@@ -42,15 +42,50 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          # NOT fetch-depth: 0 (#16207). This gate reads one regex over the PR's own
+          # commits, and a full clone is 12,874 commits on Dev_new_gui -- measured at
+          # 13s of git for 1s of work, 93% of the job, paid on every PR. Deepest PR in
+          # the last 40 merged was 30 commits, so 100 is >3x the observed maximum.
+          #
+          # The depth is a guess about the future, so the scan refuses to run rather
+          # than trust it: the reachability check below turns "too shallow" into a
+          # loud failure instead of an empty range that reports clean.
+          fetch-depth: ${{ github.event_name == 'merge_group' && '0' || '100' }}
 
       - name: Scan PR commits for banned trailers
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          # The TRUE number of commits in the PR, from GitHub rather than from the
+          # clone. This is what makes truncation detectable (#16210 review).
+          EXPECTED_COMMITS: ${{ github.event.pull_request.commits || '' }}
         run: |
           set -euo pipefail
           echo "Scanning commits ${BASE_SHA}..${HEAD_SHA}"
+          # An unreachable endpoint makes `git rev-list BASE..HEAD` scan nothing, and
+          # a gate that scans zero commits reports clean. That is worse than the
+          # seconds the shallow fetch saves, so it is checked explicitly (#16207).
+          for _endpoint in "${BASE_SHA}" "${HEAD_SHA}"; do
+            if ! git cat-file -e "${_endpoint}^{commit}" 2>/dev/null; then
+              echo "::error::${_endpoint} is not present at fetch-depth 100 -- this PR is"
+              echo "::error::deeper than the checkout. Raise fetch-depth in this workflow;"
+              echo "::error::do NOT widen it back to 0 without re-measuring (#16207)."
+              exit 1
+            fi
+          done
+          # Endpoint presence is NOT enough. A PR with more of its own commits than
+          # the fetch depth leaves BOTH endpoints present while `git rev-list` returns
+          # a TRUNCATED, non-empty range -- no error, no warning, errexit untripped,
+          # and the oldest commits are never scanned. Reproduced at depth 100: a
+          # 150-commit branch yielded 99. The guard checked the endpoints; the risk
+          # was the range (#16210 review).
+          _scanned="$(git rev-list --count "${BASE_SHA}..${HEAD_SHA}")"
+          if [ -n "${EXPECTED_COMMITS}" ] && [ "${_scanned}" != "${EXPECTED_COMMITS}" ]; then
+            echo "::error::scanned ${_scanned} commits but GitHub reports ${EXPECTED_COMMITS}"
+            echo "::error::for this PR -- the checkout is too shallow and the oldest"
+            echo "::error::commits would go unexamined. Raise fetch-depth (#16207)."
+            exit 1
+          fi
           # Agent/tooling trailers are never allowed, for any author (#13654).
           #
           # #15848: ALL THREE ARMS ARE NOW ANCHORED to a trailer position. The
