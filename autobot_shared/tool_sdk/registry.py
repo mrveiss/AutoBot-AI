@@ -12,6 +12,8 @@ OpenAPI spec generation for every BaseTool subclass registered with it.
 import logging
 from typing import Dict, List, Type
 
+from autobot_shared.coordination.run_progress import record_progress
+
 from .base import (
     BaseTool,
     ToolInputError,
@@ -212,7 +214,11 @@ class ToolSDKRegistry:
             name,
             caller_permission.value,
         )
-        return await _timed_execute(tool, validated)
+        try:
+            return await _timed_execute(tool, validated)
+        finally:
+            # A finished tool call is progress for the claimed run it belongs to (#15950 AC4).
+            record_progress()
 
     # ------------------------------------------------------------------
     # OpenAPI export
