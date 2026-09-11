@@ -312,6 +312,16 @@ jobs:
       # stage and a direct run of the hook still scan whole files.
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only pre-commit-no-print-console
 
+    - name: Block new local BaseModel definitions in API files (#6056, #16178)
+      # --changed-lines-only (#16178), and unlike the two scoped steps above, the
+      # pre-commit stage is scoped too: this hook had no CI step and no baseline,
+      # so its whole-file read blocked the commit itself, failing a change for a
+      # model it neither added nor could move (every original domain schemas_*.py
+      # is frozen at its size ceiling). With --python the wrapper cannot parse the
+      # validator's output, so it hands over the base it resolved and the hook
+      # scopes itself. A direct run of the hook still reads whole files.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only --python tools/lint/check_no_local_schemas.py --ext py
+
     - name: Check repo conventions — third-party names, doc cross-links (#13876)
       env:
         CONVENTIONS_DENYLIST_CONTENT: ${{ secrets.CONVENTIONS_DENYLIST }}
