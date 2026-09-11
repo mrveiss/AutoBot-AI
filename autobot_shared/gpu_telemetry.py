@@ -54,6 +54,28 @@ NODE_QUERY_FIELDS = (
     "power.draw",
 )
 
+# The fields the main backend's performance collectors read for each GPU (#16289).
+METRICS_QUERY_FIELDS = (
+    "name",
+    "memory.used",
+    "memory.total",
+    "utilization.gpu",
+    "temperature.gpu",
+    "power.draw",
+    "clocks.current.graphics",
+    "clocks.current.memory",
+    "fan.speed",
+    "encoder.stats.utilization",
+    "decoder.stats.utilization",
+    "pstate",
+    "clocks_throttle_reasons.gpu_idle",
+    "clocks_throttle_reasons.applications_clocks_setting",
+    "clocks_throttle_reasons.sw_power_cap",
+    "clocks_throttle_reasons.hw_slowdown",
+    "clocks_throttle_reasons.hw_thermal_slowdown",
+    "clocks_throttle_reasons.hw_power_brake_slowdown",
+)
+
 ROCM_SMI_ARGV = [
     "rocm-smi",
     "--showproductname",
@@ -93,6 +115,12 @@ def parse_nvidia_value(raw: str) -> float | None:
         return float(value)
     except ValueError:
         return None
+
+
+def parse_nvidia_text(raw: str) -> str | None:
+    """One nvidia-smi text cell (``pstate``, a throttle reason), or None when unreadable."""
+    value = raw.strip()
+    return None if value in _NVIDIA_UNREADABLE else value
 
 
 def parse_nvidia_smi_csv(output: str, fields: Sequence[str]) -> List[Dict[str, str]]:
