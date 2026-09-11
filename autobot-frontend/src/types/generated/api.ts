@@ -103259,6 +103259,16 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** InstallRequest */
+        api__schemas_skills_hub__InstallRequest: {
+            /**
+             * Skill Id
+             * @description Registry id or name of the skill to install
+             */
+            skill_id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** ClearAllResponse */
         api__schemas_system__ClearAllResponse: {
             /** Success */
@@ -103306,16 +103316,6 @@ export interface components {
             base_url_required: boolean;
             /** Documentation Url */
             documentation_url: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** InstallRequest */
-        api__skills_hub__InstallRequest: {
-            /**
-             * Skill Id
-             * @description Registry id or name of the skill to install
-             */
-            skill_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -163777,7 +163777,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["api__skills_hub__InstallRequest"];
+                "application/json": components["schemas"]["api__schemas_skills_hub__InstallRequest"];
             };
         };
         responses: {
