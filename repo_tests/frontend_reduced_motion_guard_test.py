@@ -44,8 +44,10 @@ What this cannot see, stated so a green run is not read as more than it is:
   the preference; a shadow root does not inherit it, so the embed widget
   carries its own rule -- also pinned below.
 
-Reach is floored on the **candidates** read, per primitive, at the count this
-commit holds -- the population the guard exists for. File counts are asserted
+Reach is declared on the **candidates** read, per primitive, at the count this
+commit holds -- the population the guard exists for -- through
+``repo_tests._reach.declare``, so ``reach_declarations_test`` proves each floor
+fires on an empty tree. File counts are asserted
 non-zero per root but not pinned: the frontend-unification campaign moves files
 between these roots routinely, and a pinned file count would fail every
 consolidation PR while saying nothing about motion.
@@ -58,11 +60,12 @@ from __future__ import annotations
 
 import functools
 import re
-from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 __all__: list[str] = []
 
@@ -224,6 +227,50 @@ def _sources(root: Path) -> list[Path]:
     )
 
 
+def _present_sources(repo: Path) -> list[Path]:
+    """Script sources under every root that exists in *repo*.
+
+    The declared discovery, so an empty tree yields ``[]`` instead of raising:
+    ``reach_declarations_test`` hands every declaration an empty repository and
+    needs an empty *result*, and the floor then raises ``ReachFloorError``. The
+    live sweep keeps the raising ``_sources``.
+    """
+    return [path for root in ROOTS if (repo / root).is_dir() for path in _sources(repo / root)]
+
+
+@functools.cache
+def _candidates_in(repo: Path) -> tuple[tuple[str, Hit], ...]:
+    """Every motion candidate under *repo*, wired or not, as (repo-relative path, hit)."""
+    return tuple(
+        (path.relative_to(repo).as_posix(), hit)
+        for path in _present_sources(repo)
+        for hit in detect(path.read_text(encoding="utf-8"))
+    )
+
+
+def _discover(primitive: str) -> Callable[[Path], list[tuple[str, int]]]:
+    """Discovery for one primitive's candidates -- what its floor is bound to."""
+
+    def discover(repo: Path) -> list[tuple[str, int]]:
+        return [(path, hit.line) for path, hit in _candidates_in(repo) if hit.primitive == primitive]
+
+    return discover
+
+
+#: One declaration per primitive, so a collapse in one cannot hide behind the
+#: others' counts. ``growth=0``: ordinary work does not add motion sites, so each
+#: floor sits at the live count and a new site is a deliberate edit to this map.
+REACHES = tuple(
+    declare(
+        f"reduced-motion-{primitive}",
+        discover=_discover(primitive),
+        floor=floor,
+        what=f"{primitive} motion candidates",
+    )
+    for primitive, floor in _MIN_CANDIDATES.items()
+)
+
+
 @functools.cache
 def _sweep() -> tuple[dict[str, int], dict[str, tuple[Hit, ...]]]:
     """Files read per root, and every candidate per repo-relative file."""
@@ -241,12 +288,11 @@ def _sweep() -> tuple[dict[str, int], dict[str, tuple[Hit, ...]]]:
 
 def test_the_sweep_reads_every_root_and_every_known_motion_site() -> None:
     """State the reach before trusting a clean result -- see the module docstring."""
-    reached, candidates = _sweep()
+    reached, _ = _sweep()
     empty = [root for root, count in reached.items() if count == 0]
     assert not empty, f"these roots yielded no script sources -- the sweep has stopped reading them: {empty}"
-    counts = Counter(hit.primitive for hits in candidates.values() for hit in hits)
-    short = {name: (counts[name], floor) for name, floor in _MIN_CANDIDATES.items() if counts[name] < floor}
-    assert not short, f"the sweep read fewer motion candidates than this commit holds (read, floor): {short}"
+    for reach in REACHES:
+        reach.examined(_REPO_ROOT)
 
 
 def test_every_motion_primitive_consults_the_preference_or_carries_a_reasoned_waiver() -> None:
