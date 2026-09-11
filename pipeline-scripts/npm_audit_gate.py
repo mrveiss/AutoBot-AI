@@ -42,6 +42,7 @@ import shlex
 import subprocess
 import sys
 import time
+import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -127,11 +128,16 @@ def _error_reason(report: dict) -> str | None:
     return str(error)
 
 
-def _counts(vulnerabilities: dict) -> dict[str, int]:
-    return {
-        key: value if isinstance(value, int) else 0
-        for key, value in ((key, vulnerabilities.get(key, 0)) for key in SEVERITY_ORDER)
-    }
+def _counts(vulnerabilities: dict) -> dict[str, int] | None:
+    """Every severity's count, or None when any is missing or not a count.
+
+    A missing, non-numeric or negative count is not zero: reading it as zero
+    would turn a malformed report into a pass (#16357 review).
+    """
+    counts = {key: vulnerabilities.get(key) for key in SEVERITY_ORDER}
+    if not all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in counts.values()):
+        return None
+    return counts  # type: ignore[return-value]
 
 
 def classify(stdout: str, log: str = "") -> Verdict:
@@ -153,6 +159,9 @@ def classify(stdout: str, log: str = "") -> Verdict:
     if not isinstance(vulnerabilities, dict):
         return Verdict(UNAVAILABLE, reason="the report carries no vulnerability counts", endpoint=endpoint)
     counts = _counts(vulnerabilities)
+    if counts is None:
+        reason = "the report's severity counts are missing or are not counts"
+        return Verdict(UNAVAILABLE, reason=reason, endpoint=endpoint)
     result = FOUND if any(counts[severity] for severity in FAILING_SEVERITIES) else PASSED
     return Verdict(result, counts=counts, endpoint=endpoint)
 
@@ -161,9 +170,16 @@ Runner = Callable[[list[str]], "subprocess.CompletedProcess[str]"]
 
 
 def _run_npm_audit(command: list[str]) -> subprocess.CompletedProcess[str]:
-    """One network call. ``--loglevel=http`` puts the endpoint npm used in stderr."""
+    """One network call. ``--loglevel=http`` puts the endpoint npm used in stderr.
+
+    ``errors="replace"``: an undecodable byte in npm's output must not raise
+    (#16357 review) -- the report then fails to parse and reads as "could not
+    check", which is what it is.
+    """
     argv = [*command, "audit", "--json", "--loglevel=http"]
-    return subprocess.run(argv, capture_output=True, text=True, check=False, timeout=timeout_seconds())
+    return subprocess.run(
+        argv, capture_output=True, text=True, errors="replace", check=False, timeout=timeout_seconds()
+    )
 
 
 def _attempt(command: list[str], run: Runner) -> tuple[str, str]:
@@ -263,11 +279,35 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _write_report(path: str, report: str) -> None:
+    """The artifact copy of the report; failing to write it never decides the gate."""
+    try:
+        Path(path).write_text(report, encoding="utf-8")
+    except OSError as exc:
+        _emit(f"Could not write {path}: {exc}", err=True)
+
+
+def _audit_or_could_not_check(npm: str, attempts: int) -> Outcome:
+    """Run the audit; anything unexpected inside the gate is "could not check".
+
+    Fail-closed without borrowing another result's exit code (#16357 review): an
+    uncaught exception would exit 1, the code for "advisories found", with no
+    summary. The exception is named in the verdict and its traceback logged, so
+    nothing is swallowed.
+    """
+    try:
+        return audit_with_retries(shlex.split(npm), attempts, retry_delay_seconds(), run=_run_npm_audit)
+    except Exception as exc:  # noqa: BLE001 -- reported below as UNAVAILABLE, exit 2
+        _emit(traceback.format_exc(), err=True)
+        reason = f"the gate itself failed ({type(exc).__name__}: {exc})"
+        return Outcome(Verdict(UNAVAILABLE, reason=reason), attempts, "")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     attempts = max_attempts()
-    outcome = audit_with_retries(shlex.split(args.npm), attempts, retry_delay_seconds(), run=_run_npm_audit)
-    Path(args.report).write_text(outcome.report, encoding="utf-8")
+    outcome = _audit_or_could_not_check(args.npm, attempts)
+    _write_report(args.report, outcome.report)
     _write_summary(summary_lines(outcome, attempts))
     _announce(outcome, attempts)
     return EXIT_CODES[outcome.verdict.result]

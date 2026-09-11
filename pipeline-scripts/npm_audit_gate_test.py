@@ -85,10 +85,38 @@ def test_the_endpoint_error_is_unavailable_and_names_the_error() -> None:
     assert verdict.counts == {}
 
 
+def _with_counts(**overrides: object) -> str:
+    counts: dict[str, object] = {"info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 0}
+    counts.update(overrides)
+    return json.dumps({"metadata": {"vulnerabilities": {k: v for k, v in counts.items() if v != "absent"}}})
+
+
 @pytest.mark.parametrize(
     "stdout",
-    ["", "npm error audit endpoint returned an error", "[]", json.dumps({"metadata": {}})],
-    ids=["empty", "not-json", "not-a-report", "no-counts"],
+    [
+        "",
+        "npm error audit endpoint returned an error",
+        "[]",
+        json.dumps({"metadata": {}}),
+        json.dumps({"metadata": {"vulnerabilities": {}}}),
+        _with_counts(high="1"),
+        _with_counts(critical=None),
+        _with_counts(critical=True),
+        _with_counts(high=-1),
+        _with_counts(info="absent"),
+    ],
+    ids=[
+        "empty",
+        "not-json",
+        "not-a-report",
+        "no-counts",
+        "empty-counts",
+        "string-count",
+        "null-count",
+        "bool-count",
+        "negative-count",
+        "missing-severity",
+    ],
 )
 def test_no_usable_report_is_unavailable_never_a_pass(stdout: str) -> None:
     assert gate.classify(stdout, BULK_LOG).result == gate.UNAVAILABLE
@@ -141,33 +169,51 @@ def test_a_timed_out_attempt_is_unavailable() -> None:
 
 
 def test_the_npm_command_and_the_audit_flags_reach_the_runner(monkeypatch) -> None:
-    seen: list[list[str]] = []
+    seen: list[tuple[list[str], dict]] = []
 
     def fake_run(argv, **kwargs):
-        seen.append(argv)
+        seen.append((argv, kwargs))
         return subprocess.CompletedProcess(argv, 0, stdout=_report(), stderr=BULK_LOG)
 
     monkeypatch.setattr(gate.subprocess, "run", fake_run)
     gate._run_npm_audit(["npx", "--yes", "npm@11.19.1"])
 
-    assert seen == [["npx", "--yes", "npm@11.19.1", "audit", "--json", "--loglevel=http"]]
+    (argv, kwargs), *rest = seen
+    assert rest == []
+    assert argv == ["npx", "--yes", "npm@11.19.1", "audit", "--json", "--loglevel=http"]
+    # An undecodable byte must reach classify() as text, not raise (#16357 review).
+    assert (kwargs["text"], kwargs["errors"]) == (True, "replace")
 
 
 # --- env-backed constants ----------------------------------------------------
 
 
-def test_attempts_and_delay_come_from_the_environment(monkeypatch) -> None:
+def test_every_constant_comes_from_the_environment(monkeypatch) -> None:
     monkeypatch.setenv("NPM_AUDIT_MAX_ATTEMPTS", "5")
     monkeypatch.setenv("NPM_AUDIT_RETRY_DELAY_SECONDS", "0")
+    monkeypatch.setenv("NPM_AUDIT_TIMEOUT_SECONDS", "30")
 
-    assert (gate.max_attempts(), gate.retry_delay_seconds()) == (5, 0)
+    assert (gate.max_attempts(), gate.retry_delay_seconds(), gate.timeout_seconds()) == (5, 0, 30)
 
 
-@pytest.mark.parametrize("raw", ["", "0", "-2", "three"])
-def test_an_invalid_attempt_count_falls_back_to_the_default(monkeypatch, raw: str) -> None:
-    monkeypatch.setenv("NPM_AUDIT_MAX_ATTEMPTS", raw)
+@pytest.mark.parametrize(
+    "name,getter,default,raw",
+    [
+        *(("NPM_AUDIT_MAX_ATTEMPTS", "max_attempts", gate.DEFAULT_MAX_ATTEMPTS, r) for r in ("", "0", "-2", "three")),
+        *(
+            ("NPM_AUDIT_RETRY_DELAY_SECONDS", "retry_delay_seconds", gate.DEFAULT_RETRY_DELAY_SECONDS, r)
+            for r in ("", "-1", "1.5", "soon")
+        ),
+        *(
+            ("NPM_AUDIT_TIMEOUT_SECONDS", "timeout_seconds", gate.DEFAULT_TIMEOUT_SECONDS, r)
+            for r in ("", "0", "-5", "x")
+        ),
+    ],
+)
+def test_an_invalid_constant_falls_back_to_its_default(monkeypatch, name, getter, default, raw) -> None:
+    monkeypatch.setenv(name, raw)
 
-    assert gate.max_attempts() == gate.DEFAULT_MAX_ATTEMPTS
+    assert getattr(gate, getter)() == default
 
 
 # --- what the job reports ------------------------------------------------------
@@ -214,3 +260,24 @@ def test_the_summary_says_could_not_check_distinctly_from_found() -> None:
     assert "could not check" in unavailable_text and "advisories found" not in unavailable_text
     assert "advisories found" in found_text and "could not check" not in found_text
     assert "attempts: 3 of 3" in unavailable_text
+
+
+@pytest.mark.parametrize(
+    "error",
+    [UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte"), RuntimeError("boom")],
+    ids=["undecodable-output", "anything-else"],
+)
+def test_a_crash_inside_the_gate_is_could_not_check_never_found(tmp_path, monkeypatch, capsys, error) -> None:
+    """An uncaught exception used to exit 1 -- the "advisories found" code -- with no summary."""
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+
+    def crashing(command: list[str]) -> subprocess.CompletedProcess[str]:
+        raise error
+
+    monkeypatch.setattr(gate, "_run_npm_audit", crashing)
+
+    assert gate.main(["--report", str(tmp_path / "audit-results.json")]) == gate.EXIT_CODES[gate.UNAVAILABLE]
+    text = summary.read_text(encoding="utf-8")
+    assert "**Failed, could not check:**" in text and type(error).__name__ in text
+    assert "::error title=npm audit: could not check::" in capsys.readouterr().out
