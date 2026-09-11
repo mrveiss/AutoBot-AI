@@ -161,6 +161,15 @@ class TestProxyCheckGate:
         assert exc.value.status_code == 403
 
     @pytest.mark.asyncio
+    async def test_readonly_token_gets_403(self):
+        """A read-only session -- the case the old /me gate let through -- is rejected with 403."""
+        token = _mint_token(admin=False, role="readonly", username="ro1")
+        current_user = await get_current_user(_credentials(token))
+        with pytest.raises(HTTPException) as exc:
+            await _admin_system_gate(current_user)
+        assert exc.value.status_code == 403
+
+    @pytest.mark.asyncio
     async def test_superadmin_token_gets_403(self):
         """SUPERADMIN holds no granular permissions (#13854), so it is refused
         here as on every other permission-gated SLM admin route -- despite
