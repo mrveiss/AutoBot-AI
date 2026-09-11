@@ -14,6 +14,7 @@ so peer trust levels evolve continuously from real interaction history.
 
 from typing import Any, Dict
 
+from agents.declared_scope_check import INVALID_DECLARED_SCOPE
 from agents.scope_enforcement import hold_scopes
 from autobot_shared.coordination.work_claims import ScopeError
 from autobot_shared.logging_manager import get_logger
@@ -123,14 +124,14 @@ def _report_bad_scope(manager, task_id: str, declared: list, exc: Exception) -> 
             content={"declared_scopes": list(declared), "reason": str(exc)},
         ),
     )
-    manager.update_state(task_id, TaskState.FAILED, message="invalid_declared_scope")
+    manager.update_state(task_id, TaskState.FAILED, message=INVALID_DECLARED_SCOPE)
     manager.publish_event(
         task_id,
         {
             "event": "state_change",
             "state": "failed",
             "terminal": True,
-            "message": "invalid_declared_scope",
+            "message": INVALID_DECLARED_SCOPE,
             "task_id": task_id,
         },
     )

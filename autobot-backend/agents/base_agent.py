@@ -47,6 +47,7 @@ from agents.base_agent_types import (  # noqa: F401
 # The exchanged data types live in `base_agent_types` (#15950): this module was
 # at its size ceiling, and they were the part of it that never referenced
 # `BaseAgent`. Re-exported here so the existing import sites keep working.
+from agents.declared_scope_check import malformed_scope_response
 from agents.scope_enforcement import hold_scopes, refused_response
 
 
@@ -240,6 +241,11 @@ class BaseAgent(ABC):
             analytics = None
 
         scopes = self.declared_scopes(request)
+        malformed = malformed_scope_response(request, scopes, agent_type=self.agent_type)
+        if malformed is not None:  # #16209: a named refusal, not a ScopeError out of hold_scopes
+            with self._stats_lock:
+                self.error_count += 1
+            return malformed
         async with hold_scopes(
             scopes, agent_id=self.agent_type, task_id=task_id, intent=request.action or "process_request"
         ) as held:
