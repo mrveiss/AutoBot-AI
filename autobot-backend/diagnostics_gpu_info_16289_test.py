@@ -8,29 +8,27 @@ from unittest.mock import patch
 
 from diagnostics import PerformanceOptimizedDiagnostics
 
-RTX = {
-    "name": "NVIDIA GeForce RTX 4070 Laptop GPU",
-    "memory.total": "8188",
-    "memory.used": "2047",
-    "utilization.gpu": "12",
-}
+GPU_A = {"name": "NVIDIA Test GPU A", "memory.total": "16384", "memory.used": "4096", "utilization.gpu": "30"}
 UNAVAILABLE = {"status": "nvidia-smi not available or no GPU detected"}
+_GPU_INFO_FIELDS = ("name", "memory.total", "memory.used", "utilization.gpu")
 
 
 def _info(rows):
     diagnostics = PerformanceOptimizedDiagnostics.__new__(PerformanceOptimizedDiagnostics)
-    with patch("diagnostics.query_nvidia_gpus", return_value=rows):
-        return diagnostics._get_gpu_info()
+    with patch("diagnostics.query_nvidia_gpus", return_value=rows) as query:
+        info = diagnostics._get_gpu_info()
+    query.assert_called_once_with(_GPU_INFO_FIELDS)
+    return info
 
 
 def test_the_first_gpu_is_reported_and_the_second_does_not_leak_in():
-    second = {"name": "NVIDIA RTX A2000", "memory.total": "6138", "memory.used": "10", "utilization.gpu": "0"}
+    gpu_b = {"name": "NVIDIA Test GPU B", "memory.total": "6144", "memory.used": "10", "utilization.gpu": "0"}
 
-    assert _info([RTX, second]) == {
-        "name": "NVIDIA GeForce RTX 4070 Laptop GPU",
-        "memory_total_mb": 8188,
-        "memory_used_mb": 2047,
-        "utilization_percent": 12,
+    assert _info([GPU_A, gpu_b]) == {
+        "name": "NVIDIA Test GPU A",
+        "memory_total_mb": 16384,
+        "memory_used_mb": 4096,
+        "utilization_percent": 30,
         "memory_usage_percent": 25.0,
     }
 
@@ -44,4 +42,4 @@ def test_no_gpu_rows_is_reported_as_unavailable():
 
 
 def test_an_unreadable_value_is_a_detection_error():
-    assert _info([{**RTX, "memory.total": "[N/A]"}]) == {"status": "GPU detection error"}
+    assert _info([{**GPU_A, "memory.total": "[N/A]"}]) == {"status": "GPU detection error"}
