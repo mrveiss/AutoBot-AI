@@ -14,6 +14,8 @@ the mechanism behind the committed key leak in #16301.
 
 from __future__ import annotations
 
+import asyncio
+import datetime as datetime_module
 import importlib.util
 import os
 import secrets
@@ -263,9 +265,148 @@ def test_prune_old_backups_clamps_keep_to_at_least_one(module, tmp_path):
 def test_save_backup_creates_directory_and_file_at_restrictive_modes(module, tmp_path):
     output_dir = tmp_path / "keys"
 
-    backup_file = module._save_backup(_fake_generated_keys(), "127.0.0.1", "6379", str(output_dir))
+    # A wide-open umask proves the restrictive mode comes from the explicit
+    # mkdir(mode=...)/chmod/os.open calls, not from a coincidentally
+    # restrictive process umask that a differently-configured runner would
+    # not share (#16348).
+    previous_umask = os.umask(0)
+    try:
+        backup_file = module._save_backup(_fake_generated_keys(), "127.0.0.1", "6379", str(output_dir))
+    finally:
+        os.umask(previous_umask)
 
     dir_mode = stat.S_IMODE(output_dir.stat().st_mode)
     file_mode = stat.S_IMODE(backup_file.stat().st_mode)
     assert dir_mode == 0o700, f"backup dir must be 0700, got {oct(dir_mode)}"
     assert file_mode == 0o600, f"backup file must be 0600, got {oct(file_mode)}"
+
+
+# ---------------------------------------------------------------------------
+# Collision-proof filenames: sub-second precision (#16348).
+# ---------------------------------------------------------------------------
+
+
+def test_filename_carries_microsecond_precision(module, tmp_path):
+    backup_file = module._save_backup(_fake_generated_keys(), "127.0.0.1", "6379", str(tmp_path / "keys"))
+
+    # service-keys-YYYYMMDD-HHMMSS-ffffff.yaml
+    stem = backup_file.stem.removeprefix("service-keys-")
+    date_part, time_part, micros_part = stem.split("-")
+    assert len(date_part) == 8
+    assert len(time_part) == 6
+    assert len(micros_part) == 6 and micros_part.isdigit()
+
+
+def test_same_second_reruns_do_not_collide_on_filename(module, tmp_path, monkeypatch):
+    """A same-second re-run must not raise EEXIST (#16348). Two _save_backup
+    calls are frozen onto the same whole second but different microseconds,
+    the way two real back-to-back runs would land."""
+    same_second_early = datetime_module.datetime(2026, 1, 1, 12, 0, 0, 100000)
+    same_second_late = datetime_module.datetime(2026, 1, 1, 12, 0, 0, 900000)
+    stamps = iter([same_second_early, same_second_late])
+
+    class _FixedDateTime(datetime_module.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return next(stamps)
+
+    monkeypatch.setattr(module, "datetime", _FixedDateTime)
+
+    output_dir = tmp_path / "keys"
+    first = module._save_backup(_fake_generated_keys(), "127.0.0.1", "6379", str(output_dir))
+    second = module._save_backup(_fake_generated_keys(), "127.0.0.1", "6379", str(output_dir))
+
+    assert first != second
+    assert first.exists()
+    assert second.exists()
+    # Lexicographic filename order must still agree with generation order.
+    assert sorted([first.name, second.name]) == [first.name, second.name]
+
+
+# ---------------------------------------------------------------------------
+# _load_backend must resolve the backend's ServiceAuthManager, never a
+# same-named module shadowed in from autobot_shared (#16348).
+# ---------------------------------------------------------------------------
+
+
+def test_load_backend_returns_backend_service_auth_manager(module):
+    _redis_factory, key_manager_cls = module._load_backend()
+
+    assert key_manager_cls.__module__ == "security.service_auth"
+    assert key_manager_cls.__qualname__ == "ServiceAuthManager"
+
+    from security.service_auth import ServiceAuthManager as BackendServiceAuthManager
+
+    assert key_manager_cls is BackendServiceAuthManager
+
+
+# ---------------------------------------------------------------------------
+# Export-before-store: generate_keys must never leave a key live in Redis
+# with no exported copy on disk (#16348).
+# ---------------------------------------------------------------------------
+
+
+class _FakeAsyncRedis:
+    """Minimal in-memory async Redis stand-in."""
+
+    def __init__(self) -> None:
+        self.store: Dict[str, str] = {}
+
+    async def set(self, key, value, ex=None):
+        self.store[key] = value
+
+    async def get(self, key):
+        return self.store.get(key)
+
+
+class _FakeServiceAuthManager:
+    """Mirrors the real ServiceAuthManager's generate/store split (#16348)."""
+
+    def __init__(self, redis_client):
+        self.redis = redis_client
+
+    def generate_key_material(self) -> str:
+        return secrets.token_hex(32)
+
+    async def store_service_key(self, service_id, key_hex) -> None:
+        await self.redis.set(f"service:key:{service_id}", key_hex)
+
+    async def get_service_key(self, service_id):
+        return await self.redis.get(f"service:key:{service_id}")
+
+
+def test_export_write_failure_leaves_redis_untouched(module, tmp_path, monkeypatch):
+    """If the export write fails, generate_keys must not have stored anything
+    in Redis yet -- proven with a fake Redis so no real store is exercised."""
+    fake_redis = _FakeAsyncRedis()
+
+    async def fake_redis_factory(database):
+        return fake_redis
+
+    monkeypatch.setattr(module, "_load_backend", lambda: (fake_redis_factory, _FakeServiceAuthManager))
+
+    def _boom(*args, **kwargs):
+        raise OSError("simulated export write failure")
+
+    monkeypatch.setattr(module, "_save_backup", _boom)
+
+    with pytest.raises(OSError, match="simulated export write failure"):
+        asyncio.run(module.generate_keys(str(tmp_path / "keys")))
+
+    assert fake_redis.store == {}, "Redis must be untouched when the export write fails"
+
+
+def test_generate_keys_stores_in_redis_once_export_succeeds(module, tmp_path, monkeypatch):
+    """The success path still reaches Redis, once the export is on disk."""
+    fake_redis = _FakeAsyncRedis()
+
+    async def fake_redis_factory(database):
+        return fake_redis
+
+    monkeypatch.setattr(module, "_load_backend", lambda: (fake_redis_factory, _FakeServiceAuthManager))
+
+    result = asyncio.run(module.generate_keys(str(tmp_path / "keys")))
+
+    assert set(fake_redis.store) == {f"service:key:{service_id}" for service_id in result}
+    for service_id, entry in result.items():
+        assert fake_redis.store[f"service:key:{service_id}"] == entry["key"]

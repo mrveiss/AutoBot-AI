@@ -87,6 +87,7 @@ def _load_backend():
 
     return get_async_redis_client, ServiceAuthManager
 
+
 # Service definitions for AutoBot's distributed VM infrastructure.
 # Hosts are resolved from SSOT config — never hardcoded.
 SERVICES = [
@@ -133,10 +134,13 @@ def _resolve_host(host_attr: str) -> str:
     return getattr(config.vms, host_attr)
 
 
-async def _generate_all_keys(auth_manager):
-    """Generate keys for all services and return dict.
+def _generate_all_keys(auth_manager):
+    """Generate keys for all services in memory only -- no Redis writes (#16348).
 
-    Helper for generate_keys (#1734).
+    Helper for generate_keys (#1734). Uses the manager's pure key generator
+    (``generate_key_material``) rather than ``generate_service_key`` so
+    nothing is live in Redis until after the export has been written and
+    fsynced by ``generate_keys``.
     """
     generated_keys = {}
     for service in SERVICES:
@@ -144,7 +148,7 @@ async def _generate_all_keys(auth_manager):
         host = _resolve_host(service["host_attr"])
 
         logger.info("Generating key for %s...", service_id)
-        key = await auth_manager.generate_service_key(service_id)
+        key = auth_manager.generate_key_material()
         generated_keys[service_id] = {
             "key": key,
             "host": host,
@@ -153,6 +157,17 @@ async def _generate_all_keys(auth_manager):
         }
         logger.info("  %s: %s***", service_id, key[:8])
     return generated_keys
+
+
+async def _store_all_keys(auth_manager, generated_keys) -> None:
+    """Store already-exported keys in Redis (#16348).
+
+    Helper for generate_keys. Must only run once the export has been written
+    and fsynced -- an export failure must never leave a key live in Redis
+    with no exported copy to deploy from.
+    """
+    for service_id, entry in generated_keys.items():
+        await auth_manager.store_service_key(service_id, entry["key"])
 
 
 def _resolve_output_dir(output_dir: str | None) -> Path:
@@ -193,11 +208,12 @@ def _refuse_if_inside_git_worktree(directory: Path) -> None:
 def _prune_old_backups(backup_dir: Path, keep: int = SERVICE_KEYS_KEEP_COUNT) -> None:
     """Delete all but the newest *keep* service-keys-*.yaml exports (#16348).
 
-    The filename timestamp (``%Y%m%d-%H%M%S``) sorts lexicographically in
-    chronological order, so a plain name sort picks the newest without a
-    stat() call — the deploy role's own selector (deploy-keys.yml, sorted by
-    path) keeps working against whatever survives. ``keep`` is clamped to at
-    least 1: a caller passing 0 would delete the export just written.
+    The filename timestamp (``%Y%m%d-%H%M%S-%f``, zero-padded and fixed
+    width) sorts lexicographically in chronological order, so a plain name
+    sort picks the newest without a stat() call — the deploy role's own
+    selector (deploy-keys.yml, sorted by path) keeps working against
+    whatever survives. ``keep`` is clamped to at least 1: a caller passing 0
+    would delete the export just written.
     """
     keep = max(1, keep)
     exports = sorted(backup_dir.glob("service-keys-*.yaml"))
@@ -212,32 +228,40 @@ def _ensure_private_dir(directory: Path) -> None:
     os.chmod(directory, 0o700)
 
 
-def _save_backup(generated_keys, redis_host, redis_port, output_dir: str | None = None):
-    """Write keys backup YAML and return file path.
+def _write_export_payload(f, payload: dict) -> None:
+    """Write the YAML payload, then fsync (#16348).
 
-    Helper for generate_keys (#1734). Refuses a git work tree and never
-    falls back to the working directory (#16348). The directory and file
-    are put at 0700/0600 explicitly rather than left to the umask, and the
-    file is opened O_EXCL so it never exists at a world-readable mode even
-    for an instant.
+    Split out of _save_backup to keep it under 30 lines. The fsync is the
+    durability guarantee generate_keys relies on before it stores a key.
+    """
+    yaml.safe_dump(payload, f, default_flow_style=False)
+    f.flush()
+    os.fsync(f.fileno())
+
+
+def _save_backup(generated_keys, redis_host, redis_port, output_dir: str | None = None):
+    """Write and fsync the keys export; return its path (#16348).
+
+    Helper for generate_keys (#1734). Refuses a git work tree, never falls
+    back to the working directory, and puts dir/file at 0700/0600
+    explicitly rather than the umask. Microsecond filename precision stops
+    a same-second re-run colliding on EEXIST.
     """
     backup_dir = _resolve_output_dir(output_dir)
     _refuse_if_inside_git_worktree(backup_dir)
     _ensure_private_dir(backup_dir)
 
-    backup_file = backup_dir / f"service-keys-{datetime.now().strftime('%Y%m%d-%H%M%S')}.yaml"
+    now = datetime.now()
+    backup_file = backup_dir / f"service-keys-{now.strftime('%Y%m%d-%H%M%S-%f')}.yaml"
+    payload = {
+        "generated_at": now.isoformat(),
+        "redis_host": redis_host,
+        "redis_port": redis_port,
+        "services": generated_keys,
+    }
     fd = os.open(backup_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
-        yaml.safe_dump(
-            {
-                "generated_at": datetime.now().isoformat(),
-                "redis_host": redis_host,
-                "redis_port": redis_port,
-                "services": generated_keys,
-            },
-            f,
-            default_flow_style=False,
-        )
+        _write_export_payload(f, payload)
 
     logger.info("Backup saved: %s", backup_file)
     _prune_old_backups(backup_dir)
@@ -258,37 +282,45 @@ async def _verify_keys_in_redis(auth_manager, generated_keys):
             logger.error("  %s: FAILED - Key not found!", service_id)
 
 
-async def generate_keys(output_dir: str | None = None):
-    """Generate API keys for all services and store in Redis."""
-    redis_host = config.vms.redis
-    redis_port = config.ports.redis
-
+def _log_run_header(redis_host: str, redis_port: int) -> None:
+    """Startup banner, extracted so generate_keys stays under 30 lines (#16348)."""
     logger.info("AutoBot Service Key Generation")
     logger.info("=" * 60)
     logger.info("Timestamp: %s", datetime.now().isoformat())
     logger.info("Redis: %s:%s", redis_host, redis_port)
     logger.info("Services: %d", len(SERVICES))
-    logger.info("")
 
-    redis_client_factory, key_manager_cls = _load_backend()
-    auth_manager = key_manager_cls(await redis_client_factory(database="main"))
 
-    generated_keys = await _generate_all_keys(auth_manager)
-    logger.info("")
-    logger.info("Generated %d service keys", len(generated_keys))
-    logger.info("")
-
-    backup_file = _save_backup(generated_keys, redis_host, redis_port, output_dir)
-    logger.info("")
-
-    await _verify_keys_in_redis(auth_manager, generated_keys)
-
-    logger.info("")
+def _log_run_footer(backup_file: Path) -> None:
+    """Completion banner, extracted so generate_keys stays under 30 lines (#16348)."""
     logger.info("=" * 60)
     logger.info("Service key generation complete!")
     logger.info("  Deploy: ansible-playbook playbooks/deploy-service-auth.yml")
     logger.info("  Backup: %s", backup_file)
 
+
+async def generate_keys(output_dir: str | None = None):
+    """Generate keys, export them, then store in Redis -- in that order.
+
+    #16348: an export write failure must never leave a key live in Redis
+    with no exported copy to deploy from, so nothing is stored until
+    ``_save_backup`` has written and fsynced it.
+    """
+    redis_host = config.vms.redis
+    redis_port = config.ports.redis
+    _log_run_header(redis_host, redis_port)
+
+    redis_client_factory, key_manager_cls = _load_backend()
+    auth_manager = key_manager_cls(await redis_client_factory(database="main"))
+
+    generated_keys = _generate_all_keys(auth_manager)
+    logger.info("Generated %d service keys", len(generated_keys))
+
+    backup_file = _save_backup(generated_keys, redis_host, redis_port, output_dir)
+    await _store_all_keys(auth_manager, generated_keys)
+    await _verify_keys_in_redis(auth_manager, generated_keys)
+
+    _log_run_footer(backup_file)
     return generated_keys
 
 
