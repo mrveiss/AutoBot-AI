@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 
 from autobot_shared.auth.key_scopes import key_permissions
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
+from autobot_shared.env_utils import env_int
 
 #: Keys created before this date predate scope enforcement (#16040 AC5). Set it
 #: to the day enforcement reached this deployment, if that was later.
@@ -32,7 +33,7 @@ API_KEY_SCOPES_ENFORCED_FROM = os.environ.get("AUTOBOT_API_KEY_SCOPES_ENFORCED_F
 
 #: How many days such a key keeps its owner's full authority before it must be
 #: re-issued. The owner ruled 90 days.
-API_KEY_LEGACY_GRACE_DAYS = int(os.environ.get("AUTOBOT_API_KEY_LEGACY_GRACE_DAYS", "90"))
+API_KEY_LEGACY_GRACE_DAYS = env_int("AUTOBOT_API_KEY_LEGACY_GRACE_DAYS", 90)
 
 
 def role_for_user(is_platform_admin: bool) -> Role:
