@@ -282,10 +282,12 @@ def logical_lines(text: str) -> List[Tuple[int, str]]:
     or a reintroduced flag most plausibly takes, because that is how a long
     shell invocation actually gets written::
 
-        git config \\
-          core.hooksPath /tmp/x
+        some-tool subcommand \\
+          --dangerous-flag /tmp/x
 
-    Splitting on newlines puts the command on one physical line and its
+    (A neutral example on purpose: the guards that call this scan tracked
+    files, this one included, so a real offending spelling here would trip
+    them.) Splitting on newlines puts the command on one physical line and its
     argument on the next, so a matcher requiring both on one line inspects two
     lines that each look innocent and reports nothing (#16128 review; the same
     gap recurred in #15961). The line number reported is the FIRST physical
