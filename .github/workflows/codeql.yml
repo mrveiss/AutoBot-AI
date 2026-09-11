@@ -1,54 +1,160 @@
-# CodeQL Analysis workflow
-# Runs CodeQL security analysis on Python code with custom scan paths.
+# CodeQL code scanning, advanced setup (#16283; config file from #1826).
 #
-# Related issue: #1826
+# Scans the three languages GitHub's default setup covered (python,
+# javascript-typescript, actions) under the same `/language:<lang>` category,
+# and applies .github/codeql/codeql-config.yml, which default setup cannot
+# read. That file's three file-scoped `query-filters` entries exclude nothing
+# under either setup (#16302); returning here does not by itself make them
+# apply.
+#
+# Triggers
+# - push to main or Dev_new_gui, the weekly schedule and workflow_dispatch:
+#   unfiltered, every language. A pull request's results are compared with the
+#   analysis of its base branch, so a base scan must never be skipped by a path
+#   filter; GitHub's CodeQL docs advise against `paths` on `on.push` for that
+#   reason.
+# - pull_request: `paths` below is the UNION of the three language filters in
+#   the `changes` job. A pull request touching none of them starts nothing;
+#   otherwise `changes` picks which languages the matrix analyses. Keep the two
+#   lists in step: a pattern present only in a language filter never starts
+#   the workflow, so what it would have found surfaces only after merge, in the
+#   base scan.
+#
+# Switching over from default setup, in this order (owner decision, #16283):
+# 1. land this file;
+# 2. re-enable this workflow in Actions -- it was disabled there, not here;
+# 3. run it by workflow_dispatch with `upload: never` and confirm all three
+#    languages go green. It must be `never` while default setup is still on:
+#    code scanning refuses advanced-setup results then ("CodeQL analyses from
+#    advanced configurations cannot be processed when the default setup is
+#    enabled"), which is how this workflow's last run before #16283 failed;
+# 4. only then turn default setup off, and confirm the next uploading run
+#    succeeds. Until step 4, every run that uploads fails on that refusal.
 
 name: CodeQL Analysis
 
 on:
   push:
     branches: [main, Dev_new_gui]
-    paths: ["autobot-backend/**", "autobot_shared/**", "autobot-slm-backend/**", "*.py"]
   pull_request:
     branches: [main, Dev_new_gui]
-    paths: ["autobot-backend/**", "autobot_shared/**", "autobot-slm-backend/**", "*.py"]
+    paths:
+      # python
+      - "**/*.py"
+      # javascript-typescript
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.mts"
+      - "**/*.cts"
+      - "**/*.vue"
+      - "**/*.html"
+      - "**/*.htm"
+      - "**/tsconfig*.json"
+      # actions (also covers this file)
+      - ".github/workflows/**"
+      - "**/action.yml"
+      - "**/action.yaml"
+      # every language: the scan's own configuration
+      - ".github/codeql/**"
   schedule:
-    # Run CodeQL analysis weekly on Sundays at 3 AM UTC
     - cron: "0 3 * * 0"
   workflow_dispatch:
+    inputs:
+      upload:
+        description: "Upload results to code scanning ('never' is a dry run)"
+        type: choice
+        options: [always, never]
+        default: always
 
+# Pull requests share one group per branch, and a new push cancels the run it
+# supersedes (#14434): nothing reads a result for a commit that is no longer
+# the tip. Push, schedule and dispatch runs each get a group of their own, so a
+# base scan is never cancelled, nor replaced while pending. #2699 had turned
+# cancelling off after cancelled runs left a 3-second failing CodeQL check on
+# pull requests; if that check reappears on a pull request's head commit, it
+# is #2699 again, not noise.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # Let CodeQL runs complete — cancelling produces stale 3s failures (#2699)
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
-  actions: read
   contents: read
-  security-events: write
 
 jobs:
+  changes:
+    name: Detect changed languages
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read  # dorny/paths-filter lists a pull request's files via the REST API
+    outputs:
+      # Pull requests: the languages whose filter matched. Every other event:
+      # all three. A filter step that yields no output falls through to all
+      # three, never to none.
+      languages: ${{ github.event_name == 'pull_request' && steps.filter.outputs.changes || '["python","javascript-typescript","actions"]' }}
+    steps:
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            python:
+              - '**/*.py'
+              - '.github/codeql/**'
+              - '.github/workflows/codeql.yml'
+            javascript-typescript:
+              - '**/*.js'
+              - '**/*.jsx'
+              - '**/*.mjs'
+              - '**/*.cjs'
+              - '**/*.ts'
+              - '**/*.tsx'
+              - '**/*.mts'
+              - '**/*.cts'
+              - '**/*.vue'
+              - '**/*.html'
+              - '**/*.htm'
+              - '**/tsconfig*.json'
+              - '.github/codeql/**'
+              - '.github/workflows/codeql.yml'
+            actions:
+              - '.github/workflows/**'
+              - '**/action.yml'
+              - '**/action.yaml'
+              - '.github/codeql/**'
+
   analyze:
-    name: Analyze Python
+    name: Analyze (${{ matrix.language }})
+    needs: changes
+    if: needs.changes.outputs.languages != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write  # upload results to code scanning
 
     strategy:
       fail-fast: false
       matrix:
-        language: [python]
+        language: ${{ fromJSON(needs.changes.outputs.languages) }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4.37.9
         with:
           languages: ${{ matrix.language }}
-          config-file: .github/codeql/codeql-config.yml
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4.37.9
         with:
           category: "/language:${{ matrix.language }}"
+          upload: ${{ inputs.upload || 'always' }}
