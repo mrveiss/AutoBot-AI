@@ -598,7 +598,7 @@ export interface paths {
         };
         /**
          * Get Current User Info
-         * @description Get current authenticated user information.
+         * @description Get the current authenticated user, with their effective permissions (#16270).
          */
         get: operations["get_current_user_info_api_auth_me_get"];
         put?: never;
@@ -58613,6 +58613,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AuthMeResponse
+         * @description Response for GET /auth/me: the identity fields, plus the caller's effective authority (#16270).
+         */
+        AuthMeResponse: {
+            /** Username */
+            username: string;
+            /** Role */
+            role: string;
+            /** Email */
+            email: string;
+            /** Auth Method */
+            auth_method: string;
+            /** Authenticated */
+            authenticated: boolean;
+            /** Deployment Mode */
+            deployment_mode: string;
+            /** Permissions */
+            permissions: string[];
+            /** Is Admin */
+            is_admin: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AuthPermissionResponse
          * @description Response for GET /auth/permissions/{operation}.
          */
@@ -58662,26 +58686,6 @@ export interface components {
             name: string;
             /** Permissions */
             permissions: string[];
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * AuthUserInfoResponse
-         * @description Response for GET /auth/me.
-         */
-        AuthUserInfoResponse: {
-            /** Username */
-            username: string;
-            /** Role */
-            role: string;
-            /** Email */
-            email: string;
-            /** Auth Method */
-            auth_method: string;
-            /** Authenticated */
-            authenticated: boolean;
-            /** Deployment Mode */
-            deployment_mode: string;
         } & {
             [key: string]: unknown;
         };
@@ -104541,7 +104545,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthUserInfoResponse"];
+                    "application/json": components["schemas"]["AuthMeResponse"];
                 };
             };
         };
