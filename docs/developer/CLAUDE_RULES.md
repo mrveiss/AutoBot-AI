@@ -581,6 +581,8 @@ To add a new variable:
 | `AUTOBOT_PRICING_FETCH_TIMEOUT_SECONDS` | pricing | float | `30.0` | Total timeout, in seconds, for one live pricing catalogue fetch. A timed-out fetch is a failed refresh and leaves stored prices to age, never looking fresh (#16229). |
 | `AUTOBOT_PRICING_LITELLM_URL` | pricing | str | `'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json'` | URL of LiteLLM's model price map, the primary live pricing catalogue. Fetched public-only through the egress guard (#16229). |
 | `AUTOBOT_PRICING_OPENROUTER_URL` | pricing | str | `'https://openrouter.ai/api/v1/models'` | URL of OpenRouter's public models API, the cross-check pricing catalogue. Fetched public-only through the egress guard (#16229). |
+| `AUTOBOT_PRICING_POST_SYNC_TIMEOUT_S` | slm | float | `120.0` | Timeout, in seconds, for the one-shot pricing refresh a code-sync of autobot-backend runs immediately after install/update. A refresh that does not finish within it is recorded as timed out and the sync proceeds regardless — prices stay unknown until the next refresh (autobot-slm-backend/api/_pricing_post_sync.py, #16231). |
+| `AUTOBOT_PRICING_REFRESH_INTERVAL_HOURS` | pricing | int | `24` | Hours between automatic pricing refreshes: the Celery beat cadence, and the floor under the Redis TTL so stored prices can never expire before the next scheduled refresh (#16231). |
 | `AUTOBOT_PROMETHEUS_PORT` | monitoring | str | `'9090'` | TCP port of the Prometheus instance. Also declared in ssot_config.py. |
 | `AUTOBOT_PROMETHEUS_URL` | monitoring | str | `'http://10.0.0.4:9090'` | Base URL of the Prometheus metrics server. |
 | `AUTOBOT_PROVIDER_DEGRADATION_TTL_SECONDS` | ai | int | `300` | Seconds a provider stays marked degraded after a failure before traffic is offered to it again. |
@@ -669,5 +671,5 @@ To add a new variable:
 | `AUTOBOT_WORK_CLAIM_WAIT_TTL_S` | orchestration | int | `900` | How long an agent keeps its place in a work-claim queue without renewing (#15948). Deliberately longer than AUTOBOT_WORK_CLAIM_TTL_S: a waiter that expired before the holder it is queued behind would never be promoted, and would look to an operator like a queue that silently drops people. The ceiling bounds how long a dead waiter occupies a position before it is pruned on the next read. Range: 30–7200. |
 | `AUTOBOT_WORK_CLAIM_YIELD_TIMEOUT_S` | orchestration | int | `30` | How long a requester waits for a claim holder to answer a yield request before treating the silence as a refusal (#15948). Short on purpose: the requester is blocked while it waits, and a holder that has not answered in this long is busy working, which is itself the answer. Raising it does not make a yield more likely, it only makes the requester wait longer to be told no. Range: 1–600. |
 
-*223 variables registered as of last generation.*
+*225 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->

@@ -480,3 +480,17 @@ register_env_var(
         component="pricing",
     )
 )
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_REFRESH_INTERVAL_HOURS",
+        type=int,
+        default=24,
+        description=(
+            "Hours between automatic pricing refreshes: the Celery beat cadence, and the floor under the "
+            "Redis TTL so stored prices can never expire before the next scheduled refresh (#16231)."
+        ),
+        component="pricing",
+    )
+)

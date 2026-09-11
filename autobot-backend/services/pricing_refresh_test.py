@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -241,7 +243,7 @@ def _mp(provider, model_id, inp, out, source):
 @pytest.mark.asyncio
 async def test_refresh_writes_crosschecked_prices_and_keeps_its_denominator():
     """#16229: prices come from the live catalogues, each labelled with its cross-check verdict."""
-    from services.pricing_refresh import _refresh_all
+    from services.pricing_refresh import refresh_all
 
     primary = {
         "claude-haiku-4-5": _mp("anthropic", "claude-haiku-4-5", 1.0, 5.0, "litellm"),
@@ -259,7 +261,7 @@ async def test_refresh_writes_crosschecked_prices_and_keeps_its_denominator():
         ),
         patch("llm_shared.pricing.redis_store.PricingRedisStore", return_value=store),
     ):
-        summary = await _refresh_all()
+        summary = await refresh_all()
 
     [merged] = store.set_many.call_args.args
     verdicts = {p.model_id: p.crosscheck for p in merged.values()}
@@ -279,7 +281,7 @@ async def test_refresh_writes_crosschecked_prices_and_keeps_its_denominator():
 )
 async def test_a_failed_primary_writes_nothing_and_is_recorded_as_failed(failed_primary):
     """A failed catalogue must not refresh anything -- stored prices keep their real age."""
-    from services.pricing_refresh import _refresh_all
+    from services.pricing_refresh import refresh_all
 
     store = _store()
     secondary = _source("openrouter", {"x/y": _mp("x", "y", 1.0, 1.0, "openrouter")})
@@ -287,12 +289,119 @@ async def test_a_failed_primary_writes_nothing_and_is_recorded_as_failed(failed_
         patch("services.pricing_refresh._build_sources", return_value=(failed_primary, secondary)),
         patch("llm_shared.pricing.redis_store.PricingRedisStore", return_value=store),
     ):
-        summary = await _refresh_all()
+        summary = await refresh_all()
 
     store.set_many.assert_not_called()
     store.set_model_index.assert_not_called()
     assert summary["sources"]["litellm"] == {"success": False, "model_count": 0}
     store.set_refresh_status.assert_any_await("litellm", success=False, model_count=0)
+
+
+# ---------------------------------------------------------------------------
+# refresh_if_empty (#16231, AC2) and main() (#16231, AC1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_refresh_if_empty_refreshes_a_never_refreshed_store():
+    """An empty refresh_status means first boot: refresh_if_empty must actually refresh."""
+    from services.pricing_refresh import refresh_if_empty
+
+    store = MagicMock()
+    store.get_refresh_status = AsyncMock(return_value={})
+    fake_summary = {"sources": {}, "written": 3}
+    with (
+        patch("llm_shared.pricing.redis_store.PricingRedisStore", return_value=store),
+        patch("services.pricing_refresh.refresh_all", AsyncMock(return_value=fake_summary)) as refresh_mock,
+    ):
+        result = await refresh_if_empty()
+
+    refresh_mock.assert_awaited_once()
+    assert result == fake_summary
+
+
+@pytest.mark.asyncio
+async def test_refresh_if_empty_does_nothing_when_status_is_not_empty():
+    """A store that has already refreshed once must not be refreshed again at boot."""
+    from services.pricing_refresh import refresh_if_empty
+
+    store = MagicMock()
+    store.get_refresh_status = AsyncMock(return_value={"litellm": {"success": True}})
+    with (
+        patch("llm_shared.pricing.redis_store.PricingRedisStore", return_value=store),
+        patch("services.pricing_refresh.refresh_all", AsyncMock()) as refresh_mock,
+    ):
+        result = await refresh_if_empty()
+
+    refresh_mock.assert_not_called()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_refresh_if_empty_never_raises_on_a_broken_store():
+    """A first-boot refresh failure must not propagate — startup must never fail on it."""
+    from services.pricing_refresh import refresh_if_empty
+
+    store = MagicMock()
+    store.get_refresh_status = AsyncMock(side_effect=RuntimeError("redis down"))
+    with patch("llm_shared.pricing.redis_store.PricingRedisStore", return_value=store):
+        result = await refresh_if_empty()
+
+    assert result is None
+
+
+def test_refresh_if_empty_task_is_registered_under_its_name():
+    """#16231 AC2: pricing.refresh_if_empty is the task worker_ready queues by name."""
+    from services.pricing_refresh import refresh_pricing_if_empty
+
+    assert refresh_pricing_if_empty.name == "pricing.refresh_if_empty"
+
+
+def test_worker_ready_queues_the_first_boot_refresh_task_and_never_runs_it_inline():
+    """#16231 AC2: a Celery worker coming up enqueues the check via .delay(), not a direct call."""
+    from services.pricing_refresh import _queue_first_boot_refresh
+
+    with patch("services.pricing_refresh.refresh_pricing_if_empty.delay") as delay_mock:
+        _queue_first_boot_refresh()
+
+    delay_mock.assert_called_once_with()
+
+
+def test_the_first_boot_refresh_handler_is_actually_wired_to_worker_ready():
+    """Assert the WIRING, not just the handler — mirrors workers/audit_tasks_test.py's #13570 guard."""
+    import weakref
+
+    from celery.signals import worker_ready
+
+    import services.pricing_refresh as pricing_refresh_module
+
+    resolved = [r() if isinstance(r, weakref.ReferenceType) else r for _, r in worker_ready.receivers]
+    names = {getattr(r, "__name__", "") for r in resolved if r is not None}
+    assert pricing_refresh_module._queue_first_boot_refresh.__name__ in names
+
+
+def test_main_returns_zero_and_writes_summary_when_prices_were_written(capsys):
+    """The one-shot CLI writes its JSON summary as machine output and exits 0."""
+    from services import pricing_refresh
+
+    fake_summary = {"sources": {"litellm": {"success": True, "model_count": 2}}, "written": 2, "indexed": 2}
+    with patch("services.pricing_refresh.refresh_all", AsyncMock(return_value=fake_summary)):
+        rc = pricing_refresh.main()
+
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out.strip()) == fake_summary
+
+
+def test_main_returns_one_and_still_writes_summary_when_nothing_was_written(capsys):
+    """An offline install: main() must still emit the summary, and exit non-zero (#16231)."""
+    from services import pricing_refresh
+
+    fake_summary = {"sources": {"litellm": {"success": False, "model_count": 0}}}
+    with patch("services.pricing_refresh.refresh_all", AsyncMock(return_value=fake_summary)):
+        rc = pricing_refresh.main()
+
+    assert rc == 1
+    assert json.loads(capsys.readouterr().out.strip()) == fake_summary
 
 
 @pytest.mark.asyncio
@@ -382,6 +491,18 @@ async def test_an_admin_override_changes_what_the_cost_tracker_charges(dict_redi
     assert (await tracker._redis_pricing_lookup("claude-haiku-4-5"))["input"] == 1.0
 
 
+@pytest.mark.asyncio
+async def test_admin_refresh_now_returns_the_refresh_summary():
+    """#16231: the admin 'refresh now' endpoint awaits a real refresh and returns its summary."""
+    from api.admin_pricing import refresh_pricing_now
+
+    fake_summary = {"sources": {"litellm": {"success": True, "model_count": 5}}, "written": 5, "indexed": 5}
+    with patch("services.pricing_refresh.refresh_all", AsyncMock(return_value=fake_summary)):
+        result = await refresh_pricing_now(_admin=True)
+
+    assert result == fake_summary
+
+
 # ---------------------------------------------------------------------------
 # LLMCostTracker: Redis cache takes priority over hardcoded table
 # ---------------------------------------------------------------------------
@@ -431,3 +552,28 @@ async def test_cost_tracker_uses_redis_pricing_when_available():
 
     assert cost is not None
     assert abs(cost - 0.03) < 1e-5, f"Expected 0.03 but got {cost}"
+
+
+# ---------------------------------------------------------------------------
+# Beat cadence (#16231, AC3): env-backed, and the TTL always outlasts it
+# ---------------------------------------------------------------------------
+
+
+def test_beat_cadence_is_env_backed_not_a_fixed_crontab():
+    """celery_app.py is heavy/pytest-stubbed (#7766); read its source like celery_beat_registration_test.py."""
+    celery_app_src = (Path(__file__).resolve().parents[1] / "celery_app.py").read_text(encoding="utf-8")
+
+    match = re.search(r'"pricing-refresh-daily":\s*\{[^}]*"schedule":\s*([^,\n]+),', celery_app_src)
+    assert match, "pricing-refresh-daily entry not found in celery_app.py beat_schedule"
+    assert match.group(1).strip() == "timedelta(hours=_PRICING_REFRESH_INTERVAL_HOURS)"
+    assert (
+        "from llm_shared.pricing.redis_store import REFRESH_INTERVAL_HOURS as _PRICING_REFRESH_INTERVAL_HOURS"
+        in celery_app_src
+    ), "the beat cadence must be imported from the one env-backed constant, not redeclared"
+
+
+def test_ttl_always_outlasts_the_refresh_interval_it_is_meant_to_survive():
+    """#16231 AC3: the TTL can never be shorter than the cadence, whatever the env sets it to."""
+    from llm_shared.pricing.redis_store import _TTL_SECONDS, REFRESH_INTERVAL_HOURS
+
+    assert _TTL_SECONDS > REFRESH_INTERVAL_HOURS * 3600
