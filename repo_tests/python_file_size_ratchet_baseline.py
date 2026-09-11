@@ -473,6 +473,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/models/schemas.py": 2181,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,
     "autobot-slm-backend/monitoring/performance_benchmark.py": 1136,
+    "autobot-slm-backend/monitoring/performance_monitor.py": 785,
     "autobot-slm-backend/monitoring/performance_optimizer.py": 773,
     "autobot-slm-backend/services/backup.py": 826,
     "autobot-slm-backend/services/blue_green.py": 1287,

@@ -128,6 +128,20 @@ else
     log_warning "Low disk space: ${available_space}GB available - consider cleanup"
 fi
 
+# Check for performance monitoring
+log_info "Checking performance monitoring integration..."
+
+if [[ -f "$PROJECT_ROOT/logs/performance_monitor.log" ]]; then
+    log_success "Performance monitor log found - GPU regression detection will be enhanced"
+
+    # Check for recent GPU regressions
+    if grep -q "REGRESSION.*GPU" "$PROJECT_ROOT/logs/performance_monitor.log" 2>/dev/null; then
+        log_info "🚨 Recent GPU regressions detected - enhanced monitoring will help!"
+    fi
+else
+    log_info "Performance monitor log not found - will create monitoring integration"
+fi
+
 # Check ports
 log_info "Checking required ports..."
 
@@ -169,6 +183,14 @@ echo ""
 echo -e "${GREEN}4. Start Real-Time Monitoring:${NC}"
 echo "   bash scripts/logging/real-time-monitor.sh"
 echo ""
+
+if grep -q "REGRESSION.*GPU" "$PROJECT_ROOT/logs/performance_monitor.log" 2>/dev/null; then
+    echo -e "${YELLOW}🚨 SPECIAL NOTE:${NC}"
+    echo "   GPU performance regressions detected in your system!"
+    echo "   The enhanced logging will provide better analysis and alerting"
+    echo "   for these performance issues."
+    echo ""
+fi
 
 echo -e "${CYAN}Web Interfaces (after deployment):${NC}"
 echo "  Loki API:        http://${AUTOBOT_BACKEND_HOST:-localhost}:3100"

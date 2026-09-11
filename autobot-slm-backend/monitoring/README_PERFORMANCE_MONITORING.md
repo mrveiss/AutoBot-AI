@@ -22,7 +22,6 @@ of it has a live equivalent:
 | `comprehensive_monitoring_controller.py`, `monitor_control.py`, `start_monitoring.sh`, `monitoring_config.yaml` | the in-process routers described above |
 | `metrics_adapter.py` | callers use `get_metrics_manager()` directly |
 | `performance_dashboard.py` | the `/dashboard` and `/metrics/fleet` routes in `api/monitoring.py` |
-| `performance_monitor.py` | the `/metrics/fleet` route in `api/monitoring.py`, and `get_node_metrics` in `api/performance.py` |
 
 ## Being wired in
 
@@ -34,7 +33,14 @@ Three modules here have no live equivalent yet. Each has its own issue:
 - `business_intelligence_dashboard.py`: cost and ROI analysis move to Company OS,
   and system-wide stats move under the SLM (#16307).
 
-None of the three can be imported today. All three import the retired
-`performance_monitor` (which itself needed the main backend's
-`config.ConfigManager`), and `performance_benchmark.py` also imports
-`src.constants`, which does not exist. Each issue replaces those imports.
+None of the three can be imported today. All three import `performance_monitor.py`
+by its bare name, and that module needs the main backend's `config.ConfigManager`.
+`performance_benchmark.py` also imports `src.constants`, which does not exist.
+Each issue replaces those imports.
+
+`performance_monitor.py` stays until the last of #16305, #16306 and #16307 lands.
+Its fleet view is already live, in the `/metrics/fleet` route in `api/monitoring.py`
+and `get_node_metrics` in `api/performance.py`. Whichever issue lands last removes
+it, together with its file-size baseline entries and the two log checks in
+`autobot-infrastructure/shared/scripts/logging/quick-deploy-verification.sh` that
+read `logs/performance_monitor.log`.

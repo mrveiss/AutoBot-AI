@@ -472,7 +472,7 @@ self.redis_host = redis_host or redis_config.get(
 **Affected Files:**
 - `autobot-backend/utils/async_redis_manager.py:279`
 - `autobot-backend/api/knowledge_debug.py:105`
-- `monitoring/performance_monitor.py:140` (retired in #16282)
+- `monitoring/performance_monitor.py:140`
 - (See audit report for complete list)
 
 **Issue:** Hardcoded socket_timeout, connect_timeout values
@@ -575,7 +575,7 @@ redis:
 - `monitoring/advanced_apm_system.py:221` (retired in #16282)
 - `monitoring/performance_dashboard.py:588` (retired in #16282)
 - `monitoring/business_intelligence_dashboard.py:122`
-- `monitoring/performance_monitor.py:138` (retired in #16282)
+- `monitoring/performance_monitor.py:138`
 - `monitoring/ai_performance_analytics.py:127` (retired in #16282)
 
 **Issue:** All monitoring assumes metrics in DB 4
@@ -670,7 +670,6 @@ FRONTEND_VM_IP: str = "<frontend-ip>"
 
 **Priority:** HIGH - P2
 **File:** `monitoring/performance_monitor.py`
-**Status:** moot. The module was retired in #16282; its fleet view is served by the SLM's `/metrics/fleet` route in `api/monitoring.py`.
 **Agent:** `devops-engineer`
 **Estimated Time:** 3 hours
 
