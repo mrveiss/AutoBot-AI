@@ -8,7 +8,7 @@ Layer 1 (#15947) made claiming possible and #15949 made it visible. This makes i
 the path agents actually take, which is what turns "two agents overwrite each
 other" from discouraged into refused.
 
-THREE THINGS THIS GETS RIGHT AND A NAIVE VERSION GETS WRONG.
+FOUR THINGS THIS GETS RIGHT AND A NAIVE VERSION GETS WRONG.
 
 *Partial acquisition is released, not kept.* A run declaring three scopes and
 winning two has not started work -- keeping the two would block other agents on
@@ -19,13 +19,23 @@ reported.
 *The renewal is tied to the run, not to a timer.* Claims carry a TTL so a crashed
 holder cannot hold forever. A long run must therefore renew, and the renew must
 stop when the run does -- including when it dies. Cancelling the renewal task in
-``finally`` is what makes a hung executor's scope free itself rather than being
-renewed forever by a loop nobody is watching.
+``finally`` stops renewal when the run ends. It does nothing for a run that is
+alive but hung: that run never reaches ``finally``, which is the fourth point.
 
 *A failed release is logged, never raised.* Release runs in ``finally``, so an
 exception there would replace the real outcome of the run -- a claim-registry
 error masquerading as a task failure. The TTL is the backstop that makes this
 safe to swallow.
+
+*Renewal follows progress, and a lapsed claim refuses writes (#15950).* A run
+that is alive but hung used to renew forever. Renewal now stops once the run has
+reported no progress for the stall window, and the claim lapses at TTL.
+Progress is reported at checkpoints every run passes through: an LLM
+completion, a tool SDK execution, and a write site's own check. So a slow run
+that keeps working keeps its claim, and only silence lets one lapse. A write
+site calls ``require_held`` first, and a lapsed claim refuses the write, rather
+than letting a run that stalled and woke up write over a scope someone else may
+now hold.
 """
 
 from __future__ import annotations
@@ -34,17 +44,22 @@ import asyncio
 import contextlib
 import hashlib
 import re
+import time
 from dataclasses import dataclass
 from typing import AsyncIterator, Sequence
 
+from autobot_shared.coordination.run_progress import ClaimedRun, bound, current_run, record_progress
 from autobot_shared.coordination.work_claims import (
     CLAIM_TTL_S,
     Claim,
     ClaimConflict,
     ClaimMode,
     ClaimUnavailable,
+    Scope,
 )
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 
@@ -56,6 +71,25 @@ _RENEW_DIVISOR = 3
 #: Long enough to stay readable in a claim table, short enough that a Redis key
 #: built from several of them stays sane.
 _MAX_SEGMENT = 80
+
+#: How many renewal intervals a run may go without reporting progress before its
+#: claims stop being renewed and lapse (#15950 AC4, owner ruling).
+STALL_INTERVALS = env_int_clamped("AUTOBOT_WORK_CLAIM_STALL_INTERVALS", 3, min_v=2, max_v=100)
+
+
+class ClaimNotHeld(RuntimeError):
+    """A write was attempted under a claim that is not, or no longer, held (#15950 AC6)."""
+
+
+def _stall_window_s(interval: float) -> float:
+    """Seconds without progress before a run counts as stalled.
+
+    Never shorter than two LLM request timeouts. A model call reports progress
+    only when it finishes, so a shorter window would lapse a run that is doing
+    exactly what it should (owner ruling, #15950). It is tied to the configured
+    timeout, not a number, so that stays true when either setting changes.
+    """
+    return max(STALL_INTERVALS * interval, 2 * float(config.timeout.llm_request))
 
 
 @dataclass(frozen=True)
@@ -74,39 +108,65 @@ class ScopesHeld:
         return self.conflict is None
 
 
-async def _renew_forever(scopes: Sequence[str], *, agent_id: str, task_id: str, stop=None) -> None:
-    """Keep *scopes* alive until cancelled, or until *stop* says the run is over.
+async def _run_is_over(stop, *, agent_id: str, task_id: str, scopes: Sequence[str]) -> bool:
+    """The cancellation check: True once *stop* says the run is over."""
+    if stop is None:
+        return False
+    try:
+        if await stop():
+            logger.info("run %s/%s is over; letting %s lapse at TTL", agent_id, task_id, list(scopes))
+            return True
+    except Exception as exc:  # noqa: BLE001 -- an unreadable state is no reason to stop renewing
+        logger.warning("cancellation check failed for %s/%s: %s", agent_id, task_id, exc)
+    return False
 
-    *stop* exists for cancellation. A cancelled task here does not interrupt its
-    executor -- `cancel_task` flips a state in Redis and returns -- so the work
-    keeps running, and releasing its scope immediately would free a path that is
-    still being written. Stopping the RENEWAL instead lets the claim lapse at its
-    TTL, which bounds a cancelled task's hold without ever unlocking a scope
-    while work continues.
 
-    That is a bound, not a release, and #15950's cancellation criterion is left
-    unticked because of it. Cooperative cancellation in the executor is the real
-    fix (#16174); this path stays afterwards as the backstop for an executor
-    wedged before it reaches any checkpoint.
-    """
+async def _renew_round(scopes: Sequence[str], *, agent_id: str, task_id: str) -> bool:
+    """Renew every scope. False when one was found no longer held by this run."""
     from autobot_shared.coordination.work_claims import renew
 
+    all_held = True
+    for scope in scopes:
+        try:
+            if not await renew(scope, agent_id=agent_id, task_id=task_id):
+                logger.warning("scope %s was no longer held by %s/%s at renew", scope, agent_id, task_id)
+                all_held = False
+        except Exception as exc:  # noqa: BLE001 -- a renew failure must not kill the run
+            logger.warning("renewing scope %s failed: %s", scope, exc)
+    return all_held
+
+
+async def _renew_forever(
+    scopes: Sequence[str], *, agent_id: str, task_id: str, stop=None, run: ClaimedRun | None = None
+) -> None:
+    """Keep *scopes* alive while the run makes progress; stop when it ends or stalls.
+
+    *stop* exists for cancellation. A cancelled task does not interrupt its
+    executor -- `cancel_task` flips a state in Redis and returns -- so releasing
+    its scope immediately would free a path still being written. Stopping the
+    RENEWAL instead lets the claim lapse at its TTL. Cooperative cancellation is
+    the real fix (#16174); this path stays as the backstop.
+
+    *run* ties renewal to progress (#15950 AC4). A run that reports nothing for
+    the stall window is treated as hung: renewal stops and the run is marked
+    lapsed, so its claim expires at TTL and a late write under it is refused. A
+    renew that finds the claim already gone lapses the run the same way.
+    """
     interval = max(1, CLAIM_TTL_S // _RENEW_DIVISOR)
+    window = _stall_window_s(interval)
     while True:
         await asyncio.sleep(interval)
-        if stop is not None:
-            try:
-                if await stop():
-                    logger.info("run %s/%s is over; letting %s lapse at TTL", agent_id, task_id, list(scopes))
-                    return
-            except Exception as exc:  # noqa: BLE001 -- an unreadable state is no reason to stop renewing
-                logger.warning("cancellation check failed for %s/%s: %s", agent_id, task_id, exc)
-        for scope in scopes:
-            try:
-                if not await renew(scope, agent_id=agent_id, task_id=task_id):
-                    logger.warning("scope %s was no longer held by %s/%s at renew", scope, agent_id, task_id)
-            except Exception as exc:  # noqa: BLE001 -- a renew failure must not kill the run
-                logger.warning("renewing scope %s failed: %s", scope, exc)
+        if await _run_is_over(stop, agent_id=agent_id, task_id=task_id, scopes=scopes):
+            return
+        if run is not None and time.monotonic() - run.last_progress > window:
+            run.lapse(f"no progress for {window:.0f}s")
+            logger.warning(
+                "run %s/%s reported no progress for %.0fs; %s lapse at TTL", agent_id, task_id, window, list(scopes)
+            )
+            return
+        if not await _renew_round(scopes, agent_id=agent_id, task_id=task_id) and run is not None:
+            run.lapse("a renew found the claim no longer held")
+            return
 
 
 async def _release_all(scopes: Sequence[str], *, agent_id: str, task_id: str) -> None:
@@ -228,22 +288,69 @@ async def hold_scopes(
     except ClaimUnavailable:
         # Redis is down. Refusing every run would make the coordination layer a
         # single point of failure for work it only advises on, so the run
-        # proceeds unclaimed and says so loudly.
+        # proceeds unclaimed and says so loudly -- and write sites see "degraded".
         logger.error(
             "work-claim registry unavailable; %s/%s runs WITHOUT claims on %s", agent_id, task_id, list(scopes)
         )
-        yield ScopesHeld(claims=())
+        with bound(ClaimedRun(frozenset(scopes), standing="degraded")):
+            yield ScopesHeld(claims=())
         return
 
     if not held.granted:
         yield held
         return
 
-    renewer = asyncio.create_task(_renew_forever(scopes, agent_id=agent_id, task_id=task_id, stop=stop))
-    try:
-        yield held
-    finally:
-        renewer.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await renewer
-        await _release_all(scopes, agent_id=agent_id, task_id=task_id)
+    run = ClaimedRun(frozenset(scopes))
+    with bound(run):
+        renewer = asyncio.create_task(_renew_forever(scopes, agent_id=agent_id, task_id=task_id, stop=stop, run=run))
+        try:
+            yield held
+        finally:
+            renewer.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await renewer
+            await _release_all(scopes, agent_id=agent_id, task_id=task_id)
+
+
+def _covers(held: str, wanted: str) -> bool:
+    """True when claiming *held* entitles a write to *wanted*: the same scope or an ancestor."""
+    h, w = Scope.parse(held), Scope.parse(wanted)
+    return h.kind == w.kind and (w.path == h.path or w.path.startswith(h.path + "/"))
+
+
+def require_held(scopes: Sequence[str], *, site: str) -> None:
+    """Refuse a write the current run does not, or no longer, hold a claim for (#15950 AC6).
+
+    The owner's ruling, by the run's standing:
+
+    * held, and a held scope covers the write: allow.
+    * lapsed (it stalled, or a renew found the claim gone): **refuse**.
+    * degraded (the registry was unavailable): allow, and log.
+    * no claimed run at all: allow, with a named warning.
+
+    The last case is a dispatcher that ran the agent without holding its declared
+    scopes (#16269). It is warned rather than refused until every dispatcher holds
+    them, because refusing now would break live writes on those paths. A write
+    that passes the check is itself progress.
+    """
+    if not scopes:
+        return
+    run = current_run()
+    if run is None:
+        logger.warning(
+            "UNCLAIMED WRITE at %s: no work claim is held for %s (dispatcher bypasses hold_scopes, #16269)",
+            site,
+            list(scopes),
+        )
+        return
+    if run.standing == "degraded":
+        logger.warning("write at %s proceeds unclaimed: the claim registry was unavailable (%s)", site, list(scopes))
+        return
+    live = [s for r in run.chain() if r.standing == "held" for s in r.scopes]
+    uncovered = [s for s in scopes if not any(_covers(h, s) for h in live)]
+    if uncovered:
+        reason = next((r.lapse_reason for r in run.chain() if r.standing == "lapsed"), "")
+        raise ClaimNotHeld(
+            f"write at {site} refused: {uncovered} not held" + (f" (claim lapsed: {reason})" if reason else "")
+        )
+    record_progress()
