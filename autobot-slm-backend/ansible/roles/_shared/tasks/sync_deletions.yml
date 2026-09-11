@@ -30,13 +30,31 @@
 #
 # #16310 review round 4, 3(b), accepted residual limitation: a filename
 # containing a literal newline still splits into two lines somewhere in the
-# find -> ansible -> heredoc transport below (the `find`/`read -r` pipeline
-# has no other record separator available here). This fails SAFE -- the
-# corrupted "candidate" resolves to a path that does not exist or is
+# find -> ansible -> target-side-file transport below (the `find`/`read -r`
+# pipeline has no other record separator available here). This fails SAFE --
+# the corrupted "candidate" resolves to a path that does not exist or is
 # refused, so the real file is left in place, never deleted -- not
 # re-plumbed to a NUL-separated transport, which the ansible module glue
-# (stdout_lines, the present-files copy, the heredoc) does not support end
-# to end without a much larger change.
+# (stdout_lines, the present-files copy, the delete-list file) does not
+# support end to end without a much larger change.
+#
+# #16310 review round 12:
+#   B1: the deletion shell task now declares `args: executable: /bin/bash`
+#       (matching every other pipefail task in this repo). Without it,
+#       ansible runs `shell:` under `/bin/sh`, which is dash on Ubuntu --
+#       dash rejects `set -o pipefail` with "Illegal option", so the task
+#       always landed in `rescue` and NOTHING was ever deleted on an Ubuntu
+#       host. CI could not catch this because the wiring test ran the script
+#       with `bash -c` directly instead of the interpreter the task itself
+#       declares.
+#   N4: the delete candidates are no longer inlined into the script as a
+#       heredoc. A candidate path exactly equal to the old heredoc
+#       terminator ended the heredoc early and ran the remaining script
+#       lines as shell -- candidates come from git history and are
+#       untrusted. The list is now written target-side, with
+#       ansible.builtin.copy, to a tempfile the shell script reads a line at
+#       a time with `read -r`; the file is removed afterward in `always:`.
+#   N5/N6: see the `always:` block and the bootstrap-fallback facts below.
 #
 # Contract:
 #   sync_deletions_label       (str) Display label, e.g. "Backend".
@@ -95,6 +113,29 @@
       delegate_to: localhost
       when: _sd_previous_commit | length > 0
 
+    # #16310 review round 12, N6: an unknown previous_commit (the marker
+    # names a commit this controller clone does not have -- a force-push or
+    # a re-clone moved history out from under it) used to fail the diff plan
+    # every time, land in rescue, warn, and repeat forever -- nothing ever
+    # advanced. services.sync_deletions.compute_deletion_plan now detects
+    # that case itself (`git cat-file -e`) and returns bootstrap_required
+    # instead of error, so this settles on the SAME one-time bootstrap mode
+    # used when no marker exists at all, rather than a permanent skip.
+    - name: "{{ sync_deletions_label }} | Deletions: decide whether to fall back to bootstrap mode"
+      ansible.builtin.set_fact:
+        _sd_need_bootstrap: >-
+          {{ (_sd_previous_commit | length == 0) or
+             ((_sd_plan_diff.stdout | from_json).bootstrap_required | default(false)
+              if _sd_plan_diff is defined and _sd_plan_diff.stdout is defined else false) }}
+
+    - name: "{{ sync_deletions_label }} | Deletions: warn that the previous marker commit is unknown to this clone"
+      ansible.builtin.debug:
+        msg: >-
+          {{ sync_deletions_label }}: previous marker commit {{ _sd_previous_commit }} is unknown to
+          this controller's clone (force-push or re-clone) -- falling back to bootstrap mode for
+          {{ sync_deletions_target_dir }} (#16310 review round 12, N6).
+      when: _sd_previous_commit | length > 0 and _sd_need_bootstrap
+
     # #16310 review, BLOCKING 1: pruned with the SAME ARTIFACT_DIRS/
     # ARTIFACT_DIR_SUFFIXES vocabulary services/deploy_artifacts.py and
     # full_tree_drift.py use, via -prune so `find` never DESCENDS into a
@@ -103,7 +144,7 @@
     # walking those trees file-by-file is what made a first bootstrap take
     # hours. See repo_tests/sync_deletions_ansible_wiring_16310_test.py's
     # lockstep test asserting this list matches ARTIFACT_DIRS exactly.
-    - name: "{{ sync_deletions_label }} | Deletions: enumerate files present on the target (bootstrap only)"
+    - name: "{{ sync_deletions_label }} | Deletions: enumerate files present on the target (bootstrap mode)"
       ansible.builtin.command:
         cmd: >-
           find {{ sync_deletions_target_dir }}
@@ -114,7 +155,7 @@
       register: _sd_present_raw
       become: true
       changed_when: false
-      when: _sd_previous_commit | length == 0
+      when: _sd_need_bootstrap
 
     - name: "{{ sync_deletions_label }} | Deletions: allocate a present-files list file for the bootstrap plan"
       ansible.builtin.tempfile:
@@ -122,7 +163,7 @@
         prefix: autobot-sync-deletions-present-
       register: _sd_present_file
       delegate_to: localhost
-      when: _sd_previous_commit | length == 0
+      when: _sd_need_bootstrap
 
     - name: "{{ sync_deletions_label }} | Deletions: write the present-files list for the bootstrap plan"
       ansible.builtin.copy:
@@ -131,9 +172,9 @@
               | map('regex_replace', '^' ~ sync_deletions_target_dir ~ '/', '') | list) | join('\n') }}
         dest: "{{ _sd_present_file.path }}"
       delegate_to: localhost
-      when: _sd_previous_commit | length == 0
+      when: _sd_need_bootstrap
 
-    - name: "{{ sync_deletions_label }} | Deletions: compute the bootstrap plan (no marker yet -- at most once)"
+    - name: "{{ sync_deletions_label }} | Deletions: compute the bootstrap plan (no marker, or an unrecognized one)"
       ansible.builtin.command:
         cmd: >-
           {{ sync_deletions_planner_python | default(autobot.base_dir ~ '/autobot-slm-backend/venv/bin/python3') }}
@@ -143,16 +184,38 @@
       register: _sd_plan_bootstrap
       changed_when: false
       delegate_to: localhost
-      when: _sd_previous_commit | length == 0
+      when: _sd_need_bootstrap
 
     - name: "{{ sync_deletions_label }} | Deletions: settle on the computed plan"
       ansible.builtin.set_fact:
-        _sd_plan: "{{ (_sd_plan_diff if _sd_previous_commit | length > 0 else _sd_plan_bootstrap).stdout | from_json }}"
+        _sd_plan: "{{ (_sd_plan_bootstrap if _sd_need_bootstrap else _sd_plan_diff).stdout | from_json }}"
 
     - name: "{{ sync_deletions_label }} | Deletions: fail loudly when the plan could not be computed"
       ansible.builtin.fail:
         msg: "Deletion plan failed for {{ sync_deletions_target_dir }}: {{ _sd_plan.error }} (#16310)"
       when: _sd_plan.error is truthy
+
+    # #16310 review round 12, N4: the delete list travels to the target as a
+    # real file (ansible.builtin.copy), never inlined into the script text
+    # via a heredoc. A candidate equal to the OLD heredoc terminator, or
+    # containing shell metacharacters, is now just a line in this file --
+    # `read -r` treats it as inert text, reaching `rm` only as a quoted
+    # `$rel`. Removed in `always:` below regardless of how the shell task
+    # exits.
+    - name: "{{ sync_deletions_label }} | Deletions: allocate a delete-list file on the target"
+      ansible.builtin.tempfile:
+        state: file
+        prefix: autobot-sync-deletions-list-
+      register: _sd_delete_list_file
+      become: true
+      when: _sd_plan.delete | length > 0
+
+    - name: "{{ sync_deletions_label }} | Deletions: write the delete-list file on the target"
+      ansible.builtin.copy:
+        content: "{{ _sd_plan.delete | join('\n') }}\n"
+        dest: "{{ _sd_delete_list_file.path }}"
+      become: true
+      when: _sd_plan.delete | length > 0
 
     # #16310 review, HIGH: a symlinked parent under the target could resolve
     # outside it. Resolved with `realpath -m` on the TARGET itself (the
@@ -169,6 +232,10 @@
           while IFS= read -r rel; do
             [ -z "$rel" ] && continue
             cand_real=$(realpath -m -- "{{ sync_deletions_target_dir }}/$rel")
+            # #16310 review round 12, N7: `realpath -m` also refuses a
+            # candidate whose final path component is itself a symlink
+            # pointing outside the tree -- accepted limitation (this repo
+            # tracks 0 symlinks).
             case "$cand_real" in
               "$root_real"|"$root_real"/*)
                 rm -f -- "{{ sync_deletions_target_dir }}/$rel"
@@ -177,13 +244,18 @@
                 refused="$refused $rel"
                 ;;
             esac
-          done <<'AUTOBOT_SYNC_DELETIONS_LIST'
-          {{ _sd_plan.delete | join('\n') }}
-          AUTOBOT_SYNC_DELETIONS_LIST
+          done < "{{ _sd_delete_list_file.path }}"
           if [ -n "$refused" ]; then
             echo "REFUSED (resolved outside {{ sync_deletions_target_dir }}):$refused" >&2
             exit 1
           fi
+      args:
+        # #16310 review round 12, B1: without this, ansible runs `shell:`
+        # under /bin/sh -- dash on Ubuntu -- which rejects `set -o pipefail`
+        # ("Illegal option", rc 2), sending every run to `rescue` and
+        # deleting nothing, silently, forever. The other pipefail tasks in
+        # this repo all declare this too.
+        executable: /bin/bash
       register: _sd_delete_result
       become: true
       when: _sd_plan.delete | length > 0
@@ -205,3 +277,25 @@
           WARNING: {{ sync_deletions_label }} deletion pass failed for
           {{ sync_deletions_target_dir }}: {{ ansible_failed_result.msg | default(ansible_failed_result) }}
           (#16310). Nothing was recorded as done; the next run retries from the same baseline.
+
+  # #16310 review round 12, N5: both temp files must go regardless of how the
+  # block exited -- a `rescue`-only or success-only cleanup would leak one of
+  # them on the other path. `.path is defined` guards a task that never ran
+  # (its own `when:` was false) or never even reached its `register:` (an
+  # earlier failure) -- register still creates the variable in the skipped
+  # case (`skipped: true`, no `path` key), so checking `.path` rather than
+  # just the variable itself is what actually detects "nothing to clean up".
+  always:
+    - name: "{{ sync_deletions_label }} | Deletions: remove the controller-side present-files list"
+      ansible.builtin.file:
+        path: "{{ _sd_present_file.path }}"
+        state: absent
+      delegate_to: localhost
+      when: _sd_present_file is defined and _sd_present_file.path is defined
+
+    - name: "{{ sync_deletions_label }} | Deletions: remove the target-side delete-list file"
+      ansible.builtin.file:
+        path: "{{ _sd_delete_list_file.path }}"
+        state: absent
+      become: true
+      when: _sd_delete_list_file is defined and _sd_delete_list_file.path is defined

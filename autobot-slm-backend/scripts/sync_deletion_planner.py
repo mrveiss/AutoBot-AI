@@ -38,10 +38,17 @@ Two modes:
                    --new-commit <sha> --present-file /tmp/present-paths.txt
 
 Prints one JSON object to stdout: ``{"delete": [...], "kept": [...],
-"error": null}``. Exits 1 (and sets "error") when the plan could not be
-computed -- ansible must treat that as a failed task, never as an empty
-delete list, which is the no-data-loss rule in reverse: silence must never
-read as "nothing to do".
+"error": null, "bootstrap_required": false}``. Exits 1 (and sets "error")
+when the plan could not be computed -- ansible must treat that as a failed
+task, never as an empty delete list, which is the no-data-loss rule in
+reverse: silence must never read as "nothing to do".
+
+#16310 review round 12, N6: ``diff`` mode exits 0 with
+``bootstrap_required: true`` (never "error") when ``--previous-commit`` is
+unknown to this clone (a force-push or a re-clone moved history out from
+under a target whose marker still names the old commit) -- the caller then
+runs ``bootstrap`` mode instead, the same one-time mode used when no marker
+exists at all, rather than repeating a fatal error on every run forever.
 """
 
 from __future__ import annotations
@@ -95,7 +102,16 @@ def main(argv: list[str] | None = None) -> int:
     # it and `| from_json`s the result. autobot-slm-backend/scripts/ is not in
     # CLI_OUTPUT_ROOTS (only the repo-root scripts/ is), so this needs the
     # explicit exemption rather than the automatic one.
-    print(json.dumps({"delete": plan.delete, "kept": plan.kept, "error": plan.error}))  # noqa: print
+    print(  # noqa: print
+        json.dumps(
+            {
+                "delete": plan.delete,
+                "kept": plan.kept,
+                "error": plan.error,
+                "bootstrap_required": plan.bootstrap_required,
+            }
+        )
+    )
     return 1 if plan.error else 0
 
 

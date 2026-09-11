@@ -266,6 +266,65 @@ async def test_a_diff_failure_reports_an_error_not_an_empty_plan(tmp_path) -> No
 
 
 # ---------------------------------------------------------------------------
+# #16310 review round 12, N6: an unknown previous_commit falls back to
+# bootstrap_required instead of a permanent error.
+# ---------------------------------------------------------------------------
+
+
+async def test_an_unknown_previous_commit_requests_bootstrap_not_an_error(tmp_path) -> None:
+    """The marker's own repo_root has NO history at all for this commit --
+    the shape of a force-pushed or re-cloned controller checkout whose old
+    history is simply gone. Old code: `git diff` fails, `plan.error` is set,
+    the ansible block's own rescue warns and skips -- forever, every run,
+    since the marker never advances and this exact failure repeats. New
+    code: `bootstrap_required` is set, `error` stays None, so the caller
+    falls back to the one-time bootstrap plan instead of retrying the same
+    dead end indefinitely."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo / "comp" / "keep.py")
+    new_commit = _commit_all(repo, "seed")
+
+    unknown_commit = "f" * 40  # well-formed SHA, never an object in this repo
+
+    plan = await compute_deletion_plan(str(repo / "comp"), str(repo), unknown_commit, new_commit)
+
+    assert plan.error is None, f"an unknown previous commit must not be a fatal error, got: {plan.error!r}"
+    assert plan.bootstrap_required is True
+    assert plan.delete == []
+    assert plan.kept == []
+
+
+async def test_a_known_previous_commit_never_requests_bootstrap(tmp_path) -> None:
+    """The ordinary, fast-path case: bootstrap_required must stay False so
+    the caller keeps taking the cheap diff-based path, not the bootstrap
+    `find`-the-whole-tree one, on every normal run."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo / "comp" / "keep.py")
+    commit_a = _commit_all(repo, "seed")
+    commit_b = _commit_all(repo, "no-op")
+
+    plan = await compute_deletion_plan(str(repo / "comp"), str(repo), commit_a, commit_b)
+
+    assert plan.bootstrap_required is False
+    assert plan.error is None
+
+
+async def test_same_commit_no_op_never_requests_bootstrap(tmp_path) -> None:
+    """The previous_commit==new_commit short-circuit must not even need to
+    ask git whether the commit exists -- it already knows nothing changed."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo / "comp" / "keep.py")
+    commit_a = _commit_all(repo, "seed")
+
+    plan = await compute_deletion_plan(str(repo / "comp"), str(repo), commit_a, commit_a)
+
+    assert plan.bootstrap_required is False
+
+
+# ---------------------------------------------------------------------------
 # _is_lexically_contained: MEDIUM 3, now lexical (the planner cannot resolve
 # symlinks on a possibly-remote target)
 # ---------------------------------------------------------------------------

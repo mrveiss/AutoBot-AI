@@ -399,6 +399,30 @@
         sync_deletions_owner: autobot
       tags: [slm, shared]
 
+    # #16310 review round 12, N3: `libs` and `autobot-plugins` are unarchived
+    # above (#15462 -- both frontends resolve `file:` workspace deps into
+    # these deployed trees) exactly like the three components above, and were
+    # missing their own deletion pass -- a file dropped from either would
+    # never be removed from a deployed host, contradicting the PR's own claim
+    # that deletion runs after every component's sync.
+    - name: "[PLAY 1] SLM | Delete files removed from source: libs (#16310)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/sync_deletions.yml
+      vars:
+        sync_deletions_label: "SLM libs (self-update)"
+        sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/libs"
+        sync_deletions_target_dir: "{{ autobot.base_dir }}/libs"
+        sync_deletions_owner: autobot
+      tags: [slm, slm-frontend, libs]
+
+    - name: "[PLAY 1] SLM | Delete files removed from source: autobot-plugins (#16310)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/sync_deletions.yml
+      vars:
+        sync_deletions_label: "SLM autobot-plugins (self-update)"
+        sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-plugins"
+        sync_deletions_target_dir: "{{ autobot.base_dir }}/autobot-plugins"
+        sync_deletions_owner: autobot
+      tags: [slm, slm-frontend, plugins]
+
     # #12223 (#12202): the self-update path deploys the SLM backend via the
     # unarchive above and never runs the slm_manager role — where the #12202
     # marker-write lives — so without this the .deployed_commit marker is never

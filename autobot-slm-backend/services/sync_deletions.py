@@ -59,6 +59,27 @@ class DeletionPlan:
     delete: list[str] = field(default_factory=list)
     kept: list[str] = field(default_factory=list)
     error: str | None = None
+    # #16310 review round 12, N6: True when compute_deletion_plan's
+    # previous_commit is unknown to this clone (a force-push or a re-clone
+    # moved history out from under a target whose marker still names the old
+    # commit). Without this, an unknown commit was a permanent `error` --
+    # the ansible block's own rescue warns and skips FOREVER, never
+    # advancing. The caller (sync_deletions.yml) treats this the same as no
+    # marker existing at all: fall back to compute_bootstrap_plan, the same
+    # one-time mode, rather than a fatal, repeating error.
+    bootstrap_required: bool = False
+
+
+async def _commit_known(repo_root: str, commit: str) -> bool:
+    """True when *commit* exists in *repo_root*'s history.
+
+    ``cat-file -e`` is the cheapest way to ask git "do you have this object"
+    without also triggering the "unknown revision or path not in the working
+    tree" failure a `git diff`/`git log` against an unknown commit would
+    otherwise surface as an indistinguishable, permanent planner error.
+    """
+    _output, rc = await run_git(repo_root, "cat-file", "-e", f"{commit}^{{commit}}")
+    return rc == 0
 
 
 def _is_lexically_contained(rel_path: str) -> bool:
@@ -120,6 +141,17 @@ async def compute_deletion_plan(source_dir: str, repo_root: str, previous_commit
     """Every path git proves was deleted/renamed between two known commits."""
     if previous_commit == new_commit:
         return DeletionPlan()
+
+    if not await _commit_known(repo_root, previous_commit):
+        # #16310 review round 12, N6: fails SAFE -- deleting nothing this
+        # run, same as the ordinary error path -- but tells the caller to
+        # retry via bootstrap next, rather than repeating this exact failure
+        # forever.
+        logger.warning(
+            "sync_deletions: previous commit %s is unknown to this clone -- falling back to bootstrap mode",
+            previous_commit[:12],
+        )
+        return DeletionPlan(bootstrap_required=True)
 
     pathspec = component_pathspec(repo_root, source_dir)
     diff_output, rc = await run_git(

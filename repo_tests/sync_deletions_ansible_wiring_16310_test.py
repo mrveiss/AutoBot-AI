@@ -286,14 +286,18 @@ def test_shared_task_file_never_touches_deployed_commit() -> None:
 # --------------------------------------------------------------------------
 
 
+def _delete_step() -> dict:
+    task = _shared_task()
+    delete_step = next((sub for sub in task["block"] if "remove" in str(sub.get("name", "")).lower()), None)
+    assert delete_step is not None, "no deletion step found in the block"
+    return delete_step
+
+
 def test_the_delete_step_resolves_containment_before_removing_anything() -> None:
     """The deletion step must consume only the contained list -- resolved on
     the TARGET (the controller cannot see a remote target's real filesystem),
     never trusting the (lexically-checked-only) planner output alone."""
-    task = _shared_task()
-    delete_step = next((sub for sub in task["block"] if "remove" in str(sub.get("name", "")).lower()), None)
-    assert delete_step is not None, "no deletion step found in the block"
-
+    delete_step = _delete_step()
     body = str(delete_step.get("ansible.builtin.shell", {}).get("cmd", ""))
     assert "realpath" in body, "the deletion step must resolve real paths before removing anything"
     assert "root_real" in body and "cand_real" in body, "the deletion step must compare candidate to root real paths"
@@ -304,39 +308,31 @@ def test_the_delete_step_resolves_containment_before_removing_anything() -> None
 
 
 def _delete_step_raw_cmd() -> str:
-    task = _shared_task()
-    delete_step = next((sub for sub in task["block"] if "remove" in str(sub.get("name", "")).lower()), None)
-    assert delete_step is not None, "no deletion step found in the block"
-    return str(delete_step["ansible.builtin.shell"]["cmd"])
+    return str(_delete_step()["ansible.builtin.shell"]["cmd"])
 
 
-def _render_delete_cmd(target_dir, delete_list: list[str]) -> str:
-    """Substitute the two Jinja expressions the real task uses, by hand --
-    the same two an ansible run would fill in with sync_deletions_target_dir
-    and _sd_plan.delete."""
+def _delete_step_interpreter() -> str:
+    """YAML-declared interpreter (#16310 round 12, B1); default /bin/sh
+    (ansible's own default) so a removed `executable:` fails this canary."""
+    return (_delete_step().get("args") or {}).get("executable", "/bin/sh")
+
+
+def _render_delete_cmd(target_dir, delete_list_path) -> str:
+    """Substitute the target dir and delete-list file path (#16310 N4: no heredoc)."""
     rendered = _delete_step_raw_cmd().replace("{{ sync_deletions_target_dir }}", str(target_dir))
-    return rendered.replace("{{ _sd_plan.delete | join('\\n') }}", "\n".join(delete_list))
+    return rendered.replace("{{ _sd_delete_list_file.path }}", str(delete_list_path))
 
 
 def test_the_delete_step_shell_resists_injection_and_path_escapes(tmp_path) -> None:
-    """#16310 review round 4, MEDIUM: pull the REAL `cmd:` body out of the
-    shared task file (the way this file already parses it for the tests
-    above), render it with a crafted delete list, and run it against a real
-    tree with hostile filenames -- proving the quoting holds, not just
-    asserting it by reading the source.
-
-    #16310 review round 9: a `/` is not legal inside a single filename --
-    embedding an absolute path in a command-substitution payload made
-    ``Path.write_text`` treat it as a directory that does not exist
-    (``FileNotFoundError``), never reaching the shell at all. The payload
-    below is slash-free (``touch INJECTED``, a relative name); the script
-    runs with ``cwd=tmp_path`` so that relative name resolves somewhere this
-    test controls and can check afterward. The `../` and symlinked-parent
-    escapes stay as real directory structure (a path with a real `../` /
-    a real symlinked dir inside ``root``), not as slashes baked into one
-    filename -- those are legitimate multi-segment deletion candidates, not
-    single hostile names, and are exactly what the delete step's
-    ``realpath`` containment check exists to catch.
+    """#16310 round 4 MEDIUM: pull the REAL `cmd:` out of the shared task
+    file, render it with a crafted delete list, and run it against a real
+    tree with hostile filenames -- proving the quoting holds, not asserted.
+    Round 9: the injection payload is slash-free (``touch INJECTED``); the
+    script runs with ``cwd=tmp_path``. Round 12: N4 adds
+    ``AUTOBOT_SYNC_DELETIONS_LIST`` (the retired heredoc terminator) as an
+    ordinary candidate now that the list travels as a real file; B1 part two
+    runs under ``_delete_step_interpreter()``, read from the YAML, not a
+    hard-coded ``bash -c``.
     """
     import subprocess
 
@@ -354,6 +350,7 @@ def test_the_delete_step_shell_resists_injection_and_path_escapes(tmp_path) -> N
         "semi;colon.txt",
         "pipe|char.txt",
         "-leading-dash.txt",
+        "AUTOBOT_SYNC_DELETIONS_LIST",
     ]
     for name in ordinary_hostile:
         (root / name).write_text("x", encoding="utf-8")
@@ -364,12 +361,15 @@ def test_the_delete_step_shell_resists_injection_and_path_escapes(tmp_path) -> N
     escaped_payload.write_text("do not delete", encoding="utf-8")
 
     delete_list = [*ordinary_hostile, "../outside_target.txt", "escape_link/payload.txt"]
-    script = _render_delete_cmd(root, delete_list)
+    delete_list_file = tmp_path / "delete-list"
+    delete_list_file.write_text("\n".join(delete_list) + "\n", encoding="utf-8")
+    script = _render_delete_cmd(root, delete_list_file)
+    interpreter = _delete_step_interpreter()
 
-    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, cwd=str(tmp_path))
+    result = subprocess.run([interpreter, "-c", script], capture_output=True, text=True, check=False, cwd=str(tmp_path))
 
     assert not injected_marker.exists(), f"injection executed a command: {result.stderr}"
-    assert result.returncode == 1, "the script must fail when it refused an escaping candidate"
+    assert result.returncode == 1, f"the script must fail when it refused an escaping candidate: {result.stderr}"
     for name in ordinary_hostile:
         assert not (root / name).exists(), f"{name!r} should have been deleted"
     assert escaped_payload.exists(), "a path resolving outside the root must survive"
