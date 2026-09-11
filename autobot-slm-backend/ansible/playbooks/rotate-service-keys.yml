@@ -85,7 +85,7 @@
   connection: local
 
   vars:
-    # #16348: never a hard-coded /opt/autobot literal — the same variable
+    # #16348: never a hard-coded install-root literal — the same variable
     # the service_auth role's service_auth_keys_source_dir derives from
     # (roles/service_auth/defaults/main.yml), so both resolve one directory.
     autobot_root: "{{ autobot.base_dir }}"
@@ -170,10 +170,13 @@
       tags: [generate]
 
     - name: Display latest backup file
+      # #16348: sort by path (filename timestamp), matching deploy-keys.yml
+      # and the generator's own prune -- never mtime, which a restored or
+      # copied export can disagree with.
       ansible.builtin.debug:
         msg: >-
           Latest backup:
-          {{ (backup_files.files | sort(attribute='mtime') | last).path }}
+          {{ (backup_files.files | sort(attribute='path') | last).path }}
       tags: [generate]
 
 # ======================================================================
@@ -315,7 +318,8 @@
 
   vars:
     # #16348: same expression as Phase 1 and the service_auth role's
-    # service_auth_keys_source_dir — never a separate /opt/autobot literal.
+    # service_auth_keys_source_dir — never a separate hard-coded install
+    # root literal.
     keys_backup_dir: "{{ autobot.base_dir }}/config/service-keys"
 
   tasks:
@@ -327,6 +331,8 @@
       tags: [summary]
 
     - name: Display rotation summary
+      # #16348: sort by path (filename timestamp), matching deploy-keys.yml
+      # and the generator's own prune -- never mtime.
       ansible.builtin.debug:
         msg:
           - "Key Rotation Complete"
@@ -337,7 +343,7 @@
           - "Backend: restarted and healthy"
           - "Verification: all keys validated"
           - ""
-          - "Backup: {{ (final_backup_files.files | sort(attribute='mtime') | last).path | default('N/A') }}"
+          - "Backup: {{ (final_backup_files.files | sort(attribute='path') | last).path | default('N/A') }}"
           - ""
           - "Next rotation due: ~80 days (before 90-day TTL)"
           - "Automated via: systemctl status autobot-key-rotation.timer"

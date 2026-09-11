@@ -195,29 +195,39 @@ def _prune_old_backups(backup_dir: Path, keep: int = SERVICE_KEYS_KEEP_COUNT) ->
 
     The filename timestamp (``%Y%m%d-%H%M%S``) sorts lexicographically in
     chronological order, so a plain name sort picks the newest without a
-    stat() call — the deploy role's own "sort by mtime, take last"
-    (deploy-keys.yml) keeps working against whatever survives.
+    stat() call — the deploy role's own selector (deploy-keys.yml, sorted by
+    path) keeps working against whatever survives. ``keep`` is clamped to at
+    least 1: a caller passing 0 would delete the export just written.
     """
+    keep = max(1, keep)
     exports = sorted(backup_dir.glob("service-keys-*.yaml"))
-    stale = exports[:-keep] if keep > 0 else exports
-    for path in stale:
+    for path in exports[:-keep]:
         path.unlink()
         logger.info("Pruned old service-keys export: %s", path.name)
+
+
+def _ensure_private_dir(directory: Path) -> None:
+    """Create *directory* at 0700, explicitly -- never the process umask (#16348)."""
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(directory, 0o700)
 
 
 def _save_backup(generated_keys, redis_host, redis_port, output_dir: str | None = None):
     """Write keys backup YAML and return file path.
 
     Helper for generate_keys (#1734). Refuses a git work tree and never
-    falls back to the working directory (#16348).
+    falls back to the working directory (#16348). The directory and file
+    are put at 0700/0600 explicitly rather than left to the umask, and the
+    file is opened O_EXCL so it never exists at a world-readable mode even
+    for an instant.
     """
     backup_dir = _resolve_output_dir(output_dir)
     _refuse_if_inside_git_worktree(backup_dir)
-    backup_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_private_dir(backup_dir)
 
     backup_file = backup_dir / f"service-keys-{datetime.now().strftime('%Y%m%d-%H%M%S')}.yaml"
-
-    with open(backup_file, "w", encoding="utf-8") as f:
+    fd = os.open(backup_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         yaml.safe_dump(
             {
                 "generated_at": datetime.now().isoformat(),

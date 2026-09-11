@@ -15,7 +15,9 @@ the mechanism behind the committed key leak in #16301.
 from __future__ import annotations
 
 import importlib.util
+import os
 import secrets
+import stat
 import sys
 from typing import Any, Dict
 
@@ -224,3 +226,46 @@ def test_filename_timestamp_format_sorts_lexicographically_in_chronological_orde
     by_name = [p.name for p in sorted(backup_dir.glob("service-keys-*.yaml"))]
 
     assert by_name == chronological
+
+
+def test_prune_survivor_matches_the_name_based_selector_when_mtime_disagrees(module, tmp_path):
+    """Ansible's deploy selector and the prune here must agree on "newest"
+    even when mtime doesn't reflect generation order (#16348)."""
+    backup_dir = tmp_path / "keys"
+    backup_dir.mkdir()
+    older_by_name = backup_dir / "service-keys-20260101-000000.yaml"
+    newer_by_name = backup_dir / "service-keys-20260201-000000.yaml"
+    older_by_name.write_text("services: {}\n", encoding="utf-8")
+    newer_by_name.write_text("services: {}\n", encoding="utf-8")
+    # Reverse the mtime order relative to the name order.
+    os.utime(newer_by_name, (1_600_000_000, 1_600_000_000))
+    os.utime(older_by_name, (1_700_000_000, 1_700_000_000))
+
+    module._prune_old_backups(backup_dir, keep=1)
+
+    remaining = list(backup_dir.glob("service-keys-*.yaml"))
+    assert remaining == [newer_by_name]
+
+
+def test_prune_old_backups_clamps_keep_to_at_least_one(module, tmp_path):
+    backup_dir = tmp_path / "keys"
+    backup_dir.mkdir()
+    names = [f"service-keys-2026010{i}-000000.yaml" for i in range(1, 4)]
+    for name in names:
+        (backup_dir / name).write_text("services: {}\n", encoding="utf-8")
+
+    module._prune_old_backups(backup_dir, keep=0)
+
+    remaining = sorted(p.name for p in backup_dir.glob("service-keys-*.yaml"))
+    assert remaining == [names[-1]], "keep=0 must not delete every export"
+
+
+def test_save_backup_creates_directory_and_file_at_restrictive_modes(module, tmp_path):
+    output_dir = tmp_path / "keys"
+
+    backup_file = module._save_backup(_fake_generated_keys(), "127.0.0.1", "6379", str(output_dir))
+
+    dir_mode = stat.S_IMODE(output_dir.stat().st_mode)
+    file_mode = stat.S_IMODE(backup_file.stat().st_mode)
+    assert dir_mode == 0o700, f"backup dir must be 0700, got {oct(dir_mode)}"
+    assert file_mode == 0o600, f"backup file must be 0600, got {oct(file_mode)}"

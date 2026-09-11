@@ -16,6 +16,7 @@ one group_vars value.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List
 
 import yaml
@@ -24,6 +25,7 @@ from repo_tests._paths import repo_root
 REPO_ROOT = repo_root()
 PLAYBOOK = REPO_ROOT / "autobot-slm-backend" / "ansible" / "playbooks" / "rotate-service-keys.yml"
 ROLE_DEFAULTS = REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "service_auth" / "defaults" / "main.yml"
+DEPLOY_KEYS = REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "service_auth" / "tasks" / "deploy-keys.yml"
 
 # The single expression every export/read path must agree on (#16348).
 _EXPECTED_EXPORT_DIR_EXPR = "{{ autobot.base_dir }}/config/service-keys"
@@ -77,3 +79,19 @@ def test_generator_is_invoked_with_an_explicit_output_dir():
     generate_task = next(t for t in phase1["tasks"] if t.get("name") == "Generate new service keys")
     cmd = generate_task["ansible.builtin.command"]["cmd"]
     assert "--output-dir {{ keys_backup_dir }}" in cmd
+
+
+def test_newest_export_selectors_sort_by_path_not_mtime():
+    """Every "pick the newest export" selector -- Phase 1, Phase 5 and the
+    service_auth role's deploy task -- must sort by path (the filename's
+    embedded timestamp), matching the generator's own prune
+    (generate_service_keys.py::_prune_old_backups). mtime disagrees after a
+    restored/copied export or a clock step, which could delete the
+    just-rotated export while deploy picks a stale one (#16348)."""
+    for path in (PLAYBOOK, DEPLOY_KEYS):
+        text = path.read_text(encoding="utf-8")
+        selectors = re.findall(r"sort\(attribute='(\w+)'\)\s*\|\s*last", text)
+        assert selectors, f"no newest-export selector found in {path.name}"
+        assert set(selectors) == {
+            "path"
+        }, f"{path.name} selects the newest export by {sorted(set(selectors))}, not 'path' (#16348)"
