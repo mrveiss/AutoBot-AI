@@ -8,7 +8,11 @@
  * then checks each key against en.json.  Exits with code 1 if any keys used
  * in code are missing from the locale file.
  *
- * Usage:  node scripts/check-i18n-keys.mjs [--quiet]
+ * Usage:  node scripts/check-i18n-keys.mjs [--quiet] [--root <app dir>] [--en <en.json, relative to root>]
+ *
+ * `--root` / `--en` point this same checker at another app (#15665): the SLM
+ * console keeps its en.json in src/locales/, and a forked copy of this script
+ * would drift from this one the first time either changed.
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -16,9 +20,15 @@ import { resolve, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const ROOT = resolve(__dirname, '..');
+/** The value after `flag` on the command line, or undefined when absent. */
+function argValue(flag) {
+  const index = process.argv.indexOf(flag);
+  return index === -1 ? undefined : process.argv[index + 1];
+}
+
+const ROOT = resolve(argValue('--root') ?? join(__dirname, '..'));
 const SRC = join(ROOT, 'src');
-const EN_JSON = join(ROOT, 'src', 'i18n', 'locales', 'en.json');
+const EN_JSON = join(ROOT, argValue('--en') ?? join('src', 'i18n', 'locales', 'en.json'));
 
 const quiet = process.argv.includes('--quiet');
 
