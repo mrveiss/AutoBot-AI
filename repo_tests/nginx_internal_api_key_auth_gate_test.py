@@ -33,6 +33,16 @@ $slm_ws_token_bearer``, a fallback for the log-stream WebSocket) — a request
 URL, which lands in the same access log and the browser's history the key
 gate does not touch. Round 2 replaced it with the WebSocket
 ``Sec-WebSocket-Protocol`` subprotocol instead.
+
+Round 3 (#16374) adds a third invariant: ``find_session_only_auth_request_targets``
+catches an ``auth_request`` target that proxies to ``GET /api/auth/me`` — a
+check that only proves the caller holds a *valid* SLM session, not that the
+session is an admin one. A backend login token is a valid SLM session by
+design (epic #10193), so gating the key injection on ``/api/auth/me`` let any
+authenticated backend user — read-only included — reach the admin-equivalent
+``X-Internal-API-Key``. The fix points the same locations at
+``GET /api/auth/proxy-check`` instead, which the SLM backend gates with its
+admin-role dependency.
 """
 
 from __future__ import annotations
@@ -163,6 +173,38 @@ def find_query_string_derived_credentials(text: str) -> list[str]:
     return violations
 
 
+_SESSION_ONLY_CHECK_SUFFIX = "/api/auth/me"
+
+
+def find_session_only_auth_request_targets(text: str) -> list[str]:
+    """No ``auth_request`` target gating a key injection may proxy to ``/api/auth/me`` (#16374 round 3).
+
+    ``/api/auth/me`` (``get_current_user``) proves only that the token is a
+    *valid* SLM session — it has no opinion on role. A backend login token is
+    a valid SLM session by design (epic #10193), so a read-only or
+    non-admin backend user's own token satisfied this check, and nginx then
+    attached the admin-equivalent ``X-Internal-API-Key`` on their behalf. The
+    fix is the same shape the key gate itself uses: for every location that
+    injects the key, resolve its ``auth_request`` target within the same
+    ``server`` block and flag it if that target's ``proxy_pass`` still ends
+    in ``/api/auth/me`` instead of the admin-gated ``/api/auth/proxy-check``.
+    """
+    text = _strip_jinja(text)
+    violations: list[str] = []
+    for locations in _server_blocks(text):
+        internal_by_name = {loc.pattern: loc for loc in locations if loc.is_internal}
+        key_gate_targets = {loc.auth_request_target for loc in locations if loc.injects_key and loc.auth_request_target}
+        for pattern in key_gate_targets & internal_by_name.keys():
+            target_loc = internal_by_name[pattern]
+            match = re.search(r"proxy_pass\s+([^\s;]+)\s*;", target_loc.body)
+            if match and match.group(1).rstrip("/").endswith(_SESSION_ONLY_CHECK_SUFFIX):
+                violations.append(
+                    f"location {pattern}: proxy_pass {match.group(1)} only checks session "
+                    "validity, not the admin role the key confers"
+                )
+    return violations
+
+
 def find_ungated_key_injections(text: str) -> list[str]:
     """Every ``location`` in *text* that sets the internal key unsafely.
 
@@ -244,6 +286,23 @@ def test_every_nginx_template_has_no_query_string_derived_credentials() -> None:
         "these auth maps/auth_request targets derive a credential from the query "
         "string, which nginx's access log and the browser's history both persist "
         "(#16374): " + "; ".join(all_violations)
+    )
+
+
+def test_every_nginx_template_gates_key_injection_on_the_admin_check() -> None:
+    """No discovered template may gate a key injection on session-only ``/api/auth/me`` (#16374 round 3)."""
+    templates = _nginx_template_paths()
+    assert templates, "no nginx-shaped .j2 template found — the discovery glob is broken"
+
+    all_violations: list[str] = []
+    for path in templates:
+        violations = find_session_only_auth_request_targets(path.read_text(encoding="utf-8"))
+        rel = path.relative_to(REPO_ROOT)
+        all_violations.extend(f"{rel}: {v}" for v in violations)
+
+    assert not all_violations, (
+        "these auth_request targets gate a key injection on session validity alone, "
+        "not the admin role the key confers (#16374 round 3): " + "; ".join(all_violations)
     )
 
 
@@ -373,3 +432,68 @@ def test_self_auth_request_target_reading_query_string_is_detected() -> None:
 def test_self_subprotocol_derived_credential_passes() -> None:
     """The detector must not flag the shape #16374 round 2 actually ships."""
     assert find_query_string_derived_credentials(_PROPERLY_SUBPROTOCOL_GATED) == []
+
+
+# ---------------------------------------------------------------------------
+# Planted self-test: find_session_only_auth_request_targets (#16374 round 3).
+# ---------------------------------------------------------------------------
+
+_AUTH_REQUEST_TARGETS_SESSION_ONLY_CHECK = """
+server {
+    listen 443 ssl;
+    location = /check {
+        internal;
+        proxy_pass http://backend/api/auth/me;
+    }
+    location /autobot-api/ {
+        auth_request /check;
+        proxy_pass http://backend/api/;
+        proxy_set_header X-Internal-API-Key "{{ autobot_internal_api_key }}";
+    }
+}
+"""
+
+_AUTH_REQUEST_TARGETS_THE_ADMIN_CHECK = """
+server {
+    listen 443 ssl;
+    location = /check {
+        internal;
+        proxy_pass http://backend/api/auth/proxy-check;
+    }
+    location /autobot-api/ {
+        auth_request /check;
+        proxy_pass http://backend/api/;
+        proxy_set_header X-Internal-API-Key "{{ autobot_internal_api_key }}";
+    }
+}
+"""
+
+
+def test_self_session_only_check_target_is_detected() -> None:
+    """An auth_request target that proxies to /api/auth/me must fail (#16374 round 3)."""
+    violations = find_session_only_auth_request_targets(_AUTH_REQUEST_TARGETS_SESSION_ONLY_CHECK)
+    assert violations, "planted defect (auth_request -> /api/auth/me) was not detected"
+    assert "session" in violations[0]
+
+
+def test_self_admin_check_target_passes() -> None:
+    """The detector must not flag the shape #16374 round 3 actually ships."""
+    assert find_session_only_auth_request_targets(_AUTH_REQUEST_TARGETS_THE_ADMIN_CHECK) == []
+
+
+def test_self_session_only_check_ignores_locations_that_do_not_inject_the_key() -> None:
+    """A /api/auth/me auth_request target with no key injection nearby is out of scope."""
+    text = """
+server {
+    listen 443 ssl;
+    location = /check {
+        internal;
+        proxy_pass http://backend/api/auth/me;
+    }
+    location /some-other-path/ {
+        auth_request /check;
+        proxy_pass http://backend/other/;
+    }
+}
+"""
+    assert find_session_only_auth_request_targets(text) == []

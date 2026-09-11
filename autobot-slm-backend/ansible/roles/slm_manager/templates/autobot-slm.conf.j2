@@ -418,16 +418,21 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # #16374: session gate for the internal-key injection in /autobot-api/
-    # below. auth_request fires this as a subrequest BEFORE nginx adds
-    # X-Internal-API-Key, reusing the SLM backend's own JWT dependency
-    # (services/auth.py get_current_user, via GET /api/auth/me) so only a
-    # caller holding a live SLM session reaches the backend through this
-    # path. Every REST call through /autobot-api/ sends its own
-    # Authorization header — nothing here falls back to the query string.
+    # #16374 round 3: session gate for the internal-key injection in
+    # /autobot-api/ below. auth_request fires this as a subrequest BEFORE
+    # nginx adds X-Internal-API-Key, reusing the SLM backend's own
+    # admin-role dependency (services/auth.py require_admin, via
+    # GET /api/auth/proxy-check) so only a caller holding a live *admin* SLM
+    # session reaches the backend through this path. Round 2 pointed this at
+    # GET /api/auth/me, which only checks that the session is valid — every
+    # backend login token is a valid SLM session by design (epic #10193), so
+    # a read-only or non-admin user's own token passed the gate and nginx
+    # attached the admin-equivalent internal key on their behalf. Every REST
+    # call through /autobot-api/ sends its own Authorization header —
+    # nothing here falls back to the query string.
     location = /_slm_session_check {
         internal;
-        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/auth/me;
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/auth/proxy-check;
         proxy_http_version 1.1;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
@@ -436,16 +441,17 @@ server {
         proxy_set_header Authorization $http_authorization;
     }
 
-    # #16374 round 2: the same session gate as /_slm_session_check above, but
-    # for the process-log WebSocket (location ~ ^/autobot-api/processes/...
-    # /stream$ below), which offers its session token as a
-    # Sec-WebSocket-Protocol subprotocol rather than an Authorization header
-    # — a browser WebSocket handshake cannot set a custom header.
-    # $slm_stream_authorization (mapped above) is that subprotocol, reshaped
-    # into the same "Bearer <token>" form get_current_user expects.
+    # #16374 round 2/3: the same admin-session gate as /_slm_session_check
+    # above, but for the process-log WebSocket (location ~
+    # ^/autobot-api/processes/.../stream$ below), which offers its session
+    # token as a Sec-WebSocket-Protocol subprotocol rather than an
+    # Authorization header — a browser WebSocket handshake cannot set a
+    # custom header. $slm_stream_authorization (mapped above) is that
+    # subprotocol, reshaped into the same "Bearer <token>" form
+    # require_admin/get_current_user expect.
     location = /_slm_stream_session_check {
         internal;
-        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/auth/me;
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/auth/proxy-check;
         proxy_http_version 1.1;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
