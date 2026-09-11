@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from autobot_shared.user_management.schemas.user import RESERVED_USERNAMES, UserCreate, UserUpdate
 
-_VALID = {"email": "someone@example.test", "password": "Str0ngPassw0rd"}
+_VALID = {"email": "someone@example.com", "password": "Str0ngPassw0rd"}
 
 
 @pytest.mark.parametrize("name", ["default", "Default", "DEFAULT"])
