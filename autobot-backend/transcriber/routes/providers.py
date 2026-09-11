@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
-from transcriber.deps import authenticate
+from transcriber.deps import authenticate, require_admin
 from voice_processing.providers.selection import (
     get_active_provider_id,
     list_available_providers,
@@ -58,7 +58,7 @@ async def list_providers() -> Dict[str, Any]:
     }
 
 
-@router.patch("/providers")
+@router.patch("/providers", dependencies=[Depends(require_admin)])
 async def set_provider(body: SetProviderRequest) -> Dict[str, Any]:
     """Set the active cloud ASR provider.
 

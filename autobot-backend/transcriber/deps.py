@@ -34,6 +34,12 @@ def resolve_user_id(user: dict) -> str:
     uid = user.get("user_id") or user.get("username")
     if not uid:
         raise HTTPException(status_code=403, detail="Authenticated principal has no identity")
+    # DEFAULT_USER is reserved for pre-#15758 rows. User management accepts
+    # "default" as a username (letters, digits, underscore), and a principal
+    # without a user_id falls back to its username, so a real account could
+    # otherwise become the owner of every legacy row.
+    if str(uid) == DEFAULT_USER:
+        raise HTTPException(status_code=403, detail="This account id is reserved")
     return str(uid)
 
 
@@ -62,6 +68,19 @@ def caller_id_of(request: Request) -> str:
 
 def caller_is_admin(request: Request) -> bool:
     return bool(getattr(getattr(request.state, "user", None), "is_admin", False))
+
+
+def require_admin(request: Request) -> None:
+    """Route dependency: 403 unless the authenticated caller is an admin.
+
+    For transcriber routes that change process-wide state rather than one
+    user's rows. For example, ``PATCH /providers`` decides which cloud provider
+    receives every user's audio. The owner ruled on 2026-09-11 that this is
+    admin-only. The router-level ``authenticate`` runs first and records
+    ``is_admin``.
+    """
+    if not caller_is_admin(request):
+        raise HTTPException(status_code=403, detail="Admin privileges required")
 
 
 def can_access(row: dict, caller_id: str, *, is_admin: bool = False) -> bool:
