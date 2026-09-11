@@ -12,10 +12,11 @@ so there is one definition of "a swept module", not a second list in YAML.
 :func:`plan` picks the mode from a pull request's changed files:
 
 * **full** -- the diff touches the sweep itself (:data:`SELF_FILES`). Only a full run
-  can check the known-offender baseline for entries that no longer fail.
+  judges every known-offender entry for whether it still fails.
 * **subset** -- the diff changes swept modules. The test examines those plus their
   direct importers (:func:`with_direct_importers`): if B calls into A at import, a
-  change that makes A connect fails B's import, not A's.
+  change that makes A connect fails B's import, not A's. A listed entry among them
+  that now imports cleanly fails too, so the PR that fixes it removes it.
 * **none** -- no swept module changed. Nothing is examined, and the run says so.
 
 What a subset does NOT reach. Each is a stated gap, not a blind spot, and the full
@@ -51,8 +52,8 @@ ROOTS: tuple[tuple[str, str], ...] = (
 )
 
 #: The sweep's own files. A pull request touching any of them runs the full sweep:
-#: each can change the answer for every module, and only a full run checks the
-#: baseline for stale entries. ``test_every_self_file_exists_and_triggers_the_workflow``
+#: each can change the answer for every module, and only a full run judges every
+#: baseline entry. ``test_every_self_file_exists_and_triggers_the_workflow``
 #: pins each one to the workflow's ``paths:`` filters.
 SELF_FILES: frozenset[str] = frozenset(
     {

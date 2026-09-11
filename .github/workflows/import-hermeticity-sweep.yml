@@ -7,7 +7,8 @@ name: import-hermeticity-sweep
 # module the test reads its population from:
 #
 #   push to Dev_new_gui, schedule, dispatch   FULL    these read the base
-#   PR touching the sweep's own files         FULL    only a full run checks the baseline
+#   PR touching the sweep's own files         FULL    only a full run judges every
+#                                                     baseline entry
 #   PR changing swept modules                 SUBSET  those, plus every module that
 #                                                     imports one of them directly
 #   PR changing no swept module               NONE    no install and no pytest; the summary
@@ -21,8 +22,10 @@ name: import-hermeticity-sweep
 #
 # Failures are compared with the frozen, shrink-only baseline of the 54 offenders the
 # first full run found (repo_tests/import_hermeticity_known_offenders.py; #16262 drains
-# it). A failure it does not list fails the run, and a FULL run also fails on a listed
-# entry that now passes.
+# it). A failure it does not list fails the run, and so does a listed entry the run
+# probed that now imports cleanly: the PR that fixes a listed module removes its entry,
+# or the FULL run after the merge would go red on the base. Entries a SUBSET did not
+# probe are judged by the next FULL run.
 #
 # A schedule runs the DEFAULT branch's copy of a workflow, and that branch does not
 # carry this one, so the schedule alone never fires (#16221); the push trigger is what

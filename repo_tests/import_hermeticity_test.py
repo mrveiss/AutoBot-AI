@@ -15,8 +15,10 @@ It exists because #13539's V5 -- a fresh-interpreter import sweep before a relea
 flips -- is mandatory and cannot run until the offenders are fixed (design B12,
 S13.6). The first full run sized that list: 54 of 608 modules, frozen by tree and by
 category in ``import_hermeticity_known_offenders.py`` and drained by #16262. A failure
-that list does not name fails the sweep, with its tree, module, category and detail;
-a full run also fails on a listed entry that now passes, so the list only shrinks.
+that list does not name fails the sweep, with its tree, module, category and detail.
+So does a listed entry the run probed that no longer fails that way -- a pull request
+that fixes a listed module removes its entry in the same change, and the list only
+shrinks. Entries a subset did not probe are judged by the next full run.
 
 **The sandbox is what makes running it safe.** Each import happens in a subprocess
 whose generated ``sitecustomize`` installs a ``sys.addaudithook`` handler that
@@ -51,7 +53,7 @@ import os
 import subprocess  # nosec B404  # the sandboxed probe IS the subject of this guard
 import sys
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Set
 from pathlib import Path
 
 import pytest
@@ -199,35 +201,40 @@ def _unbaselined(records: Sequence[_Record], baseline: _Baseline) -> list[_Recor
     return [r for r in records if (r["tree"], r["module"]) not in baseline.get(r["category"], frozenset())]
 
 
-def _stale(records: Sequence[_Record], baseline: _Baseline, *, full: bool) -> list[tuple[str, str, str]]:
-    """``(tree, module, category)`` listed but not failing that way -- on a full run only.
+def _stale(
+    records: Sequence[_Record], baseline: _Baseline, *, full: bool, probed: Set[tuple[str, str]]
+) -> list[tuple[str, str, str]]:
+    """``(tree, module, category)`` listed but not failing that way, among the entries judged.
 
-    A subset never examined most of the baseline, so an entry's silence there is not
-    evidence that it passes.
+    A full run judges every entry. A subset judges only the entries it probed: a pull
+    request that fixes a listed module must drop its entry in the same change, or the
+    full run after the merge goes red on the base. An entry a subset never probed is
+    left to the full run -- its silence there is not evidence that it passes.
     """
-    if not full:
-        return []
     failing = {(r["tree"], r["module"], r["category"]) for r in records}
     listed = {(tree, module, category) for category, pairs in baseline.items() for tree, module in pairs}
-    return sorted(listed - failing)
+    judged = listed if full else {entry for entry in listed if entry[:2] in probed}
+    return sorted(judged - failing)
 
 
-def _verdict(records: Sequence[_Record], baseline: _Baseline, *, full: bool, examined: int) -> str | None:
-    """The failure message, or None when every failure is listed and nothing listed is stale."""
+def _verdict(
+    records: Sequence[_Record], baseline: _Baseline, *, full: bool, probed: Set[tuple[str, str]]
+) -> str | None:
+    """The failure message, or None when every failure is listed and nothing judged is stale."""
     parts: list[str] = []
     new = _unbaselined(records, baseline)
     if new:
         lines = "".join(f"\n  {_line(r)}\n      fix: {_FIX[r['category']]}" for r in new)
         parts.append(
-            f"{len(new)} of {examined} examined modules fail and are not in the baseline:{lines}\n"
+            f"{len(new)} of {len(probed)} examined modules fail and are not in the baseline:{lines}\n"
             f"The baseline ({_BASELINE_FILE}) only shrinks: listing a new offender is not the fix (#16198)."
         )
-    stale = _stale(records, baseline, full=full)
+    stale = _stale(records, baseline, full=full, probed=probed)
     if stale:
         lines = "".join(f"\n  {tree}  {module}  [{category}]" for tree, module, category in stale)
         parts.append(
-            f"{len(stale)} baseline entries no longer fail that way. Remove each from {_BASELINE_FILE}; "
-            f"the list only shrinks:{lines}"
+            f"{len(stale)} baseline entries were examined and no longer fail that way -- remove each from "
+            f"the baseline ({_BASELINE_FILE}) in this PR; the list only shrinks:{lines}"
         )
     return "\n\n".join(parts) or None
 
@@ -373,7 +380,8 @@ def test_every_module_imports_inertly() -> None:
     raw = os.environ.get(_MODULES_ENV, "")
     examined = _selection(_REPO_ROOT, REACH.examined(_REPO_ROOT), raw)
     records = _sweep(examined)
-    message = _verdict(records, _BASELINE, full=not scope.listed_paths(raw), examined=len(examined))
+    probed = {(entry.tree, entry.module) for entry in examined}
+    message = _verdict(records, _BASELINE, full=not scope.listed_paths(raw), probed=probed)
     assert message is None, message
 
 
@@ -474,6 +482,7 @@ _KNOWN: _Baseline = {
     _HAS_EFFECT: frozenset({(_SLM, "api.auth")}),
     _DOES_NOT_IMPORT: frozenset({(".", "autobot_shared.facade")}),
 }
+_KNOWN_PAIRS = frozenset().union(*_KNOWN.values())
 
 
 def _failure(tree: str, module: str, detail: str) -> _Record:
@@ -491,13 +500,14 @@ def test_a_failure_record_names_its_tree_and_category() -> None:
 
 def test_a_known_offender_passes_a_subset_and_a_full_run() -> None:
     records = [_failure(_SLM, "api.auth", _SOCKET), _failure(".", "autobot_shared.facade", _MISSING)]
-    assert _verdict(records, _KNOWN, full=False, examined=2) is None
-    assert _verdict(records, _KNOWN, full=True, examined=9) is None
+    assert _verdict(records, _KNOWN, full=False, probed=_KNOWN_PAIRS) is None
+    assert _verdict(records, _KNOWN, full=True, probed=_KNOWN_PAIRS) is None
 
 
 def test_a_new_offender_fails_naming_its_tree_category_and_fix() -> None:
     """Same name as a listed module, other tree: new, because the pair is the identity."""
-    message = _verdict([_failure(_BACKEND, "api.auth", _SOCKET)], _KNOWN, full=False, examined=3)
+    probed = {(_BACKEND, "api.auth")}
+    message = _verdict([_failure(_BACKEND, "api.auth", _SOCKET)], _KNOWN, full=False, probed=probed)
     assert message is not None
     assert f"{_BACKEND}  api.auth  [{_HAS_EFFECT}]  {_SOCKET}" in message
     assert _FIX[_HAS_EFFECT] in message and "not in the baseline" in message
@@ -509,12 +519,20 @@ def test_a_listed_module_failing_the_other_way_is_new() -> None:
     assert _unbaselined(records, _KNOWN) == [records[0]]
 
 
-def test_a_stale_entry_fails_a_full_run_only() -> None:
-    """A subset never examined the rest of the baseline, so silence there proves nothing."""
-    records = [_failure(_SLM, "api.auth", _SOCKET)]  # the facade now imports
+def test_a_probed_entry_that_now_imports_cleanly_fails_a_subset() -> None:
+    """The PR that fixes a listed module drops its entry, or the full run after the merge goes red."""
+    records = [_failure(_SLM, "api.auth", _SOCKET)]  # the facade was probed and now imports
     assert _unbaselined(records, _KNOWN) == [], "a stale entry must not also read as a new offender"
-    assert _verdict(records, _KNOWN, full=False, examined=1) is None
-    message = _verdict(records, _KNOWN, full=True, examined=9)
+    message = _verdict(records, _KNOWN, full=False, probed=_KNOWN_PAIRS)
+    assert message is not None and "autobot_shared.facade" in message
+    assert "in this PR; the list only shrinks" in message and "api.auth" not in message
+
+
+def test_an_unprobed_stale_entry_passes_a_subset_and_fails_a_full_run() -> None:
+    """A subset never examined it, so its silence proves nothing; the full run judges it."""
+    records = [_failure(_SLM, "api.auth", _SOCKET)]  # the facade now imports, but was not probed
+    assert _verdict(records, _KNOWN, full=False, probed={(_SLM, "api.auth")}) is None
+    message = _verdict(records, _KNOWN, full=True, probed={(_SLM, "api.auth")})
     assert message is not None and "no longer fail" in message and "autobot_shared.facade" in message
 
 
