@@ -38,13 +38,16 @@ the guard, which is worse than not having it.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 yaml = pytest.importorskip("yaml")
 
-_WORKFLOWS = repo_root() / ".github" / "workflows"
+_REPO_ROOT = repo_root()
+_WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
 
 #: A name that asserts a verdict about one named thing, rather than naming a scope.
 _ACCUSES = re.compile(r"^(Check|Validate|Verify|Assert)\s+\S")
@@ -54,22 +57,17 @@ _ACCUSES = re.compile(r"^(Check|Validate|Verify|Assert)\s+\S")
 #: scope -- and partial loss is the failure mode this whole PR is about.
 _MIN_ACCUSING_JOBS = 3
 
-#: Same reasoning for the whole-tree parse: 103 jobs parse today.
-#:
-#: Was 105. Lowered by #15934, which deleted `auto-fix-formatting.yml` and its
-#: two jobs (`autofix`, `approve-parked-runs`). **This followed a deliberate
-#: deletion, not a regression** -- worth stating, because a floor left above the
-#: new population re-licenses the gap it exists to close, and a ratchet that
-#: does not move with an intentional shrink is indistinguishable from one that
-#: missed a real one. The guard was right to fail: it cannot tell "two jobs were
-#: deleted" from "the glob narrowed and dropped two silently", which is the
-#: whole reason it is bound to reach rather than to findings.
-_MIN_JOBS = 103
 
+def _jobs(root: Path = _REPO_ROOT) -> list[tuple]:
+    """`(workflow, job_id, job_name, run_step_names)` for every parsed job under *root*.
 
-def _jobs():
-    """Yield `(workflow, job_id, job_name, run_step_names)` for every parsed job."""
-    for path in sorted(_WORKFLOWS.glob("*.yml")):
+    Takes a root, and returns a list rather than yielding, so the declaration
+    below can be driven against an empty directory by `reach_declarations_test`
+    -- an unset `root/.github/workflows` glob returns [] without raising, which
+    is what an empty tree needs (#15928).
+    """
+    found = []
+    for path in sorted((root / ".github" / "workflows").glob("*.yml")):
         try:
             doc = yaml.safe_load(path.read_text(encoding="utf-8"))
         except yaml.YAMLError:  # a malformed workflow is another guard's job
@@ -80,7 +78,25 @@ def _jobs():
             if not isinstance(job, dict) or not isinstance(job.get("steps"), list):
                 continue
             runs = [s.get("name") or "<unnamed>" for s in job["steps"] if isinstance(s, dict) and "run" in s]
-            yield path.name, job_id, job.get("name"), runs
+            found.append((path.name, job_id, job.get("name"), runs))
+    return found
+
+
+#: MEASURED 2026-09-11 against this tree: 103 jobs parse -- unchanged from the
+#: figure #15934 left behind. Migrated to `_reach.declare` (#15928) rather than
+#: left as a bare constant, so the empty-tree case is proven by
+#: `reach_declarations_test` instead of relying on this file's own floor test.
+#: `growth=10` absorbs an ordinary new workflow or two before asking for a
+#: deliberate ratchet; `skips=0` because a malformed workflow is skipped by
+#: design (another guard's job), not because reading it failed.
+REACH = declare(
+    "workflow-job-parse-sweep",
+    discover=_jobs,
+    floor=103,
+    growth=10,
+    skips=0,
+    what="parsed workflow jobs",
+)
 
 
 def _accusing_jobs():
@@ -96,11 +112,7 @@ def test_the_guard_reaches_the_jobs_it_claims_to_check() -> None:
     below pass over an empty list and report the tree clean.
     """
     assert _WORKFLOWS.is_dir(), f"{_WORKFLOWS} is not a directory — the sweep read nothing"
-    total = sum(1 for _ in _jobs())
-    assert total >= _MIN_JOBS, (
-        f"only {total} jobs parsed (floor {_MIN_JOBS}); the workflow tree was not fully read — "
-        "a narrowed glob or an unparseable file drops jobs silently"
-    )
+    REACH.examined(_REPO_ROOT)
     accusing = _accusing_jobs()
     assert len(accusing) >= _MIN_ACCUSING_JOBS, (
         f"only {len(accusing)} job(s) named 'Check/Validate/Verify <x>' were found "

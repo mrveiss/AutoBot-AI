@@ -7,8 +7,9 @@
 > **TL;DR:** Inline `# codeql[query-id]` / `# lgtm[query-id]` comments do **not**
 > dismiss GitHub code-scanning alerts in this repository. They are non-functional.
 > Reviewed false positives are suppressed by **dismissing the alert** (Security tab
-> or REST API) or by a **`query-filters` / `paths-ignore` exclusion** in
-> `.github/codeql/codeql-config.yml`. See #12307.
+> or REST API). A `query-filters` exclusion in `.github/codeql/codeql-config.yml`
+> removes a query from every file, and `paths-ignore` removes a path from every
+> query; neither can suppress one query on one file (#16302). See #12307.
 
 ## Why the inline comments never worked
 
@@ -32,7 +33,7 @@ dismissal** in #12280, not by the inline comments.
 | Granularity | Mechanism | Persists? | Suppresses future alerts? |
 |---|---|---|---|
 | Per-alert (one line) | Dismiss via Security tab or REST API | Yes — matched across runs by fingerprint | No — only that reviewed alert |
-| Per-query / per-path | `query-filters` / `paths-ignore` in `codeql-config.yml` | Yes | **Yes** — also hides future alerts of that query in that path |
+| Per-query (every file) / per-path (every query) | `query-filters` / `paths-ignore` in `codeql-config.yml` | Yes | **Yes** — `query-filters` hides that query everywhere; `paths-ignore` hides every query in that path. Neither scopes one query to one file (#16302) |
 | Root cause | Fix the sink (don't log/store the sensitive value) | N/A | N/A |
 
 ### 1. Per-alert dismissal (use this for line-level FPs)
@@ -57,12 +58,21 @@ fingerprint, so they **stick** while genuinely new/unreviewed alerts still surfa
 
 ### 2. `query-filters` / `paths-ignore` (use for whole-query or whole-file FPs)
 
-Use only when the **entire** query is a FP for the **entire** path — e.g. a file
-that centralizes validated I/O. See the existing entries in
-[`.github/codeql/codeql-config.yml`](../../.github/codeql/codeql-config.yml) for
-`py/full-ssrf` (`external_importer.py`) and `py/path-injection`
-(`upload_security.py`). This is coarser: it also hides **future** alerts of that
-query in that path, so document the justification inline in the config.
+Use `query-filters` only when a query is a FP **everywhere**, and `paths-ignore`
+only when a path should not be analysed by **any** query. A `query-filters` entry
+matches **query metadata** only (`id`, `kind`, `tags`, `precision`,
+`problem.severity`, ...), never a source file. An `exclude:` that names `files:` or
+`paths:` matches no query and suppresses nothing. Three such entries sat in
+[`.github/codeql/codeql-config.yml`](../../.github/codeql/codeql-config.yml) until
+#16302, and the `py/full-ssrf` alert on `external_importer.py` stayed open the
+whole time. Those three pairs are now alert dismissals, and their reviewed
+reasons are comments in the config. For one query on one file, dismiss the alert
+(section 1).
+
+`repo_tests/codeql_query_filters_match_queries_16302_test.py` fails on any
+`query-filters` key CodeQL does not match on. Both mechanisms here are coarse:
+they also hide **future** alerts, so document the justification in a comment
+beside the entry.
 
 ### 3. Fix the sink
 
