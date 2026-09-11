@@ -307,7 +307,7 @@ ulimit -n  # Should be >1024 for high concurrency
 
 - Implementation Plan: `/planning/tasks/backend-vulnerabilities-implementation-plan.md` (Lines 281-296)
 - Existing Performance Tools: `/monitoring/performance_benchmark.py`
-- System Monitoring: `/monitoring/performance_monitor.py`
+- System Monitoring: the SLM's `/metrics/fleet` route in `autobot-slm-backend/api/monitoring.py` (`performance_monitor.py` was retired in #16282)
 - Baseline Assessment: `/reports/performance/baseline_performance_assessment.py`
 
 ## Performance Engineer Notes
