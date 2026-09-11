@@ -21,11 +21,19 @@ from llc.adapters.subprocess_support import (
     probe_pid_identity,
     render_context_markdown,
     serialize_invoke_context,
+    spawn_create_time,
     terminate_pid,
 )
 from llc.models.enums import LLCRunStatus
 
 _PSUTIL_PROCESS = "llc.adapters.subprocess_support.psutil.Process"
+
+# psutil.Process.create_time() computes an absolute epoch time via
+# psutil.boot_time() on Linux, which raises a bare RuntimeError -- NOT a
+# psutil.Error subclass -- when the host's /proc/stat has no 'btime' line
+# (seen in some sandboxed CI containers). Every create_time() call site must
+# survive it the same way it survives psutil.Error.
+_BOOT_TIME_ERROR = RuntimeError("line 'btime' not found in /proc/stat")
 
 
 class TestRenderContextMarkdown:
@@ -263,6 +271,28 @@ class TestTerminatePidIdentityGuards:
 
 
 # ---------------------------------------------------------------------------
+# spawn_create_time (PR#16284 review)
+# ---------------------------------------------------------------------------
+
+
+class TestSpawnCreateTime:
+    def test_reads_real_create_time(self) -> None:
+        with patch(_PSUTIL_PROCESS) as mock_cls:
+            mock_cls.return_value.create_time.return_value = 100.0
+            assert spawn_create_time(12345) == 100.0
+
+    def test_psutil_error_returns_none(self) -> None:
+        """Already exited in the gap between spawn and this call."""
+        with patch(_PSUTIL_PROCESS, side_effect=psutil.NoSuchProcess(12345)):
+            assert spawn_create_time(12345) is None
+
+    def test_boot_time_runtime_error_returns_none(self) -> None:
+        """A host that can't report boot_time degrades to 'unknown', not a crash."""
+        with patch(_PSUTIL_PROCESS, side_effect=_BOOT_TIME_ERROR):
+            assert spawn_create_time(12345) is None
+
+
+# ---------------------------------------------------------------------------
 # probe_pid_identity (PR#16284 review)
 # ---------------------------------------------------------------------------
 
@@ -299,6 +329,14 @@ class TestProbePidIdentity:
             result = probe_pid_identity(12345, 100.0)
         assert result.status is LLCRunStatus.RUNNING
 
+    def test_boot_time_runtime_error_falls_back_to_probe_pid(self) -> None:
+        with (
+            patch(_PSUTIL_PROCESS, side_effect=_BOOT_TIME_ERROR),
+            patch("os.kill", return_value=None),
+        ):
+            result = probe_pid_identity(12345, 100.0)
+        assert result.status is LLCRunStatus.RUNNING
+
 
 # ---------------------------------------------------------------------------
 # _identity_verified (PR#16284 review)
@@ -321,6 +359,11 @@ class TestIdentityVerified:
 
     def test_psutil_error_not_verified(self) -> None:
         with patch(_PSUTIL_PROCESS, side_effect=psutil.NoSuchProcess(12345)):
+            assert _identity_verified(12345, 100.0) is False
+
+    def test_boot_time_runtime_error_not_verified(self) -> None:
+        """A host that can't report boot_time is unverifiable, never a match -- never signalled."""
+        with patch(_PSUTIL_PROCESS, side_effect=_BOOT_TIME_ERROR):
             assert _identity_verified(12345, 100.0) is False
 
 

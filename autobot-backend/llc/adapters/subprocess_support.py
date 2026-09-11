@@ -39,6 +39,14 @@ from .base import AdapterRunStatus
 
 _logger = get_logger(__name__)
 
+# psutil.Process.create_time() computes an absolute epoch time from
+# psutil.boot_time() on Linux, which reads the ``btime`` line of /proc/stat.
+# Some sandboxed CI containers present a /proc/stat without that line, and
+# psutil raises a bare ``RuntimeError`` for it -- NOT a psutil.Error subclass
+# (see psutil._pslinux.boot_time), so it is never caught by ``except
+# psutil.Error`` alone. Every create_time() call site must catch both.
+_CREATE_TIME_ERRORS: tuple[type[BaseException], ...] = (psutil.Error, RuntimeError)
+
 # Keywords that identify a provider rate-limit or quota error in CLI output or
 # exception messages.  Shared by subprocess adapters (output-file scan) and
 # AutoBotAgentAdapter (exception message matching).  GH#9773.
@@ -336,11 +344,15 @@ def spawn_create_time(pid: int) -> float | None:
     state, so a later signal or status check can verify it's still the SAME
     process before ever acting on the PID again — a PID is only unique at a
     point in time; the OS reuses it. ``None`` means psutil couldn't read it
-    (the process already exited in the gap between spawn and this call).
+    (the process already exited in the gap between spawn and this call, or
+    the host can't report ``boot_time`` at all -- see ``_CREATE_TIME_ERRORS``).
+    ``None`` degrades identity checks to the plain, non-identity liveness
+    probe rather than crashing the invoke that just spawned this process.
     """
     try:
         return psutil.Process(pid).create_time()
-    except psutil.Error:
+    except _CREATE_TIME_ERRORS as exc:
+        _logger.warning("spawn_create_time: could not read create_time for PID %d: %s", pid, exc)
         return None
 
 
@@ -380,7 +392,8 @@ def probe_pid_identity(pid: int, expected_create_time: float | None) -> AdapterR
         actual = psutil.Process(pid).create_time()
     except psutil.NoSuchProcess:
         return AdapterRunStatus(status=LLCRunStatus.COMPLETED)
-    except psutil.Error:
+    except _CREATE_TIME_ERRORS as exc:
+        _logger.warning("probe_pid_identity: could not verify PID %d, falling back to plain probe: %s", pid, exc)
         return probe_pid(pid)
     if actual != expected_create_time:
         return AdapterRunStatus(status=LLCRunStatus.COMPLETED)
@@ -463,13 +476,16 @@ def _identity_verified(pid: int, expected_create_time: float | None) -> bool:
 
     ``expected_create_time`` of ``None`` (nothing recorded to check against —
     e.g. a state file written before this field existed) is never a match:
-    unverifiable is treated as not-ours, not as a pass.
+    unverifiable is treated as not-ours, not as a pass. A host that can't
+    report ``create_time`` at all (see ``_CREATE_TIME_ERRORS``) is unverifiable
+    the same way -- never signalled, never treated as a match.
     """
     if expected_create_time is None:
         return False
     try:
         return psutil.Process(pid).create_time() == expected_create_time
-    except psutil.Error:
+    except _CREATE_TIME_ERRORS as exc:
+        _logger.warning("_identity_verified: could not verify PID %d, refusing to signal: %s", pid, exc)
         return False
 
 

@@ -122,15 +122,23 @@ class TestTerminatePidRealProcesses:
         assert result is True
 
     async def test_sigterm_then_sigkill_after_grace(self) -> None:
-        """A process that traps SIGTERM is still gone after the grace period (SIGKILL)."""
+        """A process that traps SIGTERM is still gone after the grace period (SIGKILL).
+
+        The child must echo readiness *after* installing the trap, and the test
+        must read that line before signalling: without this sync, SIGTERM can race
+        shell startup and arrive before ``trap ''`` runs, so it hits the default
+        (terminate) disposition and the process dies on SIGTERM instead of
+        surviving to SIGKILL -- flaky about half the time when reproduced locally.
+        """
         proc = await spawn_detached(
             "sh",
             "-c",
-            "trap '' TERM; sleep 300",
-            stdout=asyncio.subprocess.DEVNULL,
+            "trap '' TERM; echo ready; sleep 300",
+            stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
         try:
+            await proc.stdout.readline()  # trap is installed by the time this returns
             assert _pid_alive(proc.pid)
             create_time = _create_time(proc.pid)
             start = time.monotonic()
