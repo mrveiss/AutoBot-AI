@@ -121,12 +121,19 @@
     # that case itself (`git cat-file -e`) and returns bootstrap_required
     # instead of error, so this settles on the SAME one-time bootstrap mode
     # used when no marker exists at all, rather than a permanent skip.
+    #
+    # #16310 review round 13, finding 3: `| bool` on the fact itself, and on
+    # EVERY later `when:`/Jinja use below -- Ansible templating can hand this
+    # fact back as the STRING "False" (e.g. round-tripped through a
+    # registered var), which is truthy in Jinja, so an unfiltered
+    # `if _sd_need_bootstrap` would pick the bootstrap plan on every
+    # diff-mode run.
     - name: "{{ sync_deletions_label }} | Deletions: decide whether to fall back to bootstrap mode"
       ansible.builtin.set_fact:
         _sd_need_bootstrap: >-
-          {{ (_sd_previous_commit | length == 0) or
-             ((_sd_plan_diff.stdout | from_json).bootstrap_required | default(false)
-              if _sd_plan_diff is defined and _sd_plan_diff.stdout is defined else false) }}
+          {{ ((_sd_previous_commit | length == 0) or
+              ((_sd_plan_diff.stdout | from_json).bootstrap_required | default(false)
+               if _sd_plan_diff is defined and _sd_plan_diff.stdout is defined else false)) | bool }}
 
     - name: "{{ sync_deletions_label }} | Deletions: warn that the previous marker commit is unknown to this clone"
       ansible.builtin.debug:
@@ -134,7 +141,7 @@
           {{ sync_deletions_label }}: previous marker commit {{ _sd_previous_commit }} is unknown to
           this controller's clone (force-push or re-clone) -- falling back to bootstrap mode for
           {{ sync_deletions_target_dir }} (#16310 review round 12, N6).
-      when: _sd_previous_commit | length > 0 and _sd_need_bootstrap
+      when: _sd_previous_commit | length > 0 and _sd_need_bootstrap | bool
 
     # #16310 review, BLOCKING 1: pruned with the SAME ARTIFACT_DIRS/
     # ARTIFACT_DIR_SUFFIXES vocabulary services/deploy_artifacts.py and
@@ -155,7 +162,7 @@
       register: _sd_present_raw
       become: true
       changed_when: false
-      when: _sd_need_bootstrap
+      when: _sd_need_bootstrap | bool
 
     - name: "{{ sync_deletions_label }} | Deletions: allocate a present-files list file for the bootstrap plan"
       ansible.builtin.tempfile:
@@ -163,7 +170,7 @@
         prefix: autobot-sync-deletions-present-
       register: _sd_present_file
       delegate_to: localhost
-      when: _sd_need_bootstrap
+      when: _sd_need_bootstrap | bool
 
     - name: "{{ sync_deletions_label }} | Deletions: write the present-files list for the bootstrap plan"
       ansible.builtin.copy:
@@ -172,7 +179,7 @@
               | map('regex_replace', '^' ~ sync_deletions_target_dir ~ '/', '') | list) | join('\n') }}
         dest: "{{ _sd_present_file.path }}"
       delegate_to: localhost
-      when: _sd_need_bootstrap
+      when: _sd_need_bootstrap | bool
 
     - name: "{{ sync_deletions_label }} | Deletions: compute the bootstrap plan (no marker, or an unrecognized one)"
       ansible.builtin.command:
@@ -184,11 +191,11 @@
       register: _sd_plan_bootstrap
       changed_when: false
       delegate_to: localhost
-      when: _sd_need_bootstrap
+      when: _sd_need_bootstrap | bool
 
     - name: "{{ sync_deletions_label }} | Deletions: settle on the computed plan"
       ansible.builtin.set_fact:
-        _sd_plan: "{{ (_sd_plan_bootstrap if _sd_need_bootstrap else _sd_plan_diff).stdout | from_json }}"
+        _sd_plan: "{{ (_sd_plan_bootstrap if _sd_need_bootstrap | bool else _sd_plan_diff).stdout | from_json }}"
 
     - name: "{{ sync_deletions_label }} | Deletions: fail loudly when the plan could not be computed"
       ansible.builtin.fail:
@@ -285,6 +292,16 @@
   # earlier failure) -- register still creates the variable in the skipped
   # case (`skipped: true`, no `path` key), so checking `.path` rather than
   # just the variable itself is what actually detects "nothing to clean up".
+  #
+  # #16310 review round 13, finding 2: `always:` has no `rescue:` of its own,
+  # so a failing cleanup task here -- an unreachable target during cleanup, a
+  # permission error -- would itself abort under PLAY 2's
+  # `any_errors_fatal: true`, taking down the whole fleet run over a leaked
+  # tempfile and contradicting this module's own "one node's failure warns,
+  # never aborts the fleet" contract. `failed_when: false` on both; the
+  # target-side task also gets `ignore_unreachable: true` since only it can
+  # run against a since-gone-unreachable remote host (the controller-side one
+  # always targets localhost).
   always:
     - name: "{{ sync_deletions_label }} | Deletions: remove the controller-side present-files list"
       ansible.builtin.file:
@@ -292,6 +309,7 @@
         state: absent
       delegate_to: localhost
       when: _sd_present_file is defined and _sd_present_file.path is defined
+      failed_when: false
 
     - name: "{{ sync_deletions_label }} | Deletions: remove the target-side delete-list file"
       ansible.builtin.file:
@@ -299,3 +317,5 @@
         state: absent
       become: true
       when: _sd_delete_list_file is defined and _sd_delete_list_file.path is defined
+      failed_when: false
+      ignore_unreachable: true
