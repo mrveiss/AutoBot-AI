@@ -10,69 +10,19 @@ Endpoints for discovering and installing skills from the community registry.
 
 from typing import List
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.schemas_skills_hub import InstalledSkillOut, InstallRequest, SkillListingOut, SkillUpdateOut
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
-from skills.hub import InstalledSkill, SkillListing, get_skill_hub
+from skills.hub import get_skill_hub
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["skills-hub"])
-
-
-# ------------------------------------------------------------------
-# Request / Response schemas
-# ------------------------------------------------------------------
-
-
-class SkillListingOut(BaseModel):
-    id: str
-    name: str
-    description: str
-    mcp_url: str
-    version: str
-    tags: List[str] = Field(default_factory=list)
-
-    @classmethod
-    def from_listing(cls, s: SkillListing) -> "SkillListingOut":
-        return cls(
-            id=s.id,
-            name=s.name,
-            description=s.description,
-            mcp_url=s.mcp_url,
-            version=s.version,
-            tags=s.tags,
-        )
-
-
-class InstalledSkillOut(BaseModel):
-    id: str
-    name: str
-    mcp_url: str
-    version: str
-    installed_at: str
-
-    @classmethod
-    def from_installed(cls, s: InstalledSkill) -> "InstalledSkillOut":
-        return cls(
-            id=s.id,
-            name=s.name,
-            mcp_url=s.mcp_url,
-            version=s.version,
-            installed_at=s.installed_at,
-        )
-
-
-class SkillUpdateOut(BaseModel):
-    id: str
-    name: str
-    current_version: str
-    latest_version: str
-
-
-class InstallRequest(BaseModel):
-    skill_id: str = Field(..., description="Registry id or name of the skill to install")
+# #16368: every route needs an authenticated caller, including any route added
+# later. Installing or removing a hub skill also needs admin, per route: an
+# install can start the entry's inline Python as an MCP subprocess.
+router = APIRouter(tags=["skills-hub"], dependencies=[Depends(get_current_user)])
 
 
 # ------------------------------------------------------------------
@@ -89,7 +39,7 @@ async def search_hub(q: str = "") -> List[SkillListingOut]:
 
 
 @router.post("/install", response_model=InstalledSkillOut, summary="Install a hub skill")
-async def install_skill(body: InstallRequest) -> InstalledSkillOut:
+async def install_skill(body: InstallRequest, _: None = Depends(check_admin_permission)) -> InstalledSkillOut:
     """Install a community skill from the hub registry."""
     hub = await get_skill_hub()
     try:
@@ -107,7 +57,7 @@ async def install_skill(body: InstallRequest) -> InstalledSkillOut:
 
 
 @router.delete("/install/{skill_id}", summary="Uninstall a hub skill")
-async def uninstall_skill(skill_id: str) -> dict:
+async def uninstall_skill(skill_id: str, _: None = Depends(check_admin_permission)) -> dict:
     """Remove a previously installed hub skill."""
     hub = await get_skill_hub()
     try:
