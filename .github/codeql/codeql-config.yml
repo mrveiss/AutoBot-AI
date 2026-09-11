@@ -49,8 +49,9 @@ name: "AutoBot CodeQL Configuration"
 #      unique-local ranges in _ip_is_private().
 #   2) autobot_shared.security.ssrf_guard.pinned_connector() pins the resolved
 #      public IP into the connector's resolver, defeating DNS rebinding.
-#   3) Redirects are disabled (`allow_redirects=False`), so no hop escapes
-#      re-validation.
+#   3) Redirects are disabled (`allow_redirects=False`), so a redirect cannot
+#      be used to reach a blocked target; a redirect response just fails the
+#      200 check.
 #   See #16302.
 #
 # py/full-ssrf — autobot_shared/security/ssrf_guard.py

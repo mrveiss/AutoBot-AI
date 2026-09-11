@@ -23,9 +23,10 @@
 #
 # Default setup vs. this workflow (owner decision, #16283): default setup is
 # OFF, reporting `not-configured` from the code-scanning API. This workflow is
-# the only source of python, javascript-typescript and actions analyses now,
-# and advanced-setup uploads land for all three languages on both main and
-# Dev_new_gui.
+# the only source of python, javascript-typescript and actions analyses now.
+# Advanced-setup uploads have landed for all three languages on Dev_new_gui
+# and on PR refs; main hasn't been pushed to since the switch, so it will
+# pick up uploads on its next push.
 
 name: CodeQL Analysis
 
