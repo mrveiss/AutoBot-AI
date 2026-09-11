@@ -16,6 +16,10 @@
 // pills across both apps map onto. Domain-status enums keep their own types.
 export type { SemanticVariant, SemanticColor } from './src/types/semantic'
 
+// Contract-typed GET (#16292): read a GET endpoint's response type from each
+// app's own generated `paths`, instead of asserting the shape inline.
+export type { GetPath, JsonOf, GetResponse } from './src/types/contract'
+
 export { default as BaseButton } from './src/components/BaseButton.vue'
 export type { ButtonVariant, ButtonSize } from './src/components/BaseButton.vue'
 

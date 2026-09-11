@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import subprocess  # nosec B404  # Required for nvidia-smi GPU queries
 import time
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
@@ -23,6 +22,7 @@ import aiohttp
 import psutil
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.gpu_telemetry import METRICS_QUERY_FIELDS, nvidia_metric_fields, query_nvidia_gpus
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_1_HOUR
@@ -220,17 +220,12 @@ class HardwarePerformanceMonitor:
             self.redis_client = None
 
     def _check_gpu_availability(self) -> bool:
-        """Check if NVIDIA GPU is available and accessible"""
-        try:
-            result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv, no user input
-                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            return result.returncode == 0 and "RTX 4070" in result.stdout
-        except Exception:
-            return False
+        """Whether nvidia-smi reports any NVIDIA GPU (#16289).
+
+        It used to answer True only when the name contained "RTX 4070", so GPU
+        metrics were off on every other NVIDIA card.
+        """
+        return bool(query_nvidia_gpus(("name",)))
 
     def _check_npu_availability(self) -> bool:
         """Check if Intel NPU is available"""
@@ -252,88 +247,17 @@ class HardwarePerformanceMonitor:
         except Exception:
             return False
 
-    def _parse_nvidia_smi_output(self, output: str) -> GPUMetrics | None:
-        """Parse nvidia-smi CSV output into GPUMetrics. Issue #620."""
-        parts = [p.strip() for p in output.strip().split(",")]
-        if len(parts) < 8:
-            return None
-
-        memory_used = int(float(parts[1]))
-        memory_total = int(float(parts[2]))
-        memory_free = memory_total - memory_used
-
-        # Parse throttling reasons
-        thermal_throttling = False
-        power_throttling = False
-        if len(parts) > 16:
-            thermal_throttling = parts[16] == "Active"
-            power_throttling = parts[15] == "Active" or parts[17] == "Active"
-
-        def _parse_optional_int(val: str) -> int | None:
-            """Parse optional integer value from nvidia-smi. Issue #620."""
-            return int(float(val)) if val != "[Not Supported]" else None
-
-        def _parse_optional_float(val: str) -> float:
-            """Parse optional float value from nvidia-smi. Issue #620."""
-            return float(val) if val != "[Not Supported]" else 0.0
-
-        return GPUMetrics(
-            timestamp=time.time(),
-            name=parts[0],
-            utilization_percent=float(parts[3]),
-            memory_used_mb=memory_used,
-            memory_total_mb=memory_total,
-            memory_free_mb=memory_free,
-            memory_utilization_percent=round((memory_used / memory_total) * 100, 1),
-            temperature_celsius=int(float(parts[4])),
-            power_draw_watts=_parse_optional_float(parts[5]),
-            gpu_clock_mhz=_parse_optional_int(parts[6]) or 0,
-            memory_clock_mhz=_parse_optional_int(parts[7]) or 0,
-            fan_speed_percent=_parse_optional_int(parts[8]) if len(parts) > 8 else None,
-            encoder_utilization=(_parse_optional_int(parts[9]) if len(parts) > 9 else None),
-            decoder_utilization=(_parse_optional_int(parts[10]) if len(parts) > 10 else None),
-            performance_state=(parts[11] if len(parts) > 11 and parts[11] != "[Not Supported]" else None),
-            thermal_throttling=thermal_throttling,
-            power_throttling=power_throttling,
-        )
+    def _gpu_metrics_from_row(self, row: Dict[str, str]) -> GPUMetrics | None:
+        """One GPU's metrics from a METRICS_QUERY_FIELDS row; the mapping is gpu_telemetry's (#16289)."""
+        fields = nvidia_metric_fields(row)
+        return None if fields is None else GPUMetrics(timestamp=time.time(), **fields)
 
     async def collect_gpu_metrics(self) -> GPUMetrics | None:
-        """Collect comprehensive GPU performance metrics.
-
-        Issue #620: Refactored to extract _parse_nvidia_smi_output helper.
-        """
+        """The first GPU's metrics; rows parsed by autobot_shared.gpu_telemetry (#16289, #16297)."""
         if not self.gpu_available:
             return None
-
-        try:
-            # Extended nvidia-smi query for comprehensive metrics
-            result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv, no user input
-                [
-                    "nvidia-smi",
-                    "--query-gpu=name,memory.used,memory.total,utilization.gpu,"
-                    "temperature.gpu,power.draw,clocks.current.graphics,"
-                    "clocks.current.memory,fan.speed,encoder.stats.utilization,"
-                    "decoder.stats.utilization,pstate,clocks_throttle_reasons.gpu_idle,"
-                    "clocks_throttle_reasons.applications_clocks_setting,"
-                    "clocks_throttle_reasons.sw_power_cap,"
-                    "clocks_throttle_reasons.hw_slowdown,"
-                    "clocks_throttle_reasons.hw_thermal_slowdown,"
-                    "clocks_throttle_reasons.hw_power_brake_slowdown",
-                    "--format=csv,noheader,nounits",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-
-            if result.returncode == 0:
-                return self._parse_nvidia_smi_output(result.stdout)
-
-            return None
-
-        except Exception as e:
-            self.logger.error(f"Error collecting GPU metrics: {e}")
-            return None
+        rows = await asyncio.to_thread(query_nvidia_gpus, METRICS_QUERY_FIELDS)
+        return self._gpu_metrics_from_row(rows[0]) if rows else None
 
     async def collect_npu_metrics(self) -> NPUMetrics | None:
         """Collect Intel NPU performance metrics"""

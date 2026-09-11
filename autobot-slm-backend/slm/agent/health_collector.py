@@ -23,14 +23,18 @@ from typing import Dict, List
 import psutil
 
 from autobot_shared.env_utils import env_float
+from autobot_shared.gpu_telemetry import probe_gpus
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.service_discovery import SERVICE_DISCOVERY_TTL_S
+from autobot_shared.ssot_config import get_config
 from autobot_shared.time_utils import utc_timestamp
 
 # App-level /health probes for services that expose engine state beyond
 # systemd (#11723/#11777). Local-only URLs, short timeout, never fatal to
-# service discovery. Env-overridable so a non-default port needs no code change.
-TTS_HEALTH_URL = os.getenv("SLM_AGENT_TTS_HEALTH_URL", "http://127.0.0.1:8083/health")
+# service discovery. The port is the SSOT's (AUTOBOT_TTS_WORKER_PORT), so a
+# re-homed worker needs no second edit; SLM_AGENT_TTS_HEALTH_URL still
+# overrides the whole URL.
+TTS_HEALTH_URL = os.getenv("SLM_AGENT_TTS_HEALTH_URL") or f"http://127.0.0.1:{get_config().port.tts}/health"
 APP_HEALTH_PROBES: Dict[str, str] = {
     "autobot-tts-worker": TTS_HEALTH_URL,
 }
@@ -94,6 +98,8 @@ class HealthCollector:
             "disk_percent": psutil.disk_usage("/").percent,
             "load_avg": (list(os.getloadavg()) if hasattr(os, "getloadavg") else [0.0, 0.0, 0.0]),
             "uptime_seconds": int(datetime.now().timestamp() - psutil.boot_time()),
+            # #16280: NVIDIA/AMD GPUs, measured where the vendor tool answers.
+            "gpu": probe_gpus(),
         }
 
         # Collect service statuses

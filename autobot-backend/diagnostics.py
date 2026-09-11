@@ -12,7 +12,6 @@ import gc
 import json
 import logging
 import platform
-import subprocess  # nosec B404  # controlled system diagnostics
 import sys
 import time
 from datetime import datetime, timezone
@@ -20,6 +19,7 @@ from typing import Any, Dict, List
 
 import psutil
 
+from autobot_shared.gpu_telemetry import parse_nvidia_value, query_nvidia_gpus
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
 
@@ -36,6 +36,9 @@ except ImportError as e:
     logging.warning(f"Import error in diagnostics: {e}")
 
 logger = get_logger(__name__)
+
+# nvidia-smi fields behind _get_gpu_info, parsed by autobot_shared.gpu_telemetry (#16289).
+_GPU_INFO_FIELDS = ("name", "memory.total", "memory.used", "utilization.gpu")
 
 
 class PerformanceOptimizedDiagnostics:
@@ -128,32 +131,25 @@ class PerformanceOptimizedDiagnostics:
             }
 
     def _get_gpu_info(self) -> Dict[str, Any]:
-        """Get GPU information for performance monitoring"""
-        try:
-            result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv, no user input
-                [
-                    "nvidia-smi",
-                    "--query-gpu=name,memory.total,memory.used,utilization.gpu",
-                    "--format=csv,noheader,nounits",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=TimingConstants.MEDIUM_DELAY,  # Short timeout for GPU query
-            )
+        """Get the first GPU's information for performance monitoring.
 
-            if result.returncode == 0:
-                gpu_data = result.stdout.strip().split(", ")
-                if len(gpu_data) >= 4:
-                    return {
-                        "name": gpu_data[0],
-                        "memory_total_mb": int(gpu_data[1]),
-                        "memory_used_mb": int(gpu_data[2]),
-                        "utilization_percent": int(gpu_data[3]),
-                        "memory_usage_percent": round((int(gpu_data[2]) / int(gpu_data[1])) * 100, 1),
-                    }
+        #16289: autobot_shared.gpu_telemetry runs the tool and splits its rows. A
+        multi-GPU host now reports its first GPU; splitting the whole output on
+        ", " used to fold the second GPU's row into the first and report an error.
+        """
+        rows = query_nvidia_gpus(_GPU_INFO_FIELDS)
+        if not rows:
             return {"status": "nvidia-smi not available or no GPU detected"}
-        except Exception:
+        total, used, utilization = (parse_nvidia_value(rows[0][field]) for field in _GPU_INFO_FIELDS[1:])
+        if total is None or used is None or utilization is None or not total:
             return {"status": "GPU detection error"}
+        return {
+            "name": rows[0]["name"],
+            "memory_total_mb": int(total),
+            "memory_used_mb": int(used),
+            "utilization_percent": int(utilization),
+            "memory_usage_percent": round((used / total) * 100, 1),
+        }
 
     async def _publish_permission_request(self, task_id: str, report: Dict[str, Any], attempt: int) -> asyncio.Future:
         """Publish permission request and return future (Issue #315 - extracted helper)."""

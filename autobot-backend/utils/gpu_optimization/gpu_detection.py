@@ -17,6 +17,14 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict
 
+from autobot_shared.gpu_telemetry import (
+    ROCM_SMI_ARGV,
+    parse_nvidia_text,
+    parse_nvidia_value,
+    parse_rocm_smi_json,
+    query_nvidia_gpus,
+    run_vendor_tool,
+)
 from autobot_shared.logging_manager import get_logger
 
 from .types import GPUCapabilities
@@ -47,44 +55,21 @@ _TENSOR_CORE_FAMILIES = {
 
 
 def _check_nvidia_gpu() -> str | None:
-    """Check for NVIDIA GPU via nvidia-smi, returning the GPU name or None.
+    """Check for NVIDIA GPU via nvidia-smi, returning the first GPU's name or None.
 
-    Issue #2222: Returns the name so callers can reuse it without
-    spawning a second nvidia-smi subprocess.
+    Issue #2222: Returns the name so callers can reuse it without spawning a
+    second nvidia-smi subprocess. #16289: autobot_shared.gpu_telemetry runs the
+    tool, so a missing, failing or hung nvidia-smi all answer None here.
     """
-    try:
-        result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv for GPU detection
-            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        lines = result.stdout.strip().splitlines()
-        name = lines[0].strip() if lines else ""
-        if result.returncode == 0 and name:
-            return name
-        return None
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return None
-    except Exception:
-        return None
+    rows = query_nvidia_gpus(("name",))
+    return (rows[0]["name"] or None) if rows else None
 
 
 def _check_amd_gpu() -> bool:
-    """Check if an AMD GPU is available via rocm-smi or sysfs."""
-    try:
-        result = subprocess.run(  # nosec B603 B607  # fixed rocm-smi argv for AMD GPU detection
-            ["rocm-smi", "--showid"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return True
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-    except Exception:
-        pass
+    """Check if an AMD GPU is available via rocm-smi or sysfs (#16289: rocm-smi run by gpu_telemetry)."""
+    output = run_vendor_tool(["rocm-smi", "--showid"])
+    if output and output.strip():
+        return True
     # Sysfs fallback: AMD vendor ID = 0x1002
     return _check_sysfs_vendor("0x1002")
 
@@ -230,31 +215,16 @@ def _detect_nvidia_capabilities(
     """
     capabilities.vendor = "nvidia"
     gpu_name = _nvidia_gpu_name
-    try:
-        result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv for NVIDIA capability detection
-            [
-                "nvidia-smi",
-                "--query-gpu=memory.total,cuda_version",
-                "--format=csv,noheader,nounits",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode == 0:
-            first_line = result.stdout.strip().splitlines()[0] if result.stdout.strip() else ""
-            parts = first_line.split(", ")
-            if len(parts) >= 2:
-                memory_mb = int(parts[0].strip())
-                cuda_version = parts[1].strip()
-
-                capabilities.name = gpu_name or "NVIDIA GPU"
-                capabilities.memory_gb = round(memory_mb / 1024, 1)
-                capabilities.cuda_version = cuda_version
-                capabilities.tensor_cores = _has_tensor_cores(gpu_name or "")
-                capabilities.mixed_precision = True
-    except Exception as e:
-        logger.error("Error detecting NVIDIA GPU capabilities: %s", e)
+    # #16289: nvidia-smi run and split by autobot_shared.gpu_telemetry. As before,
+    # an unreadable memory total sets none of these fields.
+    rows = query_nvidia_gpus(("memory.total", "cuda_version"))
+    memory_mb = parse_nvidia_value(rows[0]["memory.total"]) if rows else None
+    if memory_mb is not None:
+        capabilities.name = gpu_name or "NVIDIA GPU"
+        capabilities.memory_gb = round(memory_mb / 1024, 1)
+        capabilities.cuda_version = parse_nvidia_text(rows[0]["cuda_version"]) or capabilities.cuda_version
+        capabilities.tensor_cores = _has_tensor_cores(gpu_name or "")
+        capabilities.mixed_precision = True
 
     capabilities = _detect_detailed_capabilities(capabilities)
     return capabilities
@@ -263,42 +233,26 @@ def _detect_nvidia_capabilities(
 def _detect_amd_capabilities(
     capabilities: GPUCapabilities,
 ) -> GPUCapabilities:
-    """Detect AMD GPU capabilities via rocm-smi."""
-    try:
-        result = subprocess.run(  # nosec B603 B607  # fixed rocm-smi argv for AMD GPU name detection
-            ["rocm-smi", "--showproductname"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            for line in result.stdout.strip().splitlines():
-                if "GPU" in line or ":" in line:
-                    capabilities.name = line.strip()
-                    break
+    """Detect AMD GPU capabilities from rocm-smi's JSON (#16289).
 
-        mem_result = subprocess.run(  # nosec B603 B607  # fixed rocm-smi argv for AMD VRAM detection
-            ["rocm-smi", "--showmeminfo", "vram"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if mem_result.returncode == 0:
-            for line in mem_result.stdout.splitlines():
-                if "total" in line.lower():
-                    parts = line.split()
-                    for part in parts:
-                        try:
-                            mem_mb = float(part)
-                            if mem_mb > 100:
-                                capabilities.memory_gb = round(mem_mb / 1024, 1)
-                                break
-                        except ValueError:
-                            continue
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-    except Exception as e:
-        logger.error("Error detecting AMD GPU capabilities: %s", e)
+    This used to scrape rocm-smi's text: the first line holding "GPU" or ":" as
+    the name, and the first number over 100 on a "total" line as MB. The shared
+    parse_rocm_smi_json reads the card's name and VRAM total by key instead.
+    """
+    output = run_vendor_tool(ROCM_SMI_ARGV)
+    if output is None:
+        return capabilities
+    try:
+        devices = parse_rocm_smi_json(output)
+    except ValueError as e:
+        logger.error("rocm-smi output was not JSON: %s", e)
+        return capabilities
+    if devices:
+        first = devices[0]
+        if first["name"]:
+            capabilities.name = first["name"]
+        if first["memory_total_mb"]:
+            capabilities.memory_gb = round(first["memory_total_mb"] / 1024, 1)
     return capabilities
 
 

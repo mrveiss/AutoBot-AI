@@ -176,3 +176,80 @@ describe('usePrometheusMetrics transport', () => {
     expect(window.location.href).toBe('/login')
   })
 })
+
+describe('usePrometheusMetrics GPU state and recommendations (#15226)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  const measured = {
+    device_type: 'nvidia-gpu',
+    index: 0,
+    name: 'NVIDIA GeForce RTX 4070 Laptop GPU',
+    monitored: true,
+    utilization_percent: 12,
+    memory_used_mb: 2048,
+    memory_total_mb: 8192,
+    temperature_celsius: 51,
+    power_watts: 2,
+  }
+  const nodeStatus = (state: string, devices: unknown[] = []) => ({
+    node_id: 'n1',
+    hostname: 'worker-1',
+    node_status: 'online',
+    state,
+    devices,
+    last_heartbeat: null,
+  })
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('reads each node\'s GPUs from the SLM and summarises the measured ones', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ nodes: [nodeStatus('present', [measured])], total: 1 }))
+    const metrics = usePrometheusMetrics({ autoFetch: false })
+
+    await metrics.fetchGPUDetails()
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/monitoring/gpu/nodes')
+    expect(metrics.gpuNodes.value).toHaveLength(1)
+    expect(metrics.gpuDetails.value).toMatchObject({ available: true, utilization_percent: 12, memory_utilization_percent: 25 })
+    expect(metrics.gpuUnavailable.value).toBe(false)
+  })
+
+  it('leaves the fleet summary empty, not zeroed, when no GPU is measured', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ nodes: [nodeStatus('none'), nodeStatus('present', [{ ...measured, monitored: false }])], total: 2 }),
+    )
+    const metrics = usePrometheusMetrics({ autoFetch: false })
+
+    await metrics.fetchGPUDetails()
+
+    expect(metrics.gpuDetails.value).toBeNull()
+    expect(metrics.gpuNodes.value).toHaveLength(2)
+  })
+
+  it('marks the GPU read unavailable when the SLM does not answer', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'boom' }, 500))
+    const metrics = usePrometheusMetrics({ autoFetch: false })
+
+    await metrics.fetchGPUDetails()
+
+    expect(metrics.gpuUnavailable.value).toBe(true)
+    expect(metrics.gpuDetails.value).toBeNull()
+  })
+
+  it('reports recommendations as unavailable rather than as an empty list', async () => {
+    const metrics = usePrometheusMetrics({ autoFetch: false })
+
+    await metrics.fetchRecommendations()
+
+    expect(metrics.recommendations.value).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})

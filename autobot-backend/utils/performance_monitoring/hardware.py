@@ -10,8 +10,7 @@ Contains hardware detection utilities for GPU, NPU, and environment detection.
 Extracted from performance_monitor.py as part of Issue #381 refactoring.
 """
 
-import subprocess
-
+from autobot_shared.gpu_telemetry import query_nvidia_gpus
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -22,17 +21,12 @@ class HardwareDetector:
 
     @staticmethod
     def check_gpu_availability() -> bool:
-        """Check if NVIDIA GPU is available and accessible."""
-        try:
-            result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv for GPU availability check
-                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            return result.returncode == 0 and "RTX 4070" in result.stdout
-        except Exception:
-            return False
+        """Whether nvidia-smi reports any NVIDIA GPU (#16289).
+
+        It used to answer True only when the name contained "RTX 4070", so GPU
+        metrics were off on every other NVIDIA card.
+        """
+        return bool(query_nvidia_gpus(("name",)))
 
     @staticmethod
     def check_npu_availability() -> bool:
