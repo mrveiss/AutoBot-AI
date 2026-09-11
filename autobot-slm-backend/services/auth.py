@@ -314,17 +314,6 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
 
     Prefer require_permission(Permission.ADMIN_SYSTEM) for new endpoints.
     Retained for backward compatibility with any callers not yet migrated.
-
-    Also the gate behind GET /api/auth/proxy-check (#16374 round 3), nginx's
-    auth_request target in front of the /autobot-api/ internal-key injection.
-    A missing OR invalid/expired token never reaches the ``if`` below: the
-    upstream ``HTTPBearer()`` in ``security`` (auto_error=True) raises 401
-    itself for a missing Authorization header, and ``get_current_user``
-    raises 401 for a token it cannot verify -- so this function only ever
-    runs with an authenticated caller, and distinguishes "authenticated" from
-    "admin" with 403. That 401/401/403 split is exactly what the proxy-check
-    contract requires, so the endpoint depends on this directly rather than
-    reimplementing it.
     """
     if not current_user.get("admin", False):
         raise HTTPException(

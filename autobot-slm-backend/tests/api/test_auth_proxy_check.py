@@ -11,14 +11,17 @@ session -- not that the session is an admin one. A backend login token is a
 valid SLM session by design (epic #10193), so any authenticated backend
 user, read-only included, passed the gate and nginx attached the
 admin-equivalent X-Internal-API-Key on their behalf. /api/auth/proxy-check
-closes that: it depends on require_admin, so it is 204 only for an admin
-session, 403 for an authenticated non-admin, and 401 for a missing or
+closes that: it depends on require_permission(Permission.ADMIN_SYSTEM), so
+it is 204 only for a session whose role grants that permission, 403 for an
+authenticated caller without it -- SUPERADMIN included, since it holds no
+granular permissions (#13854) and is refused here as on every other
+permission-gated SLM admin route -- and 401 for a missing or
 invalid/expired token.
 
 Bootstrap strategy
 -------------------
-services/auth.py (get_current_user, require_admin, auth_service) is loaded
-for REAL, with REAL fastapi + fastapi.security -- unlike
+services/auth.py (get_current_user, require_permission, auth_service) is
+loaded for REAL, with REAL fastapi + fastapi.security -- unlike
 tests/api/test_auth_logout.py, which stubs fastapi wholesale and therefore
 never exercises an HTTPException-raising path (a MagicMock "HTTPException"
 is not a real raisable exception; see that file's docstring). Only the
@@ -62,8 +65,8 @@ _EXPIRE_MINUTES = 30
 # Real-load services/auth.py with REAL fastapi/fastapi.security.
 #
 # Unlike test_auth_logout.py's bootstrap, "fastapi" and "fastapi.security"
-# are deliberately NOT in this stub set: get_current_user/require_admin must
-# raise genuine, catchable fastapi.HTTPException instances with real
+# are deliberately NOT in this stub set: get_current_user/require_permission
+# must raise genuine, catchable fastapi.HTTPException instances with real
 # status_code ints for this module's assertions to mean anything.
 # ---------------------------------------------------------------------------
 _PRE_BOOTSTRAP_MODULES = dict(sys.modules)
@@ -114,9 +117,13 @@ for _k in list(sys.modules):
 del _PRE_BOOTSTRAP_MODULES
 
 get_current_user = _auth_mod.get_current_user
-require_admin = _auth_mod.require_admin
+require_permission = _auth_mod.require_permission
+Permission = _auth_mod.Permission
 auth_service = _auth_mod.auth_service
 security = _auth_mod.security  # module-level HTTPBearer() instance
+
+# The gate GET /api/auth/proxy-check depends on (#16374 round 3).
+_admin_system_gate = require_permission(Permission.ADMIN_SYSTEM)
 
 
 def _mint_token(admin: bool, role: str, username: str = "tester") -> str:
@@ -128,8 +135,9 @@ def _credentials(token: str) -> HTTPAuthorizationCredentials:
 
 
 # ---------------------------------------------------------------------------
-# require_admin/get_current_user: the gate GET /api/auth/proxy-check depends
-# on (#16374 round 3) -- admin/readonly/invalid/missing, real JWT round-trip.
+# require_permission(ADMIN_SYSTEM)/get_current_user: the gate GET
+# /api/auth/proxy-check depends on (#16374 round 3) -- admin/non-admin/
+# superadmin/invalid/missing, real JWT round-trip.
 # ---------------------------------------------------------------------------
 
 
@@ -139,26 +147,28 @@ class TestProxyCheckGate:
         """An admin session reaches proxy_check's body -- the endpoint's 204 path."""
         token = _mint_token(admin=True, role="admin", username="admin1")
         current_user = await get_current_user(_credentials(token))
-        result = await require_admin(current_user)
+        result = await _admin_system_gate(current_user)
         assert result["sub"] == "admin1"
         assert result["admin"] is True
 
     @pytest.mark.asyncio
-    async def test_readonly_token_gets_403(self):
-        """An authenticated but non-admin session is rejected with 403, not 401."""
-        token = _mint_token(admin=False, role="readonly", username="ro1")
-        current_user = await get_current_user(_credentials(token))
-        with pytest.raises(HTTPException) as exc:
-            await require_admin(current_user)
-        assert exc.value.status_code == 403
-
-    @pytest.mark.asyncio
     async def test_non_admin_user_role_token_gets_403(self):
-        """A plain "user" role (not just "readonly") is denied too -- admin only."""
+        """An authenticated but non-admin session is rejected with 403, not 401."""
         token = _mint_token(admin=False, role="user", username="u1")
         current_user = await get_current_user(_credentials(token))
         with pytest.raises(HTTPException) as exc:
-            await require_admin(current_user)
+            await _admin_system_gate(current_user)
+        assert exc.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_superadmin_token_gets_403(self):
+        """SUPERADMIN holds no granular permissions (#13854), so it is refused
+        here as on every other permission-gated SLM admin route -- despite
+        the legacy "admin" flag it also carries."""
+        token = _mint_token(admin=True, role="superadmin", username="sa1")
+        current_user = await get_current_user(_credentials(token))
+        with pytest.raises(HTTPException) as exc:
+            await _admin_system_gate(current_user)
         assert exc.value.status_code == 403
 
     @pytest.mark.asyncio
@@ -198,8 +208,8 @@ class TestProxyCheckGate:
 
 # ---------------------------------------------------------------------------
 # proxy_check itself: extracted from a real (identity-decorated) exec of
-# api/auth.py, reusing the SAME require_admin/get_current_user tested above
-# (sys.modules["services.auth"] already holds _auth_mod at this point).
+# api/auth.py, reusing the SAME require_permission/get_current_user tested
+# above (sys.modules["services.auth"] already holds _auth_mod at this point).
 # ---------------------------------------------------------------------------
 
 _AUTH_ROUTER_PY = _BACKEND / "api" / "auth.py"
@@ -273,7 +283,8 @@ def _load_real_proxy_check():
     # stub the top-level bootstrap set (that bootstrap restores sys.modules
     # before collection finishes, per #11478/#14535). Pinning it here is
     # simpler than re-deriving a second correct stub set, and keeps
-    # proxy_check's require_admin identical to the one under test above.
+    # proxy_check's require_permission(Permission.ADMIN_SYSTEM) identical to
+    # the one under test above.
     stubs["services.auth"] = _auth_mod
 
     sys.modules.update(stubs)
@@ -302,11 +313,11 @@ class TestProxyCheckEndpoint:
         proxy_check = _load_real_proxy_check()
         token = _mint_token(admin=True, role="admin", username="admin2")
         current_user = await get_current_user(_credentials(token))
-        gated = await require_admin(current_user)
+        gated = await _admin_system_gate(current_user)
         assert await proxy_check(_=gated) is None
 
-    def test_route_declares_204_and_depends_on_require_admin(self):
+    def test_route_declares_204_and_depends_on_admin_system_permission(self):
         """Static pin on the decorator: the two facts the runtime test above cannot see."""
         src = _AUTH_ROUTER_PY.read_text(encoding="utf-8")
         assert '@router.get("/proxy-check", status_code=status.HTTP_204_NO_CONTENT)' in src
-        assert "Depends(require_admin)" in src
+        assert "Depends(require_permission(Permission.ADMIN_SYSTEM))" in src
