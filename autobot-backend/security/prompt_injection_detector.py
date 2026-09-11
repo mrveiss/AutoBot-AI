@@ -84,7 +84,7 @@ INJECTION_PATTERNS = (
     r"ignore\s+previous\s+instructions",
     r"ignore\s+above",
     r"disregard\s+previous",
-    r"forget\s+previous",
+    r"forget\s+(all\s+)?previous",
     r"forget\s+all",
     r"forget\s+your\s+system\s+prompt",
     r"new\s+instructions",
