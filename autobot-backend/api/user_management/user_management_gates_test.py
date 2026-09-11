@@ -29,11 +29,14 @@ from api.user_management.dependencies import (
 from api.user_management.router import router as user_management_router
 from user_management.services import TenantContext, UserService
 
-_CALLER = uuid.uuid4()
-_OTHER = uuid.uuid4()
-_TEAM = uuid.uuid4()
-_ROLE = uuid.uuid4()
-_ORG = uuid.uuid4()
+# Fixed, not uuid4(): these appear in the parametrize ids below, and each
+# xdist worker imports this module on its own. Random values gave every
+# worker a different test list, failing collection on #16240 (shard 3).
+_CALLER = uuid.UUID("00000000-0000-0000-0000-000000000001")
+_OTHER = uuid.UUID("00000000-0000-0000-0000-000000000002")
+_TEAM = uuid.UUID("00000000-0000-0000-0000-000000000003")
+_ROLE = uuid.UUID("00000000-0000-0000-0000-000000000004")
+_ORG = uuid.UUID("00000000-0000-0000-0000-000000000005")
 
 #: A logged-in org member with no admin claim, and a platform admin.
 _MEMBER = {"role": "user", "user_id": str(_CALLER), "org_id": str(_ORG)}
