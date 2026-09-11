@@ -13,13 +13,34 @@ Checks Python functions for length violations according to CLAUDE.md guidelines:
 - >65 lines: ERROR - Blocks commit
 
 Issue #620 - Function Length Enforcement
+
+Only the functions a change touches are judged (#16191). A function counts as
+touched when a line the change added falls inside it, so adding or changing a
+line in a long function, or adding a long function, still fails, while a one-line
+fix elsewhere in the same file is no longer held hostage by a legacy function it
+never touched. A change that only deletes lines from a long function adds none
+there, so it passes: it can only have made that function shorter. The change is
+the staged diff, or the range pre-commit exports for a ``--from-ref`` run, which
+stages nothing. A file passed in but not part of the staged change
+(``--all-files``, ``--files``) has no change to scope to, so it is judged whole
+rather than passed unexamined.
+
+``--whole-file`` judges every file whole. It is for invoking this script directly
+-- the bash wrapper never passes arguments through -- and is how the current
+offenders are enumerated.
 """
 
 import ast
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Set, Tuple
+
+# The diff helpers every scoped lint hook shares (#16178): hunk parsing, rename
+# pairing and the pre-commit range, in one place rather than one copy per hook.
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools" / "lint"))
+
+from _scan_helpers import added_lines, resolve_base, staged_paths  # noqa: E402
 
 # ANSI color codes (matching bash wrapper)
 RED = "\033[0;31m"
@@ -44,6 +65,7 @@ class FunctionViolation:
     line_count: int
     is_error: bool  # True = >65 (blocks), False = 51-65 (warns)
     class_name: Optional[str] = None
+    end_line: Optional[int] = None  # the function's last line, for scoping (#16191)
 
     @property
     def full_name(self) -> str:
@@ -94,6 +116,7 @@ class FunctionLengthVisitor(ast.NodeVisitor):
                     line_count=body_line_count,
                     is_error=is_error,
                     class_name=self.current_class,
+                    end_line=getattr(node, "end_lineno", None),
                 )
             )
 
@@ -179,6 +202,60 @@ def analyze_file(file_path: str) -> List[FunctionViolation]:
         return []
 
 
+def _scope_to_change(
+    violations: List[FunctionViolation], repo_root: Path, base: Optional[str]
+) -> Tuple[List[FunctionViolation], int, List[str]]:
+    """Keep the violations in functions this change touched (#16191).
+
+    Returns (kept, how many were skipped as untouched, files judged whole). A file
+    with no staged change is judged whole: an empty diff for it would read as
+    "touched nothing", a verdict nobody examined.
+    """
+    staged = staged_paths(repo_root) if base is None else None
+    added: Dict[str, Set[int]] = {}
+    kept: List[FunctionViolation] = []
+    whole: List[str] = []
+    skipped = 0
+    for v in violations:
+        if staged is not None and v.file_path not in staged:
+            kept.append(v)
+            if v.file_path not in whole:
+                whole.append(v.file_path)
+            continue
+        if v.file_path not in added:
+            added[v.file_path] = added_lines(repo_root, v.file_path, base)
+        end = v.end_line or v.line_number
+        if any(v.line_number <= n <= end for n in added[v.file_path]):
+            kept.append(v)
+        else:
+            skipped += 1
+    return kept, skipped, whole
+
+
+def _report_scope(violations: List[FunctionViolation]) -> List[FunctionViolation]:
+    """Scope *violations* to the change, and say what was skipped or judged whole.
+
+    Only a file that has a violation costs a git call, so a clean change reads no
+    diff at all. The repository judged is the one the hook runs in, not the one
+    this script lives in: pre-commit runs hooks from that repository's root, and
+    the hook's own tests run it inside throwaway repositories. :func:`main`
+    refuses to scope from anywhere but that root.
+    """
+    if not violations:
+        return violations
+    kept, skipped, whole = _scope_to_change(violations, Path.cwd(), resolve_base())
+    if skipped:
+        print(f"{CYAN}Skipped {skipped} long function(s) this change did not touch (#16191).{NC}")
+    if whole:
+        print(
+            f"{YELLOW}NOTE{NC} {len(whole)} file(s) are not part of the staged change, so they were judged whole; "
+            "their long functions may predate it (#16191)."
+        )
+    if skipped or whole:
+        print()
+    return kept
+
+
 def print_violation(v: FunctionViolation) -> None:
     """Print a single violation in IDE-friendly format. Issue #620."""
     level = f"{RED}ERROR{NC}" if v.is_error else f"{YELLOW}WARNING{NC}"
@@ -192,28 +269,8 @@ def print_violation(v: FunctionViolation) -> None:
     print()
 
 
-def main() -> int:
-    """Main entry point. Reads file paths from stdin. Issue #620."""
-    files = [line.strip() for line in sys.stdin if line.strip()]
-
-    if not files:
-        print(f"{GREEN}No files to check.{NC}")
-        return 0
-
-    print(f"Scanning {len(files)} staged file(s)...")
-    print()
-
-    all_violations: List[FunctionViolation] = []
-
-    for file_path in files:
-        violations = analyze_file(file_path)
-        all_violations.extend(violations)
-
-    # Print all violations
-    for v in all_violations:
-        print_violation(v)
-
-    # Summary
+def _print_summary(all_violations: List[FunctionViolation]) -> int:
+    """Print the verdict and return the exit code. Issue #620."""
     print("=" * 48)
 
     errors = [v for v in all_violations if v.is_error]
@@ -230,17 +287,46 @@ def main() -> int:
         print("  3. Keep functions under 50 lines (ideal: under 30)")
         print()
         print("Documentation: CLAUDE.md - Function Length section")
-        print()
-        print("To bypass (NOT recommended): git commit --no-verify")
         return 1
-    elif warnings:
+    if warnings:
         print(f"{YELLOW}{len(warnings)} warning(s) - commit allowed{NC}")
         print("Consider refactoring before merge (functions 51-65 lines)")
         print()
         return 0
-    else:
-        print(f"{GREEN}No function length violations found!{NC}")
+    print(f"{GREEN}No function length violations found!{NC}")
+    return 0
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Main entry point. Reads file paths from stdin. Issue #620, #16191."""
+    whole_file = "--whole-file" in (sys.argv[1:] if argv is None else argv)
+    files = [line.strip() for line in sys.stdin if line.strip()]
+
+    if not files:
+        print(f"{GREEN}No files to check.{NC}")
         return 0
+
+    print(f"Scanning {len(files)} file(s)...")
+    print()
+
+    if not whole_file and not (Path.cwd() / ".git").exists():
+        # From a subdirectory the root-relative paths pre-commit passes are not
+        # found, and git's pathspecs match nothing: a clean verdict, unexamined.
+        print(f"{RED}FATAL{NC}: not at the repository root, cannot scope the change -- refusing to report clean")
+        return 1
+
+    all_violations = [v for file_path in files for v in analyze_file(file_path)]
+    if not whole_file:
+        try:
+            all_violations = _report_scope(all_violations)
+        except RuntimeError as exc:
+            # A git failure is not "this change touched nothing" (#16191).
+            print(f"{RED}FATAL{NC}: {exc} -- cannot tell what this change touched, refusing to report clean")
+            return 1
+
+    for v in all_violations:
+        print_violation(v)
+    return _print_summary(all_violations)
 
 
 if __name__ == "__main__":
