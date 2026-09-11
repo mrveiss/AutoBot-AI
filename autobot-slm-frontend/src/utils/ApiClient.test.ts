@@ -243,3 +243,36 @@ describe('SlmApiClient', () => {
     await expect(client.post('/nodes', {})).rejects.toThrow('HTTP 500: boom')
   })
 })
+
+describe('SlmApiClient.getContract (#16292)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('drops the contract key\'s /api prefix, because the base supplies it', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ nodes: [], total: 0 }))
+    const client = new SlmApiClient()
+
+    const body = await client.getContract('/api/monitoring/gpu/nodes')
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/monitoring/gpu/nodes')
+    expect(body).toEqual({ nodes: [], total: 0 })
+  })
+
+  it('keeps a co-located base', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ nodes: [], total: 0 }))
+    const client = new SlmApiClient()
+    client.setBaseUrl('/slm/api')
+
+    await client.getContract('/api/monitoring/gpu/nodes')
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/slm/api/monitoring/gpu/nodes')
+  })
+})
