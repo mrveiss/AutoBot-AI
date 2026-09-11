@@ -38,10 +38,13 @@ python:
   # confined to security.yml takes the required-context shim's green while the guard
   # that reads it never runs.
   - '.github/workflows/security.yml'
-  # #16302: repo_tests/codeql_query_filters_match_queries_16302_test.py fails on a
-  # `query-filters` key CodeQL does not match on. Without this, a change confined to
-  # the CodeQL config -- a new file-scoped exclusion -- skips the guard written for it.
-  - '.github/codeql/codeql-config.yml'
+  # #16302 / #16283: repo_tests/codeql_query_filters_match_queries_16302_test.py fails
+  # on a `query-filters` key CodeQL does not match on, and
+  # repo_tests/codeql_config_files_are_referenced_16283_test.py fails on a file under
+  # .github/codeql/ that nothing references. Without these entries, a change confined
+  # to that directory or to the workflow that reads it skips both guards.
+  - '.github/codeql/**'
+  - '.github/workflows/codeql.yml'
   # The shim gates a required context, so editing it must run the real suite for
   # the same reason editing ci.yml does.
   - '.github/workflows/python-required-context.yml'
