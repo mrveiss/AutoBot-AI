@@ -397,6 +397,11 @@ _hv_rule_url() {
     local url="$HV_MATCH"
     case "$1" in
         *enterprise*|*sso_integration*|*injection_detector*|*domain_security*|*secure_llm*|*secure_web*) return 0 ;;
+        # #16260: a CI workflow's vendor downloads and dashboard links are not
+        # deployment config -- nothing a deployment varies. Only this generic URL
+        # rule stands down here: the IP and port rules still run on workflow
+        # files, so an AutoBot address in a workflow is still reported.
+        .github/workflows/*|*/.github/workflows/*) return 0 ;;
     esac
     # Example domains, W3C/SVG namespaces, licence URLs and placeholders.
     [[ $3 =~ $_HV_URL_SKIP_RE ]] && return 0
