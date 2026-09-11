@@ -64,14 +64,28 @@ def _resolve_keep_count() -> int:
 
 SERVICE_KEYS_KEEP_COUNT = _resolve_keep_count()
 
-# Add project paths
+# Project paths (#16348). The repo root goes on sys.path, never the
+# autobot_shared package directory itself: that exposed autobot_shared's own
+# ``security`` subpackage as a top-level ``security``, which shadowed the
+# backend's and made the ServiceAuthManager import fail. The backend path and
+# its imports load only when keys are generated (_load_backend), so importing
+# this module to test its path helpers pulls in no backend code.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "autobot-backend"))
-sys.path.insert(0, str(PROJECT_ROOT / "autobot_shared"))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-from autobot_shared.redis_client import get_async_redis_client  # noqa: E402
 from autobot_shared.ssot_config import config  # noqa: E402
-from security.service_auth import ServiceAuthManager  # noqa: E402
+
+
+def _load_backend():
+    """The Redis client factory and the backend's key manager, imported at run time."""
+    backend_dir = str(PROJECT_ROOT / "autobot-backend")
+    if backend_dir not in sys.path:
+        sys.path.insert(0, backend_dir)
+    from autobot_shared.redis_client import get_async_redis_client  # noqa: PLC0415
+    from security.service_auth import ServiceAuthManager  # noqa: PLC0415
+
+    return get_async_redis_client, ServiceAuthManager
 
 # Service definitions for AutoBot's distributed VM infrastructure.
 # Hosts are resolved from SSOT config — never hardcoded.
@@ -246,8 +260,8 @@ async def generate_keys(output_dir: str | None = None):
     logger.info("Services: %d", len(SERVICES))
     logger.info("")
 
-    redis = await get_async_redis_client(database="main")
-    auth_manager = ServiceAuthManager(redis)
+    redis_client_factory, key_manager_cls = _load_backend()
+    auth_manager = key_manager_cls(await redis_client_factory(database="main"))
 
     generated_keys = await _generate_all_keys(auth_manager)
     logger.info("")
