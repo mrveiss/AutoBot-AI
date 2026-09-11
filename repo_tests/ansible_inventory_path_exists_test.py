@@ -50,16 +50,13 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 _REPO_ROOT = repo_root()
 
 #: Directories excluded from the sweep: not part of this checkout's own tree,
 #: or vendored. Matches slm_frontend_shell_publish_test.py's set.
 _EXCLUDED_PARTS = {"node_modules", ".worktrees", ".claude", ".git"}
-
-#: This repo carries ~210 tracked shell scripts. Well below this and the sweep
-#: collapsed rather than the tree being clean.
-_MIN_SHELL_FILES_SWEPT = 150
 
 #: At least this many LIVE (non-echoed, literal-path) `ansible -i <path>`
 #: invocations exist in the tree today (autobot-slm-backend/ansible/deploy*.sh
@@ -99,18 +96,22 @@ def _ansible_inventory_refs(text: str) -> list[str]:
     return refs
 
 
-def _shell_files() -> list[Path]:
-    """Every tracked-tree shell script, addressed relative to `_REPO_ROOT`.
+def _shell_files(root: Path = _REPO_ROOT) -> list[Path]:
+    """Every tracked-tree shell script, addressed relative to *root*.
 
     Exclusion is checked against the RELATIVE path: this checkout may itself
     live under a `.worktrees/<name>/` directory, so filtering on the absolute
     path's parts would exclude everything.
+
+    Takes a root so the declaration below can be driven against an empty
+    directory by `reach_declarations_test`; without that, nothing can prove
+    the floor fires (#15928).
     """
     kept: list[Path] = []
-    for path in _REPO_ROOT.rglob("*.sh"):
+    for path in root.rglob("*.sh"):
         if not path.is_file():
             continue
-        rel_parts = path.relative_to(_REPO_ROOT).parts
+        rel_parts = path.relative_to(root).parts
         if _EXCLUDED_PARTS.intersection(rel_parts):
             continue
         if any(part.startswith("venv") or part.endswith(".venv") for part in rel_parts):
@@ -119,15 +120,29 @@ def _shell_files() -> list[Path]:
     return sorted(kept)
 
 
+#: MEASURED 2026-09-11 against this tree: 212 tracked shell scripts. The
+#: previous 150 was 29% below its own population; migrated to `_reach.declare`
+#: (#15928) rather than raised in place, so the floor is pinned automatically
+#: and the empty-tree case is proven by `reach_declarations_test`. `growth=30`
+#: is roughly 14% of the population, generous enough to absorb ordinary
+#: additions without living so close to the count that every new script forces
+#: a ratchet; `skips=0` because every file here is read with
+#: `errors="replace"`, so nothing is ever dropped as unreadable.
+REACH = declare(
+    "ansible-inventory-shell-sweep",
+    discover=_shell_files,
+    floor=212,
+    growth=30,
+    skips=0,
+    what="tracked shell scripts",
+)
+
 _SWEPT = _shell_files()
 
 
 def test_the_sweep_is_not_vacuous() -> None:
     """Floors under every count this module draws a conclusion from."""
-    assert len(_SWEPT) >= _MIN_SHELL_FILES_SWEPT, (
-        f"swept only {len(_SWEPT)} shell files (floor {_MIN_SHELL_FILES_SWEPT}) -- the sweep "
-        "collapsed rather than the tree being clean."
-    )
+    REACH.examined(_REPO_ROOT)
     found = sum(len(_ansible_inventory_refs(path.read_text(encoding="utf-8", errors="replace"))) for path in _SWEPT)
     assert found >= _MIN_LIVE_INVOCATIONS_FOUND, (
         f"found only {found} literal `ansible -i <path>` invocation(s) (floor "
