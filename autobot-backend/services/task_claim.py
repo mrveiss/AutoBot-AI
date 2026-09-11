@@ -95,11 +95,7 @@ async def claim_task(task_id: str, agent_id: str, ttl: int = _DEFAULT_TTL) -> bo
     """
     redis = await get_async_redis_client()
     if redis is None:
-        logger.warning(
-            "task_claim: Redis unavailable — allowing claim task=%s agent=%s (fail-open)",
-            task_id,
-            agent_id,
-        )
+        logger.warning("task_claim: Redis unavailable — allowing claim task=%s agent=%s (fail-open)", task_id, agent_id)
         _emit_audit("task.claim", agent_id, task_id, outcome="redis_unavailable")
         return True
     try:
