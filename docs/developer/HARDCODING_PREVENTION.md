@@ -181,7 +181,7 @@ Run the detection script manually to audit the entire codebase:
 # Machine-readable, as ssot-coverage.yml consumes it
 ./pipeline-scripts/detect-hardcoded-values.sh --json
 
-# Fail if a baseline entry no longer matches anything
+# Fail if a baseline entry claims more findings than the scan finds
 ./pipeline-scripts/detect-hardcoded-values.sh --audit-baseline
 
 # Scan a specific file list (the staged-files entry point takes argv)
