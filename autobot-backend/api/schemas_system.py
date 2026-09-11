@@ -2775,7 +2775,7 @@ class VisionHealthResponse(BaseModel):
 class WakeWordCheckRequest(BaseModel):
     """Request to check text for wake word"""
 
-    text: str = Field(..., description="Text to check for wake word")
+    text: str = Field(..., max_length=1000, description="Text to check for wake word")
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Recognition confidence")
 
 

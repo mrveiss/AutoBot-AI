@@ -49,7 +49,9 @@ async def check_wake_word(request: WakeWordCheckRequest) -> WakeWordCheckRespons
     confidence scoring and false positive reduction.
     """
     detector = get_wake_word_detector()
-    event = detector.check_text_for_wake_word(request.text, request.confidence)
+    # Evaluate only: /check must never change the shared detector's cooldown,
+    # history or stats, since anyone may call it (#16247).
+    event = detector.match_text(request.text, request.confidence)
 
     if event:
         return WakeWordCheckResponse(
