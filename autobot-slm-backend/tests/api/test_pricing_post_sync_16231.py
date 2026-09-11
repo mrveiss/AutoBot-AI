@@ -169,8 +169,8 @@ def test_a_timed_out_pricing_refresh_records_the_reason_and_the_sync_still_succe
 
 # ---------------------------------------------------------------------------
 # CodeQL py/path-injection (#16229 review, alerts #1132/#1133) — _load_env_file
-# must route every candidate path through within_deployed_root before touching
-# the filesystem with it.
+# must resolve and contain every candidate path against the deployed root,
+# inline in its own scope, before touching the filesystem with it.
 # ---------------------------------------------------------------------------
 
 
@@ -219,3 +219,19 @@ def test_load_env_file_missing_file_under_the_root_returns_empty(tmp_path, monke
     result = cs._load_env_file(tmp_path / "autobot-backend" / ".env")
 
     assert result == {}
+
+
+def test_load_env_file_refuses_a_sibling_directory_sharing_the_root_as_a_string_prefix(tmp_path, monkeypatch) -> None:
+    """The containment check must be anchored on ``root + os.sep`` -- a naive
+    ``startswith(root)`` would wrongly accept a sibling whose name merely
+    starts with the same characters (e.g. ``/opt/autobot`` vs
+    ``/opt/autobot-evil``)."""
+    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    sibling = Path(str(tmp_path) + "-evil") / ".env"
+
+    try:
+        cs._load_env_file(sibling)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a same-prefix sibling directory must raise ValueError")

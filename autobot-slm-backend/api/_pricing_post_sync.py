@@ -54,14 +54,26 @@ def _load_env_file(env_path: Path) -> Dict[str, str]:
     returning {} for a path that escaped it. The caller
     (``run_pricing_refresh_post_sync``) already runs inside a never-fail
     ``try``, so this becomes a recorded "failed to start" step, not a crash.
+
+    The containment check below is inlined rather than delegated to a
+    shared helper: CodeQL's py/path-injection dataflow analysis only
+    recognises a guard as a sanitiser for a value used in the same scope
+    the guard runs in, not one raised by a helper in another function
+    (#16229 review, alerts #1132/#1133). ``deployed_root()`` still supplies
+    the root so this stays on the one configured source of truth.
     """
-    from services.deployed_dir_resolver import within_deployed_root
+    from services.deployed_dir_resolver import deployed_root
+
+    root = os.path.realpath(deployed_root())
+    real = os.path.realpath(str(env_path))
+    if real != root and not real.startswith(root + os.sep):
+        raise ValueError(f"env file path resolves outside the deployed root {root!r}")
+    real_path = Path(real)
 
     env: Dict[str, str] = {}
-    env_path = Path(within_deployed_root(env_path))
-    if not env_path.exists():
+    if not real_path.exists():
         return env
-    for raw in env_path.read_text(encoding="utf-8").splitlines():
+    for raw in real_path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue

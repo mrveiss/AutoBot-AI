@@ -40,28 +40,15 @@ def deployed_root() -> str:
     """The real, resolved deployed root -- read at call time, never import time.
 
     Read live (not cached at import) so tests can monkeypatch
-    ``SLM_DEPLOYED_ROOT`` per-test. ``os.path.realpath`` so the containment
-    check in :func:`within_deployed_root` compares two resolved paths --
-    comparing a resolved candidate against an unresolved root would let a
-    symlink escape the containment check (CodeQL py/path-injection).
+    ``SLM_DEPLOYED_ROOT`` per-test. ``os.path.realpath`` so a caller building
+    a containment check (e.g. ``api/_pricing_post_sync._load_env_file``,
+    #16229 review) compares two resolved paths -- comparing a resolved
+    candidate against an unresolved root would let a symlink escape the
+    containment check (CodeQL py/path-injection). That check is inlined at
+    each call site rather than shared here, because CodeQL only recognises a
+    guard as a sanitiser within the same scope as the value it protects.
     """
     return os.path.realpath(os.environ.get("SLM_DEPLOYED_ROOT", "/opt/autobot"))
-
-
-def within_deployed_root(path: Path | str) -> str:
-    """The real path of *path* if it is the deployed root or lives under it.
-
-    Raises ``ValueError`` naming the path otherwise. This is the sanitiser
-    CodeQL's py/path-injection help documents: ``os.path.realpath`` the
-    candidate, then compare it to the (also-resolved) root by equality or
-    ``startswith(root + os.sep)`` -- never ``Path.is_relative_to``, which
-    CodeQL's dataflow analysis does not recognise as a sanitiser.
-    """
-    root = deployed_root()
-    real = os.path.realpath(str(path))
-    if real != root and not real.startswith(root + os.sep):
-        raise ValueError(f"path {path!r} resolves outside the deployed root {root!r}")
-    return real
 
 
 def _resolve_deployed_dir(component: str = "autobot-slm-backend") -> str:
