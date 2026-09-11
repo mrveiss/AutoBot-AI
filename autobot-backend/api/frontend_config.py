@@ -12,9 +12,10 @@ Authorization (#15745): no authentication required by design. The SPA loads
 this before any session exists -- App.vue fails closed until its runtime
 feature flags resolve -- so it cannot sit behind a login. It therefore
 carries only what a signed-out client needs: no host inventory and no
-credentials, on the success path and the fallback path alike. The fleet host
-list is served by the admin-gated ``/system/frontend-config`` instead, which
-is where the terminal reads it.
+credentials, on the success path and the fallback path alike. No endpoint
+serves the fleet host list to the SPA: ``/system/frontend-config`` never
+carried one, and the terminal falls back to its built-in DEFAULT_HOSTS
+(whether that list is itself internal depends on the build -- #16258).
 """
 
 from typing import Any, Dict
@@ -189,7 +190,6 @@ def _build_fallback_config() -> Dict[str, Any]:
         "features": _build_features_config(features_config),
         "ui": _build_ui_config(ui_config),
         "performance": _build_performance_config(performance_config),
-        # Issue #372: Use NetworkConstants method for host configs
     }
 
 
@@ -229,7 +229,6 @@ async def get_frontend_config():
             "features": _build_features_config(full_config.get("features", {})),
             "ui": _build_ui_config(full_config.get("ui", {})),
             "performance": _build_performance_config(full_config.get("performance", {})),
-            # Issue #372: Use NetworkConstants method for host configs
         }
 
         logger.info("Frontend configuration provided successfully")
