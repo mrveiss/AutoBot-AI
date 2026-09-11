@@ -148,7 +148,33 @@ def test_diff_mode_prints_the_plan_as_json_and_exits_zero(tmp_path, capsys) -> N
 
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload == {"delete": ["gone.py"], "kept": [], "error": None}
+    assert payload == {"delete": ["gone.py"], "kept": [], "error": None, "bootstrap_required": False}
+
+
+def test_diff_mode_asks_for_bootstrap_when_the_previous_commit_is_unknown(tmp_path, capsys) -> None:
+    """#16310 round 12, N6: an unknown marker commit is a bootstrap request, not an error."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo / "comp" / "keep.py")
+    commit_b = _commit_all(repo, "seed")
+
+    exit_code = main(
+        [
+            "diff",
+            "--repo-root",
+            str(repo),
+            "--source-dir",
+            str(repo / "comp"),
+            "--previous-commit",
+            "f" * 40,
+            "--new-commit",
+            commit_b,
+        ]
+    )
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {"delete": [], "kept": [], "error": None, "bootstrap_required": True}
 
 
 def test_diff_mode_exits_nonzero_and_names_the_error_on_failure(tmp_path, capsys) -> None:
