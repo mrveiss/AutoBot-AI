@@ -114,3 +114,100 @@ class TestBypassIsReachableFromLoadAll:
         loader.load_all()
 
         assert len(reads) == 1
+
+
+def _switchable_loader(tmp_path, monkeypatch):
+    """Like `_counting_loader`, but the disk read can be made to fail on demand."""
+    (tmp_path / "autobot-example").mkdir()
+    loader = ManifestLoader(infra_base=tmp_path)
+    state = {"fail": False, "reads": 0}
+
+    def _from_disk(role_name: str):
+        state["reads"] += 1
+        return None if state["fail"] else _SENTINEL
+
+    monkeypatch.setattr(loader, "_load_from_disk", _from_disk)
+    return loader, state
+
+
+class TestAFailedReadLeavesNoStaleEntry:
+    """A failed disk read evicts rather than retains (#16204).
+
+    Each of these fails against the code before #16204, which only wrote the
+    cache on success and never removed an entry when a read failed.
+    """
+
+    def test_a_failed_forced_reload_does_not_leave_the_old_manifest_serving(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(manifest_loader, "_CACHE_TTL", 300)
+        loader, state = _switchable_loader(tmp_path, monkeypatch)
+
+        assert loader.load("autobot-example") is _SENTINEL
+        state["fail"] = True
+        assert loader.load("autobot-example", force_reload=True) is None
+
+        assert loader.load("autobot-example") is not _SENTINEL, (
+            "a plain load() after a failed forced reload served the pre-reload manifest "
+            "from cache — the caller that forced the reload was told it failed, and "
+            "every later caller inside the TTL is told the old answer"
+        )
+
+    def test_an_expired_entry_whose_reload_fails_is_removed(self, tmp_path, monkeypatch) -> None:
+        """Asserted on cache state, because this case has no other observable effect.
+
+        An expired entry is never served, so retaining it changes no return value —
+        it only leaves `_cache` holding a manifest the disk no longer backs.
+        """
+        monkeypatch.setattr(manifest_loader, "_CACHE_TTL", 300)
+        loader, state = _switchable_loader(tmp_path, monkeypatch)
+        role = "autobot-example"
+
+        loader.load(role)
+        manifest, loaded_at = loader._cache[role]
+        loader._cache[role] = (manifest, loaded_at - 10_000)
+        state["fail"] = True
+
+        assert loader.load(role) is None
+        assert role not in loader._cache, "an expired entry whose reload failed was retained"
+
+    def test_a_successful_read_after_a_failure_caches_again(self, tmp_path, monkeypatch) -> None:
+        """The success path is unchanged: it caches, and a fresh entry is served without disk."""
+        monkeypatch.setattr(manifest_loader, "_CACHE_TTL", 300)
+        loader, state = _switchable_loader(tmp_path, monkeypatch)
+        role = "autobot-example"
+
+        loader.load(role)
+        state["fail"] = True
+        loader.load(role, force_reload=True)
+        state["fail"] = False
+
+        assert loader.load(role) is _SENTINEL
+        assert loader.load(role) is _SENTINEL
+        assert state["reads"] == 3, "the recovered entry must be served from cache, not re-read"
+
+
+class TestLoadAllTellsAbsentFromFailed:
+    """`load_all` must not signal a failed read only by a shorter dict (#16204 AC3).
+
+    Pins behaviour already present in `_load_from_disk`: a missing manifest logs at
+    DEBUG, a manifest that fails to parse or validate logs a WARNING naming the role.
+    Uses real files, because patching `_load_from_disk` would remove the logging
+    under test.
+    """
+
+    def test_a_broken_manifest_warns_by_name_and_a_missing_one_does_not(self, tmp_path, caplog) -> None:
+        (tmp_path / "autobot-broken").mkdir()
+        (tmp_path / "autobot-broken" / "manifest.yml").write_text("role: [unclosed\n", encoding="utf-8")
+        (tmp_path / "autobot-empty").mkdir()
+        loader = ManifestLoader(infra_base=tmp_path)
+
+        caplog.set_level("DEBUG")
+        result = loader.load_all()
+
+        assert "autobot-broken" not in result and "autobot-empty" not in result
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        debugs = [r.getMessage() for r in caplog.records if r.levelname == "DEBUG"]
+        assert any(
+            "autobot-broken" in m for m in warnings
+        ), f"a manifest that failed to load produced no WARNING naming its role: {warnings}"
+        assert not any("autobot-empty" in m for m in warnings), "an absent manifest must not read as a failure"
+        assert any("autobot-empty" in m for m in debugs), "an absent manifest must still be recorded, at DEBUG"

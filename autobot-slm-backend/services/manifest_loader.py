@@ -87,7 +87,16 @@ class ManifestLoader:
                 return manifest
 
         manifest = self._load_from_disk(role_name)
-        if manifest is not None:
+        if manifest is None:
+            # A failed read must not leave the previous entry behind (#16204). A
+            # forced reload that fails returns None to its caller; if the old entry
+            # survived, every later plain load() inside the TTL would serve the
+            # pre-reload manifest -- the one caller that asked for fresh data told
+            # the truth, every later caller told the old answer. An expired entry
+            # whose reload fails is dropped for the same reason: it is never served,
+            # so keeping it only leaves the cache asserting what the disk no longer says.
+            self._cache.pop(role_name, None)
+        else:
             self._cache[role_name] = (manifest, time.monotonic())
         return manifest
 
