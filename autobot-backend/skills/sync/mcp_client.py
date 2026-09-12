@@ -23,6 +23,7 @@ from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from security.content_firewall import ContentSource, get_content_firewall
+from services.mcp_isolation_config import BridgePolicy
 from skills.sync.mcp_transport import MCPTransport, create_transport
 from type_defs.mcp import (
     MCPPromptDefinition,
@@ -51,6 +52,7 @@ class MCPClient:
         timeout: float = 30.0,
         guard_egress: bool | None = None,
         extra_headers: dict[str, str] | None = None,
+        resource_policy: BridgePolicy | None = None,
     ) -> None:
         """Create a client for the given server URI.
 
@@ -64,9 +66,16 @@ class MCPClient:
             extra_headers: Headers merged into every remote-transport request
                 — e.g. an ``Authorization`` header built from a stored
                 credential (#11542). Ignored by the stdio transport.
+            resource_policy: cpu/memory/nofile rlimits (#3229) the spawned
+                subprocess self-applies before exec — stdio transport only
+                (#11542). Ignored by the remote transports.
         """
         self._transport: MCPTransport = create_transport(
-            server_uri, timeout=timeout, guard_egress=guard_egress, extra_headers=extra_headers
+            server_uri,
+            timeout=timeout,
+            guard_egress=guard_egress,
+            extra_headers=extra_headers,
+            resource_policy=resource_policy,
         )
         self._timeout = timeout
         self._req_id = _INIT_REQ_ID

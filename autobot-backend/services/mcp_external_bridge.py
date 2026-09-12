@@ -10,7 +10,8 @@ and sourcing its server list from services.mcp_external_servers' admin CRUD
 store instead of a static config env var. Both bridges share the actual
 discovery/collision/skip logic via services.mcp_aggregation — this module
 adds only what differs: loading *enabled* servers from the store, resolving
-each server's credential into extra_headers, and the egress guard.
+each server's credential into extra_headers, the egress guard for remote
+servers, and cpu/memory/nofile rlimits (#3229) for stdio servers.
 
 Not yet wired into services/mcp_dispatch.py's existing internal-bridge
 routing (MCPDispatcher) — see the PR body for the open design question on
@@ -28,6 +29,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from knowledge.connectors.base import instance_host_egress
 from services.mcp_aggregation import discover_and_resolve
 from services.mcp_external_servers import MCPServerConfig, get_mcp_external_server_store
+from services.mcp_isolation_config import BridgePolicy, policy_for
 from services.mcp_server_credentials import resolve_extra_headers_for_server
 from type_defs.mcp import MCPToolDefinition
 
@@ -51,6 +53,16 @@ class _ExternalToolEntry:
     original_name: str
     guard_egress: bool | None
     extra_headers: dict[str, str]
+    resource_policy: BridgePolicy | None = None
+
+
+@dataclass
+class _ConnectSettings:
+    """Per-server connection settings resolved once in list_tools(), reused for every tool."""
+
+    guard_egress: bool | None
+    extra_headers: dict[str, str]
+    resource_policy: BridgePolicy | None
 
 
 def _get_mcp_client_class():
@@ -99,31 +111,41 @@ class MCPExternalBridge:
         if not servers:
             return []
 
-        connect_settings: dict[str, tuple[bool | None, dict[str, str]]] = {}
+        connect_settings: dict[str, _ConnectSettings] = {}
         for server in servers:
             uri = server.to_server_uri()
             if server.transport == "stdio":
-                connect_settings[uri] = (None, {})
+                # #3229: an admin-configured external stdio command gets the
+                # same cpu/memory/nofile rlimits as an internal isolated
+                # bridge — policy_for() has no per-server_id override
+                # declared, so this resolves to the global defaults.
+                connect_settings[uri] = _ConnectSettings(None, {}, policy_for(server.server_id))
             else:
                 headers = await resolve_extra_headers_for_server(server)
-                connect_settings[uri] = (instance_host_egress(), headers)
+                connect_settings[uri] = _ConnectSettings(instance_host_egress(), headers, None)
 
         MCPClient = _get_mcp_client_class()
 
         def _client_factory(uri: str):
-            guard_egress, extra_headers = connect_settings[uri]
-            return MCPClient(uri, guard_egress=guard_egress, extra_headers=extra_headers)
+            settings = connect_settings[uri]
+            return MCPClient(
+                uri,
+                guard_egress=settings.guard_egress,
+                extra_headers=settings.extra_headers,
+                resource_policy=settings.resource_policy,
+            )
 
         resolved = await discover_and_resolve([s.to_server_uri() for s in servers], _client_factory)
 
         tools: list[MCPToolDefinition] = []
         for r in resolved:
-            guard_egress, extra_headers = connect_settings[r.server_uri]
+            settings = connect_settings[r.server_uri]
             self._registry[r.public_name] = _ExternalToolEntry(
                 server_uri=r.server_uri,
                 original_name=r.original_name,
-                guard_egress=guard_egress,
-                extra_headers=extra_headers,
+                guard_egress=settings.guard_egress,
+                extra_headers=settings.extra_headers,
+                resource_policy=settings.resource_policy,
             )
             tools.append(r.tool.model_copy(update={"name": r.public_name}))
         return tools
@@ -143,7 +165,10 @@ class MCPExternalBridge:
         MCPClient = _get_mcp_client_class()
         try:
             async with MCPClient(
-                entry.server_uri, guard_egress=entry.guard_egress, extra_headers=entry.extra_headers
+                entry.server_uri,
+                guard_egress=entry.guard_egress,
+                extra_headers=entry.extra_headers,
+                resource_policy=entry.resource_policy,
             ) as client:
                 result = await client.call_tool(entry.original_name, arguments)
         except Exception as exc:  # noqa: BLE001

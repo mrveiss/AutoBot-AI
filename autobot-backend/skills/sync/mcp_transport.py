@@ -23,6 +23,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EgressBlockedError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.url_safety import is_public_url_async
+from services.mcp_isolation_config import BridgePolicy
 
 logger = get_logger(__name__)
 
@@ -99,10 +100,23 @@ class StdioTransport(MCPTransport):
     line-by-line.  This matches the reference MCP stdio framing spec.
     """
 
-    def __init__(self, command: str, timeout: float = 30.0) -> None:
-        """Initialise with a shell command string, e.g. ``"npx -y @modelcontextprotocol/server-filesystem /tmp"``."""
+    def __init__(
+        self,
+        command: str,
+        timeout: float = 30.0,
+        resource_policy: BridgePolicy | None = None,
+    ) -> None:
+        """Initialise with a shell command string, e.g. ``"npx -y @modelcontextprotocol/server-filesystem /tmp"``.
+
+        resource_policy (#3229, #11542): when given, the subprocess self-
+        applies its cpu/memory/nofile rlimits via preexec_fn before exec —
+        the same limits services/mcp_bridge_workers/worker_entrypoint.py
+        self-applies for the internal-bridge isolated runtime, reused here
+        for an admin-configured external stdio MCP server.
+        """
         self._command = command
         self._timeout = timeout
+        self._resource_policy = resource_policy
         self._proc: asyncio.subprocess.Process | None = None
         self._recv_lock = asyncio.Lock()
 
@@ -110,13 +124,28 @@ class StdioTransport(MCPTransport):
         """Spawn the subprocess."""
         parts = self._command.split()
         logger.info("StdioTransport: spawning %s", parts)
+        preexec_fn = self._make_preexec_fn()
         self._proc = await asyncio.create_subprocess_exec(
             *parts,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=preexec_fn,
         )
         logger.debug("StdioTransport: pid=%s", self._proc.pid)
+
+    def _make_preexec_fn(self):
+        """Return a preexec_fn applying this transport's resource_policy, or None."""
+        policy = self._resource_policy
+        if policy is None:
+            return None
+
+        def _preexec() -> None:
+            from services.mcp_isolation_config import apply_rlimits
+
+            apply_rlimits(cpu_seconds=policy.cpu_seconds, memory_mb=policy.memory_mb, nofile=policy.nofile)
+
+        return _preexec
 
     async def send(self, request: Dict[str, Any]) -> None:
         """Write one JSON line to the subprocess stdin."""
@@ -444,6 +473,7 @@ def create_transport(
     timeout: float = 30.0,
     guard_egress: bool | None = None,
     extra_headers: Dict[str, str] | None = None,
+    resource_policy: BridgePolicy | None = None,
 ) -> MCPTransport:
     """Return the correct MCPTransport for *server_uri*.
 
@@ -463,10 +493,14 @@ def create_transport(
     ``extra_headers`` (#11542) are merged into every outbound request on the
     remote transports — e.g. an ``Authorization`` header built from a stored
     credential. ``StdioTransport`` ignores it; it has no HTTP headers.
+
+    ``resource_policy`` (#3229, #11542) applies only to ``StdioTransport`` —
+    cpu/memory/nofile rlimits the spawned subprocess self-applies before
+    exec. The remote transports ignore it; they have no subprocess.
     """
     if server_uri.startswith("stdio://"):
         command = server_uri[len("stdio://") :]
-        return StdioTransport(command, timeout=timeout)
+        return StdioTransport(command, timeout=timeout, resource_policy=resource_policy)
     if server_uri.startswith("sse://"):
         return SSETransport(server_uri, timeout=timeout, guard_egress=guard_egress, extra_headers=extra_headers)
     if server_uri.startswith("streamable-http://"):

@@ -193,3 +193,84 @@ class TestCallTool:
 
         assert result.success is False
         assert "socket closed" in result.error
+
+
+class TestResourcePolicy:
+    """cpu/memory/nofile rlimits for stdio servers (#3229)."""
+
+    @pytest.mark.asyncio
+    async def test_stdio_server_gets_a_resource_policy(self):
+        bridge = MCPExternalBridge()
+        mock_client = AsyncMock()
+        mock_client.discover_tools = AsyncMock(return_value=[_make_tool("fs_read")])
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        captured_kwargs = {}
+
+        def _factory(uri, **kwargs):
+            captured_kwargs.update(kwargs)
+            return mock_client
+
+        with patch("services.mcp_external_bridge.get_mcp_external_server_store") as get_store:
+            get_store.return_value.list = AsyncMock(return_value=[_stdio_server()])
+            with patch("services.mcp_external_bridge._get_mcp_client_class", return_value=_factory):
+                await bridge.list_tools()
+
+        assert captured_kwargs["resource_policy"] is not None
+        assert bridge._registry["fs_read"].resource_policy is not None
+
+    @pytest.mark.asyncio
+    async def test_remote_server_gets_no_resource_policy(self):
+        bridge = MCPExternalBridge()
+        mock_client = AsyncMock()
+        mock_client.discover_tools = AsyncMock(return_value=[_make_tool("remote_search")])
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        captured_kwargs = {}
+
+        def _factory(uri, **kwargs):
+            captured_kwargs.update(kwargs)
+            return mock_client
+
+        with patch("services.mcp_external_bridge.get_mcp_external_server_store") as get_store:
+            get_store.return_value.list = AsyncMock(return_value=[_remote_server()])
+            with patch("services.mcp_external_bridge._get_mcp_client_class", return_value=_factory):
+                with patch("services.mcp_external_bridge.instance_host_egress", return_value=False):
+                    await bridge.list_tools()
+
+        assert captured_kwargs["resource_policy"] is None
+
+    @pytest.mark.asyncio
+    async def test_call_tool_reuses_the_resource_policy_from_discovery(self):
+        bridge = MCPExternalBridge()
+        from services.mcp_external_bridge import _ExternalToolEntry
+        from services.mcp_isolation_config import policy_for
+
+        policy = policy_for("s1")
+        bridge._registry = {
+            "fs_read": _ExternalToolEntry(
+                server_uri="stdio://npx -y pkg",
+                original_name="fs_read",
+                guard_egress=None,
+                extra_headers={},
+                resource_policy=policy,
+            )
+        }
+
+        mock_client = AsyncMock()
+        mock_client.call_tool = AsyncMock(return_value="ok")
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        captured_kwargs = {}
+
+        def _factory(uri, **kwargs):
+            captured_kwargs.update(kwargs)
+            return mock_client
+
+        with patch("services.mcp_external_bridge._get_mcp_client_class", return_value=_factory):
+            await bridge.call_tool("fs_read", {})
+
+        assert captured_kwargs["resource_policy"] is policy
