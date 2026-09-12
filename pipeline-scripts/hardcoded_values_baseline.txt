@@ -305,7 +305,6 @@
 1|other|autobot-backend/llm_shared/structured_ops.py|"user"
 1|other|autobot-backend/llm_shared/tiered_routing/complexity_router.py|"system"
 1|other|autobot-backend/llm_shared/tiered_routing/complexity_scorer.py|"user"
-1|other|autobot-backend/mcp_server/autobot_server.py|10
 1|other|autobot-backend/media/document/extraction.py|offset=0
 1|other|autobot-backend/media/link/pipeline.py|https://r.jina.ai/
 1|other|autobot-backend/memory/compat.py|100

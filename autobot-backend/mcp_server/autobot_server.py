@@ -30,7 +30,7 @@ Rate limiting:
     Pre-auth (#13268): failed authentications are counted per client IP *and*
     against an endpoint-wide ceiling before any validation work runs, so the
     secret cannot be brute-forced unmetered and failed attempts cannot be used
-    as a Redis amplifier.  See mcp/auth_throttle.py.
+    as a Redis amplifier.  See mcp_server/auth_throttle.py.
     Post-auth: in-memory token bucket per token prefix.
     Both reject with JSON-RPC error code -32029.
 
@@ -51,6 +51,7 @@ from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_constants import QueryDefaults
 from mcp_server.auth_throttle import UNKNOWN_IP, get_pre_auth_throttle
 from services.run_jwt import validate_run_jwt
 
@@ -655,7 +656,7 @@ class AutoBotMCPServer:
         self,
         query: str,
         filters: Dict[str, Any] | None = None,
-        limit: int = 10,
+        limit: int = QueryDefaults.DEFAULT_SEARCH_LIMIT,
     ) -> Any:
         from knowledge._composed import get_knowledge_base
 

@@ -213,7 +213,7 @@ class TestRealFixtureRegressionPins:
         ],
     )
     def test_mcp_security_fixtures_are_classified_correctly(self, fixture_name, expected_violation):
-        path = _REPO / "autobot-backend" / "mcp" / "mcp_security_test.py"
+        path = _REPO / "autobot-backend" / "mcp_server" / "mcp_security_test.py"
         tree = ast.parse(path.read_text(encoding="utf-8"))
         (func,) = (f for f in _iter_pytest_fixtures(tree) if f.name == fixture_name)
         assert _is_violation(func) is expected_violation
