@@ -8,7 +8,7 @@
 # Virtualmin-style single installer that deploys SLM and all dependencies.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/release/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | bash
 #   # OR after cloning:
 #   sudo ./install.sh
 #   sudo ./install.sh --unattended
