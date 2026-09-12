@@ -398,7 +398,8 @@ The codebase has excellent composable organization in `src/composables/`:
 - `useUnifiedLoading.ts` - Loading state management
 
 ### **System Integration**
-- `useApi.ts` - API request handling
+- `plugins/api.ts` (`useApiClient()`) - Imperative API request handling
+- `composables/api/useFetchEndpoint.ts` - Reactive data-loading composable
 - `useErrorHandler.ts` - Error handling
 - `useLocalStorage.ts` - Local storage abstraction
 - `useClipboard.ts` - Clipboard operations
