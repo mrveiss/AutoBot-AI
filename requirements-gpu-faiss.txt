@@ -1,0 +1,19 @@
+# GPU-built faiss — OPTIONAL extra, GPU-gated and vLLM-independent (#15163)
+#
+# NOT installed by the default backend image (CPU-only faiss-cpu, from
+# requirements.txt, is installed there instead).
+#
+# Fixes #15163: autobot-backend/utils/gpu_vector_search.py's GPU-accelerated
+# similarity search (#387) has always been unreachable, because
+# faiss.StandardGpuResources only exists in a faiss-gpu build and every
+# automated install path only ever provided faiss-cpu. requirements.txt's
+# own comment pointed at conda, which no deploy path uses. PyPI's faiss-gpu
+# 1.15.0 (Aug 2026) is a real pip-installable wheel with CUDA/ROCm support
+# for the Python this repo targets, so this follows requirements-gpu-torch.txt's
+# exact shape (#15162): the ansible backend role installs this file whenever
+# backend_gpu_available is true, regardless of backend_vllm_enabled.
+#
+# Requires: CUDA-compatible GPU, Python 3.14 (this backend's deployed
+# interpreter -- see venv/lib/python3.14 in the ansible role).
+
+faiss-gpu==1.15.0
