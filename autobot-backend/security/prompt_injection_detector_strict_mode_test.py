@@ -63,7 +63,17 @@ def _tracked_backend_python_files(root: Path = REPO_ROOT) -> list[Path]:
 
 
 def _strict_mode_calls(source: str) -> list[ast.expr]:
-    """The ``strict_mode`` argument expression of every get_prompt_injection_detector(...) call."""
+    """The ``strict_mode`` argument expression of every get_prompt_injection_detector(...) call.
+
+    Checks both shapes: PromptInjectionDetector.__init__(self, strict_mode)
+    has exactly one parameter, so a positional call's sole argument IS
+    strict_mode -- security/secure_llm_command_parser.py:66 calls it exactly
+    this way (get_prompt_injection_detector(strict_mode), not
+    strict_mode=strict_mode). An earlier version of this guard checked
+    node.keywords only and never saw that site at all: its
+    _KNOWN_INDIRECT_SITES entry was dead, and a future positional False
+    would have passed silently (#16567 review).
+    """
     try:
         tree = ast.parse(source)
     except SyntaxError:
@@ -77,9 +87,8 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
         for kw in node.keywords:
             if kw.arg == "strict_mode":
                 found.append(kw.value)
-        # Positional strict_mode is not used anywhere today (grep confirmed,
-        # #16561); a future positional call falls through to "found nothing"
-        # below and fails loudly rather than being silently approved.
+        if node.args:
+            found.append(node.args[0])
     return found
 
 
@@ -93,6 +102,36 @@ REACH = declare(
     growth=300,
     what="tracked backend python files (tests excluded)",
 )
+
+
+class TestStrictModeCallsDetection:
+    """Unit coverage of the helper itself (#16567 review): the whole-tree scan
+    below is only as good as this detection, and it previously missed
+    positional calls entirely -- these fixtures pin both shapes directly,
+    independent of what the real tree currently contains.
+    """
+
+    def test_detects_keyword_true(self):
+        (value,) = _strict_mode_calls("get_prompt_injection_detector(strict_mode=True)")
+        assert isinstance(value, ast.Constant) and value.value is True
+
+    def test_detects_keyword_false(self):
+        (value,) = _strict_mode_calls("get_prompt_injection_detector(strict_mode=False)")
+        assert isinstance(value, ast.Constant) and value.value is False
+
+    def test_detects_positional_true(self):
+        """secure_llm_command_parser.py's exact shape: get_prompt_injection_detector(strict_mode)."""
+        (value,) = _strict_mode_calls("get_prompt_injection_detector(strict_mode)")
+        assert isinstance(value, ast.Name) and value.id == "strict_mode"
+
+    def test_detects_positional_literal_false(self):
+        """The regression this fixture exists for: a bare positional False must
+        be seen, not silently pass through an untouched node.args."""
+        (value,) = _strict_mode_calls("get_prompt_injection_detector(False)")
+        assert isinstance(value, ast.Constant) and value.value is False
+
+    def test_unrelated_calls_are_ignored(self):
+        assert _strict_mode_calls("some_other_function(strict_mode=False)") == []
 
 
 def test_every_construction_site_passes_strict_mode_true_or_a_known_forward():

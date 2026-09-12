@@ -291,6 +291,27 @@ class TestChatAiStackWiring:
         assert exc_info.value.status_code == 400
         mock_process.assert_not_called()
 
+    async def test_injection_flagged_message_still_reaches_the_pipeline(self):
+        """#16530 false-positive guard, through the real wiring: flagged and
+        logged, never blocking the turn (#16567 review: restores coverage
+        the deleted stale test used to give this path, for the new call site)."""
+        from api.chat import chat_ai_stack
+        from api.schemas_chat import ChatMessage
+
+        message = ChatMessage(content=INJECTION_MESSAGE, session_id="sess-1")
+
+        with patch("api.chat.process_ai_stack_chat_message", new_callable=AsyncMock) as mock_process:
+            await chat_ai_stack(  # must not raise
+                current_user={"user_id": "u1"},
+                message=message,
+                request=MagicMock(),
+                preferences=None,
+                config=MagicMock(),
+                knowledge_base=MagicMock(),
+            )
+
+        mock_process.assert_called_once()
+
 
 @pytest.mark.asyncio
 class TestStreamAiStackChatWiring:
@@ -347,6 +368,24 @@ class TestStreamAiStackChatWiring:
 
         with patch("api.chat._generate_ai_stack_stream", return_value=iter(())):
             response = await stream_ai_stack_chat(
+                current_user={"user_id": "u1"},
+                message=message,
+                request=MagicMock(),
+                preferences=None,
+            )
+
+        assert response.status_code == 200
+
+    async def test_injection_flagged_message_still_starts_streaming(self):
+        """#16530 false-positive guard, through the real wiring (#16567 review:
+        restores coverage the deleted stale test used to give this path)."""
+        from api.chat import stream_ai_stack_chat
+        from api.schemas_chat import ChatMessage
+
+        message = ChatMessage(content=INJECTION_MESSAGE, session_id="sess-1")
+
+        with patch("api.chat._generate_ai_stack_stream", return_value=iter(())):
+            response = await stream_ai_stack_chat(  # must not raise
                 current_user={"user_id": "u1"},
                 message=message,
                 request=MagicMock(),
