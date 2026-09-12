@@ -416,6 +416,32 @@ expect_block "write to /dev/nvme0n1"                 "cat img > /dev/nvme0n1"
 expect_block "dd if= to device"                      "dd if=/dev/zero of=/dev/sda"
 expect_block "mkfs on partition"                     "mkfs.ext4 /dev/sdb1"
 
+echo ""
+echo "--- Untrusted-repo clone safety (#16488) ---"
+expect_block "bare git clone"                        "git clone https://example.com/o/r.git"
+expect_block "clone missing every safe flag"         "git clone --depth 1 https://example.com/o/r.git"
+expect_block "clone missing protocol flags only"     "git -c core.hooksPath=/dev/null -c core.fsmonitor=false clone --depth 1 --no-tags --single-branch https://example.com/o/r.git"
+expect_block "recurse-submodules, even with every other safe flag" \
+  "git clone --recurse-submodules --depth 1 --no-tags --single-branch -c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.file.allow=never -c protocol.ext.allow=never https://example.com/o/r.git"
+expect_block "-C at an unrelated directory does not excuse it" "git -C /tmp clone https://example.com/o/r.git"
+# The exact invocation build_clone_command() itself produces, spelled out by
+# hand -- the one shape a hand-typed `git clone` may take.
+expect_allow "clone carrying every one of its own safe flags" \
+  "git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.file.allow=never -c protocol.ext.allow=never clone --depth 1 --no-tags --single-branch -- https://example.com/o/r.git /cache/dest"
+# The helper's own invocation never contains a literal `git clone` at all --
+# it runs a fixed argv from a `python3` process -- so it is left alone with no
+# special-case exemption in the guard itself.
+expect_allow "the helper's own command"               "python3 scripts/research/safe_clone.py https://example.com/o/r.git --id owner__repo__deadbeef"
+expect_allow "git clone quoted in prose"               'gh issue create --body "run git clone https://example.com/x to reproduce"'
+expect_allow "git clone mentioned in a grep pattern"   'git log --oneline | grep -c "git clone"'
+# Mentioning the helper's path elsewhere on the line must not excuse a real,
+# unsafe clone sitting next to it -- the exemption this guard deliberately
+# does NOT have (see the hook's own comment).
+expect_block "helper mentioned elsewhere does not excuse an unsafe clone" \
+  "echo scripts/research/safe_clone.py && git clone https://example.com/untrusted-repo"
+expect_block "helper mentioned in a trailing comment does not excuse it" \
+  "git clone https://example.com/untrusted-repo # see scripts/research/safe_clone.py"
+
 # Reach floor: a suite that silently stopped executing cases — a mis-copied
 # hook, a sandbox that failed to build, an early `return` in a helper — would
 # otherwise finish with 0 failures and report clean. Assert the population.

@@ -410,4 +410,41 @@ if echo "$COMMAND_TO_CHECK" | grep -qE 'twine[[:space:]]+upload'; then
   deny "Blocked: publishing Python packages should be done manually or via CI, not through Claude Code."
 fi
 
+# ──────────────────────────────────────────────
+# Untrusted-repo clone safety (#16488)
+#
+# The research/adopt skills read other people's repositories, and a clone
+# brings an untrusted `.git` onto the machine with it -- hooks, `core.fsmonitor`,
+# `core.sshCommand`, filter drivers, and recursive submodules can all execute
+# during or after a plain `git clone`. `scripts/research/safe_clone.py` is the
+# one path that neutralises all of that (shallow, hooks/fsmonitor/file-protocol
+# disabled, `.git` deleted, agent-instruction files renamed `*.untrusted`)
+# before anything reads the tree.
+#
+# The helper's own subprocess call never appears as a literal `git clone` in a
+# Bash command -- it runs a fixed argv directly, from a `python3` invocation --
+# so it never reaches this rule at all and needs no explicit exemption. Adding
+# one (e.g. "allow if the command merely MENTIONS the helper's path") would be
+# a bypass: an unsafe `git clone` sitting next to unrelated text that names the
+# helper would then slip through. Every literal `git ... clone` is judged the
+# same way, whether or not the helper is mentioned anywhere else on the line.
+# ──────────────────────────────────────────────
+
+if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git([[:space:]]+[^;&|]*)?[[:space:]]+clone([[:space:]]|$)'; then
+
+  CLONE_DENY_MSG="Blocked: git clone must go through scripts/research/safe_clone.py (python3 scripts/research/safe_clone.py <url> --id <id>), or carry every one of its safe flags itself: --depth 1 --no-tags --single-branch, -c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.file.allow=never -c protocol.ext.allow=never, and never --recurse-submodules (#16488)."
+
+  if echo "$COMMAND_TO_CHECK" | grep -qE '\-\-recurse-submodules'; then
+    deny "$CLONE_DENY_MSG"
+  fi
+
+  for required_flag in '\-\-depth[[:space:]]+1' '\-\-no-tags' '\-\-single-branch' \
+    'core\.hooksPath=/dev/null' 'core\.fsmonitor=false' \
+    'protocol\.file\.allow=never' 'protocol\.ext\.allow=never'; do
+    if ! echo "$COMMAND_TO_CHECK" | grep -qE "$required_flag"; then
+      deny "$CLONE_DENY_MSG"
+    fi
+  done
+fi
+
 exit 0
