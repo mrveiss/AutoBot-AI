@@ -5021,7 +5021,18 @@
       "closePanel": "بستن پنل",
       "tabParticipants": "شرکت‌کنندگان",
       "tabActivity": "فعالیت",
-      "tabNotifications": "اعلان‌ها"
+      "tabNotifications": "اعلان‌ها",
+      "tabInvitations": "دعوت‌نامه‌ها"
+    },
+    "invitations": {
+      "loading": "در حال بارگذاری دعوت‌نامه‌ها...",
+      "noInvitations": "دعوت‌نامه در انتظاری وجود ندارد",
+      "sessionLabel": "جلسه {id}",
+      "invitedAt": "دعوت‌شده {time}",
+      "justNow": "همین الان",
+      "minutesAgo": "{count} دقیقه پیش",
+      "accept": "پذیرفتن",
+      "decline": "رد کردن"
     }
   },
   "chat": {

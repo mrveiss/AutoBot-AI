@@ -6395,7 +6395,18 @@
       "closePanel": "Close panel",
       "tabParticipants": "Participants",
       "tabActivity": "Activity",
-      "tabNotifications": "Notifications"
+      "tabNotifications": "Notifications",
+      "tabInvitations": "Invitations"
+    },
+    "invitations": {
+      "loading": "Loading invitations...",
+      "noInvitations": "No pending invitations",
+      "sessionLabel": "Session {id}",
+      "invitedAt": "Invited {time}",
+      "justNow": "just now",
+      "minutesAgo": "{count}m ago",
+      "accept": "Accept",
+      "decline": "Decline"
     }
   },
   "research": {

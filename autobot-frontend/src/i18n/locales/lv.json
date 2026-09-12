@@ -6388,7 +6388,18 @@
       "closePanel": "Aizvērt paneli",
       "tabParticipants": "Dalībnieki",
       "tabActivity": "Aktivitāte",
-      "tabNotifications": "Paziņojumi"
+      "tabNotifications": "Paziņojumi",
+      "tabInvitations": "Uzaicinājumi"
+    },
+    "invitations": {
+      "loading": "Notiek uzaicinājumu ielāde...",
+      "noInvitations": "Nav gaidošu uzaicinājumu",
+      "sessionLabel": "Sesija {id}",
+      "invitedAt": "Uzaicināts {time}",
+      "justNow": "tikko",
+      "minutesAgo": "pirms {count} min",
+      "accept": "Pieņemt",
+      "decline": "Noraidīt"
     }
   },
   "research": {

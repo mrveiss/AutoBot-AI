@@ -6388,7 +6388,18 @@
       "closePanel": "Fechar painel",
       "tabParticipants": "Participantes",
       "tabActivity": "Atividade",
-      "tabNotifications": "Notificações"
+      "tabNotifications": "Notificações",
+      "tabInvitations": "Convites"
+    },
+    "invitations": {
+      "loading": "Carregando convites...",
+      "noInvitations": "Nenhum convite pendente",
+      "sessionLabel": "Sessão {id}",
+      "invitedAt": "Convidado {time}",
+      "justNow": "agora mesmo",
+      "minutesAgo": "há {count} min",
+      "accept": "Aceitar",
+      "decline": "Recusar"
     }
   },
   "research": {

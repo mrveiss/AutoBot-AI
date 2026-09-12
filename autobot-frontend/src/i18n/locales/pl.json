@@ -6388,7 +6388,18 @@
       "closePanel": "Zamknij panel",
       "tabParticipants": "Uczestnicy",
       "tabActivity": "Aktywność",
-      "tabNotifications": "Powiadomienia"
+      "tabNotifications": "Powiadomienia",
+      "tabInvitations": "Zaproszenia"
+    },
+    "invitations": {
+      "loading": "Ładowanie zaproszeń...",
+      "noInvitations": "Brak oczekujących zaproszeń",
+      "sessionLabel": "Sesja {id}",
+      "invitedAt": "Zaproszono {time}",
+      "justNow": "przed chwilą",
+      "minutesAgo": "{count} min temu",
+      "accept": "Akceptuj",
+      "decline": "Odrzuć"
     }
   },
   "research": {
