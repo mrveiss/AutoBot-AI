@@ -15,8 +15,9 @@ What they prove is the wiring:
 - a refusal stops the handler before it reads or writes config;
 - an admitted write records who made it.
 
-Whether the deployed backend refuses an anonymous read is host evidence, not
-something a test can show. It is recorded on #16278 after deploy.
+The refusal itself, through the real gate with a genuinely anonymous caller,
+is ``tests/api/test_settings_anonymous_16278.py``. The deployed backend's 401
+for an anonymous ``GET /api/settings/`` is host evidence, recorded on #16278.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
