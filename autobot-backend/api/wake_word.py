@@ -5,9 +5,16 @@
 """
 Wake Word Detection API Endpoints
 Issue #54 - Advanced Wake Word Detection Optimization
+
+Authorization (#15745): every route here requires admin except
+``POST /check``, which is unauthenticated by design -- the local voice
+client calls it before any user session exists. Recorded on #15745 as a
+decision rather than left as an ungated route nobody chose. That ruling
+predates #16247, which records what an anonymous ``/check`` can do to the
+shared detector -- see it before relying on this exception.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_system import (
     AddWakeWordRequest,
@@ -26,6 +33,7 @@ from api.schemas_system import (
     WakeWordStatsResponse,
     WakeWordToggleResponse,
 )
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.wake_word_service import WakeWordDetector, get_wake_word_detector
@@ -63,7 +71,7 @@ async def check_wake_word(request: WakeWordCheckRequest) -> WakeWordCheckRespons
     return WakeWordCheckResponse(detected=False)
 
 
-@router.get("/words", response_model=WakeWordGetWordsResponse)
+@router.get("/words", response_model=WakeWordGetWordsResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_wake_words",
@@ -78,7 +86,7 @@ async def get_wake_words() -> Metadata:
     }
 
 
-@router.post("/words", response_model=WakeWordMutateResponse)
+@router.post("/words", response_model=WakeWordMutateResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_wake_word",
@@ -103,7 +111,9 @@ async def add_wake_word(request: AddWakeWordRequest) -> Metadata:
     }
 
 
-@router.delete("/words/{wake_word}", response_model=WakeWordMutateResponse)
+@router.delete(
+    "/words/{wake_word}", response_model=WakeWordMutateResponse, dependencies=[Depends(check_admin_permission)]
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="remove_wake_word",
@@ -132,7 +142,7 @@ async def remove_wake_word(wake_word: str) -> Metadata:
     raise HTTPException(status_code=404, detail=f"Wake word '{wake_word}' not found")
 
 
-@router.get("/config", response_model=WakeWordGetConfigResponse)
+@router.get("/config", response_model=WakeWordGetConfigResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_wake_word_config",
@@ -144,7 +154,7 @@ async def get_wake_word_config() -> Metadata:
     return detector.get_config()
 
 
-@router.put("/config", response_model=WakeWordConfigUpdateResponse)
+@router.put("/config", response_model=WakeWordConfigUpdateResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_wake_word_config",
@@ -180,7 +190,7 @@ async def update_wake_word_config(request: WakeWordConfigRequest) -> Metadata:
     }
 
 
-@router.get("/stats", response_model=WakeWordStatsResponse)
+@router.get("/stats", response_model=WakeWordStatsResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_wake_word_stats",
@@ -192,7 +202,7 @@ async def get_wake_word_stats() -> Metadata:
     return detector.get_stats()
 
 
-@router.post("/stats/reset", response_model=WakeWordStatsResetResponse)
+@router.post("/stats/reset", response_model=WakeWordStatsResetResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_wake_word_stats",
@@ -209,7 +219,7 @@ async def reset_wake_word_stats() -> Metadata:
     }
 
 
-@router.post("/feedback", response_model=WakeWordFeedbackResponse)
+@router.post("/feedback", response_model=WakeWordFeedbackResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="report_detection_feedback",
@@ -233,7 +243,7 @@ async def report_detection_feedback(request: WakeWordReportFeedbackRequest) -> M
     return {"success": True, "message": message, "stats": detector.get_stats()}
 
 
-@router.post("/enable", response_model=WakeWordToggleResponse)
+@router.post("/enable", response_model=WakeWordToggleResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enable_wake_word",
@@ -250,7 +260,7 @@ async def enable_wake_word() -> Metadata:
     }
 
 
-@router.post("/disable", response_model=WakeWordToggleResponse)
+@router.post("/disable", response_model=WakeWordToggleResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="disable_wake_word",
@@ -272,7 +282,9 @@ async def disable_wake_word() -> Metadata:
 # -------------------------------------------------------------------------
 
 
-@router.post("/listening/start", response_model=WakeWordListeningToggleResponse)
+@router.post(
+    "/listening/start", response_model=WakeWordListeningToggleResponse, dependencies=[Depends(check_admin_permission)]
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_listening",
@@ -294,7 +306,9 @@ async def start_listening() -> Metadata:
     }
 
 
-@router.post("/listening/stop", response_model=WakeWordListeningToggleResponse)
+@router.post(
+    "/listening/stop", response_model=WakeWordListeningToggleResponse, dependencies=[Depends(check_admin_permission)]
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_listening",
@@ -311,7 +325,9 @@ async def stop_listening() -> Metadata:
     }
 
 
-@router.get("/listening/status", response_model=WakeWordListeningStatusResponse)
+@router.get(
+    "/listening/status", response_model=WakeWordListeningStatusResponse, dependencies=[Depends(check_admin_permission)]
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_listening_status",
