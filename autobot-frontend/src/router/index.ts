@@ -23,9 +23,11 @@
  * - /tls-certificates - TLS Certificates
  */
 
-import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteLocationRaw, type RouteRecordRaw } from 'vue-router'
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
+import { meetsMinRole, ROLE_RANK } from '@/constants/roles'
+import type { Role } from '@/types/_generated/workflow'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
 import { isChunkLoadError } from '@/utils/chunkLoadError'
 import { createLogger } from '@/utils/debugUtils'
@@ -1324,6 +1326,31 @@ router.onError((error) => {
   }
 })
 
+/**
+ * Resolve whether `to`'s declared minimum role (#16244) blocks `userRole` --
+ * returns the redirect target if so, `null` if the route is allowed. Nested
+ * routes may each set `meta.minRole`; the strictest (highest-ranked) one
+ * among matched records applies. A pure function, kept separate from the
+ * navigation guard below so it's testable without mocking the router or
+ * user store.
+ */
+export function resolveMinRoleRedirect(
+  to: RouteLocationNormalized,
+  userRole: string | null | undefined
+): RouteLocationRaw | null {
+  const requiredMinRole = to.matched
+    .map(record => record.meta.minRole)
+    .filter((role): role is Role => role != null)
+    .reduce<Role | undefined>(
+      (strictest, role) => (strictest === undefined || ROLE_RANK[role] > ROLE_RANK[strictest] ? role : strictest),
+      undefined
+    )
+  if (requiredMinRole && !meetsMinRole(userRole, requiredMinRole)) {
+    return { path: '/home' }
+  }
+  return null
+}
+
 // Global navigation guards with enhanced error handling
 // Issue #2676: Migrated from next() callback to return-value pattern (vue-router v5)
 router.beforeEach(async (to, from) => {
@@ -1383,6 +1410,18 @@ router.beforeEach(async (to, from) => {
     if (requiresAdmin && userStore.isAuthenticated && !userStore.isAdmin) {
       logger.debug('Admin route blocked for non-admin user, redirecting to home')
       return { path: '/home' }
+    }
+
+    // Block routes below their declared minimum role (#16244). UI routing
+    // only, same as the admin check above -- the backend's own permission
+    // gates remain the actual authority; this never grants access the
+    // backend would refuse.
+    if (userStore.isAuthenticated) {
+      const minRoleRedirect = resolveMinRoleRedirect(to, userStore.currentUser?.role)
+      if (minRoleRedirect) {
+        logger.debug('Route blocked by minRole, redirecting to home')
+        return minRoleRedirect
+      }
     }
 
     // If user is authenticated and trying to access login page, redirect to home
