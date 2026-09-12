@@ -132,8 +132,9 @@ for service-to-service.
 - The password-epoch revocation check fails closed (#16411, #16422, owner decisions; the SLM's rule since
   #16387): when Redis cannot answer, or the stored marker or the token's `iat` is not an integer, the check
   raises `RevocationCheckUnavailable`, a `ConnectionError`, and
-  [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401. An `except` around it
-  that returns "not revoked" is a fail-open.
+  [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401. Rationale: a token that
+  may be revoked is never honoured, and a Redis outage taking login down with it is the accepted cost. An
+  `except` around it that returns "not revoked" is a fail-open.
 
 ## Cross-cutting
 
