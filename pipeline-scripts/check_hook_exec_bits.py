@@ -84,7 +84,7 @@ _REQUIRED_MODE = "100755"
 # this guard quiet -- a *new* hook with a missing exec bit is a plain failure.
 _KNOWN_DORMANT_ISSUE = "#14181"
 # #15750 removed the last live entry: check_no_local_schemas.py had lost its
-# exec bit on Dev_new_gui itself, and flipping it back takes the entry off this
+# exec bit on main itself, and flipping it back takes the entry off this
 # list in the same change, exactly as the rule above requires.
 # check_no_blocking_io_in_async.py was fixed earlier (executable on base) and
 # its entry was never removed -- a stale record this guard could not detect,

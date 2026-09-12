@@ -90,7 +90,7 @@ No manual `/etc/hosts` editing needed; Ansible handles all alias setup.
 cd ~/
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
-git checkout Dev_new_gui  # Always use Dev_new_gui for latest optimizations
+git checkout main  # Always use main for latest optimizations
 ```
 
 ---

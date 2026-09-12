@@ -75,7 +75,7 @@ class TestBranchMetricsCollector:
         """Create a collector instance."""
         return BranchMetricsCollector(
             repo_path="/tmp/test-repo",  # nosec B108  # test/controlled code uses tmpdir intentionally
-            base_branch="Dev_new_gui",
+            base_branch="main",
             stale_threshold_days=30,
         )
 
@@ -83,7 +83,7 @@ class TestBranchMetricsCollector:
     async def test_initialization(self, collector):
         """Test collector initialization."""
         assert collector.repo_path == "/tmp/test-repo"  # nosec B108  # test/controlled code uses tmpdir intentionally
-        assert collector.base_branch == "Dev_new_gui"
+        assert collector.base_branch == "main"
         assert collector.stale_threshold_days == 30
 
     @pytest.mark.asyncio
@@ -125,12 +125,12 @@ class TestBranchMetricsCollector:
     async def test_get_all_branches(self, collector):
         """Test getting all branches."""
         with patch.object(collector, "_run_git_cmd") as mock_run:
-            branch_output = "origin/Dev_new_gui\norigin/feature/test1\norigin/feature/test2"
+            branch_output = "origin/main\norigin/feature/test1\norigin/feature/test2"
             mock_run.return_value = (branch_output, 0)
 
             branches = await collector.get_all_branches()
 
-            assert "Dev_new_gui" in branches
+            assert "main" in branches
             assert "feature/test1" in branches
             assert "feature/test2" in branches
             assert len(branches) == 3
@@ -171,7 +171,7 @@ class TestBranchMetricsCollector:
             patch.object(collector, "calculate_branch_health") as mock_health,
         ):
             # Setup
-            mock_branches.return_value = ["Dev_new_gui", "feature/test"]
+            mock_branches.return_value = ["main", "feature/test"]
             mock_health.return_value = BranchMetrics(
                 branch="feature/test",
                 divergence=BranchDivergence(branch="feature/test"),

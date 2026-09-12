@@ -260,7 +260,7 @@ class TestTheGuardFailsClosedWhenItCannotRun:
     inside lib/_common.sh itself, independent of anything in THIS hook, and
     it was still masking a git failure identically to "nothing staged"
     after #14150 landed — proven by running the no-argv case against
-    Dev_new_gui HEAD (post-#14150, pre-#14151) below: RC=0, reports clean,
+    main HEAD (post-#14150, pre-#14151) below: RC=0, reports clean,
     the symlink still ships. Fixed by #14151's lib/_common.sh change, not
     by anything in this file — the test below exists so that fix can never
     silently regress unnoticed.

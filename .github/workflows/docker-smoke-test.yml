@@ -9,10 +9,10 @@ on:
   merge_group:
   push:
     branches:
-      - Dev_new_gui
+      - main
   pull_request:
     branches:
-      - Dev_new_gui
+      - main
     # Required status check via branch protection (#6723) — must run on PR
   schedule:
     - cron: '0 10 * * 0'  # Every Sunday at 10 AM UTC

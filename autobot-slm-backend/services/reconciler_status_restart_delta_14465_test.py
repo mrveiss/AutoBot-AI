@@ -274,7 +274,7 @@ def test_the_churn_window_floor_is_derived_from_the_shared_discovery_ttl_not_a_b
 def test_a_fresh_increase_arms_the_churn_window():
     """Discriminates directly against the deleted `n_restarts > 3` branch AND
     against a bare pulse: `n_restarts: 1` (up from a stored 0) would never
-    have tripped `n_restarts > 3` on `origin/Dev_new_gui`, and the real
+    have tripped `n_restarts > 3` on `origin/main`, and the real
     `_restart_churn_active` -- not a hand-fed boolean -- is what must detect
     the rise.
     """

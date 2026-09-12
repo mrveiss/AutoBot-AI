@@ -101,8 +101,8 @@ if [[ -d "$WORKTREE_PATH" ]]; then
     git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || rm -rf "$WORKTREE_PATH"
 fi
 
-# Create fresh worktree from Dev_new_gui
-git worktree add "$WORKTREE_PATH" Dev_new_gui
+# Create fresh worktree from main
+git worktree add "$WORKTREE_PATH" main
 
 # Verify creation
 if [[ ! -d "$WORKTREE_PATH/.git" ]]; then
@@ -175,7 +175,7 @@ for ISSUE in "${ISSUES[@]}"; do
     [[ -d "$WORKTREE_PATH" ]] && git worktree remove "$WORKTREE_PATH" --force 2>/dev/null
 
     # Create fresh worktree
-    git worktree add "$WORKTREE_PATH" Dev_new_gui
+    git worktree add "$WORKTREE_PATH" main
 
     echo "✅ Created worktree for issue #${ISSUE}"
 done
@@ -266,7 +266,7 @@ for ISSUE in "${ISSUES[@]}"; do
         BRANCH=$(git branch --show-current)
 
         # Check if commits were made
-        COMMITS=$(git log Dev_new_gui..HEAD --oneline | wc -l)
+        COMMITS=$(git log main..HEAD --oneline | wc -l)
 
         # Check if tests passed (look for pytest output in agent logs)
 
@@ -298,7 +298,7 @@ for ISSUE in "${ISSUES[@]}"; do
 
         # Create PR
         gh pr create \
-            --base Dev_new_gui \
+            --base main \
             --title "$(git log -1 --pretty=%s)" \
             --body "Implements #${ISSUE}
 

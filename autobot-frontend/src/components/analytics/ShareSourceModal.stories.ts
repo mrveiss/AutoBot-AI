@@ -9,7 +9,7 @@ const sampleSource = {
   name: 'AutoBot Backend',
   source_type: 'github' as const,
   repo: 'mrveiss/AutoBot-AI',
-  branch: 'Dev_new_gui',
+  branch: 'main',
   access: 'private' as const,
   status: 'ready' as const,
 };

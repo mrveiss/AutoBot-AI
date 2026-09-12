@@ -313,7 +313,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pr", type=int)
     parser.add_argument("--repo", default="mrveiss/AutoBot-AI")
-    parser.add_argument("--base", default="Dev_new_gui")
+    parser.add_argument("--base", default="main")
     parser.add_argument("--json", action="store_true", help="emit the full verdict as JSON")
     args = parser.parse_args(argv)
 

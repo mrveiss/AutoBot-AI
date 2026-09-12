@@ -173,7 +173,7 @@ REQUIRED_FALLBACK=(
 )
 
 mapfile -t REQUIRED < <(
-    gh api repos/mrveiss/AutoBot-AI/branches/Dev_new_gui/protection \
+    gh api repos/mrveiss/AutoBot-AI/branches/main/protection \
         --jq '.required_status_checks.contexts[]' 2>/dev/null
 )
 if [ "${#REQUIRED[@]}" -eq 0 ]; then

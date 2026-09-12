@@ -7,7 +7,7 @@ Issue #12979 is converting per-request ``aiohttp.ClientSession(...)`` sites in
 (``autobot_shared.http_client.get_http_client()``). That sweep is not
 converging: two conversion batches landed, yet the remaining count came out
 *higher* than simple subtraction predicted, because unrelated PRs merged into
-``Dev_new_gui`` kept introducing new raw sessions while the batches were in
+``main`` kept introducing new raw sessions while the batches were in
 flight. Every raw session opens its own connector, bypasses the shared pool's
 sizing/utilisation accounting, and re-creates the exact class of leak #12981
 and #12992 fixed.
@@ -17,13 +17,13 @@ ratchet: it counts the constructions still present and asserts the count never
 *exceeds* the recorded ceiling, so the existing backlog stays green while any
 newly added raw session turns the suite red at the point it is introduced.
 
-Measured 2026-07-30 (#12992), on ``Dev_new_gui`` at ``352e07cc7``:
+Measured 2026-07-30 (#12992), on ``main`` at ``352e07cc7``:
 **87** constructions across the walked tree. That measurement was already stale
 by the time it merged — batches #12991/#12994/#12999 had converted sites
 against a moving base — and read **71** by the time batch 6 (communication,
 community_growth, cloud, project_management, http_adapter integrations)
 started. Batch 6 removed 18 sites, landing at **53** (re-measured against
-``origin/Dev_new_gui`` immediately before push, per the note on
+``origin/main`` immediately before push, per the note on
 ``MAX_RAW_CLIENT_SESSIONS`` below) and merged as #13001.
 
 Batch 7 (``services/ai_stack_client.py``, ``services/npu_client.py``,
@@ -32,10 +32,10 @@ Batch 7 (``services/ai_stack_client.py``, ``services/npu_client.py``,
 ``skills/sync/mcp_transport.py``) branched before #13001 merged, so its own
 pre-conversion measurement (56) and its first ceiling value (48) were taken
 against a base that did not yet include batch 6. Rebasing batch 7 onto
-``origin/Dev_new_gui`` after #13001 merged put batch 6's 18 conversions
+``origin/main`` after #13001 merged put batch 6's 18 conversions
 underneath batch 7's 8. Re-measured with the same AST walker, independently
 two ways — walking the rebased worktree, and archiving
-``origin/Dev_new_gui`` standalone and subtracting batch 7's 8 conversions —
+``origin/main`` standalone and subtracting batch 7's 8 conversions —
 both agree: the post-#13001, pre-batch-7 base is **38** (not the 53 recorded
 in #13001's own PR description, which had gone stale by the time it merged),
 and batch 7 lands at **30**, merged as #13002. Neither pre-rebase number (48
@@ -49,7 +49,7 @@ converted), ``api/monitoring.py``, ``api/service_monitor.py``,
 ``code_analysis/src/env_analyzer.py``) branched before #13002 merged, so its
 own pre-conversion measurement (38) and first ceiling value (30) were taken
 against a base that did not yet include batch 7. Rebasing onto
-``origin/Dev_new_gui`` after #13002 merged put batch 7's 8 conversions
+``origin/main`` after #13002 merged put batch 7's 8 conversions
 underneath batch 8's 8 (9 sites converted, 1 — ``marketplace_sources.py`` —
 stays a RAW carve-out and remains counted). Re-measured with the same AST
 walker against the rebased tree: the post-#13002, pre-batch-8 base is
@@ -70,7 +70,7 @@ and ``services/npu_pipeline/npu_client.py`` — turned out on inspection to be
 long-lived/returned-session carve-outs (same shape as
 ``services/npu_client.py``'s ``_get_session()``, batch 7) and were left RAW
 with in-code reasons instead. Re-measured with the same AST walker against
-``origin/Dev_new_gui`` immediately before push: the pre-batch-9 base held at
+``origin/main`` immediately before push: the pre-batch-9 base held at
 **22** (batch 8's value was still current), and batch 9's 10 conversions land
 the true count at **12** — exactly the 10 documented carve-outs from batches
 4-8 (5 SSRF-pinned + 2 long-lived + 2 custom-TLS = 9 files, 10 sites) plus the
@@ -94,7 +94,7 @@ forbids *undocumented, unreviewed* growth.
 updating this ceiling or this inventory — exactly the "backlog refill" failure
 mode warned about above, except the new site is itself a legitimate carve-out
 rather than a reversion. Re-measured with the same AST walker against
-``origin/Dev_new_gui`` at ``a2f788889``: **13**, confirmed by an independent
+``origin/main`` at ``a2f788889``: **13**, confirmed by an independent
 manual read of every offender. Investigating #13041's own claim that
 ``orchestration/dag_executor.py`` and ``services/slm_client.py`` were *also*
 new/undocumented: both were already present in the custom-TLS bullet below
@@ -145,33 +145,33 @@ BACKEND_ROOT = pathlib.Path(__file__).resolve().parents[1]
 #:    and a regex replacement template in ``code_analysis/src/patch_generator.py``.
 #:    Trusting grep sets the ceiling 3 too high and silently buys slack for
 #:    three future raw sessions. Use ``raw_client_session_sites()`` below.
-#: 2. Re-measure against a tree freshly synced to ``origin/Dev_new_gui``
+#: 2. Re-measure against a tree freshly synced to ``origin/main``
 #:    IMMEDIATELY BEFORE PUSHING. A count taken in a worktree is a snapshot of
 #:    that worktree: the first version of this file recorded 112, measured while
 #:    #12994 was still in flight. That PR merged and removed 25 constructions,
 #:    so the ceiling shipped ~25 too high — most of a conversion batch's worth
 #:    of slack — until it was caught in review. Sync, re-run, then push.
 #:    Batch 6 hit the SAME trap in the opposite direction: this constant was
-#:    still 87 on ``origin/Dev_new_gui`` (stale from #12996) while the true
+#:    still 87 on ``origin/main`` (stale from #12996) while the true
 #:    count had already fallen to 71 via #12991/#12994/#12999. Batch 6's own
 #:    conversion of 18 sites brought it to 53 in its PR, but merged as part of
 #:    a base that had moved again by the time batch 7 rebased onto it: a
-#:    fresh measurement against ``origin/Dev_new_gui`` (batch 6 merged, batch 7
+#:    fresh measurement against ``origin/main`` (batch 6 merged, batch 7
 #:    not yet applied) read **38**, not 53. Batch 7's 8 conversions on top of
 #:    that base land at 30 — independently confirmed both by walking the
-#:    rebased worktree and by archiving ``origin/Dev_new_gui`` standalone and
-#:    subtracting. Batch 8 rebased onto ``origin/Dev_new_gui`` after batch 7
+#:    rebased worktree and by archiving ``origin/main`` standalone and
+#:    subtracting. Batch 8 rebased onto ``origin/main`` after batch 7
 #:    merged and confirmed 30 was STILL current (the first time in this
 #:    programme a pre-rebase ceiling wasn't stale) — its 8 conversions land
 #:    at 22. Batch 9 confirmed 22 was still current on a fresh
-#:    ``origin/Dev_new_gui`` sync immediately before push, and its 10
+#:    ``origin/main`` sync immediately before push, and its 10
 #:    conversions (of 12 candidate sites; 2 turned out to be long-lived
 #:    carve-outs on inspection) land the true count at 12 — every remaining
 #:    site is now a documented carve-out (see the module docstring's
 #:    "Remaining raw sites" list).
 #:    #13041 (2026-07-30): #12625's PR #13016 added a 13th raw site
 #:    (``agent_loop/search/config_declared_provider.py``) without touching this
-#:    constant or the inventory below. Re-measured against ``origin/Dev_new_gui``
+#:    constant or the inventory below. Re-measured against ``origin/main``
 #:    at ``a2f788889``: still 13, confirmed by AST walker and manual read of the
 #:    new site — it is a genuine SSRF-pinned-connector carve-out (#12278), not a
 #:    reversion, so the ceiling rises by exactly one rather than the site being

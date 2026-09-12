@@ -4,7 +4,7 @@ name: AutoBot CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
   merge_group:
     # #14353: every one of the ten required contexts already carries this. The
     # two workflows that publish `python-suite` -- this one and
@@ -14,7 +14,7 @@ on:
     # could not be enabled while this was missing.
   pull_request:
     # #14747: NO `branches:` FILTER, DELIBERATE. It used to read
-    # `[ main, Dev_new_gui ]`, which excluded STACKED pull requests -- one whose
+    # `[ release, main ]`, which excluded STACKED pull requests -- one whose
     # base is another feature branch. Those never triggered this workflow, so
     # `python-suite` never ran and the Python tests for that change never
     # executed, while the PR still showed a set of green checks from the
@@ -25,7 +25,7 @@ on:
     # either, the context went unreported. Harmless while `python-suite` is not
     # required; a permanent hard block the moment it is.
     #
-    # Dev_new_gui is the integration branch every PR targets; without a trigger
+    # main is the integration branch every PR targets; without a trigger
     # here the backend suite below only ran post-merge on push, so backend
     # regressions were only discovered once already on the shared branch
     # (#10691).
@@ -60,7 +60,7 @@ concurrency:
   # #13432: cancel superseded PR runs, but let a push to a base branch finish.
   #
   # On a pull request a new push makes the previous run obsolete, so cancelling
-  # is right. On a push to Dev_new_gui it meant each merge cancelled the previous
+  # is right. On a push to main it meant each merge cancelled the previous
   # merge's verification, and merges arrive faster than the suite completes: of
   # the last 39 completed base runs, 26 were cancelled and NONE succeeded. The
   # base branch was effectively never verified, and measuring the #13162 backlog
@@ -503,7 +503,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, python-suite, frontend-tests]
     if: |
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui') &&
+      (github.ref == 'refs/heads/release' || github.ref == 'refs/heads/main') &&
       (needs.python-suite.result == 'success' || needs.python-suite.result == 'skipped') &&
       (needs.frontend-tests.result == 'success' || needs.frontend-tests.result == 'skipped')
 

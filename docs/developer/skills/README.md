@@ -29,7 +29,7 @@ same setup with a few commands — no manual copying, and each set updates indep
 ```
 
 The split is deliberate: a general skill improves for every project at once, while an
-AutoBot-specific one stays where its conventions (`Dev_new_gui`, `autobot_shared`, the deploy path,
+AutoBot-specific one stays where its conventions (`main`, `autobot_shared`, the deploy path,
 the PR-body headings) apply. `debug-autobot` reads service hosts from `$REDIS_HOST` / `$NPU_HOST` /
 `$BROWSER_HOST` / `$AISTACK_HOST` — export them from your deployment before use.
 

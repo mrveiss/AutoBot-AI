@@ -11,7 +11,7 @@
 # Related: MVA-2111
 
 # Run pre-commit.ci on PRs targeting these branches
-branches: [main, Dev_new_gui, develop]
+branches: [release, main, develop]
 
 # Auto-fix and commit changes when possible
 autofix_commit_msg: |

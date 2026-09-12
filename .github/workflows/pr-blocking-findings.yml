@@ -8,7 +8,7 @@
 #
 # An issue "references" a PR by mentioning `#<pr-number>` (or `/pull/<n>`) in
 # its body. To make this enforce the merge button, add it as a required status
-# check on Dev_new_gui/main (repo owner; not code).
+# check on main/release (repo owner; not code).
 
 name: PR Blocking Findings
 
@@ -21,7 +21,7 @@ on:
   merge_group:
   pull_request:
     types: [opened, edited, synchronize, reopened]
-    branches: [Dev_new_gui, main]
+    branches: [main, release]
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -32,7 +32,7 @@ on:
 # #13432 found that cancelling base-branch runs meant each merge cancelled the
 # previous merge's verification, and merges arrive faster than a suite completes -
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
-# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

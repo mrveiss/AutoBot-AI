@@ -225,7 +225,7 @@ Test Results:
 Next Steps:
 - Review the commit if needed
 - Push the branch: git push origin <branch>
-- Create PR or merge to Dev_new_gui
+- Create PR or merge to main
 ```
 
 ### Failure Path (5 iterations exhausted, tests still failing)

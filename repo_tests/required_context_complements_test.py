@@ -126,7 +126,7 @@ def test_the_shim_fails_closed_on_a_broken_detector():
     assert shim_job["needs"] == "changes", "without `needs`, a failed detector would not gate the shim"
 
 
-# The ten contexts branch protection requires on Dev_new_gui today, plus
+# The ten contexts branch protection requires on main today, plus
 # `python-suite`, which #14353 exists to make the eleventh. Branch protection
 # lives in the GitHub API and cannot be read offline, so this list is declared
 # rather than derived — the test below is what keeps the workflows honest to it.
@@ -191,7 +191,7 @@ def test_ci_triggers_on_stacked_pull_requests_and_on_merge_group():
       would fail all of them, and that is a far larger change than this issue.
       What makes it load-bearing *here* is that `python-suite` is the context
       #14353 is about to require, and a stacked pull request -- base is another
-      feature branch -- matches neither `main` nor `Dev_new_gui`. Measured on PR
+      feature branch -- matches neither `release` nor `main`. Measured on PR
       #14641: **zero** CI/CD runs, with the page showing green from the workflows
       that do trigger. The shim cannot rescue it: on a stacked PR *with* Python
       changes it correctly skips, so neither side publishes (#14747).
@@ -268,6 +268,7 @@ def test_a_workflow_publishing_a_required_context_has_no_pull_request_paths(path
         "misses this filter never starts the run, so the context never reports "
         "and the merge box blocks forever."
     )
+
 
 # Each row is one required status context published by two mutually exclusive
 # jobs: the real gate when its paths changed, and a shim reporting green when
@@ -443,6 +444,5 @@ def test_every_required_context_can_report_success_on_any_pull_request():
     fixed = sorted(set(_KNOWN_UNPAIRED) - {c for c, _ in unpaired})
     assert not fixed, (
         "these contexts now have a complement but are still listed in "
-        "_KNOWN_UNPAIRED — remove them, a stale entry hides the next real one:\n  "
-        + "\n  ".join(fixed)
+        "_KNOWN_UNPAIRED — remove them, a stale entry hides the next real one:\n  " + "\n  ".join(fixed)
     )

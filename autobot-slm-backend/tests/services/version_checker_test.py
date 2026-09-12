@@ -103,7 +103,7 @@ class TestVersionCheckTask:
         (code_source / ".git").mkdir(parents=True)
 
         async def _active_config():
-            return str(code_source), "Dev_new_gui"
+            return str(code_source), "main"
 
         monkeypatch.setattr(git_tracker_module, "_get_active_code_source_config", _active_config)
         monkeypatch.setattr(git_tracker_module, "_missing_repo_warned", False)
@@ -276,7 +276,7 @@ class TestVersionCheckTask:
         no_checkout.mkdir()
 
         async def _active_config():
-            return str(no_checkout), "Dev_new_gui"
+            return str(no_checkout), "main"
 
         monkeypatch.setattr(git_tracker_module, "_get_active_code_source_config", _active_config)
 

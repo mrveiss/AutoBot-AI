@@ -38,16 +38,16 @@ Before making ANY code changes:
 
 4. **Verify target merge branch:**
    ```bash
-   git fetch origin Dev_new_gui
-   git log --oneline origin/Dev_new_gui -3
+   git fetch origin main
+   git log --oneline origin/main -3
    ```
-   - Confirm Dev_new_gui is the target (unless explicitly told otherwise)
+   - Confirm main is the target (unless explicitly told otherwise)
 
 ## Implementation Phase
 
 5. **Create feature branch:**
    ```bash
-   git checkout -b fix/issue-{issue_number} Dev_new_gui
+   git checkout -b fix/issue-{issue_number} main
    ```
 
 6. **Search memory for context:**
@@ -103,7 +103,7 @@ Before making ANY code changes:
     git push -u origin fix/issue-{issue_number}
 
     gh pr create \
-      --base Dev_new_gui \
+      --base main \
       --title "fix: <clear title> (#{issue_number})" \
       --body "$(cat <<'EOF'
     ## Summary
@@ -133,8 +133,8 @@ Before making ANY code changes:
 
 14. **Cleanup:**
     ```bash
-    git checkout Dev_new_gui
-    git pull origin Dev_new_gui
+    git checkout main
+    git pull origin main
     git branch -d fix/issue-{issue_number}
     ```
 
@@ -184,7 +184,7 @@ Before making ANY code changes:
 ✅ All code committed with correct issue references
 ✅ All acceptance criteria verified
 ✅ Tests passing
-✅ PR created and merged to Dev_new_gui
+✅ PR created and merged to main
 ✅ Feature branch deleted
 ✅ Issue closed with summary
 ✅ Knowledge stored in memory MCP

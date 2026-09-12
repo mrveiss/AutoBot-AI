@@ -42,5 +42,5 @@ Closes #
 - [ ] Tests added or updated (or N/A with reason)
 - [ ] Documentation updated if behavior changed
 - [ ] Pre-commit hooks pass (`git commit` runs them automatically)
-- [ ] PR targets `Dev_new_gui` (not `main`)
+- [ ] PR targets `main` (not `release`)
 - [ ] No secrets or credentials in the diff

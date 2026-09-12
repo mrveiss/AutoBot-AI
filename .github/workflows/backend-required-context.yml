@@ -41,7 +41,7 @@ name: backend-required-context
 
 on:
   pull_request:
-    branches: [main, Dev_new_gui, develop]
+    branches: [release, main, develop]
 
 permissions:
   contents: read

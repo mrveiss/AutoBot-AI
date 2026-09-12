@@ -8,7 +8,7 @@
 # apply.
 #
 # Triggers
-# - push to main or Dev_new_gui, the weekly schedule and workflow_dispatch:
+# - push to release or main, the weekly schedule and workflow_dispatch:
 #   unfiltered, every language. A pull request's results are compared with the
 #   analysis of its base branch, so a base scan must never be skipped by a path
 #   filter; GitHub's CodeQL docs advise against `paths` on `on.push` for that
@@ -35,9 +35,9 @@ name: CodeQL Analysis
 
 on:
   push:
-    branches: [main, Dev_new_gui]
+    branches: [release, main]
   pull_request:
-    branches: [main, Dev_new_gui]
+    branches: [release, main]
     paths:
       # python
       - "**/*.py"

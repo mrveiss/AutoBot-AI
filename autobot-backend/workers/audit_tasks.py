@@ -708,13 +708,13 @@ def _audit_beat_init(**_kwargs) -> None:
 
 
 def _changed_python_modules(since_iso: str | None, repo_root: Path) -> list[Path]:
-    """Return Python source files (non-test) changed in Dev_new_gui since *since_iso*.
+    """Return Python source files (non-test) changed in main since *since_iso*.
 
     Falls back to the last 6 hours when *since_iso* is None.
     """
     argv = [
         "log",
-        "origin/Dev_new_gui",
+        "origin/main",
         f"--since={since_iso}" if since_iso else "--since=6 hours ago",
         "--name-only",
         "--pretty=format:",
@@ -773,7 +773,7 @@ def _testgap_findings(modules: list[Path], repo_root: Path) -> list[dict]:
             title = f"discovery: test gap — {rel} has no test file"
             body = (
                 f"## Test gap detected by audit_testgaps daemon\n\n"
-                f"Module `{rel}` was recently changed in `Dev_new_gui` and has no "
+                f"Module `{rel}` was recently changed in `main` and has no "
                 f"corresponding test file with test functions.\n\n"
                 f"**Expected locations:**\n"
                 f"- `{rel.parent}/{rel.stem}_test.py`\n"

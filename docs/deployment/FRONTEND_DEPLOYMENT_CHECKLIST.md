@@ -11,7 +11,7 @@
   - Log into SLM → Code Sync → Configure button
   - Node: `01-Backend` (or code source machine)
   - Path: `/opt/autobot`
-  - Branch: `Dev_new_gui` (or `main` for prod)
+  - Branch: `main` (or `release` for prod)
 
 - [ ] **SSH Keys Deployed**
   ```bash
@@ -52,7 +52,7 @@
   ```bash
   git add <your-files>
   git commit -m "feat(frontend): description (#issue-number)"
-  git push origin Dev_new_gui
+  git push origin main
   ```
 
 - [ ] **Post-Commit Hook Executed**
@@ -187,7 +187,7 @@ git log --oneline -5
 
 # 2. Revert to previous commit
 git reset --hard <previous-commit-hash>
-git push --force-with-lease origin Dev_new_gui
+git push --force-with-lease origin main
 
 # 3. Notify SLM
 bash scripts/hooks/slm-post-commit
