@@ -16,10 +16,16 @@
  * and deterministic for the same reason: no backend, no network.
  */
 
+import { jest } from "@jest/globals";
 import { AutoBot } from "../src/index.js";
 
 describe("AutoBot SDK -- every request reaches fetch under /api (#16495)", () => {
-  let fetchMock: jest.Mock;
+  // `jest` is not an ambient global under this package's ESM preset
+  // (ts-jest/presets/default-esm + --experimental-vm-modules) the way
+  // `describe`/`test`/`expect` are -- it must be imported from
+  // @jest/globals, so the mock's type comes from `typeof jest.fn` rather
+  // than the CJS-only `jest.Mock` namespace type.
+  let fetchMock: ReturnType<typeof jest.fn>;
   const originalFetch = global.fetch;
 
   beforeEach(() => {
