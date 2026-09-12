@@ -20,7 +20,12 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SCRIPT="${HERE}/pr-preflight.sh"
 TMP="$(mktemp -d)"
-trap 'rm -rf "${TMP}"' EXIT
+# .pr-preflight-fixture-tmp (repo root) is a throwaway file the path-filter
+# dispatch tests below use to give CHANGED one real, non-matching entry.
+# Folded into this same trap -- the ONE place both it and TMP are removed, no
+# matter how the run ends (rm/git rm on a path that was never created is a
+# silent no-op, so this is safe to register before the fixture exists).
+trap 'rm -rf "${TMP}"; git rm -f --cached --ignore-unmatch -q -- ".pr-preflight-fixture-tmp" >/dev/null 2>&1; rm -f -- ".pr-preflight-fixture-tmp"' EXIT
 
 pass=0
 fail=0
@@ -239,6 +244,61 @@ then
     pass=$((pass + 1))
 else
     fail=$((fail + 1))
+fi
+
+# ---------------------------------------------------- path-filter dispatch
+#
+# Every require_check call above already exercises ITS OWN filter for real
+# gates (code-quality, verify-generated-types, ...), but every case above
+# runs with PREFLIGHT_BASE=HEAD, which makes CHANGED empty -- and an empty
+# CHANGED array skips require_check's filter-match branch entirely (its
+# `[ "${#CHANGED[@]}" -gt 0 ]` guard). So neither the skip branch itself, nor
+# --full's bypass of it (#15933 AC4), was ever exercised. Both need CHANGED
+# to hold a real, non-matching path.
+#
+# `git add --intent-to-add` on one throwaway root-level file is the smallest
+# real change that does it: pr-preflight.sh's CHANGED is the union of a
+# `$BASE...HEAD` diff (empty here, same as every other case in this file)
+# and `git diff --diff-filter=ACMR HEAD` -- the uncommitted-changes half,
+# which reports an intent-to-add path as Added without any content ever
+# being staged. Unstaged again by this file's EXIT trap, which fires no
+# matter how the run ends, so the real working tree and index end up exactly
+# as found. A bare root-level name (no `.py`, no directory prefix) matches
+# none of this repo's `.github/filters/*.yml` sets nor the derived
+# code-quality set -- verified when this test was written; re-check there if
+# it ever starts failing for the wrong reason.
+
+echo ""
+echo "path-filter dispatch (#15933 AC4/AC5)"
+
+FILTER_FIXTURE=".pr-preflight-fixture-tmp"
+: > "${FILTER_FIXTURE}"
+if ! git add --intent-to-add -- "${FILTER_FIXTURE}" 2>/dev/null; then
+    fail=$((fail + 1))
+    echo "  FAIL: could not stage the path-filter fixture (git add --intent-to-add failed)"
+else
+    FILTER_DEFAULT_OUT=$(PREFLIGHT_BASE=HEAD bash "${SCRIPT}" --issue 9999 2>&1)
+    FILTER_FULL_OUT=$(PREFLIGHT_BASE=HEAD bash "${SCRIPT}" --issue 9999 --full 2>&1)
+
+    # Default: the fixture-only diff matches no filter, so the check is
+    # skipped with a note rather than attempted.
+    if printf '%s' "${FILTER_DEFAULT_OUT}" | grep -qF "workflow path filters -- no matching paths changed"; then
+        pass=$((pass + 1))
+    else
+        fail=$((fail + 1))
+        echo "  FAIL: path-filter skip branch -- 'workflow path filters' should skip on a fixture-only diff"
+        printf '%s\n' "${FILTER_DEFAULT_OUT}" | sed 's/^/         /'
+    fi
+
+    # --full: the SAME diff, but the filter is bypassed, so the check is
+    # actually attempted instead of skipped.
+    if printf '%s' "${FILTER_FULL_OUT}" | grep -qF "workflow path filters -- no matching paths changed"; then
+        fail=$((fail + 1))
+        echo "  FAIL: --full should bypass the path filter -- 'workflow path filters' was still skipped"
+        printf '%s\n' "${FILTER_FULL_OUT}" | sed 's/^/         /'
+    else
+        pass=$((pass + 1))
+    fi
 fi
 
 # ---------------------------------------------------------------- result
