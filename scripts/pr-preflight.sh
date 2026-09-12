@@ -43,7 +43,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || exit 2
 REPO_ROOT=$(git_repo_root) || exit 2
 cd "$REPO_ROOT" || exit 2
 
-BASE="${PREFLIGHT_BASE:-origin/Dev_new_gui}"
+BASE="${PREFLIGHT_BASE:-origin/main}"
 # Commits behind base that still allow a PR. Env-var backed, never a literal in
 # a condition: the number is a policy, and a policy nobody can change without
 # editing a script is one people route around instead (#15938).
@@ -136,7 +136,7 @@ section "branch"
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 case "$BRANCH" in
-  main|master|Dev_new_gui)
+  main|master|release)
     fail "on protected branch '$BRANCH' -- the pre-commit hook will refuse this" ;;
   *) pass "branch '$BRANCH' is not protected" ;;
 esac
@@ -438,7 +438,7 @@ fi
 # ------------------------------------------------- required status checks
 #
 # Everything above predicts a gate that is cheap to run. This block covers the
-# TEN contexts the `Main` ruleset actually requires on Dev_new_gui, because
+# TEN contexts the `Main` ruleset actually requires on main, because
 # those are the ones whose failure costs a push -- and a push costs an 8.9-minute
 # suite (#15932: ~6 commits per PR, 49 failed check-runs across 9 merged PRs,
 # so every PR goes red at least once on the way).

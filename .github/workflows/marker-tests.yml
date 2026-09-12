@@ -134,7 +134,7 @@ on:
   # This is what turns "a nightly nobody has ever seen run" into a workflow with
   # an observed conclusion — the standing objection to shipping it.
   push:
-    branches: [Dev_new_gui]
+    branches: [main]
     paths:
       - '.github/workflows/marker-tests.yml'
   pull_request:

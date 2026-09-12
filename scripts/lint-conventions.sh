@@ -79,7 +79,7 @@ if [ "$MODE" = "--commit-msg" ]; then
   esac
   # #14076: `/` belongs in the scope class. The repo uses slashed scopes for
   # nested areas — `fix(llc/frontend):`, `test(hooks/guard):` — and 14 of the
-  # last 400 commits on Dev_new_gui carry one. Without it this rule rejects
+  # last 400 commits on main carry one. Without it this rule rejects
   # subjects the repository itself writes, so the linter was wrong, not them.
   #
   # The scope must still START with an alphanumeric. A bare character class
@@ -90,7 +90,7 @@ if [ "$MODE" = "--commit-msg" ]; then
   # rather than over its own test cases. The repo also writes hyphenated types
   # (`a11y(...)`, `test-guard(...)`, `tech-debt(...)`) and comma-joined scopes
   # (`docs(architecture,design)`), and `^[a-z]+` rejected every one. Over the
-  # last 400 commits on Dev_new_gui the rule rejected 12 subjects the project
+  # last 400 commits on main the rule rejected 12 subjects the project
   # itself authored; it now rejects 1, and that one is genuinely malformed —
   # capitalised, with no type at all. A linter whose own repository cannot
   # satisfy it gets ignored, which is worse than not having it.

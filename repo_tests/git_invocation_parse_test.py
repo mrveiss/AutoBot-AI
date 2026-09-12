@@ -194,7 +194,7 @@ def test_an_untokenizable_command_is_refused_not_guessed(command: str) -> None:
 
 def test_new_branch_and_restore_flags_survive_the_argument_scan() -> None:
     """The safe forms must keep their exemptions after the rewrite."""
-    assert invocations(f"git -c core.foo=bar {CHECKOUT} -b issue-9999 origin/Dev_new_gui")[0]["flags"] == "new"
+    assert invocations(f"git -c core.foo=bar {CHECKOUT} -b issue-9999 origin/main")[0]["flags"] == "new"
     assert invocations(f"git {CHECKOUT} -- file.py")[0]["flags"] == "restore"
     assert invocations(f"git {SWITCH} --create issue-9999")[0]["flags"] == "new"
 

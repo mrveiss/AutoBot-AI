@@ -83,7 +83,7 @@ repos:
 **Purpose**: Enforce quality in CI/CD
 
 **Runs On**:
-- Every push to main, Dev_new_gui, develop
+- Every push to release, main, develop
 - Every pull request to these branches
 
 **Steps**:
@@ -285,7 +285,7 @@ All ✅ verified!
 ### For CI/CD
 
 1. **GitHub Actions configured** - Will run automatically on:
-   - All pushes to main/Dev_new_gui/develop
+   - All pushes to release/main/develop
    - All pull requests to these branches
 
 2. **No additional setup required** - Pipeline is ready

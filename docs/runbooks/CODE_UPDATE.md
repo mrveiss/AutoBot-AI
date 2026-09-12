@@ -55,7 +55,7 @@ git add autobot-backend/api/some_endpoint.py
 git add autobot_shared/utils/helper.py
 
 git commit -m "feat(backend): add new API endpoint (#926)"
-git push origin Dev_new_gui
+git push origin main
 ```
 
 ### 2. Post-Commit Hook Auto-Fires
@@ -183,7 +183,7 @@ ansible-playbook playbooks/update-all-nodes.yml \
   --limit 01-Backend
 
 # 4. Return to development branch
-git checkout Dev_new_gui
+git checkout main
 git stash pop
 ```
 

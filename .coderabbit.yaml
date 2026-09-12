@@ -2,13 +2,14 @@
 #
 # CodeRabbit configuration.
 #
-# WHY THIS FILE EXISTS AT ALL: without it CodeRabbit reviews nothing here. Its
-# default is to auto-review only pull requests targeting the repository's
-# GitHub default branch, which is `main` — and `main` is protected, so no pull
-# request ever targets it. Every pull request here targets `Dev_new_gui`, so
-# every review was being skipped with "Auto reviews are disabled on base/target
-# branches other than the default branch". `base_branches` below is the line
-# that turns the integration on.
+# WHY THIS FILE EXISTS AT ALL: CodeRabbit's default is to auto-review only
+# pull requests targeting the repository's GitHub default branch. `main` is
+# both the default and working branch (#16461), so ordinary pull requests are
+# already covered by that default behaviour. The periodic release-promotion
+# pull request targets `release` instead -- a non-default, protected branch --
+# so without an override it was skipped with "Auto reviews are disabled on
+# base/target branches other than the default branch". `base_branches` below
+# is the line that keeps that PR reviewed too.
 language: en-GB
 early_access: false
 
@@ -27,11 +28,12 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
-    # The actual fix. `main` is included so a release pull request is covered
-    # too, but `Dev_new_gui` is where the work happens.
+    # The actual fix: `release` is listed explicitly since it is not the
+    # default branch; `main` is included too for completeness, though
+    # CodeRabbit's own default behaviour already covers it (#16461).
     base_branches:
-      - Dev_new_gui
       - main
+      - release
 
   path_filters:
     # Recorders, not code. These are data files whose diffs are counts and

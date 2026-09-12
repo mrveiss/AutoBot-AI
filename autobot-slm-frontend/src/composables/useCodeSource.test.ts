@@ -82,7 +82,7 @@ describe('useCodeSource — migrated onto slmApiClient (#12420 Phase 2)', () => 
     expect(mockPost).toHaveBeenCalledWith('/code-source/assign', {
       node_id: 'n1',
       repo_path: '/opt/autobot/code_source',
-      branch: 'Dev_new_gui',
+      branch: 'main',
     })
   })
 

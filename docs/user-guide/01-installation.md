@@ -58,7 +58,7 @@ sudo ./install.sh --unattended # Unattended (CI/automation)
 |------|-------------|
 | `--unattended` | No prompts, use all defaults |
 | `--reinstall` | Force reinstall over existing installation |
-| `--branch=BRANCH` | Git branch to install (default: `Dev_new_gui`) |
+| `--branch=BRANCH` | Git branch to install (default: `main`) |
 | `--admin-pass=PASS` | SLM admin password (auto-generated if not set) |
 
 **The installer will:**

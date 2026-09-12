@@ -4,7 +4,7 @@ name: Phase Validation Integration
 
 on:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     # #12986: the backend-Python entries are the canonical `backend-python`
     # set from .github/filters/backend-python-paths.yml; GitHub cannot include a file in an event path filter,
     # so pipeline-scripts/check_workflow_path_filters.py enforces the match.
@@ -19,7 +19,7 @@ on:
       - 'tools/lint/**'
       - '.github/workflows/phase_validation.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ release ]
     paths: *phase_paths
   workflow_dispatch:
     inputs:
@@ -163,9 +163,9 @@ jobs:
         echo "System maturity: ${MATURITY}%"
 
         # Set minimum maturity threshold for different branches
-        if [ "$GH_REF" == "refs/heads/main" ]; then
+        if [ "$GH_REF" == "refs/heads/release" ]; then
           THRESHOLD=80
-          echo "Main branch - requiring ${THRESHOLD}% maturity"
+          echo "Release branch - requiring ${THRESHOLD}% maturity"
         else
           THRESHOLD=60
           echo "Development branch - requiring ${THRESHOLD}% maturity"
@@ -249,7 +249,7 @@ jobs:
     name: Integration Phase Validation
     runs-on: ubuntu-latest
     needs: phase-validation
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
+    if: github.ref == 'refs/heads/release' || github.ref == 'refs/heads/main'
 
     steps:
     - name: Checkout code

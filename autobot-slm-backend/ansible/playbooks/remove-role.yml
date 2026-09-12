@@ -26,7 +26,7 @@
 # #14914: the removal paths below resolve their install root from
 # `{{ autobot.base_dir }}` (inventory/group_vars/all.yml), not from a
 # `/opt/autobot` literal. They were the nine hardcoded-value findings sitting
-# unbaselined on Dev_new_gui while the gate that reported them keyed its verdict
+# unbaselined on main while the gate that reported them keyed its verdict
 # on a different class.
 #
 # This indirection is load-bearing in BOTH directions, and the second one is

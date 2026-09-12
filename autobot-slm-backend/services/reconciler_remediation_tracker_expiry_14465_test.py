@@ -37,7 +37,7 @@ the three shapes where `_heartbeat_returned` genuinely and repeatedly fails:
 an ansible restart that cannot run, a restart that runs but never gets a
 heartbeat accepted (#14350 at its narrowest -- verification fails on every
 single attempt, not just once), and an outcome-commit failure. All three go
-from 40 restarts/0 escalations on `origin/Dev_new_gui` to 3/1 here. Whether
+from 40 restarts/0 escalations on `origin/main` to 3/1 here. Whether
 and how to widen "recovered" to also cover a node that heartbeats but never
 truly fixes itself is a posted, unresolved decision on #14465 (labelled
 `needs-decision`) -- out of scope for this PR.

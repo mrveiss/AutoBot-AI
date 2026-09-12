@@ -33,7 +33,7 @@ export const EditMode: Story = {
       name: 'AutoBot Backend',
       source_type: 'github',
       repo: 'mrveiss/AutoBot-AI',
-      branch: 'Dev_new_gui',
+      branch: 'main',
       access: 'private',
       status: 'ready',
     },

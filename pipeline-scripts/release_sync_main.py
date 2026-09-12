@@ -2,23 +2,24 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """
-Open, or update, the ONE release-sync pull request into main — #16246.
+Open, or update, the ONE release-sync pull request into release — #16246.
 
-``main`` is the default branch, so scheduled workflows run ``main``'s copy and
-Dependabot reads ``main``'s dependencies, while every pull request targets
-``Dev_new_gui``. The owner's decision on #16221 keeps ``main`` as the default and
-syncs it from ``Dev_new_gui`` regularly. The ``Sync Dev_new_gui → main`` workflow
-(``sync-main-to-dev.yml``) is the "regularly": it force-pushes ``Dev_new_gui`` to
-the release branch ``release-sync-main`` and runs this tool, which brings one
-sync pull request to the current state, and nothing more.
+``main`` is the default and working branch: scheduled workflows run its copy,
+Dependabot reads its dependencies, and every pull request targets it. The
+owner's decision on #16221 keeps ``release`` synced from ``main`` regularly
+(renamed by #16461 from the historical ``main``/``Dev_new_gui`` split). The
+``Sync main → release`` workflow (``sync-main-to-release.yml``) is the
+"regularly": it force-pushes ``main`` to the release branch
+``release-sync-release`` and runs this tool, which brings one sync pull
+request to the current state, and nothing more.
 
-A SYNC PULL REQUEST is any open pull request into ``main`` from this
-repository whose head is the release branch (``--head``) or ``Dev_new_gui``
+A SYNC PULL REQUEST is any open pull request into ``release`` from this
+repository whose head is the release branch (``--head``) or ``main``
 itself (``--source``). A sync opened by hand from the trunk therefore counts
 too, and is never duplicated.
 
 WHAT IT DECIDES (``decide``). Given the open sync pull requests and the number
-of commits ``main`` lacks:
+of commits ``release`` lacks:
 
 * none open, commits to sync  -> open one
 * one or more open            -> update the OLDEST; report the rest
@@ -30,9 +31,9 @@ It never opens a second sync pull request. If duplicates exist it updates the
 oldest, names the others, and exits 1 so the duplicate state is visible on the
 run rather than accumulating silently.
 
-IT NEVER MERGES. A sync pull request must merge with a merge commit: ``main``
-already holds one commit ``Dev_new_gui`` lacks (#15326's merge commit), so a
-fast-forward is impossible, and a squash would add another commit only ``main``
+IT NEVER MERGES. A sync pull request must merge with a merge commit: ``release``
+already holds one commit ``main`` lacks (#15326's merge commit), so a
+fast-forward is impossible, and a squash would add another commit only ``release``
 has, making every later sync re-conflict. That choice belongs to the owner at
 merge time, so the body carries the instruction and this tool calls no merge
 endpoint at all.
@@ -57,7 +58,7 @@ not the release branch: that branch is deleted when the sync PR merges, and a
 compare against a missing branch is a 404.
 
 Usage:
-    pipeline-scripts/release_sync_main.py --head release-sync-main --source Dev_new_gui
+    pipeline-scripts/release_sync_main.py --head release-sync-release --source main
     pipeline-scripts/release_sync_main.py --dry-run
 
 Environment:
@@ -105,11 +106,11 @@ from ci_dispatch_watchdog import (  # noqa: E402
 # The one definition of "the release-sync PR", shared with the watchdog (#16272).
 from release_sync_pull import RELEASE_SYNC_BASE, RELEASE_SYNC_HEAD, is_sync_pull  # noqa: E402
 
-SYNC_TITLE = "release: sync main from Dev_new_gui"
+SYNC_TITLE = "release: sync release from main"
 DEFAULT_HEAD = RELEASE_SYNC_HEAD
-DEFAULT_SOURCE = "Dev_new_gui"
+DEFAULT_SOURCE = "main"
 DEFAULT_BASE = RELEASE_SYNC_BASE
-OPENED_BY = ".github/workflows/sync-main-to-dev.yml"
+OPENED_BY = ".github/workflows/sync-main-to-release.yml"
 # Leads every body this tool writes, and only a body carrying it is ever rewritten.
 # A sync PR opened by hand keeps the body its author wrote, even one naming OPENED_BY.
 BODY_MARKER = f"<!-- generated-by: {OPENED_BY} -->"
@@ -123,14 +124,14 @@ MAX_PER_PAGE = 100
 ACTIONS_PR_REFUSAL = "not permitted to create or approve pull requests"
 # #15834 Q2: where GitHub refuses the PR, ONE tracking issue stands in for it,
 # found by this exact title plus this label, never by a text search.
-TRACKING_TITLE = "release: main is behind Dev_new_gui — open the sync PR by hand"
+TRACKING_TITLE = "release: release is behind main — open the sync PR by hand"
 TRACKING_LABEL = "automation"
 
 ACTION_CREATE = "create"
 ACTION_UPDATE = "update"
 ACTION_NOTHING = "nothing"
 
-# What the sync does to one workflow's schedule on `main`.
+# What the sync does to one workflow's schedule on `release`.
 STATE_ACTIVATES = "activates"
 STATE_CHANGES = "changes"
 STATE_STOPS = "stops"

@@ -25,7 +25,7 @@ name: AI Security Review
 
 on:
   pull_request:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     # #13388: SAFE — advisory only, never a required context (see header), so a
     # run that never starts cannot block a merge. Mirrors the `reviewable` filter
     # in `changes` below exactly; previously every docs-only pull request paid a

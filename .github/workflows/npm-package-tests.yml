@@ -19,7 +19,7 @@ name: NPM Package Tests
 
 on:
   push:
-    branches: [main, develop, 'Dev_*']
+    branches: [release, main, develop]
     paths:
       - '.mcp/**'
       - 'autobot-browser-worker/**'
@@ -27,9 +27,9 @@ on:
       - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
       - '.github/workflows/npm-package-tests.yml'
   pull_request:
-    branches: [main, develop, 'Dev_*']
+    branches: [release, main, develop]
     # SAFE under #13388: "NPM Package Tests" is not one of the required contexts
-    # on Dev_new_gui, so this workflow may skip its run entirely. The job-level
+    # on main, so this workflow may skip its run entirely. The job-level
     # self-skip below exists so the check still reports a conclusion when the
     # workflow does run but nothing it owns changed.
     paths:

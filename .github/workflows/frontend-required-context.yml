@@ -52,7 +52,7 @@ on:
     # publishes the context. Required contexts are evaluated against a pull
     # request head, which for same-repo branches is only ever written by
     # `pull_request` runs.
-    branches: [main, develop, 'Dev_*']
+    branches: [release, main, develop]
 
 permissions:
   contents: read

@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""#16272 — the watchdog releases parked runs on the release-sync PR into main, and on no other PR there.
+"""#16272 — the watchdog releases parked runs on the release-sync PR into release, and on no other PR there.
 
-Without a push token, ``sync-main-to-dev.yml`` pushes ``release-sync-main`` and opens
+Without a push token, ``sync-main-to-release.yml`` pushes ``release-sync-release`` and opens
 its PR as the bot, so the runs park, and the watchdog only ever swept PRs into
-``Dev_new_gui``. It now also sweeps that one PR, through its one approval path
+``main``. It now also sweeps that one PR, through its one approval path
 (``collect_heads`` -> ``sweep_parked_runs`` -> ``_approve_head``) and under the same
 rules: this repository, parked, triggered by the branch-update bot.
 
@@ -27,7 +27,7 @@ from repo_tests._paths import repo_root
 _REPO_ROOT = repo_root()
 _WATCHDOG = _REPO_ROOT / "pipeline-scripts" / "ci_dispatch_watchdog.py"
 _SELECTOR = _REPO_ROOT / "pipeline-scripts" / "release_sync_pull.py"
-_SYNC_WORKFLOW = _REPO_ROOT / ".github/workflows/sync-main-to-dev.yml"
+_SYNC_WORKFLOW = _REPO_ROOT / ".github/workflows/sync-main-to-release.yml"
 
 REPO = "mrveiss/AutoBot-AI"
 FORK = "someone/AutoBot-AI"
@@ -51,7 +51,7 @@ def sel():
     return _load("release_sync_pull", _SELECTOR)
 
 
-def _pull(number: int, head: str, base: str = "main", repo: str = REPO) -> Dict[str, Any]:
+def _pull(number: int, head: str, base: str = "release", repo: str = REPO) -> Dict[str, Any]:
     return {
         "number": number,
         "head": {"ref": head, "sha": f"{number:040x}", "repo": {"full_name": repo}},
@@ -94,15 +94,15 @@ class _FakeApi:
         return 201, ""
 
 
-def _main_prs() -> List[Dict[str, Any]]:
+def _release_prs() -> List[Dict[str, Any]]:
     return [
-        _pull(1, "release-sync-main"),  # the release-sync PR
-        _pull(2, "issue-7-x"),  # another PR into main, from this repository
-        _pull(3, "release-sync-main", repo=FORK),  # a fork's branch of the same name
+        _pull(1, "release-sync-release"),  # the release-sync PR
+        _pull(2, "issue-7-x"),  # another PR into release, from this repository
+        _pull(3, "release-sync-release", repo=FORK),  # a fork's branch of the same name
     ]
 
 
-def _sweep(wd, sel, api: _FakeApi, swept_base: str = "Dev_new_gui") -> List[int]:
+def _sweep(wd, sel, api: _FakeApi, swept_base: str = "main") -> List[int]:
     """The composition check_dispatch performs, followed by its approval sweep."""
     pulls = api.open_pull_requests(swept_base)
     heads = wd.collect_heads(pulls + sel.release_sync_pulls(api, swept_base), api.repository)
@@ -111,24 +111,24 @@ def _sweep(wd, sel, api: _FakeApi, swept_base: str = "Dev_new_gui") -> List[int]
 
 
 def test_the_release_sync_pr_is_approved_and_no_other_pr_into_main(wd, sel):
-    api = _FakeApi(wd, [*_main_prs(), _pull(4, "issue-8-y", base="Dev_new_gui")])
+    api = _FakeApi(wd, [*_release_prs(), _pull(4, "issue-8-y", base="main")])
     assert _sweep(wd, sel, api) == [1, 4], "the sync PR and the trunk PR, never #2 or the fork's #3"
 
 
 def test_the_selector_picks_only_this_repositorys_release_branch_into_main(wd, sel):
-    api = _FakeApi(wd, _main_prs())
-    assert [pull["number"] for pull in sel.release_sync_pulls(api, "Dev_new_gui")] == [1]
+    api = _FakeApi(wd, _release_prs())
+    assert [pull["number"] for pull in sel.release_sync_pulls(api, "main")] == [1]
 
 
 def test_the_same_rules_apply_a_sync_run_parked_for_a_person_stays_parked(wd, sel):
-    api = _FakeApi(wd, [_pull(1, "release-sync-main")])
+    api = _FakeApi(wd, [_pull(1, "release-sync-release")])
     api.runs[f"{1:040x}"][0]["triggering_actor"] = {"login": "mrveiss"}
     assert _sweep(wd, sel, api) == [], "only a run parked for the branch-update bot is released"
 
 
-def test_a_sweep_of_main_itself_does_not_list_the_sync_pr_twice(wd, sel):
-    api = _FakeApi(wd, [_pull(1, "release-sync-main")])
-    assert sel.release_sync_pulls(api, "main") == [] and api.listed == []
+def test_a_sweep_of_release_itself_does_not_list_the_sync_pr_twice(wd, sel):
+    api = _FakeApi(wd, [_pull(1, "release-sync-release")])
+    assert sel.release_sync_pulls(api, "release") == [] and api.listed == []
 
 
 def test_an_unreadable_listing_is_not_read_as_no_sync_pr(wd, sel):
@@ -137,7 +137,7 @@ def test_an_unreadable_listing_is_not_read_as_no_sync_pr(wd, sel):
             raise wd.WatchdogApiError("HTTP 502")
 
     with pytest.raises(wd.WatchdogApiError):
-        sel.release_sync_pulls(_Broken(wd, []), "Dev_new_gui")
+        sel.release_sync_pulls(_Broken(wd, []), "main")
 
 
 def test_check_dispatch_feeds_the_sync_pr_into_the_one_approval_path(wd):
@@ -150,4 +150,4 @@ def test_check_dispatch_feeds_the_sync_pr_into_the_one_approval_path(wd):
 def test_the_watchdog_and_the_sync_workflow_name_the_same_branch(sel):
     spec = yaml.safe_load(_SYNC_WORKFLOW.read_text(encoding="utf-8"))
     assert spec["jobs"]["sync"]["env"]["SYNC_BRANCH"] == sel.RELEASE_SYNC_HEAD
-    assert sel.RELEASE_SYNC_BASE == "main"
+    assert sel.RELEASE_SYNC_BASE == "release"

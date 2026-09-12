@@ -54,7 +54,7 @@ commit_parsers = [
     { message = "^style", group = "Styling" },
     { message = "^test", group = "Testing" },
     { message = "^revert", group = "Reverted" },
-    # Drop merge-bubble noise (Dev_new_gui → main promotions) — not real changes.
+    # Drop merge-bubble noise (main → release promotions) — not real changes.
     { message = "^Merge ", skip = true },
     # Catch-all: any commit that didn't match a conventional type above is
     # bucketed here rather than dropped, so no change is invisible (#10118).

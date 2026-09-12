@@ -35,7 +35,7 @@ _REBASE = re.compile(r"\bgit\s+(?:-\S+\s+)*rebase\b")
 # Any force flag on a push, long or short.
 _FORCE_PUSH = re.compile(r"\bgit\s+push\b[^\n]*?(?:--force\b|--force-with-lease\b|\s-f\b)")
 
-_PROTECTED = ("Dev_new_gui", "main", "master")
+_PROTECTED = ("main", "release", "master", "Dev_new_gui")  # Dev_new_gui: temporary mirror of main; remove with #16461
 
 
 def _shell_bodies() -> list[str]:
@@ -45,10 +45,7 @@ def _shell_bodies() -> list[str]:
     for job in spec["jobs"].values():
         for step in job.get("steps", []):
             if "run" in step:
-                stripped = "\n".join(
-                    line for line in step["run"].splitlines()
-                    if not line.lstrip().startswith("#")
-                )
+                stripped = "\n".join(line for line in step["run"].splitlines() if not line.lstrip().startswith("#"))
                 bodies.append(stripped)
     return bodies
 

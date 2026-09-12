@@ -30,7 +30,7 @@ name: Co-located Smoke
 on:
   pull_request:
     branches:
-      - Dev_new_gui
+      - main
     paths:
       # nginx — compose flavor (live-tested here)
       - 'docker/**'

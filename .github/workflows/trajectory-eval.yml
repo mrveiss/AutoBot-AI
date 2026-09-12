@@ -27,14 +27,14 @@ name: Trajectory Eval (non-blocking)
 
 on:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     paths: &paths
       - 'autobot-backend/eval/**'
       - 'autobot-backend/rlm/**'
       - 'autobot-backend/llc/**/replay*'
       - '.github/workflows/trajectory-eval.yml'
   pull_request:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     paths: *paths
 
 concurrency:

@@ -14,7 +14,7 @@ and the guard written to catch that change never runs.
 This has now happened three times. #14544 added five deployment sources after
 one slipped; #14891 added the hook and infrastructure trees after sixteen hooks
 sat outside their guard; #15704 changed ansible role defaults only, took the
-shim's green, merged, and left ``Dev_new_gui`` red on all twelve shards.
+shim's green, merged, and left ``main`` red on all twelve shards.
 
 Each fix added the specific paths that had just broken. This asserts the
 general property instead: every top-level tree a guard reads is covered.
