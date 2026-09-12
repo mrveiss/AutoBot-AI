@@ -36,6 +36,7 @@ import api.knowledge_scrape as scrape_api
 import api.knowledge_site_map as site_map_api
 import api.run_jwt_router as run_jwt_api
 import api.web_research_settings as web_research_api
+from autobot_shared.api_routing.router_routes import effective_routes
 from web_fetch import FetchResult
 from web_fetch.site_mapper import SiteMapResult
 
@@ -93,8 +94,20 @@ def _app() -> FastAPI:
     return app
 
 
-def _routes(app: FastAPI) -> set:
-    return {(method, route.path) for route in app.routes if isinstance(route, APIRoute) for method in route.methods}
+def _routes() -> set:
+    """Served ``(method, path)`` pairs, read per router rather than off the app (#15093).
+
+    On fastapi>=0.139 ``app.routes`` holds one opaque wrapper per include and no
+    ``APIRoute``, so walking the app finds nothing. Each router here is a leaf, so
+    its own routes plus the prefix it is mounted at are exactly the served paths.
+    """
+    found = set()
+    for module, prefix in _MOUNTS:
+        for mounted in effective_routes(module.router):
+            assert mounted.prefix_complete, mounted.path
+            if isinstance(mounted.route, APIRoute):
+                found.update((method, prefix + mounted.path) for method in mounted.methods)
+    return found
 
 
 def _call(test_client: TestClient, method: str, path: str):
@@ -128,7 +141,7 @@ def client(real_auth_middleware, monkeypatch):
 
 def test_the_policy_table_covers_every_route() -> None:
     """A route added to any of the six routers must be classified here before it ships."""
-    assert _routes(_app()) == set(_POLICY)
+    assert _routes() == set(_POLICY)
 
 
 @pytest.mark.parametrize(("method", "path"), sorted(_POLICY))
