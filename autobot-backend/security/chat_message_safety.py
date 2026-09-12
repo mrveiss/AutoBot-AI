@@ -77,7 +77,10 @@ def _scrub_pii(content: str, session_id: str | None) -> str:
 
 def _flag_injection(content: str, session_id: str | None) -> None:
     """Flag-and-log injection risk; raise only on the opt-in hard-block signal."""
-    detection = get_prompt_injection_detector().detect_injection(content, context="user_input")
+    # strict_mode=True matches every other caller of this singleton (prompt_manager.py,
+    # screen_analysis_prompt.py, intent_analyzer.py, ...) -- lazy_singleton() raises if a
+    # later caller passes different construction args than the first, so this must agree.
+    detection = get_prompt_injection_detector(strict_mode=True).detect_injection(content, context="user_input")
     if detection.hard_blocked:
         logger.warning(
             "Chat message hard-blocked by injection detector (session=%s, confidence=%.2f, patterns=%s)",
