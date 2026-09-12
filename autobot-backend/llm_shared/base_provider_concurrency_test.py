@@ -16,6 +16,8 @@ from __future__ import annotations
 import asyncio
 from typing import AsyncIterator, List
 
+from autobot_shared.eventually import eventually
+
 from .base_provider import BaseProvider
 from .models import LLMRequest, LLMResponse, LLMSettings
 
@@ -79,8 +81,10 @@ class TestConcurrencyCapEnforcement:
         provider = _GatedProvider("cctest-burst", settings={"max_concurrent_requests": 2})
 
         tasks = [asyncio.create_task(provider.chat_completion(_request())) for _ in range(4)]
-        # Let the loop advance every task up to the gate inside _chat_completion_impl.
-        await asyncio.sleep(0.05)
+        # Wait on the observable (#16255), not the clock: in_flight stabilizes
+        # at the cap because the other 2 tasks are blocked on the semaphore,
+        # never on _chat_completion_impl's gate.
+        await eventually(lambda: provider.in_flight == 2)
         assert provider.peak_in_flight == 2
 
         provider.release.set()
@@ -93,7 +97,7 @@ class TestConcurrencyCapEnforcement:
         provider = _GatedProvider("cctest-serial", settings={"max_concurrent_requests": 1})
 
         tasks = [asyncio.create_task(provider.chat_completion(_request())) for _ in range(3)]
-        await asyncio.sleep(0.05)
+        await eventually(lambda: provider.in_flight == 1)
         assert provider.peak_in_flight == 1
 
         provider.release.set()
