@@ -6,7 +6,7 @@ name: import-hermeticity-sweep
 # by "Choose what to sweep", from repo_tests/_import_hermeticity_scope.py -- the same
 # module the test reads its population from:
 #
-#   push to Dev_new_gui, schedule, dispatch   FULL    these read the base
+#   push to main, schedule, dispatch          FULL    these read the base
 #   PR touching the sweep's own files         FULL    only a full run judges every
 #                                                     baseline entry
 #   PR changing swept modules                 SUBSET  those, plus every module that
@@ -29,11 +29,11 @@ name: import-hermeticity-sweep
 #
 # A schedule runs the DEFAULT branch's copy of a workflow, and that branch does not
 # carry this one, so the schedule alone never fires (#16221); the push trigger is what
-# reads Dev_new_gui after each merge that can change the answer. Only non-PR runs open,
+# reads main after each merge that can change the answer. Only non-PR runs open,
 # update or close an issue: those describe the base, not a diff that may never merge.
 on:
   pull_request:
-    branches: [Dev_new_gui]
+    branches: [main]
     paths:
       - 'autobot-backend/**'
       - 'autobot-slm-backend/**'
@@ -45,7 +45,7 @@ on:
       - 'repo_tests/import_hermeticity_test.py'
       - '.github/workflows/import-hermeticity-sweep.yml'
   push:
-    branches: [Dev_new_gui]
+    branches: [main]
     paths:
       - 'autobot-backend/**'
       - 'autobot-slm-backend/**'
