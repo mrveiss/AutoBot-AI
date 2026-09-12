@@ -16,7 +16,7 @@ from typing import Any, Dict
 
 from agents.declared_scope_check import INVALID_DECLARED_SCOPE
 from agents.scope_enforcement import hold_scopes
-from autobot_shared.coordination.work_claims import ScopeError
+from autobot_shared.coordination.work_claims import ScopeError, conflict_payload
 from autobot_shared.logging_manager import get_logger
 
 from .pii_pipeline import PIIBlocked, scrub_outbound
@@ -142,22 +142,10 @@ def _report_refusal(manager, task_id: str, conflict) -> None:
 
     The operator's next question is "blocked by what?" -- a refusal that does not
     answer it turns a coordination event into a mystery, and the conflict object
-    already renders holder, task, mode, expiry and intent.
+    already renders holder, task, mode, expiry and intent. The artifact is the
+    shared refusal shape (#16208).
     """
-    manager.add_artifact(
-        task_id,
-        TaskArtifact(
-            artifact_type="json",
-            content={
-                "refused_scope": conflict.requested,
-                "held_by_agent": conflict.holder.agent_id,
-                "held_by_task": conflict.holder.task_id,
-                "holder_intent": conflict.holder.intent,
-                "holder_expires_at": conflict.holder.expires_at,
-                "reason": str(conflict),
-            },
-        ),
-    )
+    manager.add_artifact(task_id, TaskArtifact(artifact_type="json", content=conflict_payload(conflict)))
     manager.update_state(task_id, TaskState.FAILED, message="scope_conflict")
     manager.publish_event(
         task_id,
