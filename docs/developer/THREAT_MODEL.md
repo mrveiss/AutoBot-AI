@@ -129,10 +129,11 @@ for service-to-service.
   Exception text counts; a boto3 `ClientError` carries the account number in an ARN (#15324).
 - Keys come from SSOT config, never a literal. A default value for an encryption key is a
   finding even when production overrides it via env var.
-- The password-epoch revocation check fails closed (#16411, owner decision; the SLM's rule since #16387):
-  when Redis cannot answer, `get_password_epoch` raises `RevocationCheckUnavailable`, a `ConnectionError`,
-  and [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401. An `except` around
-  it that returns "not revoked" is a fail-open.
+- The password-epoch revocation check fails closed (#16411, #16422, owner decisions; the SLM's rule since
+  #16387): when Redis cannot answer, or the stored marker or the token's `iat` is not an integer, the check
+  raises `RevocationCheckUnavailable`, a `ConnectionError`, and
+  [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401. An `except` around it
+  that returns "not revoked" is a fail-open.
 
 ## Cross-cutting
 

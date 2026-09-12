@@ -120,9 +120,28 @@ def test_the_failure_is_one_the_slm_already_answers_with_401():
 
 
 @pytest.mark.asyncio
-async def test_corrupt_epoch_value_is_ignored():
+async def test_a_corrupt_epoch_marker_fails_closed():
+    """#16422: a marker the check cannot read must not read as "no password change"."""
     with patch(_MOD, AsyncMock(return_value=_redis(get_value="not-a-number"))):
-        assert await get_password_epoch("alice") is None
+        with pytest.raises(RevocationCheckUnavailable):
+            await is_token_revoked_by_password_change({"sub": "alice", "iat": 1})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("epoch", ["1000", None])
+async def test_a_non_integer_iat_fails_closed(epoch):
+    """#16422: denied whether or not the subject has a marker -- it cannot be placed either way."""
+    with patch(_MOD, AsyncMock(return_value=_redis(get_value=epoch))):
+        with pytest.raises(RevocationCheckUnavailable):
+            await is_token_revoked_by_password_change({"sub": "alice", "iat": "not-a-number"})
+
+
+@pytest.mark.asyncio
+async def test_well_formed_string_values_still_parse():
+    """The control: Redis returns the marker as a string, and a numeric-string iat is readable."""
+    with patch(_MOD, AsyncMock(return_value=_redis(get_value="1000"))):
+        assert await is_token_revoked_by_password_change({"sub": "alice", "iat": "1001"}) is False
+        assert await is_token_revoked_by_password_change({"sub": "alice", "iat": "999"}) is True
 
 
 @pytest.mark.asyncio

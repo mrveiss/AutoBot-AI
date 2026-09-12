@@ -31,12 +31,16 @@ def _redis_answering(value=None, error=None) -> AsyncMock:
     return AsyncMock(return_value=client)
 
 
-@pytest.fixture
-def get_current_user(real_auth_middleware, monkeypatch):
-    """The real dependency, seeing a signed-in JWT user."""
-    middleware = SimpleNamespace(get_user_from_request=lambda _request: dict(_JWT_USER))
+def _signed_in_as(real_auth_middleware, monkeypatch, user: dict):
+    """The real dependency, seeing *user* as the signed-in JWT caller."""
+    middleware = SimpleNamespace(get_user_from_request=lambda _request: dict(user))
     monkeypatch.setattr(real_auth_middleware, "get_auth_middleware", lambda: middleware)
     return real_auth_middleware.get_current_user
+
+
+@pytest.fixture
+def get_current_user(real_auth_middleware, monkeypatch):
+    return _signed_in_as(real_auth_middleware, monkeypatch, _JWT_USER)
 
 
 @pytest.mark.asyncio
@@ -89,4 +93,38 @@ async def test_the_denial_names_the_check_and_error_type_never_the_token(get_cur
     rendered = message % tuple(args)
     assert "password-epoch" in rendered
     assert "RedisError" in rendered
+    assert "alice" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_a_corrupt_epoch_marker_denies_the_token(get_current_user):
+    """#16422: a marker the check cannot read denies, like a store that cannot answer."""
+    with patch(_REDIS, _redis_answering(value="not-a-number")):
+        with pytest.raises(HTTPException) as denied:
+            await get_current_user(_REQUEST)
+
+    assert denied.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_a_non_integer_iat_denies_the_token(real_auth_middleware, monkeypatch):
+    get_current_user = _signed_in_as(real_auth_middleware, monkeypatch, dict(_JWT_USER, iat="not-a-number"))
+    with patch(_REDIS, _redis_answering(value=None)):
+        with pytest.raises(HTTPException) as denied:
+            await get_current_user(_REQUEST)
+
+    assert denied.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_a_corrupt_marker_is_logged_without_its_value(get_current_user):
+    with patch(_REDIS, _redis_answering(value="not-a-number")):
+        with patch.object(auth_revocation.logger, "error") as log_error:
+            with pytest.raises(HTTPException):
+                await get_current_user(_REQUEST)
+
+    message, *args = log_error.call_args.args
+    rendered = message % tuple(args)
+    assert "password-epoch" in rendered
+    assert "not-a-number" not in rendered
     assert "alice" not in rendered
