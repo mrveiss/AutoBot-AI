@@ -283,6 +283,100 @@ class HTTPTransport(MCPTransport):
         """HTTP is connectionless — nothing to close."""
 
 
+class StreamableHTTPTransport(MCPTransport):
+    """MCP "Streamable HTTP" transport (spec 2025-03-26+) — the successor to the
+    two-endpoint SSE transport, and the transport most current third-party MCP
+    servers speak (#11542).
+
+    A single POST to the server's own endpoint URL carries each JSON-RPC
+    request. The response is either a plain JSON body or a ``text/event-stream``
+    body whose first ``data:`` frame is the JSON-RPC response — either way this
+    is a synchronous request/response exchange, matching how MCPClient uses it.
+    A server that returns an ``Mcp-Session-Id`` response header (typically on
+    the ``initialize`` response) gets that id echoed back on every later
+    request; ``close()`` best-effort DELETEs the session.
+
+    Server-initiated push (the transport's optional GET+SSE stream) is not
+    implemented — resource-update notifications continue to go through
+    :class:`SSETransport` for servers that need them.
+    """
+
+    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
+        """Initialise with the literal MCP endpoint URL (no path is appended)."""
+        self._base_url = base_url
+        self._timeout = timeout
+        self._session_id: str | None = None
+        self._pending: Dict[str, Any] | None = None
+
+    async def connect(self) -> None:
+        """HTTP is connectionless — nothing to open."""
+
+    async def send(self, request: Dict[str, Any]) -> None:
+        """POST the JSON-RPC request; buffer its JSON or SSE-framed response for receive()."""
+        headers = {"Accept": "application/json, text/event-stream"}
+        if self._session_id:
+            headers["Mcp-Session-Id"] = self._session_id
+
+        async with get_http_client().tracked_request(
+            "POST",
+            self._base_url,
+            json=request,
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=self._timeout),
+        ) as resp:
+            if resp.status == 202:
+                self._pending = None
+                return
+            if resp.status != 200:
+                raise aiohttp.ClientResponseError(resp.request_info, resp.history, status=resp.status)
+
+            session_id = resp.headers.get("Mcp-Session-Id")
+            if session_id:
+                self._session_id = session_id
+
+            content_type = resp.headers.get("Content-Type", "")
+            if "text/event-stream" in content_type:
+                self._pending = await self._first_sse_event(resp.content)
+            else:
+                self._pending = await resp.json()
+        logger.debug("StreamableHTTPTransport: sent method=%s", request.get("method"))
+
+    @staticmethod
+    async def _first_sse_event(stream: aiohttp.StreamReader) -> Dict[str, Any]:
+        """Return the first SSE ``data:`` frame from *stream*, parsed as JSON."""
+        async for line in _iter_sse_lines(stream):
+            if line.startswith("data:"):
+                payload = line[5:].strip()
+                if payload:
+                    return json.loads(payload)
+        raise EOFError("StreamableHTTPTransport: SSE response closed with no data frame")
+
+    async def receive(self) -> Dict[str, Any]:
+        """Return the buffered response from the last send() call."""
+        if self._pending is None:
+            raise RuntimeError("StreamableHTTPTransport: receive() called before send()")
+        result, self._pending = self._pending, None
+        return result
+
+    async def close(self) -> None:
+        """Best-effort DELETE to terminate the session, if the server issued one."""
+        if not self._session_id:
+            return
+        try:
+            async with get_http_client().tracked_request(
+                "DELETE",
+                self._base_url,
+                headers={"Mcp-Session-Id": self._session_id},
+                timeout=aiohttp.ClientTimeout(total=self._timeout),
+            ):
+                pass
+        except aiohttp.ClientError as exc:
+            # Session termination is a courtesy — a server that does not
+            # support it (405) or is already gone is not an error to us.
+            logger.debug("StreamableHTTPTransport: session termination DELETE failed: %s", exc)
+        self._session_id = None
+
+
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
@@ -293,13 +387,19 @@ def create_transport(server_uri: str, timeout: float = 30.0) -> MCPTransport:
 
     Scheme detection:
 
-    * ``stdio://`` → :class:`StdioTransport` — remainder is the shell command
-    * ``sse://``   → :class:`SSETransport`   — rewritten to ``https://``
-    * anything else (``http://``, ``https://``) → :class:`HTTPTransport`
+    * ``stdio://``            → :class:`StdioTransport`          — remainder is the shell command
+    * ``sse://``              → :class:`SSETransport`             — rewritten to ``https://``
+    * ``streamable-http://``  → :class:`StreamableHTTPTransport`  — rewritten to ``http://``
+    * ``streamable-https://`` → :class:`StreamableHTTPTransport`  — rewritten to ``https://``
+    * anything else (``http://``, ``https://``) → :class:`HTTPTransport` (legacy ``/rpc`` JSON-RPC)
     """
     if server_uri.startswith("stdio://"):
         command = server_uri[len("stdio://") :]
         return StdioTransport(command, timeout=timeout)
     if server_uri.startswith("sse://"):
         return SSETransport(server_uri, timeout=timeout)
+    if server_uri.startswith("streamable-http://"):
+        return StreamableHTTPTransport("http://" + server_uri[len("streamable-http://") :], timeout=timeout)
+    if server_uri.startswith("streamable-https://"):
+        return StreamableHTTPTransport("https://" + server_uri[len("streamable-https://") :], timeout=timeout)
     return HTTPTransport(server_uri, timeout=timeout)
