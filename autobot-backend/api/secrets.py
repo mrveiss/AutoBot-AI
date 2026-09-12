@@ -47,17 +47,20 @@ from api.schemas_system import (
 )
 from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.auth import resolve_auth_type, validate_config_against_schema
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.status_enums import SecretType
 from autobot_shared.time_utils import parse_utc_iso
+from knowledge.connectors.credential_store import ConnectorCredentialStore, get_credential_store
 from middleware.proxy_utils import get_client_ip
 from security.secrets_store_reader import load_secrets_json, secret_log_ref
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from services.json_secrets_read import load_imported_json_secret
 from services.provider_key_vault import mirror_provider_key_best_effort
+from services.secrets_service import get_secrets_service
 from type_defs.common import Metadata
 from utils.secrets_store_migration import (
     ALL_SECRETS_STORE_FILES,
@@ -568,11 +571,38 @@ async def _mirror_llm_provider_key(name: str, value: str, user: Dict | None) -> 
     await mirror_provider_key_best_effort(name, value, created_by)
 
 
-async def _get_secret_dual_read(secret_id: str, chat_id: str | None) -> Dict | None:
-    """Try the unified envelope store (#10088 Task 3 dual-read), else the legacy JSON file.
+async def _get_connector_bridged_secret(secret_id: str, owner_id: str) -> Dict | None:
+    """Metadata for a connector-bridged secret, never its raw credential (#16428).
 
-    Chat-scope access control is enforced identically on both paths so a secret imported
-    into the unified store is never *less* protected than it was in the legacy file.
+    Returns ``None`` on not-found so the caller can fall through, same
+    contract as the other two stores this dual-read already tries. Carries
+    no ``value`` key at all -- like ``SecretModel`` (the legacy CREATE/PUT
+    response shape), which has no such field either; a caller wanting a
+    guaranteed-present ``value`` key (``_get_secret_dual_read``, GET's own
+    contract) adds it itself.
+    """
+    secret = await asyncio.get_running_loop().run_in_executor(
+        None,
+        lambda: get_secrets_service().get_secret(secret_id=secret_id, include_value=False, accessed_by=owner_id),
+    )
+    if secret is None:
+        return None
+    ConnectorCredentialStore._require_owner(secret, secret_id, owner_id)
+    # #16428: normalise to the same "type" key create_secret's connector-bridge
+    # response and the legacy path both use -- SecretsService's own row shape
+    # names it "secret_type".
+    secret = dict(secret)
+    secret["type"] = secret.pop("secret_type", None)
+    return secret
+
+
+async def _get_secret_dual_read(secret_id: str, chat_id: str | None, owner_id: str = "unknown") -> Dict | None:
+    """Try the unified envelope store (#10088 Task 3), the legacy JSON file, then
+    ConnectorCredentialStore's backing service (#16428) -- in that order.
+
+    Chat-scope access control is enforced identically on the first two paths so
+    a secret imported into the unified store is never *less* protected than it
+    was in the legacy file. A connector-bridged secret carries no chat scope.
     """
     secret = await load_imported_json_secret(secret_id)
     if secret is not None:
@@ -581,10 +611,60 @@ async def _get_secret_dual_read(secret_id: str, chat_id: str | None) -> Dict | N
                 raise PermissionError("Access denied: Chat-scoped secret from different chat")
         return secret
     # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-    return await asyncio.to_thread(secrets_manager.get_secret, secret_id, chat_id=chat_id)
+    secret = await asyncio.to_thread(secrets_manager.get_secret, secret_id, chat_id=chat_id)
+    if secret is not None:
+        return secret
+    bridged = await _get_connector_bridged_secret(secret_id, owner_id)
+    if bridged is None:
+        return None
+    # GET's own contract: every result carries a "value" key, real for a
+    # legacy secret (above) or None for a bridged one -- never absent.
+    return {**bridged, "value": None}
 
 
 # API Endpoints
+
+
+def _connector_secret_metadata(secret_id: str, request: SecretCreateRequest) -> Dict:
+    """Metadata-only response for a connector-bridged secret (#16428).
+
+    Shaped like ``SecretModel.dict()`` (the legacy path's response), minus
+    ``value`` -- a bridged secret's raw credential is never returned, by the
+    owner's decision on #16428/#13632.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "id": secret_id,
+        "name": request.name,
+        "type": request.type.value,
+        "scope": request.scope.value,
+        "chat_id": request.chat_id,
+        "description": request.description or "",
+        "tags": request.tags,
+        "created_at": now,
+        "updated_at": now,
+        "expires_at": request.expires_at.isoformat() if request.expires_at else None,
+        "metadata": {**request.metadata, "connector_id": request.connector_id, "auth_type": request.auth_type},
+    }
+
+
+async def _create_connector_bridged_secret(request: SecretCreateRequest, owner_id: str) -> Dict:
+    """Validate and store a connector-bridged secret through ConnectorCredentialStore.
+
+    Raises ValueError (-> 400) for an unknown auth_type or a credentials dict
+    missing a field auth_type's schema requires.
+    """
+    auth_cls = resolve_auth_type(request.auth_type)
+    if auth_cls is None:
+        raise ValueError(f"unknown auth_type: {request.auth_type!r}")
+    errors = validate_config_against_schema(auth_cls, request.credentials)
+    if errors:
+        raise ValueError("; ".join(errors))
+
+    secret_id, _sanitized = await get_credential_store().store(
+        request.connector_id, owner_id, auth_cls, request.credentials
+    )
+    return _connector_secret_metadata(secret_id, request)
 
 
 @router.post("/", response_model=DataResponse[SecretCreatedData])
@@ -601,31 +681,40 @@ async def create_secret(
     """Create a new secret (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
     try:
-        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-        secret = await asyncio.to_thread(secrets_manager.create_secret, request)
-        # Convert datetime objects to strings for JSON serialization
-        secret_data = secret.dict()
-        if secret_data.get("created_at"):
-            secret_data["created_at"] = secret_data["created_at"].isoformat()
-        if secret_data.get("updated_at"):
-            secret_data["updated_at"] = secret_data["updated_at"].isoformat()
-        if secret_data.get("expires_at"):
-            secret_data["expires_at"] = secret_data["expires_at"].isoformat()
-
-        audit_log("CREATE", secret.id, http_request, details=f"name={request.name}")
         _user = get_auth_middleware().get_user_from_request(http_request)
+
+        if request.connector_id is not None:
+            # #16428: bridged to ConnectorCredentialStore, never to this
+            # store's own file -- #13632's one-store decision.
+            owner_id = str((_user or {}).get("user_id", "unknown"))
+            secret_data = await _create_connector_bridged_secret(request, owner_id)
+            secret_id = secret_data["id"]
+        else:
+            # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+            secret = await asyncio.to_thread(secrets_manager.create_secret, request)
+            # Convert datetime objects to strings for JSON serialization
+            secret_data = secret.dict()
+            if secret_data.get("created_at"):
+                secret_data["created_at"] = secret_data["created_at"].isoformat()
+            if secret_data.get("updated_at"):
+                secret_data["updated_at"] = secret_data["updated_at"].isoformat()
+            if secret_data.get("expires_at"):
+                secret_data["expires_at"] = secret_data["expires_at"].isoformat()
+            secret_id = secret.id
+            # #10088 Task 7: mirror LLM-provider-key captures into the System vault
+            # (best-effort -- never turns a successful legacy write into a failure).
+            await _mirror_llm_provider_key(request.name, request.value, _user)
+
+        audit_log("CREATE", secret_id, http_request, details=f"name={request.name}")
         audit_record(
             user_id=str((_user or {}).get("user_id", "unknown")),
             action=AuditAction.API_KEY_CREATE,
             resource_type="secret",
-            resource_id=secret.id,
+            resource_id=secret_id,
             ip_address=http_request.client.host if http_request.client else "unknown",
             session_id=None,
             outcome="success",
         )
-        # #10088 Task 7: mirror LLM-provider-key captures into the System vault
-        # (best-effort -- never turns a successful legacy write into a failure).
-        await _mirror_llm_provider_key(request.name, request.value, _user)
         return JSONResponse(
             status_code=201,
             content={
@@ -791,7 +880,9 @@ async def get_secret(
     """Get a specific secret with its value (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
     try:
-        secret = await _get_secret_dual_read(secret_id, chat_id)
+        _user = get_auth_middleware().get_user_from_request(http_request)
+        owner_id = str((_user or {}).get("user_id", "unknown"))
+        secret = await _get_secret_dual_read(secret_id, chat_id, owner_id)
         if not secret:
             audit_log("ACCESS", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
@@ -858,18 +949,29 @@ async def update_secret(
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secret = await asyncio.to_thread(secrets_manager.update_secret, secret_id, request, chat_id=chat_id)
-        if not secret:
+        if secret:
+            # Convert datetime objects to strings for JSON serialization
+            secret_data = secret.dict()
+            if secret_data.get("created_at"):
+                secret_data["created_at"] = secret_data["created_at"].isoformat()
+            if secret_data.get("updated_at"):
+                secret_data["updated_at"] = secret_data["updated_at"].isoformat()
+            if secret_data.get("expires_at"):
+                secret_data["expires_at"] = secret_data["expires_at"].isoformat()
+        elif request.credentials:
+            # #16428: not a legacy secret; rotate it in ConnectorCredentialStore
+            # instead -- #13632's one-store decision, "PUT rotates the credential."
+            _user = get_auth_middleware().get_user_from_request(http_request)
+            owner_id = str((_user or {}).get("user_id", "unknown"))
+            try:
+                await get_credential_store().rotate(secret_id, request.credentials, owner_id)
+            except LookupError:
+                audit_log("UPDATE", secret_id, http_request, success=False, details="not_found")
+                raise HTTPException(status_code=404, detail="Secret not found")
+            secret_data = await _get_connector_bridged_secret(secret_id, owner_id)
+        else:
             audit_log("UPDATE", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
-
-        # Convert datetime objects to strings for JSON serialization
-        secret_data = secret.dict()
-        if secret_data.get("created_at"):
-            secret_data["created_at"] = secret_data["created_at"].isoformat()
-        if secret_data.get("updated_at"):
-            secret_data["updated_at"] = secret_data["updated_at"].isoformat()
-        if secret_data.get("expires_at"):
-            secret_data["expires_at"] = secret_data["expires_at"].isoformat()
 
         audit_log("UPDATE", secret_id, http_request)
         return JSONResponse(
@@ -912,14 +1014,22 @@ async def delete_secret(
     """Delete a secret (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
     try:
+        _user = get_auth_middleware().get_user_from_request(http_request)
+        owner_id = str((_user or {}).get("user_id", "unknown"))
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         success = await asyncio.to_thread(secrets_manager.delete_secret, secret_id, chat_id=chat_id)
         if not success:
-            audit_log("DELETE", secret_id, http_request, success=False, details="not_found")
-            raise HTTPException(status_code=404, detail="Secret not found")
+            # #16428: revoke() never raises on a missing secret (idempotent by
+            # design), so existence must be checked first to still 404 a
+            # secret_id that is not in either store -- #13632's one-store
+            # decision, "DELETE revokes it there."
+            bridged = await _get_connector_bridged_secret(secret_id, owner_id)
+            if bridged is None:
+                audit_log("DELETE", secret_id, http_request, success=False, details="not_found")
+                raise HTTPException(status_code=404, detail="Secret not found")
+            await get_credential_store().revoke(secret_id, owner_id)
 
         audit_log("DELETE", secret_id, http_request)
-        _user = get_auth_middleware().get_user_from_request(http_request)
         audit_record(
             user_id=str((_user or {}).get("user_id", "unknown")),
             action=AuditAction.API_KEY_REVOKE,

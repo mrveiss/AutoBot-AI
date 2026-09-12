@@ -141,9 +141,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_chat.py": 725,
     "autobot-backend/api/schemas_code.py": 3266,
     "autobot-backend/api/schemas_knowledge.py": 5167,
-    "autobot-backend/api/schemas_system.py": 4306,
+    "autobot-backend/api/schemas_system.py": 4337,  # #16428: connector-bridge request/response fields
     "autobot-backend/api/schemas_workflows.py": 3011,
-    "autobot-backend/api/secrets.py": 1048,
+    "autobot-backend/api/secrets.py": 1158,  # #16428: ConnectorCredentialStore CRUD bridge, owner check
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 882,
     "autobot-backend/api/system.py": 1112,
