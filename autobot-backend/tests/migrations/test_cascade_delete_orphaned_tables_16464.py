@@ -41,44 +41,48 @@ _ACTIVITY_TABLES = (
     "desktop_activities",
 )
 
-#: A value for each column type a required activity column may have. A NOT NULL
-#: column of any other type fails ``_required_columns`` by name, so a column a
-#: future migration makes required is noticed here, never silently left out.
+#: A value for each column type a required column may have. A NOT NULL column
+#: of any other type fails ``_required_columns`` by name, so a column a future
+#: migration makes required is noticed here, never silently left out.
 _PLACEHOLDER_BY_TYPE = {
     "text": "cascade-test",
     "character varying": "cascade-test",
+    "double precision": 0.0,
 }
 
 
-async def _required_columns(conn, table: str) -> dict:
-    """Every NOT NULL column of *table* without a default, bar ``user_id``, with a placeholder.
+async def _required_columns(conn, table: str, supplied: dict) -> dict:
+    """Every NOT NULL column of *table* without a default and not in *supplied*, with a placeholder.
 
     Read from the migrated schema itself -- the only thing the INSERT has to
-    satisfy -- so the fixture follows whatever the migration declares.
+    satisfy -- so the fixture follows whatever the migrations declare, such as
+    ``organizations.kb_inheritance_weight``, whose default 20260616_060 drops.
     """
     result = await conn.execute(
         text(
             "SELECT column_name, data_type FROM information_schema.columns "
             "WHERE table_schema = current_schema() AND table_name = :table "
-            "AND is_nullable = 'NO' AND column_default IS NULL AND column_name <> 'user_id'"
+            "AND is_nullable = 'NO' AND column_default IS NULL"
         ),
         {"table": table},
     )
     required = {}
     for name, data_type in result:
+        if name in supplied:
+            continue
         assert data_type in _PLACEHOLDER_BY_TYPE, f"{table}.{name} is NOT NULL ({data_type}); add a placeholder"
         required[name] = _PLACEHOLDER_BY_TYPE[data_type]
     return required
 
 
-async def _insert_activity(conn, table: str, user_id: uuid.UUID) -> None:
-    """Insert one *table* row for *user_id*, supplying every column the schema requires."""
-    required = await _required_columns(conn, table)
-    columns = ", ".join(["user_id", *required])
-    values = ", ".join([":user_id", *(f":{name}" for name in required)])
+async def _insert_row(conn, table: str, values: dict) -> None:
+    """Insert one *table* row with *values*, plus a placeholder for every other column the schema requires."""
+    row = {**await _required_columns(conn, table, values), **values}
+    columns = ", ".join(row)
+    params = ", ".join(f":{name}" for name in row)
     # No caller input: the table is a literal from this module, the columns come from information_schema.
-    statement = text(f"INSERT INTO {table} ({columns}) VALUES ({values})")  # nosec B608
-    await conn.execute(statement, {"user_id": user_id, **required})
+    statement = text(f"INSERT INTO {table} ({columns}) VALUES ({params})")  # nosec B608
+    await conn.execute(statement, row)
 
 
 async def test_hard_deleting_a_user_cascades_through_every_orphaned_table(fresh_db_url):
@@ -89,16 +93,21 @@ async def test_hard_deleting_a_user_cascades_through_every_orphaned_table(fresh_
         secret_id = uuid.uuid4()
 
         async with engine.begin() as conn:
-            await conn.execute(
-                text(
-                    "INSERT INTO users (id, email, username, is_active, is_verified, "
-                    "mfa_enabled, is_platform_admin) "
-                    "VALUES (:id, :email, :username, true, false, false, false)"
-                ),
-                {"id": user_id, "email": "cascade-test@example.com", "username": "cascade-test"},
+            await _insert_row(
+                conn,
+                "users",
+                {
+                    "id": user_id,
+                    "email": "cascade-test@example.com",
+                    "username": "cascade-test",
+                    "is_active": True,
+                    "is_verified": False,
+                    "mfa_enabled": False,
+                    "is_platform_admin": False,
+                },
             )
             for table in _ACTIVITY_TABLES:
-                await _insert_activity(conn, table, user_id)
+                await _insert_row(conn, table, {"user_id": user_id})
             await conn.execute(
                 text(
                     "INSERT INTO secret_usage "
@@ -143,27 +152,32 @@ async def test_hard_deleting_an_organization_cascades_through_its_users_and_thei
         user_id = uuid.uuid4()
 
         async with engine.begin() as conn:
-            await conn.execute(
-                text(
-                    "INSERT INTO organizations (id, name, slug, max_users, is_active) "
-                    "VALUES (:id, :name, :slug, -1, true)"
-                ),
-                {"id": org_id, "name": "cascade-test-org", "slug": f"cascade-test-org-{org_id.hex[:8]}"},
+            await _insert_row(
+                conn,
+                "organizations",
+                {
+                    "id": org_id,
+                    "name": "cascade-test-org",
+                    "slug": f"cascade-test-org-{org_id.hex[:8]}",
+                    "max_users": -1,
+                    "is_active": True,
+                },
             )
-            await conn.execute(
-                text(
-                    "INSERT INTO users (id, org_id, email, username, is_active, is_verified, "
-                    "mfa_enabled, is_platform_admin) "
-                    "VALUES (:id, :org_id, :email, :username, true, false, false, false)"
-                ),
+            await _insert_row(
+                conn,
+                "users",
                 {
                     "id": user_id,
                     "org_id": org_id,
                     "email": "cascade-org-test@example.com",
                     "username": "cascade-org-test",
+                    "is_active": True,
+                    "is_verified": False,
+                    "mfa_enabled": False,
+                    "is_platform_admin": False,
                 },
             )
-            await _insert_activity(conn, "terminal_activities", user_id)
+            await _insert_row(conn, "terminal_activities", {"user_id": user_id})
 
         # organization -> user (users.org_id CASCADE) -> activity row
         # (terminal_activities.user_id CASCADE): one delete, two cascade hops,
