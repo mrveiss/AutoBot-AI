@@ -21,6 +21,15 @@ const meta = {
   title: 'Components/Terminal/TerminalModals',
   component: TerminalModals,
   tags: ['autodocs'],
+  // Each action resolves at once, so every story shows the success path (#16285).
+  args: {
+    reconnectAction: () => Promise.resolve(),
+    executeCommandAction: () => Promise.resolve(),
+    emergencyKillAction: () => Promise.resolve(),
+    confirmStepAction: () => Promise.resolve(),
+    skipStepAction: () => Promise.resolve(),
+    manualControlAction: () => Promise.resolve(),
+  },
   argTypes: {
     showReconnectModal: {
       control: 'boolean',
