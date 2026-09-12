@@ -54,7 +54,7 @@ from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.status_enums import SecretType
 from autobot_shared.time_utils import parse_utc_iso
-from knowledge.connectors.credential_store import get_credential_store
+from knowledge.connectors.credential_store import ConnectorCredentialStore, get_credential_store
 from middleware.proxy_utils import get_client_ip
 from security.secrets_store_reader import load_secrets_json, secret_log_ref
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
@@ -587,6 +587,7 @@ async def _get_connector_bridged_secret(secret_id: str, owner_id: str) -> Dict |
     )
     if secret is None:
         return None
+    ConnectorCredentialStore._require_owner(secret, secret_id, owner_id)
     # #16428: normalise to the same "type" key create_secret's connector-bridge
     # response and the legacy path both use -- SecretsService's own row shape
     # names it "secret_type".

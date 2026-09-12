@@ -113,6 +113,53 @@ class TestConnectorBridgedSecretCreate:
             await _create_connector_bridged_secret(request, "owner-1")
 
 
+class TestGetConnectorBridgedSecretEnforcesOwnership:
+    """``_get_connector_bridged_secret`` must refuse another owner's metadata.
+
+    It reads straight through ``SecretsService.get_secret``, which has no
+    per-user check of its own -- ``ConnectorCredentialStore.load``/``rotate``/
+    ``revoke`` are the only reason this secret was ever owner-scoped at all,
+    and this dual-read bypassed that entirely. Reuses
+    ``ConnectorCredentialStore._require_owner`` rather than a second copy of
+    the same check, so the boundary can't drift between the two paths.
+    """
+
+    @pytest.mark.asyncio
+    async def test_returns_metadata_for_the_owner(self):
+        from api.secrets import _get_connector_bridged_secret
+
+        bridged = {
+            "id": "secret-1",
+            "secret_type": "connector_api_key",  # pragma: allowlist secret
+            "scope": "user",
+            "created_by": "owner-1",
+        }
+        connector_svc = MagicMock()
+        connector_svc.get_secret = MagicMock(return_value=bridged)
+
+        with patch("api.secrets.get_secrets_service", return_value=connector_svc):
+            result = await _get_connector_bridged_secret("secret-1", "owner-1")
+
+        assert result["id"] == "secret-1"
+
+    @pytest.mark.asyncio
+    async def test_refuses_a_different_owner(self):
+        from api.secrets import _get_connector_bridged_secret
+
+        bridged = {
+            "id": "secret-1",
+            "secret_type": "connector_api_key",  # pragma: allowlist secret
+            "scope": "user",
+            "created_by": "owner-1",
+        }
+        connector_svc = MagicMock()
+        connector_svc.get_secret = MagicMock(return_value=bridged)
+
+        with patch("api.secrets.get_secrets_service", return_value=connector_svc):
+            with pytest.raises(PermissionError):
+                await _get_connector_bridged_secret("secret-1", "owner-2")
+
+
 class TestCreateSecretEndpointRoutesToTheBridge:
     """``POST /api/secrets`` sends a connector-bridged request to the new
     path and a plain one to the legacy store, unchanged."""
@@ -157,6 +204,7 @@ class TestUpdateSecretRotatesTheBridgedCredential:
             "id": "secret-1",
             "secret_type": "connector_api_key",  # pragma: allowlist secret
             "scope": "user",
+            "created_by": "owner-1",
         }
         connector_svc = MagicMock()
         connector_svc.get_secret = MagicMock(return_value=bridged_after)
@@ -238,7 +286,12 @@ class TestDeleteSecretRevokesTheBridgedCredential:
 
         store = MagicMock()
         store.revoke = AsyncMock(return_value=None)
-        bridged = {"id": "secret-1", "secret_type": "connector_api_key", "scope": "user"}  # pragma: allowlist secret
+        bridged = {
+            "id": "secret-1",
+            "secret_type": "connector_api_key",  # pragma: allowlist secret
+            "scope": "user",
+            "created_by": "owner-1",
+        }
         connector_svc = MagicMock()
         connector_svc.get_secret = MagicMock(return_value=bridged)
         http_request = MagicMock()
