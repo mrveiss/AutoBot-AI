@@ -3,8 +3,8 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 #
-# #16310 AC4: the pre-fix cwd-relative NPUWorkerManager default (fixed by
-# services/npu_worker_manager.py:106, covered by
+# #16310 AC4: the pre-fix cwd-relative NPUWorkerManager default (fixed in
+# NPUWorkerManager.__init__'s config_file default, covered by
 # tests/test_npu_config_path_not_cwd_relative.py) wrote the live worker
 # registry to a NESTED {{ backend_code_dir }}/autobot-backend/config/
 # npu_workers.yaml on any host that once started the service from the wrong

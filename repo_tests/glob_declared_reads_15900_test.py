@@ -186,6 +186,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/python_interpreter_role_rename_test.py",
             "repo_tests/required_context_complements_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
+            "repo_tests/sync_deletions_ansible_wiring_16310_test.py",
             "repo_tests/test_agent_venv_isolation_14278.py",
             "repo_tests/test_ci_import_smoke_paths_14252.py",
             "repo_tests/test_deploy_constraint_rewrite_14272.py",

@@ -812,7 +812,7 @@ export function useCodeSync() {
     fullTreeDriftError.value = null
 
     try {
-      const data = await slmApiClient.get<FullTreeDriftReport>('/code-sync/drift/full')
+      const data: FullTreeDriftReport = await slmApiClient.get('/code-sync/drift/full')
       fullTreeDriftReport.value = data
       return data
     } catch (e) {
