@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
+from repo_tests._reach import declare
 
 from autobot_shared.paths import project_root
 
@@ -27,9 +29,22 @@ _RESOLVED = ("wsl-docker-desktop", "no-docker")
 _UNRESOLVED = ("linux-native", "wsl-native-docker", "containerized")
 
 
-def _tracked_env_files() -> set[str]:
-    root = project_root()
-    return {p.name for p in root.glob(".env*") if p.is_file()}
+def _tracked_env_files(root: Path | None = None) -> list[str]:
+    base = root if root is not None else project_root()
+    return sorted(p.name for p in base.glob(".env*") if p.is_file())
+
+
+#: Pinned to the live population (6 `.env*` files as of #15143). A guard whose
+#: discovery quietly returned fewer -- a moved/renamed file, a `.glob()` typo --
+#: would otherwise still pass `test_the_tracked_set_is_not_empty` as long as the
+#: count stayed above zero; the floor catches a shrink the boolean check can't.
+REACH = declare(
+    "detect-environment-env-files",
+    discover=_tracked_env_files,
+    floor=6,
+    growth=2,
+    what=".env* files tracked at the repo root",
+)
 
 
 def _run(env_value: str) -> subprocess.CompletedProcess:
