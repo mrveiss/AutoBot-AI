@@ -45,14 +45,18 @@ class MCPClient:
     multiplexed (stdio and HTTP).
     """
 
-    def __init__(self, server_uri: str, timeout: float = 30.0) -> None:
+    def __init__(self, server_uri: str, timeout: float = 30.0, guard_egress: bool | None = None) -> None:
         """Create a client for the given server URI.
 
         Args:
             server_uri: ``stdio://``, ``sse://``, ``http://`` or ``https://``
             timeout:    seconds to wait for each response
+            guard_egress: SSRF policy (#13625) for the remote transports —
+                ``None`` (default) skips guarding, unchanged for every
+                existing caller. Pass explicitly for a user-configured
+                remote server (#11542).
         """
-        self._transport: MCPTransport = create_transport(server_uri, timeout=timeout)
+        self._transport: MCPTransport = create_transport(server_uri, timeout=timeout, guard_egress=guard_egress)
         self._timeout = timeout
         self._req_id = _INIT_REQ_ID
         self._lock = asyncio.Lock()

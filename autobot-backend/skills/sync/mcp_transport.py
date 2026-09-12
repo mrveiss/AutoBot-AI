@@ -20,12 +20,29 @@ from typing import Any, AsyncIterator, Dict
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EgressBlockedError
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.url_safety import is_public_url_async
 
 logger = get_logger(__name__)
 
 # JSON-RPC version used by MCP
 _JSONRPC = "2.0"
+
+
+async def _check_egress(url: str, guard_egress: bool | None) -> None:
+    """Raise EgressBlockedError when *url* fails the outbound-address policy (#13625).
+
+    ``guard_egress=None`` (default) skips the check entirely — no behaviour
+    change for internal callers. Transports that route through
+    ``get_http_client().tracked_request(guard_egress=...)`` already get this
+    per-request; this helper is for :class:`SSETransport`, whose raw session
+    bypasses the pooled client.
+    """
+    if guard_egress is None:
+        return
+    if not await is_public_url_async(url, allow_private=guard_egress):
+        raise EgressBlockedError(f"Refusing outbound MCP request to a disallowed address: {url!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -152,11 +169,12 @@ class SSETransport(MCPTransport):
     internally so ``receive()`` can yield them in order.
     """
 
-    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
+    def __init__(self, base_url: str, timeout: float = 30.0, guard_egress: bool | None = None) -> None:
         """Initialise with the base URL of the SSE-capable MCP server."""
         # Normalise sse:// → https://
         self._base_url = base_url.replace("sse://", "https://", 1)
         self._timeout = timeout
+        self._guard_egress = guard_egress
         self._session: aiohttp.ClientSession | None = None
         self._queue: asyncio.Queue = asyncio.Queue()
         self._sse_task: asyncio.Task | None = None
@@ -171,7 +189,13 @@ class SSETransport(MCPTransport):
         session for every outgoing POST. It is explicitly torn down in
         ``close()``. Not a per-request construction, so not a pooling
         candidate.
+
+        This transport bypasses the pooled client (see the carve-out above),
+        so unlike HTTPTransport/StreamableHTTPTransport it checks the egress
+        policy itself (#13625, #11542) rather than getting it from
+        ``get_http_client().tracked_request()``.
         """
+        await _check_egress(f"{self._base_url}/sse", self._guard_egress)
         self._session = aiohttp.ClientSession()
         self._sse_task = asyncio.create_task(self._read_sse())
         logger.info("SSETransport: connected to %s", self._base_url)
@@ -205,6 +229,7 @@ class SSETransport(MCPTransport):
         if self._session is None:
             raise RuntimeError("SSETransport not connected")
         url = f"{self._base_url}/message"
+        await _check_egress(url, self._guard_egress)
         async with self._session.post(url, json=request, timeout=aiohttp.ClientTimeout(total=self._timeout)) as resp:
             if resp.status not in (200, 202):
                 raise aiohttp.ClientResponseError(resp.request_info, resp.history, status=resp.status)
@@ -249,10 +274,11 @@ class HTTPTransport(MCPTransport):
     from multiple coroutines without shared session state.
     """
 
-    def __init__(self, base_url: str, timeout: float = 10.0) -> None:
+    def __init__(self, base_url: str, timeout: float = 10.0, guard_egress: bool | None = None) -> None:
         """Initialise with the base URL of the MCP HTTP server."""
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._guard_egress = guard_egress
         # Pending response stored between send() and receive()
         self._pending: Dict[str, Any] | None = None
 
@@ -266,6 +292,7 @@ class HTTPTransport(MCPTransport):
             f"{self._base_url}/rpc",
             json=request,
             timeout=aiohttp.ClientTimeout(total=self._timeout),
+            guard_egress=self._guard_egress,
         ) as resp:
             if resp.status != 200:
                 raise aiohttp.ClientResponseError(resp.request_info, resp.history, status=resp.status)
@@ -301,10 +328,11 @@ class StreamableHTTPTransport(MCPTransport):
     :class:`SSETransport` for servers that need them.
     """
 
-    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
+    def __init__(self, base_url: str, timeout: float = 30.0, guard_egress: bool | None = None) -> None:
         """Initialise with the literal MCP endpoint URL (no path is appended)."""
         self._base_url = base_url
         self._timeout = timeout
+        self._guard_egress = guard_egress
         self._session_id: str | None = None
         self._pending: Dict[str, Any] | None = None
 
@@ -323,6 +351,7 @@ class StreamableHTTPTransport(MCPTransport):
             json=request,
             headers=headers,
             timeout=aiohttp.ClientTimeout(total=self._timeout),
+            guard_egress=self._guard_egress,
         ) as resp:
             if resp.status == 202:
                 self._pending = None
@@ -368,6 +397,7 @@ class StreamableHTTPTransport(MCPTransport):
                 self._base_url,
                 headers={"Mcp-Session-Id": self._session_id},
                 timeout=aiohttp.ClientTimeout(total=self._timeout),
+                guard_egress=self._guard_egress,
             ):
                 pass
         except aiohttp.ClientError as exc:
@@ -382,7 +412,7 @@ class StreamableHTTPTransport(MCPTransport):
 # ---------------------------------------------------------------------------
 
 
-def create_transport(server_uri: str, timeout: float = 30.0) -> MCPTransport:
+def create_transport(server_uri: str, timeout: float = 30.0, guard_egress: bool | None = None) -> MCPTransport:
     """Return the correct MCPTransport for *server_uri*.
 
     Scheme detection:
@@ -392,14 +422,23 @@ def create_transport(server_uri: str, timeout: float = 30.0) -> MCPTransport:
     * ``streamable-http://``  → :class:`StreamableHTTPTransport`  — rewritten to ``http://``
     * ``streamable-https://`` → :class:`StreamableHTTPTransport`  — rewritten to ``https://``
     * anything else (``http://``, ``https://``) → :class:`HTTPTransport` (legacy ``/rpc`` JSON-RPC)
+
+    ``guard_egress`` (#13625, #11542) applies only to the remote (SSE/HTTP/
+    streamable-HTTP) transports — ``None`` (default) means no egress
+    guarding, unchanged from every existing caller. A caller reaching a
+    user-configured remote server should pass an explicit ``True``/``False``.
     """
     if server_uri.startswith("stdio://"):
         command = server_uri[len("stdio://") :]
         return StdioTransport(command, timeout=timeout)
     if server_uri.startswith("sse://"):
-        return SSETransport(server_uri, timeout=timeout)
+        return SSETransport(server_uri, timeout=timeout, guard_egress=guard_egress)
     if server_uri.startswith("streamable-http://"):
-        return StreamableHTTPTransport("http://" + server_uri[len("streamable-http://") :], timeout=timeout)
+        return StreamableHTTPTransport(
+            "http://" + server_uri[len("streamable-http://") :], timeout=timeout, guard_egress=guard_egress
+        )
     if server_uri.startswith("streamable-https://"):
-        return StreamableHTTPTransport("https://" + server_uri[len("streamable-https://") :], timeout=timeout)
-    return HTTPTransport(server_uri, timeout=timeout)
+        return StreamableHTTPTransport(
+            "https://" + server_uri[len("streamable-https://") :], timeout=timeout, guard_egress=guard_egress
+        )
+    return HTTPTransport(server_uri, timeout=timeout, guard_egress=guard_egress)
