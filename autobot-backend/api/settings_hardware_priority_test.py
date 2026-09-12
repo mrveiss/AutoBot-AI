@@ -97,7 +97,8 @@ class TestHardwarePriorityEndpoint:
         mock_revision.create_revision = AsyncMock()
 
         with (
-            patch("api.settings.check_admin_permission", return_value=None),
+            # No gate patch: the route's gate is require_settings_admin ->
+            # check_admin_permission, and the conftest auth stub admits every caller (#16278).
             patch(
                 "api.settings.get_db_session",
                 return_value=MagicMock(__aenter__=AsyncMock(return_value=MagicMock()), __aexit__=AsyncMock()),
