@@ -530,6 +530,7 @@ To add a new variable:
 | `AUTOBOT_LIVE_PROBE_TIMEOUT_SECONDS` | testing | float | `1.0` | Seconds a test's live-service precondition probe waits for a TCP connect before reporting the service as absent and skipping (autobot_shared/live_service_probe.py, #14930). Short by default: a refused loopback connect returns immediately, and this runs once per endpoint per process. Raise it when probing a fleet host across a link slow enough that a live service could be mistaken for a missing one. Range: 0.1–60.0. |
 | `AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL` | orchestrator | int | `86400` | Cache lifetime in seconds for a human-to-agent handoff brief (llc/services/handoff.py). One day. |
 | `AUTOBOT_LLM_MAX_RETRY_AFTER_SECONDS` | ai | float | `30.0` | Cap applied to a provider's `Retry-After`. Without it a provider advertising a long back-off would stall a request for that whole period (services/llm_service.py). |
+| `AUTOBOT_LLM_QUOTA_HEADROOM_TTL_SECONDS` | ai | int | `3600` | Seconds a recorded provider rate-limit headroom reading stays valid before it expires. |
 | `AUTOBOT_LLM_TOKEN_BUDGET_PER_RUN` | ai | int | `0` | Cumulative token ceiling (input plus output) for one run. Zero disables the gate, which is the shipped default (#11541). |
 | `AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS` | ai | int | `86400` | Seconds a run's cumulative token counter survives in Redis, bounding memory for abandoned sessions. Refreshed on every increment. |
 | `AUTOBOT_LOGS_BACKUP_DIR` | logging | str | `'backup'` | Directory where rotated log archives are written. |
