@@ -6,6 +6,13 @@
 Users API Endpoints
 
 REST API for user management operations.
+
+Authorization for the six routes #15738 found checking no role or ownership:
+creating and deleting accounts and assigning or revoking roles is admin-only,
+matching the SLM backend's ``ADMIN_USERS_WRITE`` gate on the same capability.
+Reading and updating one account is self-or-admin, the shape #15743
+established for change-password. Both gates are declared dependencies, so
+``user_management_route_posture_test.py`` can see them (#15737).
 """
 
 import uuid
@@ -24,7 +31,9 @@ from api.schemas_agent import (
 from api.user_management.dependencies import (
     get_current_user,
     get_user_service,
+    require_org_context,
     require_platform_admin,
+    require_self_or_admin,
     user_management_route_marker,
 )
 from autobot_shared.auth.permissions import is_admin_role
@@ -36,7 +45,7 @@ from user_management.schemas import (
     UserResponse,
     UserUpdate,
 )
-from user_management.services import UserService
+from user_management.services import TenantContext, UserService
 from user_management.services.user_service import (
     DuplicateUserError,
     UserNotFoundError,
@@ -85,65 +94,48 @@ async def list_users(
     response_model=UserSearchResponse,
     summary="Search users for sharing",
     description=(
-        "Search users by name or username for use in sharing dialogs. "
-        "Safe to call in all deployment modes — returns empty list with "
-        "available=False when user management is not enabled. Issue #2072."
+        "Search users in the caller's own organisation by name or username, for "
+        "sharing dialogs. Requires login and an organisation context (#16279). "
+        "Returns an empty list with available=False if the search fails. Issue #2072."
     ),
 )
 async def search_users_for_sharing(
     q: str = Query("", description="Search query (name or username)"),
     limit: int = Query(10, ge=1, le=50, description="Maximum results"),
+    _org: TenantContext = Depends(require_org_context),
+    user_service: UserService = Depends(get_user_service),
 ) -> UserSearchResponse:
-    """Search users by name/username for the knowledge sharing dialog.
+    """Search the caller's own organisation by name/username for the knowledge sharing dialog.
 
-    Returns matching users from the Postgres-backed user store.
+    #16279: this route used to need no login. It searched through a hand-built
+    platform-admin context with no org, so an anonymous caller could list names
+    from every organisation.
+
+    Now ``require_org_context`` demands a logged-in caller with an org, and
+    answers 400 without one. ``get_user_service`` carries that same tenant
+    context, and its ``apply_tenant_filter`` confines the query to the
+    caller's org.
     """
-    return await _search_users_from_db(q, limit)
+    return await _search_users_from_db(user_service, q, limit)
 
 
-async def _search_users_from_db(q: str, limit: int) -> UserSearchResponse:
-    """Perform a database user search and return sharing-compatible results.
-
-    Issue #2072: Helper that performs the actual DB search so the main
-    endpoint stays within the 30-line target.
-    """
-    from user_management.database import get_async_session
-    from user_management.services import TenantContext
-
+async def _search_users_from_db(user_service: UserService, q: str, limit: int) -> UserSearchResponse:
+    """Run the search and shape the results for the sharing dialog (#2072: keeps the endpoint short)."""
     try:
-        async for session in get_async_session():
-            context = TenantContext(org_id=None, user_id=None, is_platform_admin=True)
-            service = UserService(session, context)
-            search_term = q.strip() if q.strip() else None
-            users, _ = await service.list_users(
-                limit=limit,
-                offset=0,
-                search=search_term,
-                include_inactive=False,
-            )
-            results = [
-                UserSearchResult(
-                    id=str(user.id),
-                    name=user.full_name,  # #13957: the canonical rule, not a sixth copy of it
-                    type="user",
-                )
-                for user in users
-            ]
-            logger.debug("search_users_for_sharing: found %d results for %r", len(results), q)
-            return UserSearchResponse(
-                users=results,
-                available=True,
-                message="",
-            )
+        users, _ = await user_service.list_users(
+            limit=limit, offset=0, search=q.strip() or None, include_inactive=False
+        )
     except Exception:
         logger.exception("search_users_for_sharing: database query failed")
-        return UserSearchResponse(
-            users=[],
-            available=False,
-            message="User search temporarily unavailable",
-        )
+        return UserSearchResponse(users=[], available=False, message="User search temporarily unavailable")
 
-    return UserSearchResponse(users=[], available=True, message="")
+    results = [
+        # #13957: full_name is the canonical rule, not a sixth copy of it.
+        UserSearchResult(id=str(user.id), name=user.full_name, type="user")
+        for user in users
+    ]
+    logger.debug("search_users_for_sharing: found %d results for %r", len(results), q)
+    return UserSearchResponse(users=results, available=True, message="")
 
 
 @router.post(
@@ -152,7 +144,10 @@ async def _search_users_from_db(q: str, limit: int) -> UserSearchResponse:
     status_code=status.HTTP_201_CREATED,
     summary="Create user",
     description="Create a new user account.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def create_user(
     user_data: UserCreate,
@@ -174,7 +169,7 @@ async def create_user(
             user=_user_to_response(user),
         )
 
-    except DuplicateUserError as exc:  # not admin-gated (#15736)
+    except DuplicateUserError as exc:  # admin-only (#15738): the 409 discloses nothing new (#15736)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"A user with this {exc.field} already exists",
@@ -224,7 +219,10 @@ async def get_current_user_profile(
     response_model=UserResponse,
     summary="Get user",
     description="Get a specific user by ID.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_self_or_admin),
+    ],
 )
 async def get_user(
     user_id: uuid.UUID,
@@ -246,7 +244,10 @@ async def get_user(
     response_model=UserResponse,
     summary="Update user",
     description="Update a user's profile.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_self_or_admin),
+    ],
 )
 async def update_user(
     user_id: uuid.UUID,
@@ -272,7 +273,7 @@ async def update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
-    except DuplicateUserError as exc:  # not admin-gated either (#15736)
+    except DuplicateUserError as exc:  # self-or-admin (#15738): inherent to the operation (#15736)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"A user with this {exc.field} already exists",
@@ -284,7 +285,10 @@ async def update_user(
     response_model=UserDeletedResponse,
     summary="Delete user",
     description="Delete a user account (soft delete by default).",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def delete_user(
     user_id: uuid.UUID,
@@ -374,7 +378,10 @@ async def deactivate_user(
     response_model=RoleAssignmentResponse,
     summary="Assign role",
     description="Assign a role to a user.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def assign_role(
     user_id: uuid.UUID,
@@ -400,7 +407,10 @@ async def assign_role(
     response_model=RoleAssignmentResponse,
     summary="Revoke role",
     description="Revoke a role from a user.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def revoke_role(
     user_id: uuid.UUID,

@@ -13,7 +13,7 @@ Provides developer mode functionality including:
 
 from typing import Dict, List
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from api.schemas_system import (
@@ -22,13 +22,14 @@ from api.schemas_system import (
     DeveloperEndpointsResponse,
     DeveloperSystemInfoResponse,
 )
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from config import unified_config_manager
 from services.config_service import ConfigService
 from type_defs.common import Metadata
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
 
 

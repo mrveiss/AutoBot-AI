@@ -43,6 +43,7 @@ import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 from api.chat_knowledge_manager import get_chat_knowledge_manager_instance
+from api.chat_knowledge_prompt import TranscriptRefused
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     AddKnowledgeRequest,
@@ -298,6 +299,9 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
 
         return {"success": True, "data": {"success": True, "compiled": compiled}}
 
+    except TranscriptRefused as e:
+        # #15700: a refused transcript is the user's to fix, not a server fault.
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error("Failed to compile chat: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

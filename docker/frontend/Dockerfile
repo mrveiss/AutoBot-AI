@@ -90,6 +90,9 @@ FROM ubuntu:22.04 AS production
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# apt retries, and an index failure is fatal at `apt-get update` (#16291)
+COPY docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
+
 # Install nginx
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx wget \

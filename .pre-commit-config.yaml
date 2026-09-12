@@ -511,10 +511,16 @@ repos:
       - id: no-local-schemas
         name: Block local BaseModel definitions in non-schema API files (#6056)
         entry: tools/lint/check_no_local_schemas.py
+        # --changed-lines-only (#16178): judge the models this commit ADDED, read
+        # from the staged diff. Whole-file, a one-line edit to a legacy module failed
+        # the commit for a model it never touched, and every original domain
+        # schemas_*.py is frozen at its size ceiling, so the fix it asked for was
+        # impossible. A direct run of the hook still reads whole files.
+        args: [--changed-lines-only]
         language: python
         files: ^autobot-backend/api/(?!schemas_).*\.py$
         stages: [pre-commit]
-        description: "Move BaseModel subclasses to domain schemas_*.py files (#6056)"
+        description: "New BaseModel subclasses go in a schemas_*.py module with headroom (#6056, #16178)"
 
   # AutoBot custom: regression-prevention for #6558 (decorator order) +
   # #6633 (stacked-duplicate). In Python ``@A @B def f`` ≡ ``f = A(B(f))``;
@@ -617,6 +623,11 @@ repos:
     hooks:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
+        # #16343: one process at a time. Upstream's manifest sets no
+        # require_serial, so pre-commit ran this hook in parallel batches that each
+        # rewrote .secrets.baseline and raced. The last writer won, and a large
+        # commit (any base merge) failed on every attempt.
+        require_serial: true
 
   # Block commits when branch is shared with a worktree (Issue #1654)
   # Must run BEFORE the stash/restore cycle to prevent branch corruption.
@@ -739,7 +750,9 @@ repos:
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-function-length
         language: script
         types: [python]
-        pass_filenames: false
+        # Files are passed so a `--from-ref` run, which stages nothing, still has a
+        # change to judge; the checker scopes to the functions it touched (#16191).
+        pass_filenames: true
         stages: [pre-commit]
         description: "Blocks commits with functions >65 lines, warns for 51-65 lines"
 

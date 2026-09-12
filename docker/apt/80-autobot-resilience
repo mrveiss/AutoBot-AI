@@ -1,0 +1,21 @@
+// apt settings for every image build (#16291)
+//
+// AutoBot - AI-Powered Automation Platform
+// Copyright 2025-2026 mrveiss
+// Author: mrveiss
+//
+// Each Dockerfile stage that runs apt COPYs this into /etc/apt/apt.conf.d/
+// before its first `apt-get update`, so the setting is defined once, here,
+// rather than on six command lines.
+//
+// Without it, `apt-get update` exits 0 when an index fails to download ("Some
+// index files failed to download. They have been ignored"). The build then
+// fails at `apt-get install` with an unmet-dependency error naming a package,
+// not the mirror that could not be reached.
+
+// Retry a failed fetch before giving up on it.
+Acquire::Retries "3";
+
+// Then make the failure fatal at `apt-get update`, naming the URL. This is the
+// key `apt-get update --error-on=any` sets (apt-get(8), jammy and bookworm).
+APT::Update::Error-Mode "any";

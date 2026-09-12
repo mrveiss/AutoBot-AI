@@ -40,7 +40,9 @@ Two pieces close it, and the split between them is the whole design:
 from __future__ import annotations
 
 import logging
+import os
 import posixpath
+import re
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
@@ -273,6 +275,106 @@ def iter_python_files(args: List[str], repo_root: Path) -> Iterable[Path]:
         if any(part in EXCLUDED_DIR_NAMES for part in parts):
             continue
         yield repo_root / rel
+
+
+# A unified-diff hunk header. With -U0 each hunk is exactly the changed region,
+# so the new-side range ``+start[,count]`` lists the lines this change added. A
+# missing count means one line; a count of 0 is a pure deletion and adds none.
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+
+
+def _git_diff(repo_root: Path, args: Sequence[str]) -> str:
+    """Run ``git diff`` in a scrubbed environment; raise rather than return nothing."""
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "diff", "--no-color", "--no-ext-diff", *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=scrubbed_git_env(),
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"git diff {' '.join(args)} failed in {repo_root}: {result.stderr.strip()}")
+    return result.stdout
+
+
+def _rename_source(repo_root: Path, rel: str, span: Sequence[str]) -> str | None:
+    """The path *rel* was renamed from in this change, or None.
+
+    Reads the whole change, not just *rel*: a diff limited to one path cannot pair
+    a rename with its source, so a moved file reads as wholly new and everything
+    in it as added. ``-z`` keeps paths containing spaces or quotes intact.
+    """
+    tokens = _git_diff(repo_root, [*span, "-M", "--name-status", "-z"]).split("\0")
+    i = 0
+    while i < len(tokens) and tokens[i]:
+        if tokens[i].startswith("R"):
+            if tokens[i + 2] == rel:
+                return tokens[i + 1]
+            i += 3
+        else:
+            i += 2
+    return None
+
+
+def added_lines(repo_root: Path, rel: str, base: str | None = None) -> set[int]:
+    """Line numbers of *rel* that the change being checked ADDED.
+
+    ``base=None`` reads the staged diff (index against HEAD): the pre-commit
+    stage, where the change has no commit yet. ``base=<rev>`` reads ``rev..HEAD``:
+    the PR stage, with the base the caller resolved. A hook scoped this way judges
+    what the change introduced instead of the file's whole backlog (#16178, after
+    #13950 did the same for shell hooks in CI).
+
+    A renamed file is diffed against its source, so a ``git mv`` adds only the
+    lines it actually changed. Below git's rename-similarity threshold the file
+    reads as new, which at that point is what it is.
+
+    Raises:
+        RuntimeError: git failed. A scoped hook must not read that as "added
+            nothing", which would report a clean change it never examined.
+    """
+    span = ["--cached"] if base is None else [base, "HEAD"]
+    source = _rename_source(repo_root, rel, span)
+    paths = [source, rel] if source else [rel]
+    lines: set[int] = set()
+    for header in _git_diff(repo_root, ["-U0", "-M", *span, "--", *paths]).splitlines():
+        match = _HUNK.match(header)
+        if match:
+            start = int(match.group(1))
+            count = 1 if match.group(2) is None else int(match.group(2))
+            lines.update(range(start, start + count))
+    return lines
+
+
+def staged_paths(repo_root: Path) -> set[str]:
+    """Repo-relative paths with staged changes, rename destinations included.
+
+    A scoped hook asks this before trusting an empty staged diff. A file that is
+    not staged at all is not part of the change being committed -- the run is
+    ``pre-commit run --all-files`` or ``--files`` -- so there is no change to scope
+    it to, and "nothing added" would be a verdict nobody examined (#16178).
+    """
+    return {path for path in _git_diff(repo_root, ["--cached", "--name-only", "-z"]).split("\0") if path}
+
+
+def resolve_base(explicit: str | None = None) -> str | None:
+    """The range a scoped hook reads: an explicit base, else the one pre-commit ran with.
+
+    ``pre-commit run --from-ref A --to-ref B`` stages nothing, so the staged diff is
+    empty and everything would read as pre-existing. pre-commit exports the range
+    as PRE_COMMIT_FROM_REF (commands/run.py); FROM_REF..HEAD then describes the
+    checked-out tree the hook is actually reading (#16178). Shared, so every scoped
+    hook resolves it the same way (#16191).
+    """
+    if explicit:
+        return explicit
+    # Only trust the range when pre-commit itself exported it. pre-commit always
+    # sets PRE_COMMIT=1 for its hooks, so a PRE_COMMIT_FROM_REF left in a
+    # developer's shell cannot silently re-scope a plain run (#16241 review).
+    if os.environ.get("PRE_COMMIT") == "1":
+        return os.environ.get("PRE_COMMIT_FROM_REF") or None
+    return None
 
 
 def logical_lines(text: str) -> List[Tuple[int, str]]:
