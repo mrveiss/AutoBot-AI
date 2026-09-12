@@ -1120,13 +1120,7 @@ async def _try_mcp_dispatch(
 
     tool = dispatcher.find_tool(tool_name)
     if tool is None:
-        # #11542: not in the internal-bridge registry — try the standalone
-        # external-MCP-server bridge before reporting unknown-tool. Kept
-        # separate from `dispatcher` above: external tools are admin-
-        # configured at runtime and can never carry a pre-declared
-        # mcp_tool_permissions entry, so they cannot pass through
-        # MCPDispatcher.dispatch()'s fail-closed "undeclared" RBAC gate.
-        return await _try_external_mcp_dispatch(tool_name, tool_call, execution_results, session_id=session_id)
+        return None
 
     arguments = tool_call.get("arguments", {})
 
@@ -1186,67 +1180,6 @@ async def _try_mcp_dispatch(
             exc_info=True,
         )
         raise
-
-
-async def _try_external_mcp_dispatch(
-    tool_name: str,
-    tool_call: dict[str, Any],
-    execution_results: list[dict[str, Any]],
-    session_id: str = "",
-) -> WorkflowMessage | None:
-    """Dispatch tool_name via the admin-configured external MCP server bridge (#11542).
-
-    Refreshes the bridge's registry when it does not yet know tool_name — the
-    registry is normally warmed by _get_mcp_tools_prompt() building the
-    system prompt earlier this turn, but this call must not depend on that
-    having happened. Returns None when the external bridge doesn't know
-    tool_name either, so the caller falls through to the unknown-tool error
-    exactly as it did before #11542.
-
-    Deliberately does NOT call _emit_before_tool_execute(): #14523 made that
-    hook's PermissionEnforcementExtension *raise* PermissionError for any
-    tool_permission=None ("undeclared tool, refused by default") — and an
-    admin-configured external tool can never carry an entry in the static
-    mcp_tool_permissions table its declaration comes from. Calling it as-is
-    would reject every external tool call. Whether external tools need their
-    own permission model (and what it should be) is an open design question,
-    not resolved by this change — see the PR body.
-    """
-    from services.mcp_external_bridge import get_mcp_external_bridge
-
-    bridge = get_mcp_external_bridge()
-    if not bridge.has_tool(tool_name):
-        await bridge.list_tools()
-    if not bridge.has_tool(tool_name):
-        return None
-
-    arguments = tool_call.get("arguments", {})
-
-    try:
-        call_result = await bridge.call_tool(tool_name, arguments, user_id=session_id or None)
-    except Exception as e:
-        await _emit_tool_error(tool_name, e, session_id, {})
-        logger.error("[Issue #11542] external MCP dispatch error for tool %s: %s", tool_name, e, exc_info=True)
-        raise
-
-    result_text = str(call_result.result if call_result.success else call_result.error)
-    result_text = await _emit_after_tool_execute(tool_name, result_text, session_id, {})
-
-    execution_results.append(
-        {
-            "tool": tool_name,
-            "bridge": "external",
-            "result": result_text,
-            "status": "success" if call_result.success else "error",
-        }
-    )
-    msg_type = "tool_result" if call_result.success else "error"
-    logger.info("[Issue #11542] external MCP dispatch: tool=%s success=%s", tool_name, call_result.success)
-    return WorkflowMessage(
-        type=msg_type,
-        content=f"[external] {result_text}",
-        metadata={"tool_name": tool_name, "bridge": "external", "mcp_dispatch": True},
-    )
 
 
 async def _fetch_single_page(entry: dict) -> dict:

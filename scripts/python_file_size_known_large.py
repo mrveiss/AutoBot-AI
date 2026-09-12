@@ -165,7 +165,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1358,
     "autobot-backend/chat_workflow/manager.py": 4068,
-    "autobot-backend/chat_workflow/tool_handler.py": 3796,  # #11542: external MCP dispatch fallback
+    "autobot-backend/chat_workflow/tool_handler.py": 3729,  # #11542: external MCP dispatch merged into MCPDispatcher
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/circuit_breaker.py": 689,
@@ -497,6 +497,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 778,
     "autobot-slm-backend/user_management/services/user_service.py": 863,
+    "autobot_shared/auth/permissions.py": 603,  # #11542: Permission.MCP_EXTERNAL
     "autobot_shared/env_registry.py": 1225,  # #15774: logging component split to env_registry_logging.py
     "autobot_shared/monitoring/prometheus_metrics.py": 954,
     "autobot_shared/network_constants.py": 616,

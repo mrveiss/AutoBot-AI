@@ -13,10 +13,14 @@ adds only what differs: loading *enabled* servers from the store, resolving
 each server's credential into extra_headers, the egress guard for remote
 servers, and cpu/memory/nofile rlimits (#3229) for stdio servers.
 
-Not yet wired into services/mcp_dispatch.py's existing internal-bridge
-routing (MCPDispatcher) — see the PR body for the open design question on
-whether external servers should route through that RBAC-gated dispatch path
-or stay a parallel bridge like this one.
+Wired into services/mcp_dispatch.py's existing RBAC-gated dispatch (#11542,
+owner decision on #16458): every external tool is merged into
+MCPDispatcher's tool cache carrying Permission.MCP_EXTERNAL as its
+required_permission, so the same gate and the same BEFORE_TOOL_EXECUTE hook
+built-in tools go through also cover these — no bypass. On top of that
+coarse gate, call_tool() here checks the owning server's own
+MCPServerConfig.allowed_roles before ever connecting — narrower, per-server
+RBAC that MCPDispatcher's single shared permission cannot express.
 """
 
 from __future__ import annotations
@@ -53,6 +57,7 @@ class _ExternalToolEntry:
     original_name: str
     guard_egress: bool | None
     extra_headers: dict[str, str]
+    allowed_roles: list[str]
     resource_policy: BridgePolicy | None = None
 
 
@@ -63,6 +68,7 @@ class _ConnectSettings:
     guard_egress: bool | None
     extra_headers: dict[str, str]
     resource_policy: BridgePolicy | None
+    allowed_roles: list[str]
 
 
 def _get_mcp_client_class():
@@ -119,10 +125,10 @@ class MCPExternalBridge:
                 # same cpu/memory/nofile rlimits as an internal isolated
                 # bridge — policy_for() has no per-server_id override
                 # declared, so this resolves to the global defaults.
-                connect_settings[uri] = _ConnectSettings(None, {}, policy_for(server.server_id))
+                connect_settings[uri] = _ConnectSettings(None, {}, policy_for(server.server_id), server.allowed_roles)
             else:
                 headers = await resolve_extra_headers_for_server(server)
-                connect_settings[uri] = _ConnectSettings(instance_host_egress(), headers, None)
+                connect_settings[uri] = _ConnectSettings(instance_host_egress(), headers, None, server.allowed_roles)
 
         MCPClient = _get_mcp_client_class()
 
@@ -145,6 +151,7 @@ class MCPExternalBridge:
                 original_name=r.original_name,
                 guard_egress=settings.guard_egress,
                 extra_headers=settings.extra_headers,
+                allowed_roles=settings.allowed_roles,
                 resource_policy=settings.resource_policy,
             )
             tools.append(r.tool.model_copy(update={"name": r.public_name}))
@@ -155,12 +162,36 @@ class MCPExternalBridge:
         return name in self._registry
 
     async def call_tool(
-        self, name: str, arguments: dict[str, Any], *, user_id: str | None = None
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        *,
+        role: str = "user",
+        user_id: str | None = None,
     ) -> ExternalToolCallResult:
-        """Route a chat tool call to its owning external server. Always audit-logged."""
+        """Route a chat tool call to its owning external server. Always audit-logged.
+
+        ``role`` is checked against the owning server's own
+        ``MCPServerConfig.allowed_roles`` (#11542, owner decision on #16458)
+        — narrower, per-server RBAC on top of the coarse
+        ``Permission.MCP_EXTERNAL`` gate ``MCPDispatcher.dispatch()`` already
+        enforced before this method is ever reached. A role not on the list
+        is refused here, without ever connecting to the server.
+        """
         entry = self._registry.get(name)
         if entry is None:
             return ExternalToolCallResult(success=False, error=f"Unknown external MCP tool '{name}'")
+
+        if role not in entry.allowed_roles:
+            logger.warning("mcp_external_bridge.call_tool role=%s denied for tool=%s", role, name)
+            await _audit_log(
+                "mcp.external_server.tool_call",
+                result="denied",
+                user_id=user_id,
+                resource=name,
+                details={"server_uri": entry.server_uri, "role": role, "allowed_roles": entry.allowed_roles},
+            )
+            return ExternalToolCallResult(success=False, error=f"role '{role}' is not permitted to call '{name}'")
 
         MCPClient = _get_mcp_client_class()
         try:

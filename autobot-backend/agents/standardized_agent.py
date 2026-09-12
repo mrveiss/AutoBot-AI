@@ -402,12 +402,10 @@ class StandardizedAgent(BaseAgent):
         but failures fall through to whatever stale data is available, so a
         transient registry outage never blocks a chat response (#2631).
 
-        Admin-configured external MCP servers (#11542) are appended the same
-        way, for every role — same permission shape as a knowledge connector:
-        an admin configures it, any authenticated user can use what it
-        surfaces. They are a standalone bridge, not yet merged into the
-        dispatcher's own RBAC-gated cache (see services/mcp_external_bridge.py's
-        module docstring for why).
+        Admin-configured external MCP servers (#11542) are merged into the
+        dispatcher's own cache (services/mcp_dispatch.py's
+        _merge_external_tools) and so already appear here via
+        get_tool_definitions() — no separate listing needed.
 
         Args:
             role: Caller RBAC role — passed to filter admin-only tools (#2629).
@@ -423,31 +421,13 @@ class StandardizedAgent(BaseAgent):
         except Exception:
             pass  # Use stale cache rather than blocking
         tools = dispatcher.get_tool_definitions(role=role)
-        tool_lines = [f"- **{t['name']}**: {t['description']}" for t in tools]
-        tool_lines.extend(await self._get_external_mcp_tool_lines())
-        if not tool_lines:
+        if not tools:
             return ""
+        tool_lines = [f"- **{t['name']}**: {t['description']}" for t in tools]
         return (
             "\n\n## Available MCP Tools\n"
             "You can call these tools by name when the user's request requires them:\n" + "\n".join(tool_lines)
         )
-
-    @staticmethod
-    async def _get_external_mcp_tool_lines() -> list[str]:
-        """Return Markdown lines for admin-configured external MCP server tools (#11542).
-
-        A discovery failure (all servers unreachable, or none configured)
-        degrades to an empty list, never an exception — matches the outage
-        tolerance _get_mcp_tools_prompt already applies to the internal registry.
-        """
-        from services.mcp_external_bridge import get_mcp_external_bridge
-
-        try:
-            tools = await get_mcp_external_bridge().list_tools()
-        except Exception as exc:
-            logger.debug("external MCP tool discovery failed: %s", exc)
-            return []
-        return [f"- **{t.name}**: {t.description}" for t in tools]
 
     @abstractmethod
     def _get_system_prompt(self) -> str:

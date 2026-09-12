@@ -64,6 +64,7 @@ def _to_response(cfg: MCPServerConfig) -> MCPServerResponse:
         command=cfg.command,
         url=cfg.url,
         auth_type=cfg.auth_type,
+        allowed_roles=cfg.allowed_roles,
         has_credential=cfg.secret_id is not None,
     )
 
@@ -125,6 +126,7 @@ async def create_external_server(
         auth_type=request.auth_type,
         secret_id=secret_id,
         auth_config=auth_config,
+        allowed_roles=request.allowed_roles if request.allowed_roles is not None else ["admin"],
     )
     try:
         cfg.validate()
@@ -155,7 +157,7 @@ async def update_external_server(
     if cfg is None:
         raise HTTPException(status_code=404, detail=f"MCP server {server_id!r} not found")
 
-    for field_name in ("name", "enabled", "command", "url"):
+    for field_name in ("name", "enabled", "command", "url", "allowed_roles"):
         value = getattr(request, field_name)
         if value is not None:
             setattr(cfg, field_name, value)

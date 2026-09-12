@@ -171,3 +171,17 @@ class TestMCPExternalServerStore:
         await store.create(cfg)
         loaded = await store.get("srv-1")
         assert loaded.created_at == cfg.created_at
+
+    @pytest.mark.asyncio
+    async def test_round_trip_preserves_allowed_roles(self, store):
+        cfg = _stdio_cfg()
+        cfg.allowed_roles = ["admin", "user"]
+        await store.create(cfg)
+        loaded = await store.get("srv-1")
+        assert loaded.allowed_roles == ["admin", "user"]
+
+
+class TestAllowedRolesDefault:
+    def test_defaults_to_admin_only(self):
+        cfg = _stdio_cfg()
+        assert cfg.allowed_roles == ["admin"]

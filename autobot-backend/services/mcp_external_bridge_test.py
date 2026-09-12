@@ -159,6 +159,7 @@ class TestCallTool:
                 original_name="search",
                 guard_egress=False,
                 extra_headers={},
+                allowed_roles=["admin", "user"],
             )
         }
 
@@ -185,6 +186,7 @@ class TestCallTool:
                 original_name="flaky",
                 guard_egress=False,
                 extra_headers={},
+                allowed_roles=["admin", "user"],
             )
         }
 
@@ -255,6 +257,7 @@ class TestResourcePolicy:
                 original_name="fs_read",
                 guard_egress=None,
                 extra_headers={},
+                allowed_roles=["admin", "user"],
                 resource_policy=policy,
             )
         }
@@ -274,3 +277,72 @@ class TestResourcePolicy:
             await bridge.call_tool("fs_read", {})
 
         assert captured_kwargs["resource_policy"] is policy
+
+
+class TestAllowedRoles:
+    """Per-server RBAC on top of the coarse Permission.MCP_EXTERNAL gate (#11542)."""
+
+    def _entry(self, allowed_roles):
+        from services.mcp_external_bridge import _ExternalToolEntry
+
+        return _ExternalToolEntry(
+            server_uri="https://mcp-a.example.com/mcp",
+            original_name="search",
+            guard_egress=False,
+            extra_headers={},
+            allowed_roles=allowed_roles,
+        )
+
+    @pytest.mark.asyncio
+    async def test_role_not_on_list_is_refused_without_connecting(self):
+        bridge = MCPExternalBridge()
+        bridge._registry = {"search": self._entry(["admin"])}
+
+        with patch("services.mcp_external_bridge._get_mcp_client_class") as mock_get_client:
+            result = await bridge.call_tool("search", {}, role="user")
+
+        assert result.success is False
+        assert "not permitted" in result.error
+        mock_get_client.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_role_on_list_succeeds(self):
+        bridge = MCPExternalBridge()
+        bridge._registry = {"search": self._entry(["admin", "user"])}
+
+        mock_client = AsyncMock()
+        mock_client.call_tool = AsyncMock(return_value="ok")
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("services.mcp_external_bridge._get_mcp_client_class", return_value=lambda uri, **_: mock_client):
+            result = await bridge.call_tool("search", {}, role="user")
+
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_admin_only_default_applies(self):
+        bridge = MCPExternalBridge()
+        bridge._registry = {"search": self._entry(["admin"])}
+
+        mock_client = AsyncMock()
+        mock_client.call_tool = AsyncMock(return_value="ok")
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("services.mcp_external_bridge._get_mcp_client_class", return_value=lambda uri, **_: mock_client):
+            denied = await bridge.call_tool("search", {}, role="user")
+            allowed = await bridge.call_tool("search", {}, role="admin")
+
+        assert denied.success is False
+        assert allowed.success is True
+
+    @pytest.mark.asyncio
+    async def test_default_role_is_user_when_unspecified(self):
+        """call_tool()'s role default (\"user\") is refused against an admin-only server."""
+        bridge = MCPExternalBridge()
+        bridge._registry = {"search": self._entry(["admin"])}
+
+        result = await bridge.call_tool("search", {})
+
+        assert result.success is False

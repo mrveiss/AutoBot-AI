@@ -56,6 +56,12 @@ class MCPServerConfig:
     #: "username") ConnectorCredentialStore.store() returned alongside
     #: secret_id — merged back in by .load() to rebuild the full auth config.
     auth_config: dict[str, Any] = field(default_factory=dict)
+    #: Per-server RBAC role names (#11542, owner decision on #16458) checked
+    #: by services.mcp_external_bridge before dispatch, on top of every
+    #: caller needing autobot_shared.auth.permissions.Permission.MCP_EXTERNAL
+    #: — this narrows *which* roles may use *this* server, it never widens
+    #: who may use external servers at all. Admin-only by default.
+    allowed_roles: list[str] = field(default_factory=lambda: ["admin"])
 
     def validate(self) -> None:
         """Raise ValueError/LauncherNotAllowedError on an internally inconsistent config."""
