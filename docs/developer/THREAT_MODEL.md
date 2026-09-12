@@ -130,7 +130,7 @@ for service-to-service · [`services/auth.py`](../../autobot-slm-backend/service
   the backend admin path reached through the proxy (#16374).
 - The RS256 authority-token path fails CLOSED the same way (#16412): [`rs256_denylist.py`](../../autobot-slm-backend/services/rs256_denylist.py)
   `is_rs256_jti_revoked` (:91) raises on a Redis error rather than reporting "not revoked"; its caller
-  [`jwks_verifier.py`](../../autobot-slm-backend/services/jwks_verifier.py) `verify_authority_token` (:177) denies the token (401) at both call sites; the write side stays best-effort.
+  [`jwks_verifier.py`](../../autobot-slm-backend/services/jwks_verifier.py) `verify_authority_token` (:218) denies the token (401) at both call sites; the write side stays best-effort.
 
 ## Cross-cutting
 
