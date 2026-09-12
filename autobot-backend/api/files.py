@@ -154,8 +154,6 @@ ALLOWED_EXTENSIONS = {
     ".gif",
     ".svg",
     ".ico",
-    ".pd",
-    ".gi",
 }
 
 # Performance optimization: O(1) lookup for invalid path characters (Issue #326).
