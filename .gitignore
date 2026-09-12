@@ -467,6 +467,13 @@ database-backup-*
 
 # === KUBERNETES SECRETS ===
 secrets/
+# ...except autobot-frontend/src/components/secrets/ and .../views/secrets/,
+# ordinary tracked Vue source for the Secrets management feature, not
+# generated k8s Secret manifests (#16446, same class as docs/reports/ above:
+# the blanket rule matched at any depth and silently untracked a new file
+# added there with no warning from `git status`).
+!autobot-frontend/src/components/secrets/
+!autobot-frontend/src/views/secrets/
 *secret.yaml
 *secret.yml
 
