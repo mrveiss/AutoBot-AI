@@ -449,24 +449,43 @@ fi
 # Where a workflow's gate is inline YAML with no extractable script, the check
 # is reported as unavailable with that as its reason rather than approximated.
 #
-# Cost tiers, because a preflight nobody runs saves nothing:
-#   default   script-only gates -- no imports, no services, seconds
-#   --full    gates that import the backend or run a suite -- minutes
-#   never     gates needing infrastructure this box does not have
+# Default gating is the PATH FILTER each `require_check` call below carries --
+# the same `.github/filters/*.yml` set the check's own workflow gates on, so a
+# diff outside those paths gets the identical "nothing to check" verdict
+# locally that it would get in CI. `--full` (#15933 AC4) bypasses every
+# filter inside `require_check` and forces each of them to actually run.
 #
-# `migration-matrix` sits in that last tier: it needs a live PostgreSQL and is
-# reported unavailable unless AUTOBOT_MIGRATION_TEST_ADMIN_URL is set. #15933
-# was filed claiming nine of the ten were locally reproducible; that was one
-# too many, and the honest count is eight plus one conditional.
+# Two narrower tiers sit on top of that, because a preflight nobody runs
+# saves nothing:
+#   --full-only   `api-wiring` builds the whole FastAPI app to dump its
+#                 OpenAPI schema -- materially heavier than a path-filtered
+#                 import, so it stays gated behind --full on top of (not
+#                 instead of) its own path filter.
+#   never         gates needing infrastructure this box does not reliably
+#                 have. `migration-matrix` needs a live PostgreSQL and is
+#                 reported unavailable unless AUTOBOT_MIGRATION_TEST_ADMIN_URL
+#                 is set. `smoke-test` needs a Docker daemon, three image
+#                 builds and a running compose stack CI budgets 45 minutes
+#                 for -- reported SKIPPED with that reason rather than
+#                 approximated. #15933 was filed claiming both were locally
+#                 reproducible; `smoke-test` is the one check this re-audit
+#                 leaves genuinely unmet, not faked.
 
 section "required status checks"
 
 # Run one required context locally. Args: <context> <path-filter-regex> <cmd...>
 # An empty path filter means the gate is unconditional.
+#
+# --full bypasses the path filter (#15933 AC4): every filtered check then
+# actually runs, regardless of whether ITS OWN filter's paths changed. Without
+# this, --full only widened the narrower --full-only tier (api-wiring, see
+# the section header above) while every ordinary require_check call kept
+# skipping on a diff outside its filter even when the caller explicitly asked
+# for a full run.
 require_check() {
   local ctx="$1" filter="$2"; shift 2
 
-  if [ -n "$filter" ] && [ "${#CHANGED[@]}" -gt 0 ]; then
+  if [ "$FULL" != "1" ] && [ -n "$filter" ] && [ "${#CHANGED[@]}" -gt 0 ]; then
     if ! printf '%s\n' "${CHANGED[@]}" | grep -qE "$filter"; then
       note "$ctx -- no matching paths changed (CI path-filters it too)"
       return 0
@@ -599,7 +618,7 @@ CQEOF
     '\.github/' \
     "$PY" pipeline-scripts/check_workflow_path_filters.py
 
-  # ---- gates that import the backend or run a suite: --full only ----------
+  # ---- api-wiring: builds the whole app, --full only (see the tier note above)
   if [ "$FULL" = "1" ]; then
     # Same CWE-377 shape as require_check's log, one gate over: a predictable
     # `$$` name in a world-writable directory, and never removed at all. Found by
@@ -616,15 +635,23 @@ CQEOF
         "$PY" scripts/audit_api_wiring.py --dump-openapi "$openapi_dump"
       rm -f "$openapi_dump"
     fi
-
-    require_check "startup-import-smoke" \
-      'autobot-backend/' \
-      env PYTHONPATH="$REPO_ROOT:$REPO_ROOT/autobot-backend" \
-      "$PY" -c 'import initialization.lifespan'
   else
-    skip_check "api-wiring"           "imports the backend -- re-run with --full"
-    skip_check "startup-import-smoke" "imports the backend -- re-run with --full"
+    skip_check "api-wiring" "builds the whole app to dump its OpenAPI schema -- re-run with --full"
   fi
+
+  # startup-import-smoke (#15933 re-audit): test_startup_imports.py documents
+  # itself as "Fast (<5s) -- pure imports, no Redis or network calls", so
+  # unlike api-wiring it belongs in the default, path-filtered tier rather
+  # than behind --full. Same command
+  # .github/workflows/startup-import-smoke.yml's "Run startup-import smoke
+  # test" step runs: `python -m pytest
+  # autobot-backend/tests/test_startup_imports.py -q --tb=line`. This
+  # previously ran `python -c 'import initialization.lifespan'` -- a
+  # narrower, hand-picked substitute for the workflow's actual gate, the
+  # exact drift this section exists to prevent.
+  require_check "startup-import-smoke" \
+    'autobot-backend/' \
+    "$PY" -m pytest autobot-backend/tests/test_startup_imports.py -q --tb=line
 
   # #15933: these two were skipped outright because each needs an `npm ci`
   # first, and a preflight that installs packages is a preflight that gets run
@@ -659,11 +686,16 @@ CQEOF
     '^autobot-frontend/' \
     bash -c 'cd "$0/autobot-frontend" && test -f src/types/generated/api.ts && npm run verify:types' "$REPO_ROOT"
 
-  # `test:unit` is `vitest run`, which genuinely needs the workspace installed.
+  # frontend-test.yml's "Unit & Integration Tests" job runs `npm run
+  # test:integration` then `npm run test:coverage` -- not `test:unit`.
+  # (#10365 dropped a separate `test:unit` step: `test:coverage` is `vitest
+  # run --coverage` over the same default config `test:unit` uses, so a
+  # third step just ran every unit test again.) Match those two; both
+  # genuinely need the workspace installed.
   if frontend_deps_current; then
     require_check "Unit & Integration Tests" \
       '^autobot-frontend/' \
-      bash -c 'cd "$0/autobot-frontend" && npm run test:unit' "$REPO_ROOT"
+      bash -c 'cd "$0/autobot-frontend" && npm run test:integration && npm run test:coverage' "$REPO_ROOT"
   else
     skip_check "Unit & Integration Tests" \
       "autobot-frontend/node_modules is absent or older than package-lock.json -- npm --prefix autobot-frontend ci"
@@ -686,7 +718,19 @@ CQEOF
   else
     skip_check "migration-matrix" "needs a live PostgreSQL (set AUTOBOT_MIGRATION_TEST_ADMIN_URL)"
   fi
-  skip_check "smoke-test" "builds images and starts the compose stack -- CI only"
+
+  # #15933 re-audit: left unmet on purpose, not faked. docker-smoke-test.yml
+  # needs a Docker daemon to build three images (backend/slm/frontend) and
+  # start the full compose stack via `docker compose --env-file
+  # docker/.env.docker up -d`, then health-polls for up to 15 minutes --
+  # CI budgets 45 minutes for the job overall. Not attempted here even when
+  # Docker IS available (this script never probes for a daemon, so it never
+  # claims one is absent): a run that slow defeats the fast-path premise this
+  # whole script exists for (#15932: "a preflight that takes as long as the
+  # suite changes nothing"). Reproduce manually if you want the real gate:
+  # docker compose --env-file docker/.env.docker up -d
+  skip_check "smoke-test" \
+    "needs a Docker daemon to build 3 images and start the full compose stack, health-polled up to 15 min (docker-smoke-test.yml) -- not attempted here regardless of Docker's availability, because CI's own worst case (45 min) would defeat a fast preflight; reproduce manually: docker compose --env-file docker/.env.docker up -d"
   skip_check "No open blocks-merge issues reference this PR" "reads GitHub issue state, not the working tree"
 
   # `No commit trailers` is already predicted by the commit-message section
