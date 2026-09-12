@@ -48,12 +48,11 @@ admin-role dependency.
 from __future__ import annotations
 
 import re
-import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
 
@@ -239,19 +238,15 @@ def _nginx_template_paths() -> list[Path]:
     template (a ``location`` block exists) is in scope regardless of where it
     lives, so a new proxy vhost is covered without a matching edit here.
 
-    Discovery walks ``git ls-files`` under ``scrubbed_git_env()`` rather than
-    a filesystem glob from the repo root: this repo keeps worktrees inside the
-    working copy, so a raw walk can wander into another checkout (#15955,
-    tripped by this test's own first version).
+    Discovery goes through the shared ``tracked_paths`` enumerator, which reads
+    git's index rather than walking the filesystem: this repo keeps worktrees
+    inside the working copy, so a raw walk can wander into another checkout
+    (#15955, tripped by this test's own first version), and one helper keeps
+    the anchor, the scrub and the empty-result failure decided once (#15926).
     """
-    result = subprocess.run(  # nosec B603 B607
-        ["git", "ls-files", "*.j2"], cwd=REPO_ROOT, capture_output=True, text=True, check=False, env=scrubbed_git_env()
-    )
     paths = []
-    for rel in sorted(result.stdout.splitlines()):
+    for rel in sorted(tracked_paths(REPO_ROOT, "*.j2", exclude=("node_modules",))):
         path = REPO_ROOT / rel
-        if "node_modules" in path.parts:
-            continue
         text = path.read_text(encoding="utf-8", errors="ignore")
         if re.search(r"location\s+[=~^*]*\s*[^\s{]+\s*\{", text):
             paths.append(path)
