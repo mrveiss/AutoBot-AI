@@ -161,17 +161,22 @@
   notify: restart nginx
   tags: ['frontend', 'tls']
 
-# #16020: EXISTENCE is consolidated above; this role-specific permission
-# (world-readable KEY, not just cert) stays here rather than in the shared
-# task, which does not touch the key's mode at all.
+# #16566: this used to set the key world-readable (0644 root:root) -- any
+# local user or process could read the node's TLS PRIVATE key. Two real
+# consumers need it, not one: nginx's master process (root, reads it via
+# ssl_certificate_key in nginx-frontend.conf.j2) and the autobot-frontend
+# systemd service itself (runs as frontend_user/frontend_group, not root --
+# autobot-frontend.service.j2's dev-mode `--https --key` flag), so 0600
+# root:root (nginx-only) would break the frontend service's own HTTPS
+# startup. 0640 with frontend_group as the one named group that needs it
+# covers both without the previous blanket world-readable exposure.
 - name: "Frontend | Set TLS key permissions"
   file:
     path: "{{ frontend_tls_key }}"
     owner: root
-    group: root
-    mode: '0644'
+    group: "{{ frontend_group }}"
+    mode: '0640'
   become: true
-  when: _frontend_cert_rotated
   tags: ['frontend', 'tls']
 
 - name: "Frontend | Check if package.json exists"

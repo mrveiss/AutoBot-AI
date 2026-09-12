@@ -316,6 +316,15 @@
           - "======================================================="
           - "  Target: {{ inventory_hostname }} ({{ ansible_host }})"
 
+    # #16522/#16566 review: see [PLAY 2] Backend's identical note further
+    # down -- the shared TLS cert-ensure task must be reachable from the
+    # routine fleet updater, not just full provisioning. slm_manager needs
+    # no ownership step beyond the shared task's own root:root 0600 default
+    # (that redundant step was removed from the role itself in #16020).
+    - name: "[PLAY 1] SLM | Ensure the shared node TLS cert"
+      include_tasks: "../_shared/tasks/ensure_node_tls_cert.yml"
+      tags: [slm, slm-backend]
+
     - name: "[PLAY 1] SLM | Deploy autobot-slm-backend"
       unarchive:
         src: "{{ deploy_tmp }}/slm-backend.tar.gz"
@@ -716,6 +725,36 @@
           - "  Target: {{ inventory_hostname }} ({{ ansible_host }})"
 
     # ----- Backend -----
+    # #16522/#16566 review: the shared TLS cert-ensure task ran only during
+    # full provisioning (roles/backend/tasks/main.yml), never on a routine
+    # fleet update -- an already-provisioned node whose cert expires between
+    # provisioning runs would never get it refreshed here, and the builtin
+    # updater is the only sanctioned path for that (CLAUDE.md: "System
+    # updates ... go through the builtin updater only").
+    - name: "[PLAY 2] Backend | Ensure the shared node TLS cert"
+      include_tasks: "../_shared/tasks/ensure_node_tls_cert.yml"
+      when: "'backend' in group_names"
+      tags: [backend]
+
+    # #16522: EXISTENCE is consolidated in the shared task above; the backend
+    # process reads the key as its own service user (autobot), not root like
+    # the shared task's other consumers -- matching roles/backend/tasks/main.yml's
+    # own "Set certificate key permissions" step. No cert-rotation condition
+    # needed here: "[PLAY 2] Backend | Restart service" below already restarts
+    # unconditionally on every run with the `restart` tag active.
+    - name: "[PLAY 2] Backend | Set certificate key permissions"
+      file:
+        path: "{{ item }}"
+        mode: "0600"
+        owner: autobot
+        group: autobot
+      loop:
+        - /etc/autobot/certs/server-key.pem
+        - /etc/autobot/certs/server-cert.pem
+      become: true
+      when: "'backend' in group_names"
+      tags: [backend]
+
     - name: "[PLAY 2] Backend | Deploy autobot-backend"
       unarchive:
         src: "{{ deploy_tmp }}/backend.tar.gz"
@@ -1134,6 +1173,30 @@
       tags: [backend, restart]
 
     # ----- Frontend -----
+    # #16522/#16566 review: see the Backend section's identical note above --
+    # the shared TLS cert-ensure task must be reachable from the routine
+    # fleet updater, not just full provisioning.
+    - name: "[PLAY 2] Frontend | Ensure the shared node TLS cert"
+      include_tasks: "../_shared/tasks/ensure_node_tls_cert.yml"
+      when: "'frontend' in group_names"
+      tags: [frontend]
+
+    # #16566: nginx (root) and the autobot-frontend systemd service (runs as
+    # the autobot user/group, not root -- its dev-mode --https --key flag)
+    # both need to read this key; 0640 root:autobot covers both without the
+    # world-readable mode the role's own task used to set. See
+    # roles/frontend/tasks/main.yml's "Frontend | Set TLS key permissions"
+    # for the full reasoning.
+    - name: "[PLAY 2] Frontend | Set TLS key permissions"
+      file:
+        path: /etc/autobot/certs/server-key.pem
+        mode: "0640"
+        owner: root
+        group: autobot
+      become: true
+      when: "'frontend' in group_names"
+      tags: [frontend]
+
     - name: "[PLAY 2] Frontend | Deploy autobot-frontend"
       unarchive:
         src: "{{ deploy_tmp }}/frontend.tar.gz"
