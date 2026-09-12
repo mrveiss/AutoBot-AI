@@ -197,7 +197,9 @@ _TRACKED_BY_OTHER_ISSUES = {
     # entry would be a stale record. That removal is a CONSEQUENCE of the fix,
     # which is what test_every_recorded_exemption_is_still_ungated exists to
     # force -- it failed on this exact entry the moment the gate went in.
-    "transcriber": "#15758 -- request.state.user is set nowhere in production; every caller is DEFAULT_USER",
+    # transcriber came off the same way when #15758 landed: every sub-router now
+    # carries Depends(authenticate), which resolves the caller through
+    # get_current_user, so the router is gated.
 }
 
 _ALL_EXEMPTIONS = {**_INTENTIONALLY_OPEN, **_TRACKED_BY_15745, **_TRACKED_BY_OTHER_ISSUES}

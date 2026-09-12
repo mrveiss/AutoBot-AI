@@ -10,13 +10,20 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, get_db
+from transcriber.deps import authenticate, get_db
 from transcriber.routes.projects import router as projects_router
 from transcriber.routes.recordings import router as recordings_router
+
+TEST_CALLER = "test-user"
+
+
+def _as_test_user(request: Request) -> None:
+    """Stand in for authenticate: these tests exercise ownership, not login (#15758)."""
+    request.state.user = SimpleNamespace(id=TEST_CALLER, is_admin=False)
 
 
 @pytest_asyncio.fixture
@@ -31,6 +38,7 @@ async def client(tmp_path):
 
     await db.connect()
     a.dependency_overrides[get_db] = override_db
+    a.dependency_overrides[authenticate] = _as_test_user
     a.state.transcriber_upload_dir = str(upload_dir)
     a.include_router(projects_router, prefix="/api/transcriber")
     a.include_router(recordings_router, prefix="/api/transcriber")
@@ -128,7 +136,7 @@ async def test_upload_recording_with_relative_upload_dir(tmp_path, monkeypatch):
     saved = tmp_path / rel_upload
     files = list(saved.iterdir())
     assert len(files) == 1, files
-    assert files[0].read_bytes().startswith(b"RIFF")
+    assert (await asyncio.to_thread(files[0].read_bytes)).startswith(b"RIFF")
 
     # #13861: aiosqlite's worker thread is non-daemon, so an unclosed
     # connection keeps the interpreter alive after the test passes.
@@ -205,7 +213,7 @@ async def test_upload_recording_at_limit_succeeds(client, tmp_path, monkeypatch)
     upload_dir = tmp_path / "uploads"
     files = list(upload_dir.iterdir())
     assert len(files) == 1
-    assert len(files[0].read_bytes()) == 104
+    assert len(await asyncio.to_thread(files[0].read_bytes)) == 104
 
 
 @pytest.mark.asyncio
@@ -219,7 +227,7 @@ async def test_upload_recording_cancelled_mid_write_cleans_up(tmp_path):
     upload_dir.mkdir()
     db = Database(str(tmp_path / "test.db"))
     await db.connect()
-    pid = await db.create_project("P", "", user_id=DEFAULT_USER)
+    pid = await db.create_project("P", "", user_id=TEST_CALLER)
 
     class FlakyFile:
         filename = "cancelled.wav"
@@ -235,7 +243,7 @@ async def test_upload_recording_cancelled_mid_write_cleans_up(tmp_path):
 
     request = SimpleNamespace(
         app=SimpleNamespace(state=SimpleNamespace(transcriber_upload_dir=str(upload_dir))),
-        state=SimpleNamespace(),
+        state=SimpleNamespace(user=SimpleNamespace(id=TEST_CALLER, is_admin=False)),
     )
 
     with pytest.raises(asyncio.CancelledError):
