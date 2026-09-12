@@ -183,8 +183,8 @@ class TestTheEffectOnAdminOnlyTools:
         async def _fresh():
             return None
 
-        async def _call(tool_name, bridge, endpoint, arguments):
-            return {"success": True, "result": "ran", "bridge": bridge}
+        async def _call(tool_name, bridge, endpoint, arguments, role):
+            return {"success": True, "result": "ran", "bridge": bridge, "role_seen": role}
 
         d._ensure_cache_fresh = _fresh
         d._call_bridge = _call
@@ -195,6 +195,11 @@ class TestTheEffectOnAdminOnlyTools:
         result = await self._dispatcher().dispatch("redis_flushall", {}, role="admin")
 
         assert result["success"] is True, "an admin was being denied a tool they are entitled to"
+        # #16458: _call_bridge gained a role parameter (external-bridge auth
+        # routing) -- pin that the role reaching the gate is the same one
+        # that reaches the bridge call, not just that the stub's signature
+        # happens to match.
+        assert result["role_seen"] == "admin"
 
     @pytest.mark.asyncio
     async def test_a_user_is_denied_an_admin_only_tool(self):
