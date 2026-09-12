@@ -20,6 +20,7 @@ const { pendingInvitations, refreshPendingInvitations, respondToInvitation } = u
 
 const isLoading = ref(false)
 const respondingSessionIds = ref<Set<string>>(new Set())
+const respondErrorSessionIds = ref<Set<string>>(new Set())
 
 const hasInvitations = computed(() => pendingInvitations.value.length > 0)
 
@@ -45,10 +46,13 @@ const formatInvitedAt = (iso: string): string => {
 const respond = async (sessionId: string, accept: boolean): Promise<void> => {
   if (respondingSessionIds.value.has(sessionId)) return
   respondingSessionIds.value.add(sessionId)
+  // A retry gets a clean slate rather than stacking with a stale error.
+  respondErrorSessionIds.value.delete(sessionId)
   try {
     const success = await respondToInvitation(sessionId, accept)
     if (!success) {
       logger.error(`Failed to ${accept ? 'accept' : 'decline'} invitation for session ${sessionId}`)
+      respondErrorSessionIds.value.add(sessionId)
     }
   } finally {
     respondingSessionIds.value.delete(sessionId)
@@ -94,6 +98,12 @@ onMounted(async () => {
           </div>
           <div class="text-xs text-autobot-text-muted mb-2">
             {{ $t('collaboration.invitations.invitedAt', { time: formatInvitedAt(invitation.invitedAt) }) }}
+          </div>
+          <div
+            v-if="respondErrorSessionIds.has(invitation.sessionId)"
+            class="text-xs text-red-400 mb-2"
+          >
+            {{ $t('collaboration.invitations.respondError') }}
           </div>
           <div class="flex items-center gap-2">
             <button

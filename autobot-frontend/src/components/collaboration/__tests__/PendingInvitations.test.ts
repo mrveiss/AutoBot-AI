@@ -96,4 +96,25 @@ describe('PendingInvitations (#16470)', () => {
 
     expect(respondToInvitation).toHaveBeenCalledWith('chat-9', false)
   })
+
+  it('shows an inline error when respondToInvitation resolves false, and clears it on retry (review on #16472)', async () => {
+    respondToInvitation.mockResolvedValueOnce(false)
+    pendingInvitations.value = [
+      { sessionId: 'chat-9', fromUserId: 'owner-9', permission: 'viewer', invitedAt: new Date().toISOString(), expiresAt: null }
+    ]
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    const acceptButton = wrapper.findAll('button').find(b => b.text() === 'Accept')
+    await acceptButton?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain("Couldn't process this response. Please try again.")
+
+    respondToInvitation.mockResolvedValueOnce(true)
+    await wrapper.findAll('button').find(b => b.text() === 'Accept')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain("Couldn't process this response. Please try again.")
+  })
 })

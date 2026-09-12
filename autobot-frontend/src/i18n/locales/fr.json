@@ -6476,6 +6476,7 @@
       "minutesAgo": "il y a {count} min",
       "accept": "Accepter",
       "decline": "Refuser",
+      "respondError": "Impossible de traiter cette réponse. Veuillez réessayer.",
       "bellTitle": "Invitations en attente"
     }
   },

@@ -6483,6 +6483,7 @@
       "minutesAgo": "{count}m ago",
       "accept": "Accept",
       "decline": "Decline",
+      "respondError": "Couldn't process this response. Please try again.",
       "bellTitle": "Pending invitations"
     }
   },
