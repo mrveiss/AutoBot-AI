@@ -93,14 +93,15 @@ main() {
     files=$(get_staged_python_files "$@")
 
     if [[ -z "$files" ]]; then
-        echo -e "${GREEN}No Python files staged for commit.${NC}"
+        echo -e "${GREEN}No Python files to check.${NC}"
         exit 0
     fi
 
-    # Count files for display
+    # Count files for display. Not "staged": since #16191 a --from-ref or
+    # --all-files run passes files that were never staged.
     local file_count
     file_count=$(echo "$files" | wc -l)
-    echo -e "Checking ${BOLD}${file_count}${NC} staged Python file(s)..."
+    echo -e "Checking ${BOLD}${file_count}${NC} Python file(s)..."
     echo ""
 
     # Run Python analyzer and capture exit code. GH#14151: a bare pipeline
