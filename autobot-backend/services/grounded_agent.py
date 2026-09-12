@@ -34,10 +34,12 @@ from enum import Enum
 from typing import Any, Dict, List
 from uuid import uuid4
 
+from autobot_shared.env_utils import blank_to_none
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.ssot_config import CLAIM_VERIFICATION_ENABLED
+from autobot_shared.ssot_config import CLAIM_VERIFICATION_ENABLED, config
+from constants.ttl_constants import TTL_30_DAYS
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_factory import get_or_create_knowledge_base
 from llm_shared.types import LLMType
@@ -46,6 +48,42 @@ from services.causal_inference_engine import CausalInferenceEngine
 from services.knowledge_grounding_models import VerificationMethod
 
 logger = get_logger(__name__)
+
+# #14981: TTL for the grounding:stats Redis hash real counters land in.
+_GROUNDING_STATS_KEY = "grounding:stats"
+
+
+def _resolve_grounding_stats_ttl() -> int:
+    """Return TTL seconds for the grounding:stats Redis hash."""
+    raw = blank_to_none(config.misc.grounding_stats_ttl)
+    if raw is None:
+        return TTL_30_DAYS
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_GROUNDING_STATS_TTL=%r is not an integer; falling back to %ds (30d)",
+            raw,
+            TTL_30_DAYS,
+        )
+        return TTL_30_DAYS
+    if value <= 0:
+        logger.warning(
+            "AUTOBOT_GROUNDING_STATS_TTL=%d must be positive; falling back to %ds (30d)",
+            value,
+            TTL_30_DAYS,
+        )
+        return TTL_30_DAYS
+    return value
+
+
+_GROUNDING_STATS_TTL = _resolve_grounding_stats_ttl()
+
+# #14981: the only two VerificationMethod members anything produces today
+# (services/knowledge_grounding_models.py's VerificationMethod docstring).
+# EXTERNAL_RESEARCH and CAUSAL_INFERENCE are reserved for tiers that don't
+# exist yet -- they get no counter until something writes to it.
+_PRODUCED_VERIFICATION_METHODS = (VerificationMethod.KB_LOOKUP.value, VerificationMethod.CLAIM_VERIFIER_RAG.value)
 
 
 def _make_claim_verifier(knowledge_base):
@@ -336,7 +374,53 @@ class GroundedAgent:
             requires_review,
         )
 
+        await self._record_grounding_stats(
+            claims_extracted=len(claims),
+            verified_claims=verified_claims,
+            conflicts_created=len(conflicts),
+            overall_confidence=overall_confidence,
+        )
+
         return grounded
+
+    async def _record_grounding_stats(
+        self,
+        claims_extracted: int,
+        verified_claims: List[VerifiedClaim],
+        conflicts_created: int,
+        overall_confidence: float,
+    ) -> None:
+        """Write the real ``grounding:stats`` counters GET /kb-stats reads (#14981).
+
+        Best-effort: a stats-recording failure must not fail the response the
+        caller is waiting on, matching every other Redis-optional path in this
+        module -- dropping a write here is the same quiet gap those already
+        accept, and strictly better than the hardcoded claim_sources block it
+        replaces.
+        """
+        if self.redis_client is None:
+            return
+
+        method_counts: Dict[str, int] = {}
+        for verified in verified_claims:
+            if verified.verification_method in _PRODUCED_VERIFICATION_METHODS:
+                method_counts[verified.verification_method] = method_counts.get(verified.verification_method, 0) + 1
+
+        try:
+            async with self.redis_client.pipeline() as pipe:
+                await pipe.hincrby(_GROUNDING_STATS_KEY, "total_responses_grounded", 1)
+                await pipe.hincrby(_GROUNDING_STATS_KEY, "total_claims_extracted", claims_extracted)
+                await pipe.hincrby(_GROUNDING_STATS_KEY, "claims_verified_count", len(verified_claims))
+                await pipe.hincrbyfloat(_GROUNDING_STATS_KEY, "confidence_sum", overall_confidence)
+                await pipe.hincrby(_GROUNDING_STATS_KEY, "conflicts_created", conflicts_created)
+                for method in _PRODUCED_VERIFICATION_METHODS:
+                    count = method_counts.get(method, 0)
+                    if count:
+                        await pipe.hincrby(_GROUNDING_STATS_KEY, f"claim_source_{method}", count)
+                await pipe.expire(_GROUNDING_STATS_KEY, _GROUNDING_STATS_TTL)
+                await pipe.execute()
+        except Exception as exc:
+            logger.warning("Failed to record grounding stats: %s", exc)
 
     async def _extract_claims(self, query: str, response: str) -> List[Claim]:
         """
@@ -646,6 +730,14 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
                 "status": ConflictResolution.RESOLVED.value,
             },
         )
+
+        # #14981: best-effort, like _record_grounding_stats -- the resolution
+        # above already persisted; a stats-counter hiccup must not undo that.
+        try:
+            await redis.hincrby(_GROUNDING_STATS_KEY, "conflicts_resolved", 1)
+            await redis.expire(_GROUNDING_STATS_KEY, _GROUNDING_STATS_TTL)
+        except Exception as exc:
+            logger.warning("Failed to record conflicts_resolved for %s: %s", conflict_id, exc)
 
         return {
             "status": "success",

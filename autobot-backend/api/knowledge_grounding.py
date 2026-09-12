@@ -441,13 +441,19 @@ async def get_stats(
 
     Returns metrics on grounding operations:
     - % of claims verified
-    - % from KB vs research vs causal inference
-    - Top unverifiable claims
-    - Conflict resolution time
+    - % by verification method (methods with no producer yet are absent, not zero)
+    - Conflicts created/resolved
     - Overall confidence trends
 
+    #14981: every field below is a real counter written by GroundedAgent
+    (respond_with_grounding, resolve_conflict), read since the hash was last
+    created or its TTL last refreshed -- not yet windowed by `period`.
+    `avg_resolution_time_hours` and `top_unverifiable` were promised here but
+    never implemented or returned; dropped rather than left as more
+    undelivered promises (#16421 if wanted).
+
     Query params:
-    - period: 1h|24h|7d|30d (default: 24h)
+    - period: 1h|24h|7d|30d (default: 24h; accepted, not yet applied -- see above)
 
     Response:
     ```json
@@ -458,17 +464,12 @@ async def get_stats(
         "total_claims_extracted": 8204,
         "claims_verified": 0.87,
         "claim_sources": {
-            "kb_lookup": 0.65,
-            "external_research": 0.22,
-            "causal_inference": 0.13
+            "kb_lookup": 0.74,
+            "claim_verifier_rag": 0.26
         },
         "average_confidence": 0.89,
         "conflicts_created": 142,
-        "conflicts_resolved": 128,
-        "avg_resolution_time_hours": 2.3,
-        "top_unverifiable": [
-            {"claim": "...", "count": 12}
-        ]
+        "conflicts_resolved": 128
     }
     ```
 
@@ -484,39 +485,40 @@ async def get_stats(
 
     redis = await get_async_redis_client()
 
-    # Get stats from Redis (simplified - production would use time-series data)
+    # #14981: every field below is now a real counter GroundedAgent writes
+    # (respond_with_grounding, resolve_conflict) -- an absent hash means no
+    # response has been grounded yet, not a producer that was never wired.
     try:
         stats_data = await redis.hgetall("grounding:stats")
 
-        # The shared client is decode_responses=True, so hgetall yields str keys.
-        # These probes used bytes literals and only appeared to work because the
-        # empty-hash fallback below was itself bytes-keyed: the moment a writer
-        # for grounding:stats exists, every field would silently read 0 (#13278).
-        if not stats_data:
-            # Return empty stats structure
-            stats_data = {
-                "total_responses_grounded": "0",
-                "total_claims_extracted": "0",
-                "claims_verified": "0",
-                "average_confidence": "0",
-            }
+        total_claims_extracted = int(decode_redis_value(stats_data.get("total_claims_extracted")) or 0)
+        total_responses_grounded = int(decode_redis_value(stats_data.get("total_responses_grounded")) or 0)
+        claims_verified_count = int(decode_redis_value(stats_data.get("claims_verified_count")) or 0)
+        confidence_sum = float(decode_redis_value(stats_data.get("confidence_sum")) or 0)
+
+        # #14981: only the two VerificationMethod members anything produces
+        # today. The reserved EXTERNAL_RESEARCH/CAUSAL_INFERENCE tiers get no
+        # key here until something writes to their counter -- a key that can
+        # only ever read 0 is the same fabricated-measurement shape this
+        # issue exists to remove, just spelled "0.0" instead of "0.13".
+        produced_methods = (VerificationMethod.KB_LOOKUP.value, VerificationMethod.CLAIM_VERIFIER_RAG.value)
+        method_counts = {
+            method: int(decode_redis_value(stats_data.get(f"claim_source_{method}")) or 0)
+            for method in produced_methods
+        }
+        methods_total = sum(method_counts.values())
+        claim_sources = (
+            {method: count / methods_total for method, count in method_counts.items() if count} if methods_total else {}
+        )
 
         return {
             "status": "success",
             "period": period,
-            "total_responses_grounded": int(decode_redis_value(stats_data.get("total_responses_grounded")) or 0),
-            "total_claims_extracted": int(decode_redis_value(stats_data.get("total_claims_extracted")) or 0),
-            "claims_verified": float(decode_redis_value(stats_data.get("claims_verified")) or 0),
-            # #14981: these ratios are still hardcoded, not derived from real
-            # per-method counts — that fabrication is a separate bug. #15005
-            # only removes the bare-literal keys; VerificationMethod gives
-            # #14981's fix the rungs to key its real counts on.
-            "claim_sources": {
-                VerificationMethod.KB_LOOKUP.value: 0.65,
-                VerificationMethod.EXTERNAL_RESEARCH.value: 0.22,
-                VerificationMethod.CAUSAL_INFERENCE.value: 0.13,
-            },
-            "average_confidence": float(decode_redis_value(stats_data.get("average_confidence")) or 0),
+            "total_responses_grounded": total_responses_grounded,
+            "total_claims_extracted": total_claims_extracted,
+            "claims_verified": (claims_verified_count / total_claims_extracted) if total_claims_extracted else 0.0,
+            "claim_sources": claim_sources,
+            "average_confidence": (confidence_sum / total_responses_grounded) if total_responses_grounded else 0.0,
             "conflicts_created": int(decode_redis_value(stats_data.get("conflicts_created")) or 0),
             "conflicts_resolved": int(decode_redis_value(stats_data.get("conflicts_resolved")) or 0),
         }
