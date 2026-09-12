@@ -5014,6 +5014,14 @@
       "roleEditor": "Editor",
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
+    },
+    "panel": {
+      "title": "שיתוף פעולה",
+      "invite": "הזמן",
+      "closePanel": "סגור פאנל",
+      "tabParticipants": "משתתפים",
+      "tabActivity": "פעילות",
+      "tabNotifications": "התראות"
     }
   },
   "chat": {

@@ -31,6 +31,31 @@ export interface SessionParticipantsResponse {
   total_count: number
 }
 
+export interface SessionInviteResponse {
+  success: boolean
+  session_id: string
+  invited_user_id: string
+  permission: string
+}
+
+export interface SessionRemoveResponse {
+  success: boolean
+  session_id: string
+  removed_user_id: string
+}
+
+export interface SessionShareSecretResponse {
+  success: boolean
+  secret_id: string
+  shared_with_count: number
+}
+
+export interface SessionPresenceResponse {
+  session_id: string
+  online_users: string[]
+  count: number
+}
+
 class ApiService {
   private client: typeof apiClient
 
@@ -105,9 +130,42 @@ class ApiService {
     return this.delete(`${getApiBase()}/chats/${chatId}`)
   }
 
-  // Session Collaboration API (Issue #3986)
+  // Session Collaboration API (Issue #3986; #16443 added the remaining
+  // api/collaboration.py endpoints -- invite/remove/share/presence)
   async getSessionParticipants(sessionId: string): Promise<SessionParticipantsResponse> {
     return this.get<SessionParticipantsResponse>(`${getApiBase()}/sessions/${sessionId}/participants`)
+  }
+
+  async inviteToSession(
+    sessionId: string,
+    userId: string,
+    permission: 'editor' | 'viewer'
+  ): Promise<SessionInviteResponse> {
+    return this.post<SessionInviteResponse>(`${getApiBase()}/sessions/${sessionId}/invite`, {
+      user_id: userId,
+      permission
+    })
+  }
+
+  async removeFromSession(sessionId: string, userId: string): Promise<SessionRemoveResponse> {
+    return this.post<SessionRemoveResponse>(`${getApiBase()}/sessions/${sessionId}/remove`, {
+      user_id: userId
+    })
+  }
+
+  async shareSecretWithSession(
+    sessionId: string,
+    secretId: string,
+    participantIds?: string[]
+  ): Promise<SessionShareSecretResponse> {
+    return this.post<SessionShareSecretResponse>(`${getApiBase()}/sessions/${sessionId}/secrets/share`, {
+      secret_id: secretId,
+      participant_ids: participantIds ?? null
+    })
+  }
+
+  async getSessionPresence(sessionId: string): Promise<SessionPresenceResponse> {
+    return this.get<SessionPresenceResponse>(`${getApiBase()}/sessions/${sessionId}/presence`)
   }
 
   // Workflow API
