@@ -1,6 +1,6 @@
 # Document processing and text extraction
 python-docx==1.2.0
-pypdf==6.17.0
+pypdf==6.18.0
 reportlab>=5.0.1            # MVA-2174: PDF export for transcripts
 # #15600: `markdown` was declared here and required by nothing. It is the
 # mirror image of the nltk entry below, and the same instrument settled both:
@@ -35,7 +35,7 @@ pdfplumber>=0.11.10         # PDF table extraction (#14232); see the note above 
 # #14551: production dep (autobot-backend/requirements.txt, Live Canvas
 # HTML->PDF export). transcriber/tests/test_export_api.py gates on
 # pytest.importorskip("weasyprint") — silently skipping without this.
-weasyprint>=69.0
+weasyprint>=70.0
 # #14551: production dep (autobot-backend/requirements.txt, #10932 content-reach
 # readable-article extraction, lazy). tests/content_reach/sources/test_web_page.py
 # gates on pytest.importorskip("trafilatura") — silently skipping without this.
