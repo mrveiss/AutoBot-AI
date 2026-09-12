@@ -169,12 +169,19 @@ class SSETransport(MCPTransport):
     internally so ``receive()`` can yield them in order.
     """
 
-    def __init__(self, base_url: str, timeout: float = 30.0, guard_egress: bool | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 30.0,
+        guard_egress: bool | None = None,
+        extra_headers: Dict[str, str] | None = None,
+    ) -> None:
         """Initialise with the base URL of the SSE-capable MCP server."""
         # Normalise sse:// → https://
         self._base_url = base_url.replace("sse://", "https://", 1)
         self._timeout = timeout
         self._guard_egress = guard_egress
+        self._extra_headers = extra_headers or {}
         self._session: aiohttp.ClientSession | None = None
         self._queue: asyncio.Queue = asyncio.Queue()
         self._sse_task: asyncio.Task | None = None
@@ -204,7 +211,7 @@ class SSETransport(MCPTransport):
         """Background task: stream SSE events into the internal queue."""
         assert self._session is not None
         url = f"{self._base_url}/sse"
-        headers = {"Accept": "text/event-stream", "Cache-Control": "no-cache"}
+        headers = {"Accept": "text/event-stream", "Cache-Control": "no-cache", **self._extra_headers}
         try:
             async with self._session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=None)) as resp:
                 if resp.status != 200:
@@ -230,7 +237,12 @@ class SSETransport(MCPTransport):
             raise RuntimeError("SSETransport not connected")
         url = f"{self._base_url}/message"
         await _check_egress(url, self._guard_egress)
-        async with self._session.post(url, json=request, timeout=aiohttp.ClientTimeout(total=self._timeout)) as resp:
+        async with self._session.post(
+            url,
+            json=request,
+            headers=self._extra_headers or None,
+            timeout=aiohttp.ClientTimeout(total=self._timeout),
+        ) as resp:
             if resp.status not in (200, 202):
                 raise aiohttp.ClientResponseError(resp.request_info, resp.history, status=resp.status)
         logger.debug("SSETransport: sent method=%s", request.get("method"))
@@ -274,11 +286,18 @@ class HTTPTransport(MCPTransport):
     from multiple coroutines without shared session state.
     """
 
-    def __init__(self, base_url: str, timeout: float = 10.0, guard_egress: bool | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 10.0,
+        guard_egress: bool | None = None,
+        extra_headers: Dict[str, str] | None = None,
+    ) -> None:
         """Initialise with the base URL of the MCP HTTP server."""
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._guard_egress = guard_egress
+        self._extra_headers = extra_headers
         # Pending response stored between send() and receive()
         self._pending: Dict[str, Any] | None = None
 
@@ -291,6 +310,7 @@ class HTTPTransport(MCPTransport):
             "POST",
             f"{self._base_url}/rpc",
             json=request,
+            headers=self._extra_headers,
             timeout=aiohttp.ClientTimeout(total=self._timeout),
             guard_egress=self._guard_egress,
         ) as resp:
@@ -328,11 +348,18 @@ class StreamableHTTPTransport(MCPTransport):
     :class:`SSETransport` for servers that need them.
     """
 
-    def __init__(self, base_url: str, timeout: float = 30.0, guard_egress: bool | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 30.0,
+        guard_egress: bool | None = None,
+        extra_headers: Dict[str, str] | None = None,
+    ) -> None:
         """Initialise with the literal MCP endpoint URL (no path is appended)."""
         self._base_url = base_url
         self._timeout = timeout
         self._guard_egress = guard_egress
+        self._extra_headers = extra_headers or {}
         self._session_id: str | None = None
         self._pending: Dict[str, Any] | None = None
 
@@ -341,7 +368,7 @@ class StreamableHTTPTransport(MCPTransport):
 
     async def send(self, request: Dict[str, Any]) -> None:
         """POST the JSON-RPC request; buffer its JSON or SSE-framed response for receive()."""
-        headers = {"Accept": "application/json, text/event-stream"}
+        headers = {"Accept": "application/json, text/event-stream", **self._extra_headers}
         if self._session_id:
             headers["Mcp-Session-Id"] = self._session_id
 
@@ -395,7 +422,7 @@ class StreamableHTTPTransport(MCPTransport):
             async with get_http_client().tracked_request(
                 "DELETE",
                 self._base_url,
-                headers={"Mcp-Session-Id": self._session_id},
+                headers={**self._extra_headers, "Mcp-Session-Id": self._session_id},
                 timeout=aiohttp.ClientTimeout(total=self._timeout),
                 guard_egress=self._guard_egress,
             ):
@@ -412,7 +439,12 @@ class StreamableHTTPTransport(MCPTransport):
 # ---------------------------------------------------------------------------
 
 
-def create_transport(server_uri: str, timeout: float = 30.0, guard_egress: bool | None = None) -> MCPTransport:
+def create_transport(
+    server_uri: str,
+    timeout: float = 30.0,
+    guard_egress: bool | None = None,
+    extra_headers: Dict[str, str] | None = None,
+) -> MCPTransport:
     """Return the correct MCPTransport for *server_uri*.
 
     Scheme detection:
@@ -427,18 +459,28 @@ def create_transport(server_uri: str, timeout: float = 30.0, guard_egress: bool 
     streamable-HTTP) transports — ``None`` (default) means no egress
     guarding, unchanged from every existing caller. A caller reaching a
     user-configured remote server should pass an explicit ``True``/``False``.
+
+    ``extra_headers`` (#11542) are merged into every outbound request on the
+    remote transports — e.g. an ``Authorization`` header built from a stored
+    credential. ``StdioTransport`` ignores it; it has no HTTP headers.
     """
     if server_uri.startswith("stdio://"):
         command = server_uri[len("stdio://") :]
         return StdioTransport(command, timeout=timeout)
     if server_uri.startswith("sse://"):
-        return SSETransport(server_uri, timeout=timeout, guard_egress=guard_egress)
+        return SSETransport(server_uri, timeout=timeout, guard_egress=guard_egress, extra_headers=extra_headers)
     if server_uri.startswith("streamable-http://"):
         return StreamableHTTPTransport(
-            "http://" + server_uri[len("streamable-http://") :], timeout=timeout, guard_egress=guard_egress
+            "http://" + server_uri[len("streamable-http://") :],
+            timeout=timeout,
+            guard_egress=guard_egress,
+            extra_headers=extra_headers,
         )
     if server_uri.startswith("streamable-https://"):
         return StreamableHTTPTransport(
-            "https://" + server_uri[len("streamable-https://") :], timeout=timeout, guard_egress=guard_egress
+            "https://" + server_uri[len("streamable-https://") :],
+            timeout=timeout,
+            guard_egress=guard_egress,
+            extra_headers=extra_headers,
         )
-    return HTTPTransport(server_uri, timeout=timeout, guard_egress=guard_egress)
+    return HTTPTransport(server_uri, timeout=timeout, guard_egress=guard_egress, extra_headers=extra_headers)
