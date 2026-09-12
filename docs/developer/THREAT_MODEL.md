@@ -82,7 +82,7 @@ the one read-side gate · `validate_ownership` (:613).
 **Canonical enforcement:** every route in
 [`autobot-backend/plugin_manager.py`](../../autobot-backend/plugin_manager.py) carries a
 `Depends` on [`auth_middleware.py`](../../autobot-backend/auth_middleware.py)
-`check_admin_permission` (:972).
+`check_admin_permission` (:967).
 Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-backend/archive_safety.py)
 — `validate_zip_metadata` (:27), `safe_extract` (:58), `MAX_UPLOAD_BYTES` (:19).
 
@@ -112,7 +112,7 @@ AES-GCM + PBKDF2 for data at rest · [`autobot_shared/field_encryption.py`](../.
 `encrypt_field`/`decrypt_field` for single columns ·
 [`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py)
 `ConnectorCredentialStore` (:178) for connector/OAuth creds, ownership via `_require_owner` (:604) ·
-[`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:959)
+[`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:954)
 for service-to-service.
 
 **Invariants**
@@ -129,6 +129,10 @@ for service-to-service.
   Exception text counts; a boto3 `ClientError` carries the account number in an ARN (#15324).
 - Keys come from SSOT config, never a literal. A default value for an encryption key is a
   finding even when production overrides it via env var.
+- The password-epoch revocation check fails closed (#16411, owner decision; the SLM's rule since #16387):
+  when Redis cannot answer, `get_password_epoch` raises `RevocationCheckUnavailable`, a `ConnectionError`,
+  and [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401. An `except` around
+  it that returns "not revoked" is a fail-open.
 
 ## Cross-cutting
 

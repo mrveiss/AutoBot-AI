@@ -17,6 +17,7 @@ from typing import Dict, Tuple
 
 from fastapi import HTTPException, Request, status
 
+from auth_revocation import reject_if_revoked_by_password_change
 from autobot_shared.auth.jwt_core import (
     decode_jwt_multi,
     encode_jwt,
@@ -29,9 +30,6 @@ from autobot_shared.principal import resolve_principal_id  # noqa: F401  (re-exp
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import parse_utc_iso
-from autobot_shared.user_management.password_epoch import (
-    is_token_revoked_by_password_change,
-)
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
@@ -128,6 +126,21 @@ class AuthenticationMiddleware:
         """
         return ssot_config.path.data_path / "service-keys" / "jwt_rsa_private.pem"
 
+    @staticmethod
+    def _write_jwt_key_file(key_file: Path, pem: str) -> None:
+        """Write PEM to the durable key file with mode 0600 (``_get_rs256_keypair``)."""
+        try:
+            key_file.parent.mkdir(parents=True, exist_ok=True)
+            key_file.write_text(pem, encoding="utf-8")
+            os.chmod(key_file, 0o600)
+            logger.info("RS256 private key written to durable file %s", key_file)
+        except Exception as exc:
+            logger.error(
+                "Failed to write RS256 key to %s: %s — key will be ephemeral this session",
+                key_file,
+                exc,
+            )
+
     def _get_rs256_keypair(self) -> Tuple[str, str, str]:
         """Load or auto-generate the RS256 keypair for signing user JWTs (#10196).
 
@@ -170,20 +183,6 @@ class AuthenticationMiddleware:
                 backend=default_backend(),
             )
 
-        def _write_key_file(pem: str) -> None:
-            """Write PEM to the durable file with mode 0600."""
-            try:
-                key_file.parent.mkdir(parents=True, exist_ok=True)
-                key_file.write_text(pem, encoding="utf-8")
-                os.chmod(key_file, 0o600)
-                logger.info("RS256 private key written to durable file %s", key_file)
-            except Exception as exc:
-                logger.error(
-                    "Failed to write RS256 key to %s: %s — key will be ephemeral this session",
-                    key_file,
-                    exc,
-                )
-
         # Tier 1: env var
         pem_private = ssot_config.misc.jwt_private_key
         if pem_private:
@@ -218,7 +217,7 @@ class AuthenticationMiddleware:
             try:
                 private_key = _load_pem(stored_pem)
                 # Migrate to the durable file so the next restart reuses it
-                _write_key_file(stored_pem)
+                self._write_jwt_key_file(key_file, stored_pem)
                 logger.info("RS256 keypair migrated from security config to durable file")
                 return stored_pem, _derive_public(private_key), kid
             except Exception as exc:
@@ -241,7 +240,7 @@ class AuthenticationMiddleware:
         ).decode("utf-8")
         pem_public = _derive_public(private_key)
 
-        _write_key_file(pem_private)
+        self._write_jwt_key_file(key_file, pem_private)
 
         return pem_private, pem_public, kid
 
@@ -902,13 +901,9 @@ async def get_current_user(request: Request) -> Dict:
         # #12924: a token minted before its subject's password changed is no
         # longer valid. This is the first point on the request path that can
         # await, which is why the check lives here rather than in the
-        # synchronous extraction above.
-        if user_data.get("auth_method") == "jwt" and await is_token_revoked_by_password_change(user_data):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token is no longer valid — password was changed. Please sign in again.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        # synchronous extraction above. A check that cannot run denies (#16411).
+        if user_data.get("auth_method") == "jwt":
+            await reject_if_revoked_by_password_change(user_data)
 
         return user_data
 
