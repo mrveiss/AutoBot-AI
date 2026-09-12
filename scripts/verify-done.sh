@@ -6,7 +6,7 @@
 # Issue: #13879 (rebuild of the implementation removed in #13877)
 #
 #   --branch <name>    branch to judge (default: current)
-#   --base <ref>       integration branch (default: origin/Dev_new_gui)
+#   --base <ref>       integration branch (default: origin/main)
 #   --leftovers-only   audit stranded worktrees only
 #
 # Exit 0 = verified. Anything else = not done.
@@ -25,7 +25,7 @@
 
 set -uo pipefail
 
-BASE="${VERIFY_DONE_BASE:-origin/Dev_new_gui}"
+BASE="${VERIFY_DONE_BASE:-origin/main}"
 BRANCH=""
 LEFTOVERS_ONLY=0
 
@@ -252,7 +252,7 @@ if [ "$LEFTOVERS_ONLY" -eq 0 ]; then
   echo
   echo "[2] branch is not an integration branch"
   case "$BRANCH" in
-    main|master|Dev_new_gui) fail "'$BRANCH' is protected — work belongs on a feature branch" ;;
+    main|master|release) fail "'$BRANCH' is protected — work belongs on a feature branch" ;;
     "")                      fail "detached HEAD — no branch to verify" ;;
     *)                       ok "'$BRANCH'" ;;
   esac
@@ -329,7 +329,7 @@ else
       SEEN=$((SEEN+1)); info "detached HEAD at $dir — no branch to compare; cannot audit"
       continue
     fi
-    case "$wb" in main|master|Dev_new_gui) continue ;; esac
+    case "$wb" in main|master|release) continue ;; esac
     SEEN=$((SEEN+1))
 
     branch_state "$dir" "$wb"; bs=$?

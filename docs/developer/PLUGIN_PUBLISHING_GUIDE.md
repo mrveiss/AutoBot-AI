@@ -42,7 +42,7 @@ Every plugin must have a `plugin.json` manifest at the root of its directory. Th
     },
     "required": ["api_key"]
   },
-  "source_url": "https://github.com/mrveiss/AutoBot-AI/tree/Dev_new_gui/plugins/core-plugins/my-plugin"
+  "source_url": "https://github.com/mrveiss/AutoBot-AI/tree/main/plugins/core-plugins/my-plugin"
 }
 ```
 
@@ -151,7 +151,7 @@ The current catalog is self-hosted — there is no remote registry. To add a plu
    redis-cli -n 0 DEL marketplace:catalog
    ```
 
-5. File a GitHub issue linking the plugin to `#1803` as context, then open a PR targeting `Dev_new_gui`.
+5. File a GitHub issue linking the plugin to `#1803` as context, then open a PR targeting `main`.
 
 ### Valid categories
 
@@ -322,7 +322,7 @@ The planned upgrade path:
 3. **Community submissions** — a GitHub-based submission flow where plugin authors open a PR to a `community-registry` repository, triggering automated manifest validation and security scanning.
 4. **Per-org install namespacing** — replace the single `marketplace:installed` Set with `marketplace:installed:<org_id>` Sets once multi-org support lands (issue #4451).
 
-For now, to publish a plugin: open a PR to `Dev_new_gui` adding the plugin under `plugins/core-plugins/` and a catalog entry in `marketplace.py`.
+For now, to publish a plugin: open a PR to `main` adding the plugin under `plugins/core-plugins/` and a catalog entry in `marketplace.py`.
 
 ---
 

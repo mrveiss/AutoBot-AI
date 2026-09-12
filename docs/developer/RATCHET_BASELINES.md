@@ -34,13 +34,13 @@ Every count below is labelled with its scope and predicate, because this page's
 own subject is numbers that do not carry the frame they depend on — and an
 earlier draft presented these without one.
 
-All figures are measured against **`origin/Dev_new_gui`** on the date of the
+All figures are measured against **`origin/main`** on the date of the
 commit that introduced them, over the **whole of git history on that branch**
 (12,786 commits) unless stated otherwise.
 
 | Cluster | Predicate | Population |
 |---|---|---|
-| 2,426 · 7,087 · 7,373 · 5,033 | `no-commit-trailers.yml:79-95`, applied as the workflow applies it — `grep -iE`, owner and bot identity exemptions | commits on `Dev_new_gui` |
+| 2,426 · 7,087 · 7,373 · 5,033 | `no-commit-trailers.yml:79-95`, applied as the workflow applies it — `grep -iE`, owner and bot identity exemptions | commits on `main` |
 | 497 · 501 · 499 · 5,574 · 5,244 · 47 | `check_python_file_size.py`'s walk, `EXCLUDED_PREFIXES` applied, `MAX_LINES = 600` | tracked `.py` files |
 | 8 · 26 · 35 · 246 · 464 | #15896's citation filter versus its `tokenize.STRING` re-derivation | `repo_tests/*.py` |
 
@@ -189,7 +189,7 @@ it: deleting unrelated code, or splitting a file.
 ## Worked example — the one that passes
 
 `repo_tests/python_file_size_ratchet_baseline.py`, measured against
-`origin/Dev_new_gui`:
+`origin/main`:
 
 | | |
 |---|---|

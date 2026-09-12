@@ -10,13 +10,13 @@ Self-healing commit sequence that formats, stages, commits, and verifies — ret
 ## Step 1 — Pre-flight state check
 
 ```bash
-git branch --show-current        # Must NOT be main/Dev_new_gui directly
+git branch --show-current        # Must NOT be release/main directly
 git status                       # Identify all modified/untracked files
 git diff --staged --name-only    # What's already staged?
 git stash list                   # Warn if stashes exist
 ```
 
-If on `main` or `Dev_new_gui` directly: **STOP** and ask user.
+If on `release` or `main` directly: **STOP** and ask user.
 
 ## Step 2 — Auto-format Python files
 

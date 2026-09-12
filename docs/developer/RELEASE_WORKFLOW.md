@@ -17,14 +17,14 @@ How AutoBot versions, tags, and changelogs are produced. Issue refs: #1296 (desi
 
 | Piece | Path | Role |
 | --- | --- | --- |
-| Trigger workflow | `.github/workflows/release.yml` | Fires on every push to `main` |
+| Trigger workflow | `.github/workflows/release.yml` | Fires on every push to `release` |
 | Generator config | `cliff.toml` | git-cliff template, commit parsers, `tag_pattern = "v[0-9].*"`, SemVer bump rules |
 | Full history index | `CHANGELOG.md` (repo root) | Auto-generated wholesale by git-cliff — **never hand-edit entries** |
 | Human-written fragments | `changelog/unreleased/*.md` | One file per notable PR (copy `TEMPLATE.md`, name `{issue}-{slug}.md`) |
 | Fragment compiler | `scripts/compile_changelog.py` | Merges fragments + git-cliff notes into `changelog/{version}.md` at release time |
 | Per-version notes | `changelog/{version}.md` + `changelog/_index.md` | Release-notes body for the GitHub Release |
 
-## What happens on a push to `main`
+## What happens on a push to `release`
 
 1. **Determine next version** — `orhun/git-cliff-action` runs `git-cliff --bumped-version`: scans conventional commits since the last `v*` tag (`feat` → minor, `fix` → patch, breaking → major).
 2. **Check if release needed** — reads the bumped version from the action's `content` output, validates `^v[0-9]+\.[0-9]+\.[0-9]+$`, and skips if that tag already exists (no bump → git-cliff echoes the *current* version).
@@ -33,7 +33,7 @@ How AutoBot versions, tags, and changelogs are produced. Issue refs: #1296 (desi
 5. **Regenerate `CHANGELOG.md`** — git-cliff rewrites the full history index from scratch.
 6. **Commit + tag + release** — bot commits the changelog files, tags `vX.Y.Z`, pushes, and creates a (prerelease) GitHub Release with the compiled notes as body.
 
-`main` only receives pushes via `Dev_new_gui` promotions and Dependabot security merges, so releases are cut at promotion time.
+`release` only receives pushes via `main` promotions (Dependabot security merges now land on `main` directly, like everything else, since `main` is the default branch), so releases are cut at promotion time.
 
 ## Why CHANGELOG.md went stale (2026-03-01 → 2026-06-13)
 
@@ -62,4 +62,4 @@ re-tagging an existing version.
 - **Never hand-edit `CHANGELOG.md` entries** — the next release regenerates the whole file; manual edits are lost.
 - **Add a fragment** under `changelog/unreleased/` for user-visible changes; that text becomes the headline of the release notes.
 - **Conventional commits are load-bearing** — non-conforming subjects are invisible to the changelog and to version bumping.
-- **Verify after a promotion to `main`**: `gh run list --workflow=release.yml --limit 1` then check the job's "Check if release needed" step actually printed `Next version: vX.Y.Z` — a green run alone does not mean a release happened.
+- **Verify after a promotion to `release`**: `gh run list --workflow=release.yml --limit 1` then check the job's "Check if release needed" step actually printed `Next version: vX.Y.Z` — a green run alone does not mean a release happened.

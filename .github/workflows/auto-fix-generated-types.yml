@@ -244,6 +244,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          WATCHDOG_BASE_BRANCH: Dev_new_gui
+          WATCHDOG_BASE_BRANCH: main
           WATCHDOG_ONLY_PR: ${{ github.event.pull_request.number }}
         run: python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch

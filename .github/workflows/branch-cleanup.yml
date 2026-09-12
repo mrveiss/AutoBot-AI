@@ -6,7 +6,7 @@
 # 3. Clean up stale worktrees
 #
 # Preserves:
-# - Main development branches (main, Dev_new_gui)
+# - Main development branches (main, release)
 # - Branches with active work or recent commits
 # - Protected branches
 #
@@ -73,7 +73,7 @@ jobs:
           set -euo pipefail
           # Shared safe-pruning guards (recency, open-PR) -- see #10035.
           source scripts/lib/branch-guards.sh
-          BASE_BRANCH="Dev_new_gui"
+          BASE_BRANCH="main"
           DAYS_OLD=7
           CUTOFF_DATE=$(date -d "$DAYS_OLD days ago" +%s)
           deleted_count=0
@@ -81,10 +81,11 @@ jobs:
 
           echo "Looking for merged branches older than $DAYS_OLD days..."
 
-          # Get all branches merged into Dev_new_gui (ancestor-based, never
+          # Get all branches merged into main (ancestor-based, never
           # patch-equivalence -- #10035).
+          # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
           merged_branches=$(git branch -r --merged "origin/$BASE_BRANCH" \
-            | grep -v "HEAD\|$BASE_BRANCH\|main\|master" \
+            | grep -v "HEAD\|$BASE_BRANCH\|release\|master\|Dev_new_gui" \
             | sed 's|^ *origin/||' || true)
 
           if [ -z "$merged_branches" ]; then
@@ -149,9 +150,10 @@ jobs:
           echo "Looking for branches tied to closed issues..."
 
           # Get all remote branches with issue numbers
+          # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
           remote_branches=$(git branch -r \
             | sed 's|^ *origin/||' \
-            | grep -v "HEAD\|main\|master\|Dev_new_gui" || true)
+            | grep -v "HEAD\|release\|master\|main\|Dev_new_gui" || true)
 
           if [ -z "$remote_branches" ]; then
             echo "  No candidate branches found."

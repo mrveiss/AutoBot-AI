@@ -67,7 +67,7 @@ REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 # sync-to-vm.sh deploys the working tree (including uncommitted code).
 # For production deploys, use update-all-nodes.yml (git archive based).
 # =============================================================================
-ALLOWED_BRANCHES=("Dev_new_gui" "main")
+ALLOWED_BRANCHES=("main" "release")
 SKIP_GIT_CHECK="${SKIP_GIT_CHECK:-false}"
 
 git_safety_check() {

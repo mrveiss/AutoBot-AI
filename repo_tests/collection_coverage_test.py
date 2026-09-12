@@ -194,7 +194,7 @@ INTENTIONALLY_UNCOLLECTED = {
 #: is not a record of today's number -- a growing exclusion is a tree quietly
 #: falling out of CI, which is the whole defect #13653 and #15018 recorded, and
 #: without a ceiling the allowlist absorbs it silently. Measured on
-#: Dev_new_gui after the autobot-frontend and autobot-infrastructure/shared/tests
+#: main after the autobot-frontend and autobot-infrastructure/shared/tests
 #: mis-classifications moved to NARROWLY_COLLECTED (#15178); the frontend entry
 #: alone had been inflating this by 1 and shared/tests by 5.
 #: NEVER raise one to make this pass.
@@ -207,14 +207,14 @@ _UNCOLLECTED_CEILINGS = {
 #: Floor under the SUBJECT, not the finding. Every count above is derived from
 #: `_tracked_test_files()`, so a pathspec that collapses to nothing reports zero
 #: exclusions and a perfectly clean tree -- the exact failure #15018 recorded,
-#: one layer up. Measured 2110 on Dev_new_gui; recorded ~10% under so ordinary
+#: one layer up. Measured 2110 on main; recorded ~10% under so ordinary
 #: consolidation does not trip it. Raise as the tree grows; never lower.
 _MIN_TRACKED_TEST_FILES = 1900
 
 #: Minimum tracked files each half of ``python_files`` must match. The floor
 #: that existed before #15018 was on the COMBINED list, which ``*_test.py``
 #: alone kept non-empty while ``test_*.py`` matched zero for months. Only a
-#: per-half floor can see that. Measured on Dev_new_gui: ``test_*.py`` -> 878,
+#: per-half floor can see that. Measured on main: ``test_*.py`` -> 878,
 #: ``*_test.py`` -> 1174; recorded ~10% under so that ordinary consolidation
 #: does not trip the guard. Raise these as the tree grows. NEVER lower one to
 #: make this pass -- a half whose count collapsed is a broken pathspec, which
@@ -470,7 +470,7 @@ def test_every_test_file_is_accounted_for() -> None:
     assert not unaccounted, (
         "these test files are collected by no pytest invocation and are not on "
         "INTENTIONALLY_UNCOLLECTED — add them to ci.yml's collection list, or to "
-        f"the allowlist with a reason:\n  " + "\n  ".join(unaccounted)
+        "the allowlist with a reason:\n  " + "\n  ".join(unaccounted)
     )
 
 
@@ -484,7 +484,7 @@ def test_no_test_file_sits_at_the_repository_root() -> None:
 
     assert not root_level, (
         "test files at the repository root are collected by nothing — move them "
-        f"beside their subject:\n  " + "\n  ".join(root_level)
+        "beside their subject:\n  " + "\n  ".join(root_level)
     )
 
 

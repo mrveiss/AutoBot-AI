@@ -35,7 +35,7 @@ CHROMADB_PORT=8100
 
 # Git source
 DEFAULT_GIT_REPO="https://github.com/mrveiss/AutoBot-AI.git"
-DEFAULT_BRANCH="Dev_new_gui"
+DEFAULT_BRANCH="main"
 
 # Python version
 PYTHON_VERSION="3.14"
@@ -84,7 +84,7 @@ Usage:
 
 Options:
   --unattended          Run with default values, no prompts
-  --branch BRANCH       Git branch to install (default: Dev_new_gui)
+  --branch BRANCH       Git branch to install (default: main)
   --repo URL            Git repository URL
   --no-ollama           Skip Ollama installation
   --skip-redis          Skip Redis installation (use existing)

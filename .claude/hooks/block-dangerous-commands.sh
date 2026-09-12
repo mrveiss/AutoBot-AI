@@ -52,15 +52,17 @@ deny() {
 
 if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+push'; then
 
-  # Block push to main, master, or Dev_new_gui directly
-  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push.*(origin[[:space:]]+|:)(main|master|Dev_new_gui)\b'; then
-    deny "Blocked: cannot push directly to main/master/Dev_new_gui. Use a feature branch and create a PR."
+  # Block push to release, master, or main directly
+  # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
+  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push.*(origin[[:space:]]+|:)(release|master|main|Dev_new_gui)\b'; then
+    deny "Blocked: cannot push directly to release/master/main/Dev_new_gui. Use a feature branch and create a PR."
   fi
 
   # Block bare git push when on protected branches
+  # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
   if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push[[:space:]]*($|[;&|])'; then
     CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
-    if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "Dev_new_gui" ]; then
+    if [ "$CURRENT_BRANCH" = "release" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "Dev_new_gui" ]; then
       deny "Blocked: you are on $CURRENT_BRANCH. Use a feature branch and create a PR."
     fi
   fi
@@ -109,11 +111,11 @@ fi
 #   - file restore FROM THE INDEX: `git checkout -- <path>`, `git checkout .`,
 #     `git restore <path>` — bounded by what you staged
 #   - detached / toggle switches: `git switch -`, `git switch --detach`
-#   - SHA / tag / Dev_new_gui checkouts that move HEAD and nothing else
+#   - SHA / tag / main checkouts that move HEAD and nothing else
 #
 # What that list used to say, and why it was wrong (#15835): it read "file
-# restore: `git checkout -- <path>`" next to "SHA / tag / Dev_new_gui
-# checkouts", and `git checkout origin/Dev_new_gui -- .` matches BOTH entries.
+# restore: `git checkout -- <path>`" next to "SHA / tag / main
+# checkouts", and `git checkout origin/main -- .` matches BOTH entries.
 # It was allowed by design, and it destroyed 147 lines of uncommitted work in
 # this repository. Two different operations share that syntax:
 #
@@ -180,10 +182,11 @@ source_is_own_branch() {
   git_scrubbed "$dir" "$gitdir" remote | grep -qxF "$remote"
 }
 
-# main/master/Dev_new_gui, local or through origin.
+# release/master/main, local or through origin.
+# Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
 is_protected_ref() {
   case "${1#origin/}" in
-    main | master | Dev_new_gui) return 0 ;;
+    release | master | main | Dev_new_gui) return 0 ;;
   esac
   return 1
 }
@@ -266,7 +269,7 @@ if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch -e restore -e reset -
     # A reset onto a protected ref moves HEAD and can drop commits a parallel
     # session has not pushed yet (#6512).
     if [ "$SUBCOMMAND" = "reset" ] && is_protected_ref "$REF_ARG"; then
-      deny "Blocked: resetting onto a protected ref moves HEAD and can lose unpushed commits in parallel sessions (#6512). Use 'git fetch && git merge --ff-only' or create a fresh branch with 'git checkout -b NEW origin/Dev_new_gui'."
+      deny "Blocked: resetting onto a protected ref moves HEAD and can lose unpushed commits in parallel sessions (#6512). Use 'git fetch && git merge --ff-only' or create a fresh branch with 'git checkout -b NEW origin/main'."
     fi
 
     # A path-scoped checkout or restore that names a source other than the
@@ -309,14 +312,14 @@ if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch -e restore -e reset -
     # branch. Allowed on the main tree, exactly as before.
     case ",$INVOCATION_FLAGS," in *,new,* | *,restore,*) continue ;; esac
 
-    if [ "$REF_ARG" = "main" ] || [ "$REF_ARG" = "master" ]; then
-      deny "Blocked: never check out main/master locally (#4113, #6512). Main is read-only; commits flow Dev_new_gui → main via release cycle. If you need to inspect main, use git log origin/main or create a worktree: git worktree add .worktrees/inspect-main main"
+    if [ "$REF_ARG" = "release" ] || [ "$REF_ARG" = "master" ]; then
+      deny "Blocked: never check out release/master locally (#4113, #6512). Release is read-only; commits flow main → release via release cycle. If you need to inspect release, use git log origin/release or create a worktree: git worktree add .worktrees/inspect-release release"
     fi
 
     # Deny only when a concrete branch-name arg is present and is not one of the
     # safe targets (base branch, file restore, detached HEAD, SHA, tag, path).
     if [ -n "$REF_ARG" ] &&
-      [ "$REF_ARG" != "Dev_new_gui" ] &&
+      [ "$REF_ARG" != "main" ] &&
       [ "$REF_ARG" != "." ] &&
       [ "$REF_ARG" != "HEAD" ] &&
       ! [[ "$REF_ARG" =~ ^[0-9a-f]{7,40}$ ]] &&

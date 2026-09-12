@@ -61,10 +61,10 @@ from pathlib import Path
 from typing import NamedTuple
 
 import pytest
-
-from autobot_shared.paths import GitRepoRootUnavailable, git_repo_root, scrubbed_git_env
 from repo_tests._reach import declare
 from repo_tests.env_var_bare_cast_allowlist import BARE_ENV_CASTS, MAX_BARE_ENV_CASTS
+
+from autobot_shared.paths import GitRepoRootUnavailable, git_repo_root, scrubbed_git_env
 
 #: A path this scan never reaches: tests (whatever their naming convention),
 #: this guard's own package, and vendored/agent-worktree copies of the tree.
@@ -241,7 +241,7 @@ def measurement() -> Measurement:
 
 #: Floor on files reached, so a scanner that has stopped walking the tree
 #: fails loudly instead of passing on an empty sweep (the #15018 lesson).
-#: Measured on Dev_new_gui: comfortably above 1000 tracked, non-test .py files.
+#: Measured on main: comfortably above 1000 tracked, non-test .py files.
 MIN_FILES_SCANNED = 3000
 
 #: See `audio_extension_allowlist_test` for the derivation of `growth`.

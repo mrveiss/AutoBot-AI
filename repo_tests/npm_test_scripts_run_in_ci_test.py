@@ -48,12 +48,12 @@ from typing import NamedTuple
 
 import pytest
 import yaml
-
-from autobot_shared.paths import GitRepoRootUnavailable, git_repo_root, scrubbed_git_env
 from repo_tests.npm_test_scripts_allowlist import (
     MAX_WHOLLY_UNGATED_PACKAGES,
     UNINVOKED_TEST_SCRIPTS,
 )
+
+from autobot_shared.paths import GitRepoRootUnavailable, git_repo_root, scrubbed_git_env
 
 #: A script name this repository treats as a test runner: `test` or `test:*`.
 TEST_SCRIPT_NAME = re.compile(r"^test(?::|$)")
@@ -107,7 +107,7 @@ NOT_A_SCRIPT = frozenset(
 
 #: Floors, so a regex that stops matching turns this module red instead of green
 #: (the #15018 lesson: a guard that enumerates nothing passes comfortably).
-#: Measured on Dev_new_gui: 7 packages declaring 13 runners between them, and
+#: Measured on main: 7 packages declaring 13 runners between them, and
 #: 15 npm script invocations resolved to a tracked package directory. The floors
 #: sit below those so a package removal does not fail the guard, while a
 #: scanner that has stopped reaching the tree still does.
@@ -313,7 +313,7 @@ def covered_scripts(scripts: dict[str, dict[str, str]], invoked: set[str]) -> se
     `"ci": "npm run lint && npm run test:unit"` gates `test:unit` -- which a
     test-shaped-only graph could not see either.
 
-    Measured on Dev_new_gui: one such edge exists (`autobot-frontend::test:all`
+    Measured on main: one such edge exists (`autobot-frontend::test:all`
     -> test:unit, test:integration, test:playwright) and no workflow invokes it,
     so this closure changes no number today. It is here so the guard's verdict
     does not depend on that staying true.

@@ -56,11 +56,11 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 import pytest
-from tools.lint._scan_helpers import TRACKED_PY_FLOOR
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.status_enums import Severity
+from tools.lint._scan_helpers import TRACKED_PY_FLOOR
 
 REPO_ROOT = repo_root()
 
@@ -77,7 +77,7 @@ _SEVERITY_COMPARISON = re.compile(r"""severity["']?\]?\s*==\s*["'][A-Za-z_]+["']
 # Trailing quoted word of a match — the literal value itself.
 _MATCHED_VALUE = re.compile(r"""["']([A-Za-z_]+)["']\s*$""")
 
-# Measured on Dev_new_gui at 2363ad3aa9. Ceilings may only fall.
+# Measured on main at 2363ad3aa9. Ceilings may only fall.
 KWARG_LITERAL_CEILING = 73
 COMPARISON_LITERAL_CEILING = 121
 LITERAL_FILE_CEILING = 53

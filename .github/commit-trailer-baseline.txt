@@ -24,12 +24,12 @@
 # WHY NOT REWRITE THEM
 #
 # Stripping the trailers means rewriting history from the earliest offender
-# (26 commits) and force-pushing `Dev_new_gui`. Roughly 32 worktrees and several
+# (26 commits) and force-pushing `main`. Roughly 32 worktrees and several
 # concurrent sessions are based on that branch; every one would need re-basing,
 # and the project's own rules forbid force-pushing a shared branch. That is a
 # real operational risk traded for a cosmetic correction.
 #
-# These surfaced only when a release PR first scanned the whole `main..Dev_new_gui`
+# These surfaced only when a release PR first scanned the whole `release..main`
 # range; per-PR scans never saw them, because the trailer was added BY the squash
 # merge rather than being present on the branch.
 #
@@ -45,11 +45,11 @@ ffc37c6f9cda65783f469f92e91d4cf9978ceca5  # ci(runners): move code-quality and t
 #
 # These eighteen owner-authored squash commits, 2026-09-05 to 2026-09-10, carry a
 # `Co-authored-by: t <...>` trailer naming neither the owner, a bot, nor the
-# commit's own author. They sit in `main..Dev_new_gui`, so the first release-sync
+# commit's own author. They sit in `release..main`, so the first release-sync
 # PR (#16246) could never pass `No commit trailers`. The owner chose to baseline
 # exactly these commits as full SHAs, and nothing else: the check stays strict
 # for every other commit. The list is the output of
-#   git log --format=%H -i --grep='^co-authored-by: *t <' origin/main..origin/Dev_new_gui
+#   git log --format=%H -i --grep='^co-authored-by: *t <' origin/release..origin/main
 # which returned exactly these eighteen when they were recorded.
 5f447725070e667ab86c18242a65131404554c7d  # feat(agents): agents hold the scopes they declare, and a guard keeps the declaration honest (#15950) (#16175)
 43359282d0bc59bb7e51479af99193ba0d353e36  # refactor(slm): split four frozen modules so their ceilings stop blocking work (#15495, #15496) (#16099)

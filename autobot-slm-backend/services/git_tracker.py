@@ -32,7 +32,7 @@ except ImportError:
 # Configuration
 VERSION_CHECK_INTERVAL = 300  # 5 minutes
 DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot/code_source")
-DEFAULT_BRANCH = os.environ.get("SLM_REPO_BRANCH", "Dev_new_gui")
+DEFAULT_BRANCH = os.environ.get("SLM_REPO_BRANCH", "main")
 
 # Log the "no local code source" condition once, not every interval (#9716).
 _missing_repo_warned = False
@@ -245,7 +245,7 @@ def get_git_tracker(
 
     Args:
         repo_path: Path to the git repository
-        branch: Branch to track (default: Dev_new_gui)
+        branch: Branch to track (default: main)
 
     Returns:
         GitTracker instance

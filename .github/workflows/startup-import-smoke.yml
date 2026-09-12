@@ -18,7 +18,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   push:
-    branches: [main, Dev_new_gui, develop]
+    branches: [release, main, develop]
     #
     # #12986: the backend-Python entries are the canonical `backend-python` set
     # from .github/filters/backend-python-paths.yml; GitHub cannot include a file here, so
@@ -47,7 +47,7 @@ on:
   # python-required-context.yml serves `python-suite` (#14353).
   # Branch-protection promotion to required happened separately (#10022).
   pull_request:
-    branches: [main, Dev_new_gui, develop]
+    branches: [release, main, develop]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

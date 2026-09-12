@@ -7,7 +7,7 @@
 #
 # WHERE COVERAGE IS MEASURED
 #
-# `.github/workflows/coverage.yml` — nightly, and on every push to Dev_new_gui.
+# `.github/workflows/coverage.yml` — nightly, and on every push to main.
 # Deliberately NOT on pull requests (#10691): instrumentation, not test work, was
 # the dominant cost, measured at 336s without `--cov` against 35m11s with it.
 #

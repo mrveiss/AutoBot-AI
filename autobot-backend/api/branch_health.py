@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 )
 async def get_all_branch_health(
     repo_path: str | None = None,
-    base_branch: str = "Dev_new_gui",
+    base_branch: str = "main",
 ) -> List[BranchHealthResponse]:
     """
     Get health metrics for all branches.
@@ -65,7 +65,7 @@ async def get_all_branch_health(
 )
 async def get_unhealthy_branch_health(
     repo_path: str | None = None,
-    base_branch: str = "Dev_new_gui",
+    base_branch: str = "main",
     threshold: float = 50.0,
 ) -> List[BranchHealthResponse]:
     """
@@ -99,7 +99,7 @@ async def get_unhealthy_branch_health(
 )
 async def get_diverged_branch_health(
     repo_path: str | None = None,
-    base_branch: str = "Dev_new_gui",
+    base_branch: str = "main",
     threshold: int = 20,
 ) -> List[BranchHealthResponse]:
     """
@@ -134,7 +134,7 @@ async def get_diverged_branch_health(
 )
 async def get_stale_branch_health(
     repo_path: str | None = None,
-    base_branch: str = "Dev_new_gui",
+    base_branch: str = "main",
     threshold_days: int = 30,
 ) -> List[BranchHealthResponse]:
     """

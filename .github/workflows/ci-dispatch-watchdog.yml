@@ -46,17 +46,20 @@ on:
     # LIVE as of #13791. GitHub only dispatches `schedule` from the DEFAULT
     # branch, so for the first 100 runs of this workflow — 73 `pull_request`,
     # 27 `push`, zero `schedule` — the cron did nothing: the file existed only
-    # on Dev_new_gui. It is now also on `main`, which is what makes the sweep
-    # periodic rather than incidental.
+    # on main. #13791 added it to `release` (then the default branch) too,
+    # which made the sweep periodic rather than incidental. #16461 later made
+    # `main` itself the default, so this duplication is no longer load-bearing
+    # for the schedule, though the two copies still must stay byte-identical
+    # (see below).
     #
-    # This file exists on both `main` and `Dev_new_gui` and the two copies must
+    # This file exists on both `release` and `main` and the two copies must
     # stay byte-identical — a direction-specific note here makes them permanently
     # conflict on every release sync. The push and
     # pull_request hooks below are still not redundant: they catch a PR head
     # parking within seconds rather than up to 15 minutes later.
     - cron: '*/15 * * * *'
   push:
-    branches: [Dev_new_gui]
+    branches: [main]
   workflow_dispatch:
   pull_request:
     # A PR head moving is the moment its CI either dispatches or parks, so the
@@ -185,7 +188,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          WATCHDOG_BASE_BRANCH: Dev_new_gui
+          WATCHDOG_BASE_BRANCH: main
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
@@ -259,7 +262,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          WATCHDOG_BASE_BRANCH: Dev_new_gui
+          WATCHDOG_BASE_BRANCH: main
         run: |
           set -uo pipefail
           python3 pipeline-scripts/ci_dispatch_retry.py \

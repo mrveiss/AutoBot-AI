@@ -52,11 +52,11 @@ name: Security Scanning
 
 on:
   push:
-    branches: [ main, dev, Dev_new_gui ]
+    branches: [ release, dev, main ]
   pull_request:
-    branches: [ main, Dev_new_gui ]  # Issue #6597: Semgrep blocks merge on all feature PRs
+    branches: [ release, main ]  # Issue #6597: Semgrep blocks merge on all feature PRs
     # #13388: SAFE — this workflow publishes no required status context (none of
-    # the ten on Dev_new_gui comes from here), so skipping the run cannot deadlock
+    # the ten on main comes from here), so skipping the run cannot deadlock
     # a pull request on a check that never reports.
     #
     # Exact UNION of the `python` and `deps` filters in `changes` below, which

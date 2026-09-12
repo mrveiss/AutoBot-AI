@@ -42,7 +42,7 @@ git commit ...
 **Run the same check locally** before pushing:
 
 ```bash
-GITHUB_BASE_REF=Dev_new_gui bash pipeline-scripts/check-hardcoded-values-pr.sh
+GITHUB_BASE_REF=main bash pipeline-scripts/check-hardcoded-values-pr.sh
 ```
 
 **What it blocks** (by category, see hook source for full patterns):

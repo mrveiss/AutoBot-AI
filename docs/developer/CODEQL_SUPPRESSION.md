@@ -137,13 +137,13 @@ string-SQL file.
 only interesting if the sink receives a `str`/f-string rather than a construct —
 which is the one thing to check before spending time on it.
 
-### Point scans at `Dev_new_gui`, not `main`
+### Point scans at `main`, not `release`
 
-The same batch was scanned against `main`, then ~682 commits behind
-`Dev_new_gui`, so **every line number had to be re-located by content search**.
+The same batch was scanned against `release`, then ~682 commits behind
+`main`, so **every line number had to be re-located by content search**.
 Three `code_sync.py` findings landed on a function signature, a `return False`
-and a docstring — lines with no path expression at all. `main` is a strict
-ancestor of `Dev_new_gui`; scanning it reports on code no one is running.
+and a docstring — lines with no path expression at all. `release` is a strict
+ancestor of `main`; scanning it reports on code no one is running.
 
 ## References
 

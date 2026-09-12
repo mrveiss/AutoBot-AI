@@ -2,7 +2,7 @@ name: Deploy GitHub Pages
 
 on:
   push:
-    branches: [Dev_new_gui]
+    branches: [main]
     paths:
       - 'docs/**'
   workflow_dispatch:
@@ -24,7 +24,7 @@ jobs:
 
       - uses: actions/configure-pages@v6
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b  # v1.321.0
         with:
           ruby-version: '3.3'
           bundler-cache: true
