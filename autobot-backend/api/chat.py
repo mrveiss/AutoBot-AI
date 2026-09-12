@@ -939,7 +939,7 @@ async def _generate_llm_stream(
         if hasattr(llm_service, "stream_response"):
             # MVA-3090: Streaming path - thinking_metadata not yet extracted from stream
             # TODO: Extract usage/thinking_metadata from stream final message and include in end event
-            async for chunk in llm_service.stream_response(scan_chat_message(message.content, session_id), session_id):
+            async for chunk in llm_service.stream_response(message.content, session_id):  # scanned in stream_message()
                 chunk_data = {
                     "type": "chunk",
                     "content": chunk.get("content", ""),
@@ -1147,7 +1147,7 @@ async def stream_message(
 
     # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
-    llm_service = get_llm_service(request)
+    llm_service, message.content = get_llm_service(request), scan_chat_message(message.content, message.session_id)
 
     # Return streaming response
     return await stream_chat_response(message, chat_history_manager, llm_service, request_id)
@@ -1983,7 +1983,7 @@ async def send_direct_chat_response(
     # `chat_id` as a path parameter and this endpoint takes it from the body, so
     # the dependency would validate a different value than the one used. The
     # explicit call is the same pattern the session endpoints above use.
-    _, message = await validate_chat_ownership(chat_id, request), scan_chat_message(message, chat_id)  # #16529
+    _, message = await validate_chat_ownership(chat_id, request), scan_chat_message(message, chat_id)  # #16529/#16530
 
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_workflow_manager(chat_workflow_manager)
@@ -2012,7 +2012,7 @@ async def _store_ai_stack_user_message(
     chat_history_manager,
 ) -> str:
     """Store user message and log event for AI Stack chat."""
-    user_message_id, message.content = str(uuid4()), scan_chat_message(message.content, session_id)  # #16529
+    user_message_id, message.content = str(uuid4()), scan_chat_message(message.content, session_id)  # #16529/#16530
     user_message_data = {
         "id": user_message_id,
         "content": message.content,

@@ -229,6 +229,21 @@ class TestStoreAndLogUserMessageWiring:
         # from it afterwards (process_chat_message) sees the clean text.
         assert "test.user@example.com" not in message.content
 
+    async def test_injection_flagged_message_still_reaches_storage(self):
+        """#16530 false-positive guard, exercised through the real wiring (not
+        just the primitive): a HIGH/CRITICAL injection pattern is flagged and
+        logged, but the turn is not rejected and storage still happens."""
+        from api.chat import _store_and_log_user_message
+        from api.schemas_chat import ChatMessage
+
+        message = ChatMessage(content=INJECTION_MESSAGE, session_id="sess-1")
+        chat_history_manager = MagicMock()
+        chat_history_manager.add_messages_batch = AsyncMock()
+
+        await _store_and_log_user_message(message, "sess-1", chat_history_manager)  # must not raise
+
+        chat_history_manager.add_messages_batch.assert_called_once()
+
 
 @pytest.mark.asyncio
 class TestStoreAiStackUserMessageWiring:
@@ -246,23 +261,71 @@ class TestStoreAiStackUserMessageWiring:
         assert exc_info.value.status_code == 400
         chat_history_manager.add_messages_batch.assert_not_called()
 
+    async def test_injection_flagged_message_still_reaches_storage(self):
+        from api.chat import _store_ai_stack_user_message
+        from api.schemas_chat import ChatMessage
+
+        message = ChatMessage(content=INJECTION_MESSAGE, session_id="sess-1")
+        chat_history_manager = MagicMock()
+        chat_history_manager.add_messages_batch = AsyncMock()
+
+        await _store_ai_stack_user_message(message, "sess-1", chat_history_manager)  # must not raise
+
+        chat_history_manager.add_messages_batch.assert_called_once()
+
+
+@pytest.mark.asyncio
+class TestStreamMessageWiring:
+    """The scan runs in stream_message(), BEFORE stream_chat_response() builds a
+    StreamingResponse -- not inside the generator (#16529/#16530 review follow-up).
+
+    A StreamingResponse commits to HTTP 200 the moment it is constructed/returned,
+    before its body generator is ever entered: raising inside the generator only
+    gets caught by its own broad ``except Exception`` and downgraded to a generic
+    SSE error event, so a caller could not distinguish "blocked by policy" from
+    "the LLM failed". Scanning here instead means a block is a real 400, same as
+    every other entry point.
+    """
+
+    async def test_pii_blocked_message_never_starts_streaming(self):
+        from api.chat import stream_message
+        from api.schemas_chat import ChatMessage
+
+        message = ChatMessage(content=FAKE_SSN_MESSAGE, session_id="sess-1")
+
+        with (
+            patch("api.chat.get_chat_history_manager"),
+            patch("api.chat.get_llm_service"),
+            patch("api.chat.stream_chat_response", new_callable=AsyncMock) as mock_stream,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await stream_message(current_user={"user_id": "u1"}, message=message, request=MagicMock())
+
+        assert exc_info.value.status_code == 400
+        mock_stream.assert_not_called()
+
+    async def test_injection_flagged_message_still_starts_streaming(self):
+        from api.chat import stream_message
+        from api.schemas_chat import ChatMessage
+
+        message = ChatMessage(content=INJECTION_MESSAGE, session_id="sess-1")
+
+        with (
+            patch("api.chat.get_chat_history_manager"),
+            patch("api.chat.get_llm_service"),
+            patch("api.chat.stream_chat_response", new_callable=AsyncMock) as mock_stream,
+        ):
+            await stream_message(current_user={"user_id": "u1"}, message=message, request=MagicMock())  # must not raise
+
+        mock_stream.assert_called_once()
+
 
 @pytest.mark.asyncio
 class TestGenerateLlmStreamWiring:
-    async def test_pii_blocked_message_never_reaches_the_llm(self):
-        from api.chat import _generate_llm_stream
-        from api.schemas_chat import ChatMessage
-
-        message = ChatMessage(content=FAKE_CREDIT_CARD_MESSAGE, session_id="sess-1")
-        llm_service = MagicMock()
-        llm_service.stream_response = MagicMock()  # present so hasattr() takes this branch
-
-        events = [chunk async for chunk in _generate_llm_stream(message, MagicMock(), llm_service, "req-1")]
-
-        llm_service.stream_response.assert_not_called()
-        assert any('"type": "error"' in e for e in events)
-
     async def test_benign_message_reaches_the_llm_with_unchanged_content(self):
+        """Basic passthrough check -- the scan itself now happens upstream in
+        stream_message(), so by the time this generator runs, message.content
+        is already the text to send."""
         from api.chat import _generate_llm_stream
         from api.schemas_chat import ChatMessage
 
@@ -304,6 +367,23 @@ class TestSendChatMessageByIdWiring:
         mock_get_history.assert_not_called()
         mock_get_workflow.assert_not_called()
 
+    async def test_injection_flagged_message_still_reaches_the_workflow_manager(self):
+        from api.chat import send_chat_message_by_id
+
+        with (
+            patch("api.chat.get_chat_history_manager"),
+            patch("api.chat.get_chat_workflow_manager", new_callable=AsyncMock) as mock_get_workflow,
+        ):
+            await send_chat_message_by_id(  # must not raise
+                chat_id="chat-1",
+                current_user={"user_id": "u1", "role": "user"},
+                request_data={"message": INJECTION_MESSAGE},
+                request=MagicMock(),
+                ownership={},
+            )
+
+        mock_get_workflow.assert_called_once()
+
 
 @pytest.mark.asyncio
 class TestSendDirectChatResponseWiring:
@@ -325,3 +405,20 @@ class TestSendDirectChatResponseWiring:
 
         assert exc_info.value.status_code == 400
         mock_get_workflow.assert_not_called()
+
+    async def test_injection_flagged_message_still_reaches_the_workflow_manager(self):
+        from api.chat import send_direct_chat_response
+
+        with (
+            patch("api.chat.validate_chat_ownership", new_callable=AsyncMock),
+            patch("api.chat.get_chat_workflow_manager", new_callable=AsyncMock) as mock_get_workflow,
+        ):
+            await send_direct_chat_response(  # must not raise
+                current_user={"user_id": "u1", "role": "user"},
+                request=MagicMock(),
+                message=INJECTION_MESSAGE,
+                chat_id="chat-1",
+                remember_choice=False,
+            )
+
+        mock_get_workflow.assert_called_once()
