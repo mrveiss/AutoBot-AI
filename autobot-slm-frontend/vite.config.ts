@@ -8,6 +8,7 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { shouldInjectInternalApiKey } from './src/config/devProxyAuth'
 
 /** Best-effort check: are we co-located with the user frontend? */
 function isCoLocated(): boolean {
@@ -119,15 +120,20 @@ export default defineConfig(({ mode }) => {
           secure: false
         },
         // Main AutoBot backend for admin functionality (Issue #729)
-        // Issue #1779: inject X-Internal-API-Key for service auth
+        // #16382: the developer's own Authorization header is forwarded to the
+        // backend as-is — http-proxy copies the incoming request's headers by
+        // default, so nothing extra is needed for that — and
+        // X-Internal-API-Key is injected ONLY when explicitly opted in (see
+        // shouldInjectInternalApiKey() in ./src/config/devProxyAuth.ts). It
+        // defaults off.
         '/autobot-api': {
           target: autobotTarget,
           changeOrigin: true,
           ws: true,
           rewrite: (path) => path.replace(/^\/autobot-api/, '/api'),
-          headers: {
-            'X-Internal-API-Key': process.env.AUTOBOT_INTERNAL_API_KEY || '',
-          },
+          ...(shouldInjectInternalApiKey()
+            ? { headers: { 'X-Internal-API-Key': process.env.AUTOBOT_INTERNAL_API_KEY || '' } }
+            : {}),
         }
       }
     },
