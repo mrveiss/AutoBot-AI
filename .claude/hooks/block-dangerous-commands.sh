@@ -432,7 +432,7 @@ fi
 
 if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git([[:space:]]+[^;&|]*)?[[:space:]]+clone([[:space:]]|$)'; then
 
-  CLONE_DENY_MSG="Blocked: git clone must go through scripts/research/safe_clone.py (python3 scripts/research/safe_clone.py <url> --id <id>), or carry every one of its safe flags itself: --depth 1 --no-tags --single-branch, -c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.file.allow=never -c protocol.ext.allow=never, and never --recurse-submodules (#16488)."
+  CLONE_DENY_MSG="Blocked: git clone must go through scripts/research/safe_clone.py (python3 scripts/research/safe_clone.py <url> --id <id>), or carry every one of its safe flags itself: --depth 1 --no-tags --single-branch; the config values core.hooksPath=/dev/null, core.fsmonitor=false, protocol.file.allow=never and protocol.ext.allow=never, each passed with -c; and never --recurse-submodules (#16488)."
 
   if echo "$COMMAND_TO_CHECK" | grep -qE '\-\-recurse-submodules'; then
     deny "$CLONE_DENY_MSG"

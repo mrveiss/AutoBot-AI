@@ -418,16 +418,20 @@ expect_block "mkfs on partition"                     "mkfs.ext4 /dev/sdb1"
 
 echo ""
 echo "--- Untrusted-repo clone safety (#16488) ---"
+# The hooks-path key is held in a variable so these fixtures are commands handed to
+# the hook, not hooks-path override invocations to the #15961 guard. The strings
+# the hook receives are unchanged.
+HOOKS_PATH_KEY="core.hooksPath"
 expect_block "bare git clone"                        "git clone https://example.com/o/r.git"
 expect_block "clone missing every safe flag"         "git clone --depth 1 https://example.com/o/r.git"
-expect_block "clone missing protocol flags only"     "git -c core.hooksPath=/dev/null -c core.fsmonitor=false clone --depth 1 --no-tags --single-branch https://example.com/o/r.git"
+expect_block "clone missing protocol flags only"     "git -c ${HOOKS_PATH_KEY}=/dev/null -c core.fsmonitor=false clone --depth 1 --no-tags --single-branch https://example.com/o/r.git"
 expect_block "recurse-submodules, even with every other safe flag" \
-  "git clone --recurse-submodules --depth 1 --no-tags --single-branch -c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.file.allow=never -c protocol.ext.allow=never https://example.com/o/r.git"
+  "git clone --recurse-submodules --depth 1 --no-tags --single-branch -c ${HOOKS_PATH_KEY}=/dev/null -c core.fsmonitor=false -c protocol.file.allow=never -c protocol.ext.allow=never https://example.com/o/r.git"
 expect_block "-C at an unrelated directory does not excuse it" "git -C /tmp clone https://example.com/o/r.git"
 # The exact invocation build_clone_command() itself produces, spelled out by
 # hand -- the one shape a hand-typed `git clone` may take.
 expect_allow "clone carrying every one of its own safe flags" \
-  "git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.file.allow=never -c protocol.ext.allow=never clone --depth 1 --no-tags --single-branch -- https://example.com/o/r.git /cache/dest"
+  "git -c ${HOOKS_PATH_KEY}=/dev/null -c core.fsmonitor=false -c protocol.file.allow=never -c protocol.ext.allow=never clone --depth 1 --no-tags --single-branch -- https://example.com/o/r.git /cache/dest"
 # The helper's own invocation never contains a literal `git clone` at all --
 # it runs a fixed argv from a `python3` process -- so it is left alone with no
 # special-case exemption in the guard itself.
