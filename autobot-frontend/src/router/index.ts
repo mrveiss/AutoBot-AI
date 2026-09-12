@@ -1020,6 +1020,20 @@ export const routes: RouteRecordRaw[] = [
           admin: true,
           hideInNav: true
         }
+      },
+      // Issue #16429: SecretAuditLog.vue wired in — GET /api/audit/logs is
+      // admin-only (api/audit.py), matching the llm-keys tab's gate above.
+      {
+        path: 'audit-log',
+        name: 'secrets-audit-log',
+        component: () => import('@/views/secrets/AuditLogView.vue'),
+        meta: {
+          title: 'Secret Audit Log',
+          description: 'Audit trail of secret access, creation, and deletion',
+          requiresAuth: true,
+          admin: true,
+          hideInNav: true
+        }
       }
     ]
   },
