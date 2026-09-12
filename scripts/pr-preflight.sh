@@ -359,25 +359,29 @@ if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
   skip_gate "lint" "$BASE not found -- run git fetch"
 else
   mapfile -t CHANGED < <(git diff --name-only --diff-filter=ACMR "$BASE...HEAD"; git diff --name-only --diff-filter=ACMR HEAD)
-  mapfile -t PY < <(printf '%s\n' "${CHANGED[@]}" | sort -u | grep -E '\.py$' | while read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done)
+  # PY_FILES, never PY: PY is the interpreter chosen at the top (#13573), and
+  # reusing the name here overwrote it -- every later "$PY" then ran the first
+  # changed file as the interpreter or, with none changed, aborted the script
+  # under `set -u` before a single required check ran (#15933).
+  mapfile -t PY_FILES < <(printf '%s\n' "${CHANGED[@]}" | sort -u | grep -E '\.py$' | while read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done)
 
-  if [ "${#PY[@]}" -eq 0 ]; then
+  if [ "${#PY_FILES[@]}" -eq 0 ]; then
     note "no changed Python files"
   else
-    printf '  %d changed Python file(s)\n' "${#PY[@]}"
+    printf '  %d changed Python file(s)\n' "${#PY_FILES[@]}"
 
     # Same flags as .github/workflows/code-quality.yml. Different flags is how
     # a local green becomes a CI red.
-    if "$PY" -m black --check --line-length=120 "${PY[@]}" >/dev/null 2>&1; then
+    if "$PY" -m black --check --line-length=120 "${PY_FILES[@]}" >/dev/null 2>&1; then
       pass "black --line-length=120"
     else
-      fail "black -- run: python3 -m black --line-length=120 ${PY[*]}"
+      fail "black -- run: python3 -m black --line-length=120 ${PY_FILES[*]}"
     fi
 
-    if "$PY" -m isort --check-only --settings-path=. --line-length=120 "${PY[@]}" >/dev/null 2>&1; then
+    if "$PY" -m isort --check-only --settings-path=. --line-length=120 "${PY_FILES[@]}" >/dev/null 2>&1; then
       pass "isort --settings-path=. --line-length=120"
     else
-      fail "isort -- run: python3 -m isort --settings-path=. --line-length=120 ${PY[*]}"
+      fail "isort -- run: python3 -m isort --settings-path=. --line-length=120 ${PY_FILES[*]}"
     fi
 
     # #13521: flake8 checks a file named explicitly on the command line even when
@@ -396,7 +400,7 @@ else
                     | sed 's/#.*//' | tr ',' '\n' | tr -d ' ' | grep -vE '^\*|^$')
     FLAKE_BARE=$(printf '%s\n' "$FLAKE_ENTRIES" | grep -v '/' | tr '\n' '|' | sed 's/|$//')
     FLAKE_ANCHORED=$(printf '%s\n' "$FLAKE_ENTRIES" | grep '/' | tr '\n' '|' | sed 's/|$//')
-    mapfile -t PY_LINT < <(printf '%s\n' "${PY[@]}")
+    mapfile -t PY_LINT < <(printf '%s\n' "${PY_FILES[@]}")
     if [ -n "$FLAKE_BARE" ]; then
       mapfile -t PY_LINT < <(printf '%s\n' "${PY_LINT[@]}" | grep -vE "(^|/)(${FLAKE_BARE})(/|$)" || true)
     fi
@@ -426,7 +430,7 @@ else
     # property of the file you happened to touch, and blocking on it would stop
     # anyone editing a file that carries a stale suppression. Reported by the
     # dedicated sweep instead; a real finding still says "Issue:".
-    BANDIT_OUT=$("$PY" -m bandit -c .bandit -q "${PY[@]}" 2>&1 | grep -v "nosec encountered")
+    BANDIT_OUT=$("$PY" -m bandit -c .bandit -q "${PY_FILES[@]}" 2>&1 | grep -v "nosec encountered")
     if [ -z "$BANDIT_OUT" ]; then
       pass "bandit -c .bandit (no severity floor, as CI runs it)"
     else

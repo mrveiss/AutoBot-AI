@@ -46,6 +46,11 @@ fail=0
 # shrinks to its one "not selected" note.
 NO_REQUIRED_CHECKS='^$'
 
+# A run that dies part-way prints no FAIL for anything it never reached, so an
+# expected "not reported" would pass on a crash. The verdict line is the
+# script's last output; without it, the run did not finish.
+finished() { printf '%s\n' "$1" | grep -qE '^(pre-flight[ :]|[0-9]+ pre-flight failure)'; }
+
 # Assert that running the script over the given fixtures does (or does not)
 # report a failure whose text contains $pattern.
 check_reports() {
@@ -55,7 +60,11 @@ check_reports() {
             ${body:+--body "$body"} ${message:+--message "$message"} 2>&1)
     local actual="no"
     printf '%s' "$out" | grep -q "FAIL.*${pattern}" && actual="yes"
-    if [ "$expected" = "$actual" ]; then
+    if ! finished "$out"; then
+        fail=$((fail + 1))
+        echo "  FAIL: ${name} -- the preflight did not reach its verdict line"
+        printf '%s\n' "$out" | sed 's/^/         /'
+    elif [ "$expected" = "$actual" ]; then
         pass=$((pass + 1))
     else
         fail=$((fail + 1))
@@ -328,13 +337,15 @@ else
     fi
 
     # --full: the SAME diff, but the filter is bypassed, so the check is
-    # actually attempted instead of skipped.
-    if printf '%s' "${FILTER_FULL_OUT}" | grep -qF "workflow path filters -- no matching paths changed"; then
-        fail=$((fail + 1))
-        echo "  FAIL: --full should bypass the path filter -- 'workflow path filters' was still skipped"
-        printf '%s\n' "${FILTER_FULL_OUT}" | sed 's/^/         /'
-    else
+    # actually attempted instead of skipped. Asserted by its ok/FAIL result
+    # line, not by the skip note's absence: a run that died before reaching the
+    # check lacks the note too, and passed this way while the script aborted.
+    if printf '%s\n' "${FILTER_FULL_OUT}" | grep -qE '^  (ok|FAIL) +workflow path filters'; then
         pass=$((pass + 1))
+    else
+        fail=$((fail + 1))
+        echo "  FAIL: --full should bypass the path filter -- 'workflow path filters' was not attempted"
+        printf '%s\n' "${FILTER_FULL_OUT}" | sed 's/^/         /'
     fi
 fi
 
