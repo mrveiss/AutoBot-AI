@@ -13,7 +13,7 @@ Includes metrics and health tracking (Issue #4339).
 
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_agent import (
     SkillActionRequest,
@@ -44,6 +44,7 @@ from api.schemas_workflows import (
     SkillTracesResponse,
 )
 from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from skills.manager import SkillManager, get_skill_manager
@@ -51,7 +52,10 @@ from skills.registry import get_skill_registry
 
 logger = get_logger(__name__)
 
-router = APIRouter()
+# #16368: every route needs an authenticated caller, including any route added
+# later. The routes that change state, fetch from outside or execute a skill
+# also need admin, declared per route with Depends(check_admin_permission).
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _get_manager() -> SkillManager:
@@ -146,7 +150,7 @@ async def probe_skills(
     operation="initialize_skills",
     error_code_prefix="SKILLS",
 )
-async def initialize_skills() -> Dict[str, Any]:
+async def initialize_skills(_: None = Depends(check_admin_permission)) -> Dict[str, Any]:
     """Discover and load all builtin skills."""
     manager = _get_manager()
     result = await manager.initialize()
@@ -162,6 +166,7 @@ async def initialize_skills() -> Dict[str, Any]:
 async def get_skill_traces(
     skill: str | None = Query(None, description="Filter by skill name"),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of traces to return"),
+    _: None = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Return recent MCP tool-call spans from Redis (Issue #4413).
 
@@ -220,6 +225,7 @@ async def list_catalog(
     catalog_url: str = Query(..., description="HTTP URL of the remote skill catalog"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    _: None = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Fetch paginated skill entries from an HTTP catalog and return them with install actions.
 
@@ -253,7 +259,9 @@ async def list_catalog(
     operation="install_catalog_skill",
     error_code_prefix="SKILLS",
 )
-async def install_catalog_skill(name: str, body: SkillInstallRequest) -> Dict[str, Any]:
+async def install_catalog_skill(
+    name: str, body: SkillInstallRequest, _: None = Depends(check_admin_permission)
+) -> Dict[str, Any]:
     """Fetch a skill from a remote catalog and persist it as a SANDBOXED SkillPackage.
 
     The catalog must expose a ``/skills/{name}`` endpoint (or equivalent) that
@@ -336,7 +344,7 @@ async def list_skill_bundles() -> dict:
     operation="enable_skill_bundle",
     error_code_prefix="SKILLS",
 )
-async def enable_skill_bundle(bundle_id: str) -> dict:
+async def enable_skill_bundle(bundle_id: str, _: None = Depends(check_admin_permission)) -> dict:
     """Enable every member skill of a curated bundle.
 
     Delegates to the existing ``registry.enable_skill`` +
@@ -380,7 +388,7 @@ async def get_skill(name: str) -> Dict[str, Any]:
     operation="enable_skill",
     error_code_prefix="SKILLS",
 )
-async def enable_skill(name: str) -> Dict[str, Any]:
+async def enable_skill(name: str, _: None = Depends(check_admin_permission)) -> Dict[str, Any]:
     """Enable a skill, checking dependencies. Persists state to Redis (Issue #993)."""
     registry = get_skill_registry()
     result = registry.enable_skill(name)
@@ -397,7 +405,7 @@ async def enable_skill(name: str) -> Dict[str, Any]:
     operation="disable_skill",
     error_code_prefix="SKILLS",
 )
-async def disable_skill(name: str) -> Dict[str, Any]:
+async def disable_skill(name: str, _: None = Depends(check_admin_permission)) -> Dict[str, Any]:
     """Disable a skill. Persists state to Redis (Issue #993)."""
     registry = get_skill_registry()
     result = registry.disable_skill(name)
@@ -414,7 +422,9 @@ async def disable_skill(name: str) -> Dict[str, Any]:
     operation="update_config",
     error_code_prefix="SKILLS",
 )
-async def update_config(name: str, body: SkillConfigUpdate) -> Dict[str, Any]:
+async def update_config(
+    name: str, body: SkillConfigUpdate, _: None = Depends(check_admin_permission)
+) -> Dict[str, Any]:
     """Update a skill's configuration values."""
     registry = get_skill_registry()
     result = registry.update_config(name, body.config)
@@ -434,7 +444,9 @@ async def update_config(name: str, body: SkillConfigUpdate) -> Dict[str, Any]:
     operation="execute_skill",
     error_code_prefix="SKILLS",
 )
-async def execute_skill(name: str, body: SkillActionRequest) -> Dict[str, Any]:
+async def execute_skill(
+    name: str, body: SkillActionRequest, _: None = Depends(check_admin_permission)
+) -> Dict[str, Any]:
     """Execute a specific action on a skill."""
     manager = _get_manager()
     result = await manager.execute_skill(name, body.action, body.params)
