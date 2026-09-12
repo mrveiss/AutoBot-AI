@@ -357,7 +357,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1486,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1216,
-    "autobot-backend/services/llm_service.py": 1194,
+    "autobot-backend/services/llm_service.py": 1206,
     "autobot-backend/services/load_balancer.py": 693,
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 634,

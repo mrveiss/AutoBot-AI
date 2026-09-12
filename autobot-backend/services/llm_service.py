@@ -861,6 +861,12 @@ class LLMService:
 
         Not applied to chat_optimized(): its system-prompt prefix is static
         for vLLM prefix-cache reuse, and rewriting it would defeat that cache.
+
+        Fails open like the sibling quota_headroom/provider_degradation
+        checks in this class (review on #16546 at eefaafb28): compression is
+        a cost optimisation, not a correctness requirement, so a
+        `compress()` exception must never fail the chat/stream request --
+        it falls back to the message's original content instead.
         """
         if not config.llm_prompt_compression_enabled:
             return messages
@@ -871,11 +877,17 @@ class LLMService:
             if not content or len(content) < min_chars:
                 compressed_messages.append(msg)
                 continue
-            result = self._prompt_compressor.compress(content)
-            if result.compressed_text == content:
+            try:
+                result = self._prompt_compressor.compress(content)
+                compressed_text = result.compressed_text
+            except Exception as exc:
+                logger.warning("Prompt compression failed, using original content: %s", exc)
+                compressed_messages.append(msg)
+                continue
+            if compressed_text == content:
                 compressed_messages.append(msg)
             else:
-                compressed_messages.append({**msg, "content": result.compressed_text})
+                compressed_messages.append({**msg, "content": compressed_text})
         return compressed_messages
 
     async def _check_response_cache(

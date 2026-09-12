@@ -204,3 +204,52 @@ async def test_min_chars_is_read_live_too(monkeypatch):
     await svc.chat([{"role": "user", "content": short_message}], temperature=0.0, use_cache=False)
 
     assert "Please note that" not in provider.last_request.messages[-1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_compression_failure_falls_back_to_original_content(monkeypatch):
+    """HIGH review finding on #16546 (eefaafb28): compress() has no exception
+    handling and runs on every 100+ char message by default, so any
+    exception (a regex edge case, a future phrase-list edit, non-string
+    multimodal content) would propagate and fail the whole chat/stream
+    request -- a cost optimisation failing closed. It must fail open like
+    the sibling quota_headroom/provider_degradation checks: log and send the
+    original content unchanged."""
+    svc, provider = _make_service()
+
+    def _raise(_content: str):
+        raise RuntimeError("simulated compressor failure")
+
+    monkeypatch.setattr(svc._prompt_compressor, "compress", _raise)
+
+    await svc.chat(
+        [{"role": "user", "content": _FILLER_HEAVY_MESSAGE}],
+        temperature=0.0,
+        use_cache=False,
+    )
+
+    assert provider.calls == 1
+    assert provider.last_request.messages[-1]["content"] == _FILLER_HEAVY_MESSAGE
+
+
+def test_compression_preserves_system_role_and_redaction_markers():
+    """Regression requested on #16546's review: a system-role message
+    carrying a #16545 PII-redaction marker (``[REDACTED:{type}]``, from
+    a2a/pii_pipeline.py) must come out byte-identical -- today that's true
+    only because rule-based compression happens to never touch bracket
+    syntax, not because anything pins it."""
+    svc, _ = _make_service()
+    redacted_marker = "[REDACTED:EMAIL]"
+    system_message = (
+        "Please note that this is important. The user's contact on file is "
+        f"{redacted_marker}. It is important to keep in mind that this value "
+        "must never be logged or echoed back to the user."
+    )
+    assert len(system_message) >= 100  # over the default compression floor
+
+    compressed = svc._compress_messages([{"role": "system", "content": system_message}])
+
+    assert redacted_marker in compressed[0]["content"]
+    assert compressed[0]["role"] == "system"
+    # Filler outside the marker is still stripped, proving compression ran.
+    assert "Please note that" not in compressed[0]["content"]
