@@ -23,9 +23,10 @@ import argparse
 import asyncio
 import json
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from autobot_shared.paths import scrubbed_git_env
 
 REPO = "mrveiss/AutoBot-AI"
 MAX_FIX_ITERATIONS = 5
@@ -54,7 +55,10 @@ class RemediationResult:
 
 
 def _run(cmd: list[str], *, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, check=check)
+    # #16179: an inherited GIT_DIR outranks cwd=, so an unscrubbed call here
+    # would operate on whichever repo the caller's environment names instead
+    # of the worktree this tool is actually managing.
+    return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, check=check, env=scrubbed_git_env())
 
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -74,11 +78,13 @@ def cleanup_worktree(worktree_path: Path) -> None:
         ["git", "worktree", "remove", str(worktree_path), "--force"],
         capture_output=True,
         cwd=REPO_ROOT,
+        env=scrubbed_git_env(),  # #16179
     )
     subprocess.run(
         ["git", "branch", "-D", branch],
         capture_output=True,
         cwd=REPO_ROOT,
+        env=scrubbed_git_env(),  # #16179
     )
 
 
@@ -279,7 +285,7 @@ async def remediate_issue(issue: dict, dry_run: bool = False) -> RemediationResu
         print(f"[dry-run] Would create worktree for issue-{issue_number}")
         print(f"[dry-run] Would write test: autobot-backend/tests/test_issue_{issue_number}_repro.py")
         print(f"[dry-run] Would iterate up to {MAX_FIX_ITERATIONS} fix attempts")
-        print(f"[dry-run] Would open PR to Dev_new_gui on success")
+        print("[dry-run] Would open PR to main on success")
         return RemediationResult(issue_number, False, 0, notes=["dry-run: no changes made"])
 
     try:
