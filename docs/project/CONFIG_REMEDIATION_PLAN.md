@@ -572,11 +572,11 @@ redis:
 **Estimated Time:** 4 hours
 
 **Affected Files:**
-- `monitoring/advanced_apm_system.py:221`
-- `monitoring/performance_dashboard.py:588`
+- `monitoring/advanced_apm_system.py:221` (retired in #16282)
+- `monitoring/performance_dashboard.py:588` (retired in #16282)
 - `monitoring/business_intelligence_dashboard.py:122`
 - `monitoring/performance_monitor.py:138`
-- `monitoring/ai_performance_analytics.py:127`
+- `monitoring/ai_performance_analytics.py:127` (retired in #16282)
 
 **Issue:** All monitoring assumes metrics in DB 4
 
