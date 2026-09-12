@@ -94,7 +94,13 @@ jobs:
       #
       # autobot_shared + autobot-slm-backend + autobot-slm-frontend/src: 4,729
       # duplicated lines, 135 clones, 259,937 lines scanned (1.82%).
-      SLM_MAX_DUP_LINES: '4729'
+      #
+      # #16401: that measurement included the Ansible-mirrored SLM agent tree,
+      # now excluded from the scan below (see the "Gate the previously ungated
+      # trees" step). Re-measured with the mirror excluded on run 34632034006
+      # (base affea4b38, workflow/test/doc-only change): 2,945 duplicated lines,
+      # 129 clones, 258,231 lines scanned in 754 files.
+      SLM_MAX_DUP_LINES: '2945'
       JSCPD_VERSION: '5.0.6'
     steps:
       - uses: actions/checkout@v7
@@ -119,6 +125,13 @@ jobs:
       # figure for an UNMEASURED pin. The gate prints it on every run now, and an
       # UNMEASURED pin fails with the figure to pin (#16319), so one jscpd run per
       # scope is enough.
+      #
+      # #16401: autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/ is a
+      # mandatory mirror of autobot-slm-backend/slm/agent/, kept byte-identical by
+      # ansible/tests/detect_agent_code_drift_test.py. jscpd counted the mirror as
+      # a clone of its own source on every agent change, so it is excluded below --
+      # the drift test already guarantees the two trees cannot differ, so there is
+      # nothing here this guard can ask anyone to deduplicate.
       - name: Gate the previously ungated trees
         id: slm_scope
         run: |
@@ -127,7 +140,7 @@ jobs:
             autobot_shared autobot-slm-backend autobot-slm-frontend/src \
             -k 70 -l 8 --skip-comments \
             -f python,typescript,javascript,vue \
-            -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
+            -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**,**/ansible/roles/slm_agent/files/**" \
             -r console 2>&1 | tee /tmp/slm-gate.log
           python3 scripts/duplication_gate.py /tmp/slm-gate.log "${SLM_MAX_DUP_LINES}"
 
