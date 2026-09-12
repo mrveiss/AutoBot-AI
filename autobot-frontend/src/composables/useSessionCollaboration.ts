@@ -22,12 +22,11 @@
  *   join/leave presence events, plus a generic `{"type":"broadcast","payload"}`
  *   relay any connected participant can send, forwarded live to the others.
  *   Activity broadcast and secret-share notifications both ride this relay
- *   (`payload.kind`), which is why they're live-only -- nothing is persisted
- *   server-side. #16460 tracks adding real history/persistence and a
- *   list/respond surface for pending invitations; until it lands, this
- *   composable has no `pendingInvitations`/`respondToInvitation` -- there is
- *   no REST endpoint to back them, and shipping a no-op stub would violate
- *   the same "no fake protocol" rule this rewrite exists to fix.
+ *   (`payload.kind`) for LIVE delivery. #16460 added the durable copy:
+ *   `GET /sessions/{id}/events` backfills `recentCollaboratorActivities` /
+ *   `secretNotifications` with everything that happened before this client
+ *   joined; `GET /sessions/invitations/mine` + `POST .../invitations/respond`
+ *   back `pendingInvitations` / `respondToInvitation` below.
  *
  * Known gap: neither `GET .../participants` nor the presence WebSocket
  * returns a display username for anyone but the caller -- only user_id.
@@ -47,7 +46,7 @@ import { useChatStore, type UserContext, type SessionActivity } from '@/stores/u
 import { createLogger } from '@/utils/debugUtils'
 import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
 import { getApiBase } from '@/config/ssot-config'
-import { apiService } from '@/services/api'
+import { apiService, type PendingInvitationResponse } from '@/services/api'
 
 const logger = createLogger('SessionCollaboration')
 
@@ -94,6 +93,15 @@ interface PresenceBroadcastEnvelope {
   payload: Record<string, unknown>
 }
 
+/** A pending invitation to collaborate on someone else's session (#16460). */
+export interface PendingInvitation {
+  sessionId: string
+  fromUserId: string
+  permission: string
+  invitedAt: string
+  expiresAt: string | null
+}
+
 /**
  * Return type for the composable
  */
@@ -102,12 +110,14 @@ export interface UseSessionCollaborationReturn {
   myPresence: Ref<UserPresence | null>
   /** All participants' presence in current session (online only -- see module docstring) */
   sessionPresence: ComputedRef<UserPresence[]>
-  /** Recent activities from collaborators (live-only, see #16460) */
+  /** Recent activities from collaborators (live + backfilled on join, #16460) */
   recentCollaboratorActivities: Ref<CollaboratorActivity[]>
-  /** Secret sharing notifications (live-only, see #16460) */
+  /** Secret sharing notifications (live + backfilled on join, #16460) */
   secretNotifications: Ref<SecretSharingNotification[]>
   /** Whether the presence WebSocket is connected */
   isConnected: ComputedRef<boolean>
+  /** Pending invitations addressed to the current user, across all sessions */
+  pendingInvitations: Ref<PendingInvitation[]>
 
   /** Join a session for collaboration */
   joinSession: (sessionId: string) => void
@@ -124,6 +134,10 @@ export interface UseSessionCollaborationReturn {
   shareSecretWithSession: (secretId: string, participantIds?: string[]) => Promise<boolean>
   /** Clear secret notifications */
   clearSecretNotifications: () => void
+  /** Refresh `pendingInvitations` from the backend */
+  refreshPendingInvitations: () => Promise<void>
+  /** Accept or decline a pending invitation */
+  respondToInvitation: (sessionId: string, accept: boolean) => Promise<boolean>
 }
 
 // Module-level state (shared across instances, matching the pre-#16443 design)
@@ -133,6 +147,7 @@ const secretNotifications = ref<SecretSharingNotification[]>([])
 const currentSessionId = ref<string | null>(null)
 const myPresence = ref<UserPresence | null>(null)
 const wsConnected = ref(false)
+const pendingInvitations = ref<PendingInvitation[]>([])
 let presenceSocket: WebSocket | null = null
 
 // #16443 review: multiple components call useSessionCollaboration() for the
@@ -274,6 +289,48 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
   }
 
   /**
+   * Backfill activity/notification history from the durable copy (#16460) --
+   * covers everything that happened in this session before this client
+   * joined (or while it was disconnected), which the live relay alone can't.
+   */
+  const _backfillEvents = async (sessionId: string): Promise<void> => {
+    try {
+      const { events } = await apiService.getSessionEvents(sessionId)
+      // Oldest first, matching how live events arrive (unshift onto the front).
+      for (const event of [...events].reverse()) {
+        if (event.kind === 'activity') {
+          recentActivities.value.unshift({
+            sessionId: event.session_id,
+            userId: event.user_id ?? '',
+            username: event.username || event.user_id || '',
+            activity: {
+              ...(event.payload.activity as SessionActivity),
+              timestamp: new Date((event.payload.activity as { timestamp: string })?.timestamp)
+            },
+            timestamp: new Date(event.timestamp)
+          })
+        } else if (event.kind === 'secret_shared') {
+          secretNotifications.value.unshift({
+            secretId: event.payload.secret_id as string,
+            secretName: event.payload.secret_name as string,
+            secretType: event.payload.secret_type as string,
+            sharedBy: event.payload.shared_by as string,
+            sharedByUsername: (event.payload.shared_by_username as string) || (event.payload.shared_by as string),
+            sessionId: event.session_id,
+            action: 'shared',
+            timestamp: new Date(event.timestamp)
+          })
+        }
+      }
+      if (recentActivities.value.length > 50) {
+        recentActivities.value = recentActivities.value.slice(0, 50)
+      }
+    } catch (error) {
+      logger.error('Failed to backfill session events:', error)
+    }
+  }
+
+  /**
    * Join a session for collaboration -- opens the real presence WebSocket.
    */
   const joinSession = (sessionId: string): void => {
@@ -319,6 +376,8 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     presenceSocket.onerror = () => {
       logger.warn('Presence WebSocket error')
     }
+
+    void _backfillEvents(sessionId)
   }
 
   /**
@@ -429,6 +488,42 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     secretNotifications.value = []
   }
 
+  /**
+   * Refresh `pendingInvitations` from GET /sessions/invitations/mine (#16460).
+   */
+  const refreshPendingInvitations = async (): Promise<void> => {
+    try {
+      const { invitations } = await apiService.getMyInvitations()
+      pendingInvitations.value = invitations.map((inv: PendingInvitationResponse) => ({
+        sessionId: inv.session_id,
+        fromUserId: inv.from_user_id,
+        permission: inv.permission,
+        invitedAt: inv.invited_at,
+        expiresAt: inv.expires_at
+      }))
+    } catch (error) {
+      logger.error('Failed to refresh pending invitations:', error)
+    }
+  }
+
+  /**
+   * Accept or decline a pending invitation -- POST
+   * /sessions/{id}/invitations/respond (#16460). Removes it from
+   * `pendingInvitations` locally on success rather than a full refetch.
+   */
+  const respondToInvitation = async (sessionId: string, accept: boolean): Promise<boolean> => {
+    try {
+      const response = await apiService.respondToInvitation(sessionId, accept)
+      if (response.success) {
+        pendingInvitations.value = pendingInvitations.value.filter(inv => inv.sessionId !== sessionId)
+      }
+      return response.success
+    } catch (error) {
+      logger.error('Failed to respond to invitation:', error)
+      return false
+    }
+  }
+
   // Auto-join when the current chat session is collaborative
   watch(
     () => chatStore.currentSession?.id,
@@ -465,13 +560,16 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     recentCollaboratorActivities: recentActivities,
     secretNotifications,
     isConnected,
+    pendingInvitations,
     joinSession,
     leaveSession,
     updatePresence,
     inviteCollaborator,
     broadcastActivity,
     shareSecretWithSession,
-    clearSecretNotifications
+    clearSecretNotifications,
+    refreshPendingInvitations,
+    respondToInvitation
   }
 }
 
@@ -489,6 +587,7 @@ export function cleanupCollaboration(): void {
   presenceMap.value.clear()
   recentActivities.value = []
   secretNotifications.value = []
+  pendingInvitations.value = []
   currentSessionId.value = null
   myPresence.value = null
 }

@@ -135,6 +135,19 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "record; nothing else stores a copy. #16464 ported the table into the canonical "
         "Alembic chain -- it existed only in an orphaned, never-applied migration before.",
     ),
+    "collaboration_event_history": Concept(
+        name="collaboration_event_history",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=(
+            "autobot-backend/api/collaboration.py",
+            "autobot-backend/websocket/presence.py",
+        ),
+        rebuilt_by="collaboration_events rows are the record; nothing else stores a copy. "
+        "The live broadcast relay (websocket/presence.py) and the REST share-secret "
+        "endpoint both persist here in addition to broadcasting, so a client that "
+        "reconnects sees the same events it would have seen live (#16460).",
+    ),
     "activity_audit_trail": Concept(
         name="activity_audit_trail",
         system_of_record=Store.POSTGRES,

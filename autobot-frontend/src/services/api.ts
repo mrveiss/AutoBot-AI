@@ -16,6 +16,9 @@ import { getApiBase } from '@/config/ssot-config'
 // Create scoped logger for ApiService
 const logger = createLogger('ApiService')
 
+// #16460: matches the backend's own GET /sessions/{id}/events default (api/collaboration_events.py).
+const DEFAULT_SESSION_EVENTS_LIMIT = 50
+
 // Session collaboration response types
 export interface ParticipantResponse {
   user_id: string
@@ -54,6 +57,42 @@ export interface SessionPresenceResponse {
   session_id: string
   online_users: string[]
   count: number
+}
+
+// #16460: persisted collaboration history + invitation list/respond
+export interface CollabEventResponse {
+  id: string
+  session_id: string
+  kind: string
+  user_id: string | null
+  username: string | null
+  payload: Record<string, unknown>
+  timestamp: string
+}
+
+export interface SessionEventsResponse {
+  session_id: string
+  events: CollabEventResponse[]
+  has_more: boolean
+}
+
+export interface PendingInvitationResponse {
+  session_id: string
+  from_user_id: string
+  permission: string
+  invited_at: string
+  expires_at: string | null
+}
+
+export interface MyInvitationsResponse {
+  invitations: PendingInvitationResponse[]
+}
+
+export interface InvitationRespondResponse {
+  success: boolean
+  session_id: string
+  accepted: boolean
+  permission: string | null
 }
 
 class ApiService {
@@ -166,6 +205,26 @@ class ApiService {
 
   async getSessionPresence(sessionId: string): Promise<SessionPresenceResponse> {
     return this.get<SessionPresenceResponse>(`${getApiBase()}/sessions/${sessionId}/presence`)
+  }
+
+  async getSessionEvents(
+    sessionId: string,
+    limit: number = DEFAULT_SESSION_EVENTS_LIMIT,
+    before?: string
+  ): Promise<SessionEventsResponse> {
+    return this.get<SessionEventsResponse>(`${getApiBase()}/sessions/${sessionId}/events`, {
+      params: { limit, before }
+    })
+  }
+
+  async getMyInvitations(): Promise<MyInvitationsResponse> {
+    return this.get<MyInvitationsResponse>(`${getApiBase()}/sessions/invitations/mine`)
+  }
+
+  async respondToInvitation(sessionId: string, accept: boolean): Promise<InvitationRespondResponse> {
+    return this.post<InvitationRespondResponse>(`${getApiBase()}/sessions/${sessionId}/invitations/respond`, {
+      accept
+    })
   }
 
   // Workflow API

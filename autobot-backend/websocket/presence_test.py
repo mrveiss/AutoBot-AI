@@ -9,11 +9,13 @@ Issue #3282: collaborative multi-user support — shared sessions and workspaces
 """
 
 import json
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 
-from websocket.presence import PresenceManager, presence_websocket_handler
+from websocket.presence import PresenceManager, _handle_presence_message, presence_websocket_handler
 
 # ====================================================================
 # PresenceManager Unit Tests
@@ -205,3 +207,76 @@ async def test_handler_responds_to_ping() -> None:
 
     pong_calls = [call.args[0] for call in ws.send_json.call_args_list if call.args[0].get("type") == "pong"]
     assert len(pong_calls) == 1
+
+
+# ====================================================================
+# Activity persistence tests (#16460)
+# ====================================================================
+
+
+def _mock_session_factory(mock_db: AsyncMock) -> MagicMock:
+    """A get_async_session_factory() replacement yielding `mock_db` via `async with`."""
+    session_cm = AsyncMock()
+    session_cm.__aenter__.return_value = mock_db
+    session_cm.__aexit__.return_value = None
+    return MagicMock(return_value=session_cm)
+
+
+@pytest.mark.asyncio
+async def test_activity_broadcast_persists_a_collaboration_event() -> None:
+    """An 'activity' kind broadcast is persisted as a CollaborationEvent."""
+    mock_db = AsyncMock()
+    mock_db.add = MagicMock()
+    mock_db.commit = AsyncMock()
+    user_id = str(uuid.uuid4())
+    message = {
+        "type": "broadcast",
+        "payload": {"kind": "activity", "username": "alice", "activity": {"type": "chat"}},
+    }
+
+    with (
+        patch("websocket.presence.get_async_session_factory", return_value=_mock_session_factory(mock_db)),
+        patch("websocket.presence.presence_manager") as mock_pm,
+    ):
+        mock_pm.broadcast_to_session = AsyncMock()
+        await _handle_presence_message(_make_ws(), "sess-1", user_id, message)
+
+    mock_db.add.assert_called_once()
+    event = mock_db.add.call_args.args[0]
+    assert event.kind == "activity"
+    assert event.session_id == "sess-1"
+    assert str(event.user_id) == user_id
+    assert event.username == "alice"
+    mock_db.commit.assert_awaited_once()
+    mock_pm.broadcast_to_session.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_presence_update_broadcast_is_not_persisted() -> None:
+    """Only 'activity' events are persisted -- 'presence_update' is transient."""
+    message = {"type": "broadcast", "payload": {"kind": "presence_update", "status": "online"}}
+
+    with (
+        patch("websocket.presence.get_async_session_factory") as mock_get_factory,
+        patch("websocket.presence.presence_manager") as mock_pm,
+    ):
+        mock_pm.broadcast_to_session = AsyncMock()
+        await _handle_presence_message(_make_ws(), "sess-1", "user-A", message)
+
+    mock_get_factory.assert_not_called()
+    mock_pm.broadcast_to_session.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_activity_persistence_failure_does_not_block_broadcast() -> None:
+    """A DB failure while persisting must never break live delivery."""
+    message = {"type": "broadcast", "payload": {"kind": "activity", "username": "alice"}}
+
+    with (
+        patch("websocket.presence.get_async_session_factory", side_effect=SQLAlchemyError("boom")),
+        patch("websocket.presence.presence_manager") as mock_pm,
+    ):
+        mock_pm.broadcast_to_session = AsyncMock()
+        await _handle_presence_message(_make_ws(), "sess-1", "user-A", message)
+
+    mock_pm.broadcast_to_session.assert_awaited_once()
