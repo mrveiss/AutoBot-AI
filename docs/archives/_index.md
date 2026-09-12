@@ -19,6 +19,7 @@ Dated design and implementation plans — see [plans/_index.md](plans/_index.md)
 | Document | Description |
 | --- | --- |
 | [changelog_20250822](changelog_20250822.md) | Session changelog from August 2025 |
+| [DISTRIBUTED_6VM_SETUP_20250912](DISTRIBUTED_6VM_SETUP_20250912.md) | Setup-completion record for one 2025-09-12 six-VM install — not the platform architecture (#15194) |
 
 ## Addressing in these documents was redacted after archival (#15208)
 
