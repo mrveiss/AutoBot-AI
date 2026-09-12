@@ -22,7 +22,7 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # ai-stack + npu-worker installs have failed to resolve ever since.
                           # scripts/tokenizers_transformers_range_test.py now fails on a floor
                           # that excludes 0.23.0.
-transformers>=5.16.1
+transformers>=5.17.0
 huggingface-hub>=1.30.0
 
 # Tensor Operations (NPU optimized)
