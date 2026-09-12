@@ -1130,163 +1130,16 @@ async def _cleanup_terminal_sessions(request: Request, session_id: str) -> dict:
     return terminal_cleanup_result
 
 
-def _get_knowledge_base_or_none(request: Request):
-    """
-    Get knowledge base from app state or None if unavailable.
-
-    Issue #620.
-    """
-    return getattr(request.app.state, "knowledge_base", None)
-
-
-def _create_kb_cleanup_result() -> dict:
-    """
-    Create initial KB cleanup result dictionary.
-
-    Issue #620.
-    """
-    return {
-        "facts_deleted": 0,
-        "facts_preserved": 0,
-        "cleanup_error": None,
-    }
-
-
-def _process_kb_deletion_result(result: dict, kb_cleanup_result: dict) -> None:
-    """
-    Process and update cleanup result from knowledge base deletion.
-
-    Issue #620.
-
-    Args:
-        result: Result from knowledge_base.delete_facts_by_session
-        kb_cleanup_result: Result dict to update in place
-    """
-    kb_cleanup_result["facts_deleted"] = result.get("deleted_count", 0)
-    kb_cleanup_result["facts_preserved"] = result.get("preserved_count", 0)
-
-    if result.get("errors"):
-        kb_cleanup_result["cleanup_error"] = f"{len(result['errors'])} errors during cleanup"
-
-
-def _log_kb_cleanup_result(session_id: str, kb_cleanup_result: dict, errors: List | None = None) -> None:
-    """
-    Log KB cleanup results appropriately based on outcome.
-
-    Issue #620.
-
-    Args:
-        session_id: Session being cleaned up
-        kb_cleanup_result: Cleanup result dictionary
-        errors: Optional list of errors from deletion
-    """
-    if errors:
-        logger.warning(
-            "KB cleanup completed with errors for session %s: %s",
-            session_id,
-            errors,
-        )
-
-    if kb_cleanup_result["facts_deleted"] > 0 or kb_cleanup_result["facts_preserved"] > 0:
-        logger.info(
-            "KB cleanup for session %s: deleted=%d, preserved=%d",
-            session_id,
-            kb_cleanup_result["facts_deleted"],
-            kb_cleanup_result["facts_preserved"],
-        )
-
-
-async def _cleanup_knowledge_base_facts(request: Request, session_id: str) -> dict:
-    """
-    Clean up knowledge base facts created during this session.
-
-    Issue #547: Fixes orphaned KB data when conversations are deleted.
-    Issue #620: Refactored using Extract Method pattern.
-
-    Args:
-        request: FastAPI request object with app.state
-        session_id: Chat session ID being deleted
-
-    Returns:
-        Dict with cleanup statistics
-    """
-    kb_cleanup_result = _create_kb_cleanup_result()
-
-    knowledge_base = _get_knowledge_base_or_none(request)
-    if not knowledge_base:
-        logger.warning(
-            "Knowledge base not available, skipping KB cleanup for session %s",
-            session_id,
-        )
-        return kb_cleanup_result
-
-    try:
-        result = await knowledge_base.delete_facts_by_session(
-            session_id=session_id,
-            preserve_important=True,
-        )
-        _process_kb_deletion_result(result, kb_cleanup_result)
-        _log_kb_cleanup_result(session_id, kb_cleanup_result, result.get("errors"))
-
-    except Exception as kb_cleanup_error:
-        logger.error(
-            "Failed to cleanup KB facts for session %s: %s",
-            session_id,
-            kb_cleanup_error,
-            exc_info=True,
-        )
-        kb_cleanup_result["cleanup_error"] = str(kb_cleanup_error)
-
-    return kb_cleanup_result
-
-
-async def _cleanup_conversation_transcript(session_id: str) -> dict:
-    """
-    Clean up conversation transcript file from data/conversation_transcripts/.
-
-    This removes the duplicate transcript storage used by ChatWorkflowManager.
-
-    Args:
-        session_id: Chat session ID being deleted
-
-    Returns:
-        Dict with cleanup result
-    """
-    import os
-
-    from autobot_shared.security.path_validator import validate_relative_path
-    from constants.path_constants import PATH
-
-    result = {"transcript_deleted": False, "error": None}
-
-    try:
-        if "/" in session_id or "\\" in session_id or ".." in session_id:
-            raise ValueError("Invalid session ID")
-
-        transcript_path = validate_relative_path(
-            f"{session_id}.json",
-            PATH.DATA_DIR / "conversation_transcripts",
-        )
-
-        if transcript_path.exists():
-            os.remove(transcript_path)
-            result["transcript_deleted"] = True
-            logger.info("Deleted conversation transcript for session %s", session_id)
-        else:
-            logger.debug(
-                "No conversation transcript found for session %s (may not exist)",
-                session_id,
-            )
-
-    except Exception as e:
-        logger.warning(
-            "Failed to delete conversation transcript for session %s: %s",
-            session_id,
-            e,
-        )
-        result["error"] = str(e)
-
-    return result
+# #16490: KB-facts/transcript cleanup (Issue #620's Extract-Method helpers)
+# and the new chat-knowledge-context cleanup now live in
+# api/chat_sessions_delete_cleanup.py -- split out, not added here, because
+# this file was already at scripts/check_python_file_size.py's recorded
+# ceiling. See that module's docstring for why.
+from api.chat_sessions_delete_cleanup import (
+    _cleanup_chat_knowledge_context,
+    _cleanup_conversation_transcript,
+    _cleanup_knowledge_base_facts,
+)
 
 
 async def _perform_all_session_cleanup(
@@ -1294,7 +1147,7 @@ async def _perform_all_session_cleanup(
     session_id: str,
     file_action: str,
     parsed_file_options: dict,
-) -> tuple[dict, dict, dict, dict]:
+) -> tuple[dict, dict, dict, dict, dict]:
     """Perform all cleanup operations for session deletion.
 
     Issue #665: Extracted from delete_session to reduce function complexity.
@@ -1306,7 +1159,8 @@ async def _perform_all_session_cleanup(
         parsed_file_options: Parsed options for file transfer
 
     Returns:
-        Tuple of (file_result, terminal_result, kb_result, transcript_result)
+        Tuple of (file_result, terminal_result, kb_result, transcript_result,
+        knowledge_context_result)
     """
     # Handle conversation files
     file_deletion_result = await _handle_conversation_files(request, session_id, file_action, parsed_file_options)
@@ -1320,11 +1174,15 @@ async def _perform_all_session_cleanup(
     # Clean up conversation transcript
     transcript_cleanup_result = await _cleanup_conversation_transcript(session_id)
 
+    # Clean up the chat-knowledge context (#16490)
+    knowledge_context_result = await _cleanup_chat_knowledge_context(request, session_id)
+
     return (
         file_deletion_result,
         terminal_cleanup_result,
         kb_cleanup_result,
         transcript_cleanup_result,
+        knowledge_context_result,
     )
 
 
@@ -1360,6 +1218,7 @@ def _build_delete_session_response(
     terminal_cleanup_result: dict,
     kb_cleanup_result: dict,
     transcript_cleanup_result: dict,
+    knowledge_context_cleanup_result: dict,
 ) -> dict:
     """
     Build response data for delete_session endpoint.
@@ -1373,6 +1232,7 @@ def _build_delete_session_response(
         terminal_cleanup_result: Result from terminal cleanup
         kb_cleanup_result: Result from KB cleanup
         transcript_cleanup_result: Result from transcript cleanup
+        knowledge_context_cleanup_result: Result from chat-knowledge context cleanup (#16490)
 
     Returns:
         Success response with deletion details
@@ -1385,6 +1245,7 @@ def _build_delete_session_response(
             "terminal_cleanup": terminal_cleanup_result,
             "kb_cleanup": kb_cleanup_result,
             "transcript_cleanup": transcript_cleanup_result,
+            "knowledge_context_cleanup": knowledge_context_cleanup_result,
         },
         message="Session deleted successfully",
         request_id=request_id,
@@ -1424,6 +1285,7 @@ async def delete_session(
         terminal_result,
         kb_result,
         transcript_result,
+        knowledge_context_result,
     ) = await _perform_all_session_cleanup(request, session_id, file_action, parsed_file_options)
 
     await _delete_session_and_verify(chat_history_manager, session_id)
@@ -1466,6 +1328,7 @@ async def delete_session(
         terminal_result,
         kb_result,
         transcript_result,
+        knowledge_context_result,
     )
 
 
