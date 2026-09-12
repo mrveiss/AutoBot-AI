@@ -6,6 +6,8 @@
 
 **Created:** 2025-10-06
 
+> **Historical record:** this rollout ran across the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic — deployments run in Docker, on one VM, or scaled across any number of machines the operator chooses; the counts below describe that one install.
+
 ---
 
 ## 🎯 Objective

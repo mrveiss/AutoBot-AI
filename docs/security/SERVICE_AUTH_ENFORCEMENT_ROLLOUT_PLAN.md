@@ -6,6 +6,8 @@
 **Status:** 🟡 PENDING APPROVAL
 **Security Level:** CRITICAL - CVSS 10.0 Vulnerability Closure
 
+> **Historical record:** this plan describes one specific install's 6-machine layout at the time. AutoBot's architecture is role-based and count-agnostic — deployments run in Docker, on one VM, or scaled across any number of machines.
+
 ---
 
 ## 📋 Executive Summary
