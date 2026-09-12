@@ -26,7 +26,7 @@ the same as inert. ``test_the_baseline_names_only_modules_in_the_population`` fa
 the moment a pair stops naming a module the sweep reaches.
 
 **Provenance.** Run 34564055823, head a0afddd0d (a pull_request run, so checked out
-merged into Dev_new_gui), 11 Sep 2026: 54 of 608 modules failed. Its records named
+merged into main), 11 Sep 2026: 54 of 608 modules failed. Its records named
 modules without their tree, and 10 names exist in both backends, so each tree was
 attributed, then checked two ways that share no enumeration with the sweep:
 

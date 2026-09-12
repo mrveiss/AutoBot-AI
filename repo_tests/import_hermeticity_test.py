@@ -44,7 +44,7 @@ A ran" is not measuring hermeticity. The cost is paid in CI, and narrowed there:
 
 A subset cannot reach a module that gets to the changed one only through an
 intermediate's *function* called at import time, nor the other gaps the scope module
-lists; the full sweep on every push to Dev_new_gui does.
+lists; the full sweep on every push to main does.
 """
 
 from __future__ import annotations

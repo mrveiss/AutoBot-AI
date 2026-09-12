@@ -20,7 +20,7 @@ so there is one definition of "a swept module", not a second list in YAML.
 * **none** -- no swept module changed. Nothing is examined, and the run says so.
 
 What a subset does NOT reach. Each is a stated gap, not a blind spot, and the full
-sweep on every push to Dev_new_gui covers it:
+sweep on every push to main covers it:
 
 * a module that reaches the changed one only through an intermediate's *function*
   called at import time -- only direct importers are added;
