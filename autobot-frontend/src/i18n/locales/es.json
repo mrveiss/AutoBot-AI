@@ -6381,6 +6381,14 @@
       "offline": "Offline",
       "collaboratorTooltip": "Collaborator",
       "youStatus": "Your status"
+    },
+    "panel": {
+      "title": "Colaboración",
+      "invite": "Invitar",
+      "closePanel": "Cerrar panel",
+      "tabParticipants": "Participantes",
+      "tabActivity": "Actividad",
+      "tabNotifications": "Notificaciones"
     }
   },
   "research": {

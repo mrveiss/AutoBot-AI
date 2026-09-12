@@ -6388,6 +6388,14 @@
       "unknownTab": "Unknown tab",
       "you": "You",
       "youStatus": "Your status"
+    },
+    "panel": {
+      "title": "Collaboration",
+      "invite": "Invite",
+      "closePanel": "Close panel",
+      "tabParticipants": "Participants",
+      "tabActivity": "Activity",
+      "tabNotifications": "Notifications"
     }
   },
   "research": {
