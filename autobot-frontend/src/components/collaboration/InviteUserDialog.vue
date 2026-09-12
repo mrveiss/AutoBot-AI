@@ -123,7 +123,7 @@ const sendInvitation = async () => {
 
   try {
     // Call composable to send invitation
-    const success = inviteCollaborator(selectedUserId.value, selectedRole.value)
+    const success = await inviteCollaborator(selectedUserId.value, selectedRole.value)
 
     if (success) {
       const user = users.value.find(u => u.id === selectedUserId.value)

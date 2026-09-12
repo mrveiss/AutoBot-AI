@@ -5014,6 +5014,14 @@
       "roleEditor": "Editor",
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
+    },
+    "panel": {
+      "title": "همکاری",
+      "invite": "دعوت",
+      "closePanel": "بستن پنل",
+      "tabParticipants": "شرکت‌کنندگان",
+      "tabActivity": "فعالیت",
+      "tabNotifications": "اعلان‌ها"
     }
   },
   "chat": {

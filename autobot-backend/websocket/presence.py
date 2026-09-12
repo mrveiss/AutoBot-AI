@@ -11,13 +11,17 @@ Part of Issue #872 - Session Collaboration API (#608 Phase 3).
 
 import asyncio
 import json
+import uuid
 from collections import defaultdict
 from typing import Dict, List, Set
 
 from fastapi import WebSocket, WebSocketDisconnect
+from sqlalchemy.exc import SQLAlchemyError
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
+from models.collaboration_event import CollaborationEvent
+from user_management.database import get_async_session_factory
 
 logger = get_logger(__name__)
 
@@ -229,6 +233,38 @@ async def _send_presence_sync(websocket: WebSocket, session_id: str) -> None:
     )
 
 
+async def _persist_activity_event(session_id: str, user_id: str, payload: dict) -> None:
+    """Best-effort persistence of a live 'activity' broadcast (#16460).
+
+    Counterpart to api/collaboration.py's ``_record_event`` for the
+    'secret_shared' kind: that one rides a REST call and already has a DB
+    session, this one rides the generic broadcast relay and owns its own
+    (matching api/presence_ws.py's ``_authorized_participant`` pattern for
+    the same reason -- this module has no request-scoped session to borrow).
+    A failure here must never break delivery to the other live participants.
+    """
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        user_uuid = None
+
+    try:
+        session_factory = get_async_session_factory()
+        async with session_factory() as db:
+            db.add(
+                CollaborationEvent(
+                    session_id=session_id,
+                    kind="activity",
+                    user_id=user_uuid,
+                    username=payload.get("username"),
+                    payload=payload,
+                )
+            )
+            await db.commit()
+    except SQLAlchemyError as exc:
+        logger.warning("collaboration activity persistence failed: %s", type(exc).__name__)
+
+
 async def _handle_presence_message(
     websocket: WebSocket,
     session_id: str,
@@ -244,6 +280,8 @@ async def _handle_presence_message(
         return True
     if message.get("type") == "broadcast":
         payload = message.get("payload", {})
+        if isinstance(payload, dict) and payload.get("kind") == "activity":
+            await _persist_activity_event(session_id, user_id, payload)
         await presence_manager.broadcast_to_session(
             session_id,
             {
