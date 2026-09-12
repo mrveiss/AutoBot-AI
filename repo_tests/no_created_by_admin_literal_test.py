@@ -76,15 +76,17 @@ def _tracked_backend_python_files(root: Path = REPO_ROOT) -> list[Path]:
     return [root / line for line in result.stdout.splitlines() if line and not line.endswith("_test.py")]
 
 
-#: Ratcheted well below the live population (3514 non-test files under the two
-#: scoped dirs as of #16541) so ordinary churn never trips it, while still
-#: catching a narrowed glob, a moved directory, or a broken git env -- the
-#: failure this mechanism exists to distinguish from "genuinely found nothing"
-#: (#15826).
+#: Pinned to the live population (3514 non-test files under the two scoped
+#: dirs as of #16541) rather than padded below it: `Reach.verify_floor`
+#: requires population - floor <= skips + growth, and growth alone (a
+#: maintenance-frequency choice, not a safety one) is meant to absorb
+#: ordinary churn -- it is not a second, redundant safety margin under the
+#: floor. `growth=300` absorbs about two weeks of this repo's churn before
+#: asking for a deliberate bump.
 REACH = declare(
     "no-created-by-admin-literal",
     discover=_tracked_backend_python_files,
-    floor=3000,
+    floor=3514,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )
