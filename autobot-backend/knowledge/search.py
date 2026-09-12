@@ -192,6 +192,28 @@ class SearchMixin:
         )
         return results
 
+    async def basic_vector_search(
+        self,
+        query: str,
+        top_k: int,
+        filters: Dict[str, Any] | None = None,
+    ) -> List[Dict[str, Any]]:
+        """Validate, sanitize, and query ChromaDB directly -- no VectorSearchEngine dispatch.
+
+        The entry point ``VectorSearchEngine._CPUBackend`` must call instead of
+        ``search()`` itself (#15165): ``_CPUBackend`` is one of ``search()``'s
+        own callers (the CPU leg of hardware dispatch), so calling back into
+        ``search()`` -- which tries ``VectorSearchEngine`` again -- recurses
+        with no base case anywhere in the chain.
+        """
+        invalid_result = self._validate_search_inputs(query)
+        if invalid_result is not None:
+            return invalid_result
+        sanitized = self._sanitize_search_query(query)
+        if sanitized is None:
+            return []
+        return await self._execute_vector_search(sanitized, top_k, filters=filters)
+
     async def search(  # noqa: PLR0913
         self,
         query: str,

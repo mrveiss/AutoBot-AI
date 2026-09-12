@@ -52,6 +52,15 @@ class _CountingSearchMixin(SearchMixin):
     def ensure_initialized(self) -> None:
         """No-op: the real impl lives in KnowledgeBaseCore, irrelevant to this path."""
 
+    async def _execute_vector_search(self, query, similarity_top_k, filters=None):
+        """Stand in for the real ChromaDB/embedding leaf -- irrelevant to this recursion.
+
+        Real once the fix lands: validate/sanitize/dispatch logic all runs for
+        real; only the actual network/model call is replaced, the same way a
+        unit test always stubs its true I/O boundary.
+        """
+        return []
+
     async def search(self, *args, **kwargs):
         self.entry_count += 1
         if self.entry_count > _RECURSION_CAP:
