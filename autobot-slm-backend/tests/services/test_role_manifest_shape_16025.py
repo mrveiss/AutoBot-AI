@@ -230,15 +230,25 @@ def test_derivation_reflects_the_manifest_it_is_given_not_a_frozen_copy():
 # ---------------------------------------------------------------------------
 
 
-def test_the_real_backend_manifest_yields_both_systemd_units():
-    """Proves the actual autobot-backend/manifest.yml (not a fixture) drives this."""
+def test_the_real_backend_manifest_yields_all_its_systemd_units():
+    """Proves the actual autobot-backend/manifest.yml (not a fixture) drives this.
+
+    "backend" owns the whole manifest (find_role_manifest's direct-ownership
+    branch), so it gets every systemd service the manifest declares --
+    autobot-celery-beat included, even though that service also tags its own
+    narrower "scheduler" role below.
+    """
     from repo_tests._paths import repo_root
 
     loader = ManifestLoader(infra_base=repo_root() / "autobot-infrastructure")
     manifests = loader.load_all()
     resolved, owns_whole = rms.find_role_manifest("backend", manifests)
     assert resolved is not None, "autobot-backend/manifest.yml did not load"
-    assert rms.systemd_units("backend", resolved, owns_whole) == ["autobot-backend", "autobot-celery"]
+    assert rms.systemd_units("backend", resolved, owns_whole) == [
+        "autobot-backend",
+        "autobot-celery",
+        "autobot-celery-beat",
+    ]
 
 
 def test_the_real_backend_manifest_also_yields_celery_and_scheduler_alone():
