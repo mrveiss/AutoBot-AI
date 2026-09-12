@@ -204,6 +204,16 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_LLM_QUOTA_HEADROOM_TTL_SECONDS",
+        type=int,
+        default=3600,
+        description=("Seconds a recorded provider rate-limit headroom reading stays valid before " "it expires."),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_TRAJECTORY_CONSOLIDATE_SCAN_LIMIT",
         type=int,
         default=50000,

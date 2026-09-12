@@ -526,6 +526,7 @@ To add a new variable:
 | `AUTOBOT_LIVE_PROBE_TIMEOUT_SECONDS` | testing | float | `1.0` | Seconds a test's live-service precondition probe waits for a TCP connect before reporting the service as absent and skipping (autobot_shared/live_service_probe.py, #14930). Short by default: a refused loopback connect returns immediately, and this runs once per endpoint per process. Raise it when probing a fleet host across a link slow enough that a live service could be mistaken for a missing one. Range: 0.1–60.0. |
 | `AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL` | orchestrator | int | `86400` | Cache lifetime in seconds for a human-to-agent handoff brief (llc/services/handoff.py). One day. |
 | `AUTOBOT_LLM_MAX_RETRY_AFTER_SECONDS` | ai | float | `30.0` | Cap applied to a provider's `Retry-After`. Without it a provider advertising a long back-off would stall a request for that whole period (services/llm_service.py). |
+| `AUTOBOT_LLM_QUOTA_HEADROOM_TTL_SECONDS` | ai | int | `3600` | Seconds a recorded provider rate-limit headroom reading stays valid before it expires. |
 | `AUTOBOT_LLM_TOKEN_BUDGET_PER_RUN` | ai | int | `0` | Cumulative token ceiling (input plus output) for one run. Zero disables the gate, which is the shipped default (#11541). |
 | `AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS` | ai | int | `86400` | Seconds a run's cumulative token counter survives in Redis, bounding memory for abandoned sessions. Refreshed on every increment. |
 | `AUTOBOT_LOGS_BACKUP_DIR` | logging | str | `'backup'` | Directory where rotated log archives are written. |
@@ -665,5 +666,5 @@ To add a new variable:
 | `AUTOBOT_WORK_CLAIM_WAIT_TTL_S` | orchestration | int | `900` | How long an agent keeps its place in a work-claim queue without renewing (#15948). Deliberately longer than AUTOBOT_WORK_CLAIM_TTL_S: a waiter that expired before the holder it is queued behind would never be promoted, and would look to an operator like a queue that silently drops people. The ceiling bounds how long a dead waiter occupies a position before it is pruned on the next read. Range: 30–7200. |
 | `AUTOBOT_WORK_CLAIM_YIELD_TIMEOUT_S` | orchestration | int | `30` | How long a requester waits for a claim holder to answer a yield request before treating the silence as a refusal (#15948). Short on purpose: the requester is blocked while it waits, and a holder that has not answered in this long is busy working, which is itself the answer. Raising it does not make a yield more likely, it only makes the requester wait longer to be told no. Range: 1–600. |
 
-*219 variables registered as of last generation.*
+*220 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->
