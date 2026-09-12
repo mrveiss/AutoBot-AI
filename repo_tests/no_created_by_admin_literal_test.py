@@ -21,13 +21,12 @@ happens to contain the same substring.
 from __future__ import annotations
 
 import ast
-import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
 
@@ -65,15 +64,16 @@ def _tracked_backend_python_files(root: Path = REPO_ROOT) -> list[Path]:
     directory by ``reach_declarations_test`` (#15826) -- without that, nothing
     can prove the floor fires.
     """
-    result = subprocess.run(  # nosec B603 B607
-        ["git", "ls-files", "--", *(f"{d}/*.py" for d in _SCOPED_DIRS)],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-        env=scrubbed_git_env(),
-    )
-    return [root / line for line in result.stdout.splitlines() if line and not line.endswith("_test.py")]
+    try:
+        paths = tracked_paths(root, *(f"{d}/*.py" for d in _SCOPED_DIRS))
+    except EmptyEnumeration:
+        # An empty result must reach Reach's own floor check as [], the same
+        # contract the raw `git ls-files` call this replaced had -- raising
+        # here instead would fail with the wrong exception type against
+        # reach_declarations_test's empty-tree case (it requires
+        # ReachFloorError specifically, from the floor, not from discovery).
+        return []
+    return [root / line for line in paths if not line.endswith("_test.py")]
 
 
 #: Pinned to the live population (3514 non-test files under the two scoped
