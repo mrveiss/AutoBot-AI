@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-collaboration-panel h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border">
+  <div class="w-80 max-w-80 min-w-80 h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border">
     <!-- Header -->
     <div class="flex items-center justify-between p-3 border-b border-autobot-border shrink-0">
       <div class="flex items-center gap-2">
@@ -9,7 +9,7 @@
       <div class="flex items-center gap-1">
         <button
           @click="showInviteDialog = true"
-          class="action-btn"
+          class="w-6 h-6 flex items-center justify-center rounded transition-colors text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary"
           :title="$t('collaboration.panel.invite')"
           :aria-label="$t('collaboration.panel.invite')"
         >
@@ -17,7 +17,7 @@
         </button>
         <button
           @click="$emit('close')"
-          class="action-btn"
+          class="w-6 h-6 flex items-center justify-center rounded transition-colors text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary"
           :title="$t('collaboration.panel.closePanel')"
           :aria-label="$t('collaboration.panel.closePanel')"
         >
@@ -134,15 +134,3 @@ const handleRemoveParticipant = async (userId: string) => {
   }
 }
 </script>
-
-<style scoped>
-.chat-collaboration-panel {
-  width: 320px;
-  max-width: 320px;
-  min-width: 320px;
-}
-
-.action-btn {
-  @apply w-6 h-6 flex items-center justify-center rounded transition-colors text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary;
-}
-</style>

@@ -6383,12 +6383,12 @@
       "youStatus": "Your status"
     },
     "panel": {
-      "title": "Collaboration",
+      "title": "Collaborer",
       "invite": "Inviter",
       "closePanel": "Fermer le panneau",
       "tabParticipants": "Participants",
       "tabActivity": "Activité",
-      "tabNotifications": "Notifications"
+      "tabNotifications": "Alertes"
     }
   },
   "research": {
@@ -6521,12 +6521,6 @@
       "secretLabel": "Secret",
       "shareWithParticipants": "Partager avec les participants",
       "noParticipants": "Aucun participant dans la session",
-      "expiresIn": "L'accès expire dans",
-      "expire1Hour": "1 heure",
-      "expire6Hours": "6 heures",
-      "expire24Hours": "24 heures",
-      "expire1Week": "1 semaine",
-      "expireNever": "Jamais",
       "cancel": "Annuler",
       "sharing": "Partage en cours...",
       "shareSecret": "Partager le secret"
@@ -6607,6 +6601,7 @@
       "cancel": "Cancel",
       "saving": "Saving...",
       "edit": "Edit",
+      "share": "Partager",
       "delete": "Delete",
       "duplicate": "Duplicate",
       "transfer": "Transfer",

@@ -7,7 +7,13 @@ import type {
   ChatSession,
   WorkflowApproval
 } from '@/types/api'
-import type { UserResponse, TeamResponse } from '@/types/api-contract'
+import type {
+  UserResponse,
+  TeamResponse,
+  SessionInviteResponse,
+  SessionRemoveResponse,
+  SessionShareSecretResponse
+} from '@/types/api-contract'
 import apiClient from '@/utils/ApiClient'
 import type { RequestOptions } from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
@@ -29,31 +35,6 @@ export interface SessionParticipantsResponse {
   owner_id: string
   participants: ParticipantResponse[]
   total_count: number
-}
-
-export interface SessionInviteResponse {
-  success: boolean
-  session_id: string
-  invited_user_id: string
-  permission: string
-}
-
-export interface SessionRemoveResponse {
-  success: boolean
-  session_id: string
-  removed_user_id: string
-}
-
-export interface SessionShareSecretResponse {
-  success: boolean
-  secret_id: string
-  shared_with_count: number
-}
-
-export interface SessionPresenceResponse {
-  session_id: string
-  online_users: string[]
-  count: number
 }
 
 class ApiService {
@@ -131,7 +112,9 @@ class ApiService {
   }
 
   // Session Collaboration API (Issue #3986; #16443 added the remaining
-  // api/collaboration.py endpoints -- invite/remove/share/presence)
+  // api/collaboration.py endpoints -- invite/remove/share). Presence itself
+  // rides the /ws/sessions/{id}/presence WebSocket only (useSessionCollaboration.ts),
+  // not a REST call -- there is no presence-fetch method here to keep in sync.
   async getSessionParticipants(sessionId: string): Promise<SessionParticipantsResponse> {
     return this.get<SessionParticipantsResponse>(`${getApiBase()}/sessions/${sessionId}/participants`)
   }
@@ -162,10 +145,6 @@ class ApiService {
       secret_id: secretId,
       participant_ids: participantIds ?? null
     })
-  }
-
-  async getSessionPresence(sessionId: string): Promise<SessionPresenceResponse> {
-    return this.get<SessionPresenceResponse>(`${getApiBase()}/sessions/${sessionId}/presence`)
   }
 
   // Workflow API

@@ -221,7 +221,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
         })
         break
       }
-      case 'presence_update': {
+      case 'presence_status': {
         _upsertPresence(senderId, {
           status: (payload.status as UserPresence['status']) || 'online',
           currentTab: payload.current_tab as UserPresence['currentTab']
@@ -358,7 +358,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     }
 
     _sendBroadcast({
-      kind: 'presence_update',
+      kind: 'presence_status',
       status,
       current_tab: currentTab
     })

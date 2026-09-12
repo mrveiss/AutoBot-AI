@@ -230,6 +230,9 @@
             <button @click.stop="editSecret(secret)" class="action-btn" :title="t('security.secretsManager.edit')">
               <Icon name="edit" />
             </button>
+            <button @click.stop="shareSecret(secret)" class="action-btn" :title="t('security.secretsManager.share')">
+              <Icon name="user-plus" />
+            </button>
             <button
               v-if="secret.scope === 'chat'"
               @click.stop="transferSecret(secret)"
@@ -783,6 +786,15 @@
         </button>
       </template>
     </BaseModal>
+
+    <!-- Share Secret Dialog (#16443 AC5) -->
+    <ShareSecretDialog
+      v-model="showShareModal"
+      :secret-id="sharingSecret?.id ?? ''"
+      :secret-name="sharingSecret?.name ?? ''"
+      :secret-type="sharingSecret?.type ?? ''"
+      @shared="onSecretShared"
+    />
   </div>
 </template>
 
@@ -799,6 +811,7 @@ import { useDebounce } from '@/composables/useDebounce';
 import { useSecretsInfraApi } from '@/composables/security/useSecretsInfraApi';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import ShareSecretDialog from '@/components/secrets/ShareSecretDialog.vue';
 import { BaseModal } from '@autobot/ui'
 import { getCssVar } from '@/composables/useCssVars'
 
@@ -927,6 +940,7 @@ const showEditModal = ref(false);
 const showViewModal = ref(false);
 const showTransferModal = ref(false);
 const showDeleteModal = ref(false);
+const showShareModal = ref(false);
 const showSecretValue = ref(false);
 const showValue = ref(false);
 
@@ -966,6 +980,7 @@ const sharedWithInput = ref('');
 const viewingSecret = ref<Secret | null>(null);
 const transferringSecret = ref<Secret | null>(null);
 const deletingSecret = ref<Secret | null>(null);
+const sharingSecret = ref<Secret | null>(null);
 
 // Debounced search
 const debouncedSearch = useDebounce(searchQuery, 300);
@@ -1334,6 +1349,16 @@ const editSecret = (secret: Secret | null) => {
 
   showViewModal.value = false;
   showEditModal.value = true;
+};
+
+const shareSecret = (secret: Secret) => {
+  sharingSecret.value = secret;
+  showShareModal.value = true;
+};
+
+const onSecretShared = () => {
+  showShareModal.value = false;
+  sharingSecret.value = null;
 };
 
 const transferSecret = (secret: Secret) => {

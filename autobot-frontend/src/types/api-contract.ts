@@ -529,3 +529,14 @@ export type UserResponse = components['schemas']['UserResponse']
 
 /** `GET /user-management/teams/{team_id}` response. */
 export type TeamResponse = components['schemas']['TeamResponse']
+
+// --- session collaboration schemas (#16443) -------------------------------
+
+/** `POST /sessions/{session_id}/invite` response. */
+export type SessionInviteResponse = components['schemas']['CollabInviteResponse']
+
+/** `POST /sessions/{session_id}/remove` response. */
+export type SessionRemoveResponse = components['schemas']['CollabRemoveResponse']
+
+/** `POST /sessions/{session_id}/secrets/share` response. */
+export type SessionShareSecretResponse = components['schemas']['SessionShareSecretResponse']
