@@ -396,6 +396,11 @@ def logical_lines(text: str) -> List[Tuple[int, str]]:
     line, so a message still points at the invocation rather than at whichever
     token happened to land on the joined line.
 
+    A whole-line comment never continues: bash ends a comment at the newline,
+    so a trailing backslash inside one is text, not a continuation. Folding it
+    would hand the next line to the caller glued behind a ``#``, and a caller
+    that skips comment lines would then skip a real command (#16414 review).
+
     Extracted from the guard that found the pattern first (#15938) so the
     guard that found it again (#15961) shares one fold instead of each
     carrying its own copy to drift independently.
@@ -406,6 +411,9 @@ def logical_lines(text: str) -> List[Tuple[int, str]]:
         if not buffer:
             start = number
         stripped = line.rstrip()
+        if not buffer and stripped.lstrip().startswith("#"):
+            out.append((number, line))
+            continue
         if stripped.endswith("\\"):
             buffer += stripped[:-1] + " "
             continue

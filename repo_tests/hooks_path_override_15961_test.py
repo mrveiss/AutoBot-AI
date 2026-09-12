@@ -259,6 +259,10 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
         # `core.hooksPath ...` with no `git config` on the next.
         "git config \\\n  core.hooksPath /tmp/nowhere",
         "git -c \\\n  core.hooksPath=/tmp/nowhere commit",
+        # A comment's trailing backslash is not a continuation in bash, so the
+        # command after it is live and must not be skipped as part of the
+        # comment (#16414 review).
+        "# see the note above \\\ngit config core.hooksPath /tmp/nowhere",
     ],
 )
 def test_the_matcher_catches_an_override_invocation(line: str) -> None:

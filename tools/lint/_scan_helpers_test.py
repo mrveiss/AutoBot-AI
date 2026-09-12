@@ -243,6 +243,14 @@ def test_logical_lines_does_not_fold_a_mid_line_backslash() -> None:
     ]
 
 
+def test_logical_lines_never_folds_out_of_a_comment_line() -> None:
+    """Bash ends a comment at the newline, so its trailing backslash is text."""
+    assert helpers.logical_lines("# see the note \\\nsome-tool --dangerous-flag /tmp/x") == [
+        (1, "# see the note \\"),
+        (2, "some-tool --dangerous-flag /tmp/x"),
+    ]
+
+
 def test_logical_lines_reports_the_first_physical_line_of_each_fold() -> None:
     """Numbering follows the fold, not the physical line count.
 
