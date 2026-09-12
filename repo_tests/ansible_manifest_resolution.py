@@ -360,17 +360,17 @@ def _names_a_component_package(value: object) -> bool:
     return False
 
 
-# Only a pip task carrying BOTH a literal `requirements:` and a literal
-# `virtualenv:` produces a derived edge. A `name:`-list pip task is invisible
-# here whether or not a manifest exists behind it, so the three "no manifest"
-# sites are asserted by their recorded reason rather than cross-checked.
+# Only a pip task carrying BOTH a literal `requirements:` and a literal `virtualenv:` produces a derived edge. A
+# `name:`-list pip task is invisible here whether or not a manifest exists behind it, so the three "no manifest" sites
+# are asserted by their recorded reason rather than cross-checked.
 def _record_task(key: object, value: object, path: str, edges: _Edges) -> None:
     """Record the delivery and install edges one task key opens."""
     if key in _PIP_TASK_KEYS and isinstance(value, dict):
         if isinstance(value.get("requirements"), str) and isinstance(value.get("virtualenv"), str):
             edges.installs.append((path, value["virtualenv"], value["requirements"]))
             edges.sources.append((path, value["virtualenv"], MANIFEST_SOURCE))
-        if isinstance(value.get("virtualenv"), str) and _names_a_component_package(value.get("name")):
+        removing = value.get("state") == "absent"
+        if not removing and isinstance(value.get("virtualenv"), str) and _names_a_component_package(value.get("name")):
             edges.sources.append((path, value["virtualenv"], INLINE_SOURCE))
     if key in _SYNCHRONIZE_KEYS and isinstance(value, dict):
         source, destination = str(value.get("src", "")), str(value.get("dest", ""))
