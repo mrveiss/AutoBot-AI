@@ -25,7 +25,7 @@ from api.schemas_code import (
     SkillsGovernanceConfigResponse,
     SkillsGovernanceUpdateResponse,
 )
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
@@ -42,7 +42,9 @@ from skills.promoter import SkillPromoter
 from skills.validator import SkillValidator
 
 logger = get_logger(__name__)
-router = APIRouter()
+# #16368: every route needs an authenticated caller, and every route here also
+# needs admin: drafts, approvals and the governance mode are the admin console.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 _GOVERNANCE_SINGLETON_ID = 1
 _STATUS_PENDING = "pending"
@@ -129,7 +131,7 @@ async def detect_gap(
     operation="list_drafts",
     error_code_prefix="SKILLS_GOVERNANCE",
 )
-async def list_drafts() -> List[Dict[str, Any]]:
+async def list_drafts(_: None = Depends(check_admin_permission)) -> List[Dict[str, Any]]:
     """Return all SkillPackage records in DRAFT state."""
     async with skills_session_context() as session:
         result = await session.execute(select(SkillPackage).where(SkillPackage.state == SkillState.DRAFT))
@@ -229,7 +231,7 @@ async def promote_draft(
     operation="list_approvals",
     error_code_prefix="SKILLS_GOVERNANCE",
 )
-async def list_approvals() -> List[Dict[str, Any]]:
+async def list_approvals(_: None = Depends(check_admin_permission)) -> List[Dict[str, Any]]:
     """Return all SkillApproval records with status 'pending'."""
     async with skills_session_context() as session:
         result = await session.execute(select(SkillApproval).where(SkillApproval.status == _STATUS_PENDING))
@@ -279,7 +281,7 @@ async def decide_approval(
     operation="get_governance",
     error_code_prefix="SKILLS_GOVERNANCE",
 )
-async def get_governance() -> Dict[str, Any]:
+async def get_governance(_: None = Depends(check_admin_permission)) -> Dict[str, Any]:
     """Return the active GovernanceConfig, or the default if none exists."""
     async with skills_session_context() as session:
         result = await session.execute(select(GovernanceConfig))
