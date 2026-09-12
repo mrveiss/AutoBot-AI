@@ -307,6 +307,7 @@ Run these gates before creating a PR or merging any branch. Gates are ordered by
 ```bash
 scripts/pr-preflight.sh --issue N [--body pr.md] [--message msg.txt]
 scripts/pr-preflight.sh --issue N --full   # also run the checks a path filter would otherwise skip
+scripts/pr-preflight.sh --issue N --only 'ERE'   # run only the required checks whose name matches; the rest are named as not selected
 ```
 
 It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs.

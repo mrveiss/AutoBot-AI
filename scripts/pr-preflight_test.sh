@@ -14,6 +14,14 @@
 # these tests cover the body/message logic, which is where the recurring
 # misses have been. The lint section just shells out to the same tools CI
 # runs and has nothing of its own to test.
+#
+# Every run also passes --only, because an empty change set runs the MOST
+# required checks, not the fewest: require_check's path filter only skips when
+# CHANGED is non-empty. Unscoped, each case here would run every required
+# check -- the startup-import pytest included -- which is too slow for this
+# suite's CI budget and runs pytest from inside pytest, since
+# repo_tests/shell_lib_test.py is what runs this file. A case selects only the
+# check it asserts on, and the body/message cases select none.
 
 set -uo pipefail
 
@@ -21,21 +29,29 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 SCRIPT="${HERE}/pr-preflight.sh"
 TMP="$(mktemp -d)"
 # .pr-preflight-fixture-tmp (repo root) is a throwaway file the path-filter
-# dispatch tests below use to give CHANGED one real, non-matching entry.
-# Folded into this same trap -- the ONE place both it and TMP are removed, no
-# matter how the run ends (rm/git rm on a path that was never created is a
-# silent no-op, so this is safe to register before the fixture exists).
-trap 'rm -rf "${TMP}"; git rm -f --cached --ignore-unmatch -q -- ".pr-preflight-fixture-tmp" >/dev/null 2>&1; rm -f -- ".pr-preflight-fixture-tmp"' EXIT
+# dispatch tests below use to give CHANGED one real, non-matching entry. It is
+# only ever staged in a temporary index inside TMP, never the real one, so
+# removing TMP undoes the staging and this trap has only the file itself left
+# to delete -- the ONE place both are removed, however the run ends (rm on a
+# path that was never created is a silent no-op, so registering this before
+# the fixture exists is safe).
+trap 'rm -rf "${TMP}"; rm -f -- ".pr-preflight-fixture-tmp"' EXIT
 
 pass=0
 fail=0
+
+# `--only` takes an ERE over required-check context names. `^$` matches only an
+# empty name and every context has one, so it selects NO required check: the
+# body, message and branch gates still run, and the required-checks section
+# shrinks to its one "not selected" note.
+NO_REQUIRED_CHECKS='^$'
 
 # Assert that running the script over the given fixtures does (or does not)
 # report a failure whose text contains $pattern.
 check_reports() {
     local name="$1" expected="$2" pattern="$3" body="$4" message="$5"
     local out
-    out=$(PREFLIGHT_BASE=HEAD bash "${SCRIPT}" --issue 9999 \
+    out=$(PREFLIGHT_BASE=HEAD bash "${SCRIPT}" --issue 9999 --only "${NO_REQUIRED_CHECKS}" \
             ${body:+--body "$body"} ${message:+--message "$message"} 2>&1)
     local actual="no"
     printf '%s' "$out" | grep -q "FAIL.*${pattern}" && actual="yes"
@@ -186,11 +202,16 @@ if [ "${#REQUIRED[@]}" -eq 0 ]; then
     echo "  --    branch protection unreadable; using the ten contexts known at #15933"
 fi
 
-COVERAGE_OUT=$(PREFLIGHT_BASE=HEAD bash "${SCRIPT}" --issue 9999 2>&1)
+# Scoped to no required check, so none of them runs here -- and none needs to:
+# every check that reaches require_check or skip_check is named in --only's
+# "not selected" note, so a context that loses its call still goes missing
+# from this output and fails below.
+COVERAGE_OUT=$(PREFLIGHT_BASE=HEAD bash "${SCRIPT}" --issue 9999 --only "${NO_REQUIRED_CHECKS}" 2>&1)
 
 for ctx in "${REQUIRED[@]}"; do
     # A context is covered when the script names it -- as a run, as a skip with
-    # a reason, or as a cross-reference to the section that already predicts it.
+    # a reason, as a cross-reference to the section that already predicts it,
+    # or (in this scoped run) in the "not selected" note.
     if printf '%s' "${COVERAGE_OUT}" | grep -qF "${ctx}"; then
         pass=$((pass + 1))
     else
@@ -261,24 +282,40 @@ fi
 # `$BASE...HEAD` diff (empty here, same as every other case in this file)
 # and `git diff --diff-filter=ACMR HEAD` -- the uncommitted-changes half,
 # which reports an intent-to-add path as Added without any content ever
-# being staged. Unstaged again by this file's EXIT trap, which fires no
-# matter how the run ends, so the real working tree and index end up exactly
-# as found. A bare root-level name (no `.py`, no directory prefix) matches
+# being staged. A bare root-level name (no `.py`, no directory prefix) matches
 # none of this repo's `.github/filters/*.yml` sets nor the derived
 # code-quality set -- verified when this test was written; re-check there if
 # it ever starts failing for the wrong reason.
+#
+# The staging goes into a COPY of the real index, in TMP, named through
+# GIT_INDEX_FILE only to the three commands that need it. An EXIT trap undoing
+# a change to the real index is undone by nothing when the run is SIGKILLed or
+# dies before the trap is set -- the same class as #15353, where shell suites
+# wrote onto the real repository. A copy rather than an index rebuilt from
+# HEAD, so anything already staged stays in CHANGED exactly as the real index
+# has it, and the fixture is the only addition.
+#
+# Both runs select only `workflow path filters`, the one check the assertions
+# read, so --full does not also build the whole app for api-wiring.
 
 echo ""
 echo "path-filter dispatch (#15933 AC4/AC5)"
 
 FILTER_FIXTURE=".pr-preflight-fixture-tmp"
+FIXTURE_INDEX="${TMP}/index"
+PATH_FILTER_CHECK='^workflow path filters$'
 : > "${FILTER_FIXTURE}"
-if ! git add --intent-to-add -- "${FILTER_FIXTURE}" 2>/dev/null; then
+if ! cp -- "$(git rev-parse --git-path index)" "${FIXTURE_INDEX}" 2>/dev/null; then
+    fail=$((fail + 1))
+    echo "  FAIL: could not copy the real index into a temporary one for the path-filter fixture"
+elif ! GIT_INDEX_FILE="${FIXTURE_INDEX}" git add --intent-to-add -- "${FILTER_FIXTURE}" 2>/dev/null; then
     fail=$((fail + 1))
     echo "  FAIL: could not stage the path-filter fixture (git add --intent-to-add failed)"
 else
-    FILTER_DEFAULT_OUT=$(PREFLIGHT_BASE=HEAD bash "${SCRIPT}" --issue 9999 2>&1)
-    FILTER_FULL_OUT=$(PREFLIGHT_BASE=HEAD bash "${SCRIPT}" --issue 9999 --full 2>&1)
+    FILTER_DEFAULT_OUT=$(GIT_INDEX_FILE="${FIXTURE_INDEX}" PREFLIGHT_BASE=HEAD \
+        bash "${SCRIPT}" --issue 9999 --only "${PATH_FILTER_CHECK}" 2>&1)
+    FILTER_FULL_OUT=$(GIT_INDEX_FILE="${FIXTURE_INDEX}" PREFLIGHT_BASE=HEAD \
+        bash "${SCRIPT}" --issue 9999 --full --only "${PATH_FILTER_CHECK}" 2>&1)
 
     # Default: the fixture-only diff matches no filter, so the check is
     # skipped with a note rather than attempted.
