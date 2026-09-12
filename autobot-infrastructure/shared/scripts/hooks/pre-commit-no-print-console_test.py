@@ -79,7 +79,11 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # removed print()/console.* line is in that one file. So the whole drop of 37 is those
 # call sites, with no residue for a lost-reach case to hide in. (The removed LINES
 # number 40, which is the proxy the note above warns about.)
-_KNOWN_REPO_VIOLATIONS = 322
+# 317 since #16540: `.claude/skills/claims-audit/generate_report.py` writes its CLI
+# summary through sys.stdout instead of print(). MEASURED, not inferred: this test on
+# #16558's head (python-suite shard 11/12, job 103601998828) reported 317 against 322,
+# and the diff removes exactly 5 print() lines and adds none. A FIX, not a population change.
+_KNOWN_REPO_VIOLATIONS = 317
 
 
 def _test_git_env() -> dict[str, str]:
