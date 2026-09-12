@@ -52,7 +52,8 @@ for arg in "$@"; do
             echo "Usage: $0 [--json|--report|--audit-baseline|--prune-baseline|--help]"
             echo "  --json            Output results as JSON"
             echo "  --report          Show the detailed violation report"
-            echo "  --audit-baseline  Fail on baseline entries that match nothing"
+            echo "  --audit-baseline  Fail on baseline entries that claim more findings than the scan finds"
+            echo "                    (matched 0: delete the entry; matched fewer: lower its count)"
             echo "  --prune-baseline  Rewrite the baseline to what is actually found (REMOVES only)"
             exit 0
             ;;
@@ -147,12 +148,32 @@ STATUS="pass"
 [ "$TOTAL_VIOLATIONS" -gt 0 ] && STATUS="fail"
 
 if [ "$AUDIT_BASELINE" = true ]; then
-    STALE=$(hv_stale_baseline_entries)
-    if [ -n "$STALE" ]; then
-        STALE_COUNT=$(printf '%s\n' "$STALE" | grep -c . || true)
-        echo "${STALE_COUNT} baseline entr(ies) in ${BASELINE#"$REPO_ROOT"/} no longer match anything:"
-        echo
-        printf '%s\n' "$STALE" | sed 's/^/  STALE  /'
+    # `claimed|found|key` per entry that found fewer than it claims (#16334).
+    # found 0 -> delete the entry; 0 < found < claimed -> lower it to found.
+    # Calling both "no longer match anything" made #16298 delete an entry that
+    # still covered a live finding, so the two are listed and worded apart.
+    SHORT=$(hv_stale_baseline_entries | LC_ALL=C sort -t'|' -k3)
+    if [ -n "$SHORT" ]; then
+        UNMATCHED=(); OVERCOUNTED=()
+        while IFS='|' read -r claimed found key; do
+            [ -n "$key" ] || continue
+            if [ "$found" -eq 0 ]; then
+                UNMATCHED+=("  STALE  ${key}  (matched 0 of ${claimed}: delete this entry)")
+            else
+                OVERCOUNTED+=("  OVER   ${key}  (matched ${found} of ${claimed}: lower it to ${found}, do not delete)")
+            fi
+        done <<< "$SHORT"
+        echo "$(( ${#UNMATCHED[@]} + ${#OVERCOUNTED[@]} )) baseline entr(ies) in ${BASELINE#"$REPO_ROOT"/} claim more findings than the scan found:"
+        if [ "${#UNMATCHED[@]}" -gt 0 ]; then
+            echo
+            echo "${#UNMATCHED[@]} match nothing any more:"
+            printf '%s\n' "${UNMATCHED[@]}"
+        fi
+        if [ "${#OVERCOUNTED[@]}" -gt 0 ]; then
+            echo
+            echo "${#OVERCOUNTED[@]} still match, but fewer times than they claim:"
+            printf '%s\n' "${OVERCOUNTED[@]}"
+        fi
         echo
         # #14912: this used to stop at "here is what is wrong". Most of the cost
         # of this check was never the rule, it was that the person who hit it --
@@ -162,17 +183,19 @@ if [ "$AUDIT_BASELINE" = true ]; then
         echo
         echo "    ./pipeline-scripts/detect-hardcoded-values.sh --prune-baseline"
         echo
-        echo "then commit the changed baseline. Prune only ever REMOVES entries — it"
-        echo "cannot add a key or raise a count — so it cannot be used to silence a new"
-        echo "finding. That direction is blocked independently by"
+        echo "then commit the changed baseline. Prune deletes the entries that match"
+        echo "nothing and lowers the others to what was found. It only ever REMOVES or"
+        echo "LOWERS — it cannot add a key or raise a count — so it cannot be used to"
+        echo "silence a new finding. That direction is blocked independently by"
         echo "pipeline-scripts/check_baseline_no_growth.sh."
         echo
         echo "Why this blocks rather than warns: an entry naming a path that has moved"
         echo "exempts nothing today, but silently re-permits the value the moment that"
-        echo "path comes back."
+        echo "path comes back; an entry claiming more than it finds leaves room for a"
+        echo "new occurrence of the same value in that file to slip in unreported."
         exit 1
     fi
-    echo "hardcoded-values: every baseline entry still matches something"
+    echo "hardcoded-values: every baseline entry matches as many findings as it claims"
     exit 0
 fi
 

@@ -1,51 +1,53 @@
+# Known hardcoded-value findings as of the #14371 consolidation.
 #
+# WHY THIS FILE EXISTS. Three detectors implemented "find hardcoded values" and
+# only one of them ever ran over the repository tree — the CI one, which
+# reported ZERO. Merging the three rule sets (nothing dropped) and running the
+# result over the same tree found 1977 findings. Every one of them was already
+# true; it was simply never being looked for, because the rules that would have
+# found it lived in a fork nothing invoked or in a hook that only ever sees
+# staged files.
 #
+# Turning 1977 findings into a blocking gate on the same day would redden
+# ssot-coverage on every pull request and block every local commit. So they are
+# recorded HERE instead of being silently omitted from the rules: every run
+# prints how many baselined findings it suppressed and the issue that owns the
+# backlog. A backlog nobody is reminded of is indistinguishable from no backlog.
 #
+# THIS FILE ONLY EVER SHRINKS BY DEFAULT. A finding not listed here fails the
+# build. The count is part of the key, so a SECOND occurrence of an
+# already-known value in an already-known file is a new finding, not a free
+# pass. `--audit-baseline` reports entries that claim more findings than the
+# scan finds -- delete one that matches nothing, LOWER one that still matches
+# fewer times (#16334) -- so a fixed violation cannot leave a stranded
+# exemption behind.
 #
+# THE ONE WAY AN ENTRY MAY BE ADDED (#14919). Both halves are required, and the
+# first one cannot be bought:
 #
-#
-#
-#
-#
-#          # reviewed: #<issue> why this cannot be fixed at the source
-#          1|ssot|path/to/file.py|value
+#   1. the entry's file is byte-identical to the base ref -- so a detection-rule
 #      change surfaced code that was already here, and this change did not write
 #      the value. An addition in a file the same change TOUCHES is the bypass
 #      this baseline exists to close and has no override of any kind;
-#   1. the entry's file is byte-identical to the base ref -- so a detection-rule
 #   2. the change adds a justification line directly above the entry:
-# All 1408 entries below carry exactly three.
-# Format: <count>|<class>|<file>|<value>
-# Known hardcoded-value findings as of the #14371 consolidation.
-# THE ONE WAY AN ENTRY MAY BE ADDED (#14919). Both halves are required, and the
-# THIS FILE ONLY EVER SHRINKS BY DEFAULT. A finding not listed here fails the
-# THREE `|` PER LINE, EXACTLY. Neither `file` nor `value` is escaped, so a
+#
+#          # reviewed: #<issue> why this cannot be fixed at the source
+#          1|ssot|path/to/file.py|value
+#
 # The justification is a preceding COMMENT, never a suffix: everything after the
-# Turning 1977 findings into a blocking gate on the same day would redden
-# WHY THIS FILE EXISTS. Three detectors implemented "find hardcoded values" and
-# addition in full.
-# already-known value in an already-known file is a new finding, not a free
-# backlog. A backlog nobody is reminded of is indistinguishable from no backlog.
-# build. The count is part of the key, so a SECOND occurrence of an
-# exploitable, not merely untidy: a crafted filename containing `|` lets a
 # first `|` is the key, so a trailing `# reviewed: ...` would change the key
-# first one cannot be bought:
-# fixed violation cannot leave a stranded exemption behind.
-# found it lived in a fork nothing invoked or in a hook that only ever sees
-# fourth separator makes the record ambiguous -- and the ambiguity is
-# no-growth guard refuses an ambiguous key outright rather than guessing.
-# only one of them ever ran over the repository tree — the CI one, which
-# pass. `--audit-baseline` reports entries that no longer match anything, so a
-# pipeline-scripts/check_baseline_no_growth.sh, which prints every permitted
-# prints how many baselined findings it suppressed and the issue that owns the
-# reader resolve the FILE field to an unrelated, untouched decoy. The
-# recorded HERE instead of being silently omitted from the rules: every run
-# reported ZERO. Merging the three rule sets (nothing dropped) and running the
-# result over the same tree found 1977 findings. Every one of them was already
-# ssot-coverage on every pull request and block every local commit. So they are
-# staged files.
-# true; it was simply never being looked for, because the rules that would have
 # until it matched no finding at all. Both halves are enforced by
+# pipeline-scripts/check_baseline_no_growth.sh, which prints every permitted
+# addition in full.
+#
+# Format: <count>|<class>|<file>|<value>
+#
+# THREE `|` PER LINE, EXACTLY. Neither `file` nor `value` is escaped, so a
+# fourth separator makes the record ambiguous -- and the ambiguity is
+# exploitable, not merely untidy: a crafted filename containing `|` lets a
+# reader resolve the FILE field to an unrelated, untouched decoy. The
+# no-growth guard refuses an ambiguous key outright rather than guessing.
+# All 1408 entries below carry exactly three.
 10|other|autobot-backend/api/chat.py|"assistant"
 10|ssot|autobot-infrastructure/shared/config/prometheus/alertmanager.yml|:8001
 12|other|autobot-infrastructure/shared/scripts/bulletproof-frontend/zero-downtime-update.sh|"/opt/autobot/src/autobot-slm-frontend
