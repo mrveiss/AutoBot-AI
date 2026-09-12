@@ -4,32 +4,51 @@
  * Session Collaboration Composable
  *
  * Issue #608: User-Centric Session Tracking - Phase 5
+ * #16443: rewritten onto the REAL backend. The previous version sent
+ * invented message shapes (`{type: "session_join", ...}`) over
+ * `globalWebSocketService`'s generic `/ws/live` channel, whose protocol only
+ * understands `{action: "subscribe"|"unsubscribe"|"command"|"ping"}` --
+ * every message this composable sent was silently dropped server-side
+ * (logged at DEBUG, never delivered; see api/live_events.py's
+ * `_handle_message`). Nothing here sends a `/ws/live`-shaped message anymore;
+ * see __tests__/useSessionCollaboration.test.ts's
+ * "never sends one of the old fake /ws/live message shapes" test.
  *
- * Provides real-time collaboration features for chat sessions:
- * - Presence tracking (who's online in session)
- * - Activity sync between collaborators
- * - Invitation system
- * - Secret sharing notifications
+ * Real backend surface used instead:
+ * - REST, `api/collaboration.py`: invite / remove / list participants /
+ *   share a secret with the session (persists via Secret.share_with()).
+ * - WebSocket, `api/presence_ws.py` + `websocket/presence.py`
+ *   (`/ws/sessions/{id}/presence`, authenticated + authorized as of #16455):
+ *   join/leave presence events, plus a generic `{"type":"broadcast","payload"}`
+ *   relay any connected participant can send, forwarded live to the others.
+ *   Activity broadcast and secret-share notifications both ride this relay
+ *   (`payload.kind`), which is why they're live-only -- nothing is persisted
+ *   server-side. #16460 tracks adding real history/persistence and a
+ *   list/respond surface for pending invitations; until it lands, this
+ *   composable has no `pendingInvitations`/`respondToInvitation` -- there is
+ *   no REST endpoint to back them, and shipping a no-op stub would violate
+ *   the same "no fake protocol" rule this rewrite exists to fix.
+ *
+ * Known gap: neither `GET .../participants` nor the presence WebSocket
+ * returns a display username for anyone but the caller -- only user_id.
+ * `UserPresence.username` falls back to the raw user_id until a real
+ * user-lookup exists (also #16460's territory).
  *
  * Usage:
  * ```typescript
  * import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
  *
- * const {
- *   presence,
- *   inviteCollaborator,
- *   leaveSession,
- *   onActivityUpdate
- * } = useSessionCollaboration()
+ * const { sessionPresence, inviteCollaborator, joinSession, leaveSession } = useSessionCollaboration()
  * ```
  */
 
 import { ref, computed, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, watch, type Ref, type ComputedRef } from 'vue'
 import { useChatStore, type UserContext, type SessionActivity } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
-import globalWebSocketService from '@/services/GlobalWebSocketService'
+import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
+import { getApiBase } from '@/config/ssot-config'
+import { apiService } from '@/services/api'
 
-// Create scoped logger
 const logger = createLogger('SessionCollaboration')
 
 /**
@@ -37,27 +56,11 @@ const logger = createLogger('SessionCollaboration')
  */
 export interface UserPresence {
   userId: string
+  /** Best-effort display name -- falls back to userId (see module docstring). */
   username: string
   status: 'online' | 'away' | 'offline'
   lastSeen: Date
   currentTab?: 'chat' | 'terminal' | 'files' | 'browser' | 'desktop'
-  cursorPosition?: { x: number; y: number }
-}
-
-/**
- * Collaboration invitation
- */
-export interface CollaborationInvitation {
-  id: string
-  sessionId: string
-  sessionName: string
-  fromUserId: string
-  fromUsername: string
-  toUserId: string
-  role: 'collaborator' | 'viewer'
-  createdAt: Date
-  expiresAt: Date
-  status: 'pending' | 'accepted' | 'declined' | 'expired'
 }
 
 /**
@@ -85,25 +88,10 @@ export interface SecretSharingNotification {
   timestamp: Date
 }
 
-/**
- * WebSocket message types for collaboration
- */
-type CollaborationMessageType =
-  | 'session_join'
-  | 'session_leave'
-  | 'presence_update'
-  | 'activity_broadcast'
-  | 'invitation_send'
-  | 'invitation_response'
-  | 'secret_shared'
-  | 'secret_revoked'
-  | 'cursor_move'
-
-interface CollaborationMessage {
-  type: CollaborationMessageType
-  sessionId: string
+/** Shape of a message sent over the presence WebSocket's generic relay. */
+interface PresenceBroadcastEnvelope {
+  type: 'broadcast'
   payload: Record<string, unknown>
-  timestamp: string
 }
 
 /**
@@ -112,44 +100,56 @@ interface CollaborationMessage {
 export interface UseSessionCollaborationReturn {
   /** Current user's presence state */
   myPresence: Ref<UserPresence | null>
-  /** All participants' presence in current session */
+  /** All participants' presence in current session (online only -- see module docstring) */
   sessionPresence: ComputedRef<UserPresence[]>
-  /** Pending invitations for current user */
-  pendingInvitations: Ref<CollaborationInvitation[]>
-  /** Recent activities from collaborators */
+  /** Recent activities from collaborators (live-only, see #16460) */
   recentCollaboratorActivities: Ref<CollaboratorActivity[]>
-  /** Secret sharing notifications */
+  /** Secret sharing notifications (live-only, see #16460) */
   secretNotifications: Ref<SecretSharingNotification[]>
-  /** Whether collaboration is connected */
+  /** Whether the presence WebSocket is connected */
   isConnected: ComputedRef<boolean>
 
   /** Join a session for collaboration */
   joinSession: (sessionId: string) => void
   /** Leave current session */
   leaveSession: () => void
-  /** Update my presence status */
+  /** Update my presence status (local + best-effort broadcast to others) */
   updatePresence: (status: UserPresence['status'], currentTab?: UserPresence['currentTab']) => void
-  /** Invite a user to collaborate */
-  inviteCollaborator: (userId: string, role?: 'collaborator' | 'viewer') => boolean
-  /** Respond to an invitation */
-  respondToInvitation: (invitationId: string, accept: boolean) => boolean
+  /** Invite a user to collaborate. 'collaborator' maps to the backend's EDITOR permission. */
+  inviteCollaborator: (userId: string, role?: 'collaborator' | 'viewer') => Promise<boolean>
   /** Broadcast an activity to collaborators */
   broadcastActivity: (activity: SessionActivity) => void
-  /** Share a secret with session participants */
-  shareSecretWithSession: (secretId: string, secretName: string, secretType: string) => void
+  /** Share a secret with session participants (persists via the backend).
+   *  Omit participantIds to share with every editor+ participant. */
+  shareSecretWithSession: (secretId: string, participantIds?: string[]) => Promise<boolean>
   /** Clear secret notifications */
   clearSecretNotifications: () => void
 }
 
-// Module-level state (shared across instances)
+// Module-level state (shared across instances, matching the pre-#16443 design)
 const presenceMap = ref<Map<string, UserPresence>>(new Map())
-const pendingInvitations = ref<CollaborationInvitation[]>([])
 const recentActivities = ref<CollaboratorActivity[]>([])
 const secretNotifications = ref<SecretSharingNotification[]>([])
 const currentSessionId = ref<string | null>(null)
 const myPresence = ref<UserPresence | null>(null)
-let presenceInterval: ReturnType<typeof setInterval> | null = null
-let unsubscribers: Array<() => void> = []
+const wsConnected = ref(false)
+let presenceSocket: WebSocket | null = null
+
+// #16443 review: multiple components call useSessionCollaboration() for the
+// SAME session (ParticipantList, PresenceIndicator, ActivityFeed,
+// SecretNotifications, ChatCollaborationPanel all do). Each instantiation
+// registers its own onScopeDispose -- with the connection now real (it was
+// inert under the old fake protocol, so this never mattered before), the
+// first one of those components to unmount would close the socket out from
+// under every other still-mounted consumer. Reference-counted: the socket
+// closes only when the last instance disposes.
+let activeInstanceCount = 0
+
+function _presenceWsUrl(sessionId: string): string | null {
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const base = `${wsProtocol}//${window.location.host}${getApiBase()}/ws/sessions/${sessionId}/presence`
+  return buildAuthenticatedWsUrl(base)
+}
 
 /**
  * Session Collaboration composable
@@ -159,182 +159,143 @@ let unsubscribers: Array<() => void> = []
 export function useSessionCollaboration(): UseSessionCollaborationReturn {
   const chatStore = useChatStore()
 
-  // Get current user from store
   const getCurrentUser = (): UserContext | null => {
     const session = chatStore.currentSession
     return session?.owner || null
   }
 
-  // Computed: all presence entries for current session
   const sessionPresence = computed<UserPresence[]>(() => {
     if (!currentSessionId.value) return []
     return Array.from(presenceMap.value.values())
   })
 
-  // Computed: is WebSocket connected
-  const isConnected = computed(() => globalWebSocketService.isConnected.value)
+  const isConnected = computed(() => wsConnected.value)
 
-  /**
-   * Handle incoming WebSocket messages for collaboration
-   */
-  const handleCollaborationMessage = (message: CollaborationMessage) => {
-    if (message.sessionId !== currentSessionId.value) return
-
-    switch (message.type) {
-      case 'session_join':
-        handleUserJoined(message.payload as unknown as UserPresence)
-        break
-      case 'session_leave':
-        handleUserLeft(message.payload.userId as string)
-        break
-      case 'presence_update':
-        handlePresenceUpdate(message.payload as unknown as UserPresence)
-        break
-      case 'activity_broadcast':
-        handleActivityBroadcast(message.payload as unknown as CollaboratorActivity)
-        break
-      case 'invitation_send':
-        handleInvitationReceived(message.payload as unknown as CollaborationInvitation)
-        break
-      case 'invitation_response':
-        handleInvitationResponse(message.payload as { invitationId: string; accepted: boolean })
-        break
-      case 'secret_shared':
-      case 'secret_revoked':
-        handleSecretNotification(message.payload as unknown as SecretSharingNotification)
-        break
-      case 'cursor_move':
-        handleCursorMove(message.payload as { userId: string; position: { x: number; y: number } })
-        break
-    }
-  }
-
-  /**
-   * Handle user joining session
-   */
-  const handleUserJoined = (presence: UserPresence) => {
-    presenceMap.value.set(presence.userId, {
-      ...presence,
-      lastSeen: new Date(presence.lastSeen)
-    })
-    logger.debug(`[Issue #608] User ${presence.username} joined session`)
-  }
-
-  /**
-   * Handle user leaving session
-   */
-  const handleUserLeft = (userId: string) => {
-    const user = presenceMap.value.get(userId)
-    if (user) {
-      logger.debug(`[Issue #608] User ${user.username} left session`)
-      presenceMap.value.delete(userId)
-    }
-  }
-
-  /**
-   * Handle presence update
-   */
-  const handlePresenceUpdate = (presence: UserPresence) => {
-    presenceMap.value.set(presence.userId, {
-      ...presence,
-      lastSeen: new Date(presence.lastSeen)
+  const _upsertPresence = (userId: string, patch: Partial<UserPresence>): void => {
+    const existing = presenceMap.value.get(userId)
+    presenceMap.value.set(userId, {
+      userId,
+      username: existing?.username ?? userId,
+      currentTab: existing?.currentTab,
+      // Any upsert means "just seen" -- status/lastSeen default fresh, not
+      // carried over from `existing`, unless `patch` explicitly overrides them.
+      status: 'online',
+      lastSeen: new Date(),
+      ...patch
     })
   }
 
-  /**
-   * Handle activity broadcast from collaborator
-   */
-  const handleActivityBroadcast = (activity: CollaboratorActivity) => {
-    // Don't show my own activities
+  const _handleBroadcastPayload = (senderId: string, payload: Record<string, unknown>): void => {
     const currentUser = getCurrentUser()
-    if (currentUser && activity.userId === currentUser.id) return
+    const isOwnMessage = !!currentUser && senderId === currentUser.id
 
-    recentActivities.value.unshift({
-      ...activity,
-      timestamp: new Date(activity.timestamp)
-    })
-
-    // Keep only last 50 activities
-    if (recentActivities.value.length > 50) {
-      recentActivities.value = recentActivities.value.slice(0, 50)
-    }
-
-    logger.debug(`[Issue #608] Activity from ${activity.username}: ${activity.activity.type}`)
-  }
-
-  /**
-   * Handle invitation received
-   */
-  const handleInvitationReceived = (invitation: CollaborationInvitation) => {
-    pendingInvitations.value.push({
-      ...invitation,
-      createdAt: new Date(invitation.createdAt),
-      expiresAt: new Date(invitation.expiresAt)
-    })
-    logger.debug(`[Issue #608] Received invitation from ${invitation.fromUsername}`)
-  }
-
-  /**
-   * Handle invitation response
-   */
-  const handleInvitationResponse = (response: { invitationId: string; accepted: boolean }) => {
-    const index = pendingInvitations.value.findIndex(i => i.id === response.invitationId)
-    if (index !== -1) {
-      pendingInvitations.value[index].status = response.accepted ? 'accepted' : 'declined'
-    }
-  }
-
-  /**
-   * Handle secret sharing notification
-   */
-  const handleSecretNotification = (notification: SecretSharingNotification) => {
-    secretNotifications.value.unshift({
-      ...notification,
-      timestamp: new Date(notification.timestamp)
-    })
-    logger.debug(`[Issue #608] Secret ${notification.action}: ${notification.secretName}`)
-  }
-
-  /**
-   * Handle cursor movement from collaborator
-   */
-  const handleCursorMove = (data: { userId: string; position: { x: number; y: number } }) => {
-    const presence = presenceMap.value.get(data.userId)
-    if (presence) {
-      presence.cursorPosition = data.position
-      presenceMap.value.set(data.userId, presence)
+    switch (payload.kind) {
+      case 'activity': {
+        if (isOwnMessage) return
+        recentActivities.value.unshift({
+          sessionId: currentSessionId.value || '',
+          userId: senderId,
+          username: (payload.username as string) || senderId,
+          activity: {
+            ...(payload.activity as SessionActivity),
+            timestamp: new Date((payload.activity as { timestamp: string })?.timestamp)
+          },
+          timestamp: new Date()
+        })
+        if (recentActivities.value.length > 50) {
+          recentActivities.value = recentActivities.value.slice(0, 50)
+        }
+        break
+      }
+      case 'secret_shared': {
+        if (isOwnMessage) return
+        secretNotifications.value.unshift({
+          secretId: payload.secret_id as string,
+          secretName: payload.secret_name as string,
+          secretType: payload.secret_type as string,
+          sharedBy: payload.shared_by as string,
+          sharedByUsername: (payload.shared_by_username as string) || (payload.shared_by as string),
+          sessionId: (payload.session_id as string) || currentSessionId.value || '',
+          action: 'shared',
+          timestamp: new Date()
+        })
+        break
+      }
+      case 'presence_update': {
+        _upsertPresence(senderId, {
+          status: (payload.status as UserPresence['status']) || 'online',
+          currentTab: payload.current_tab as UserPresence['currentTab']
+        })
+        break
+      }
+      default:
+        logger.debug('Unrecognized presence broadcast kind:', payload.kind)
     }
   }
 
-  /**
-   * Send presence update to server
-   */
-  const sendPresenceUpdate = () => {
-    if (!myPresence.value || !currentSessionId.value) return
-
-    const message: CollaborationMessage = {
-      type: 'presence_update',
-      sessionId: currentSessionId.value,
-      payload: myPresence.value as unknown as Record<string, unknown>,
-      timestamp: new Date().toISOString()
-    }
-
-    globalWebSocketService.send(message as unknown as Record<string, unknown>)
-  }
-
-  /**
-   * Join a session for collaboration
-   */
-  const joinSession = (sessionId: string) => {
-    const user = getCurrentUser()
-    if (!user) {
-      logger.warn('[Issue #608] Cannot join session: no current user')
+  const _handlePresenceSocketMessage = (event: MessageEvent<string>): void => {
+    let data: Record<string, unknown>
+    try {
+      data = JSON.parse(event.data)
+    } catch {
       return
     }
 
-    // Leave previous session if any
+    switch (data.type) {
+      case 'presence_sync': {
+        const onlineUsers = (data.online_users as string[]) || []
+        presenceMap.value.clear()
+        onlineUsers.forEach(userId => _upsertPresence(userId, {}))
+        break
+      }
+      case 'user_joined':
+        _upsertPresence(data.user_id as string, {})
+        logger.debug(`User ${data.user_id} joined session`)
+        break
+      case 'user_left':
+        presenceMap.value.delete(data.user_id as string)
+        logger.debug(`User ${data.user_id} left session`)
+        break
+      case 'user_message':
+        _handleBroadcastPayload(data.user_id as string, (data.payload as Record<string, unknown>) || {})
+        break
+      case 'pong':
+      case 'ping':
+        break
+      default:
+        logger.debug('Unrecognized presence message type:', data.type)
+    }
+  }
+
+  const _sendBroadcast = (payload: Record<string, unknown>): void => {
+    if (!presenceSocket || presenceSocket.readyState !== WebSocket.OPEN) return
+    const envelope: PresenceBroadcastEnvelope = { type: 'broadcast', payload }
+    presenceSocket.send(JSON.stringify(envelope))
+  }
+
+  /**
+   * Join a session for collaboration -- opens the real presence WebSocket.
+   */
+  const joinSession = (sessionId: string): void => {
+    // Idempotent: several components mounted at once each call joinSession
+    // for the same session via the auto-join watcher below. Reopening the
+    // socket on every one of them would thrash the connection for no reason.
+    if (currentSessionId.value === sessionId && presenceSocket) return
+
+    const user = getCurrentUser()
+    if (!user) {
+      logger.warn('Cannot join session: no current user')
+      return
+    }
+
     if (currentSessionId.value) {
       leaveSession()
+    }
+
+    const wsUrl = _presenceWsUrl(sessionId)
+    if (!wsUrl) {
+      logger.debug('No auth token available yet; deferring presence connect')
+      return
     }
 
     currentSessionId.value = sessionId
@@ -346,59 +307,48 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       currentTab: 'chat'
     }
 
-    // Send join message
-    const message: CollaborationMessage = {
-      type: 'session_join',
-      sessionId,
-      payload: myPresence.value as unknown as Record<string, unknown>,
-      timestamp: new Date().toISOString()
+    presenceSocket = new WebSocket(wsUrl)
+    presenceSocket.onopen = () => {
+      wsConnected.value = true
+      logger.debug(`Joined session ${sessionId} for collaboration`)
     }
-
-    globalWebSocketService.send(message as unknown as Record<string, unknown>)
-
-    // Start presence heartbeat
-    if (presenceInterval) {
-      clearInterval(presenceInterval)
+    presenceSocket.onmessage = _handlePresenceSocketMessage
+    presenceSocket.onclose = () => {
+      wsConnected.value = false
     }
-    presenceInterval = setInterval(sendPresenceUpdate, 30000) // Every 30 seconds
-
-    logger.debug(`[Issue #608] Joined session ${sessionId} for collaboration`)
+    presenceSocket.onerror = () => {
+      logger.warn('Presence WebSocket error')
+    }
   }
 
   /**
    * Leave current session
    */
-  const leaveSession = () => {
-    if (!currentSessionId.value || !myPresence.value) return
-
-    const message: CollaborationMessage = {
-      type: 'session_leave',
-      sessionId: currentSessionId.value,
-      payload: { userId: myPresence.value.userId },
-      timestamp: new Date().toISOString()
+  const leaveSession = (): void => {
+    if (presenceSocket) {
+      presenceSocket.onopen = null
+      presenceSocket.onmessage = null
+      presenceSocket.onclose = null
+      presenceSocket.onerror = null
+      presenceSocket.close()
+      presenceSocket = null
     }
-
-    globalWebSocketService.send(message as unknown as Record<string, unknown>)
-
-    // Clear state
-    if (presenceInterval) {
-      clearInterval(presenceInterval)
-      presenceInterval = null
-    }
+    wsConnected.value = false
     presenceMap.value.clear()
     currentSessionId.value = null
     myPresence.value = null
-
-    logger.debug('[Issue #608] Left collaboration session')
+    logger.debug('Left collaboration session')
   }
 
   /**
-   * Update my presence status
+   * Update my presence status: local state always; best-effort broadcast to
+   * other connected participants (there is no server-side persistence of
+   * status/tab, so a participant who joins later won't see history of it).
    */
   const updatePresence = (
     status: UserPresence['status'],
     currentTab?: UserPresence['currentTab']
-  ) => {
+  ): void => {
     if (!myPresence.value) return
 
     myPresence.value.status = status
@@ -407,176 +357,83 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       myPresence.value.currentTab = currentTab
     }
 
-    sendPresenceUpdate()
+    _sendBroadcast({
+      kind: 'presence_update',
+      status,
+      current_tab: currentTab
+    })
   }
 
   /**
-   * Invite a user to collaborate
+   * Invite a user to collaborate. Real REST call -- POST /sessions/{id}/invite.
    */
-  const inviteCollaborator = (userId: string, role: 'collaborator' | 'viewer' = 'collaborator'): boolean => {
-    const user = getCurrentUser()
-    const session = chatStore.currentSession
-    if (!user || !session || !currentSessionId.value) {
-      logger.warn('[Issue #608] Cannot invite: no current user or session')
+  const inviteCollaborator = async (
+    userId: string,
+    role: 'collaborator' | 'viewer' = 'collaborator'
+  ): Promise<boolean> => {
+    if (!currentSessionId.value) {
+      logger.warn('Cannot invite: no current session')
       return false
     }
 
-    const invitation: CollaborationInvitation = {
-      id: `inv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      sessionId: currentSessionId.value,
-      sessionName: session.title || 'Unnamed Session',
-      fromUserId: user.id,
-      fromUsername: user.username,
-      toUserId: userId,
-      role,
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-      status: 'pending'
+    try {
+      // The UI's "collaborator" role maps to the backend's EDITOR permission
+      // level (owner/editor/viewer) -- "collaborator" reads as "can edit".
+      const permission = role === 'collaborator' ? 'editor' : 'viewer'
+      await apiService.inviteToSession(currentSessionId.value, userId, permission)
+      logger.debug(`Sent invitation to user ${userId}`)
+      return true
+    } catch (error) {
+      logger.error('Failed to invite collaborator:', error)
+      return false
     }
-
-    const message: CollaborationMessage = {
-      type: 'invitation_send',
-      sessionId: currentSessionId.value,
-      payload: invitation as unknown as Record<string, unknown>,
-      timestamp: new Date().toISOString()
-    }
-
-    globalWebSocketService.send(message as unknown as Record<string, unknown>)
-    logger.debug(`[Issue #608] Sent invitation to user ${userId}`)
-    return true
   }
 
   /**
-   * Respond to an invitation
+   * Broadcast an activity to collaborators over the presence relay.
    */
-  const respondToInvitation = (invitationId: string, accept: boolean): boolean => {
-    const invitation = pendingInvitations.value.find(i => i.id === invitationId)
-    if (!invitation) return false
-
-    invitation.status = accept ? 'accepted' : 'declined'
-
-    const message: CollaborationMessage = {
-      type: 'invitation_response',
-      sessionId: invitation.sessionId,
-      payload: { invitationId, accepted: accept },
-      timestamp: new Date().toISOString()
-    }
-
-    globalWebSocketService.send(message as unknown as Record<string, unknown>)
-
-    // If accepted, join the session
-    if (accept) {
-      joinSession(invitation.sessionId)
-    }
-
-    logger.debug(`[Issue #608] ${accept ? 'Accepted' : 'Declined'} invitation ${invitationId}`)
-    return true
-  }
-
-  /**
-   * Broadcast an activity to collaborators
-   */
-  const broadcastActivity = (activity: SessionActivity) => {
+  const broadcastActivity = (activity: SessionActivity): void => {
     const user = getCurrentUser()
     if (!user || !currentSessionId.value) return
 
-    const collaboratorActivity: CollaboratorActivity = {
-      sessionId: currentSessionId.value,
-      userId: user.id,
+    _sendBroadcast({
+      kind: 'activity',
       username: user.username,
-      activity,
-      timestamp: new Date()
-    }
-
-    const message: CollaborationMessage = {
-      type: 'activity_broadcast',
-      sessionId: currentSessionId.value,
-      payload: collaboratorActivity as unknown as Record<string, unknown>,
-      timestamp: new Date().toISOString()
-    }
-
-    globalWebSocketService.send(message as unknown as Record<string, unknown>)
+      activity
+    })
   }
 
   /**
-   * Share a secret with session participants
+   * Share a secret with session participants. Real REST call --
+   * POST /sessions/{id}/secrets/share -- persists via Secret.share_with()
+   * and the backend broadcasts a live notification (id/name/sharer only,
+   * never the value) to connected participants.
    */
-  const shareSecretWithSession = (secretId: string, secretName: string, secretType: string) => {
-    const user = getCurrentUser()
-    if (!user || !currentSessionId.value) return
+  const shareSecretWithSession = async (secretId: string, participantIds?: string[]): Promise<boolean> => {
+    if (!currentSessionId.value) return false
 
-    const notification: SecretSharingNotification = {
-      secretId,
-      secretName,
-      secretType,
-      sharedBy: user.id,
-      sharedByUsername: user.username,
-      sessionId: currentSessionId.value,
-      action: 'shared',
-      timestamp: new Date()
+    try {
+      await apiService.shareSecretWithSession(currentSessionId.value, secretId, participantIds)
+      logger.debug(`Shared secret ${secretId} with session`)
+      return true
+    } catch (error) {
+      logger.error('Failed to share secret with session:', error)
+      return false
     }
-
-    const message: CollaborationMessage = {
-      type: 'secret_shared',
-      sessionId: currentSessionId.value,
-      payload: notification as unknown as Record<string, unknown>,
-      timestamp: new Date().toISOString()
-    }
-
-    globalWebSocketService.send(message as unknown as Record<string, unknown>)
-    logger.debug(`[Issue #608] Shared secret ${secretName} with session`)
   }
 
   /**
    * Clear secret notifications
    */
-  const clearSecretNotifications = () => {
+  const clearSecretNotifications = (): void => {
     secretNotifications.value = []
   }
 
-  // Subscribe to WebSocket messages on mount
-  if (getCurrentInstance()) {
-    onMounted(() => {
-      // Subscribe to collaboration messages
-      const unsubMessage = globalWebSocketService.subscribe('collaboration', handleCollaborationMessage as (data: unknown) => void)
-      unsubscribers.push(unsubMessage)
-
-      // Also subscribe to specific message types that might come separately
-      const messageTypes: CollaborationMessageType[] = [
-        'session_join',
-        'session_leave',
-        'presence_update',
-        'activity_broadcast',
-        'invitation_send',
-        'invitation_response',
-        'secret_shared',
-        'secret_revoked',
-        'cursor_move'
-      ]
-
-      messageTypes.forEach(type => {
-        const unsub = globalWebSocketService.subscribe(type, (rawData: unknown) => {
-          const data = rawData as Record<string, unknown>
-          handleCollaborationMessage({
-            type,
-            sessionId: data.sessionId as string,
-            payload: data,
-            timestamp: data.timestamp as string || new Date().toISOString()
-          })
-        })
-        unsubscribers.push(unsub)
-      })
-
-      logger.debug('[Issue #608] Session collaboration initialized')
-    })
-  }
-
-  // Watch for session changes
+  // Auto-join when the current chat session is collaborative
   watch(
     () => chatStore.currentSession?.id,
     (newSessionId, oldSessionId) => {
       if (newSessionId && newSessionId !== oldSessionId) {
-        // Auto-join if collaborative session
         const session = chatStore.currentSession
         if (session?.mode === 'collaborative') {
           joinSession(newSessionId)
@@ -585,19 +442,26 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     }
   )
 
-  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      logger.debug('Session collaboration initialized')
+    })
+  }
+
   if (getCurrentScope()) {
+    activeInstanceCount++
     onScopeDispose(() => {
-      leaveSession()
-      unsubscribers.forEach(unsub => unsub())
-      unsubscribers = []
+      activeInstanceCount--
+      if (activeInstanceCount <= 0) {
+        activeInstanceCount = 0
+        leaveSession()
+      }
     })
   }
 
   return {
     myPresence,
     sessionPresence,
-    pendingInvitations,
     recentCollaboratorActivities: recentActivities,
     secretNotifications,
     isConnected,
@@ -605,7 +469,6 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     leaveSession,
     updatePresence,
     inviteCollaborator,
-    respondToInvitation,
     broadcastActivity,
     shareSecretWithSession,
     clearSecretNotifications
@@ -613,16 +476,17 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
 }
 
 /**
- * Cleanup function to stop collaboration and clear state
- * Call this when the app is being destroyed
+ * Cleanup function to stop collaboration and clear state.
+ * Call this when the app is being destroyed.
  */
 export function cleanupCollaboration(): void {
-  if (presenceInterval) {
-    clearInterval(presenceInterval)
-    presenceInterval = null
+  if (presenceSocket) {
+    presenceSocket.close()
+    presenceSocket = null
   }
+  activeInstanceCount = 0
+  wsConnected.value = false
   presenceMap.value.clear()
-  pendingInvitations.value = []
   recentActivities.value = []
   secretNotifications.value = []
   currentSessionId.value = null

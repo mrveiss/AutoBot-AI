@@ -6383,6 +6383,14 @@
       "offline": "Offline",
       "collaboratorTooltip": "Collaborator",
       "youStatus": "Your status"
+    },
+    "panel": {
+      "title": "التعاون",
+      "invite": "دعوة",
+      "closePanel": "إغلاق اللوحة",
+      "tabParticipants": "المشاركون",
+      "tabActivity": "النشاط",
+      "tabNotifications": "الإشعارات"
     }
   },
   "research": {
