@@ -1110,9 +1110,11 @@
    * and soft-red exceeded palettes have no existing exact semantic token
    * (--color-danger-dark matches the exceeded text hex but carries an OKLCH
    * override that would drift). Work-item status and priority colors live in
-   * component script data, NOT here. Batch-mate CodeCell.vue (#12048) needed
-   * no scoped tokens - its chrome is already fully tokenised and its hljs
-   * syntax-highlighting palette is DATA, preserved literal in the component.
+   * component script data, NOT here. Batch-mate CodeCell.vue (#12048) was
+   * left untokenised at the time on the call that its hljs syntax-highlighting
+   * palette was DATA, preserved literal in the component -- superseded by
+   * #14770 (canvas/CodeCell.vue) and #14853 (artifact-cells/CodeCell.vue),
+   * both of which now read the SYNTAX HIGHLIGHTING TOKENS block below.
    * ============================================ */
   --kanban-wip-warn-bg: #fef9c3;        /* WIP-limit warning column-header fill */
   --kanban-wip-warn-text: #713f12;      /* WIP-limit warning column-header text */
@@ -1120,8 +1122,10 @@
   --kanban-wip-exceeded-text: #991b1b;  /* WIP-limit exceeded column-header text */
 
   /* ============================================
-   * SYNTAX HIGHLIGHTING TOKENS (#14770, umbrella #11515)
-   * Scoped to canvas/CodeCell.vue's highlight.js theme.
+   * SYNTAX HIGHLIGHTING TOKENS (#14770, #14853, umbrella #11515)
+   * Shared by canvas/CodeCell.vue and artifact-cells/CodeCell.vue's
+   * highlight.js themes -- the one token set both components read (#14853's
+   * AC2), not one theme per file.
    *
    * The comment on the Kanban block above records the earlier call that this
    * palette is "DATA, preserved literal in the component" (#12048). That held
@@ -1144,12 +1148,17 @@
   --codecell-syntax-callable-dark: #61afef;  /* built_in / title / function */
   --codecell-syntax-keyword-dark: #c678dd;   /* keyword */
   --codecell-syntax-comment-dark: #5c6370;   /* comment */
+  /* #14853: artifact-cells/CodeCell.vue's only category with no match above.
+     Pinned to that file's own prior rendered value -- not a themed color,
+     since nothing here measured what a "correct" tag color should be. */
+  --codecell-syntax-tag-dark: #f97583;       /* tag (HTML/XML element name) */
   --codecell-syntax-attr-light: #0184bc;
   --codecell-syntax-number-light: #986801;
   --codecell-syntax-string-light: #50a14f;
   --codecell-syntax-callable-light: #4078f2;
   --codecell-syntax-keyword-light: #a626a4;
   --codecell-syntax-comment-light: #a0a1a7;
+  --codecell-syntax-tag-light: #800000;      /* #14853, see the dark entry above */
 
   /* ============================================
    * KB SEARCH HIGHLIGHT TOKENS (#14770, umbrella #11515)
