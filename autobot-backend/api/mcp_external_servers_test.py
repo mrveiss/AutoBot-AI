@@ -237,7 +237,9 @@ class TestUpdateExternalServer:
         store.update = AsyncMock()
         cred_store = AsyncMock()
         cred_store.store = AsyncMock(return_value=("new-sec", {}))
+        cred_store.load = AsyncMock(return_value={"token": "new-tok"})
 
+        # rotate
         with patch("api.mcp_external_servers.get_mcp_external_server_store", return_value=store):
             with patch("api.mcp_external_servers.get_credential_store", return_value=cred_store):
                 resp = await mod.update_external_server(
@@ -250,8 +252,28 @@ class TestUpdateExternalServer:
         (updated_cfg,) = store.update.await_args.args
         assert updated_cfg.owner_id == "admin-2"
         assert updated_cfg.secret_id == "new-sec"
-        # The OLD secret was genuinely stored under admin-1 -- revoking it
-        # under the new owner would look up the wrong row (or none).
+        from autobot_shared.auth.connector_auth import BearerAuth
+
+        # The new credential must be STORED under the new owner, not left
+        # implicit -- this is the write side of the consistency the load
+        # side (below) depends on.
+        cred_store.store.assert_awaited_once_with(
+            connector_id="s1", owner_id="admin-2", auth_cls=BearerAuth, config={"token": "new-tok"}
+        )
+
+        # connect: resolve_extra_headers_for_server loads BY cfg.owner_id --
+        # this is the actual bug's failure point (_require_owner mismatch)
+        # made real rather than inferred from the stored fields alone.
+        from services.mcp_server_credentials import resolve_extra_headers_for_server
+
+        with patch("knowledge.connectors.credential_store.get_credential_store", return_value=cred_store):
+            headers = await resolve_extra_headers_for_server(updated_cfg)
+
+        assert headers == {"Authorization": "Bearer new-tok"}
+        cred_store.load.assert_awaited_once_with("new-sec", updated_cfg.auth_config, BearerAuth, "admin-2")
+
+        # revoke: the OLD secret was genuinely stored under admin-1 --
+        # revoking it under the new owner would look up the wrong row (or none).
         cred_store.revoke.assert_awaited_once_with("old-sec", "admin-1")
 
     @pytest.mark.asyncio

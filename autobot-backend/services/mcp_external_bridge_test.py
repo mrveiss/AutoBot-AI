@@ -76,6 +76,31 @@ class TestListTools:
         assert [t.name for t in tools] == ["search"]
 
     @pytest.mark.asyncio
+    async def test_reserved_name_is_prefixed_even_with_only_one_server(self):
+        """#16458 review: list_tools() must actually forward reserved_names to
+        discover_and_resolve(), not just accept it -- exercised without mocking
+        the bridge itself (only the transport client), so a forwarding bug
+        that a mocked-bridge dispatch test cannot see is caught here.
+        """
+        bridge = MCPExternalBridge()
+        mock_client = AsyncMock()
+        mock_client.discover_tools = AsyncMock(return_value=[_make_tool("search")])
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("services.mcp_external_bridge.get_mcp_external_server_store") as get_store:
+            get_store.return_value.list = AsyncMock(return_value=[_stdio_server()])
+            with patch("services.mcp_external_bridge._get_mcp_client_class", return_value=lambda uri, **_: mock_client):
+                tools = await bridge.list_tools(reserved_names=frozenset({"search"}))
+
+        # The prefix comes from server_id_from_uri(to_server_uri()), not
+        # MCPServerConfig.server_id -- for a stdio server that's a slug of
+        # the command itself (services.mcp_aggregation.server_id_from_uri).
+        assert [t.name for t in tools] == ["npx_y_pkg__search"]
+        assert bridge.has_tool("npx_y_pkg__search")
+        assert not bridge.has_tool("search")
+
+    @pytest.mark.asyncio
     async def test_collision_across_two_servers_prefixes_both(self):
         bridge = MCPExternalBridge()
         client_a = AsyncMock()

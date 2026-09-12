@@ -146,7 +146,9 @@ class MCPExternalBridge:
                 resource_policy=settings.resource_policy,
             )
 
-        resolved = await discover_and_resolve([s.to_server_uri() for s in servers], _client_factory)
+        resolved = await discover_and_resolve(
+            [s.to_server_uri() for s in servers], _client_factory, reserved_names=reserved_names
+        )
 
         tools: list[MCPToolDefinition] = []
         for r in resolved:
