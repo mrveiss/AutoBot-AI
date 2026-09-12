@@ -27,7 +27,9 @@ from typing import AsyncIterator
 
 import pytest
 import pytest_asyncio
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.compiler import compiles
 
 from user_management.models import Role, User, UserRole
 from user_management.models.base import Base
@@ -35,6 +37,12 @@ from user_management.services.base_service import TenantContext
 from user_management.services.user_service import UserService
 
 _SQLITE_URL = "sqlite+aiosqlite://"
+
+
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_as_json_on_sqlite(element, compiler, **kw):  # noqa: ANN001
+    return "JSON"
+
 
 #: list_users eager-loads User.user_roles -> UserRole.role (user_service.py's
 #: list_users), so both tables must exist even though no test row uses them --
