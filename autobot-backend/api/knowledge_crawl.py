@@ -40,7 +40,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_knowledge_web import CrawlRequest, CrawlResponse
-from auth_middleware import check_admin_permission, get_current_user
+from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.web_crawler import WebCrawlerConnector
@@ -48,9 +48,9 @@ from web_fetch import FetchResult, RenderMode
 
 logger = get_logger(__name__)
 
-# #16375: mounted with no auth dependency. Every route needs a signed-in caller;
-# the crawl fetches caller-chosen URLs and can write the knowledge base, so it
-# also needs admin.
+# #16375: mounted with no auth dependency. Owner decision: any signed-in user
+# may crawl (#16375 PR discussion) — only the web-research settings mutations
+# stay admin-only.
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 _CONNECTOR_ID = "api_crawl"
@@ -87,7 +87,7 @@ def _fetch_results_to_pages(results: List[FetchResult]) -> List[Dict[str, Any]]:
 
 
 @router.post("/crawl", response_model=CrawlResponse, summary="BFS crawl seed URLs and optionally ingest into KB")
-async def crawl_url_endpoint(request: CrawlRequest, _: bool = Depends(check_admin_permission)) -> CrawlResponse:
+async def crawl_url_endpoint(request: CrawlRequest) -> CrawlResponse:
     """BFS-crawl *request.seeds* and return the fetched pages.
 
     Delegates entirely to :class:`knowledge.connectors.web_crawler.WebCrawlerConnector`

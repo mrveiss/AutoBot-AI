@@ -35,15 +35,14 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_knowledge_web import SiteMapRequest, SiteMapResponse, SiteMapUrlEntry
-from auth_middleware import check_admin_permission, get_current_user
+from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from web_fetch.site_mapper import SiteMapEntry, SiteMapper, SiteMapResult
 
 logger = get_logger(__name__)
 
-# #16375: mounted with no auth dependency. Every route needs a signed-in caller;
-# the site map fetches a caller-chosen domain's sitemap or crawls it, so it also
-# needs admin.
+# #16375: mounted with no auth dependency. Owner decision: any signed-in user
+# may map a site — only the web-research settings mutations stay admin-only.
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
@@ -53,7 +52,7 @@ def _entries_to_response_urls(entries: List[SiteMapEntry]) -> List[SiteMapUrlEnt
 
 
 @router.post("/site-map", response_model=SiteMapResponse, summary="Enumerate URLs for a domain via sitemap or crawl")
-async def get_site_map(request: SiteMapRequest, _: bool = Depends(check_admin_permission)) -> SiteMapResponse:
+async def get_site_map(request: SiteMapRequest) -> SiteMapResponse:
     """Return a list of URLs discovered for *request.domain*.
 
     Discovery strategy:

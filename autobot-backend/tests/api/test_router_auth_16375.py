@@ -2,14 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""No route in six previously ungated routers serves an unauthenticated caller (#16375).
+"""No route in seven previously ungated routers serves an unauthenticated caller (#16375).
 
-``api.ide_integration``, ``api.knowledge_crawl``, ``api.knowledge_scrape``,
-``api.knowledge_site_map``, ``api.run_jwt_router`` and ``api.web_research_settings``
+``api.ide_integration``, ``api.knowledge_crawl``, ``api.knowledge_extract``,
+``api.knowledge_scrape``, ``api.knowledge_site_map``, ``api.run_jwt_router`` and
+``api.web_research_settings``
 were mounted with no auth dependency, so every route was reachable anonymously.
-Each router now depends on ``get_current_user`` at router level, and every route
-that changes shared state, fetches from outside or runs a search also depends on
-``check_admin_permission``.
+Each router now depends on ``get_current_user`` at router level, so every route
+needs a signed-in caller. Owner decision: crawl/scrape/site-map/extract are for
+any signed-in user; only routes that change shared config (IDE config, the
+web-research settings mutations) also depend on ``check_admin_permission``.
 
 These tests judge that with the REAL dependencies, the way
 ``test_skills_auth_16368.py`` does. Under pytest, ``auth_middleware`` is the
@@ -29,10 +31,13 @@ from fastapi.testclient import TestClient
 
 import api.ide_integration as ide_api
 import api.knowledge_crawl as crawl_api
+import api.knowledge_extract as extract_api
 import api.knowledge_scrape as scrape_api
 import api.knowledge_site_map as site_map_api
 import api.run_jwt_router as run_jwt_api
 import api.web_research_settings as web_research_api
+from web_fetch import FetchResult
+from web_fetch.site_mapper import SiteMapResult
 
 _ADMIN, _USER = "admin", "user"
 
@@ -43,6 +48,7 @@ _MOUNTS = (
     (crawl_api, "/api/knowledge"),
     (scrape_api, "/api/knowledge"),
     (site_map_api, "/api/knowledge"),
+    (extract_api, "/api/knowledge"),
     (run_jwt_api, "/api"),
     (web_research_api, "/api"),
 )
@@ -59,9 +65,12 @@ _POLICY: Dict[Tuple[str, str], str] = {
     ("GET", "/api/ide/severities"): _USER,
     ("POST", "/api/ide/batch-analyze"): _USER,
     ("POST", "/api/ide/completion"): _USER,
-    ("POST", "/api/knowledge/crawl"): _ADMIN,
-    ("POST", "/api/knowledge/scrape"): _ADMIN,
-    ("POST", "/api/knowledge/site-map"): _ADMIN,
+    # Owner decision (#16375 PR discussion): the research routes are for any
+    # signed-in user — only the web-research settings mutations stay admin.
+    ("POST", "/api/knowledge/crawl"): _USER,
+    ("POST", "/api/knowledge/scrape"): _USER,
+    ("POST", "/api/knowledge/site-map"): _USER,
+    ("POST", "/api/knowledge/extract"): _USER,
     ("POST", "/api/runs/{run_id}/jwt/refresh"): _USER,
     ("GET", "/api/web-research/status"): _USER,
     ("POST", "/api/web-research/enable"): _ADMIN,
@@ -146,5 +155,52 @@ def test_a_non_admin_still_reaches_a_user_route(client) -> None:
     identity.user = dict(_NON_ADMIN)
 
     response = _call(test_client, "GET", "/api/ide/categories")
+
+    assert response.status_code == 200, response.text
+
+
+_RESEARCH_ROUTES = (
+    ("POST", "/api/knowledge/crawl"),
+    ("POST", "/api/knowledge/scrape"),
+    ("POST", "/api/knowledge/site-map"),
+    ("POST", "/api/knowledge/extract"),
+)
+
+
+@pytest.fixture
+def _stub_research_io(monkeypatch):
+    """Stub each research route's outbound call, so only the auth gate is under test."""
+
+    async def _fake_crawl(self, **_kwargs):
+        return []
+
+    async def _fake_fetch(url, **_kwargs):
+        return FetchResult(url=url, success=True, markdown="stub")
+
+    async def _fake_map_site(domain, **_kwargs):
+        return SiteMapResult(domain=domain, source="sitemap", entries=[])
+
+    async def _fake_extract_url(url, schema, render):
+        return {"url": url, "data": {}, "schema_valid": True}
+
+    monkeypatch.setattr(crawl_api.WebCrawlerConnector, "crawl", _fake_crawl)
+    monkeypatch.setattr(scrape_api.WebFetcher, "fetch", _fake_fetch)
+    monkeypatch.setattr(site_map_api.SiteMapper, "map_site", _fake_map_site)
+    monkeypatch.setattr(extract_api, "extract_url", _fake_extract_url)
+
+
+@pytest.mark.parametrize(("method", "path"), _RESEARCH_ROUTES)
+def test_a_non_admin_reaches_the_research_routes(client, _stub_research_io, method: str, path: str) -> None:
+    """Owner decision: crawl/scrape/site-map/extract are for any signed-in user, not admin only."""
+    test_client, identity = client
+    identity.user = dict(_NON_ADMIN)
+
+    body = {"seeds": ["https://example.com"]} if path.endswith("/crawl") else {"url": "https://example.com"}
+    if path.endswith("/site-map"):
+        body = {"domain": "example.com"}
+    elif path.endswith("/extract"):
+        body["schema"] = {"type": "object"}
+
+    response = test_client.request(method, path, json=body)
 
     assert response.status_code == 200, response.text

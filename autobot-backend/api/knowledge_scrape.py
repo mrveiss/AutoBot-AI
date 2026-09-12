@@ -48,20 +48,19 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_knowledge_web import ScrapeMetadata, ScrapeRequest, ScrapeResponse
-from auth_middleware import check_admin_permission, get_current_user
+from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from web_fetch import FetchResult, RenderMode, WebFetcher
 
 logger = get_logger(__name__)
 
-# #16375: mounted with no auth dependency. Every route needs a signed-in caller;
-# the scrape fetches a caller-chosen URL and can write the knowledge base, so it
-# also needs admin.
+# #16375: mounted with no auth dependency. Owner decision: any signed-in user
+# may scrape — only the web-research settings mutations stay admin-only.
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.post("/scrape", response_model=ScrapeResponse, summary="Scrape and optionally ingest a URL")
-async def scrape_url(request: ScrapeRequest, _: bool = Depends(check_admin_permission)) -> ScrapeResponse:
+async def scrape_url(request: ScrapeRequest) -> ScrapeResponse:
     """Fetch *request.url* and return markdown content.
 
     The render mode controls which backend is tried:

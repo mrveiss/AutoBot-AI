@@ -5,8 +5,9 @@
 """Request and response models for the knowledge web-ingestion routes (#16375).
 
 POST /knowledge/crawl (``api/knowledge_crawl.py``), POST /knowledge/scrape
-(``api/knowledge_scrape.py``) and POST /knowledge/site-map
-(``api/knowledge_site_map.py``). Moved here unchanged from those routers, where
+(``api/knowledge_scrape.py``), POST /knowledge/site-map
+(``api/knowledge_site_map.py``) and POST /knowledge/extract
+(``api/knowledge_extract.py``). Moved here unchanged from those routers, where
 they were local definitions: the no-local-schemas hook (#6056) blocks any edit of
 a router file that still defines its own ``BaseModel``, and ``schemas_knowledge.py``
 is at its recorded size ceiling.
@@ -100,3 +101,29 @@ class SiteMapResponse(BaseModel):
     source: str  # "sitemap" or "crawl"
     urls: List[SiteMapUrlEntry]
     count: int
+
+
+class ExtractRequest(BaseModel):
+    """Request body for POST /knowledge/extract.
+
+    The field ``json_schema`` is serialised as ``schema`` on the wire via
+    ``alias``.  ``schema`` is a reserved attribute on ``BaseModel`` so we
+    cannot use it as a Python field name directly.
+    """
+
+    model_config = {"populate_by_name": True}
+
+    url: str = Field(..., min_length=1, max_length=2000, description="Absolute URL to fetch and extract from")
+    json_schema: Dict[str, Any] = Field(
+        ..., alias="schema", description="JSON Schema (draft 2020-12) for the expected output shape"
+    )
+    render: Literal["auto", "fast", "playwright"] = Field(default="auto", description="Render mode")
+    ingest: bool = Field(default=False, description="Index raw page markdown into ChromaDB when True")
+
+
+class ExtractResponse(BaseModel):
+    """Success response for POST /knowledge/extract."""
+
+    url: str
+    data: Dict[str, Any]
+    schema_valid: bool
