@@ -6475,7 +6475,8 @@
       "justNow": "przed chwilą",
       "minutesAgo": "{count} min temu",
       "accept": "Akceptuj",
-      "decline": "Odrzuć"
+      "decline": "Odrzuć",
+      "bellTitle": "Oczekujące zaproszenia"
     }
   },
   "research": {

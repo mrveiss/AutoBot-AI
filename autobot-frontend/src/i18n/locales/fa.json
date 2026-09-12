@@ -5084,7 +5084,8 @@
       "justNow": "همین الان",
       "minutesAgo": "{count} دقیقه پیش",
       "accept": "پذیرفتن",
-      "decline": "رد کردن"
+      "decline": "رد کردن",
+      "bellTitle": "دعوت‌نامه‌های در انتظار"
     }
   },
   "chat": {

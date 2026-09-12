@@ -111,6 +111,10 @@
             >
               <Icon name="users" />
             </button>
+            <!-- #16470 follow-up: always-mountable, independent of session
+                 mode -- an invitee usually has no collaborative session of
+                 their own yet, so this can't be gated the same way. -->
+            <PendingInvitationsBell />
           </template>
         </ChatHeader>
 
@@ -318,6 +322,7 @@ import ChatTabs from './ChatTabs.vue'
 import ChatTabContent from './ChatTabContent.vue'
 import ChatFilePanel from './ChatFilePanel.vue'
 import ChatCollaborationPanel from './ChatCollaborationPanel.vue'
+import PendingInvitationsBell from '@/components/collaboration/PendingInvitationsBell.vue'
 import KnowledgePersistenceDialog from '@/components/knowledge/KnowledgePersistenceDialog.vue'
 import CommandPermissionDialog from '@/components/ui/CommandPermissionDialog.vue'
 import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget.vue'

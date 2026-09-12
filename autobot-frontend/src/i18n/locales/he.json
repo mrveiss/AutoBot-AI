@@ -5084,7 +5084,8 @@
       "justNow": "הרגע",
       "minutesAgo": "לפני {count} דק'",
       "accept": "קבל",
-      "decline": "דחה"
+      "decline": "דחה",
+      "bellTitle": "הזמנות ממתינות"
     }
   },
   "chat": {
