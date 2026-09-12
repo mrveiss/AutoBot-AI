@@ -348,7 +348,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/fast_document_scanner.py": 653,
     "autobot-backend/services/graph_rag_service.py": 741,
     "autobot-backend/services/graph_rag_service_test.py": 895,
-    "autobot-backend/services/grounded_agent.py": 766,  # #14981: real grounding:stats counters
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
     "autobot-backend/services/knowledge/code_indexer.py": 1179,
     "autobot-backend/services/knowledge/doc_indexer.py": 1274,
@@ -389,7 +388,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/tasks/knowledge_tasks.py": 862,
     "autobot-backend/tests/agents/test_librarian_assistant_extract.py": 635,
     "autobot-backend/tests/api/test_canvas.py": 676,
-    "autobot-backend/tests/api/test_knowledge_grounding.py": 929,
+    "autobot-backend/tests/api/test_knowledge_grounding.py": 924,
     "autobot-backend/tests/api/test_marketplace.py": 772,
     "autobot-backend/tests/content_reach/test_url_guard.py": 787,
     "autobot-backend/tests/fixtures/mocks.py": 671,
@@ -406,7 +405,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/tests/services/test_claim_classifier.py": 689,
     "autobot-backend/tests/services/test_claim_verifier.py": 1053,
     "autobot-backend/tests/services/test_conflict_resolver.py": 962,
-    "autobot-backend/tests/services/test_grounded_agent.py": 795,  # #14981: tests for the real counters
+    "autobot-backend/tests/services/test_grounded_agent.py": 679,
     "autobot-backend/tests/services/test_tool_output_filter.py": 1060,
     "autobot-backend/tests/test_claude_adapter_wiring.py": 708,
     "autobot-backend/tests/test_cross_worker_registries.py": 724,
@@ -513,7 +512,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/redis_client.py": 679,
     "autobot_shared/redis_management/connection_manager.py": 1519,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3299,  # #14981: AUTOBOT_GROUNDING_STATS_TTL
+    "autobot_shared/ssot_config.py": 3298,  # #14981: AUTOBOT_GROUNDING_STATS_TTL
     "autobot_shared/ssot_config_test.py": 782,
     "autobot_shared/ssot_constants.py": 896,
     "autobot_shared/user_management/team_service.py": 725,

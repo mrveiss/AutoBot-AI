@@ -42,10 +42,8 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_utils import decode_redis_value
 from constants.threshold_constants import QueryDefaults
-from services.grounded_agent import (
-    Claim,
-    get_grounded_agent,
-)
+from services.grounded_agent import get_grounded_agent
+from services.grounded_agent_models import Claim
 from services.knowledge_grounding_models import VerificationMethod
 
 logger = get_logger(__name__)

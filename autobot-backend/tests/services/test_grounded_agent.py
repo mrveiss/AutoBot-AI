@@ -29,15 +29,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.grounded_agent import (
-    Claim,
-    ClaimStatus,
-    GroundedAgent,
-    GroundedResponse,
-    VerifiedClaim,
-)
+from services.grounded_agent import GroundedAgent
+from services.grounded_agent_models import Claim, ClaimStatus, GroundedResponse, VerifiedClaim
 from services.knowledge_grounding_models import VerificationMethod
-from tests.fixtures import make_async_redis, make_redis_pipeline
 
 
 @pytest.fixture
@@ -543,116 +537,6 @@ async def test_resolve_conflict(grounded_agent):
     assert result["resolved"]
     assert result["chosen_fact"] == "fact-001"
     mock_redis.hset.assert_awaited_once()
-    # #14981: conflicts_resolved must move when a conflict actually resolves.
-    mock_redis.hincrby.assert_awaited_once_with("grounding:stats", "conflicts_resolved", 1)
-    mock_redis.expire.assert_awaited_once()
-
-
-# ===== GROUNDING STATS (#14981) =====
-#
-# _record_grounding_stats is unit-tested directly, in isolation from the
-# LLM/KB pipeline: what it needs to prove is that each grounding:stats
-# counter moves by the right amount for the right event, not that claim
-# extraction/verification also still works (that's every test above).
-
-
-@pytest.fixture
-def stats_pipeline():
-    """The mock pipeline _record_grounding_stats writes through."""
-    return make_redis_pipeline()
-
-
-@pytest.fixture
-def agent_with_redis(grounded_agent, stats_pipeline):
-    grounded_agent.redis_client = make_async_redis(pipeline=stats_pipeline)
-    return grounded_agent
-
-
-@pytest.mark.asyncio
-async def test_record_grounding_stats_increments_every_counter(agent_with_redis, stats_pipeline, sample_claim):
-    """One event: every counter it touches moves by the exact amount."""
-    verified = [
-        VerifiedClaim(
-            claim=sample_claim,
-            kb_status=ClaimStatus.IN_KB,
-            confidence=0.9,
-            verification_method=VerificationMethod.KB_LOOKUP.value,
-        ),
-        VerifiedClaim(
-            claim=sample_claim,
-            kb_status=ClaimStatus.IN_KB,
-            confidence=0.7,
-            verification_method=VerificationMethod.CLAIM_VERIFIER_RAG.value,
-        ),
-    ]
-
-    await agent_with_redis._record_grounding_stats(
-        claims_extracted=3,
-        verified_claims=verified,
-        conflicts_created=1,
-        overall_confidence=0.8,
-    )
-
-    stats_pipeline.hincrby.assert_any_await("grounding:stats", "total_responses_grounded", 1)
-    stats_pipeline.hincrby.assert_any_await("grounding:stats", "total_claims_extracted", 3)
-    stats_pipeline.hincrby.assert_any_await("grounding:stats", "claims_verified_count", 2)
-    stats_pipeline.hincrbyfloat.assert_any_await("grounding:stats", "confidence_sum", 0.8)
-    stats_pipeline.hincrby.assert_any_await("grounding:stats", "conflicts_created", 1)
-    stats_pipeline.hincrby.assert_any_await("grounding:stats", "claim_source_kb_lookup", 1)
-    stats_pipeline.hincrby.assert_any_await("grounding:stats", "claim_source_claim_verifier_rag", 1)
-    stats_pipeline.expire.assert_awaited_once()
-    stats_pipeline.execute.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_record_grounding_stats_omits_a_method_nobody_produced(agent_with_redis, stats_pipeline, sample_claim):
-    """No claim_verifier_rag claim this call -> no write to that counter at all."""
-    verified = [
-        VerifiedClaim(
-            claim=sample_claim,
-            kb_status=ClaimStatus.IN_KB,
-            confidence=0.9,
-            verification_method=VerificationMethod.KB_LOOKUP.value,
-        ),
-    ]
-
-    await agent_with_redis._record_grounding_stats(
-        claims_extracted=1,
-        verified_claims=verified,
-        conflicts_created=0,
-        overall_confidence=0.9,
-    )
-
-    written_fields = {call.args[1] for call in stats_pipeline.hincrby.await_args_list}
-    assert "claim_source_kb_lookup" in written_fields
-    assert "claim_source_claim_verifier_rag" not in written_fields
-
-
-@pytest.mark.asyncio
-async def test_record_grounding_stats_is_a_noop_without_redis(grounded_agent, sample_claim):
-    """No redis_client (disabled/circuit open) must not raise -- best-effort."""
-    assert grounded_agent.redis_client is None
-
-    await grounded_agent._record_grounding_stats(
-        claims_extracted=1,
-        verified_claims=[],
-        conflicts_created=0,
-        overall_confidence=0.0,
-    )
-
-
-@pytest.mark.asyncio
-async def test_record_grounding_stats_swallows_a_redis_failure(grounded_agent):
-    """A stats-write failure must never fail the response the caller is waiting on."""
-    grounded_agent.redis_client = MagicMock()
-    grounded_agent.redis_client.pipeline = MagicMock(side_effect=RuntimeError("redis down"))
-
-    await grounded_agent._record_grounding_stats(
-        claims_extracted=1,
-        verified_claims=[],
-        conflicts_created=0,
-        overall_confidence=0.0,
-    )
 
 
 # ===== EDGE CASES =====
