@@ -145,35 +145,25 @@
     delete: true
   tags: ['frontend', 'deploy']
 
-- name: "Frontend | Ensure TLS cert directory exists"
-  file:
-    path: "{{ frontend_tls_cert_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-  become: true
+- name: "Frontend | Ensure the shared node TLS keypair exists (#16020)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
   tags: ['frontend', 'tls']
 
-- name: "Frontend | Check existing TLS certificate"
-  stat:
-    path: "{{ frontend_tls_cert }}"
-  register: _tls_cert
-  tags: ['frontend', 'tls']
-
-- name: "Frontend | Generate self-signed TLS certificate"
-  command: >
-    openssl req -x509 -nodes
-    -newkey rsa:2048
-    -days 365
-    -keyout {{ frontend_tls_key }}
-    -out {{ frontend_tls_cert }}
-    -subj "/CN={{ ansible_host | default('127.0.0.1') }}/O=AutoBot/C=US"
-  become: true
-  when: not _tls_cert.stat.exists
+# #16020: the shared task has no restart handler of its own -- it also
+# serves backend, Redis and PostgreSQL, none of which restart the same way.
+# Reuses the shared task's own registered vars (the exact condition it used
+# to decide whether to (re)generate) rather than re-deriving the check, so
+# nginx keeps restarting on a cert rotation as it did before consolidation.
+- name: "Frontend | Flag a cert rotation for the restart handler"
+  ansible.builtin.set_fact:
+    _frontend_cert_rotated: "{{ not autobot_node_cert_stat.stat.exists or (autobot_node_cert_valid.rc | default(1)) != 0 }}"
+  changed_when: _frontend_cert_rotated
   notify: restart nginx
   tags: ['frontend', 'tls']
 
+# #16020: EXISTENCE is consolidated above; this role-specific permission
+# (world-readable KEY, not just cert) stays here rather than in the shared
+# task, which does not touch the key's mode at all.
 - name: "Frontend | Set TLS key permissions"
   file:
     path: "{{ frontend_tls_key }}"
@@ -181,7 +171,7 @@
     group: root
     mode: '0644'
   become: true
-  when: not _tls_cert.stat.exists
+  when: _frontend_cert_rotated
   tags: ['frontend', 'tls']
 
 - name: "Frontend | Check if package.json exists"
