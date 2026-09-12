@@ -24,6 +24,17 @@ import axios from 'axios'
 import BackendSettings from './BackendSettings.vue'
 import en from '@/locales/en.json'
 
+// #15761 review: BackendSettings.vue itself no longer imports useAuthStore,
+// but useAutobotApi() (its connection-probe transport, #13079) does -- it
+// reads authStore.token for the Authorization header. Without this mock,
+// that's a real Pinia store with no active Pinia instance in this test file,
+// which throws "getActivePinia() was called but there was no active Pinia"
+// on mount. token is the only field either caller still reads (getApiUrl,
+// the field the old version of this mock carried, no longer exists).
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ token: 'tok' }),
+}))
+
 vi.mock('@/utils/slmSettingsApi', () => ({
   listSettings: vi.fn(async () => []),
   upsertSetting: vi.fn(async () => true),
