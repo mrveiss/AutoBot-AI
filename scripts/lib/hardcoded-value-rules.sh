@@ -715,15 +715,25 @@ hv_partition() {
     return 0
 }
 
-# Baseline keys that matched fewer findings than they claim.
+# Baseline keys that matched fewer findings than they claim, one per line as
+# `claimed|found|key`. The counts come first because the key itself contains `|`.
 #
 # An allowlist entry naming a moved file exempts nothing, and does it silently.
 # These are reported so a fixed violation cannot leave a stranded exemption that
 # quietly re-permits the same value when the file comes back.
+#
+# found 0 and 0 < found < claimed are different findings with different fixes
+# (#16334). The first matches nothing and should be deleted. The second still
+# exempts live findings and must be LOWERED to `found`, never deleted: #16298
+# deleted such an entry because the audit called it "no longer match anything",
+# which un-baselined the occurrence it still covered. Emitting both counts is
+# what lets the caller say which.
 hv_stale_baseline_entries() {
-    local key
+    local key claimed found
     for key in "${!HV_BASELINE[@]}"; do
-        [ "${HV_BASELINE_SEEN[$key]:-0}" -lt "${HV_BASELINE[$key]}" ] && printf '%s\n' "$key"
+        claimed="${HV_BASELINE[$key]}"
+        found="${HV_BASELINE_SEEN[$key]:-0}"
+        [ "$found" -lt "$claimed" ] && printf '%s|%s|%s\n' "$claimed" "$found" "$key"
     done
     return 0
 }
