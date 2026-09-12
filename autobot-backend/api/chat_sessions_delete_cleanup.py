@@ -177,8 +177,16 @@ async def _cleanup_conversation_transcript(session_id: str) -> dict:
             PATH.DATA_DIR / "conversation_transcripts",
         )
 
-        if transcript_path.exists():
-            os.remove(transcript_path)
+        # CodeQL py/path-injection only credits a realpath + startswith(root + os.sep) guard in the
+        # sink's own scope (#16229, #16236); validate_relative_path above stays the real validator.
+        # The one name this adds a refusal for resolves to the directory itself, which os.remove refuses too.
+        root = os.path.realpath(str(PATH.DATA_DIR / "conversation_transcripts"))
+        real = os.path.realpath(str(transcript_path))
+        if not real.startswith(root + os.sep):
+            raise ValueError("Invalid session ID")
+
+        if os.path.exists(real):
+            os.remove(real)
             result["transcript_deleted"] = True
             logger.info("Deleted conversation transcript for session %s", session_id)
         else:
