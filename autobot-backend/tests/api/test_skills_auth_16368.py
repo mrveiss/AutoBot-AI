@@ -31,6 +31,7 @@ import api.skills as skills_api
 import api.skills_governance as governance_api
 import api.skills_hub as hub_api
 import api.skills_repos as repos_api
+from autobot_shared.api_routing.router_routes import effective_routes
 
 _ADMIN, _USER = "admin", "user"
 
@@ -84,18 +85,36 @@ _PATH_VALUES = {
 _NON_ADMIN = {"username": "viewer", "role": "user"}
 
 
+#: Mounted as the registry mounts them: sub-routers first, then the base router's ``/{name}``.
+_MOUNTS = (
+    ("/api/skills/hub", hub_api.router),
+    ("/api/skills/repos", repos_api.router),
+    ("/api/skills/governance", governance_api.router),
+    ("/api/skills", skills_api.router),
+)
+
+
 def _app() -> FastAPI:
-    """Mounted as the registry mounts them: sub-routers first, then the base router's ``/{name}``."""
     app = FastAPI()
-    app.include_router(hub_api.router, prefix="/api/skills/hub")
-    app.include_router(repos_api.router, prefix="/api/skills/repos")
-    app.include_router(governance_api.router, prefix="/api/skills/governance")
-    app.include_router(skills_api.router, prefix="/api/skills")
+    for prefix, router in _MOUNTS:
+        app.include_router(router, prefix=prefix)
     return app
 
 
-def _routes(app: FastAPI) -> set:
-    return {(method, route.path) for route in app.routes if isinstance(route, APIRoute) for method in route.methods}
+def _routes() -> set:
+    """Served ``(method, path)`` pairs, read per router rather than off the app (#15093).
+
+    On fastapi>=0.139 ``app.routes`` holds one opaque wrapper per include and no
+    ``APIRoute``, so walking the app finds nothing. Each router here is a leaf, so
+    its own routes plus the prefix it is mounted at are exactly the served paths.
+    """
+    found = set()
+    for prefix, router in _MOUNTS:
+        for mounted in effective_routes(router):
+            assert mounted.prefix_complete, mounted.path
+            if isinstance(mounted.route, APIRoute):
+                found.update((method, prefix + mounted.path) for method in mounted.methods)
+    return found
 
 
 def _call(test_client: TestClient, method: str, path: str):
@@ -128,7 +147,7 @@ def client(real_auth_middleware, monkeypatch):
 
 def test_the_policy_table_covers_every_route() -> None:
     """A route added to either router must be classified here, admin or user, before it ships."""
-    assert _routes(_app()) == set(_POLICY)
+    assert _routes() == set(_POLICY)
 
 
 @pytest.mark.parametrize(("method", "path"), sorted(_POLICY))
