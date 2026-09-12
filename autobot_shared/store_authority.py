@@ -154,16 +154,17 @@ STORE_AUTHORITY: dict[str, Concept] = {
         projections=(),
         write_sites=(
             "autobot-backend/utils/activity_tracker.py",
-            "autobot-backend/integrations/terminal_tracking.py",
-            "autobot-backend/integrations/file_tracking.py",
-            "autobot-backend/integrations/browser_tracking.py",
             "autobot-backend/integrations/desktop_tracking.py",
-            "autobot-backend/knowledge/activity_types.py",
         ),
         rebuilt_by="terminal_activities/file_activities/browser_activities/"
         "desktop_activities/secret_usage rows are the audit record; nothing else stores a "
         "copy. #16464 ported all five tables into the canonical Alembic chain -- same "
-        "orphaned-migration gap as session_collaboration, above.",
+        "orphaned-migration gap as session_collaboration, above. #16466 retired the "
+        "terminal/file/browser/secret-usage writer code as dead (zero callers anywhere; "
+        "#873's own acceptance checklist for those three was never completed, and nothing "
+        "reads them either) -- only desktop_activities receives real rows today. The other "
+        "four tables stay, empty, for the cascade-delete-safety reason #16464 fixed, "
+        "independent of whether anything writes to them.",
     ),
     "verbatim_memory": Concept(
         name="verbatim_memory",
