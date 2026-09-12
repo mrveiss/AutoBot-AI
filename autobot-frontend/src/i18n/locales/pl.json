@@ -6400,6 +6400,7 @@
       "minutesAgo": "{count} min temu",
       "accept": "Akceptuj",
       "decline": "Odrzuć",
+      "respondError": "Nie udało się przetworzyć tej odpowiedzi. Spróbuj ponownie.",
       "bellTitle": "Oczekujące zaproszenia"
     }
   },

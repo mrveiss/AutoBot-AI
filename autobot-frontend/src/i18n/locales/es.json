@@ -6400,6 +6400,7 @@
       "minutesAgo": "hace {count} min",
       "accept": "Aceptar",
       "decline": "Rechazar",
+      "respondError": "No se pudo procesar esta respuesta. Inténtalo de nuevo.",
       "bellTitle": "Invitaciones pendientes"
     }
   },

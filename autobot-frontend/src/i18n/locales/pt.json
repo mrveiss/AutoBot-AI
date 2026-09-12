@@ -6400,6 +6400,7 @@
       "minutesAgo": "há {count} min",
       "accept": "Aceitar",
       "decline": "Recusar",
+      "respondError": "Não foi possível processar esta resposta. Tente novamente.",
       "bellTitle": "Convites pendentes"
     }
   },

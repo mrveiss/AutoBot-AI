@@ -5033,6 +5033,7 @@
       "minutesAgo": "לפני {count} דק'",
       "accept": "קבל",
       "decline": "דחה",
+      "respondError": "לא ניתן היה לעבד את התגובה הזו. נסה שוב.",
       "bellTitle": "הזמנות ממתינות"
     }
   },

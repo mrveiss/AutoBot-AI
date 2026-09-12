@@ -6400,6 +6400,7 @@
       "minutesAgo": "pirms {count} min",
       "accept": "Pieņemt",
       "decline": "Noraidīt",
+      "respondError": "Neizdevās apstrādāt šo atbildi. Lūdzu, mēģiniet vēlreiz.",
       "bellTitle": "Gaidošie uzaicinājumi"
     }
   },
