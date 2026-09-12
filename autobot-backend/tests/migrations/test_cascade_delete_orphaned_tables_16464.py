@@ -41,6 +41,44 @@ _ACTIVITY_TABLES = (
     "desktop_activities",
 )
 
+#: A value for each column type a required activity column may have. A NOT NULL
+#: column of any other type fails ``_required_columns`` by name, so a column a
+#: future migration makes required is noticed here, never silently left out.
+_PLACEHOLDER_BY_TYPE = {
+    "text": "cascade-test",
+    "character varying": "cascade-test",
+}
+
+
+async def _required_columns(conn, table: str) -> dict:
+    """Every NOT NULL column of *table* without a default, bar ``user_id``, with a placeholder.
+
+    Read from the migrated schema itself -- the only thing the INSERT has to
+    satisfy -- so the fixture follows whatever the migration declares.
+    """
+    result = await conn.execute(
+        text(
+            "SELECT column_name, data_type FROM information_schema.columns "
+            "WHERE table_schema = current_schema() AND table_name = :table "
+            "AND is_nullable = 'NO' AND column_default IS NULL AND column_name <> 'user_id'"
+        ),
+        {"table": table},
+    )
+    required = {}
+    for name, data_type in result:
+        assert data_type in _PLACEHOLDER_BY_TYPE, f"{table}.{name} is NOT NULL ({data_type}); add a placeholder"
+        required[name] = _PLACEHOLDER_BY_TYPE[data_type]
+    return required
+
+
+async def _insert_activity(conn, table: str, user_id: uuid.UUID) -> None:
+    """Insert one *table* row for *user_id*, supplying every column the schema requires."""
+    required = await _required_columns(conn, table)
+    columns = ", ".join(["user_id", *required])
+    values = ", ".join([":user_id", *(f":{name}" for name in required)])
+    statement = text(f"INSERT INTO {table} ({columns}) VALUES ({values})")  # nosec B608 -- names from the schema
+    await conn.execute(statement, {"user_id": user_id, **required})
+
 
 async def test_hard_deleting_a_user_cascades_through_every_orphaned_table(fresh_db_url):
     assert run_alembic(["upgrade", "head"], fresh_db_url).returncode == 0
@@ -59,10 +97,7 @@ async def test_hard_deleting_a_user_cascades_through_every_orphaned_table(fresh_
                 {"id": user_id, "email": "cascade-test@example.com", "username": "cascade-test"},
             )
             for table in _ACTIVITY_TABLES:
-                await conn.execute(
-                    text(f"INSERT INTO {table} (id, user_id) VALUES (gen_random_uuid(), :user_id)"),  # nosec B608
-                    {"user_id": user_id},
-                )
+                await _insert_activity(conn, table, user_id)
             await conn.execute(
                 text(
                     "INSERT INTO secret_usage "
@@ -127,10 +162,7 @@ async def test_hard_deleting_an_organization_cascades_through_its_users_and_thei
                     "username": "cascade-org-test",
                 },
             )
-            await conn.execute(
-                text("INSERT INTO terminal_activities (id, user_id) VALUES (gen_random_uuid(), :user_id)"),
-                {"user_id": user_id},
-            )
+            await _insert_activity(conn, "terminal_activities", user_id)
 
         # organization -> user (users.org_id CASCADE) -> activity row
         # (terminal_activities.user_id CASCADE): one delete, two cascade hops,
