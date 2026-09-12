@@ -27,7 +27,7 @@ librosa>=1.0.0
 # multimodal_processor/processors/vision.py raises on its own flag too. Kept in
 # step with the other pinned sites (autobot-tts-worker/requirements.txt:3,
 # autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt:19).
-transformers>=5.16.1
+transformers>=5.17.0
 
 # Frame extraction for the video pipeline. Import name is cv2.
 opencv-python>=5.0.0.93
