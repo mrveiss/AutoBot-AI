@@ -215,7 +215,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/events/stream_manager.py": 654,
     "autobot-backend/events/types.py": 885,
     "autobot-backend/hardware_acceleration.py": 678,
-    "autobot-backend/initialization/lifespan.py": 2769,
+    "autobot-backend/initialization/lifespan.py": 2760,
     "autobot-backend/initialization/router_registry/feature_routers.py": 779,
     "autobot-backend/integrations/cloud_integration.py": 630,
     "autobot-backend/integrations/communication_integration.py": 605,

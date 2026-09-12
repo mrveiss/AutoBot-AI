@@ -12,7 +12,6 @@ Handles application startup and shutdown with 2-phase initialization:
 
 import asyncio
 import functools
-import json
 import logging
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
@@ -24,7 +23,6 @@ from fastapi import FastAPI
 from autobot_shared.env_utils import env_raw, truthy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
-from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.tracing import (
     instrument_aiohttp,
     instrument_redis,
@@ -33,6 +31,7 @@ from autobot_shared.tracing import (
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
 from config.manager import get_config_manager
+from initialization.startup_error_file import persist_startup_error
 from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
 from services.slm_client import init_slm_client, shutdown_slm_client
@@ -697,18 +696,10 @@ async def initialize_critical_services(app: FastAPI):
         # unreachable. The file survives process exit and lets /api/health report
         # the failure when the next (probe) process reads it.
         try:
-            STARTUP_ERROR_FILE.parent.mkdir(parents=True, exist_ok=True)
-            STARTUP_ERROR_FILE.write_text(
-                json.dumps(
-                    {
-                        "error_type": error_type,
-                        "timestamp": utc_timestamp(),
-                    }
-                ),
-                encoding="utf-8",
-            )
-        except Exception:
-            pass  # File write failure must not mask the original startup error
+            await asyncio.to_thread(persist_startup_error, error_type)
+        except Exception as write_error:
+            # Must not mask the original startup error, re-raised below (#16250).
+            logger.warning("Startup error file not written: %s", write_error)
         raise  # Re-raise to prevent app from starting
 
 
