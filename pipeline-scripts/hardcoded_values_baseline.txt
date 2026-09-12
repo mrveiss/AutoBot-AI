@@ -1135,7 +1135,6 @@
 2|other|autobot-backend/api/analytics_code_generation.py|"system"
 2|other|autobot-backend/api/analytics_conversation.py|"user"
 2|other|autobot-backend/api/anthropic_compat.py|"system"
-2|other|autobot-backend/api/auth.py|"user"
 2|other|autobot-backend/api/chat_embed.py|"user"
 2|other|autobot-backend/api/knowledge_audit.py|100
 2|other|autobot-backend/api/knowledge_mcp.py|"user"

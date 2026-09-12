@@ -299,6 +299,10 @@ _REAL_SERVICE_MODULES = (
     # line-count ceiling, #14236) into this module; its own tests import it
     # directly and need the real coroutines, not MagicMocks.
     "slm_frontend_build",
+    # #16040: the permission decision, including API-key authority. It is pure
+    # (stdlib + autobot_shared), so its co-located test exercises the real
+    # decision without importing services/auth.py.
+    "api_key_authority",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for

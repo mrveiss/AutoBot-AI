@@ -28,6 +28,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from autobot_shared.auth.key_scopes import scope_granted
 from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.models.base import Base
 
@@ -192,38 +193,18 @@ class APIKey(Base):
     def has_scope(self, scope: str) -> bool:
         """Check if this key has a specific scope.
 
-        Fails **closed** on a malformed ``scopes`` value (#16040). Every check
-        below is a membership test, and ``in`` against a *string* is a substring
-        test — so a scalar ``scopes`` of ``"read:*"`` answers ``True`` to
-        ``"*" in self.scopes`` and this method then grants **every** scope,
-        including admin. That is silent and in the direction of more privilege.
+        Delegates to ``autobot_shared.auth.key_scopes.scope_granted`` (#16270),
+        the one implementation of the matching rule. ``key_permissions`` uses
+        the same function to turn a key's scopes into ``Permission`` members,
+        so the two cannot disagree.
 
-        ``scopes`` is ``Mapped[list]`` over ``JSONB``. The annotation is not a
-        database constraint and JSONB stores a scalar happily, so the type is
-        guaranteed by whoever writes the row rather than by the column. The HTTP
-        path is defended — ``APIKeyCreate.scopes: List[str]`` validates at the
-        boundary — but a migration, a backfill or a second writer is not, and
-        this method is now load-bearing for an authorisation decision
-        (``get_api_key_user``). One line here is cheaper than trusting every
-        future writer.
+        It fails **closed** on a malformed ``scopes`` value; see that function
+        for why (#16040). The HTTP path is defended, because
+        ``APIKeyCreate.scopes: List[str]`` validates at the boundary. A
+        migration, a backfill or a second writer is not, and this method is
+        load-bearing for an authorisation decision (``get_api_key_user``).
         """
-        scopes = self.scopes if isinstance(self.scopes, list) else []
-
-        # Check exact match
-        if scope in scopes:
-            return True
-
-        # Check wildcard (e.g., "chat:*" matches "chat:use")
-        resource = scope.split(":")[0] if ":" in scope else scope
-        wildcard = f"{resource}:*"
-        if wildcard in scopes:
-            return True
-
-        # Check global admin scope
-        if "*" in scopes or "admin:*" in scopes:
-            return True
-
-        return False
+        return scope_granted(self.scopes, scope)
 
 
 # Available API key scopes
