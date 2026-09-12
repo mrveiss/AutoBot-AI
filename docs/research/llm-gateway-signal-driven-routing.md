@@ -295,13 +295,16 @@ below cites the files/greps actually checked.
 Prioritized by risk/impact, each traceable to an adopt item above where
 one exists:
 
-1. **PII scanning never runs on the main chat path.** The only wired PII
-   detector (`a2a/pii_pipeline.py`) scrubs Agent-to-Agent task payloads;
-   `autobot-backend/api/chat.py` has no PII/injection call at all (checked
-   directly). This is the highest-priority gap — it's a security posture
-   hole, not a missing nice-to-have.
-2. **No blanket prompt-injection guard on raw user chat input.** The
-   detector (`security/prompt_injection_detector.py`) is wired to specific
+1. **PII scanning never runs on the main chat path.** *(Fixed since this
+   audit — #16545, `cc3514448`. Recorded as found: at the time this was
+   written, the only wired PII detector, `a2a/pii_pipeline.py`, scrubbed
+   Agent-to-Agent task payloads only, and `autobot-backend/api/chat.py`
+   had no PII/injection call at all.)* This was the highest-priority gap —
+   a security posture hole, not a missing nice-to-have.
+2. **No blanket prompt-injection guard on raw user chat input.** *(Fixed
+   since this audit — #16545, `cc3514448`; #16561 closed a post-merge
+   review gap on the same path.)* At the time of this audit, the detector
+   (`security/prompt_injection_detector.py`) was wired to specific
    features (screen analysis, KB transcript, advanced-workflow intent) and
    to *tool-fetched* content via `ContentFirewall`, but not to the raw
    user message on every chat turn.
@@ -334,3 +337,18 @@ one exists:
 | `security/` (new registry module) | Route `pii_pipeline`, `content_firewall`, `prompt_injection_detector`, `security_risk_judge` through one dispatcher |
 | `knowledge/`, `services/rag_service.py` | Add a post-generation grounding check against retrieved source context |
 | `llm_shared/semantic_cache.py` vs `services/semantic_query_cache.py` | Consolidate — delete the dead one once confirmed unused, or merge its cosine fallback into the live path |
+
+## Filed
+
+Umbrella **#16524**, children attached natively as sub-issues at filing time:
+
+| Gap | # | Status |
+| --- | --- | --- |
+| 1. PII scanning never runs on the main chat path | #16529 | Delivered by #16545 (`cc3514448`) |
+| 2. No blanket prompt-injection guard on raw chat input | #16530 | Delivered by #16545 (`cc3514448`); #16561 closed a post-merge review gap on the same path |
+| 3. No unified safety-signal registry | #16532 | Blocked by #16529, #16530 — now unblocked |
+| 4. No post-hoc hallucination/grounding check for RAG answers | #16533 | Needs a model/architecture decision before implementation |
+| 5. No per-category semantic-cache policy | #16531 | Blocked by #16528 |
+| 6. No enforced per-backend concurrency admission control | #16527 | In progress |
+| 7. Extractive prompt compression written but unwired | #16526 | In progress |
+| 8. Duplicate semantic-cache implementations, one dead | #16528 | In progress |
