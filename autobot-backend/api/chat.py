@@ -71,6 +71,7 @@ from exceptions import get_exceptions_lazy
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # CRITICAL SECURITY FIX: Import session ownership validation
+from security.chat_message_safety import scan_chat_message
 from security.session_ownership import build_owner_metadata, validate_session_ownership
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
@@ -441,7 +442,7 @@ async def _store_and_log_user_message(
     Returns:
         Generated message ID
     """
-    user_message_id = generate_message_id()
+    user_message_id, message.content = generate_message_id(), scan_chat_message(message.content, session_id)  # #16529
     user_message_data = {
         "id": user_message_id,
         "content": message.content,
@@ -494,7 +495,6 @@ async def _store_and_log_user_message(
         get_metrics_manager().record_chat_message_sent("chat_send")
     except Exception as e:
         logger.warning("chat_send Prometheus metrics update failed: %s", e)
-
     return user_message_id
 
 
@@ -939,7 +939,7 @@ async def _generate_llm_stream(
         if hasattr(llm_service, "stream_response"):
             # MVA-3090: Streaming path - thinking_metadata not yet extracted from stream
             # TODO: Extract usage/thinking_metadata from stream final message and include in end event
-            async for chunk in llm_service.stream_response(message.content, session_id):
+            async for chunk in llm_service.stream_response(scan_chat_message(message.content, session_id), session_id):
                 chunk_data = {
                     "type": "chunk",
                     "content": chunk.get("content", ""),
@@ -1612,7 +1612,7 @@ async def send_chat_message_by_id(
     request_id = generate_request_id()
     log_request_context(request, "send_chat_message_by_id", request_id)
 
-    message = _validate_chat_message(request_data)
+    message = scan_chat_message(_validate_chat_message(request_data), chat_id)  # #16529/#16530
 
     chat_history_manager = get_chat_history_manager(request)
     chat_workflow_manager = await get_chat_workflow_manager(request)
@@ -1983,7 +1983,7 @@ async def send_direct_chat_response(
     # `chat_id` as a path parameter and this endpoint takes it from the body, so
     # the dependency would validate a different value than the one used. The
     # explicit call is the same pattern the session endpoints above use.
-    await validate_chat_ownership(chat_id, request)  # SECURITY: caller must own the session
+    _, message = await validate_chat_ownership(chat_id, request), scan_chat_message(message, chat_id)  # #16529
 
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_workflow_manager(chat_workflow_manager)
@@ -2012,7 +2012,7 @@ async def _store_ai_stack_user_message(
     chat_history_manager,
 ) -> str:
     """Store user message and log event for AI Stack chat."""
-    user_message_id = str(uuid4())
+    user_message_id, message.content = str(uuid4()), scan_chat_message(message.content, session_id)  # #16529
     user_message_data = {
         "id": user_message_id,
         "content": message.content,
