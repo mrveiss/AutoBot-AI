@@ -6464,7 +6464,18 @@
       "closePanel": "Panel schließen",
       "tabParticipants": "Teilnehmer",
       "tabActivity": "Aktivität",
-      "tabNotifications": "Benachrichtigungen"
+      "tabNotifications": "Benachrichtigungen",
+      "tabInvitations": "Einladungen"
+    },
+    "invitations": {
+      "loading": "Einladungen werden geladen...",
+      "noInvitations": "Keine ausstehenden Einladungen",
+      "sessionLabel": "Sitzung {id}",
+      "invitedAt": "Eingeladen {time}",
+      "justNow": "gerade eben",
+      "minutesAgo": "vor {count} Min.",
+      "accept": "Annehmen",
+      "decline": "Ablehnen"
     }
   },
   "research": {
