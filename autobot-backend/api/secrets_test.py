@@ -200,7 +200,12 @@ class TestGetSecretDualRead:
         """#16428: the third fallback, after the unified store and the legacy file."""
         from api.secrets import _get_secret_dual_read
 
-        bridged = {"id": "s4", "secret_type": "connector_api_key", "scope": "user"}  # pragma: allowlist secret
+        bridged = {
+            "id": "s4",
+            "secret_type": "connector_api_key",  # pragma: allowlist secret
+            "scope": "user",
+            "created_by": "owner-9",
+        }
         connector_svc = MagicMock()
         connector_svc.get_secret = MagicMock(return_value=bridged)
         with (
