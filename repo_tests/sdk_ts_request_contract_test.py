@@ -47,13 +47,22 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._scan_helpers import tracked_paths
+
 _REPO = repo_root()
 _SDK_TS_SRC = _REPO / "libs" / "autobot-sdk-ts" / "src" / "resources"
 _BACKEND_API_ROOT = "/api"
+
+# Git-tracked, not `Path.glob` -- glob would also see an untracked scratch
+# file sitting in the directory, and the whole point of this enumeration is
+# to catch a resource file that ships with no row, not to trust whatever is
+# on disk in this checkout right now.
+_RESOURCE_FILES = sorted(Path(p).name for p in tracked_paths(_REPO, "libs/autobot-sdk-ts/src/resources/*.ts"))
 
 _PLACEHOLDER_RE = re.compile(r"\{[^}]*\}")
 
@@ -234,9 +243,17 @@ def test_ts_sdk_request_matches_a_real_backend_route(row: TsRequest, route_query
             assert not unknown, f"{row.file}::{row.method} sends query params {unknown} the route does not declare"
     else:
         assert key in route_query_params, f"no backend route answers {key} -- {row.file}::{row.method}"
-        if row.body_fields is not None and key in route_request_bodies:
-            _media, declared, _required = route_request_bodies[key]
-            if declared is not None:
+        if key in route_request_bodies:
+            # `client.ts` sends `Content-Type: application/json` on every
+            # POST/PUT, unconditionally -- the same class of gap #15527 fixed
+            # on the route side (a Form field beside a dict body publishes as
+            # x-www-form-urlencoded, which no JSON body can satisfy).
+            media, declared, _required = route_request_bodies[key]
+            assert media == "application/json", (
+                f"{row.file}::{row.method} sends application/json to {row.verb} {full_path}, "
+                f"which FastAPI publishes as {media!r}"
+            )
+            if row.body_fields is not None and declared is not None:
                 unknown = row.body_fields - declared
                 assert not unknown, f"{row.file}::{row.method} sends body fields {unknown} the route does not declare"
 
@@ -256,7 +273,7 @@ _METHOD_DECL_RE = re.compile(r"(?:^|\n)\s*(?:async\s+)?([a-zA-Z_$][\w$]*)\s*\([^
 _NOT_A_REQUEST_METHOD = frozenset({"constructor"})
 
 
-@pytest.mark.parametrize("ts_file", ["sessions.ts", "knowledge.ts", "analytics.ts", "agents.ts"])
+@pytest.mark.parametrize("ts_file", _RESOURCE_FILES)
 def test_every_resource_method_has_a_pinned_row(ts_file: str) -> None:
     """A new method shipping on one of these four classes with no row in
     TS_SDK_REQUESTS is exactly what let `agents.setModel`/`setEnabled` not
@@ -271,9 +288,12 @@ def test_every_resource_method_has_a_pinned_row(ts_file: str) -> None:
 
 
 def test_the_table_covers_every_resource_file_that_exists() -> None:
-    on_disk = {p.name for p in _SDK_TS_SRC.glob("*.ts")}
+    on_disk = set(_RESOURCE_FILES)
     pinned = {row.file for row in TS_SDK_REQUESTS}
-    assert pinned <= on_disk, f"TS_SDK_REQUESTS names files that don't exist: {pinned - on_disk}"
+    assert on_disk == pinned, (
+        f"TS_SDK_REQUESTS and libs/autobot-sdk-ts/src/resources/ disagree: "
+        f"on disk but unpinned {on_disk - pinned}, pinned but missing on disk {pinned - on_disk}"
+    )
     assert len(TS_SDK_REQUESTS) >= 15, "the table shrank well below its filed size -- check nothing was dropped"
 
 
