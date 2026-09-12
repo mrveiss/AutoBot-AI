@@ -62,7 +62,11 @@ def test_a_non_admin_gets_403(client):
 
 
 def test_an_admin_writes_settings(client):
-    """The control: the 401 and 403 above come from the gate, not from a broken harness."""
+    """The control: the 401 and 403 above come from the gate, not from a broken harness.
+
+    Only admission is judged here. The author the write records comes from the
+    stub's ``get_current_user``; authorship is ``settings_revision_author_test.py``.
+    """
     test_client, identity = client
     identity.user = {"username": "operator", "role": "admin"}
     revisions = MagicMock()
