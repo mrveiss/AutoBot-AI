@@ -38,6 +38,7 @@ from api.schemas_system import (
     UpdateStatusResponse,
     WorkerStatusResponse,
 )
+from api.settings_config import require_settings_admin
 from api.settings_config import router as config_router
 from api.user_management.dependencies import get_db_session, get_optional_db_session
 from auth_middleware import check_admin_permission, get_current_user
@@ -579,7 +580,7 @@ def _count_unchanged_keys(incoming: dict, changed: dict) -> int:
 async def sync_config(
     request: ConfigSyncRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: None = Depends(check_admin_permission),
+    actor: str = Depends(require_settings_admin),
 ):
     """Atomically merge *request.settings* into settings.json (Issue #3398).
 
@@ -644,7 +645,7 @@ async def sync_config(
         before_config=before_config,
         after_config=merged_config,
         source="api_sync",
-        created_by="admin",
+        created_by=actor,
     )
 
     logger.info(
@@ -672,7 +673,7 @@ async def sync_config(
 async def update_hardware_priority(
     request: HardwarePriorityRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: None = Depends(check_admin_permission),
+    actor: str = Depends(require_settings_admin),
 ):
     """Set hardware processing priority order for NPU/GPU/CPU (Issue #3288).
 
@@ -718,7 +719,7 @@ async def update_hardware_priority(
         before_config=before_config,
         after_config=merged_config,
         source="api",
-        created_by="admin",
+        created_by=actor,
     )
 
     logger.info(
