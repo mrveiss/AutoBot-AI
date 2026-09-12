@@ -41,13 +41,14 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     # --- provider credential. Same classification IRREDUCIBLE_KEYS documents for
     # --- autobot_internal_api_key in autobot-slm-backend/services/system_secrets_vault.py.
     ("autobot-backend/agents/base_agent.py", "mcp_token"): f"{_AUTH_BOOTSTRAP}: internal MCP server shared secret",
-    ("autobot-backend/mcp/autobot_server.py", "mcp_token"): f"{_AUTH_BOOTSTRAP}: internal MCP server shared secret",
+    (
+        "autobot-backend/mcp_server/autobot_server.py",
+        "mcp_token",
+    ): f"{_AUTH_BOOTSTRAP}: internal MCP server shared secret",
     ("autobot-backend/services/execution/claude_code_backend.py", "mcp_token"): (
         f"{_AUTH_BOOTSTRAP}: internal MCP server shared secret"
     ),
-    ("autobot-backend/auth_middleware.py", "jwt_secret"): (
-        f"{_AUTH_BOOTSTRAP}: platform user-session signing key"
-    ),
+    ("autobot-backend/auth_middleware.py", "jwt_secret"): (f"{_AUTH_BOOTSTRAP}: platform user-session signing key"),
     ("autobot-backend/services/slm_client.py", "jwt_secret"): (
         f"{_AUTH_BOOTSTRAP}: platform user-session signing key, reused to mint SLM service JWTs"
     ),

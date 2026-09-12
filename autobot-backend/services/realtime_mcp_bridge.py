@@ -212,7 +212,7 @@ class RealtimeMCPBridge:
       2. For each server, open an MCPClient connection and call discover_tools().
       3. Unreachable servers are logged and skipped (best-effort).
       4. When no external servers are configured, fall back to the in-process
-         ``mcp.autobot_server._TOOLS`` dict (zero-dependency baseline).
+         ``mcp_server.autobot_server._TOOLS`` dict (zero-dependency baseline).
       5. Name collisions across servers are resolved by prefixing with server_id.
       6. Voice bundle + RBAC filtering is applied before returning.
 
@@ -341,18 +341,7 @@ class RealtimeMCPBridge:
                 resource=name,
                 details=audit_details,
             )
-            if session_id:
-                try:
-                    from services.voice_realtime_telemetry import get_voice_realtime_telemetry
-
-                    await get_voice_realtime_telemetry().record_tool_call(
-                        session_id=session_id,
-                        tool=name,
-                        latency_s=latency_s,
-                        outcome="success",
-                    )
-                except Exception as _te:
-                    logger.debug("voice_realtime telemetry emit failed: %s", _te)
+            await self._emit_telemetry(session_id, name, latency_s, "success")
             return RealtimeToolResult(content=content, is_error=False)
 
         except Exception as exc:  # noqa: BLE001
@@ -371,19 +360,29 @@ class RealtimeMCPBridge:
                 resource=name,
                 details={**audit_details, "error": str(exc)},
             )
-            if session_id:
-                try:
-                    from services.voice_realtime_telemetry import get_voice_realtime_telemetry
-
-                    await get_voice_realtime_telemetry().record_tool_call(
-                        session_id=session_id,
-                        tool=name,
-                        latency_s=latency_s,
-                        outcome="error",
-                    )
-                except Exception as _te:
-                    logger.debug("voice_realtime telemetry emit failed: %s", _te)
+            await self._emit_telemetry(session_id, name, latency_s, "error")
             return RealtimeToolResult(content=str(exc), is_error=True)
+
+    @staticmethod
+    async def _emit_telemetry(session_id: str | None, tool: str, latency_s: float, outcome: str) -> None:
+        """Best-effort per-session telemetry for one call_tool outcome (GH#7421).
+
+        Extracted from call_tool, whose success and error branches emitted
+        this identically apart from *outcome*.
+        """
+        if not session_id:
+            return
+        try:
+            from services.voice_realtime_telemetry import get_voice_realtime_telemetry
+
+            await get_voice_realtime_telemetry().record_tool_call(
+                session_id=session_id,
+                tool=tool,
+                latency_s=latency_s,
+                outcome=outcome,
+            )
+        except Exception as _te:
+            logger.debug("voice_realtime telemetry emit failed: %s", _te)
 
     # ------------------------------------------------------------------
     # Discovery internals
@@ -393,7 +392,7 @@ class RealtimeMCPBridge:
         """Enumerate MCP tools from all configured servers and build the routing registry.
 
         When no external server URIs are configured, falls back to in-process
-        _TOOLS dict from mcp.autobot_server.
+        _TOOLS dict from mcp_server.autobot_server.
         """
         self._registry = {}
 
@@ -417,7 +416,7 @@ class RealtimeMCPBridge:
 
     def _discover_inprocess(self) -> list[RealtimeTool]:
         """Discover tools from the in-process AutoBot MCP server dict (zero-dependency baseline)."""
-        from mcp.autobot_server import _TOOLS  # noqa: PLC0415
+        from mcp_server.autobot_server import _TOOLS  # noqa: PLC0415
 
         result: list[RealtimeTool] = []
         for name, meta in _TOOLS.items():
@@ -487,14 +486,14 @@ class RealtimeMCPBridge:
     @staticmethod
     async def _call_inprocess(name: str, arguments: dict[str, Any]) -> Any:
         """Call a tool via the in-process AutoBotMCPServer handler."""
-        from mcp.autobot_server import AutoBotMCPServer  # noqa: PLC0415
+        from mcp_server.autobot_server import AutoBotMCPServer  # noqa: PLC0415
 
         server = AutoBotMCPServer()
         if hasattr(server, "handle_tool_call"):
             return await server.handle_tool_call(name, arguments)
 
         # Fallback: direct dispatch via _TOOLS handler map
-        from mcp.autobot_server import _TOOLS  # noqa: PLC0415
+        from mcp_server.autobot_server import _TOOLS  # noqa: PLC0415
 
         if name not in _TOOLS:
             raise RuntimeError(f"Tool not found: {name}")

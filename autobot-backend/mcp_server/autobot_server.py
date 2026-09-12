@@ -51,7 +51,7 @@ from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
-from mcp.auth_throttle import UNKNOWN_IP, get_pre_auth_throttle
+from mcp_server.auth_throttle import UNKNOWN_IP, get_pre_auth_throttle
 from services.run_jwt import validate_run_jwt
 
 logger = get_logger(__name__)
