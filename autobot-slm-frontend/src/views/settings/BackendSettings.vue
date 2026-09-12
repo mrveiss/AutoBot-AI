@@ -10,14 +10,14 @@
  */
 
 import { ref, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { getSlmApiBase } from '@/config/ssot-config'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
 
-// `authStore.getApiUrl()` is retained for DISPLAY only (the "API endpoint"
-// field and the summary row): it reports the SLM host origin the operator is
-// pointed at. Every transport call goes through the canonical client (#13140).
-const authStore = useAuthStore()
+// `getSlmApiBase()` is used for DISPLAY only (the "API endpoint" field and the
+// summary row): it reports the SLM API base the operator is pointed at. Every
+// transport call goes through the canonical client (#13140). #15761 replaces
+// the former `authStore.getApiUrl()`, which diverged from this resolver in DEV.
 const autobotApi = useAutobotApi()
 const loading = ref(false)
 const saving = ref(false)
@@ -59,9 +59,9 @@ async function fetchSettings(): Promise<void> {
       }
     })
 
-    // Set API endpoint from auth store if not in settings
+    // Set API endpoint from the SLM API base if not in settings
     if (!settings.value.api_endpoint) {
-      settings.value.api_endpoint = authStore.getApiUrl()
+      settings.value.api_endpoint = getSlmApiBase()
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load settings'
@@ -274,7 +274,7 @@ onMounted(() => {
               <p class="text-sm text-gray-500">{{ $t('settings.backendSettings.currentBackendAPIURL') }}</p>
             </div>
             <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-sm">
-              {{ settings.api_endpoint || authStore.getApiUrl() }}
+              {{ settings.api_endpoint || getSlmApiBase() }}
             </p>
           </div>
 

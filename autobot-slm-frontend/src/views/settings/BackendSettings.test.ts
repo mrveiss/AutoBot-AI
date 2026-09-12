@@ -24,10 +24,6 @@ import axios from 'axios'
 import BackendSettings from './BackendSettings.vue'
 import en from '@/locales/en.json'
 
-vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ token: 'test-token', getApiUrl: () => 'https://slm.example' }),
-}))
-
 vi.mock('@/utils/slmSettingsApi', () => ({
   listSettings: vi.fn(async () => []),
   upsertSetting: vi.fn(async () => true),

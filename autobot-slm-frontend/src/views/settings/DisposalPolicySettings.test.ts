@@ -8,7 +8,6 @@ import en from '@/locales/en.json'
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
-    getApiUrl: () => '',
     getAuthHeaders: () => ({}),
   }),
 }))
