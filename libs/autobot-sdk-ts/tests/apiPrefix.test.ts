@@ -19,22 +19,36 @@
 import { jest } from "@jest/globals";
 import { AutoBot } from "../src/index.js";
 
+/** Just the shape `client.ts`'s methods read off a response. */
+interface FakeFetchResponse {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  json: () => Promise<Record<string, unknown>>;
+}
+
 describe("AutoBot SDK -- every request reaches fetch under /api (#16495)", () => {
   // `jest` is not an ambient global under this package's ESM preset
   // (ts-jest/presets/default-esm + --experimental-vm-modules) the way
   // `describe`/`test`/`expect` are -- it must be imported from
   // @jest/globals, so the mock's type comes from `typeof jest.fn` rather
-  // than the CJS-only `jest.Mock` namespace type.
-  let fetchMock: ReturnType<typeof jest.fn>;
+  // than the CJS-only `jest.Mock` namespace type. `jest.fn()` called with no
+  // type argument infers `Mock<never>`, which rejects any real return value
+  // with TS2345 -- the call signature has to be spelled out, and the
+  // implementation passed alongside it so nothing is inferred from a
+  // separate `mockResolvedValue` call instead. The parameters are
+  // `unknown[]`, not `fetch`'s own signature, so reading `.mock.calls[0]`
+  // back as `[string]` below is a widening cast, not a narrowing one.
+  let fetchMock: ReturnType<typeof jest.fn<(...args: unknown[]) => Promise<FakeFetchResponse>>>;
   const originalFetch = global.fetch;
 
   beforeEach(() => {
-    fetchMock = jest.fn().mockResolvedValue({
+    fetchMock = jest.fn<(...args: unknown[]) => Promise<FakeFetchResponse>>(async () => ({
       ok: true,
       status: 200,
       statusText: "OK",
       json: async () => ({}),
-    });
+    }));
     global.fetch = fetchMock as unknown as typeof fetch;
   });
 
