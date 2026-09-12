@@ -41,12 +41,12 @@ pytestmark = pytest.mark.performance
 # runner; every local figure is converted by that factor before headroom. Headroom on top: 3x where the measurement is
 # large and steady (cv of units under ~12% across the five runs), 8x where it is single-digit microseconds and timer
 # granularity rather than load sets the spread, floored at 0.20 units.
-# ONE SITE KEEPS A WIDE BUDGET ON PURPOSE. `Multimodal processor startup` read 315.602, 177.909 and 114.306 units on
-# runs 33156790797, 33158382218 and 33161132835 — a 2.76x spread in the RATIO, not merely in the milliseconds.
-# Calibration cannot normalise it: the cost is model-file and HF-cache disk I/O and a CPU-bound yardstick does not track
-# a disk-bound numerator, so its budget is 600, ~1.9x the worst reading. Every other site is CPU-shaped, tracks the unit
-# closely, and is held to 8x its highest observation (3x for the large steady ones). Ratchet DOWN as runs report lower —
-# the only direction allowed.
+# ONE SITE KEEPS A WIDE BUDGET ON PURPOSE. `Multimodal processor startup`'s first readings (315.602 worst) were
+# taken on #15054's CLIP-load error path, which skipped the work this benchmark times; #15297 fixed that, and the
+# same constructor now measures 2013-4348 units across seven real runs since (full list on #16535) -- the
+# baseline's premise had gone (perf_work_budget.py names this site as its worked example). Re-derived at 4348.363
+# (worst) x ~1.9, this site's disk-bound policy (model/HF-cache I/O, not CPU-trackable): budget 8300. Every other
+# site is CPU-shaped, held to 8x its high (3x if steady); ratchet DOWN as runs report lower, the only direction allowed.
 
 
 @pytest.fixture(autouse=True)
@@ -380,10 +380,9 @@ class TestSystemPerformanceBenchmarks:
         processor = MultiModalProcessor()
         processor_startup_time = (time.perf_counter() - start_time) * 1000
 
-        # First-observation ceiling: 315.602 units measured on run 33156790797,
-        # on #15054's error path. Ratchet DOWN, never up.
+        # Re-derived post-#15297 (#16535); see file header.
         assert isinstance(processor, MultiModalProcessor), "MultiModalProcessor() returned no instance to time"
-        assert_within_work_budget(processor_startup_time, 2200.0, "Multimodal processor startup")  # #15342
+        assert_within_work_budget(processor_startup_time, 8300.0, "Multimodal processor startup")  # #15342, #16535
 
         # Test memory manager startup
         MemoryManager()  # discard: primes the shared memory backend

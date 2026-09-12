@@ -127,8 +127,9 @@ def assert_within_work_budget(
     state: `Multimodal processor startup` was calibrated at 315.602 units while
     `VisionProcessor`'s CLIP load was raising `TypeError` (#15054), so the
     constructor exited early. When #15297 fixed that load, the same constructor
-    began doing the work it had been skipping and measured ~1500 units. Nothing
-    regressed; the baseline's premise had gone.
+    began doing the work it had been skipping and measured 2000-4300+ units
+    across seven subsequent runs (#16535, which re-derived the budget from
+    them). Nothing regressed; the baseline's premise had gone.
 
     Without the state recorded, that breach is indistinguishable from a real
     slowdown, and the failure text — "investigate the code, do not raise it" —
