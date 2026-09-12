@@ -34,6 +34,7 @@ from llc.adapters.subprocess_base import (
     resolve_stall_deadline,
     resolve_timeout,
 )
+from llc.adapters.subprocess_support import spawn_create_time
 from llc.models.enums import LLCRunStatus
 
 # ---------------------------------------------------------------------------
@@ -428,9 +429,19 @@ class TestSharedGracefulTimeout:
 class TestDeadRunNeverReportsStalled:
     async def test_finished_run_polled_after_stall_deadline_is_completed(self) -> None:
         """A run that completed normally, polled long after its last write
-        (e.g. after a backend outage), reports COMPLETED, not "stalled"."""
+        (e.g. after a backend outage), reports COMPLETED, not "stalled".
+
+        Captured via :func:`spawn_create_time`, exactly as every real adapter's
+        ``invoke()`` does right after spawn (#13097 review) -- a bare
+        ``psutil.Process(proc.pid).create_time()`` here raced ``true``'s own
+        near-instant exit: the child can be reaped by asyncio's child watcher
+        before this line runs, and ``Process()`` then raises
+        ``psutil.NoSuchProcess`` with no adapter code on the stack to guard it.
+        ``spawn_create_time`` is the same helper production code uses to
+        absorb exactly that race, degrading to ``None`` rather than raising.
+        """
         proc = await asyncio.create_subprocess_exec("true", start_new_session=True)
-        create_time = psutil.Process(proc.pid).create_time()
+        create_time = spawn_create_time(proc.pid)
         await proc.wait()
         await eventually(lambda: not psutil.pid_exists(proc.pid))
 
