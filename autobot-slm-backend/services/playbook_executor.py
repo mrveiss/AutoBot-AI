@@ -646,7 +646,7 @@ class PlaybookExecutor:
             logger.debug("_update_code_source: no .git at %s — skipping", code_source_dir)
             return True
 
-        branch = os.getenv("AUTOBOT_GIT_BRANCH", "Dev_new_gui")
+        branch = os.getenv("AUTOBOT_GIT_BRANCH", "main")
         synced = True
 
         try:

@@ -17,7 +17,7 @@
           },
           {
             "type": "command",
-            "command": "if [[ \"$TOOL_ARGS\" == *\"git commit\"* ]]; then cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && echo '\ud83d\udccb Staged files:' && git diff --staged --name-only 2>/dev/null | head -20 && echo '' && echo '\ud83c\udf3f Branch:' $(git branch --show-current 2>/dev/null) '\u2192 Dev_new_gui' && echo ''; fi",
+            "command": "if [[ \"$TOOL_ARGS\" == *\"git commit\"* ]]; then cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && echo '\ud83d\udccb Staged files:' && git diff --staged --name-only 2>/dev/null | head -20 && echo '' && echo '\ud83c\udf3f Branch:' $(git branch --show-current 2>/dev/null) '\u2192 main' && echo ''; fi",
             "statusMessage": "Verifying git state...",
             "timeout": 3000
           }

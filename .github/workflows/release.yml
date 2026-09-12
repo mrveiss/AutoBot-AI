@@ -1,5 +1,5 @@
 # AutoBot Release Workflow
-# Automatically creates releases on merge to main using git-cliff
+# Automatically creates releases on merge to release using git-cliff
 # Analyzes conventional commits to determine version bump and generate changelog
 #
 # Changelog strategy (A+B):
@@ -13,7 +13,7 @@ name: Release
 
 on:
   push:
-    branches: [main]
+    branches: [release]
     # The workflow's own "chore(release): changelog…" commit touches ONLY these
     # paths. Ignoring pushes limited to them stops release.yml from re-triggering
     # on its own changelog PR merge — otherwise git-cliff patch-bumps off the
@@ -26,10 +26,10 @@ on:
 
 permissions:
   contents: write
-  # The final "Open changelog PR to main" step calls `gh pr create`, which
+  # The final "Open changelog PR to release" step calls `gh pr create`, which
   # needs pull-requests:write — without it GITHUB_TOKEN fails with
   # "Resource not accessible by integration (createPullRequest)" and the
-  # changelog history never lands on main (#11853).
+  # changelog history never lands on release (#11853).
   pull-requests: write
 
 concurrency:
@@ -58,7 +58,7 @@ jobs:
       # the merge itself, which cliff.toml skips via `{ message = "^Merge " }`.
       # git-cliff therefore found nothing to bump and returned the current
       # version, and the run reported success having minted no release, with the
-      # 276 commits it should have covered sitting on main.
+      # 276 commits it should have covered sitting on release.
       #
       # Passing `<tag>..HEAD` makes the walk semantics irrelevant: cliff is told
       # the range rather than inferring it.
@@ -126,7 +126,7 @@ jobs:
             echo "release_needed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Monotonic guard (#11826): legacy tags can sit off the main history
+          # Monotonic guard (#11826): legacy tags can sit off the release history
           # (they pointed at squashed-away changelog commits), so git-cliff may
           # bump from an older ancestor tag and mint a version that regresses
           # or collides. Never release a version <= any existing tag: fall back
@@ -200,17 +200,17 @@ jobs:
             git commit -m "chore(release): changelog and fragments for ${VERSION}"
             echo "has_changelog=true" >> "$GITHUB_OUTPUT"
           fi
-          # Tag the commit that was pushed to main (GITHUB_SHA) — NOT the
-          # changelog commit made above. That commit only reaches main via a
+          # Tag the commit that was pushed to release (GITHUB_SHA) — NOT the
+          # changelog commit made above. That commit only reaches release via a
           # squash-merged PR (different SHA), so tagging it strands every
-          # release tag off the main history: git-cliff then bumps from a
+          # release tag off the release history: git-cliff then bumps from a
           # stale ancestor tag and release notes cover the wrong range (#11826).
           git tag -a "${VERSION}" -m "Release ${VERSION}" "${GITHUB_SHA}"
           # Push the tag first and on its own. Tags are not branch-protected, so
           # this always lands and guarantees the "Create GitHub Release" step
           # below has a ref to release from (#10608). The changelog commit lands
-          # on main via a PR (see "Open changelog PR to main" below, #10845) —
-          # a direct bot push is rejected by main's required status checks.
+          # on release via a PR (see "Open changelog PR to release" below, #10845) —
+          # a direct bot push is rejected by release's required status checks.
           git push origin "refs/tags/${VERSION}"
 
       - name: Create GitHub Release
@@ -234,11 +234,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # #10845: a direct bot push of the changelog commit to protected main is
-      # rejected by main's required status checks. Land it via a PR instead so
-      # CHANGELOG.md history on main includes released versions. The tag + Release
+      # #10845: a direct bot push of the changelog commit to protected release is
+      # rejected by release's required status checks. Land it via a PR instead so
+      # CHANGELOG.md history on release includes released versions. The tag + Release
       # are already published above, so this step is non-fatal to the release.
-      - name: Open changelog PR to main
+      - name: Open changelog PR to release
         if: steps.check.outputs.release_needed == 'true' && steps.commit.outputs.has_changelog == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -246,14 +246,14 @@ jobs:
         run: |
           BRANCH="release/changelog-${VERSION}"
           # HEAD holds the changelog commit (made in the commit step). Push it to
-          # a dedicated branch and open/refresh a PR to main.
+          # a dedicated branch and open/refresh a PR to release.
           git push origin "HEAD:refs/heads/${BRANCH}" --force
           if gh pr view "${BRANCH}" --json state --jq '.state' 2>/dev/null | grep -q OPEN; then
             echo "Changelog PR for ${BRANCH} already open."
           else
-            gh pr create --base main --head "${BRANCH}" \
+            gh pr create --base release --head "${BRANCH}" \
               --title "chore(release): changelog for ${VERSION}" \
-              --body "Automated changelog for release ${VERSION}. Merging lands the CHANGELOG.md history and per-version file on main (#10845). The tag and GitHub Release for ${VERSION} are already published."
+              --body "Automated changelog for release ${VERSION}. Merging lands the CHANGELOG.md history and per-version file on release (#10845). The tag and GitHub Release for ${VERSION} are already published."
           fi
           # Land automatically once required checks pass; non-fatal if the token
           # cannot enable auto-merge (the PR stays open for a manual merge).

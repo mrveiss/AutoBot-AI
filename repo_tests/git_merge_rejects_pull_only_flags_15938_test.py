@@ -157,7 +157,7 @@ def test_the_matcher_leaves_valid_merges_and_prose_alone() -> None:
     # `git pull --no-rebase` is correct usage and must not be touched.
     assert not offending_lines("git pull --no-rebase origin main")
     # A merge with no flags at all.
-    assert not offending_lines("git merge origin/Dev_new_gui")
+    assert not offending_lines("git merge origin/main")
 
 
 # ---------------------------------------------------- where a workspace starts

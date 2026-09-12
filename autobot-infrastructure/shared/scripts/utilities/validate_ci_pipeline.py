@@ -143,10 +143,10 @@ def main():
     if workflow_valid and files_present:
         print("\n🎉 CI/CD Pipeline is fully configured and ready!")
         print("\n💡 Next steps:")
-        print("   1. Push to main or Dev_new_gui branch to trigger pipeline")
+        print("   1. Push to release or main branch to trigger pipeline")
         print("   2. Create pull request to test PR workflow")
         print("   3. Monitor Actions tab in GitHub for execution results")
-        print("   4. Set up branch protection rules for main branch")
+        print("   4. Set up branch protection rules for release branch")
         return True
     else:
         print("\n⚠️  Pipeline configuration needs attention")

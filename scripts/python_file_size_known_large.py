@@ -520,7 +520,7 @@ KNOWN_LARGE: dict[str, int] = {
     "pipeline-scripts/check-pre-commit-hook-pr_test.py": 747,
     "pipeline-scripts/ci_dispatch_watchdog.py": 1452,
     "pipeline-scripts/detect-hardcoded-values_test.py": 653,
-    "repo_tests/ci_dispatch_watchdog_test.py": 1317,
+    "repo_tests/ci_dispatch_watchdog_test.py": 1283,
     "repo_tests/enum_union_guard_test.py": 801,
     "repo_tests/sys_modules_leak_guard.py": 1164,
     "scripts/audit_api_wiring.py": 897,

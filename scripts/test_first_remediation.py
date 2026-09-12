@@ -23,7 +23,6 @@ import argparse
 import asyncio
 import json
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -63,7 +62,7 @@ REPO_ROOT = Path(__file__).parent.parent
 def create_worktree(issue_number: int) -> Path:
     branch = f"issue-{issue_number}"
     worktree_path = WORKTREE_BASE / branch
-    _run(["git", "worktree", "add", str(worktree_path), "-b", branch, "origin/Dev_new_gui"], cwd=REPO_ROOT)
+    _run(["git", "worktree", "add", str(worktree_path), "-b", branch, "origin/main"], cwd=REPO_ROOT)
     _run(["git", "-C", str(worktree_path), "branch", "--unset-upstream"])
     return worktree_path
 
@@ -183,7 +182,7 @@ def create_pr(worktree: Path, issue_number: int, title: str) -> str:
                 "vs fix history explicit."
             ),
             "--base",
-            "Dev_new_gui",
+            "main",
         ],
         cwd=worktree,
     )
@@ -279,7 +278,7 @@ async def remediate_issue(issue: dict, dry_run: bool = False) -> RemediationResu
         print(f"[dry-run] Would create worktree for issue-{issue_number}")
         print(f"[dry-run] Would write test: autobot-backend/tests/test_issue_{issue_number}_repro.py")
         print(f"[dry-run] Would iterate up to {MAX_FIX_ITERATIONS} fix attempts")
-        print(f"[dry-run] Would open PR to Dev_new_gui on success")
+        print("[dry-run] Would open PR to main on success")
         return RemediationResult(issue_number, False, 0, notes=["dry-run: no changes made"])
 
     try:

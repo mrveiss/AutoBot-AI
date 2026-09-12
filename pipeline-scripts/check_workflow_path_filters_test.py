@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GUARD = REPO_ROOT / "pipeline-scripts" / "check_workflow_path_filters.py"
 CANONICAL = Path(".github/filters/backend-python-paths.yml")
@@ -64,7 +63,7 @@ def test_dropping_a_canonical_path_from_an_inline_copy_fails(tmp_path: Path) -> 
 
 
 def test_adding_to_the_canonical_set_reds_every_inline_consumer(tmp_path: Path) -> None:
-    """"Adding a path in one place demonstrably affects all consumers"."""
+    """ "Adding a path in one place demonstrably affects all consumers"."""
     root = _sandbox(tmp_path)
     _edit(
         root / CANONICAL,
@@ -81,8 +80,8 @@ def test_reintroducing_api_wiring_pull_request_paths_fails(tmp_path: Path) -> No
     root = _sandbox(tmp_path)
     _edit(
         root / ".github/workflows/api-wiring.yml",
-        "    branches: [ main, Dev_new_gui ]\n\nconcurrency:",
-        "    paths:\n      - 'autobot-backend/**/*.py'\n    branches: [ main, Dev_new_gui ]\n\nconcurrency:",
+        "    branches: [ release, main ]\n\nconcurrency:",
+        "    paths:\n      - 'autobot-backend/**/*.py'\n    branches: [ release, main ]\n\nconcurrency:",
     )
     result = _run(root)
     assert result.returncode == 1, result.stdout
@@ -102,7 +101,7 @@ def test_an_undeclared_consumer_of_the_filter_file_fails(tmp_path: Path) -> None
     root = _sandbox(tmp_path)
     (root / ".github/workflows/zz-new-gate.yml").write_text(
         "name: zz\n"
-        "on:\n  pull_request:\n    branches: [Dev_new_gui]\n"
+        "on:\n  pull_request:\n    branches: [main]\n"
         "jobs:\n"
         "  changes:\n"
         "    runs-on: ubuntu-latest\n"
@@ -187,7 +186,14 @@ def test_an_undeclared_consumer_of_the_code_quality_filter_fails(tmp_path: Path)
 
 @pytest.mark.parametrize(
     "workflow",
-    ["phase_validation.yml", "security.yml", "ai-security-review.yml", "startup-import-smoke.yml", "api-wiring.yml", "auto-fix-generated-types.yml"],
+    [
+        "phase_validation.yml",
+        "security.yml",
+        "ai-security-review.yml",
+        "startup-import-smoke.yml",
+        "api-wiring.yml",
+        "auto-fix-generated-types.yml",
+    ],
 )
 def test_every_declared_consumer_is_actually_reached(tmp_path: Path, workflow: str) -> None:
     """Each declared consumer must be one the guard really inspects.
@@ -253,7 +259,7 @@ def test_a_renamed_dorny_filter_key_fails_rather_than_exempting_silently(tmp_pat
 
 
 def test_a_workflow_with_no_dorny_step_is_fatal_not_a_pass(tmp_path: Path) -> None:
-    """"Could not find the filters" and "the filters were fine" are opposite facts."""
+    """ "Could not find the filters" and "the filters were fine" are opposite facts."""
     root = _sandbox(tmp_path)
     _edit(root / VGT, "      - uses: dorny/paths-filter@", "      - uses: not-dorny/other@")
     result = _run(root)
@@ -320,8 +326,7 @@ def test_a_watcher_entry_with_empty_tuples_fails(tmp_path: Path) -> None:
     patched.write_text(
         src.replace(
             old,
-            '"verify-generated-types.yml": ((), ()),\n'
-            '    "zz-vgt-copy.yml": (("push",), ("types", "slm_types")),',
+            '"verify-generated-types.yml": ((), ()),\n' '    "zz-vgt-copy.yml": (("push",), ("types", "slm_types")),',
         ),
         encoding="utf-8",
     )

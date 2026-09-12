@@ -79,7 +79,7 @@ _SERVICES = {
 }
 
 # Lower when a sweep genuinely covers less; never lower it to make a red run pass.
-# Measured on Dev_new_gui at the time of writing: 126 resolved, 8 unresolved-and-skipped.
+# Measured on main at the time of writing: 126 resolved, 8 unresolved-and-skipped.
 _RESOLVED_FLOOR = 115
 
 # (repo-relative file, service, normalised path) — exact, shrink-only.
@@ -195,8 +195,7 @@ def _bases(text: str) -> dict[str, str]:
     """Map local `const` names bound to a base-URL helper to their service."""
     pattern = r"const\s+(\w+)\s*=\s*(getSlmApiBase|getBackendUrl)\(\)"
     return {
-        match.group(1): ("slm" if match.group(2) == "getSlmApiBase" else "main")
-        for match in re.finditer(pattern, text)
+        match.group(1): ("slm" if match.group(2) == "getSlmApiBase" else "main") for match in re.finditer(pattern, text)
     }
 
 
@@ -222,9 +221,7 @@ def _call_pattern(receivers: dict[str, str]) -> re.Pattern[str] | None:
     if not receivers:
         return None
     names = "|".join(re.escape(name) for name in receivers)
-    return re.compile(
-        r"\b(" + names + r")\.(?:" + _VERBS + r")(?:<[^>(]*>)?\(\s*(['\"`])([^'\"`]*)\2"
-    )
+    return re.compile(r"\b(" + names + r")\.(?:" + _VERBS + r")(?:<[^>(]*>)?\(\s*(['\"`])([^'\"`]*)\2")
 
 
 def _service_of(head: str, bases: dict[str, str]) -> str:

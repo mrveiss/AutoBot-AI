@@ -28,7 +28,7 @@ Editing rules:
 
 #: Measured on the sweep that added this guard: 178 guards parsed, 27 of their
 #: inputs uncovered. The ansible tree is NOT here -- #15713 covered it in the
-#: same change, because it had already broken `Dev_new_gui` once (#15704) and
+#: same change, because it had already broken `main` once (#15704) and
 #: eighteen guards read it, which is the largest concentration in the repo.
 UNCOVERED_READS: frozenset[str] = frozenset(
     {

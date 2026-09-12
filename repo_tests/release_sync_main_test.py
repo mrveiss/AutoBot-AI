@@ -2,19 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""#16246 — one release-sync pull request into main, never merged by a bot.
+"""#16246 — one release-sync pull request into release, never merged by a bot.
 
-``sync-main-to-dev.yml`` force-pushes Dev_new_gui to ``release-sync-main`` and
+``sync-main-to-release.yml`` force-pushes main to ``release-sync-release`` and
 runs ``pipeline-scripts/release_sync_main.py``, weekly and on a confirmed manual
 trigger. The properties pinned here are the ones a reviewer cannot see once the
 files are long:
 
 * **Exactly one.** A run opens a sync PR only when none is open, counting PRs
-  into main from the release branch AND from the trunk. With two already open
+  into release from the release branch AND from the trunk. With two already open
   it updates the oldest and opens nothing — "fixing" duplicates by adding a
   third is the failure this guards.
-* **Never merges.** The sync must land as a merge commit (``main`` holds
-  #15326's merge commit, which Dev_new_gui lacks), and that call is the owner's.
+* **Never merges.** The sync must land as a merge commit (``release`` holds
+  #15326's merge commit, which main lacks), and that call is the owner's.
   No request in any path reaches a merge endpoint, and neither the script nor
   the workflow names one.
 * **The workflow list is complete.** It is read from both refs' directory
@@ -37,7 +37,7 @@ from repo_tests._release_sync_fakes import BASE, HEAD, REPO, SCRIPT, SOURCE, _ap
 
 _REPO_ROOT = repo_root()
 _SCRIPT = SCRIPT
-_WORKFLOW = _REPO_ROOT / ".github/workflows/sync-main-to-dev.yml"
+_WORKFLOW = _REPO_ROOT / ".github/workflows/sync-main-to-release.yml"
 
 PUSH_TOKEN = "${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}"
 
@@ -114,7 +114,7 @@ def test_a_sync_pr_is_this_repositorys_release_branch_or_trunk_into_the_base(rs)
 
 
 def test_title_is_the_agreed_one(rs):
-    assert rs.SYNC_TITLE == "release: sync main from Dev_new_gui"
+    assert rs.SYNC_TITLE == "release: sync release from main"
 
 
 def test_the_default_head_is_the_workflows_release_branch(rs):
@@ -269,7 +269,7 @@ def test_body_instructs_a_merge_commit_and_never_a_squash(rs):
     body = rs.build_body(310, [], SOURCE, BASE)
     assert "gh pr merge --merge" in body
     assert "Never `--squash`" in body
-    assert "#15326" in body, "the body must say WHY: main holds #15326's merge commit"
+    assert "#15326" in body, "the body must say WHY: release holds #15326's merge commit"
     assert "re-conflict" in body, "the body must say what a squash costs"
 
 
@@ -298,7 +298,7 @@ def test_body_uses_the_pr_template_headings(rs):
 
 def test_body_names_the_workflow_that_opened_it_and_leads_with_the_marker(rs):
     body = rs.build_body(310, [], SOURCE, BASE)
-    assert "sync-main-to-dev.yml" in body and body.startswith(rs.BODY_MARKER)
+    assert "sync-main-to-release.yml" in body and body.startswith(rs.BODY_MARKER)
 
 
 # --------------------------------------------------------------------------
@@ -383,7 +383,7 @@ def test_workflow_list_comes_from_both_directory_listings_not_the_compare(rs):
 
 
 # --------------------------------------------------------------------------
-# The workflow: sync-main-to-dev.yml, the one release-sync mechanism.
+# The workflow: sync-main-to-release.yml, the one release-sync mechanism.
 # --------------------------------------------------------------------------
 
 
@@ -436,7 +436,7 @@ def test_triggers_are_a_weekly_schedule_and_manual_dispatch_only():
 def test_no_pull_request_or_push_trigger():
     triggers = _triggers()
     for event in ("pull_request", "pull_request_target", "push"):
-        assert event not in triggers, f"sync-main-to-dev.yml must not trigger on `{event}`"
+        assert event not in triggers, f"sync-main-to-release.yml must not trigger on `{event}`"
 
 
 def test_manual_runs_still_need_the_release_confirmation_and_scheduled_runs_skip_it():
@@ -483,15 +483,15 @@ def test_the_push_and_the_pr_prefer_the_push_token():
 
 def test_the_divergence_guard_is_kept():
     joined = "\n".join(_shell_bodies())
-    assert "--no-merges" in joined, "#13974: DIVERGENT counts non-merge commits only on main"
-    assert '"$DIVERGENT" != "0"' in joined, "#13974: work committed straight to main blocks the sync"
+    assert "--no-merges" in joined, "#13974: DIVERGENT counts non-merge commits only on release"
+    assert '"$DIVERGENT" != "0"' in joined, "#13974: work committed straight to release blocks the sync"
 
 
 def test_workflow_never_merges():
     joined = "\n".join(_shell_bodies())
     for forbidden in ("gh pr merge", "git merge"):
-        assert forbidden not in joined, f"sync-main-to-dev.yml runs `{forbidden}` (#16246)"
-    assert not _MERGE_ENDPOINT.search(joined), "sync-main-to-dev.yml calls a merge endpoint"
+        assert forbidden not in joined, f"sync-main-to-release.yml runs `{forbidden}` (#16246)"
+    assert not _MERGE_ENDPOINT.search(joined), "sync-main-to-release.yml calls a merge endpoint"
     for step in _job()["steps"]:
         assert "merge" not in str(step.get("uses", "")).lower(), f"merge action: {step['uses']}"
     pushes = [line for line in joined.splitlines() if "git push" in line]

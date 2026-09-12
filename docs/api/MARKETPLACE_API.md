@@ -80,7 +80,7 @@ Authorization: Bearer <token>
       "hooks": ["on_message_received", "on_agent_complete", "on_error"],
       "downloads": 203,
       "rating": 4.7,
-      "source_url": "https://github.com/mrveiss/AutoBot-AI/tree/Dev_new_gui/plugins/core-plugins/logger-plugin"
+      "source_url": "https://github.com/mrveiss/AutoBot-AI/tree/main/plugins/core-plugins/logger-plugin"
     }
   ],
   "total": 1,
@@ -155,7 +155,7 @@ Authorization: Bearer <token>
   "hooks": ["on_tool_call", "on_tool_result"],
   "downloads": 176,
   "rating": 4.3,
-  "source_url": "https://github.com/mrveiss/AutoBot-AI/tree/Dev_new_gui/plugins/core-plugins/mcp-wrapper-plugin"
+  "source_url": "https://github.com/mrveiss/AutoBot-AI/tree/main/plugins/core-plugins/mcp-wrapper-plugin"
 }
 ```
 

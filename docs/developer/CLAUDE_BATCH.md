@@ -7,7 +7,7 @@ When the user says "implement all X-labeled issues", "fix all Y bugs", or "run `
 Default behavior:
 - Batch size: 3 agents max per round (API rate limit)
 - All issues get their own worktree: `.worktrees/issue-XXXX/`
-- Main session stays on `Dev_new_gui` — never switches
+- Main session stays on `main` — never switches
 - Agents commit locally; main session pushes and creates PRs
 - After each batch: review, merge, file discovery issues, then next batch
 
@@ -34,7 +34,7 @@ Checklist", all 8 steps — batch work is exactly the case where steps 5-8 apply
 
 ## Parallel Agents Strategy
 
-1. **Main session stays on `Dev_new_gui`** throughout — never switches
+1. **Main session stays on `main`** throughout — never switches
 2. **Agents work in isolated worktrees** — no cross-contamination
 3. **Batch size: 3 implementation agents max** — avoid API rate limiting (529 errors), wait between batches. The cap is on *implementation* agents; read-only Haiku sweeps are cheap and may fan out wider
 4. **Agents commit locally only** — do NOT push; main session handles all pushes

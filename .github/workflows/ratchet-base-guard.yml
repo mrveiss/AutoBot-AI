@@ -2,7 +2,7 @@
 #
 # Why this exists when `code-quality` already runs the same audit
 # ---------------------------------------------------------------
-# It does — and on 2026-08-26 it ran on `Dev_new_gui` and went RED (run
+# It does — and on 2026-08-26 it ran on `main` and went RED (run
 # 32962821850, step "Audit the python-file-size ceilings for drift"), because
 # merging #15100 took `autobot-backend/api/terminal_websocket_route_test.py`
 # to 613 lines. Nobody was told. The violation was found days later by someone
@@ -12,7 +12,7 @@
 # So this workflow adds the two things the existing invocation does not have:
 #
 # 1. It CANNOT be skipped. `code-quality` filters both its `on.push.paths` and
-#    its `changes` job on the backend-Python set, so a push to `Dev_new_gui`
+#    its `changes` job on the backend-Python set, so a push to `main`
 #    that touches no Python leaves the base invariant unexamined that day. The
 #    ratchet is a property of the whole tree, not of one diff — a tree-wide
 #    invariant must not be gated on the diff that happened to arrive. There is
@@ -41,7 +41,7 @@ on:
   push:
     # No `paths:` filter, deliberately — see the header. `git ls-files` is what
     # scopes this run, not the diff.
-    branches: [ Dev_new_gui, main ]
+    branches: [ main, release ]
   workflow_dispatch:
 
 concurrency:

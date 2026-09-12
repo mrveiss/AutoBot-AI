@@ -7,8 +7,8 @@ on:
       - 'autobot-backend/services/autoresearch/run_experiment.py'
       - 'autobot-backend/services/autoresearch/requirements*.txt'
     branches:
-      - Dev_new_gui
       - main
+      - release
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -41,7 +41,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/mrveiss/autobot-autoresearch:${{ github.sha }}
-            ${{ github.ref == 'refs/heads/main' && 'ghcr.io/mrveiss/autobot-autoresearch:latest' || '' }}
+            ${{ github.ref == 'refs/heads/release' && 'ghcr.io/mrveiss/autobot-autoresearch:latest' || '' }}
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2

@@ -1,4 +1,4 @@
-# Keep PR-less branches current with Dev_new_gui by MERGING base into them (#15306)
+# Keep PR-less branches current with main by MERGING base into them (#15306)
 #
 # THE HOLE THIS FILLS. Three branch states, two of them already covered:
 #
@@ -22,7 +22,7 @@
 #
 # WHY THIS COSTS NO CI. No workflow triggers on a push to an arbitrary branch:
 # every `push:` trigger under .github/workflows/ is scoped to
-# main/Dev_new_gui/develop, except image-sign.yml which is `push: tags:`. PR
+# release/main/develop, except image-sign.yml which is `push: tags:`. PR
 # workflows fire on `pull_request`, and these branches have no PR by definition.
 # So this does NOT reintroduce the reset amplification #14022 fixed — that was
 # specific to branches WITH an open PR, where a push discards an in-flight check
@@ -88,11 +88,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          BASE: Dev_new_gui
+          BASE: main
           # Never a target, whatever else changes. The base itself and the
           # protected trunks: pushing a merge to any of these is exactly the
           # "never push to a protected branch" rule this repo enforces.
-          NEVER_TARGET: 'Dev_new_gui main master develop HEAD'
+          # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
+          NEVER_TARGET: 'main release master develop HEAD Dev_new_gui'
           # See the rescued/* rationale in the header.
           EXCLUDED_PREFIXES: 'rescued/'
           DRY_RUN: ${{ inputs.dry_run }}

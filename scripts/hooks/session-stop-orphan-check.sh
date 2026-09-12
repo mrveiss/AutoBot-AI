@@ -36,7 +36,7 @@ BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 # branch this inflates the reported commit count; it never causes a false report.
 pr_base() {
   local candidate
-  for candidate in "${ORPHAN_CHECK_BASE:-}" Dev_new_gui develop main master; do
+  for candidate in "${ORPHAN_CHECK_BASE:-}" main develop release master; do
     [ -n "$candidate" ] || continue
     if git rev-parse --verify --quiet "origin/$candidate" >/dev/null 2>&1; then
       printf 'origin/%s' "$candidate"

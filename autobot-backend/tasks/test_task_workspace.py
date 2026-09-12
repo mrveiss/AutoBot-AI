@@ -400,7 +400,7 @@ class TestCleanupTOCTOU:
         assert not _branch_exists(git_repo, f"task-{task_id}")
 
 
-_BASE = "origin/Dev_new_gui"
+_BASE = "origin/main"
 
 
 def _git(repo: Path, *argv: str) -> None:

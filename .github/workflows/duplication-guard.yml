@@ -44,7 +44,7 @@ on:
       - 'autobot-slm-frontend/src/**/*.vue'
       - '.github/workflows/duplication-guard.yml'
   push:
-    branches: [Dev_new_gui]
+    branches: [main]
     paths:
       - 'autobot-backend/**/*.py'
       - 'autobot-frontend/src/**/*.ts'
@@ -65,7 +65,7 @@ on:
 # #13432 found that cancelling base-branch runs meant each merge cancelled the
 # previous merge's verification, and merges arrive faster than a suite completes -
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
-# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -78,7 +78,7 @@ jobs:
   duplication-guard:
     runs-on: ubuntu-latest
     env:
-      # Pins: duplicated lines per scope, measured on Dev_new_gui run 34581036896
+      # Pins: duplicated lines per scope, measured on main run 34581036896
       # (2026-09-11, base d5a0c6dcb, jscpd 5.0.6). Ratchet DOWN only (#16319).
       #
       # autobot-backend + autobot-frontend/src: 11,723 duplicated lines, 676

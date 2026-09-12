@@ -40,7 +40,7 @@ on:
 # #13432 found that cancelling base-branch runs meant each merge cancelled the
 # previous merge's verification, and merges arrive faster than a suite completes -
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
-# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

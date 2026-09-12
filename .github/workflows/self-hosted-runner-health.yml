@@ -44,7 +44,7 @@ on:
   # lands. Without this the repaired probe would sit unexecuted behind the same
   # default-branch registration wall that has kept the broken one running.
   push:
-    branches: [Dev_new_gui]
+    branches: [main]
 
 permissions:
   contents: read

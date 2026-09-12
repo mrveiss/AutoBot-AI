@@ -238,7 +238,7 @@ Each language file must:
    - Test in-app at `/settings` language selector
    - Validate RTL rendering, number formats, button overflow
 
-4. **Integration**: Create PRs for each language, review with native speakers, merge to `Dev_new_gui`
+4. **Integration**: Create PRs for each language, review with native speakers, merge to `main`
 
 ## Current Status
 
