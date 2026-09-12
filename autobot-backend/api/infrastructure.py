@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_system import InfrastructureHostsResponse
-from auth_middleware import get_current_user
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security.secrets_store_errors import SecretsStoreUnavailable
@@ -72,12 +72,14 @@ def _load_secrets_hosts() -> List[Dict[str, Any]]:
 async def get_infrastructure_hosts(
     capability: str | None = Query(None, description="Filter by capability (ssh, vnc)"),
     chat_id: str | None = Query(None, description="Associated chat session (unused, for context)"),
-    _user: Any = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Return user-configured hosts from secrets, filtered by capability.
 
     Issue #1310: Fleet/system hosts removed — they belong in SLM only.
     Only hosts explicitly added by the user via Secrets are returned.
+    Issue #16426: admin-only — connection metadata (host, ports, username)
+    for every host, not just the caller's own.
     """
     try:
         hosts = _load_secrets_hosts()
@@ -99,7 +101,7 @@ async def get_infrastructure_hosts(
 )
 async def delete_infrastructure_host(
     host_id: str,
-    _user: Any = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Delete a user-configured infrastructure host.
 
@@ -107,6 +109,7 @@ async def delete_infrastructure_host(
     ``infrastructure_host``; deleting the host removes its Secrets entry.
     Mirrors the GET read-shim — the host id IS the secret id. Returns 404
     when no matching infrastructure host exists.
+    Issue #16426: admin-only — any authenticated user could delete any host.
     """
     if not any(h["id"] == host_id for h in _load_secrets_hosts()):
         raise HTTPException(status_code=404, detail="Infrastructure host not found")

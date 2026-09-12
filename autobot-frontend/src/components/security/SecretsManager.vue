@@ -260,7 +260,7 @@
               <Icon :name="template.icon" />
             </div>
             <div class="template-info">
-              <h4>{{ template.name }}</h4>
+              <h4>{{ template.label }}</h4>
               <p>{{ template.description }}</p>
             </div>
           </div>
@@ -793,10 +793,12 @@ import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { useChatStore } from '@/stores/useChatStore';
+import { useUserStore } from '@/stores/useUserStore';
 import { createLogger } from '@/utils/debugUtils';
 import { formatDateTime } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';
 import { useSecretsInfraApi } from '@/composables/security/useSecretsInfraApi';
+import type { InfraHostsResponse } from '@/composables/security/useSecretsInfraApi';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import { BaseModal } from '@autobot/ui'
@@ -804,6 +806,9 @@ import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n();
 const logger = createLogger('SecretsManager');
+// #16426: infrastructure hosts are admin-only, matching the backend gate on
+// GET/DELETE /api/infrastructure/hosts.
+const userStore = useUserStore();
 const { fetchInfraHosts, fetchSecretsUsage, deleteInfraHost } = useSecretsInfraApi();
 
 // Infrastructure-host connection metadata stored alongside a secret.
@@ -872,7 +877,11 @@ const credentialCategories = computed<CredentialCategory[]>(() => [
   { type: 'token', label: 'Tokens', icon: 'tag', color: getCssVar('--chart-purple', '#8b5cf6') },
   { type: 'password', label: 'Passwords', icon: 'lock', color: getCssVar('--chart-pink', '#ec4899') },
   { type: 'ssh_key', label: 'SSH Keys', icon: 'terminal', color: getCssVar('--chart-teal', '#14b8a6') },
-  { type: 'infrastructure_host', label: 'Infrastructure Hosts', icon: 'server', color: getCssVar('--chart-blue', '#3b82f6') },
+  // #16426: admin-only category — GET /api/infrastructure/hosts (which backs
+  // it) now 403s for a non-admin.
+  ...(userStore.isAdmin
+    ? [{ type: 'infrastructure_host', label: 'Infrastructure Hosts', icon: 'server' as IconName, color: getCssVar('--chart-blue', '#3b82f6') }]
+    : []),
   { type: 'database_url', label: 'Database', icon: 'database', color: getCssVar('--color-warning', '#f59e0b') },
   { type: 'certificate', label: 'Certificates', icon: 'shield-check', color: getCssVar('--color-success', '#10b981') },
   { type: 'other', label: 'Other', icon: 'ellipsis-h', color: getCssVar('--text-tertiary', '#6b7280') },
@@ -881,7 +890,13 @@ const credentialCategories = computed<CredentialCategory[]>(() => [
 // Quick-add templates for common services (using design tokens)
 interface CredentialTemplate {
   id: string
+  // Pre-filled secret name. For a type whose value is read by
+  // provider_key_vault.py's capture hook (api/secrets.py's
+  // POST /api/secrets/ matches this verbatim against
+  // VAULT_RESOLVED_CREDENTIAL_NAMES), this MUST be the exact runtime key
+  // name (e.g. "OPENAI_API_KEY"), not a display label -- #16427.
   name: string
+  label: string
   description: string
   icon: IconName
   color: string
@@ -891,15 +906,24 @@ interface CredentialTemplate {
 // #9724: 'aws'/'github'/'slack' brand icons are not SVG IconNames (rendered
 // empty) — mapped to the closest registry icons.
 const credentialTemplates = computed<CredentialTemplate[]>(() => [
-  { id: 'openai', name: 'OpenAI', description: 'GPT API access', icon: 'brain', color: getCssVar('--color-success', '#10a37f'), type: 'api_key' },
-  { id: 'anthropic', name: 'Anthropic', description: 'Claude API access', icon: 'robot', color: getCssVar('--color-warning-hover', '#d97706'), type: 'api_key' },
-  { id: 'aws', name: 'AWS', description: 'Amazon Web Services', icon: 'cloud', color: getCssVar('--chart-orange', '#ff9900'), type: 'api_key' },
-  { id: 'github', name: 'GitHub', description: 'GitHub personal token', icon: 'code-branch', color: getCssVar('--bg-tertiary', '#333'), type: 'token' },
-  { id: 'postgres', name: 'PostgreSQL', description: 'Database connection', icon: 'database', color: getCssVar('--color-info', '#336791'), type: 'database_url' },
-  { id: 'redis', name: 'Redis', description: 'Redis connection', icon: 'layer-group', color: getCssVar('--chart-red', '#dc382d'), type: 'database_url' },
-  { id: 'ssh', name: 'SSH Key', description: 'Server access', icon: 'terminal', color: getCssVar('--bg-primary', '#000'), type: 'ssh_key' },
-  { id: 'slack', name: 'Slack', description: 'Slack bot token', icon: 'comments', color: getCssVar('--chart-purple', '#4a154b'), type: 'token' },
-  { id: 'server', name: 'Server Host', description: 'SSH/VNC server access', icon: 'server', color: getCssVar('--chart-blue', '#3b82f6'), type: 'infrastructure_host' },
+  // #16427: name is provider_key_vault.LLM_PROVIDER_KEY_NAMES' exact key —
+  // mirror_provider_key_best_effort only captures a name it recognizes.
+  { id: 'openai', name: 'OPENAI_API_KEY', label: 'OpenAI', description: 'GPT API access', icon: 'brain', color: getCssVar('--color-success', '#10a37f'), type: 'api_key' },
+  { id: 'anthropic', name: 'ANTHROPIC_API_KEY', label: 'Anthropic', description: 'Claude API access', icon: 'robot', color: getCssVar('--color-warning-hover', '#d97706'), type: 'api_key' },
+  // No AWS_* member in any provider_key_vault registry -- free-form name.
+  { id: 'aws', name: 'AWS', label: 'AWS', description: 'Amazon Web Services', icon: 'cloud', color: getCssVar('--chart-orange', '#ff9900'), type: 'api_key' },
+  { id: 'github', name: 'GitHub', label: 'GitHub', description: 'GitHub personal token', icon: 'code-branch', color: getCssVar('--bg-tertiary', '#333'), type: 'token' },
+  { id: 'postgres', name: 'PostgreSQL', label: 'PostgreSQL', description: 'Database connection', icon: 'database', color: getCssVar('--color-info', '#336791'), type: 'database_url' },
+  { id: 'redis', name: 'Redis', label: 'Redis', description: 'Redis connection', icon: 'layer-group', color: getCssVar('--chart-red', '#dc382d'), type: 'database_url' },
+  { id: 'ssh', name: 'SSH Key', label: 'SSH Key', description: 'Server access', icon: 'terminal', color: getCssVar('--bg-primary', '#000'), type: 'ssh_key' },
+  // #16427: name is provider_key_vault.SERVICE_CREDENTIAL_KEY_NAMES' exact key.
+  { id: 'slack', name: 'SLACK_BOT_TOKEN', label: 'Slack', description: 'Slack bot token', icon: 'comments', color: getCssVar('--chart-purple', '#4a154b'), type: 'token' },
+  // #16426: same admin-only gate as the category above — creating one would
+  // 403 anyway (create_secret is already admin-gated), this just stops
+  // offering the button.
+  ...(userStore.isAdmin
+    ? [{ id: 'server', name: 'Server Host', label: 'Server Host', description: 'SSH/VNC server access', icon: 'server' as IconName, color: getCssVar('--chart-blue', '#3b82f6'), type: 'infrastructure_host' }]
+    : []),
 ]);
 
 // State
@@ -1087,8 +1111,11 @@ const loadSecrets = async () => {
     const [secretsResponse, statsResponse, legacyHostsResponse] = await Promise.all([
       secretsApiClient.getSecrets({}) as Promise<{ secrets?: Secret[] }>,
       secretsApiClient.getSecretsStats() as Promise<SecretsStats>,
-      // Also fetch legacy hosts for backwards compatibility (will be migrated eventually)
-      fetchInfraHosts()
+      // Also fetch legacy hosts for backwards compatibility (will be migrated
+      // eventually). #16426: admin-only — skip the call for a non-admin
+      // rather than let it 403 (fetchInfraHosts() would swallow that into an
+      // empty list anyway, but a non-admin should never issue the request).
+      userStore.isAdmin ? fetchInfraHosts() : Promise.resolve<InfraHostsResponse>({ hosts: [] })
     ]);
 
     // Convert legacy infrastructure hosts to secret-like format for unified display
