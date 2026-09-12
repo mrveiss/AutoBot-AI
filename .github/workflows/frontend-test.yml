@@ -27,6 +27,8 @@ on:
       # Canonical source for the cross-language parity guard (#13073, #13074):
       # a port/enum edit here with no frontend edit must still run the suite.
       - 'autobot_shared/ssot_config.py'
+      # #16337: the Security Scan job's audit gate.
+      - 'pipeline-scripts/npm_audit_gate.py'
   pull_request:
     # 'Dev_*' covers the Dev_new_gui integration branch — every frontend PR
     # merges here, so the suite must run pre-merge, not only post-merge on the
@@ -285,68 +287,45 @@ jobs:
           CYPRESS_INSTALL_BINARY: '0'
         run: npm ci
 
-      # #13400: this step GATES. `npm audit --audit-level=high` runs without
-      # `|| true`, so a high or critical advisory in the frontend lockfile fails
-      # the job on purpose — that is the whole point of the check's name.
+      # #13400: this step GATES. A high or critical advisory in the frontend
+      # lockfile fails the job on purpose — that is the whole point of the
+      # check's name.
       #
       # The backlog was measured at 0 advisories (every severity) across 1191
       # dependencies immediately before the gate was armed, so arming it broke
       # no open PR and required no triage campaign.
       #
-      # Do NOT re-add `|| true` here to clear a red build. A red on this step
-      # means a real advisory reached package-lock.json; the fix is to bump the
-      # dependency (dependabot raises those PRs). If an advisory ever has no
-      # published fix and the gate has to yield, change it deliberately and
-      # record why on #13400 — do not silence it as an infra flake.
+      # Do NOT make this step non-blocking to clear a red build. A red
+      # "advisories found" means a real advisory reached package-lock.json; the
+      # fix is to bump the dependency (dependabot raises those PRs). If an
+      # advisory ever has no published fix and the gate has to yield, change it
+      # deliberately and record why on #13400 — do not silence it as a flake.
+      #
+      # #16337: ONE call to npm's audit service, not two. The gate used to be a
+      # second `npm audit --audit-level=high` that re-fetched what the `--json`
+      # call already had, so an endpoint failure on that second call read as an
+      # advisory. pipeline-scripts/npm_audit_gate.py makes the single call,
+      # retries it while the service is unavailable, writes audit-results.json
+      # for the artifact below, and ends in one of three results, each named in
+      # the job summary and as an annotation:
+      #   passed (exit 0) · advisories found (exit 1) · could not check (exit 2)
+      # "Could not check" still fails the job — a gate that did not look must
+      # not pass — but it is labelled as an outage, not as an advisory.
+      #
+      # npm is pinned to 11 for this call. npm 7-10 (Node 22 bundles 10.9) fall
+      # back to the retiring `audits/quick` endpoint when the bulk advisory call
+      # fails; npm 11 has no such fallback. `--loglevel=http` puts the endpoint
+      # npm called in the log, and the script echoes those lines.
       - name: Run npm audit
         working-directory: autobot-frontend
+        env:
+          NPM_AUDIT_NPM_VERSION: '11.19.1'
+          NPM_AUDIT_MAX_ATTEMPTS: '3'
+          NPM_AUDIT_RETRY_DELAY_SECONDS: '15'
         run: |
-          # Machine-readable report first, non-blocking: a non-zero exit here
-          # only means advisories exist, which the gate at the end is what
-          # reports. This is also the artifact uploaded below.
-          npm audit --json > audit-results.json || true
-
-          # #13400: surface the counts in the job summary so the result is
-          # readable from the checks tab without downloading the artifact.
-          # Parsing failures must not fail the job — only the gate may.
-          node --input-type=commonjs -e '
-            const fs = require("fs");
-            const order = ["critical", "high", "moderate", "low", "info"];
-            const summaryPath = process.env.GITHUB_STEP_SUMMARY;
-            let lines;
-            try {
-              const report = JSON.parse(fs.readFileSync("audit-results.json", "utf8"));
-              const counts = (report.metadata || {}).vulnerabilities || {};
-              const total = order.reduce((sum, key) => sum + (counts[key] || 0), 0);
-              lines = [
-                "## Frontend dependency audit",
-                "",
-                total === 0
-                  ? "No known advisories in autobot-frontend."
-                  : "npm audit reported " + total + " advisory record(s).",
-                "",
-                "| Severity | Count |",
-                "| --- | --- |",
-              ].concat(
-                order.map((key) => "| " + key + " | " + (counts[key] || 0) + " |"),
-                ["", "High and critical advisories fail this job (#13400)."]
-              );
-            } catch (error) {
-              lines = [
-                "## Frontend dependency audit",
-                "",
-                "Could not parse audit-results.json: " + error.message,
-              ];
-            }
-            try {
-              fs.appendFileSync(summaryPath, lines.join("\n") + "\n", "utf8");
-            } catch (error) {
-              console.log("Could not write job summary: " + error.message);
-            }
-          '
-
-          # THE GATE — deliberately not suffixed with `|| true`.
-          npm audit --audit-level=high
+          python3 ../pipeline-scripts/npm_audit_gate.py \
+            --npm "npx --yes npm@${NPM_AUDIT_NPM_VERSION}" \
+            --report audit-results.json
 
       # Stays non-blocking by design (#13400): auditjs queries a third-party
       # network service (OSS Index) whose availability is outside this repo's
