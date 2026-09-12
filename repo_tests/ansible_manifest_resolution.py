@@ -70,6 +70,7 @@ NPU_DOCKER = "autobot-infrastructure/autobot-npu-worker/docker/requirements-npu.
 TTS = "autobot-tts-worker/requirements.txt"
 GPU_TORCH = "requirements-gpu-torch.txt"
 GPU = "requirements-gpu.txt"
+GPU_FAISS = "requirements-gpu-faiss.txt"
 ROOT_REQUIREMENTS = "requirements.txt"
 
 # Not a path: the one resolution that legitimately spans the whole tree. Used by
@@ -135,9 +136,9 @@ SITE_MANIFESTS: dict[tuple[str, str], Resolution] = {
         "scripts/build-filtered-requirements.sh and installs the result into this venv (#14272, #14809)",
     ),
     (f"{_ROLES}/backend/tasks/main.yml", "{{ backend_code_dir }}/venv"): Resolution(
-        (BACKEND, GPU_TORCH, GPU),
+        (BACKEND, GPU_TORCH, GPU, GPU_FAISS),
         "the role rsyncs autobot-backend/ to the code dir, filters its manifest into the venv, and "
-        "adds the two repo-root GPU manifests on a GPU host (#11134, #15162, #10288)",
+        "adds the three repo-root GPU manifests on a GPU host (#11134, #15162, #10288, #15163)",
     ),
     (f"{_ROLES}/browser/tasks/main.yml", "{{ browser_install_dir }}/venv"): Resolution(
         (BROWSER,),

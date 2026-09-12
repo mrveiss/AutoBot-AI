@@ -139,3 +139,10 @@ python:
   # to the baseline -- an unaudited finding parked in it -- skips that guard. The
   # ungated `secret-detection` job in security.yml checks the verdicts too.
   - '.secrets.baseline'
+  # #15163: a repo-root file, so `**/requirements*.txt` above does not reach it --
+  # this filter is matched with fnmatch, which (unlike the real dorny/paths-filter
+  # matcher) requires a literal `/` before `requirements` for a `**/` prefix, and a
+  # bare root-level filename has none. ansible_manifest_resolution.py and
+  # backend_gpu_faiss_gating_test.py both read this manifest; without an entry
+  # here, a change confined to it skips both guards.
+  - 'requirements-gpu-faiss.txt'
