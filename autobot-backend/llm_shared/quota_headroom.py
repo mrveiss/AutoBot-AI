@@ -226,9 +226,22 @@ class QuotaHeadroomStore:
     # ------------------------------------------------------------------
 
     async def _get_redis(self):
+        """The shared async Redis client, or raise if there is none to use.
+
+        ``get_async_redis_client()`` returns ``None`` when Redis is disabled
+        or its circuit breaker is open -- not an exception. Raising here
+        instead of returning ``None`` gives every caller one fallback path:
+        without this, ``record``/``get``/``all_entries`` would each need
+        their own ``if redis is None`` branch, or hit an AttributeError from
+        calling a method on ``None`` that the narrowed except no longer
+        catches.
+        """
         from autobot_shared.redis_client import get_async_redis_client  # noqa: PLC0415
 
-        return await get_async_redis_client()
+        redis = await get_async_redis_client()
+        if redis is None:
+            raise RedisConnectionError("redis client unavailable (disabled or circuit open)")
+        return redis
 
 
 # ---------------------------------------------------------------------------

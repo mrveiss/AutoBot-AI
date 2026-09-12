@@ -20,7 +20,7 @@ Coverage:
 from __future__ import annotations
 
 import time
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -203,6 +203,50 @@ async def test_no_redis_fallback_all_entries():
 
     assert {e.provider for e in await store.all_entries()} == {"openai", "anthropic"}
     assert {e.provider for e in await store.all_entries(provider="openai")} == {"openai"}
+
+
+# ---------------------------------------------------------------------------
+# Redis client unavailable (disabled, or its circuit breaker open) --
+# get_async_redis_client() returns None in this case rather than raising, and
+# _get_redis() must turn that into the same fallback the connection/timeout
+# errors above use, not an AttributeError from calling a method on None.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_record_falls_back_when_redis_client_is_none():
+    store = QuotaHeadroomStore()
+
+    with patch("autobot_shared.redis_client.get_async_redis_client", AsyncMock(return_value=None)):
+        await store.record("openai", "rpm", limit=500, remaining=10)
+
+    entry = await store.get("openai", "rpm")
+    assert entry is not None
+    assert entry.remaining == 10
+
+
+@pytest.mark.asyncio
+async def test_get_falls_back_when_redis_client_is_none():
+    store = QuotaHeadroomStore()
+
+    with patch("autobot_shared.redis_client.get_async_redis_client", AsyncMock(return_value=None)):
+        await store.record("openai", "rpm", limit=500, remaining=10)
+        entry = await store.get("openai", "rpm")
+
+    assert entry is not None
+    assert entry.remaining == 10
+
+
+@pytest.mark.asyncio
+async def test_all_entries_falls_back_when_redis_client_is_none():
+    store = QuotaHeadroomStore()
+
+    with patch("autobot_shared.redis_client.get_async_redis_client", AsyncMock(return_value=None)):
+        await store.record("openai", "rpm", remaining=10)
+        await store.record("anthropic", "5h_output_tokens", remaining=1000)
+        entries = await store.all_entries()
+
+    assert {e.provider for e in entries} == {"openai", "anthropic"}
 
 
 # ---------------------------------------------------------------------------
