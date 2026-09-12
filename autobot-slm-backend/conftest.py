@@ -168,32 +168,36 @@ for _m in [
     _stub(_m)
 
 # #16025: role_registry.seed_default_roles() now filters each DEFAULT_ROLES
-# entry through `Role.__table__.columns` before writing it. A bare MagicMock
-# auto-vivifies that attribute chain as more MagicMocks, whose own
-# auto-configured __contains__/__bool__ make every `in` check True -- the
-# filter would silently keep fields the real table has no column for,
-# instead of exercising the real behaviour it stands in for. Give the stub
-# the real Role model's column names.
-sys.modules["models.database"].Role.__table__.columns = frozenset(
-    {
-        "id",
-        "name",
-        "display_name",
-        "sync_type",
-        "source_paths",
-        "target_path",
-        "systemd_service",
-        "auto_restart",
-        "health_check_port",
-        "health_check_path",
-        "pre_sync_cmd",
-        "post_sync_cmd",
-        "required",
-        "degraded_without",
-        "ansible_playbook",
-        "created_at",
-        "updated_at",
-    }
+# entry through `Role.__table__.columns` before writing it. `__table__` is a
+# dunder-shaped name Mock's __getattr__ refuses to auto-vivify (it raises
+# AttributeError rather than fake a magic method it does not implement), so
+# a bare MagicMock cannot even reach that attribute, let alone stand in for
+# it. Set `__table__` directly -- a plain attribute assignment, not a nested
+# get-then-set through the Mock -- to a real object carrying the real Role
+# model's column names, so the filter is exercised against something that
+# behaves like the real table would.
+sys.modules["models.database"].Role.__table__ = types.SimpleNamespace(
+    columns=frozenset(
+        {
+            "id",
+            "name",
+            "display_name",
+            "sync_type",
+            "source_paths",
+            "target_path",
+            "systemd_service",
+            "auto_restart",
+            "health_check_port",
+            "health_check_path",
+            "pre_sync_cmd",
+            "post_sync_cmd",
+            "required",
+            "degraded_without",
+            "ansible_playbook",
+            "created_at",
+            "updated_at",
+        }
+    )
 )
 
 # #13139: models/schemas_secrets.py must be REAL, not stubbed. It carries
