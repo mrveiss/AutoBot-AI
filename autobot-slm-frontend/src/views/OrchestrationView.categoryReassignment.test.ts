@@ -38,23 +38,6 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
-// RedisServicePanel (also ported from ServicesView.vue) talks to the main
-// AutoBot backend through a private axios instance, not the `fetch` seam
-// stubbed below — irrelevant to the capability under test, so it is
-// stubbed out to keep this test deterministic.
-vi.mock('@/composables/useAutobotApi', () => ({
-  useAutobotApi: () => ({
-    getRedisServiceStatus: vi.fn().mockResolvedValue({
-      status: 'running',
-      uptime_seconds: 0,
-      memory_used_bytes: 0,
-      memory_peak_bytes: 0,
-    }),
-    performRedisServiceAction: vi.fn(),
-  }),
-  autobotApiErrorMessage: () => 'error',
-}))
-
 import NodeHealthCard from '@/components/orchestration/NodeHealthCard.vue'
 import OrchestrationView from './OrchestrationView.vue'
 

@@ -150,8 +150,9 @@ describe('formatUptime', () => {
     expect(formatUptime(NaN)).toBe('—')
   })
 
-  // RedisServiceControl (3-part days line + !seconds -> 'N/A')
-  it('matches RedisServiceControl original with options', () => {
+  // The formatter RedisServiceControl carried until #16245 removed that component
+  // (3-part days line + !seconds -> 'N/A')
+  it('matches the removed RedisServiceControl formatter with options', () => {
     const original = (seconds: number): string => {
       if (!seconds) return 'N/A'
       const days = Math.floor(seconds / 86400)

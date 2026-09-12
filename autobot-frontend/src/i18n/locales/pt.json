@@ -4928,31 +4928,6 @@
     "themeAuto": "Automático",
     "tabDevices": "Tab devices"
   },
-  "redis": {
-    "title": "Serviço Redis",
-    "lastCheck": "Última verificação:",
-    "uptime": "Tempo ativo",
-    "memory": "Memória",
-    "connections": "Ligações",
-    "pid": "PID",
-    "start": "Iniciar",
-    "restart": "Reiniciar",
-    "stop": "Parar",
-    "healthStatus": "Estado de saúde",
-    "recommendations": "Recomendações",
-    "autoRecoveryStatus": "Estado da recuperação automática",
-    "enabled": "Ativado:",
-    "recentRecoveries": "Recuperações recentes:",
-    "manualInterventionTitle": "Intervenção manual necessária:",
-    "manualInterventionMsg": "A recuperação automática falhou. Verifique os registos do serviço.",
-    "processing": "A processar...",
-    "restartTitle": "Reiniciar serviço Redis",
-    "restartMsg": "Isto interromperá temporariamente o serviço Redis. As ligações ativas serão desligadas.",
-    "restartWarning": "Todos os clientes ligados serão desligados durante o reinício.",
-    "stopTitle": "Parar serviço Redis",
-    "stopMsg": "Isto irá parar completamente o serviço Redis. Todos os serviços dependentes serão afetados.",
-    "stopWarning": "AVISO: Esta ação afetará a funcionalidade do sistema. Apenas administradores podem parar o serviço."
-  },
   "charts": {
     "base": {
       "loading": "Loading chart...",

@@ -65,18 +65,11 @@ const mockSettingsResponse = {
   },
 }
 
-const mockHealthResponse = {
-  status: 'healthy',
-  services: {},
-}
-
 /**
  * Configure ApiClient mock return values for all endpoints SettingsPanel
  * calls on mount:
  *   GET /api/settings/           -> loadSettings
  *   GET /api/cache/stats         -> checkCacheApiAvailability + refreshCacheStats
- *   GET /api/system/health/detailed -> loadHealthStatus
- *   GET /api/system/health       -> loadHealthStatus fallback
  *
  * ApiClient.get resolves with PARSED JSON directly (no `.data` envelope).
  */
@@ -87,12 +80,6 @@ function setupApiClientMocks() {
     }
     if (url === '/api/cache/stats') {
       return Promise.resolve({ hits: 0, misses: 0 })
-    }
-    if (url === '/api/system/health/detailed') {
-      return Promise.resolve(mockHealthResponse)
-    }
-    if (url === '/api/system/health') {
-      return Promise.resolve({ status: 'healthy' })
     }
     if (url === '/api/prompts') {
       return Promise.resolve([])
@@ -145,14 +132,6 @@ describe('SettingsPanel', () => {
 
       await waitFor(() => {
         expect(apiClient.get).toHaveBeenCalledWith('/api/settings/', expect.anything())
-      })
-    })
-
-    it('calls health API on mount', async () => {
-      renderSettings()
-
-      await waitFor(() => {
-        expect(apiClient.get).toHaveBeenCalledWith('/api/system/health/detailed', expect.anything())
       })
     })
 
@@ -277,37 +256,6 @@ describe('SettingsPanel', () => {
     })
   })
 
-  describe('Health Status', () => {
-    it('loads detailed health status on mount', async () => {
-      renderSettings()
-
-      await waitFor(() => {
-        expect(apiClient.get).toHaveBeenCalledWith('/api/system/health/detailed', expect.anything())
-      })
-    })
-
-    it('falls back to basic health when detailed fails', async () => {
-      vi.mocked(apiClient.get).mockImplementation((url: string) => {
-        if (url === '/api/settings/') {
-          return Promise.resolve(mockSettingsResponse)
-        }
-        if (url === '/api/system/health/detailed') {
-          return Promise.reject(new Error('Not found'))
-        }
-        if (url === '/api/system/health') {
-          return Promise.resolve({ status: 'healthy' })
-        }
-        return Promise.resolve({})
-      })
-
-      renderSettings()
-
-      await waitFor(() => {
-        expect(apiClient.get).toHaveBeenCalledWith('/api/system/health', expect.anything())
-      })
-    })
-  })
-
   describe('Cache API', () => {
     it('checks cache API availability on mount', async () => {
       renderSettings()
@@ -339,9 +287,6 @@ describe('SettingsPanel', () => {
         }
         if (url === '/api/cache/stats') {
           return Promise.reject(new Error('Cache unavailable'))
-        }
-        if (url === '/api/system/health/detailed') {
-          return Promise.resolve(mockHealthResponse)
         }
         return Promise.resolve({})
       })
@@ -393,7 +338,6 @@ describe('SettingsPanel', () => {
       await waitFor(() => {
         const calledUrls = vi.mocked(apiClient.get).mock.calls.map((call) => call[0])
         expect(calledUrls).toContain('/api/settings/')
-        expect(calledUrls).toContain('/api/system/health/detailed')
         // Cache stats called with timeout option for availability check
         const cacheCall = vi.mocked(apiClient.get).mock.calls.find(
           (call) => call[0] === '/api/cache/stats'
