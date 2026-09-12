@@ -30,6 +30,7 @@ from api.collaboration import (
     share_secret_with_session,
 )
 from autobot_shared.status_enums import SecretType
+from models.collaboration_event import CollaborationEvent
 from models.secret import Secret, SecretScope
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 
@@ -442,3 +443,41 @@ async def test_share_secret_broadcasts_id_name_and_sharer_only(
     assert not forbidden_keys & payload.keys(), f"secret value leaked into broadcast payload: {payload}"
     serialized = str(payload)
     assert "super-secret-encrypted-bytes" not in serialized
+
+
+@pytest.mark.asyncio
+async def test_share_secret_persists_a_collaboration_event(
+    mock_db, session_id, owner_id, collaborator_id, current_user_owner
+):
+    """#16460: the share is also persisted, not just broadcast live."""
+    secret_id = uuid.uuid4()
+    secret = Secret(
+        id=secret_id,
+        owner_id=owner_id,
+        name="prod-db-password",  # pragma: allowlist secret
+        type=SecretType.API_KEY.value,
+        scope=SecretScope.USER.value,
+        encrypted_value="super-secret-encrypted-bytes",
+    )
+    collab = SessionCollaboration(session_id=session_id, owner_id=owner_id)
+    collab.add_collaborator(collaborator_id, PermissionLevel.EDITOR)
+    share = ShareSecretRequest(secret_id=str(secret_id))
+
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = secret
+    mock_db.execute = AsyncMock(return_value=mock_result)
+    mock_db.flush = AsyncMock()
+
+    with (
+        patch("api.collaboration._ensure_permission", return_value=collab),
+        patch("websocket.presence.presence_manager.broadcast_to_session", new=AsyncMock()),
+    ):
+        await share_secret_with_session(session_id, share, mock_db, current_user_owner)
+
+    added_events = [call.args[0] for call in mock_db.add.call_args_list if isinstance(call.args[0], CollaborationEvent)]
+    assert len(added_events) == 1
+    event = added_events[0]
+    assert event.session_id == session_id
+    assert event.kind == "secret_shared"
+    assert event.payload["secret_id"] == str(secret_id)
+    assert "value" not in event.payload and "encrypted_value" not in event.payload
