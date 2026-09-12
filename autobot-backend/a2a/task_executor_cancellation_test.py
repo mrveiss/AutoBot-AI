@@ -90,6 +90,43 @@ async def test_cancelled_before_orchestration_skips_the_orchestrator_call(claim_
 
 
 @pytest.mark.asyncio
+async def test_already_cancelled_before_the_first_checkpoint_does_nothing(claim_registry):
+    """The "before scrub" checkpoint, not just the later ones (#16174 review).
+
+    Every other test in this file cancels mid-run, inside `scrub_outbound` or
+    `process_request`'s side effect -- so removing the *first* checkpoint
+    (the one before either runs) would leave them all green. `execute_a2a_task`
+    itself unconditionally moves the task to WORKING before anything else
+    (task_executor.py:98), so an initial CANCELLED state cannot survive to the
+    checkpoint -- cancelling from *inside* that update_state call is the only
+    way to have the task be CANCELLED by the time "before scrub" checks it.
+    """
+    tm = _FakeTaskManager()
+
+    def _cancel_once_working(task_id, state, message=None):
+        tm.update_state_calls.append((state, message))
+        tm.state = TaskState.CANCELLED if state == TaskState.WORKING else state
+
+    tm.update_state = _cancel_once_working
+    scrub = MagicMock(side_effect=AssertionError("scrub_outbound must not run once already cancelled"))
+    orchestrator = MagicMock()
+    orchestrator.process_request = AsyncMock(side_effect=AssertionError("process_request must not run"))
+
+    with (
+        patch("a2a.task_executor.get_task_manager", return_value=tm),
+        patch("a2a.task_executor.get_trust_manager", return_value=MagicMock()),
+        patch("a2a.task_executor.scrub_outbound", scrub),
+        patch("agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True),
+    ):
+        await execute_a2a_task("task-cp0", "do something", context={"declared_scopes": ["path:a/b"]})
+
+    scrub.assert_not_called()
+    orchestrator.process_request.assert_not_called()
+    assert tm.artifacts == [], "no artifact must be stored once already cancelled"
+    assert [c.scope for c in await list_claims()] == [], "scope must be released, never having done any work"
+
+
+@pytest.mark.asyncio
 async def test_scope_stays_held_while_the_orchestrator_call_is_still_running(claim_registry):
     """AC3: cancelling mid-call must not free the scope while work is still in flight."""
     tm = _FakeTaskManager()
