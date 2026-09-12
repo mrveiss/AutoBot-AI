@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from api.schemas_common import MAX_THOUGHT_COUNT, SuccessDataResponse, SuccessMessageResponse
 from api.schemas_secrets import StorableSecretType
@@ -3527,7 +3527,7 @@ class SecretCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=256)
     type: StorableSecretType
     scope: ChatSecretScope
-    value: str = Field(..., min_length=1, max_length=65536)
+    value: str | None = Field(None, min_length=1, max_length=65536)
     chat_id: str | None = Field(None, max_length=128)
     description: str | None = Field("", max_length=1024)
     tags: List[str] = Field(default_factory=list)
@@ -3538,10 +3538,33 @@ class SecretCreateRequest(BaseModel):
     team_ids: List[str] = Field(default_factory=list, description="Team IDs for group-level secrets")
     shared_with: List[str] = Field(default_factory=list, description="User IDs to share with")
 
+    # #16428: bridges this secret to a connector's ConnectorCredentialStore
+    # entry (ADR-007) instead of this store's own file, per #13632's decision
+    # that connector credentials come from one store. All three are required
+    # together; value is unused on this path.
+    connector_id: str | None = Field(
+        None, max_length=128, description="Bridge to this connector's ConnectorCredentialStore entry"
+    )
+    auth_type: str | None = Field(
+        None, description="ConnectorAuth subclass name: BearerAuth, ApiKeyAuth, BasicAuth or OAuthRefreshAuth"
+    )
+    credentials: Dict[str, str] | None = Field(
+        None, description="Sensitive auth fields, validated against auth_type's schema"
+    )
+
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
         return _validate_secret_name(v)
+
+    @model_validator(mode="after")
+    def _validate_value_or_connector_bridge(self) -> "SecretCreateRequest":
+        if self.connector_id is not None:
+            if not self.auth_type or not self.credentials:
+                raise ValueError("connector_id requires both auth_type and credentials")
+        elif self.value is None:
+            raise ValueError("value is required unless connector_id is set")
+        return self
 
     def to_secret_model(self, secret_id: str | None = None) -> "SecretModel":
         """Convert request to SecretModel."""
@@ -3575,6 +3598,10 @@ class SecretUpdateRequest(BaseModel):
     tags: List[str] | None = None
     expires_at: datetime | None = None
     metadata: Metadata | None = None
+    # #16428: rotates a connector-bridged secret's credential in
+    # ConnectorCredentialStore. Ignored for a non-bridged secret -- legacy
+    # secrets have never supported value rotation via this endpoint.
+    credentials: Dict[str, str] | None = Field(None, description="New sensitive auth fields, for a bridged secret")
 
     @field_validator("name")
     @classmethod
