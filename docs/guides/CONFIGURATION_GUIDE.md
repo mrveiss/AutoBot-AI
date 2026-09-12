@@ -10,14 +10,11 @@ AutoBot uses a comprehensive environment-driven configuration system that allows
 ```bash
 # Service Hosts (where each service runs)
 AUTOBOT_OLLAMA_HOST=127.0.0.2          # Ollama AI service
-AUTOBOT_LM_STUDIO_HOST=127.0.0.2       # LM Studio service
 AUTOBOT_BACKEND_HOST=127.0.0.3         # AutoBot backend
 AUTOBOT_FRONTEND_HOST=127.0.0.3        # Frontend dev server
 AUTOBOT_REDIS_HOST=127.0.0.7           # Redis database
-AUTOBOT_PLAYWRIGHT_HOST=127.0.0.4      # Playwright VNC
 AUTOBOT_NPU_WORKER_HOST=127.0.0.5      # NPU worker
 AUTOBOT_AI_STACK_HOST=127.0.0.6        # AI stack
-AUTOBOT_LOG_VIEWER_HOST=127.0.0.8      # Centralized logging
 ```
 
 ### Port Configuration
@@ -26,23 +23,17 @@ AUTOBOT_LOG_VIEWER_HOST=127.0.0.8      # Centralized logging
 AUTOBOT_BACKEND_PORT=8001              # Backend API
 AUTOBOT_FRONTEND_PORT=5173             # Frontend dev
 AUTOBOT_OLLAMA_PORT=11434              # Ollama API
-AUTOBOT_LM_STUDIO_PORT=1234            # LM Studio
 AUTOBOT_REDIS_PORT=6379                # Redis
-AUTOBOT_PLAYWRIGHT_API_PORT=3000       # Playwright API
-AUTOBOT_PLAYWRIGHT_VNC_PORT=6080       # VNC web interface
+AUTOBOT_VNC_PORT=6080                  # VNC web interface (noVNC)
 AUTOBOT_NPU_WORKER_PORT=8081           # NPU worker
 AUTOBOT_AI_STACK_PORT=8080             # AI stack
-AUTOBOT_LOG_VIEWER_PORT=5341           # Log viewer
 AUTOBOT_FLUENTD_PORT=24224             # Log collection
-AUTOBOT_CHROME_DEBUG_PORT=9222         # Chrome debugging
 ```
 
 ### Protocol Configuration
 ```bash
-# Protocols (http/https, ws/wss, etc.)
+# Protocols (http/https, etc.)
 AUTOBOT_HTTP_PROTOCOL=http             # Can be https for SSL
-AUTOBOT_WS_PROTOCOL=ws                 # Can be wss for secure WebSocket
-AUTOBOT_REDIS_PROTOCOL=redis           # Redis connection protocol
 ```
 
 ## 🚀 Common Configuration Scenarios
@@ -78,9 +69,8 @@ export AUTOBOT_REDIS_PORT=6379
 
 ### SSL/HTTPS Production
 ```bash
-# Enable HTTPS and secure WebSockets
+# Enable HTTPS
 export AUTOBOT_HTTP_PROTOCOL=https
-export AUTOBOT_WS_PROTOCOL=wss
 export AUTOBOT_BACKEND_PORT=443
 ```
 
