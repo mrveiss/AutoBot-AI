@@ -100,9 +100,16 @@ case "$FILE_PATH" in
   .git/*|*/.git/*)
     deny "Cannot edit files inside .git/"
     ;;
-  # Secrets directories
+  # Secrets directories (#16446: real credential storage only -- not the
+  # frontend source trees that implement the Secrets *feature*. The bare
+  # pattern below matched src/components/secrets/ and src/views/secrets/,
+  # the only two directories anywhere in this repo named "secrets" -- both
+  # ordinary tracked Vue source, zero real targets, 100% false positive.
   secrets/*|*/secrets/*)
-    deny "Cannot edit files inside secrets/"
+    case "$FILE_PATH" in
+      */src/components/secrets/*|*/src/views/secrets/*) ;;
+      *) deny "Cannot edit files inside secrets/" ;;
+    esac
     ;;
   # Environment files
   .env|.env.*|*/.env|*/.env.*)
