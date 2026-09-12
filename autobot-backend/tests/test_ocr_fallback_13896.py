@@ -246,7 +246,7 @@ def test_ci_actually_has_the_ocr_toolchain():
     assert available, (
         f"OCR toolchain missing on the CI runner: {reason}. "
         "The end-to-end tests below are skipping, which means OCR is shipping unverified. "
-        "See the 'Install OCR system packages' step in .github/actions/setup-python-suite."
+        "See the 'Install CI system packages' step in .github/actions/setup-python-suite."
     )
 
 
