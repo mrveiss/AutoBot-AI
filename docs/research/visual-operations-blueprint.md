@@ -93,7 +93,7 @@ stop us building anything we already own.
 | Steps / edges | `components/workflow/WorkflowCanvas.vue` | exists, wrong scope |
 | Change log | `work_item.py`, `activity.py`, `approval.py`, `finding_proposal.py` | **we are ahead** |
 | Costing | `llc/api/costs.py`, `llc/models/budget.py` | **we are ahead** (measured) |
-| Agent protocol seam | `autobot-backend/mcp/`, `api/mcp_registry.py` | exists, gated by #13228 |
+| Agent protocol seam | `autobot-backend/mcp_server/`, `api/mcp_registry.py` | exists, gated by #13228 |
 
 ### The decisive audit result
 

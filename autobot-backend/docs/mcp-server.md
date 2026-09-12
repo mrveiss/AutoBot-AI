@@ -6,12 +6,12 @@ Exposes AutoBot's KB, memory graph, and agent introspection as an MCP server for
 
 **stdio** (default — used by Claude Code / Cline):
 ```bash
-AUTOBOT_MCP_TOKEN="$MCP_SECRET" python -m mcp.autobot_mcp_main
+AUTOBOT_MCP_TOKEN="$MCP_SECRET" python -m mcp_server.autobot_mcp_main
 ```
 
 **HTTP** (standalone aiohttp on port 8200):
 ```bash
-AUTOBOT_MCP_TOKEN="$MCP_SECRET" python -m mcp.autobot_mcp_main --http
+AUTOBOT_MCP_TOKEN="$MCP_SECRET" python -m mcp_server.autobot_mcp_main --http
 ```
 
 `AUTOBOT_MCP_TOKEN` holds the **secret only** — never a full `<secret>:<scopes>`
@@ -75,7 +75,7 @@ Add to your MCP config (e.g. `.claude/mcp.json`):
   "mcpServers": {
     "autobot": {
       "command": "python",
-      "args": ["-m", "mcp.autobot_mcp_main"],
+      "args": ["-m", "mcp_server.autobot_mcp_main"],
       "cwd": "/opt/autobot/autobot-backend",
       "env": {
         "AUTOBOT_MCP_TOKEN": "<your-secret>",

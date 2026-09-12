@@ -30,7 +30,7 @@ Architecture
 Governance seam
 ---------------
 ``ClaudeCodeBackend`` is initialised with the URL/token of AutoBot's MCP server
-(``autobot-backend/mcp/autobot_server.py``, HTTP transport on port 8200).
+(``autobot-backend/mcp_server/autobot_server.py``, HTTP transport on port 8200).
 When invoking the ``claude`` CLI it passes ``--mcp-config`` so every tool call
 Claude Code makes goes through the MCP server, which already enforces
 approval/budget/RBAC.  SDK path: the SDK subprocess inherits the MCP config env.

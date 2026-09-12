@@ -7,19 +7,19 @@ AutoBot MCP Server entry point (Issue #5072).
 
 Usage:
     # stdio transport (default — used by Claude Code / Cline):
-    python -m mcp.autobot_mcp_main
+    python -m mcp_server.autobot_mcp_main
 
     # HTTP transport (port 8200):
-    python -m mcp.autobot_mcp_main --http
+    python -m mcp_server.autobot_mcp_main --http
 
     # HTTP on custom host/port:
-    python -m mcp.autobot_mcp_main --http --host 127.0.0.1 --port 9200
+    python -m mcp_server.autobot_mcp_main --http --host 127.0.0.1 --port 9200
 """
 
 import sys
 
 from autobot_shared.async_compat import run_or_schedule
-from mcp.autobot_server import AutoBotMCPServer
+from mcp_server.autobot_server import AutoBotMCPServer
 
 
 async def main() -> None:
