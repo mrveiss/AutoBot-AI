@@ -272,7 +272,7 @@ API Base:  http://<slm-manager-ip>:8000/api
 
 **Achievement:**
 - ✅ **Unified monitoring stack** - All metrics accessible "under one roof"
-- ✅ **Production-ready** - Prometheus + Grafana + AlertManager on VM3
+- ✅ **Production-ready** - Prometheus + Grafana + AlertManager on the database role
 - ✅ **Real-time dashboards** - 6 pre-configured dashboards in AutoBot UI
 - ✅ **Memory optimized** - Removed legacy buffers (~54-62MB freed)
 - ✅ **Automatic startup** - All services managed by systemd
@@ -641,7 +641,7 @@ async def search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
 - ✅ All APIs responsive immediately
 - ✅ Vector search functional with 545,255 vectors
 - ✅ Search returns results with 0.77-0.85 similarity scores
-- ✅ WebSocket connections work from VM1
+- ✅ WebSocket connections work from the frontend role
 
 ---
 
@@ -863,7 +863,7 @@ export class KnowledgeController {
 
 **Status:** ✅ Complete
 
-**Changes Applied** (VM3: <database-ip>):
+**Changes Applied** (database role: <database-ip>):
 
 1. **Memory Management:**
    - Set `maxmemory 8gb` (prevents OOM kills)
@@ -1035,7 +1035,7 @@ docs/
 ├── api/
 │   └── COMPREHENSIVE_API_DOCUMENTATION.md      # 518+ endpoints fully documented
 ├── architecture/
-│   └── DISTRIBUTED_ARCHITECTURE.md    # 6-VM distributed system explained
+│   └── DISTRIBUTED_ARCHITECTURE.md    # distributed, role-based system explained
 ├── developer/
 │   └── DEVELOPER_SETUP.md             # Complete onboarding guide (25min setup)
 ├── features/
@@ -1057,7 +1057,7 @@ docs/
 - Python/JavaScript SDK usage examples
 
 🏗️ **Architecture Documentation** (`docs/architecture/DISTRIBUTED_ARCHITECTURE.md`):
-- **6-VM distributed system** design rationale and implementation
+- **Distributed, role-based system** design rationale and implementation
 - Hardware optimization (Intel NPU + RTX 4070 + 22-core CPU)
 - Network security and firewall configuration
 - Service mesh communication patterns
@@ -1099,7 +1099,7 @@ docs/
 
 3. **Complete API Coverage**: All 518 endpoints documented with examples, eliminating guesswork
 
-4. **Architecture Justification**: Explained why 6-VM distribution is necessary (environment conflicts, hardware optimization, fault tolerance)
+4. **Architecture Justification**: Explained why role-based distribution is necessary (environment conflicts, hardware optimization, fault tolerance)
 
 5. **Enterprise-Ready Documentation**: SOC2, GDPR compliance documentation, security frameworks
 
@@ -1107,7 +1107,7 @@ docs/
 
 ### **Documentation Quality Metrics:**
 - ✅ **100% API endpoint coverage** (518/518 endpoints documented)
-- ✅ **Complete architecture explanation** (6 VMs, hardware integration, security)
+- ✅ **Complete architecture explanation** (role-based distribution, hardware integration, security)
 - ✅ **Developer setup success rate**: Target <30 minutes (down from hours)
 - ✅ **Security compliance**: SOC2, GDPR, ISO27001 documentation
 - ✅ **Troubleshooting coverage**: Critical/High/Medium/Low priority issues
@@ -1551,11 +1551,11 @@ Desktop access is **enabled by default** on all modes:
 **Infrastructure Overview:**
 - 📡 **Main Machine (WSL)**: `<backend-ip>` - Backend API (port 8443) + Desktop/Terminal VNC (port 6080)
 - 🌐 **Remote VMs:**
-  - **VM1 Frontend**: `<frontend-ip>:5173` - Web interface (SINGLE FRONTEND SERVER)
-  - **VM2 NPU Worker**: `<npu-ip>:8081` - Hardware AI acceleration
-  - **VM3 Redis**: `<database-ip>:6379` - Data layer
-  - **VM4 AI Stack**: `<aiml-ip>:8080` - AI processing
-  - **VM5 Browser**: `<browser-ip>:3000` - Web automation (Playwright)
+  - **Frontend**: `<frontend-ip>:5173` - Web interface (SINGLE FRONTEND SERVER)
+  - **NPU Worker**: `<npu-ip>:8081` - Hardware AI acceleration
+  - **Database (Redis)**: `<database-ip>:6379` - Data layer
+  - **AI Stack**: `<aiml-ip>:8080` - AI processing
+  - **Browser**: `<browser-ip>:3000` - Web automation (Playwright)
 
 **Service Distribution:**
 - **Backend API**: `<backend-ip>:8443` - Main machine
@@ -1951,7 +1951,7 @@ Direct editing on remote machines (<frontend-ip>-25) **GUARANTEES WORK LOSS** wh
 
 ### 6. **📚 Phase 5 Documentation Suite (COMPLETED)**
 - **API Documentation**: 518+ endpoints fully documented with schemas and examples
-- **Architecture Guide**: 6-VM distributed system explained with justification
+- **Architecture Guide**: distributed, role-based system explained with justification
 - **Developer Setup**: 25-minute automated onboarding process
 - **Multi-Modal AI Guide**: Complete text/image/audio processing documentation
 - **Security Framework**: Enterprise-grade security implementation guide
@@ -2415,7 +2415,7 @@ Fragmentation Ratio: 0.98 (excellent)
 - Request throughput: ⬆️ 30% (with connection pool optimization)
 
 ### Configuration Persisted
-Changes saved to `/etc/redis-stack.conf` on VM3 (<database-ip>)
+Changes saved to `/etc/redis-stack.conf` on the database role (<database-ip>)
 
 ### Why Redis Uses Only 1 Core
 Redis is architecturally **single-threaded** for command processing by design:

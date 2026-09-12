@@ -4,6 +4,8 @@
 **Date:** 2025-10-05
 **Session Reset Time:** 7pm
 
+> **Historical record:** this plan targets the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; the counts and addresses below describe that one install.
+
 ---
 
 ## ✅ Preparation Complete (100%)
@@ -204,14 +206,14 @@ Create custom prompts for each agent based on their task sections
 ✅ Redis: Connected and healthy
 ```
 
-### VM Status
+### Deployment Machine Status
 ```
-✅ Frontend (VM1):   <frontend-ip>:5173
-✅ NPU Worker (VM2): <npu-ip>:8081
-✅ Redis (VM3):      <database-ip>:6379
-✅ AI Stack (VM4):   <aiml-ip>:8080
-✅ Browser (VM5):    <browser-ip>:3000
-✅ Main (VM0):       <backend-ip>:8443
+✅ Frontend:   <frontend-ip>:5173
+✅ NPU Worker: <npu-ip>:8081
+✅ Redis:      <database-ip>:6379
+✅ AI Stack:   <aiml-ip>:8080
+✅ Browser:    <browser-ip>:3000
+✅ Main/Control: <backend-ip>:8443
 ```
 
 ### Documentation Status

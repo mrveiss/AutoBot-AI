@@ -44,7 +44,7 @@ Navigate: **AutoBot UI → Monitoring → Dashboards**
 
 ### Infrastructure Dashboards
 
-- **Multi-Machine Health** - 6-VM infrastructure status
+- **Multi-Machine Health** - role-based infrastructure status (any machine count)
 - **Redis Performance** - Redis operations, pool, memory
 - **WebSocket Metrics** - Real-time connection stats
 - **GPU/NPU Performance** - Hardware acceleration metrics

@@ -21,40 +21,43 @@
 
 ## Architecture Expertise (Static Reference — Verify Against Actual Docs)
 
-You are explaining AutoBot's distributed VM architecture and technical design. Focus on clarity and technical accuracy.
+You are explaining AutoBot's distributed, role-based architecture and technical design. Focus on clarity and technical accuracy. AutoBot has no fixed machine count: it runs in Docker, on one VM, or scaled out by role across any number of machines an operator chooses.
 
-### Distributed VM Architecture
+### Distributed, Role-Based Architecture
 
 **Design Philosophy:**
-- **Separation of Concerns**: Each VM handles specific functionality
-- **Scalability**: VMs can be scaled independently
+- **Separation of Concerns**: Each role handles specific functionality
+- **Scalability**: Roles can be scaled independently, and a role can run on more than one machine
 - **Resource Optimization**: Hardware resources allocated efficiently
-- **Fault Isolation**: Issues in one VM don't crash entire system
-- **Development Flexibility**: VMs can be updated independently
+- **Fault Isolation**: Issues in one role don't crash the entire system
+- **Development Flexibility**: Roles can be updated independently
 
-**VM Breakdown:**
+**Role Breakdown:**
 
-1. **Main Machine ({{ vm_main }})** - Control Center
-   - WSL2 Ubuntu environment
+There is no fixed machine count — every role below can be co-located on a single VM or Docker host,
+or split onto its own machine, depending on how the deployment is scaled.
+
+- **Main / Control ({{ vm_main }})** - Control Center
+   - WSL2 Ubuntu environment (or equivalent host)
    - Backend FastAPI application (port 8001)
    - Development workspace
    - VNC desktop access (port 6080)
    - Git repository and code management
 
-2. **Frontend VM ({{ vm_frontend }})** - User Interface
+- **Frontend role ({{ vm_frontend }})** - User Interface
    - Vue.js 3 + TypeScript
    - Vite development server (port 5173)
-   - **Critical**: ONLY frontend server permitted
+   - **Critical**: ONLY one frontend server instance permitted
    - Real User Monitoring (RUM)
    - WebSocket connections to backend
 
-3. **NPU Worker VM ({{ vm_npu }})** - Hardware Acceleration
-   - Orange Pi 5 Plus with NPU
+- **NPU Worker role ({{ vm_npu }})** - Hardware Acceleration
+   - Orange Pi 5 Plus with NPU (or equivalent NPU hardware)
    - RKNN toolkit for model optimization
    - Hardware-accelerated AI inference
    - Reduces load on main AI stack
 
-4. **Redis VM ({{ vm_redis }})** - Data Infrastructure
+- **Database role ({{ vm_redis }})** - Data Infrastructure
    - Redis Stack with RediSearch
    - Multiple databases:
      - DB 0: Default/general storage
@@ -67,14 +70,14 @@ You are explaining AutoBot's distributed VM architecture and technical design. F
    - Persistent storage with AOF
    - Connection pooling
 
-5. **AI Stack VM ({{ vm_aistack }})** - AI Processing
+- **AI Stack role ({{ vm_aistack }})** - AI Processing
    - Ollama for LLM management
    - Multiple model support
    - Background vectorization
    - LlamaIndex for RAG
    - Streaming response handling
 
-6. **Browser VM ({{ vm_browser }})** - Web Automation
+- **Browser role ({{ vm_browser }})** - Web Automation
    - Playwright browser automation
    - Headless Chrome/Firefox
    - Web scraping capabilities
@@ -97,26 +100,26 @@ You are explaining AutoBot's distributed VM architecture and technical design. F
 - Streaming responses
 - Timeout: 300 seconds for inference
 
-**Backend → Browser VM:**
+**Backend → Browser role:**
 - Playwright API (port 3000)
 - WebSocket for real-time control
 - Screenshot and automation commands
 
 ### Key Design Decisions
 
-**Why Separate Frontend VM?**
+**Why Separate the Frontend Role?**
 - Isolates Node.js environment
-- Prevents port conflicts on main machine
+- Prevents port conflicts on the control/backend machine
 - Easier to scale web tier
 - Clean separation of concerns
 
-**Why NPU Worker VM?**
-- Hardware AI acceleration (6 TOPS)
+**Why a Dedicated NPU Worker Role?**
+- Hardware AI acceleration
 - Offloads inference from AI Stack
 - Cost-effective acceleration
 - Specialized workload handling
 
-**Why Dedicated Redis VM?**
+**Why a Dedicated Database Role?**
 - Central data layer for all services
 - Better memory management
 - Independent scaling
@@ -137,8 +140,8 @@ You are explaining AutoBot's distributed VM architecture and technical design. F
 - Vector search: <200ms with RediSearch
 
 **Scalability:**
-- Horizontal: Add more worker VMs
-- Vertical: Increase VM resources
+- Horizontal: Add more machines running the worker role
+- Vertical: Increase resources on a role's machine
 - Database: Redis clustering support
 - Frontend: Load balancer for multiple instances
 

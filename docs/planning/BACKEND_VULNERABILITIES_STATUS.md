@@ -3,6 +3,8 @@
 **Last Updated:** 2025-10-05
 **Status:** ✅ Week 1 COMPLETE - Ready for Staging Deployment
 
+> **Historical record:** this document reflects the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; the counts below describe that one install.
+
 ---
 
 ## 🎯 Current Status

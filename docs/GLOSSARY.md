@@ -36,8 +36,8 @@ A non-blocking Redis or HTTP client that allows concurrent operations. Used for 
 ### Backend API
 The FastAPI-based REST API service running on the main machine. Handles all business logic, LLM orchestration, and data management.
 
-### Browser VM
-VM5 (`<browser-ip>:3000`) dedicated to Playwright browser automation. Isolated for security and stability.
+### Browser Role
+The browser role (`<browser-ip>:3000`) dedicated to Playwright browser automation. Isolated for security and stability.
 
 ---
 
@@ -60,7 +60,7 @@ The maximum amount of text an LLM can process in a single request. Varies by mod
 ## D
 
 ### Distributed Architecture
-AutoBot's 6-VM infrastructure design where each VM serves a specific purpose. See [ADR-001](adr/001-distributed-vm-architecture.md).
+AutoBot's distributed, role-based infrastructure design where each role serves a specific purpose — Docker, a single VM, or however many machines a deployment scales to. See [ADR-001](adr/001-distributed-vm-architecture.md).
 
 ### DR (Disaster Recovery)
 Procedures and documentation for recovering from system failures. Critical for production deployments.
@@ -88,8 +88,8 @@ A code smell where a method accesses data from another object more than its own.
 ### Fleet
 The set of nodes (machines or containers) that AutoBot's [Service Lifecycle Manager (SLM)](#service-lifecycle-manager-slm) deploys, operates, and scales — vector DB, cache, database, inference, and workers across one or more hosts.
 
-### Frontend VM
-VM1 (`<frontend-ip>:5173`) - the **only** machine allowed to run the Vite frontend server.
+### Frontend Role
+The frontend role (`<frontend-ip>:5173`) - the **only** place allowed to run the Vite frontend server.
 
 ---
 
@@ -177,14 +177,14 @@ AI capabilities that span multiple modalities: text, image, voice, and desktop i
 Redis database accessed by logical name (e.g., "knowledge") rather than number (e.g., db=1). See [ADR-002](adr/002-redis-database-separation.md).
 
 ### NPU Worker
-VM2 (`<npu-ip>:8081`) - dedicated service for Intel NPU-accelerated AI inference.
+The NPU worker role (`<npu-ip>:8081`) - dedicated service for Intel NPU-accelerated AI inference.
 
 ---
 
 ## O
 
 ### Ollama
-Local LLM inference server running on VM4. Provides self-hosted model inference.
+Local LLM inference server running on the AI/ML role. Provides self-hosted model inference.
 
 ### OpenVINO
 Intel's toolkit for optimizing AI models for Intel hardware including NPUs.
@@ -197,7 +197,7 @@ Intel's toolkit for optimizing AI models for Intel hardware including NPUs.
 AutoBot's small, stable core — chat/streaming, the knowledge base ([RAG](#rag-retrieval-augmented-generation) + memory graph), the LLM gateway, [local inference](#local-inference), [hooks](#hooks), and [governance](#governance). It changes slowly so the [SLM](#service-lifecycle-manager-slm) and [modules](#module) can depend on it. Embodies the platform's promise: your data stays on your machines and the AI stays yours.
 
 ### Playwright
-Browser automation framework running on VM5. Used for web scraping and UI testing.
+Browser automation framework running on the browser role. Used for web scraping and UI testing.
 
 ### Pre-commit Hook
 Scripts that run before git commits to enforce code quality, formatting, and security checks.
@@ -210,7 +210,7 @@ Scripts that run before git commits to enforce code quality, formatting, and sec
 AI technique that retrieves relevant context before generating responses, reducing hallucinations.
 
 ### Redis Stack
-Enhanced Redis with modules for vectors, JSON, and search. Running on VM3.
+Enhanced Redis with modules for vectors, JSON, and search. Running on the database role.
 
 ### Reranking
 Post-processing search results to improve relevance ranking using AI models.
@@ -265,7 +265,7 @@ Database optimized for storing and searching embedding vectors. Redis (knowledge
 Increasing resources (CPU, RAM) on existing machines. Contrast with horizontal scaling.
 
 ### Vite
-Frontend build tool and development server. Only runs on VM1.
+Frontend build tool and development server. Only runs on the frontend role.
 
 ### VNC
 Virtual Network Computing - desktop streaming protocol. AutoBot exposes VNC at port 6080.

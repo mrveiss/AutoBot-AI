@@ -126,7 +126,7 @@ If the user provides images or mockups:
 # Edit locally first
 vim autobot-vue/src/components/MyComponent.vue
 
-# Then sync to VM1 (172.16.168.21)
+# Then sync to the frontend role
 ./scripts/utilities/sync-frontend.sh components/MyComponent.vue
 # OR
 ./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/
@@ -136,7 +136,7 @@ vim autobot-vue/src/components/MyComponent.vue
 # Edit locally first
 vim backend/api/chat.py
 
-# Then sync to VM4 (172.16.168.24)
+# Then sync to the AI Stack role
 ./scripts/utilities/sync-to-vm.sh ai-stack backend/api/ /home/autobot/backend/api/
 # OR
 ansible-playbook -i ansible/inventory ansible/playbooks/deploy-backend.yml
@@ -159,14 +159,14 @@ ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.ym
 ```
 [Code example removed for token optimization]
 ```bash
-# WRONG - Direct editing on VM
-ssh autobot@172.16.168.21 "vim /home/autobot/app.py"
+# WRONG - Direct editing on a remote host
+ssh autobot@<frontend-host> "vim /home/autobot/app.py"
 
 # WRONG - Remote configuration change  
-ssh autobot@172.16.168.23 "sudo vim /etc/redis/redis.conf"
+ssh autobot@<database-host> "sudo vim /etc/redis/redis.conf"
 
-# WRONG - Direct Docker changes on VM
-ssh autobot@172.16.168.24 "docker-compose up -d"
+# WRONG - Direct Docker changes on a remote host
+ssh autobot@<aiml-host> "docker-compose up -d"
 ```
 [Code example removed for token optimization]
 ```bash

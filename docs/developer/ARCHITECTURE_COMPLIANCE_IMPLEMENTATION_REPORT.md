@@ -7,6 +7,8 @@
 **Phase**: Phase 2 - Architecture Configuration Enforcement
 **Status**: ✅ **COMPLETE**
 
+> **Correction (2026-09-12, #15194):** "distributed 6-VM architecture" below describes the specific install this report was written against, not a platform invariant. AutoBot's architecture is role-based and count-agnostic — Docker, one VM, or any number of machines. The `test_*_on_vmN` test names quoted below are historical; see #15194 for the compliance-test rewrite that removes the fixed-count assumption.
+
 ## Executive Summary
 
 Successfully replaced **manual architecture fix scripts** with **automated compliance testing** and **configuration-driven architecture**. This ensures the distributed 6-VM architecture is properly maintained through validation rather than manual fixes.

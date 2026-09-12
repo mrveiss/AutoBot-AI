@@ -2,43 +2,46 @@
 
 ## Overview
 
-This comprehensive Ansible deployment system migrates AutoBot from 8 Docker containers to 5 optimized Hyper-V VMs, providing enhanced performance, security, and scalability.
+This comprehensive Ansible deployment system migrates AutoBot from Docker containers to native,
+role-based Hyper-V VMs, providing enhanced performance, security, and scalability. AutoBot has no
+fixed machine count: roles can be co-located in Docker, on one VM, or split across however many
+machines an operator chooses. The example below shows one reference layout with one machine per role.
 
 ## Architecture Migration
 
-### From Docker (8 Containers)
+### From Docker
 ```
 docker-compose.yml:
-├── dns-cache          → VM1 (Frontend)
-├── redis              → VM3 (Database)  
-├── browser-service    → VM5 (Browser)
-├── frontend           → VM1 (Frontend)
-├── ai-stack           → VM4 (AI/ML)
-├── npu-worker         → VM4 (AI/ML)
-├── models (volume)    → VM3 (Database)
-└── autobot (backend)  → VM2 (Backend)
+├── dns-cache          → Frontend role
+├── redis              → Database role
+├── browser-service    → Browser role
+├── frontend           → Frontend role
+├── ai-stack           → AI/ML role
+├── npu-worker         → AI/ML role
+├── models (volume)    → Database role
+└── autobot (backend)  → Backend role
 ```
 
-### To Hyper-V VMs (5 VMs)
+### To Hyper-V VMs (one worked example, per-role machine count is a deployment choice)
 ```
-VM Architecture:
-├── VM1 (172.16.168.21) - Frontend
+Role-Based Architecture:
+├── Frontend role (<frontend-ip>)
 │   ├── nginx (reverse proxy)
 │   ├── Vue.js frontend
 │   └── DNS cache (unbound)
-├── VM2 (172.16.168.20) - Backend  
+├── Backend role (<backend-ip>)
 │   ├── FastAPI server
 │   ├── Python services
 │   └── Log aggregation
-├── VM3 (172.16.168.23) - Database
+├── Database role (<database-ip>)
 │   ├── Redis Stack 7.4
 │   ├── Model storage
 │   └── Data persistence
-├── VM4 (172.16.168.24) - AI/ML
+├── AI/ML role (<aiml-ip>)
 │   ├── AI Stack server
 │   ├── NPU Worker
 │   └── Intel OpenVINO
-└── VM5 (172.16.168.25) - Browser
+└── Browser role (<browser-ip>)
     ├── Playwright automation
     ├── VNC server
     └── Desktop environment
@@ -54,7 +57,7 @@ VM Architecture:
 ```
 
 ### 2. Ubuntu Installation
-- Install Ubuntu Server 22.04 LTS on each VM
+- Install Ubuntu Server 22.04 LTS on each machine
 - Create `autobot` user with sudo privileges
 - Configure static IP addresses as specified
 - Enable SSH service
@@ -64,8 +67,8 @@ VM Architecture:
 # Generate deployment key
 ssh-keygen -t rsa -b 4096 -f ~/.ssh/autobot_key -N ""
 
-# Copy to all VMs
-for ip in 172.16.168.21 172.16.168.20 172.16.168.23 172.16.168.24 172.16.168.25; do
+# Copy to every deployment machine
+for ip in <frontend-ip> <backend-ip> <database-ip> <aiml-ip> <browser-ip>; do
     ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@$ip
 done
 ```
@@ -79,17 +82,17 @@ ansible-galaxy install -r ansible/requirements.yml
 ## Quick Start Deployment
 
 ### 1. Update Inventory
-Edit `ansible/inventory/production.yml` with your actual VM IP addresses:
+Edit `ansible/inventory/production.yml` with your actual machine IP addresses, one group per role:
 ```yaml
 frontend:
   hosts:
     autobot-frontend:
-      ansible_host: 172.16.168.21  # YOUR_FRONTEND_IP
+      ansible_host: <frontend-ip>  # YOUR_FRONTEND_IP
 backend:
   hosts:
     autobot-backend:
-      ansible_host: 172.16.168.20  # YOUR_BACKEND_IP
-# ... update all VM IPs
+      ansible_host: <backend-ip>  # YOUR_BACKEND_IP
+# ... update every role group's IP(s)
 ```
 
 ### 2. Test Connectivity
@@ -144,7 +147,7 @@ This will:
 ```
 - Export data from Docker containers
 - Transfer Redis database, models, and configurations
-- Import data to appropriate VMs
+- Import data to the role machines
 - Validate data integrity
 
 ### Phase 4: Service Startup
@@ -159,14 +162,14 @@ This will:
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| **Web Interface** | http://172.16.168.21 | Main AutoBot UI |
-| **API Backend** | http://172.16.168.20:8001/api | REST API |
-| **Database** | redis://172.16.168.23:6379 | Redis Stack |
-| **RedisInsight** | http://172.16.168.23:8002 | Database management |
-| **AI Stack** | http://172.16.168.24:8080 | AI inference server |
-| **NPU Worker** | http://172.16.168.22:8081 | NPU acceleration |
-| **Browser API** | http://172.16.168.25:3000 | Playwright automation |
-| **VNC Desktop** | vnc://172.16.168.25:5901 | Remote desktop |
+| **Web Interface** | `http://<frontend-ip>` | Main AutoBot UI |
+| **API Backend** | `http://<backend-ip>:8001/api` | REST API |
+| **Database** | `redis://<database-ip>:6379` | Redis Stack |
+| **RedisInsight** | `http://<database-ip>:8002` | Database management |
+| **AI Stack** | `http://<aiml-ip>:8080` | AI inference server |
+| **NPU Worker** | `http://<npu-ip>:8081` | NPU acceleration |
+| **Browser API** | `http://<browser-ip>:3000` | Playwright automation |
+| **VNC Desktop** | `vnc://<browser-ip>:5901` | Remote desktop |
 
 ## Management Commands
 
@@ -199,8 +202,8 @@ This will:
 sudo journalctl -u autobot-* -f
 
 # Service-specific logs
-ssh autobot@172.16.168.20 "sudo journalctl -u autobot-backend -f"
-ssh autobot@172.16.168.24 "sudo journalctl -u autobot-ai-stack -f"
+ssh autobot@<backend-ip> "sudo journalctl -u autobot-backend -f"
+ssh autobot@<aiml-ip> "sudo journalctl -u autobot-ai-stack -f"
 
 # Health check logs
 tail -f /var/log/autobot/health-check*.log
@@ -210,7 +213,7 @@ tail -f /var/log/autobot/health-check*.log
 
 ### Common Issues
 
-#### 1. VM Connectivity Problems
+#### 1. Deployment Machine Connectivity Problems
 ```bash
 # Test SSH connectivity
 ansible all -m ping
@@ -228,23 +231,23 @@ ansible all -m setup -a "filter=ansible_default_ipv4"
 ansible all -m systemd -a "name=autobot-backend" --become
 
 # View service logs
-ssh autobot@172.16.168.20 "sudo journalctl -u autobot-backend --since '10 minutes ago'"
+ssh autobot@<backend-ip> "sudo journalctl -u autobot-backend --since '10 minutes ago'"
 
 # Manual service restart
-ssh autobot@172.16.168.20 "sudo systemctl restart autobot-backend"
+ssh autobot@<backend-ip> "sudo systemctl restart autobot-backend"
 ```
 
 #### 3. Data Migration Issues
 ```bash
 # Verify Redis data
-redis-cli -h 172.16.168.23 -p 6379 dbsize
-redis-cli -h 172.16.168.23 -p 6379 info keyspace
+redis-cli -h <database-ip> -p 6379 dbsize
+redis-cli -h <database-ip> -p 6379 info keyspace
 
 # Check model files
-ssh autobot@172.16.168.24 "find /var/lib/autobot/models -type f | wc -l"
+ssh autobot@<aiml-ip> "find /var/lib/autobot/models -type f | wc -l"
 
 # Validate configurations
-ssh autobot@172.16.168.20 "ls -la /etc/autobot/"
+ssh autobot@<backend-ip> "ls -la /etc/autobot/"
 ```
 
 #### 4. Performance Issues
@@ -289,33 +292,34 @@ ansible-playbook -i inventory/production.yml playbooks/data-migration.yml
 ## Performance Optimization
 
 ### System Tuning
-Each VM is optimized for its specific role:
+Each role is optimized for its specific responsibility, whether or not it shares a machine
+with another role:
 
-**Frontend VM (VM1)**:
+**Frontend role**:
 - nginx worker processes: auto
 - Vue.js build optimization
 - DNS cache for fast resolution
 - Static file compression
 
-**Backend VM (VM2)**:
+**Backend role**:
 - FastAPI with 4 workers
 - Connection pooling
 - Log aggregation and rotation
 - Memory-optimized Python settings
 
-**Database VM (VM3)**:
+**Database role**:
 - Redis maxmemory: 6GB
 - Optimized persistence (RDB + AOF)
 - Kernel parameters for Redis
 - Automatic cleanup and maintenance
 
-**AI/ML VM (VM4)**:
+**AI/ML role**:
 - Intel OpenVINO optimization
 - NPU device access
 - Model caching and optimization
 - GPU passthrough (if available)
 
-**Browser VM (VM5)**:
+**Browser role**:
 - Desktop environment optimization
 - VNC compression settings
 - Playwright resource limits
@@ -336,8 +340,8 @@ watch -n 5 './utils/health-check.sh --quick'
 ## Security
 
 ### Network Security
-- Internal network isolation (172.16.168.0/24)
-- UFW firewall on each VM
+- Internal network isolation (your deployment's subnet)
+- UFW firewall on each role's machine
 - SSH key-only authentication
 - Service-specific port restrictions
 
@@ -361,7 +365,7 @@ secret migration to move OAuth `client_secret` and LDAP `bind_password` from
 plaintext JSONB to encrypted storage:
 
 ```bash
-# On the backend VM (VM2), before restarting the service:
+# On the backend role's machine, before restarting the service:
 source /etc/autobot/slm-secrets.env
 cd /opt/autobot/autobot-slm-backend && source venv/bin/activate
 python migrations/migrate_sso_secrets_to_system_secret.py
@@ -411,23 +415,23 @@ ansible-playbook -i inventory/production.yml playbooks/optimize-system.yml
 - **Native VM Performance**: No Docker overlay overhead
 - **Dedicated Resources**: Guaranteed RAM/CPU per service
 - **Optimized Storage**: Direct filesystem access
-- **Network Performance**: VM-to-VM at memory speeds
+- **Network Performance**: Machine-to-machine at memory speeds when co-located
 
 ### Scalability Enhancements
-- **Independent Scaling**: Scale each service separately
+- **Independent Scaling**: Scale each role separately
 - **Resource Isolation**: One service can't starve others
-- **Load Distribution**: Distribute load across VMs
+- **Load Distribution**: Distribute load across as many machines as needed
 - **Future Migration**: Easy migration to separate physical machines
 
 ### Operational Benefits
 - **Service Independence**: Service failures don't cascade
-- **Easier Debugging**: Clear service boundaries
-- **Simplified Monitoring**: VM-level resource monitoring
+- **Easier Debugging**: Clear role boundaries
+- **Simplified Monitoring**: Per-role resource monitoring
 - **Backup Granularity**: Service-specific backup strategies
 
 ### Security Advantages
 - **Network Isolation**: Internal network with firewall protection
-- **Process Isolation**: Full VM-level isolation
+- **Process Isolation**: Full machine-level isolation when roles are split out
 - **Credential Separation**: Separate SSH keys and users
 - **Attack Surface Reduction**: Minimal exposed services
 
@@ -443,8 +447,8 @@ ansible-playbook -i inventory/production.yml playbooks/optimize-system.yml
 ```bash
 # Post-deployment validation
 ./deploy.sh --health-check
-curl http://172.16.168.21/health
-redis-cli -h 172.16.168.23 ping
+curl http://<frontend-ip>/health
+redis-cli -h <database-ip> ping
 ```
 
 ### Emergency Contacts
@@ -455,7 +459,7 @@ redis-cli -h 172.16.168.23 ping
 ---
 
 **Deployment Status**: Ready for production use  
-**Migration Path**: Docker containers → 5 Hyper-V VMs  
+**Migration Path**: Docker containers → role-based Hyper-V VMs (one worked example above; machine count is a deployment choice)  
 **Performance**: Native VM speed with dedicated resources  
 **Security**: Internal network isolation with firewall protection  
 **Scalability**: Independent service scaling and resource allocation

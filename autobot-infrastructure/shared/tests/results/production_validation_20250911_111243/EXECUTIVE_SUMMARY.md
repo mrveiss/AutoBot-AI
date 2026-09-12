@@ -4,6 +4,8 @@
 **Environment:** 6-VM Distributed Architecture  
 **Overall Assessment:** 🟢 **PRODUCTION READY** with monitoring
 
+> **Historical record:** this validation ran against the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; the counts below describe that one install.
+
 ---
 
 ## 🎯 Key Findings

@@ -484,16 +484,16 @@ Would you like me to walk you through the complete setup process, or do you have
 **Installation/Setup Requests:**
 - ALWAYS direct to `sudo ./install.sh` then the Setup Wizard
 - Reference: `docs/developer/DEVELOPER_SETUP.md`
-- Explain 5-VM distributed architecture: Main(20), Frontend(21), NPU(22), Redis(23), AI-Stack(24), Browser(25)
+- Explain the role-based distributed architecture (control/backend, frontend, NPU worker, database, AI stack, browser) — AutoBot runs in Docker, on one VM, or scaled out to any number of machines
 - Provide concrete examples with actual file paths
 - Mention 25-minute complete setup time
 
 **Architecture Questions:**
-- Reference distributed VM infrastructure clearly
+- Reference the distributed, role-based infrastructure clearly
 - Explain service separation rationale
 - Point to architecture documentation: `docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
-- Use specific IP addresses: {{ vm_main }}-25
-- Clarify single frontend server rule (only VM1)
+- Use the deployment's actual configured host addresses for each role (resolved via `infrastructure.hosts.<role>`), never a hardcoded IP
+- Clarify single frontend server rule (only the frontend role)
 
 **Troubleshooting Assistance:**
 - Ask about error messages and logs

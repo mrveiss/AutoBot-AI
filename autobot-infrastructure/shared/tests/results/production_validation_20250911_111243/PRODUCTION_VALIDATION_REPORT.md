@@ -4,6 +4,8 @@
 **Environment:** 6-VM Distributed Architecture
 **Test Duration:** ~30 minutes
 
+> **Historical record:** this validation ran against the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; the counts and addresses below describe that one install.
+
 ## Executive Summary
 
 ✅ **PRODUCTION READY** - 85% overall success rate across distributed architecture
@@ -61,7 +63,7 @@ Method Not Allowed:
 ### 2. Database Integration Testing ✅ EXCELLENT
 **Result:** 100% success - All tests passed
 
-**Distributed Redis (172.16.168.23:6379):**
+**Distributed Redis (<database-ip>:6379):**
 - ✅ Connection established successfully
 - ✅ Basic read/write operations functional
 - ✅ Ping response: True
@@ -70,7 +72,7 @@ Method Not Allowed:
 ### 3. WebSocket Real-time Communication ✅ EXCELLENT
 **Result:** 100% success - Perfect implementation
 
-**WebSocket Server (ws://172.16.168.20:8002/ws):**
+**WebSocket Server (ws://<backend-ip>:8002/ws):**
 - ✅ Connection established instantly
 - ✅ Bidirectional communication working
 - ✅ Proper JSON message handling
@@ -80,11 +82,11 @@ Method Not Allowed:
 **Result:** 100% success across all 6 VMs
 
 **Response Times (Average across 5 requests each):**
-- ✅ Backend API (172.16.168.20:8002): 0.003s (100% success)
-- ✅ Frontend (172.16.168.21:5173): 0.002s (100% success)
-- ✅ NPU Worker (172.16.168.22:8081): 0.002s (100% success)
-- ✅ AI Stack (172.16.168.24:8080): 0.001s (100% success)
-- ✅ Browser Service (172.16.168.25:3000): 0.001s (100% success)
+- ✅ Backend API (<backend-ip>:8002): 0.003s (100% success)
+- ✅ Frontend (<frontend-ip>:5173): 0.002s (100% success)
+- ✅ NPU Worker (<npu-ip>:8081): 0.002s (100% success)
+- ✅ AI Stack (<aiml-ip>:8080): 0.001s (100% success)
+- ✅ Browser Service (<browser-ip>:3000): 0.001s (100% success)
 
 **Performance Analysis:**
 - All services responding in <5ms (exceptional)
@@ -128,12 +130,12 @@ The 6-VM distributed architecture is performing exceptionally well:
 
 **VM Performance Matrix:**
 ```
-Main WSL (172.16.168.20)    - Backend API + Ollama + VNC    ✅ Operational
-Frontend VM (172.16.168.21) - Vue.js Web Interface        ✅ Operational  
-NPU Worker (172.16.168.22)  - Intel OpenVINO + Hardware   ✅ Operational
-Redis VM (172.16.168.23)    - Redis Stack + Vector Store  ✅ Operational
-AI Stack VM (172.16.168.24) - AI Processing Services      ✅ Operational
-Browser VM (172.16.168.25)  - Playwright Automation       ✅ Operational
+Main WSL (<backend-ip>)    - Backend API + Ollama + VNC    ✅ Operational
+Frontend (<frontend-ip>)   - Vue.js Web Interface          ✅ Operational
+NPU Worker (<npu-ip>)      - Intel OpenVINO + Hardware     ✅ Operational
+Database - Redis (<database-ip>) - Redis Stack + Vector Store ✅ Operational
+AI Stack (<aiml-ip>)       - AI Processing Services        ✅ Operational
+Browser (<browser-ip>)     - Playwright Automation         ✅ Operational
 ```
 
 **Network Performance:**
