@@ -76,7 +76,8 @@ async def _insert_activity(conn, table: str, user_id: uuid.UUID) -> None:
     required = await _required_columns(conn, table)
     columns = ", ".join(["user_id", *required])
     values = ", ".join([":user_id", *(f":{name}" for name in required)])
-    statement = text(f"INSERT INTO {table} ({columns}) VALUES ({values})")  # nosec B608 -- names from the schema
+    # No caller input: the table is a literal from this module, the columns come from information_schema.
+    statement = text(f"INSERT INTO {table} ({columns}) VALUES ({values})")  # nosec B608
     await conn.execute(statement, {"user_id": user_id, **required})
 
 
