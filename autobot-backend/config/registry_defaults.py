@@ -26,9 +26,9 @@ from autobot_shared.ssot_config import (
 # All values sourced from autobot_shared.ssot_config → .env → pydantic defaults
 _ssot = get_config()
 
-# VM IP addresses (6-VM distributed architecture + SLM admin)
+# Service host addresses (role-based, count-agnostic architecture — ADR-010; SLM admin included)
 REGISTRY_DEFAULTS = {
-    # VM IPs — sourced from SSOT VMConfig
+    # Service hosts — sourced from SSOT VMConfig, one per role
     "vm.main": _ssot.vm.main,
     "vm.frontend": _ssot.vm.frontend,
     "vm.npu": _ssot.vm.npu,

@@ -13,7 +13,7 @@
 2. Read the relevant files:
    ```
    cat docs/architecture/DISTRIBUTED_ARCHITECTURE.md
-   cat docs/architecture/DISTRIBUTED_6VM_ARCHITECTURE.md
+   cat docs/architecture/VM_ROLES.md
    cat docs/developer/AUTOBOT_REFERENCE.md
    ```
 3. Base your answer on the **actual file contents**, not the static guidance below.

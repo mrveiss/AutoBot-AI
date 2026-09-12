@@ -62,7 +62,7 @@ pysaml2
 typing-extensions
 
 # --- OpenTelemetry tracing stack ------------------------------------------
-# Issue #57/#697: distributed tracing across the 5-VM deployment. Several
+# Issue #57/#697: distributed tracing across AutoBot's role-based deployment. Several
 # production files DO import opentelemetry unconditionally at module scope
 # (middleware/tracing_middleware.py, llm_shared/observability/otel_observer.py,
 # pki/distributor.py, utils/traced_http_client.py, services/tracing_service.py)

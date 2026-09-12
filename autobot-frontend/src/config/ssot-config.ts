@@ -40,21 +40,21 @@
 // =============================================================================
 
 /**
- * VM IP address configuration.
- * Supports the 6-VM distributed architecture.
+ * Service host configuration, resolved per role.
+ * Supports AutoBot's role-based, count-agnostic architecture (ADR-010).
  */
 export interface VMConfig {
-  /** Main machine (WSL) - Backend API + VNC Desktop */
+  /** Main machine (backend role) - Backend API + VNC Desktop */
   main: string;
-  /** VM1 Frontend - Web interface */
+  /** Frontend role - Web interface */
   frontend: string;
-  /** VM2 NPU Worker - Hardware AI acceleration */
+  /** NPU Worker role (aiml) - Hardware AI acceleration */
   npu: string;
-  /** VM3 Redis - Data layer */
+  /** Database role - Redis data layer */
   redis: string;
-  /** VM4 AI Stack - AI processing */
+  /** AI Stack role (aiml) - AI processing */
   aistack: string;
-  /** VM5 Browser - Web automation */
+  /** Browser role - Web automation */
   browser: string;
   /** Ollama host (typically localhost) */
   ollama: string;

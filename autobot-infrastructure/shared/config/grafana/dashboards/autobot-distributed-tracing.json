@@ -41,7 +41,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "# Distributed Tracing Dashboard\n\nThis dashboard shows OpenTelemetry traces across AutoBot's 6-VM infrastructure.\n\n**Services:** Backend (Main) | Frontend (VM1) | NPU Worker (VM2) | Redis (VM3) | AI Stack (VM4) | Browser (VM5)",
+        "content": "# Distributed Tracing Dashboard\n\nThis dashboard shows OpenTelemetry traces across AutoBot's distributed, role-based infrastructure.\n\n**Services:** Backend | Frontend | NPU Worker | Redis (Database role) | AI Stack | Browser",
         "mode": "markdown"
       },
       "pluginVersion": "10.2.0",

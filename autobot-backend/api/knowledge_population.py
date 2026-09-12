@@ -867,16 +867,16 @@ def _build_system_config_info() -> str:
 
     return f"""AutoBot System Configuration
 
-Network Layout:
-- Main Machine (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API
+Network Layout (role-based, count-agnostic -- any host count; SSOT-resolved):
+- Backend role (Main Machine): {NetworkConstants.MAIN_MACHINE_IP} - Backend API
   (port {NetworkConstants.BACKEND_PORT}) + NPU Worker (port 8082) +
   Desktop/Terminal VNC (port 6080)
-- VM1 Frontend: {NetworkConstants.FRONTEND_VM_IP}:5173 - Web interface
+- Frontend role: {NetworkConstants.FRONTEND_VM_IP}:5173 - Web interface
   (SINGLE FRONTEND SERVER)
-- VM2 NPU Worker: {NetworkConstants.NPU_WORKER_VM_IP}:8081 - Secondary NPU worker (Linux)
-- VM3 Redis: {NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT} - Data layer
-- VM4 AI Stack: {NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT} - AI processing
-- VM5 Browser: {NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT} -
+- NPU Worker role: {NetworkConstants.NPU_WORKER_VM_IP}:8081 - Secondary NPU worker (Linux)
+- Database role (Redis): {NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT} - Data layer
+- AI Stack role: {NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT} - AI processing
+- Browser role: {NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT} -
   Web automation (Playwright)
 
 Key Commands:
@@ -884,10 +884,10 @@ Key Commands:
 - Run: SLM GUI (https://<SLM_HOST>/orchestration) or scripts/start-services.sh
 
 Critical Rules:
-- NEVER edit code directly on remote VMs (VM1-VM5)
+- NEVER edit code directly on remote role hosts
 - ALL code edits MUST be made locally in {PATH.PROJECT_ROOT}/
 - Use ./sync-frontend.sh or sync scripts to deploy changes
-- Frontend ONLY runs on VM1 ({NetworkConstants.FRONTEND_VM_IP}:5173)
+- Frontend ONLY runs on its designated role host ({NetworkConstants.FRONTEND_VM_IP}:5173)
 - NO temporary fixes or workarounds allowed
 
 Source: AutoBot System Configuration

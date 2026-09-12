@@ -38,7 +38,7 @@ from autobot_shared.redis_client import get_async_redis_client
 logger = structlog.get_logger()
 
 
-# Service definitions matching the 6-VM infrastructure
+# Service definitions matching AutoBot's distributed, role-based infrastructure
 SERVICES = [
     {
         "id": "main-backend",

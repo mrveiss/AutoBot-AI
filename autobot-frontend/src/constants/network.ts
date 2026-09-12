@@ -27,16 +27,16 @@ import { getConfig, getServiceUrl, getVmIp } from '../config/ssot-config';
 const config = getConfig();
 
 /**
- * Core network constants for AutoBot distributed infrastructure
+ * Core network constants for AutoBot's distributed infrastructure
  * CRITICAL: All values read from SSOT config (which reads from environment)
  *
- * Service Distribution (6-VM Architecture):
- * - Main Machine (WSL): Backend API + VNC Desktop
- * - VM1 Frontend: Web interface (SINGLE FRONTEND SERVER)
- * - VM2 NPU Worker: Hardware AI acceleration
- * - VM3 Redis: Data layer
- * - VM4 AI Stack: AI processing
- * - VM5 Browser: Web automation (Playwright)
+ * Service Distribution (role-based, count-agnostic — ADR-010; see VM_ROLES.md):
+ * - Backend role: Backend API + VNC Desktop
+ * - Frontend role: Web interface (SINGLE FRONTEND SERVER)
+ * - NPU Worker role: Hardware AI acceleration
+ * - Database role: Redis data layer
+ * - AI Stack role: AI processing
+ * - Browser role: Web automation (Playwright)
  */
 export const NetworkConstants = Object.freeze({
   // Main machine (WSL) - from SSOT config
