@@ -55,11 +55,19 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Dict, Optional
 
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
+
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
+
+# Only Redis being unreachable falls back to the in-process store — matching
+# conversation_file_manager.py's convention for the same client. Any other
+# exception (a programming error, a bad call) must still surface.
+_REDIS_UNAVAILABLE = (RedisConnectionError, RedisTimeoutError)
 
 # ---------------------------------------------------------------------------
 # Module-level TTL constant — read from env, never hard-coded at call sites.
@@ -94,6 +102,19 @@ class QuotaHeadroomEntry:
         if self.limit is None or self.limit <= 0 or self.remaining is None:
             return None
         return max(0.0, min(1.0, 1.0 - (self.remaining / self.limit)))
+
+
+def _decode_entry(raw: str, key: str) -> Optional[QuotaHeadroomEntry]:
+    """Parse one stored payload, or None (logged) if it is corrupt.
+
+    A single bad row must not take the rest of the store down with it --
+    the caller skips this key and keeps going.
+    """
+    try:
+        return QuotaHeadroomEntry(**json.loads(raw))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        logger.warning("quota_headroom: corrupt entry for %s, skipping", key, exc_info=True)
+        return None
 
 
 class QuotaHeadroomStore:
@@ -143,7 +164,7 @@ class QuotaHeadroomStore:
         try:
             redis = await self._get_redis()
             await redis.set(key, payload, ex=_HEADROOM_TTL_SECONDS)
-        except Exception:
+        except _REDIS_UNAVAILABLE:
             logger.debug("quota_headroom: Redis unavailable — using in-process fallback for %s", key, exc_info=True)
             self._local[key] = (entry, time.monotonic() + _HEADROOM_TTL_SECONDS)
 
@@ -163,8 +184,8 @@ class QuotaHeadroomStore:
                 return None
             if isinstance(raw, bytes):
                 raw = raw.decode("utf-8")
-            return QuotaHeadroomEntry(**json.loads(raw))
-        except Exception:
+            return _decode_entry(raw, key)
+        except _REDIS_UNAVAILABLE:
             logger.debug("quota_headroom: Redis unavailable — checking in-process fallback for %s", key)
             cached = self._local.get(key)
             if cached is None:
@@ -187,9 +208,12 @@ class QuotaHeadroomStore:
                     continue
                 if isinstance(raw_val, bytes):
                     raw_val = raw_val.decode("utf-8")
-                entries.append(QuotaHeadroomEntry(**json.loads(raw_val)))
+                entry = _decode_entry(raw_val, raw_key)
+                if entry is not None:
+                    entries.append(entry)
             return entries
-        except Exception:
+        except _REDIS_UNAVAILABLE:
+            logger.debug("quota_headroom: Redis unavailable — listing the in-process fallback for prefix %s", prefix)
             now = time.monotonic()
             return [
                 entry

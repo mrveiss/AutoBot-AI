@@ -29,6 +29,8 @@ try:
 except ImportError:
     fakeredis_async = None  # type: ignore[assignment]
 
+from redis.exceptions import ConnectionError as RedisConnectionError
+
 from llm_shared.quota_headroom import QuotaHeadroomEntry, QuotaHeadroomStore
 
 # ---------------------------------------------------------------------------
@@ -160,7 +162,7 @@ async def test_no_redis_fallback_record_and_get():
     store = QuotaHeadroomStore()
 
     async def _raise(*_args, **_kwargs):
-        raise ConnectionError("Redis unavailable")
+        raise RedisConnectionError("Redis unavailable")
 
     store._get_redis = _raise  # type: ignore[method-assign]
 
@@ -176,7 +178,7 @@ async def test_no_redis_fallback_expiry():
     store = QuotaHeadroomStore()
 
     async def _raise(*_args, **_kwargs):
-        raise ConnectionError("Redis unavailable")
+        raise RedisConnectionError("Redis unavailable")
 
     store._get_redis = _raise  # type: ignore[method-assign]
 
@@ -192,7 +194,7 @@ async def test_no_redis_fallback_all_entries():
     store = QuotaHeadroomStore()
 
     async def _raise(*_args, **_kwargs):
-        raise ConnectionError("Redis unavailable")
+        raise RedisConnectionError("Redis unavailable")
 
     store._get_redis = _raise  # type: ignore[method-assign]
 
@@ -201,6 +203,44 @@ async def test_no_redis_fallback_all_entries():
 
     assert {e.provider for e in await store.all_entries()} == {"openai", "anthropic"}
     assert {e.provider for e in await store.all_entries(provider="openai")} == {"openai"}
+
+
+# ---------------------------------------------------------------------------
+# Corrupt entries — one bad payload must not sink the whole store
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_returns_none_for_a_corrupt_entry(_require_fakeredis, _make_store_with_fake_server, caplog):
+    """A payload that doesn't parse must not raise into the caller -- treated as absent, not fabricated."""
+    server = fakeredis_async.FakeServer()
+    store = _make_store_with_fake_server(server)
+    redis = await store._get_redis()
+    await redis.set("autobot:llm:headroom:openai:default:rpm", "not valid json")
+
+    with caplog.at_level("WARNING", logger="llm_shared.quota_headroom"):
+        assert await store.get("openai", "rpm") is None
+
+    assert "corrupt entry" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_all_entries_skips_a_corrupt_entry_but_keeps_the_rest(
+    _require_fakeredis, _make_store_with_fake_server, caplog
+):
+    """One bad row must not make every other Redis-held entry vanish."""
+    server = fakeredis_async.FakeServer()
+    store = _make_store_with_fake_server(server)
+
+    await store.record("openai", "rpm", limit=500, remaining=10)
+    redis = await store._get_redis()
+    await redis.set("autobot:llm:headroom:anthropic:default:5h_output_tokens", "not valid json")
+
+    with caplog.at_level("WARNING", logger="llm_shared.quota_headroom"):
+        entries = await store.all_entries()
+
+    assert {e.provider for e in entries} == {"openai"}
+    assert "corrupt entry" in caplog.text
 
 
 # ---------------------------------------------------------------------------
