@@ -13913,6 +13913,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mcp/external_servers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List External Servers
+         * @description List every configured external MCP server.
+         */
+        get: operations["list_external_servers_api_mcp_external_servers_get"];
+        put?: never;
+        /**
+         * Create External Server
+         * @description Register a new external MCP server. Validates the stdio launcher allowlist and auth schema.
+         */
+        post: operations["create_external_server_api_mcp_external_servers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/external_servers/{server_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get External Server
+         * @description Return one configured external MCP server.
+         */
+        get: operations["get_external_server_api_mcp_external_servers__server_id__get"];
+        /**
+         * Update External Server
+         * @description Update an existing external MCP server. Omitted fields are left unchanged.
+         *
+         *     A new ``credentials`` payload replaces the stored credential (old one
+         *     revoked after the new one is validated and stored, never before).
+         */
+        put: operations["update_external_server_api_mcp_external_servers__server_id__put"];
+        post?: never;
+        /**
+         * Delete External Server
+         * @description Delete an external MCP server and revoke its stored credential, if any.
+         */
+        delete: operations["delete_external_server_api_mcp_external_servers__server_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequential_thinking/mcp/tools": {
         parameters: {
             query?: never;
@@ -82158,6 +82213,105 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * MCPServerCreateRequest
+         * @description Admin request to register a new external MCP server.
+         */
+        MCPServerCreateRequest: {
+            /** Name */
+            name: string;
+            /** Transport */
+            transport: string;
+            /** Command */
+            command?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Auth Type */
+            auth_type?: string | null;
+            /** Credentials */
+            credentials?: {
+                [key: string]: string;
+            } | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Allowed Roles */
+            allowed_roles?: string[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * MCPServerListResponse
+         * @description List of configured external MCP servers.
+         */
+        MCPServerListResponse: {
+            /** Servers */
+            servers: components["schemas"]["MCPServerResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * MCPServerResponse
+         * @description Public shape of a configured external MCP server — never carries a secret.
+         */
+        MCPServerResponse: {
+            /** Server Id */
+            server_id: string;
+            /** Name */
+            name: string;
+            /** Transport */
+            transport: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Owner Id */
+            owner_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Command */
+            command?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Auth Type */
+            auth_type?: string | null;
+            /** Allowed Roles */
+            allowed_roles: string[];
+            /**
+             * Has Credential
+             * @description True when a credential is stored, without exposing it
+             */
+            has_credential: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * MCPServerUpdateRequest
+         * @description Admin request to update an existing external MCP server. Omitted fields are unchanged.
+         */
+        MCPServerUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Command */
+            command?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Auth Type */
+            auth_type?: string | null;
+            /** Credentials */
+            credentials?: {
+                [key: string]: string;
+            } | null;
+            /** Allowed Roles */
+            allowed_roles?: string[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * MCPSpanResponse
          * @description Single MCP tool-call span returned by the traces API (Issue #4413).
          */
@@ -121678,6 +121832,154 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MCPRegistryInfoResponse"];
+                };
+            };
+        };
+    };
+    list_external_servers_api_mcp_external_servers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServerListResponse"];
+                };
+            };
+        };
+    };
+    create_external_server_api_mcp_external_servers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MCPServerCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_external_server_api_mcp_external_servers__server_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_external_server_api_mcp_external_servers__server_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MCPServerUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_external_server_api_mcp_external_servers__server_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
