@@ -44,3 +44,30 @@ export function isAdminRole(role: string | null | undefined): boolean {
   if (!role) return false
   return (ADMIN_ROLES as readonly string[]).includes(role.toLowerCase())
 }
+
+/**
+ * Role rank, mirroring the backend's authoritative ordering in
+ * `autobot_shared/auth/permissions.py::_ROLE_META` (#16244). `superadmin`
+ * ranks above `admin` for the same reason `_ROLE_META`'s own comment gives:
+ * it is administrative at every gate that admits `admin`, and a lower rank
+ * here would sort the most privileged role below `readonly`.
+ *
+ * UI ROUTING ONLY — this never grants access the backend refuses. It backs
+ * `meta.minRole`'s router guard alone; every actual permission decision
+ * still goes through the backend's own gates.
+ */
+export const ROLE_RANK: Record<Role, number> = {
+  superadmin: 110,
+  admin: 100,
+  operator: 80,
+  analyst: 60,
+  editor: 55,
+  user: 50,
+  readonly: 10
+} as const satisfies Record<Role, number>
+
+/** True when `role` meets or exceeds `minRole` in the ranking above. Unknown/missing `role` never meets any `minRole`. */
+export function meetsMinRole(role: string | null | undefined, minRole: Role): boolean {
+  if (!role || !(role in ROLE_RANK)) return false
+  return ROLE_RANK[role as Role] >= ROLE_RANK[minRole]
+}
