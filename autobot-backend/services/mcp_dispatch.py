@@ -144,17 +144,34 @@ class MCPDispatcher:
         internal registry fetch above: an external-bridge outage (store
         down, every server unreachable) merges zero tools and never raises,
         so it can never block internal tools from loading.
+
+        The internal names already in the cache are passed as reserved
+        (#16458 review): without this, an external server advertising a
+        built-in tool's name would silently overwrite that entry below,
+        so calls meant for the internal tool would route to the external
+        server instead — same name, wrong owner, no error anywhere.
         """
         from autobot_shared.auth.permissions import Permission
         from services.mcp_external_bridge import get_mcp_external_bridge
 
+        internal_names = frozenset(self._tool_cache)
         try:
-            tools = await get_mcp_external_bridge().list_tools()
+            tools = await get_mcp_external_bridge().list_tools(reserved_names=internal_names)
         except Exception as exc:
             logger.warning("MCPDispatcher: external MCP tool discovery failed: %s", exc)
             return
 
         for tool in tools:
+            if tool.name in internal_names:
+                # Defence in depth: the bridge is told these names are
+                # reserved and prefixes on collision (services.mcp_aggregation),
+                # but a bridge that somehow still returns a bare, colliding
+                # name must not silently take over the internal entry either.
+                logger.warning(
+                    "MCPDispatcher: external tool %r collides with an internal tool name -- skipped, " "not merged",
+                    tool.name,
+                )
+                continue
             self._tool_cache[tool.name] = {
                 "name": tool.name,
                 "description": tool.description,

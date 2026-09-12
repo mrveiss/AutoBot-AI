@@ -163,6 +163,7 @@ async def update_external_server(
             setattr(cfg, field_name, value)
 
     old_secret_id = cfg.secret_id
+    old_owner_id = cfg.owner_id
     if request.auth_type is not None:
         if request.credentials is None:
             raise HTTPException(status_code=422, detail="auth_type given without credentials")
@@ -170,6 +171,14 @@ async def update_external_server(
             server_id, owner_id, request.auth_type, request.credentials
         )
         cfg.auth_type = request.auth_type
+        # #16458 review: the new credential is stored under the CALLER's id,
+        # not necessarily cfg's existing owner_id (rotation by a different
+        # admin than the one who created the server). cfg.owner_id must move
+        # with it -- resolve_extra_headers_for_server() loads by cfg.owner_id,
+        # and a stale value here means the next connection's load call names
+        # the wrong owner for the secret_id it just stored, and _require_owner()
+        # refuses it.
+        cfg.owner_id = owner_id
 
     try:
         cfg.validate()
@@ -178,7 +187,7 @@ async def update_external_server(
 
     await store.update(cfg)
     if request.auth_type is not None and old_secret_id and old_secret_id != cfg.secret_id:
-        await get_credential_store().revoke(old_secret_id, cfg.owner_id)
+        await get_credential_store().revoke(old_secret_id, old_owner_id)
 
     await _audit("mcp.external_server.update", "success", user, server_id)
     return _to_response(cfg)

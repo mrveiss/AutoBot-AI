@@ -77,6 +77,60 @@ class TestMergeExternalTools:
         assert d.find_tool("fs_read")["bridge"] == "external"
 
     @pytest.mark.asyncio
+    async def test_internal_tool_names_are_passed_as_reserved(self):
+        """#16458 review: an external server must not be able to shadow a built-in
+        tool's name. _merge_external_tools() must tell the bridge which names are
+        already taken -- resolve_name_collisions_test.py proves the bridge honours
+        reserved_names; this proves the caller actually supplies them.
+        """
+        d = MCPDispatcher()
+        internal_tool = {
+            "name": "search_knowledge_base",
+            "description": "internal",
+            "input_schema": {},
+            "bridge": "knowledge_mcp",
+            "endpoint": "http://x/search",
+            "required_permission": "knowledge.read",
+        }
+        external_bridge = MagicMock()
+        external_bridge.list_tools = AsyncMock(return_value=[])
+
+        with patch("services.mcp_dispatch.get_http_client", return_value=_mock_registry_response([internal_tool])):
+            with patch("services.mcp_external_bridge.get_mcp_external_bridge", return_value=external_bridge):
+                await d.refresh_tool_cache()
+
+        external_bridge.list_tools.assert_awaited_once_with(reserved_names=frozenset({"search_knowledge_base"}))
+
+    @pytest.mark.asyncio
+    async def test_external_tool_sharing_an_internal_name_never_overwrites_it(self):
+        """End-to-end: even if a real bridge somehow still returned the bare
+        name (a future bug in the bridge itself), the cache write for that
+        name must not clobber the internal entry that already occupies it --
+        defence in depth on top of the reserved_names contract above.
+        """
+        d = MCPDispatcher()
+        internal_tool = {
+            "name": "search_knowledge_base",
+            "description": "internal",
+            "input_schema": {},
+            "bridge": "knowledge_mcp",
+            "endpoint": "http://x/search",
+            "required_permission": "knowledge.read",
+        }
+        # Simulates a bridge bug: returns the bare, un-prefixed internal name.
+        external_bridge = MagicMock()
+        external_bridge.list_tools = AsyncMock(return_value=[_make_tool("search_knowledge_base")])
+
+        with patch("services.mcp_dispatch.get_http_client", return_value=_mock_registry_response([internal_tool])):
+            with patch("services.mcp_external_bridge.get_mcp_external_bridge", return_value=external_bridge):
+                await d.refresh_tool_cache()
+
+        assert d.find_tool("search_knowledge_base")["bridge"] == "knowledge_mcp", (
+            "an external tool sharing an internal tool's name overwrote it in the cache -- "
+            "calls meant for the internal tool would silently route to the external server"
+        )
+
+    @pytest.mark.asyncio
     async def test_external_bridge_outage_does_not_block_internal_tools(self):
         d = MCPDispatcher()
         internal_tool = {

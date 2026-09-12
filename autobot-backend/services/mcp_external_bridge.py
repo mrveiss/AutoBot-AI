@@ -106,11 +106,16 @@ class MCPExternalBridge:
             return []
         return [s for s in servers if s.enabled]
 
-    async def list_tools(self) -> list[MCPToolDefinition]:
+    async def list_tools(self, reserved_names: frozenset[str] = frozenset()) -> list[MCPToolDefinition]:
         """Discover tools from every enabled server, renamed for collision-safety.
 
         Unreachable servers are logged and skipped (services.mcp_aggregation);
         this never raises for a single bad server.
+
+        ``reserved_names`` (#16458 review): the caller's own internal tool
+        names, so a server-advertised name matching one of them is prefixed
+        with its server_id exactly like colliding with another external
+        server -- an external server cannot shadow a built-in tool's name.
         """
         self._registry = {}
         servers = await self._enabled_servers()

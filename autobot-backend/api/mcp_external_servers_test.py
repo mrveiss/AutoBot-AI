@@ -213,6 +213,48 @@ class TestUpdateExternalServer:
         cred_store.revoke.assert_awaited_once_with("old-sec", "admin-1")
 
     @pytest.mark.asyncio
+    async def test_update_by_a_different_admin_moves_owner_id_with_the_new_credential(self):
+        """#16458 review: rotation by an admin other than the server's creator.
+
+        Before the fix, cfg.owner_id stayed "admin-1" (the original creator)
+        even though the new credential is stored under "admin-2" (the caller
+        making this request) -- resolve_extra_headers_for_server() loads by
+        cfg.owner_id on the next connection, so the mismatch made
+        _require_owner() refuse a secret_id/owner_id pair that was never
+        actually inconsistent in the credential store, only in cfg.
+        """
+        cfg = MCPServerConfig(
+            server_id="s1",
+            name="n",
+            transport="streamable_http",
+            owner_id="admin-1",
+            url="https://x.example",
+            auth_type="BearerAuth",
+            secret_id="old-sec",
+        )
+        store = AsyncMock()
+        store.get = AsyncMock(return_value=cfg)
+        store.update = AsyncMock()
+        cred_store = AsyncMock()
+        cred_store.store = AsyncMock(return_value=("new-sec", {}))
+
+        with patch("api.mcp_external_servers.get_mcp_external_server_store", return_value=store):
+            with patch("api.mcp_external_servers.get_credential_store", return_value=cred_store):
+                resp = await mod.update_external_server(
+                    "s1",
+                    MCPServerUpdateRequest(auth_type="BearerAuth", credentials={"token": "new-tok"}),
+                    user={"user_id": "admin-2"},
+                )
+
+        assert resp.owner_id == "admin-2", "cfg.owner_id must move with the credential it now names"
+        (updated_cfg,) = store.update.await_args.args
+        assert updated_cfg.owner_id == "admin-2"
+        assert updated_cfg.secret_id == "new-sec"
+        # The OLD secret was genuinely stored under admin-1 -- revoking it
+        # under the new owner would look up the wrong row (or none).
+        cred_store.revoke.assert_awaited_once_with("old-sec", "admin-1")
+
+    @pytest.mark.asyncio
     async def test_update_auth_type_without_credentials_422s(self):
         cfg = MCPServerConfig(server_id="s1", name="n", transport="stdio", owner_id="admin-1", command="npx x")
         store = AsyncMock()

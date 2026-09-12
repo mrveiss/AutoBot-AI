@@ -79,8 +79,21 @@ class ResolvedTool:
     tool: MCPToolDefinition
 
 
-def resolve_name_collisions(server_tool_lists: Sequence[ServerToolList]) -> list[ResolvedTool]:
-    """Prefix a tool's name with its server_id only when 2+ servers expose that name."""
+def resolve_name_collisions(
+    server_tool_lists: Sequence[ServerToolList],
+    reserved_names: frozenset[str] = frozenset(),
+) -> list[ResolvedTool]:
+    """Prefix a tool's name with its server_id when 2+ servers expose that name.
+
+    ``reserved_names`` (#16458 review) forces the same prefixing for a name
+    that collides with something outside ``server_tool_lists`` entirely --
+    the voice bridge (services/realtime_mcp_bridge.py) passes nothing, so its
+    behaviour here is unchanged; the external MCP bridge (#11542) passes the
+    internal tool registry's names, so an admin-configured external server
+    cannot advertise a built-in tool's name and have calls to it silently
+    routed there instead -- a name that looks internal but isn't must be
+    visibly external, not merely happen to still resolve correctly today.
+    """
     name_count: dict[str, int] = {}
     for stl in server_tool_lists:
         for tool in stl.tools:
@@ -89,7 +102,8 @@ def resolve_name_collisions(server_tool_lists: Sequence[ServerToolList]) -> list
     resolved: list[ResolvedTool] = []
     for stl in server_tool_lists:
         for tool in stl.tools:
-            public_name = f"{stl.server_id}__{tool.name}" if name_count[tool.name] > 1 else tool.name
+            needs_prefix = name_count[tool.name] > 1 or tool.name in reserved_names
+            public_name = f"{stl.server_id}__{tool.name}" if needs_prefix else tool.name
             resolved.append(
                 ResolvedTool(
                     public_name=public_name,
@@ -105,7 +119,8 @@ def resolve_name_collisions(server_tool_lists: Sequence[ServerToolList]) -> list
 async def discover_and_resolve(
     server_uris: Sequence[str],
     client_factory: ClientFactory,
+    reserved_names: frozenset[str] = frozenset(),
 ) -> list[ResolvedTool]:
     """Convenience wrapper: discover across all servers, then resolve name collisions."""
     server_tool_lists = await discover_tools_multi_server(server_uris, client_factory)
-    return resolve_name_collisions(server_tool_lists)
+    return resolve_name_collisions(server_tool_lists, reserved_names)
