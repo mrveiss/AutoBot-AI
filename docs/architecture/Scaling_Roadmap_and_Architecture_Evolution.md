@@ -2,6 +2,16 @@
 
 > **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
 
+> **Superseded premise (#16361):** the `autobot/chat-agent:latest` / `rag-agent` /
+> `npu-agent` container images this roadmap scales out below never existed as
+> separate builds — their source `.Dockerfile`s built nothing reachable and were
+> removed. Today the chat, RAG, research and knowledge agents run in-process
+> inside the backend container (`autobot-backend/agents/`), invoked directly by
+> `autobot-backend/agents/agent_orchestration/coordinator.py`. A future move to
+> per-agent scaling, as this roadmap outlines, would first require extracting
+> those agents into independently deployable services — that extraction has not
+> happened, so the examples below are aspirational, not current state.
+
 ## Current State: Docker Compose (Small Scale)
 **Target**: 1-10 concurrent users, single server
 
@@ -45,6 +55,8 @@ services:
       - autobot-cluster
 
   autobot-agents:
+    # Illustrative only (#16361): no autobot/chat-agent image is built today —
+    # the chat agent runs in-process in the backend container.
     image: autobot/chat-agent:latest
     deploy:
       replicas: 10  # Distributed across nodes
@@ -77,7 +89,8 @@ services:
 
 #### Native Log Collection (No Setup Required)
 ```bash
-# Kubernetes automatically provides:
+# Kubernetes automatically provides (illustrative paths for a future
+# per-agent split that hasn't happened -- #16361):
 /var/log/containers/autobot-chat-agent-123_default_chat-abc123.log
 /var/log/containers/autobot-rag-agent-456_default_rag-def456.log
 /var/log/containers/autobot-npu-agent-789_default_npu-ghi789.log
