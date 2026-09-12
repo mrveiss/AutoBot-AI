@@ -71,9 +71,9 @@ sys.modules["services"] = _svc_pkg
 for _m in ("sqlalchemy", "sqlalchemy.ext", "sqlalchemy.ext.asyncio", "sqlalchemy.orm"):
     sys.modules[_m] = _MagicMock()
 
-# models.database shim — role_registry uses SyncType + Role.
+# models.database shim (SyncType + Role); real __path__ so models.manifest resolves too (#16025).
 _models_pkg = _types.ModuleType("models")
-_models_pkg.__path__ = []  # type: ignore[assignment]
+_models_pkg.__path__ = [str(_Path(__file__).parent.parent.parent / "models")]  # type: ignore[assignment]
 sys.modules["models"] = _models_pkg
 
 _models_db = _types.ModuleType("models.database")
@@ -144,7 +144,7 @@ def test_role_names_are_unique():
 def test_postgres_role_present():
     role = _role("postgres")
     assert role["display_name"] == "PostgreSQL"
-    assert role["systemd_service"] == "postgresql"
+    assert role["systemd_service"] == ["postgresql"]  # #16025: manifest-derived sequence
     assert role["required"] is True
     assert role["auto_restart"] is True
     # #12170: postgres now has a dedicated deploy playbook (was None → 422).
@@ -191,7 +191,7 @@ def test_postgres_dependencies():
 def test_scheduler_role_present():
     role = _role("scheduler")
     assert role["display_name"] == "Celery Beat Scheduler"
-    assert role["systemd_service"] == "autobot-celery-beat"
+    assert role["systemd_service"] == ["autobot-celery-beat"]  # #16025: manifest-derived sequence
     assert role["required"] is True
     assert role["auto_restart"] is True
     # #12083: "deploy-backend.yml" never existed under ansible/ (FileNotFoundError
@@ -268,7 +268,7 @@ def test_vnc_role_has_non_empty_target_path():
     it due to the old guard that only checked target_path (#9965)."""
     role = _role("vnc")
     assert role["target_path"], "vnc target_path must be non-empty so role_detector detects it"
-    assert role["systemd_service"] == "tigervncserver"
+    assert role["systemd_service"] == ["tigervncserver"]  # #16025: no manifest -- wrapped as a sequence
     assert role["required"] is False
 
 

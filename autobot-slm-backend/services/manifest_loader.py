@@ -17,6 +17,14 @@ Environment:
     Read through ``autobot_shared.env_utils.env_int``, as the other SLM knobs
     are. Documented here rather than in ``autobot_shared/env_registry.py``:
     that registry holds ``AUTOBOT_*`` names and carries no ``SLM_*`` entry.
+
+    ``SLM_INFRA_BASE_DIR`` -- overrides where ``autobot-infrastructure/`` is
+    read from, default ``$AUTOBOT_BASE_DIR/autobot-infrastructure``. Kept
+    separate from ``AUTOBOT_BASE_DIR`` (#16025) because ``role_registry.py``
+    reads that same variable for the unrelated deploy *target* directory
+    (``/opt/autobot`` in production); a test or dev host pointing manifests at
+    the repo's own ``autobot-infrastructure/`` must not also redirect every
+    role's deploy target.
 """
 
 import logging
@@ -34,7 +42,10 @@ logger = logging.getLogger(__name__)
 
 # Base dir where autobot-infrastructure/ lives on the SLM server
 _AUTOBOT_BASE = Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
-_INFRA_BASE = _AUTOBOT_BASE / "autobot-infrastructure"
+# #16025: independent override -- see the module docstring for why this is
+# not just AUTOBOT_BASE_DIR / "autobot-infrastructure".
+_INFRA_BASE_OVERRIDE = os.environ.get("SLM_INFRA_BASE_DIR")
+_INFRA_BASE = Path(_INFRA_BASE_OVERRIDE) if _INFRA_BASE_OVERRIDE else (_AUTOBOT_BASE / "autobot-infrastructure")
 
 # Cache TTL in seconds, env-backed rather than a bare literal (#16026): a
 # manifest is an operator-edited file, so the staleness window has to be tunable

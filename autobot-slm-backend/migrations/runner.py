@@ -76,6 +76,8 @@ MIGRATIONS = [
     # already-migrated design). role_permissions and audit_logs never opted
     # into TimestampMixin, so they need the columns added — mirrors #10636.
     "add_role_permission_audit_log_timestamps",
+    # Issue #16025: roles.systemd_service becomes JSON (a role can own >1 unit).
+    "widen_systemd_service_to_sequence",
 ]
 
 
