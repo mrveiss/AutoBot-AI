@@ -575,7 +575,11 @@ async def _get_connector_bridged_secret(secret_id: str, owner_id: str) -> Dict |
     """Metadata for a connector-bridged secret, never its raw credential (#16428).
 
     Returns ``None`` on not-found so the caller can fall through, same
-    contract as the other two stores this dual-read already tries.
+    contract as the other two stores this dual-read already tries. Carries
+    no ``value`` key at all -- like ``SecretModel`` (the legacy CREATE/PUT
+    response shape), which has no such field either; a caller wanting a
+    guaranteed-present ``value`` key (``_get_secret_dual_read``, GET's own
+    contract) adds it itself.
     """
     secret = await asyncio.get_running_loop().run_in_executor(
         None,
@@ -586,7 +590,7 @@ async def _get_connector_bridged_secret(secret_id: str, owner_id: str) -> Dict |
     # #16428: normalise to the same "type" key create_secret's connector-bridge
     # response and the legacy path both use -- SecretsService's own row shape
     # names it "secret_type".
-    secret = {**secret, "value": None}
+    secret = dict(secret)
     secret["type"] = secret.pop("secret_type", None)
     return secret
 
@@ -609,7 +613,12 @@ async def _get_secret_dual_read(secret_id: str, chat_id: str | None, owner_id: s
     secret = await asyncio.to_thread(secrets_manager.get_secret, secret_id, chat_id=chat_id)
     if secret is not None:
         return secret
-    return await _get_connector_bridged_secret(secret_id, owner_id)
+    bridged = await _get_connector_bridged_secret(secret_id, owner_id)
+    if bridged is None:
+        return None
+    # GET's own contract: every result carries a "value" key, real for a
+    # legacy secret (above) or None for a bridged one -- never absent.
+    return {**bridged, "value": None}
 
 
 # API Endpoints
