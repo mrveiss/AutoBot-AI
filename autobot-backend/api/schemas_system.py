@@ -3560,7 +3560,11 @@ class SecretCreateRequest(BaseModel):
     @model_validator(mode="after")
     def _validate_value_or_connector_bridge(self) -> "SecretCreateRequest":
         if self.connector_id is not None:
-            if not self.auth_type or not self.credentials:
+            # `credentials={}` is a present-but-incomplete dict, not an absent
+            # one -- whether its fields satisfy auth_type's schema is
+            # validate_config_against_schema's job (_create_connector_bridged_secret),
+            # not this presence check's.
+            if not self.auth_type or self.credentials is None:
                 raise ValueError("connector_id requires both auth_type and credentials")
         elif self.value is None:
             raise ValueError("value is required unless connector_id is set")
