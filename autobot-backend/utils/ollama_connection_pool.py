@@ -7,6 +7,21 @@ Ollama Connection Pool Manager
 
 Manages connection pooling for Ollama API calls to prevent resource contention
 and improve performance across multiple concurrent requests.
+
+**Superseded (#16527):** this pool has zero production callers — every caller
+that reaches the live chat/stream path uses ``llm_shared.providers.ollama_provider
+.OllamaProvider`` directly, never ``llm_shared.adapters.ollama_adapter.OllamaAdapter``
+(the only module that ever constructed this pool). Its two jobs are both owned
+elsewhere now: ``acquire_connection()`` borrows its session from
+``autobot_shared.http_client_manager.HTTPClientManager`` via ``tracked_session()``
+(see ``ollama_connection_pool_test.py``), which already pools the underlying TCP
+connections for every provider, not just Ollama; and the admission-control job
+(bound concurrent requests) is now ``llm_shared.base_provider.BaseProvider``'s
+per-provider ``asyncio.Semaphore``, sized from ``LLMSettings.max_concurrent_requests``,
+which covers Ollama automatically since ``OllamaProvider`` subclasses
+``BaseProvider``. Kept in-tree (not deleted) pending a dedicated removal PR once
+that semaphore has run in production — see the architecture decision in
+``docs/developer/ARCHITECTURE_EXCEPTIONS.md`` and the removal follow-up, #16539.
 """
 
 import asyncio

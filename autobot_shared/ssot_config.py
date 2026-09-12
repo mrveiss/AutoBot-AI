@@ -273,17 +273,17 @@ class LLMConfig(RedactedSettings):
     # Default provider for all models (can be overridden per-model)
     provider: str = Field(default="ollama", alias="AUTOBOT_LLM_PROVIDER")
 
-    # LLM cost-efficiency toggles (#10597)
-    # Prompt caching is a pure cost win → default on.  Chat tiered routing
-    # downgrades models by complexity (precision-sensitive) → default off until
-    # validated via knowledge/rag_benchmarks.py.
+    # LLM cost-efficiency toggles (#10597). Chat tiered routing downgrades models by
+    # complexity (precision-sensitive) so it defaults off until validated via
+    # knowledge/rag_benchmarks.py; the rest are pure cost wins, default on.
     llm_prompt_cache_default: bool = Field(default=True, alias="AUTOBOT_LLM_PROMPT_CACHE_DEFAULT")
     chat_tiered_routing: bool = Field(default=False, alias="AUTOBOT_CHAT_TIERED_ROUTING")
-    # Response cache for chat(): only near-deterministic, safely-reusable
-    # requests are cached (low temperature, no tools/structured-output/thinking).
-    # Above this temperature responses must vary, so they are never cached.
+    # Response cache for chat(): only near-deterministic, safely-reusable requests are cached.
     llm_response_cache: bool = Field(default=True, alias="AUTOBOT_LLM_RESPONSE_CACHE")
     llm_cache_max_temperature: float = Field(default=0.3, alias="AUTOBOT_LLM_CACHE_MAX_TEMPERATURE")
+    # Extractive prompt compression on chat()/stream() (#16526) — pure token-cost win, default on.
+    llm_prompt_compression_enabled: bool = Field(default=True, alias="AUTOBOT_LLM_PROMPT_COMPRESSION_ENABLED")
+    llm_prompt_compression_min_chars: int = Field(default=100, alias="AUTOBOT_LLM_PROMPT_COMPRESSION_MIN_CHARS")
 
     # Cross-vendor second-opinion verifier tier (#12618). A second LLM call on a
     # genuinely distinct provider doubles spend on the verification path, so this
