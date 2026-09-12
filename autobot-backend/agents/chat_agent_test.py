@@ -156,3 +156,82 @@ async def test_get_mcp_tools_prompt_falls_back_to_stale_cache_on_refresh_error()
     # Stale tools should still be returned despite the refresh error
     assert "## Available MCP Tools" in result
     assert "search_knowledge_base" in result
+
+
+# ---------------------------------------------------------------------------
+# External MCP server tools (#11542)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_external_mcp_tools_appended_to_prompt():
+    """A tool from an admin-configured external server is listed alongside internal tools."""
+    from agents.chat_agent import ChatAgent
+    from type_defs.mcp import MCPToolDefinition
+
+    external_tool = MCPToolDefinition.model_validate(
+        {"name": "external_search", "description": "Search an external server", "inputSchema": {"type": "object"}}
+    )
+    mock_bridge = MagicMock()
+    mock_bridge.list_tools = AsyncMock(return_value=[external_tool])
+
+    with (
+        patch(
+            "services.mcp_dispatch.get_mcp_dispatcher",
+            return_value=_make_mock_dispatcher([_SAMPLE_TOOL_DEF]),
+        ),
+        patch("services.mcp_external_bridge.get_mcp_external_bridge", return_value=mock_bridge),
+        patch.object(ChatAgent, "__init__", lambda self: None),
+    ):
+        agent = ChatAgent.__new__(ChatAgent)
+        result = await agent._get_mcp_tools_prompt()
+
+    assert "search_knowledge_base" in result
+    assert "external_search" in result
+    assert "Search an external server" in result
+
+
+@pytest.mark.asyncio
+async def test_external_mcp_tools_alone_still_produce_a_section():
+    """External tools alone (no internal tools registered) still produce a prompt section."""
+    from agents.chat_agent import ChatAgent
+    from type_defs.mcp import MCPToolDefinition
+
+    external_tool = MCPToolDefinition.model_validate(
+        {"name": "external_search", "description": "Search an external server", "inputSchema": {"type": "object"}}
+    )
+    mock_bridge = MagicMock()
+    mock_bridge.list_tools = AsyncMock(return_value=[external_tool])
+
+    with (
+        patch("services.mcp_dispatch.get_mcp_dispatcher", return_value=_make_mock_dispatcher([])),
+        patch("services.mcp_external_bridge.get_mcp_external_bridge", return_value=mock_bridge),
+        patch.object(ChatAgent, "__init__", lambda self: None),
+    ):
+        agent = ChatAgent.__new__(ChatAgent)
+        result = await agent._get_mcp_tools_prompt()
+
+    assert "## Available MCP Tools" in result
+    assert "external_search" in result
+
+
+@pytest.mark.asyncio
+async def test_external_mcp_discovery_failure_degrades_to_internal_tools_only():
+    """A broken external bridge never breaks the internal-tools prompt section."""
+    from agents.chat_agent import ChatAgent
+
+    mock_bridge = MagicMock()
+    mock_bridge.list_tools = AsyncMock(side_effect=RuntimeError("all servers down"))
+
+    with (
+        patch(
+            "services.mcp_dispatch.get_mcp_dispatcher",
+            return_value=_make_mock_dispatcher([_SAMPLE_TOOL_DEF]),
+        ),
+        patch("services.mcp_external_bridge.get_mcp_external_bridge", return_value=mock_bridge),
+        patch.object(ChatAgent, "__init__", lambda self: None),
+    ):
+        agent = ChatAgent.__new__(ChatAgent)
+        result = await agent._get_mcp_tools_prompt()
+
+    assert "search_knowledge_base" in result

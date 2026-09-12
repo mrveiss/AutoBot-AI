@@ -991,6 +991,101 @@ def _build_mcp_approval_message(
     )
 
 
+def _build_schema_validation_error(
+    tool_name: str,
+    tool: dict[str, Any],
+    arguments: dict[str, Any],
+    tool_call: dict[str, Any],
+    max_schema_retries: int,
+    execution_results: list[dict[str, Any]],
+) -> WorkflowMessage | None:
+    """Validate *arguments* against tool's input_schema; None when valid (#4482).
+
+    Extracted from _try_mcp_dispatch (#11542, keeps the parent under 65 lines).
+    Appends to *execution_results* and returns a structured error
+    WorkflowMessage on failure, so the agent loop can feed it back as a
+    tool_result and self-correct. The retry counter is owned by the caller
+    (agent loop); this only surfaces the error clearly.
+    """
+    input_schema = tool.get("input_schema", {})
+    if not input_schema:
+        return None
+    schema_error = validate_tool_arguments(tool_name, arguments, input_schema)
+    if schema_error is None:
+        return None
+
+    retries_left = max_schema_retries - tool_call.get("_schema_retry_count", 0)
+    logger.info(
+        "[Issue #4482] Schema validation error for %s (retries_left=%d): %s",
+        tool_name,
+        retries_left,
+        schema_error["error"],
+    )
+    execution_results.append(
+        {
+            "tool": tool_name,
+            "status": "schema_error",
+            "error": schema_error["error"],
+            "schema_validation_failed": True,
+            "retries_left": retries_left,
+        }
+    )
+    return WorkflowMessage(
+        type="tool_result",
+        content=schema_error["error"],
+        metadata={
+            "tool_name": tool_name,
+            "schema_validation_failed": True,
+            "retries_left": retries_left,
+            "self_correction_hint": (
+                f"Fix the argument errors above and retry '{tool_name}' "
+                f"with corrected arguments. {retries_left} attempt(s) remaining."
+            ),
+        },
+    )
+
+
+async def _run_before_tool_execute_hook(
+    tool_name: str,
+    tool: dict[str, Any],
+    arguments: dict[str, Any],
+    role: str,
+    session_id: str,
+) -> WorkflowMessage | None:
+    """Run BEFORE_TOOL_EXECUTE for an internal-registry tool; None means proceed.
+
+    Extracted from _try_mcp_dispatch (#11542, keeps the parent under 65
+    lines). Issue #4261: wires the hook. Issue #14420: forwards the tool's
+    declared permission requirement (#13228 stage 1, resolved onto the
+    registry entry as `required_permission`) and the caller's RBAC role so
+    PermissionEnforcementExtension has something real to decide against.
+    """
+    should_execute = await _emit_before_tool_execute(
+        tool_name,
+        arguments,
+        session_id,
+        tool_permission=tool.get("required_permission"),
+        user_role=role,
+    )
+    if should_execute:
+        return None
+
+    logger.info("[Issue #4261] Tool execution cancelled by BEFORE_TOOL_EXECUTE hook: %s", tool_name)
+    cancellation_metadata = {"tool_name": tool_name, "cancelled_by_hook": True}
+    # Issue #14420 (review): the agent loop cannot otherwise tell a
+    # permission denial from any other hook veto and may retry the same
+    # call forever. A declared permission requirement is the only signal
+    # available at this call site without deeper hook introspection - the
+    # PermissionError detail itself correctly stays server-side.
+    if tool.get("required_permission") is not None:
+        cancellation_metadata["reason"] = "permission_denied"
+    return WorkflowMessage(
+        type="error",
+        content=f"Tool execution cancelled: {tool_name}",
+        metadata=cancellation_metadata,
+    )
+
+
 async def _try_mcp_dispatch(
     tool_name: str,
     tool_call: dict[str, Any],
@@ -1025,78 +1120,25 @@ async def _try_mcp_dispatch(
 
     tool = dispatcher.find_tool(tool_name)
     if tool is None:
-        return None
+        # #11542: not in the internal-bridge registry — try the standalone
+        # external-MCP-server bridge before reporting unknown-tool. Kept
+        # separate from `dispatcher` above: external tools are admin-
+        # configured at runtime and can never carry a pre-declared
+        # mcp_tool_permissions entry, so they cannot pass through
+        # MCPDispatcher.dispatch()'s fail-closed "undeclared" RBAC gate.
+        return await _try_external_mcp_dispatch(tool_name, tool_call, execution_results, session_id=session_id)
 
     arguments = tool_call.get("arguments", {})
 
-    # Issue #4482: Validate arguments against the tool's input_schema before
-    # dispatching.  Return a structured error WorkflowMessage so the agent
-    # loop can feed it back as a tool_result and retry.  The retry counter is
-    # owned by the caller (agent loop); here we just surface the error clearly.
-    input_schema = tool.get("input_schema", {})
-    if input_schema:
-        schema_error = validate_tool_arguments(tool_name, arguments, input_schema)
-        if schema_error is not None:
-            retries_left = max_schema_retries - tool_call.get("_schema_retry_count", 0)
-            logger.info(
-                "[Issue #4482] Schema validation error for %s (retries_left=%d): %s",
-                tool_name,
-                retries_left,
-                schema_error["error"],
-            )
-            execution_results.append(
-                {
-                    "tool": tool_name,
-                    "status": "schema_error",
-                    "error": schema_error["error"],
-                    "schema_validation_failed": True,
-                    "retries_left": retries_left,
-                }
-            )
-            return WorkflowMessage(
-                type="tool_result",
-                content=schema_error["error"],
-                metadata={
-                    "tool_name": tool_name,
-                    "schema_validation_failed": True,
-                    "retries_left": retries_left,
-                    "self_correction_hint": (
-                        f"Fix the argument errors above and retry '{tool_name}' "
-                        f"with corrected arguments. {retries_left} attempt(s) remaining."
-                    ),
-                },
-            )
-
-    # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for MCP tools
-    # Issue #14420: forward the tool's declared permission requirement
-    # (#13228 stage 1, resolved onto the registry entry as
-    # `required_permission`) and the caller's RBAC role so
-    # PermissionEnforcementExtension has something real to decide against.
-    should_execute = await _emit_before_tool_execute(
-        tool_name,
-        arguments,
-        session_id,
-        tool_permission=tool.get("required_permission"),
-        user_role=role,
+    schema_error_message = _build_schema_validation_error(
+        tool_name, tool, arguments, tool_call, max_schema_retries, execution_results
     )
-    if not should_execute:
-        logger.info(
-            "[Issue #4261] Tool execution cancelled by BEFORE_TOOL_EXECUTE hook: %s",
-            tool_name,
-        )
-        cancellation_metadata = {"tool_name": tool_name, "cancelled_by_hook": True}
-        # Issue #14420 (review): the agent loop cannot otherwise tell a
-        # permission denial from any other hook veto and may retry the same
-        # call forever. A declared permission requirement is the only signal
-        # available at this call site without deeper hook introspection - the
-        # PermissionError detail itself correctly stays server-side.
-        if tool.get("required_permission") is not None:
-            cancellation_metadata["reason"] = "permission_denied"
-        return WorkflowMessage(
-            type="error",
-            content=f"Tool execution cancelled: {tool_name}",
-            metadata=cancellation_metadata,
-        )
+    if schema_error_message is not None:
+        return schema_error_message
+
+    cancellation_message = await _run_before_tool_execute_hook(tool_name, tool, arguments, role, session_id)
+    if cancellation_message is not None:
+        return cancellation_message
 
     try:
         mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role)
@@ -1144,6 +1186,67 @@ async def _try_mcp_dispatch(
             exc_info=True,
         )
         raise
+
+
+async def _try_external_mcp_dispatch(
+    tool_name: str,
+    tool_call: dict[str, Any],
+    execution_results: list[dict[str, Any]],
+    session_id: str = "",
+) -> WorkflowMessage | None:
+    """Dispatch tool_name via the admin-configured external MCP server bridge (#11542).
+
+    Refreshes the bridge's registry when it does not yet know tool_name — the
+    registry is normally warmed by _get_mcp_tools_prompt() building the
+    system prompt earlier this turn, but this call must not depend on that
+    having happened. Returns None when the external bridge doesn't know
+    tool_name either, so the caller falls through to the unknown-tool error
+    exactly as it did before #11542.
+
+    Deliberately does NOT call _emit_before_tool_execute(): #14523 made that
+    hook's PermissionEnforcementExtension *raise* PermissionError for any
+    tool_permission=None ("undeclared tool, refused by default") — and an
+    admin-configured external tool can never carry an entry in the static
+    mcp_tool_permissions table its declaration comes from. Calling it as-is
+    would reject every external tool call. Whether external tools need their
+    own permission model (and what it should be) is an open design question,
+    not resolved by this change — see the PR body.
+    """
+    from services.mcp_external_bridge import get_mcp_external_bridge
+
+    bridge = get_mcp_external_bridge()
+    if not bridge.has_tool(tool_name):
+        await bridge.list_tools()
+    if not bridge.has_tool(tool_name):
+        return None
+
+    arguments = tool_call.get("arguments", {})
+
+    try:
+        call_result = await bridge.call_tool(tool_name, arguments, user_id=session_id or None)
+    except Exception as e:
+        await _emit_tool_error(tool_name, e, session_id, {})
+        logger.error("[Issue #11542] external MCP dispatch error for tool %s: %s", tool_name, e, exc_info=True)
+        raise
+
+    result_text = str(call_result.result if call_result.success else call_result.error)
+    result_text = await _emit_after_tool_execute(tool_name, result_text, session_id, {})
+
+    execution_results.append(
+        {
+            "tool": tool_name,
+            "bridge": "external",
+            "result": result_text,
+            "status": "success" if call_result.success else "error",
+        }
+    )
+    msg_type = "tool_result" if call_result.success else "error"
+    logger.info("[Issue #11542] external MCP dispatch: tool=%s success=%s", tool_name, call_result.success)
+    return WorkflowMessage(
+        type=msg_type,
+        content=f"[external] {result_text}",
+        metadata={"tool_name": tool_name, "bridge": "external", "mcp_dispatch": True},
+    )
 
 
 async def _fetch_single_page(entry: dict) -> dict:
