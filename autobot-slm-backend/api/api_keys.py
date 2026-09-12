@@ -117,7 +117,14 @@ async def list_api_keys(
 
 @router.get("/scopes", response_model=APIScopesResponse)
 async def get_api_scopes() -> APIScopesResponse:
-    """Get available API key scopes (no authentication required)."""
+    """Get the catalogue of available API key scopes. Unauthenticated by design (#16040 AC7).
+
+    The owner ruled on 2026-09-11 to keep this route open. It returns only the
+    static scope names and their descriptions (``API_KEY_SCOPES``): no keys,
+    no users, no tenant data. The key-creation form needs that catalogue before
+    it can offer a choice. ``middleware/security_headers.py`` allowlists this
+    path for the same reason.
+    """
     return APIScopesResponse(scopes=API_KEY_SCOPES)
 
 

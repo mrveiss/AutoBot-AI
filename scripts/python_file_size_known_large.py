@@ -74,7 +74,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/analytics_quality.py": 1730,
     "autobot-backend/api/analytics_root_cause_test.py": 628,
     "autobot-backend/api/api_endpoint_migrations_test.py": 31040,
-    "autobot-backend/api/auth.py": 770,
+    "autobot-backend/api/auth.py": 734,
     "autobot-backend/api/batch_jobs.py": 964,
     "autobot-backend/api/browser_mcp.py": 1340,
     "autobot-backend/api/cache_management.py": 779,
@@ -501,7 +501,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 778,
     "autobot-slm-backend/user_management/services/user_service.py": 863,
-    "autobot_shared/auth/permissions.py": 631,
     "autobot_shared/env_registry.py": 1225,  # #15774: logging component split to env_registry_logging.py
     "autobot_shared/monitoring/prometheus_metrics.py": 954,
     "autobot_shared/network_constants.py": 616,

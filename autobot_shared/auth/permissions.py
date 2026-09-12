@@ -25,6 +25,8 @@ Search for callers of the old name across both backends before deleting.
 from enum import Enum
 from typing import Dict, List
 
+from autobot_shared.auth.permission_seed import build_system_permissions, build_system_roles
+
 
 class Permission(str, Enum):
     """All API permissions in the system.
@@ -74,6 +76,19 @@ class Permission(str, Enum):
     SECURITY_VIEW = "security.view"
     SECURITY_AUDIT = "security.audit"
     SECURITY_MANAGE = "security.manage"
+
+    # === Chat, teams and webhooks (#16270) ===
+    # Concepts that API-key scopes and the frontend already use, with no
+    # counterpart here. Migration 062 folded chat:* into api.* and teams:* into
+    # admin.users.*. The owner ruled for dedicated members instead, so a
+    # chat-only key cannot reach api.write.
+    CHAT_USE = "chat.use"
+    CHAT_HISTORY = "chat.history"
+    TEAMS_READ = "teams.read"
+    TEAMS_CREATE = "teams.create"
+    TEAMS_MANAGE = "teams.manage"
+    TEAMS_DELETE = "teams.delete"
+    WEBHOOKS_TRIGGER = "webhooks.trigger"
 
     # === System Administration ===
     ADMIN_USERS_READ = "admin.users.read"
@@ -270,6 +285,12 @@ def is_admin_role(role: "Role | str | None") -> bool:
 # Canonical role-to-permission mappings.
 # Both autobot-backend (auth_rbac.py) and autobot-slm-backend import this dict
 # so that a permission added here is enforced by both services automatically.
+# #16270 grants.
+# chat.use / chat.history are behaviour-preserving. Every chat route is
+# login-only today (autobot-backend/api/chat*.py), so every role that can log
+# in holds them; superadmin stays empty by design.
+# teams.* and webhooks.trigger are a policy choice: admin only. teams.* follows
+# the #16276 ruling; webhooks.trigger gates nothing yet.
 ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     Role.ADMIN: [
         Permission.API_READ,
@@ -317,6 +338,14 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.SANDBOX_MANAGE,
         Permission.SERVICE_MANAGEMENT,
         Permission.SHELL_EXECUTE,
+        # #16270: admin holds every member (roles_are_canonical_test).
+        Permission.CHAT_USE,
+        Permission.CHAT_HISTORY,
+        Permission.TEAMS_READ,
+        Permission.TEAMS_CREATE,
+        Permission.TEAMS_MANAGE,
+        Permission.TEAMS_DELETE,
+        Permission.WEBHOOKS_TRIGGER,
         # #13228: per-bridge MCP grants — mirrors this role's MCP_READ/MCP_EXECUTE level.
         Permission.MCP_BROWSER_READ,
         Permission.MCP_DATABASE_READ,
@@ -360,6 +389,8 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     Role.SUPERADMIN: [],
     Role.OPERATOR: [
         Permission.API_READ,
+        Permission.CHAT_USE,
+        Permission.CHAT_HISTORY,
         Permission.API_WRITE,
         Permission.KNOWLEDGE_READ,
         Permission.KNOWLEDGE_WRITE,
@@ -395,6 +426,8 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     ],
     Role.ANALYST: [
         Permission.API_READ,
+        Permission.CHAT_USE,
+        Permission.CHAT_HISTORY,
         Permission.KNOWLEDGE_READ,
         Permission.ANALYTICS_VIEW,
         Permission.ANALYTICS_EXPORT,
@@ -416,6 +449,8 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     ],
     Role.EDITOR: [
         Permission.API_READ,
+        Permission.CHAT_USE,
+        Permission.CHAT_HISTORY,
         Permission.API_WRITE,
         Permission.KNOWLEDGE_READ,
         Permission.KNOWLEDGE_WRITE,
@@ -439,6 +474,8 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     ],
     Role.USER: [
         Permission.API_READ,
+        Permission.CHAT_USE,
+        Permission.CHAT_HISTORY,
         Permission.KNOWLEDGE_READ,
         Permission.ANALYTICS_VIEW,
         Permission.AGENT_VIEW,
@@ -457,6 +494,8 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     ],
     Role.READONLY: [
         Permission.API_READ,
+        Permission.CHAT_USE,
+        Permission.CHAT_HISTORY,
         Permission.KNOWLEDGE_READ,
         Permission.ANALYTICS_VIEW,
         Permission.AGENT_VIEW,
@@ -525,59 +564,10 @@ def role_has_permission(role: "Role | str | None", permission: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# DB seeding helpers — generated from canonical sources above so a single edit
-# to Permission / ROLE_PERMISSIONS propagates automatically to both.
+# DB seeding rows, generated from the canonical sources above, so a single edit
+# to Permission / ROLE_PERMISSIONS propagates to both. The builders live in
+# ``permission_seed`` (#16270); the values are still computed and exported here.
 # ---------------------------------------------------------------------------
-
-# Legacy colon-style secrets vault permissions required by secrets_authz policy
-# (#10088).  Not represented in the Permission enum (colon composite names) but
-# must appear in SYSTEM_PERMISSIONS and relevant SYSTEM_ROLES entries.
-_SECRETS_VAULT_LEGACY: List[tuple] = [
-    ("secrets:team:read", "secrets", "team:read", "Read team-vault secrets"),
-    ("secrets:team:write", "secrets", "team:write", "Write team-vault secrets"),
-    ("secrets:team:share", "secrets", "team:share", "Share team-vault secrets"),
-    ("secrets:team:revoke", "secrets", "team:revoke", "Revoke team-vault secret grants"),
-    ("secrets:role:read", "secrets", "role:read", "Read role-vault secrets"),
-    ("secrets:role:write", "secrets", "role:write", "Write role-vault secrets"),
-    ("secrets:role:share", "secrets", "role:share", "Share role-vault secrets"),
-    ("secrets:role:revoke", "secrets", "role:revoke", "Revoke role-vault secret grants"),
-]
-
-_SECRETS_ADMIN_PERMS: List[str] = [row[0] for row in _SECRETS_VAULT_LEGACY]
-_SECRETS_USER_PERMS: List[str] = [
-    "secrets:team:read",
-    "secrets:team:write",
-    "secrets:role:read",
-    "secrets:role:write",
-]
-
-
-def _perm_description(perm: Permission) -> str:
-    """Generate a human-readable description from a dot-style permission value."""
-    parts = perm.value.split(".")
-    resource = ".".join(parts[:-1]) if len(parts) > 1 else perm.value
-    action = parts[-1] if len(parts) > 1 else perm.value
-    return f"{action.capitalize()} {resource}"
-
-
-def _build_system_permissions() -> List[tuple]:
-    """Generate SYSTEM_PERMISSIONS from the canonical Permission enum.
-
-    Each entry: (name, resource, action, description).
-    The 'name' field equals the Permission enum value (dot-style), making it
-    the primary key used by DB seeding and parity tests.  Legacy colon-style
-    secrets:* entries are appended because the secrets_authz policy uses names
-    not representable in the dot-style enum (#10088).
-    """
-    rows: List[tuple] = []
-    for perm in Permission:
-        parts = perm.value.split(".")
-        resource = ".".join(parts[:-1]) if len(parts) > 1 else perm.value
-        action = parts[-1] if len(parts) > 1 else perm.value
-        rows.append((perm.value, resource, action, _perm_description(perm)))
-    rows.extend(_SECRETS_VAULT_LEGACY)
-    return rows
-
 
 _ROLE_META: Dict[Role, Dict] = {
     Role.ADMIN: {"description": "Full administrative access", "priority": 100},
@@ -594,38 +584,12 @@ _ROLE_META: Dict[Role, Dict] = {
     Role.READONLY: {"description": "Read-only access", "priority": 10},
 }
 
-
-def _build_system_roles() -> Dict[str, Dict]:
-    """Generate SYSTEM_ROLES from ROLE_PERMISSIONS.
-
-    Each role entry carries every dot-style permission from ROLE_PERMISSIONS plus
-    the legacy colon-style secrets:* permissions required by secrets_authz (#10088).
-    Priority and description come from _ROLE_META.
-    """
-    result: Dict[str, Dict] = {}
-    for role, perms in ROLE_PERMISSIONS.items():
-        dot_perms = [p.value if isinstance(p, Permission) else p for p in perms]
-        if role is Role.ADMIN:
-            extra = _SECRETS_ADMIN_PERMS
-        elif role is Role.USER:
-            extra = _SECRETS_USER_PERMS
-        else:
-            extra = []
-        meta = _ROLE_META.get(role, {"description": role.value, "priority": 0})
-        result[role.value] = {
-            "description": meta["description"],
-            "priority": meta["priority"],
-            "permissions": dot_perms + extra,
-        }
-    return result
-
-
 # Default system permissions for database seeding — generated from the canonical
 # Permission enum so it is always in sync.  Tuple layout: (name, resource, action, description).
-SYSTEM_PERMISSIONS: List[tuple] = _build_system_permissions()
+SYSTEM_PERMISSIONS: List[tuple] = build_system_permissions(Permission)
 
 # Default system roles with their permissions for database seeding — generated
 # from ROLE_PERMISSIONS so a single edit propagates here automatically.
 # Issue #744: Guest role REMOVED — security vulnerability; unauthenticated
 # requests must be rejected, not assigned guest permissions.
-SYSTEM_ROLES: Dict[str, Dict] = _build_system_roles()
+SYSTEM_ROLES: Dict[str, Dict] = build_system_roles(ROLE_PERMISSIONS, _ROLE_META)
