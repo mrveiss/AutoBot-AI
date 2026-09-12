@@ -57,6 +57,24 @@ def _function_source(name: str) -> str:
     return match.group(0)
 
 
+def _constant_lines(*names: str) -> str:
+    """The named top-level constants, verbatim, from install.sh.
+
+    `_function_source` lifts one function out of the script, so the constants
+    block above it never runs. A function that reads a script-wide constant
+    would then trip `set -u` on an unbound name and abort before its handlers,
+    which reads as the very defect this file exists to catch (#16540). Copied
+    from the script rather than restated, so the harness cannot drift from it.
+    """
+    text = _INSTALL.read_text(encoding="utf-8")
+    lines = []
+    for name in names:
+        match = re.search(rf"^readonly {re.escape(name)}=.*$", text, re.M)
+        assert match, f"readonly {name}= not found in install.sh — the function would run with it unbound"
+        lines.append(match.group(0))
+    return "\n".join(lines)
+
+
 def _curl_stub(routes: dict[str, str]) -> str:
     """A curl stub that honours `-f` the way real curl does.
 
@@ -102,6 +120,7 @@ def _run(curl_stub: str, *, function: str = "register_local_node", extra: str = 
         (bin_dir / "jq").write_text("#!/bin/sh\ncat\n", encoding="utf-8")
         (bin_dir / "jq").chmod(0o755)
 
+        constants = _constant_lines("AUTOBOT_USER", "AUTOBOT_HOME")
         script = f"""
 set -euo pipefail
 LOG_FILE={tmp}/install.log
@@ -121,6 +140,7 @@ ADMIN_PASSWORD=pw
 SLM_NODE_ID=node-1
 CODE_SOURCE=/src
 GIT_BRANCH=main
+{constants}
 {extra}
 {_function_source(function)}
 {function}
