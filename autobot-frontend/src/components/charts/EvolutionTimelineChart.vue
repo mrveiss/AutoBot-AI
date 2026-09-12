@@ -80,8 +80,8 @@ const chartOptions = computed<ApexOptions>(() => ({
     zoom: {
       enabled: true,
     },
+    // #15749: BaseChart decides `enabled` from the user's motion preference.
     animations: {
-      enabled: true,
       easing: 'easeinout',
       speed: 800,
     },

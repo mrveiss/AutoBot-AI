@@ -192,7 +192,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { KnowledgeRepository } from '@/models/repositories'
 import type { SearchResult, KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { createLogger } from '@/utils/debugUtils'
-import { scrollBehavior } from '@/composables/useReducedMotion'
+import { preferredScrollBehavior } from '@/composables/useReducedMotion'
 
 const logger = createLogger('KBSearchResultPanel')
 
@@ -326,7 +326,7 @@ function scrollListItemIntoView(index: number): void {
     const item = list.children[index] as HTMLElement | undefined
     // #14770: keyboard navigation through results should not glide for a
     // user who asked for reduced motion — the item still comes into view.
-    item?.scrollIntoView({ block: 'nearest', behavior: scrollBehavior() })
+    item?.scrollIntoView({ block: 'nearest', behavior: preferredScrollBehavior() })
   })
 }
 
