@@ -115,7 +115,7 @@ class TestConversationSummarizer:
         mock_response.content = "User asked about weather. Assistant confirmed sunny, no rain expected."
 
         mock_gateway = AsyncMock()
-        mock_gateway.chat_completion.return_value = mock_response
+        mock_gateway.chat.return_value = mock_response
 
         with patch.object(summarizer, "_get_gateway", return_value=mock_gateway):
             summary = await summarizer.summarize_messages(messages, "gpt-4")
@@ -132,7 +132,7 @@ class TestConversationSummarizer:
         mock_response.content = "[Summary: 0 earlier message(s) were summarized to preserve context.]"
 
         mock_gateway = AsyncMock()
-        mock_gateway.chat_completion.return_value = mock_response
+        mock_gateway.chat.return_value = mock_response
 
         with patch.object(summarizer, "_get_gateway", return_value=mock_gateway):
             summary = await summarizer.summarize_messages([], "gpt-4")
@@ -166,7 +166,7 @@ class TestConversationSummarizer:
         mock_response = MagicMock()
         mock_response.content = "   "
         mock_gateway = AsyncMock()
-        mock_gateway.chat_completion.return_value = mock_response
+        mock_gateway.chat.return_value = mock_response
 
         with patch.object(summarizer, "_get_gateway", return_value=mock_gateway):
             with pytest.raises(SummarizationFailed):
@@ -192,13 +192,13 @@ class TestConversationSummarizer:
         mock_response = MagicMock()
         mock_response.content = "Summary."
         mock_gateway = AsyncMock()
-        mock_gateway.chat_completion.return_value = mock_response
+        mock_gateway.chat.return_value = mock_response
 
         with patch.object(summarizer, "_get_gateway", return_value=mock_gateway):
             summary = await summarizer.summarize_messages(messages, "gpt-4")
 
         assert summary == "Summary."
-        prompt = mock_gateway.chat_completion.call_args.kwargs["messages"][0]["content"]
+        prompt = mock_gateway.chat.call_args.kwargs["messages"][0]["content"]
         assert "a real one" in prompt, "the well-formed message must still reach the summarizer"
 
     @pytest.mark.asyncio
