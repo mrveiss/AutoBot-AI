@@ -1,11 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { ApiRepository } from './ApiRepository'
-import type { AutoBotSettings, DiagnosticsReport } from '@/types/models'
-// `/api/settings/backend` returns the open-ended provider/memory/agents config
-// object typed in settings.ts (distinct from the settings-section BackendSettings
-// in models.ts). Aliased to make the endpoint semantics explicit at call sites.
-import type { BackendSettings as BackendConfig } from '@/types/settings'
+import type { DiagnosticsReport } from '@/types/models'
 import { getApiBase } from '@/config/ssot-config'
 
 /**
@@ -202,28 +198,13 @@ export class SystemRepository extends ApiRepository {
     }
   }
 
-  // Settings management
-  // Backend returns the section-keyed settings dict directly (no envelope) —
-  // see #5214 for the audit history and the rewritten AutoBotSettings shape.
-  async getSettings(): Promise<AutoBotSettings> {
-    const response = await this.get<AutoBotSettings>(`${getApiBase()}/settings/`)
-    return (response.data ?? {}) as AutoBotSettings
-  }
-
-  async updateSettings(settings: Partial<AutoBotSettings>): Promise<AutoBotSettings> {
-    const response = await this.post<AutoBotSettings>(`${getApiBase()}/settings/`, settings)
-    return (response.data ?? {}) as AutoBotSettings
-  }
-
-  async getBackendSettings(): Promise<BackendConfig> {
-    const response = await this.get<BackendConfig>(`${getApiBase()}/settings/backend`)
-    return (response.data ?? {}) as BackendConfig
-  }
-
-  async saveBackendSettings(settings: BackendConfig): Promise<BackendConfig> {
-    const response = await this.post<BackendConfig>(`${getApiBase()}/settings/backend`, { settings })
-    return (response.data ?? {}) as BackendConfig
-  }
+  // Settings management methods (getSettings/updateSettings/getBackendSettings/
+  // saveBackendSettings) removed for #16465: zero call sites anywhere in the
+  // frontend (confirmed via grep across autobot-frontend and
+  // autobot-slm-frontend for the `/backend` piece specifically). The plain
+  // `/settings/` get/save is already served live by utils/ApiClient.ts
+  // (AgentSettingsPanel.vue, BatchApiService.ts); `/settings/backend` has no
+  // equivalent anywhere and was never called.
 
   // Config-file methods removed for #5214: backend /api/settings/config returns
   // the same section-keyed settings dict as /api/settings/ (query params ignored),

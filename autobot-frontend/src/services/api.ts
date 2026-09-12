@@ -166,18 +166,11 @@ class ApiService {
     })
   }
 
-  // Settings API
-  async getSettings(): Promise<ApiResponse> {
-    return this.get(`${getApiBase()}/settings/`)
-  }
-
-  async updateSettings(settings: Record<string, unknown>): Promise<ApiResponse> {
-    return this.post(`${getApiBase()}/settings/`, settings)
-  }
-
-  async saveSettings(settings: Record<string, unknown>): Promise<ApiResponse> {
-    return this.updateSettings(settings)
-  }
+  // Settings API: getSettings/updateSettings/saveSettings removed for #16465
+  // -- zero real callers (only the now-removed useSettingsApi and this
+  // file's own integration test referenced them). Superseded by
+  // utils/ApiClient.ts's getSettings()/saveSettings(), already live via
+  // AgentSettingsPanel.vue and BatchApiService.ts.
 
   // System API
   async getSystemStatus(): Promise<ApiResponse> {
