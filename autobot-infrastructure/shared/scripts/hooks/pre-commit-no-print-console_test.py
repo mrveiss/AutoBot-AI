@@ -79,7 +79,17 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # removed print()/console.* line is in that one file. So the whole drop of 37 is those
 # call sites, with no residue for a lost-reach case to hide in. (The removed LINES
 # number 40, which is the proxy the note above warns about.)
-_KNOWN_REPO_VIOLATIONS = 322
+# 320 since #16526/#16527: services/llm_service.py's module docstring carries a
+# "Usage example::" block showing the REPL-style calls a caller would type
+# (`print(response.content)`, `print(chunk, end="", flush=True)`) -- this hook
+# scans line-by-line and cannot see that both sit inside a triple-quoted
+# docstring, so it flagged them as real print() calls. Both now carry
+# `# noqa: print`, same fix class as the #16263 entry above. MEASURED: running
+# `bash pre-commit-no-print-console autobot-backend/services/llm_service.py`
+# alone reports 0 violations post-fix (was 2), and no other tracked file
+# changed in that PR's diff, so the whole repo-wide drop of 2 is exactly those
+# two lines with no residue.
+_KNOWN_REPO_VIOLATIONS = 320
 
 
 def _test_git_env() -> dict[str, str]:

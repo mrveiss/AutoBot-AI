@@ -63,6 +63,18 @@ name: "AutoBot CodeQL Configuration"
 #   4) Symlink rejection (L143)
 #   5) File existence and type validation (L147-150)
 #   These checks prevent path traversal attacks. See #9214.
+#
+# py/clear-text-logging-sensitive-data — autobot-backend/services/llm_fallback_chain.py:123
+#   (alert #1139, fallback_model arg to track_fallback_event()'s logger.debug call)
+#   CodeQL's message cites config/defaults.py:77,304,335 as the "password" source —
+#   three unrelated _get_*_config() dict builders (memory/default-redis/task-transport
+#   config). fallback_model/primary_model are plain LLM model-name strings: traced the
+#   full chain, track_fallback_event(fallback_model=...) <- emit_fallback_success
+#   (current_model=...) <- _attempt_chat_once/_attempt_stream_once(current_model=...)
+#   <- chat()/stream()'s loop state <- the model_name/selected_model caller args on
+#   LLMService.chat()/stream(). No code path reaches any of the three config dict
+#   builders; this is the taint tracker over-generalizing a "password" key that exists
+#   elsewhere in the program, not a real flow. See #16526, #16527, PR #16546.
 
 packs:
   python:
