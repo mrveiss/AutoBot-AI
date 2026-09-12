@@ -6381,6 +6381,26 @@
       "offline": "Offline",
       "collaboratorTooltip": "Collaborator",
       "youStatus": "Your status"
+    },
+    "panel": {
+      "title": "التعاون",
+      "invite": "دعوة",
+      "closePanel": "إغلاق اللوحة",
+      "tabParticipants": "المشاركون",
+      "tabActivity": "النشاط",
+      "tabNotifications": "الإشعارات",
+      "tabInvitations": "الدعوات"
+    },
+    "invitations": {
+      "loading": "جارٍ تحميل الدعوات...",
+      "noInvitations": "لا توجد دعوات معلقة",
+      "sessionLabel": "الجلسة {id}",
+      "invitedAt": "تمت الدعوة {time}",
+      "justNow": "الآن",
+      "minutesAgo": "منذ {count} دقيقة",
+      "accept": "قبول",
+      "decline": "رفض",
+      "bellTitle": "الدعوات المعلقة"
     }
   },
   "research": {

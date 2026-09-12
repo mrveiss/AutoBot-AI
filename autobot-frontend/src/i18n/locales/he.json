@@ -5014,6 +5014,26 @@
       "roleEditor": "Editor",
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
+    },
+    "panel": {
+      "title": "שיתוף פעולה",
+      "invite": "הזמן",
+      "closePanel": "סגור פאנל",
+      "tabParticipants": "משתתפים",
+      "tabActivity": "פעילות",
+      "tabNotifications": "התראות",
+      "tabInvitations": "הזמנות"
+    },
+    "invitations": {
+      "loading": "טוען הזמנות...",
+      "noInvitations": "אין הזמנות ממתינות",
+      "sessionLabel": "פגישה {id}",
+      "invitedAt": "הוזמן {time}",
+      "justNow": "הרגע",
+      "minutesAgo": "לפני {count} דק'",
+      "accept": "קבל",
+      "decline": "דחה",
+      "bellTitle": "הזמנות ממתינות"
     }
   },
   "chat": {

@@ -16,6 +16,9 @@ import { getApiBase } from '@/config/ssot-config'
 // Create scoped logger for ApiService
 const logger = createLogger('ApiService')
 
+// #16460: matches the backend's own GET /sessions/{id}/events default (api/collaboration_events.py).
+const DEFAULT_SESSION_EVENTS_LIMIT = 50
+
 // Session collaboration response types
 export interface ParticipantResponse {
   user_id: string
@@ -29,6 +32,67 @@ export interface SessionParticipantsResponse {
   owner_id: string
   participants: ParticipantResponse[]
   total_count: number
+}
+
+export interface SessionInviteResponse {
+  success: boolean
+  session_id: string
+  invited_user_id: string
+  permission: string
+}
+
+export interface SessionRemoveResponse {
+  success: boolean
+  session_id: string
+  removed_user_id: string
+}
+
+export interface SessionShareSecretResponse {
+  success: boolean
+  secret_id: string
+  shared_with_count: number
+}
+
+export interface SessionPresenceResponse {
+  session_id: string
+  online_users: string[]
+  count: number
+}
+
+// #16460: persisted collaboration history + invitation list/respond
+export interface CollabEventResponse {
+  id: string
+  session_id: string
+  kind: string
+  user_id: string | null
+  username: string | null
+  payload: Record<string, unknown>
+  timestamp: string
+}
+
+export interface SessionEventsResponse {
+  session_id: string
+  events: CollabEventResponse[]
+  has_more: boolean
+}
+
+export interface PendingInvitationResponse {
+  session_id: string
+  from_user_id: string
+  permission: string
+  invited_at: string
+  expires_at: string | null
+}
+
+export interface MyInvitationsResponse {
+  invitations: PendingInvitationResponse[]
+}
+
+export interface InvitationRespondResponse {
+  success: boolean
+  session_id: string
+  accepted: boolean
+  permission: string | null
 }
 
 class ApiService {
@@ -105,9 +169,62 @@ class ApiService {
     return this.delete(`${getApiBase()}/chats/${chatId}`)
   }
 
-  // Session Collaboration API (Issue #3986)
+  // Session Collaboration API (Issue #3986; #16443 added the remaining
+  // api/collaboration.py endpoints -- invite/remove/share/presence)
   async getSessionParticipants(sessionId: string): Promise<SessionParticipantsResponse> {
     return this.get<SessionParticipantsResponse>(`${getApiBase()}/sessions/${sessionId}/participants`)
+  }
+
+  async inviteToSession(
+    sessionId: string,
+    userId: string,
+    permission: 'editor' | 'viewer'
+  ): Promise<SessionInviteResponse> {
+    return this.post<SessionInviteResponse>(`${getApiBase()}/sessions/${sessionId}/invite`, {
+      user_id: userId,
+      permission
+    })
+  }
+
+  async removeFromSession(sessionId: string, userId: string): Promise<SessionRemoveResponse> {
+    return this.post<SessionRemoveResponse>(`${getApiBase()}/sessions/${sessionId}/remove`, {
+      user_id: userId
+    })
+  }
+
+  async shareSecretWithSession(
+    sessionId: string,
+    secretId: string,
+    participantIds?: string[]
+  ): Promise<SessionShareSecretResponse> {
+    return this.post<SessionShareSecretResponse>(`${getApiBase()}/sessions/${sessionId}/secrets/share`, {
+      secret_id: secretId,
+      participant_ids: participantIds ?? null
+    })
+  }
+
+  async getSessionPresence(sessionId: string): Promise<SessionPresenceResponse> {
+    return this.get<SessionPresenceResponse>(`${getApiBase()}/sessions/${sessionId}/presence`)
+  }
+
+  async getSessionEvents(
+    sessionId: string,
+    limit: number = DEFAULT_SESSION_EVENTS_LIMIT,
+    before?: string
+  ): Promise<SessionEventsResponse> {
+    return this.get<SessionEventsResponse>(`${getApiBase()}/sessions/${sessionId}/events`, {
+      params: { limit, before }
+    })
+  }
+
+  async getMyInvitations(): Promise<MyInvitationsResponse> {
+    return this.get<MyInvitationsResponse>(`${getApiBase()}/sessions/invitations/mine`)
+  }
+
+  async respondToInvitation(sessionId: string, accept: boolean): Promise<InvitationRespondResponse> {
+    return this.post<InvitationRespondResponse>(`${getApiBase()}/sessions/${sessionId}/invitations/respond`, {
+      accept
+    })
   }
 
   // Workflow API

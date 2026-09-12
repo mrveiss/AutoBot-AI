@@ -6381,6 +6381,26 @@
       "offline": "Offline",
       "collaboratorTooltip": "Collaborator",
       "youStatus": "Your status"
+    },
+    "panel": {
+      "title": "Sadarbība",
+      "invite": "Uzaicināt",
+      "closePanel": "Aizvērt paneli",
+      "tabParticipants": "Dalībnieki",
+      "tabActivity": "Aktivitāte",
+      "tabNotifications": "Paziņojumi",
+      "tabInvitations": "Uzaicinājumi"
+    },
+    "invitations": {
+      "loading": "Notiek uzaicinājumu ielāde...",
+      "noInvitations": "Nav gaidošu uzaicinājumu",
+      "sessionLabel": "Sesija {id}",
+      "invitedAt": "Uzaicināts {time}",
+      "justNow": "tikko",
+      "minutesAgo": "pirms {count} min",
+      "accept": "Pieņemt",
+      "decline": "Noraidīt",
+      "bellTitle": "Gaidošie uzaicinājumi"
     }
   },
   "research": {

@@ -5014,6 +5014,26 @@
       "roleEditor": "Editor",
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
+    },
+    "panel": {
+      "title": "تعاون",
+      "invite": "مدعو کریں",
+      "closePanel": "پینل بند کریں",
+      "tabParticipants": "شرکاء",
+      "tabActivity": "سرگرمی",
+      "tabNotifications": "اطلاعات",
+      "tabInvitations": "دعوت نامے"
+    },
+    "invitations": {
+      "loading": "دعوت نامے لوڈ ہو رہے ہیں...",
+      "noInvitations": "کوئی زیر التوا دعوت نامہ نہیں",
+      "sessionLabel": "سیشن {id}",
+      "invitedAt": "مدعو کیا گیا {time}",
+      "justNow": "ابھی ابھی",
+      "minutesAgo": "{count} منٹ پہلے",
+      "accept": "قبول کریں",
+      "decline": "مسترد کریں",
+      "bellTitle": "زیر التوا دعوت نامے"
     }
   },
   "chat": {

@@ -12,6 +12,7 @@ Part of Issue #872 - Session Collaboration API (#608 Phase 3).
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_agent import (
@@ -27,6 +28,8 @@ from api.schemas_workflows import SessionPresenceResponse, SessionShareSecretRes
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
+from models.collaboration_event import CollaborationEvent
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 from user_management.database import get_async_session
 
@@ -42,8 +45,6 @@ router = APIRouter(prefix="/sessions", tags=["collaboration"])
 
 async def _get_session_collab(session_id: str, db: AsyncSession) -> SessionCollaboration | None:
     """Get session collaboration record."""
-    from sqlalchemy import select
-
     stmt = select(SessionCollaboration).where(SessionCollaboration.session_id == session_id)
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
@@ -93,8 +94,6 @@ async def _get_or_create_collab(session_id: str, owner_id: uuid.UUID, db: AsyncS
 
 async def _fetch_and_validate_secret(secret_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession):
     """Helper for share_secret_with_session. Ref: #1088."""
-    from sqlalchemy import select
-
     from models.secret import Secret
 
     stmt = select(Secret).where(Secret.id == secret_id)
@@ -131,6 +130,33 @@ def _resolve_share_recipients(
         ]:
             recipient_ids.append(uuid.UUID(uid_str))
     return recipient_ids
+
+
+async def _record_event(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    kind: str,
+    user_id: uuid.UUID | None,
+    username: str | None,
+    payload: dict,
+) -> None:
+    """Persist one collaboration event (#16460). Best-effort: a failure here
+    must never break the live broadcast or the REST call it rides alongside
+    -- see websocket/presence.py's own use of this for the same reasoning."""
+    try:
+        db.add(
+            CollaborationEvent(
+                session_id=session_id,
+                kind=kind,
+                user_id=user_id,
+                username=username,
+                payload=payload,
+            )
+        )
+        await db.flush()
+    except Exception as exc:  # noqa: BLE001 - persistence is best-effort, never breaks the caller
+        logger.warning("collaboration event persistence failed: %s", type(exc).__name__)
 
 
 # ====================================================================
@@ -354,9 +380,50 @@ async def share_secret_with_session(
             if recipient_id != user_id:  # Don't share with self
                 secret.share_with(recipient_id)
 
+        # #16460: persisted alongside the share, same transaction -- a client
+        # that reconnects later sees this in GET /{session_id}/events, not
+        # just whoever was connected to the live broadcast below.
+        await _record_event(
+            db,
+            session_id=session_id,
+            kind="secret_shared",
+            user_id=user_id,
+            username=current_user.get("username", ""),
+            payload={
+                "secret_id": str(secret_id),
+                "secret_name": secret.name,
+                "secret_type": secret.type,
+                "shared_by": str(user_id),
+                "shared_by_username": current_user.get("username", ""),
+            },
+        )
+
         await db.commit()
 
         logger.info(f"User shared secret with {len(recipient_ids)} participants in session {session_id}")
+
+        # #16443: notify connected participants live, over the same presence
+        # WebSocket they're already on. id/name/sharer ONLY -- never the
+        # secret's value, which this handler never reads in the first place.
+        from websocket.presence import presence_manager
+
+        await presence_manager.broadcast_to_session(
+            session_id,
+            {
+                "type": "user_message",
+                "user_id": str(user_id),
+                "payload": {
+                    "kind": "secret_shared",
+                    "secret_id": str(secret_id),
+                    "secret_name": secret.name,
+                    "secret_type": secret.type,
+                    "shared_by": str(user_id),
+                    "shared_by_username": current_user.get("username", ""),
+                    "session_id": session_id,
+                },
+                "timestamp": utc_timestamp(),
+            },
+        )
 
         return {
             "success": True,

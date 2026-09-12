@@ -6388,6 +6388,26 @@
       "unknownTab": "Unknown tab",
       "you": "You",
       "youStatus": "Your status"
+    },
+    "panel": {
+      "title": "Collaboration",
+      "invite": "Invite",
+      "closePanel": "Close panel",
+      "tabParticipants": "Participants",
+      "tabActivity": "Activity",
+      "tabNotifications": "Notifications",
+      "tabInvitations": "Invitations"
+    },
+    "invitations": {
+      "loading": "Loading invitations...",
+      "noInvitations": "No pending invitations",
+      "sessionLabel": "Session {id}",
+      "invitedAt": "Invited {time}",
+      "justNow": "just now",
+      "minutesAgo": "{count}m ago",
+      "accept": "Accept",
+      "decline": "Decline",
+      "bellTitle": "Pending invitations"
     }
   },
   "research": {

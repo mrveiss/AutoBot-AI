@@ -5014,6 +5014,26 @@
       "roleEditor": "Editor",
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
+    },
+    "panel": {
+      "title": "همکاری",
+      "invite": "دعوت",
+      "closePanel": "بستن پنل",
+      "tabParticipants": "شرکت‌کنندگان",
+      "tabActivity": "فعالیت",
+      "tabNotifications": "اعلان‌ها",
+      "tabInvitations": "دعوت‌نامه‌ها"
+    },
+    "invitations": {
+      "loading": "در حال بارگذاری دعوت‌نامه‌ها...",
+      "noInvitations": "دعوت‌نامه در انتظاری وجود ندارد",
+      "sessionLabel": "جلسه {id}",
+      "invitedAt": "دعوت‌شده {time}",
+      "justNow": "همین الان",
+      "minutesAgo": "{count} دقیقه پیش",
+      "accept": "پذیرفتن",
+      "decline": "رد کردن",
+      "bellTitle": "دعوت‌نامه‌های در انتظار"
     }
   },
   "chat": {

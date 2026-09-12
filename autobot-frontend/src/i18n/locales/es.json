@@ -6381,6 +6381,26 @@
       "offline": "Offline",
       "collaboratorTooltip": "Collaborator",
       "youStatus": "Your status"
+    },
+    "panel": {
+      "title": "Colaboración",
+      "invite": "Invitar",
+      "closePanel": "Cerrar panel",
+      "tabParticipants": "Participantes",
+      "tabActivity": "Actividad",
+      "tabNotifications": "Notificaciones",
+      "tabInvitations": "Invitaciones"
+    },
+    "invitations": {
+      "loading": "Cargando invitaciones...",
+      "noInvitations": "No hay invitaciones pendientes",
+      "sessionLabel": "Sesión {id}",
+      "invitedAt": "Invitado {time}",
+      "justNow": "ahora mismo",
+      "minutesAgo": "hace {count} min",
+      "accept": "Aceptar",
+      "decline": "Rechazar",
+      "bellTitle": "Invitaciones pendientes"
     }
   },
   "research": {
