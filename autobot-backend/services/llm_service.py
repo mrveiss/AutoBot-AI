@@ -152,17 +152,13 @@ class LLMService:
         # Shared response cache (L1 in-memory + L2 Redis) for clear_cache /
         # get_cache_metrics and the optimized chat path (#3185).
         self._response_cache = get_llm_cache()
-        # Extractive prompt compression for chat()/stream() (#16526) — strips
-        # filler phrases/redundant whitespace before a prompt reaches a
-        # provider. Disabled or no-op (short content) compress() calls are
-        # cheap, so this always runs; config.llm_prompt_compression_enabled
-        # is the kill switch.
-        self._prompt_compressor = PromptCompressor(
-            CompressionConfig(
-                enabled=config.llm_prompt_compression_enabled,
-                min_length_to_compress=config.llm_prompt_compression_min_chars,
-            )
-        )
+        # Extractive prompt compression for chat()/stream() (#16526). The
+        # enabled/min-chars config is read LIVE in _compress_messages, not
+        # baked in here -- this is a process-wide singleton, so a flag read
+        # only at construction would miss every later config change. Pinned
+        # to min_length_to_compress=0 so this instance never gates on a stale
+        # threshold of its own.
+        self._prompt_compressor = PromptCompressor(CompressionConfig(min_length_to_compress=0))
         # Runtime provider override set via switch_provider() (#3185).
         self._active_provider: str | None = None
         # Tiered model routing — mirrors LLMInterface._init_tiered_routing() (#3185).
@@ -857,20 +853,22 @@ class LLMService:
     def _compress_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """Compress message content via the extractive PromptCompressor (#16526).
 
-        Strips filler phrases and redundant whitespace from outgoing prompts
-        to cut token cost/latency on every provider call. Code blocks and URLs
-        are preserved verbatim (PromptCompressor's preserve_code_blocks /
-        preserve_urls defaults); content shorter than
-        config.llm_prompt_compression_min_chars is left untouched.
+        Strips filler phrases/redundant whitespace; code blocks and URLs are
+        preserved verbatim. config.llm_prompt_compression_enabled/_min_chars
+        are read live every call (like config.llm_response_cache elsewhere in
+        this class), so toggling either takes effect on the next request, not
+        just before this singleton was first constructed.
 
-        Not applied to chat_optimized(): that path's system-prompt prefix is
-        deliberately static for vLLM prefix-cache reuse, and rewriting it
-        would defeat that cache (#16526 scoping note).
+        Not applied to chat_optimized(): its system-prompt prefix is static
+        for vLLM prefix-cache reuse, and rewriting it would defeat that cache.
         """
+        if not config.llm_prompt_compression_enabled:
+            return messages
+        min_chars = config.llm_prompt_compression_min_chars
         compressed_messages: List[Dict[str, str]] = []
         for msg in messages:
             content = msg.get("content")
-            if not content:
+            if not content or len(content) < min_chars:
                 compressed_messages.append(msg)
                 continue
             result = self._prompt_compressor.compress(content)

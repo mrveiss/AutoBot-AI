@@ -175,8 +175,13 @@ async def test_short_messages_are_left_untouched():
 
 @pytest.mark.asyncio
 async def test_compression_disabled_via_config_is_a_real_kill_switch(monkeypatch):
-    monkeypatch.setattr(config, "llm_prompt_compression_enabled", False, raising=False)
+    """config.llm_prompt_compression_enabled is read live inside
+    _compress_messages, not baked in at __init__: the service is constructed
+    with compression ON, then disabled afterward, and that still takes
+    effect — LLMService is a process-wide singleton (get_llm_service()), so
+    a flag read only at construction would never see a later config change."""
     svc, provider = _make_service()
+    monkeypatch.setattr(config, "llm_prompt_compression_enabled", False, raising=False)
 
     await svc.chat(
         [{"role": "user", "content": _FILLER_HEAVY_MESSAGE}],
@@ -185,3 +190,17 @@ async def test_compression_disabled_via_config_is_a_real_kill_switch(monkeypatch
     )
 
     assert provider.last_request.messages[-1]["content"] == _FILLER_HEAVY_MESSAGE
+
+
+@pytest.mark.asyncio
+async def test_min_chars_is_read_live_too(monkeypatch):
+    """Same live-read requirement for config.llm_prompt_compression_min_chars:
+    lowering it after construction makes a message the original 100-char
+    floor would have skipped get compressed on the very next call."""
+    svc, provider = _make_service()
+    short_message = "Please note that this is a test."  # 34 chars, under the default 100
+    monkeypatch.setattr(config, "llm_prompt_compression_min_chars", 10, raising=False)
+
+    await svc.chat([{"role": "user", "content": short_message}], temperature=0.0, use_cache=False)
+
+    assert "Please note that" not in provider.last_request.messages[-1]["content"]
