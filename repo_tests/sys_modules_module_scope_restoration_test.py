@@ -61,9 +61,14 @@ from tools.lint._scan_helpers import tracked_paths  # noqa: E402
 #: pass this module having parsed zero files -- the same green a clean tree gives.
 #: Measured 2026-09-10: `git ls-files '*.py'` = 5635. The previous 3000 was
 #: 47% below its own population -- it caught total collapse and tolerated the
-#: loss of two files in five, which is the shape #16147 is about. Raised with
-#: the same 400-file growth allowance the reach declarations use.
-MIN_FILES_PARSED = 5235
+#: loss of two files in five, which is the shape #16147 is about.
+#:
+#: RE-MEASURED 2026-09-11: `git ls-files '*.py'` = 5654, of which 5654 parse
+#: cleanly -- 19 more than the day before. #16147 AC2 (option A): pin the
+#: floor to the exact measured count rather than the 400-file growth
+#: allowance this replaces, since slack here is the same blind spot #16147
+#: was filed for. A legitimate removal now needs a same-PR floor lowering.
+MIN_FILES_PARSED = 5654
 
 _RESTORES = re.compile(
     r"del\s+sys\.modules"

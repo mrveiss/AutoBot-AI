@@ -29,8 +29,11 @@ export interface ServiceOperationResult {
   message?: string
 }
 
-/** Snapshot of the Redis service runtime status. */
-export interface ServiceStatus {
+/**
+ * Snapshot of the Redis service runtime status. Named for Redis (#15401): the
+ * SLM's `ServiceStatus` / `ServiceHealth` are different concepts under the same names.
+ */
+export interface RedisServiceStatus {
   status: string
   pid: number | null
   uptime_seconds: number | null
@@ -41,7 +44,7 @@ export interface ServiceStatus {
 }
 
 /** Health-check payload from the service-monitor endpoint. */
-export interface ServiceHealth {
+export interface RedisServiceHealth {
   status: string
   /** Additional fields depend on the backend implementation. */
   [key: string]: unknown
@@ -156,9 +159,9 @@ class RedisServiceAPI {
   /**
    * Get current service status.
    */
-  async getStatus(): Promise<ServiceStatus> {
+  async getStatus(): Promise<RedisServiceStatus> {
     try {
-      return await this.get<ServiceStatus>(
+      return await this.get<RedisServiceStatus>(
         `${this.baseEndpoint}/status`,
       )
     } catch (error) {
@@ -170,9 +173,9 @@ class RedisServiceAPI {
   /**
    * Get detailed health information.
    */
-  async getHealth(): Promise<ServiceHealth> {
+  async getHealth(): Promise<RedisServiceHealth> {
     try {
-      return await this.get<ServiceHealth>(
+      return await this.get<RedisServiceHealth>(
         `${this.baseEndpoint}/health`,
       )
     } catch (error) {

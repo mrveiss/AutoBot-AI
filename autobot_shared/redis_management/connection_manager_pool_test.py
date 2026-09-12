@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from autobot_shared.eventually import eventually
 from autobot_shared.redis_management.connection_manager import (
     RedisConfigurationError,
     RedisConnectionManager,
@@ -134,14 +135,17 @@ class TestEnsureAsyncPoolLockScope:
         """While a slow creation is in flight, the registry lock must be free
         (pre-#11449 it was held for the whole retry sequence)."""
         m = _bare_manager()
+        started = asyncio.Event()
 
         async def _slow_create(name):
+            started.set()
             await asyncio.sleep(0.2)
             return object()
 
         m._create_async_pool = _slow_create
         task = asyncio.ensure_future(m._ensure_async_pool_exists("main"))
-        await asyncio.sleep(0.05)  # creation is now in flight
+        # Wait for creation to actually start, not a fixed delay (#16255)
+        await eventually(started.is_set, watch=task)
         assert not m._async_lock.locked(), "lock must not be held during creation"
         await task
 

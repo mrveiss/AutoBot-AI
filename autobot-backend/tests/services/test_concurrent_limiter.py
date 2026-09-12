@@ -8,6 +8,7 @@ import asyncio
 
 import pytest
 
+from autobot_shared.eventually import eventually
 from services.workflow_automation.concurrent_limiter import (
     ConcurrencyLimitError,
     ConcurrentWorkflowLimiter,
@@ -115,7 +116,7 @@ class TestDropOldestCallbackInvoked:
 
         limiter = _make_limiter(max_concurrent=2, callback=releasing_cancel)
         await limiter.acquire("wf-first")
-        # Brief sleep so timestamps differ reliably
+        # fixed sleep on purpose (#16255): eviction order reads time.time(); no injectable clock, must differ
         await asyncio.sleep(0.01)
         await limiter.acquire("wf-second")
 
@@ -244,11 +245,12 @@ class TestExistingPoliciesUnchanged:
             acquired = True
 
         task = asyncio.create_task(acquire_and_flag())
-        await asyncio.sleep(0.05)
+        # Wait for wf-b to actually be queued, not a fixed delay (#16255)
+        await eventually(lambda: limiter.queued_count == 1)
         assert not acquired, "wf-b should still be queued"
 
         await limiter.release("wf-a")
-        await asyncio.sleep(0.05)
+        await eventually(lambda: acquired, watch=task)
         assert acquired, "wf-b should have been promoted after wf-a released"
 
         task.cancel()

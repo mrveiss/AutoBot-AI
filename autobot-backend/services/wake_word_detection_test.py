@@ -10,6 +10,7 @@ import time
 
 import pytest
 
+from autobot_shared.eventually import eventually
 from services.wake_word_service import (
     WakeWordConfig,
     WakeWordDetector,
@@ -453,10 +454,13 @@ class TestCPUOptimization:
     async def test_chunks_processed_increments(self, detector) -> None:
         """chunks_processed counter should increment during active listening"""
         await detector.start_listening(audio_callback=None)
-        # Let a few cycles run
-        await asyncio.sleep(0.05)
+        # Wait for a real chunk, not a fixed window a busy runner can miss (#16255)
+        await eventually(
+            lambda: detector.get_listening_status()["chunks_processed"] >= 1,
+            watch=detector._listening_task,
+        )
         await detector.stop_listening()
-        assert detector.get_listening_status()["chunks_processed"] >= 0
+        assert detector.get_listening_status()["chunks_processed"] >= 1
 
     @pytest.mark.asyncio
     async def test_throttle_triggered_when_cpu_high(self, detector) -> None:
@@ -464,6 +468,7 @@ class TestCPUOptimization:
         # Force CPU reading to simulate high load
         detector.stats.cpu_usage_percent = detector.config.max_cpu_percent * 3.0
         await detector.start_listening(audio_callback=None)
+        # fixed sleep on purpose (#16255): throttle depends on real sampled host CPU; no observable to wait on
         await asyncio.sleep(0.15)
         await detector.stop_listening()
         # With very high simulated CPU, at least one throttle event expected
@@ -484,6 +489,7 @@ class TestCPUProfileBaseline:
         captures the pattern for sustained-operation profiling.
         """
         await detector.start_listening(audio_callback=None)
+        # fixed sleep on purpose (#16255): sustained-operation CPU baseline (see docstring); wall time is the subject
         await asyncio.sleep(0.5)
         await detector.stop_listening()
         status = detector.get_listening_status()
@@ -491,3 +497,23 @@ class TestCPUProfileBaseline:
         assert status["chunks_processed"] >= 0
         # CPU reading should be a valid float (may be 0.0 if psutil unavailable)
         assert detector.stats.cpu_usage_percent >= 0.0
+
+
+class TestMatchTextHasNoSideEffects:
+    """#16247: POST /check evaluates through match_text, which must not change detector state."""
+
+    def test_match_text_detects_like_the_stateful_path(self, detector) -> None:
+        event = detector.match_text("hey autobot", confidence=0.9)
+        assert event is not None
+        assert event.wake_word == "hey autobot"
+
+    def test_match_text_leaves_stats_history_and_state_untouched(self, detector) -> None:
+        before = (detector.stats.total_detections, len(detector._recent_detections), detector.state)
+        assert detector.match_text("hey autobot", confidence=0.9) is not None
+        assert (detector.stats.total_detections, len(detector._recent_detections), detector.state) == before
+
+    def test_match_text_still_answers_during_cooldown(self, detector) -> None:
+        assert detector.check_text_for_wake_word("hey autobot", confidence=0.9) is not None
+        assert detector.state == WakeWordState.COOLDOWN
+        assert detector.check_text_for_wake_word("hey autobot", confidence=0.9) is None
+        assert detector.match_text("hey autobot", confidence=0.9) is not None

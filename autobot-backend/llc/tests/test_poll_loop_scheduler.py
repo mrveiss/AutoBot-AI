@@ -30,6 +30,7 @@ import logging
 
 import pytest
 
+from autobot_shared.eventually import eventually
 from llc.scheduler.base import PENDING_CANCELLATION_REQUIREMENT, SUPPORTS_PENDING_CANCELLATION, PollLoopScheduler
 
 # #13369: assert the capability, never skip on it. base.py now refuses to import
@@ -253,9 +254,10 @@ async def test_tick_exception_does_not_kill_loop(caplog: pytest.LogCaptureFixtur
     sched = _ErrorScheduler(poll_interval=0.0)
     with caplog.at_level(logging.ERROR, logger=_ErrorScheduler.__module__):
         sched.start()
-        # Allow a couple of iterations — if the loop were killed by the first
-        # exception, tick_count would stay at 1.
-        await asyncio.sleep(0.05)
+        # Wait for a couple of iterations, not a fixed window a busy runner can
+        # miss — if the loop were killed by the first exception, tick_count
+        # would stay at 1 forever (#16255).
+        await eventually(lambda: sched.tick_count >= 2, watch=sched._task)
         sched.stop()
         await asyncio.sleep(0)  # let cancellation propagate
 
@@ -515,7 +517,9 @@ async def test_restart_after_aclose_keeps_ticking() -> None:
     await sched.aclose()
 
     sched.start()
-    await asyncio.sleep(0.05)
+    # Wait on the count, not a fixed 0.05 s window a busy runner can fill with
+    # one tick (#16255).
+    await eventually(lambda: sched.tick_count >= 2, watch=sched._task)
     ticks_after_restart = sched.tick_count
     await sched.aclose()
 

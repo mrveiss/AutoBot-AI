@@ -86,6 +86,7 @@ Environment:
     GITHUB_TOKEN                     required — API credential
     GITHUB_REPOSITORY                required — "owner/repo"
     GITHUB_API_URL                   API root (default https://api.github.com)
+    GITHUB_SERVER_URL                web root for fallback run links (set by Actions; unset, no link)
     WATCHDOG_BASE_BRANCH             PR base to watch (default Dev_new_gui)
     WATCHDOG_GRACE_MINUTES           age before "no runs at all" is a failure
     WATCHDOG_STALL_MINUTES           age before a job-less queued run is a failure
@@ -136,6 +137,10 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
+
+# The release-sync PR's one definition, shared with release_sync_main.py (#16272), reached by path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from release_sync_pull import release_sync_pulls  # noqa: E402
 
 # GitHub returns this message when the *token* lacks `actions: write`.
 PERMISSION_DENIED_MARKER = "resource not accessible"
@@ -416,9 +421,7 @@ def is_already_released(message: str) -> bool:
     return NOT_WAITING_MARKER in message.lower()
 
 
-def starved_runs(
-    runs: Sequence[Dict[str, Any]], now: datetime, stall_minutes: int
-) -> List[Dict[str, Any]]:
+def starved_runs(runs: Sequence[Dict[str, Any]], now: datetime, stall_minutes: int) -> List[Dict[str, Any]]:
     """Runs queued longer than *stall_minutes* without allocating a job."""
     starved = []
     for run in runs:
@@ -678,9 +681,7 @@ def classify_dispatch(
         if waited is None or waited >= grace_minutes:
             return (
                 "failure",
-                _truncate(
-                    f"no workflow runs exist for this commit after {grace_minutes}m — CI never dispatched"
-                ),
+                _truncate(f"no workflow runs exist for this commit after {grace_minutes}m — CI never dispatched"),
             )
         return (
             "pending",
@@ -705,9 +706,7 @@ class GitHubApi:
         self.api_root = api_root.rstrip("/")
         self.timeout = timeout
 
-    def request(
-        self, method: str, path: str, payload: Optional[Dict[str, Any]] = None
-    ) -> Tuple[int, Any]:
+    def request(self, method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Tuple[int, Any]:
         """
         Issue a request and return ``(status_code, decoded_body)``.
 
@@ -726,9 +725,7 @@ class GitHubApi:
         if data is not None:
             request.add_header("Content-Type", "application/json")
         try:
-            with urllib.request.urlopen(
-                request, timeout=self.timeout
-            ) as response:  # noqa: S310 - fixed api host
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - fixed api host
                 body = response.read().decode("utf-8")
                 return response.status, (json.loads(body) if body else None)
         except urllib.error.HTTPError as exc:
@@ -774,25 +771,19 @@ class GitHubApi:
 
     def run_jobs(self, run_id: int) -> List[Dict[str, Any]]:
         query = urllib.parse.urlencode({"per_page": "100"})
-        status, body = self.request(
-            "GET", f"/repos/{self.repository}/actions/runs/{run_id}/jobs?{query}"
-        )
+        status, body = self.request("GET", f"/repos/{self.repository}/actions/runs/{run_id}/jobs?{query}")
         if status != 200 or not isinstance(body, dict):
             raise WatchdogApiError(f"cannot list jobs for run {run_id} (HTTP {status}): {body}")
         return list(body.get("jobs") or [])
 
     def approve_run(self, run_id: int) -> Tuple[int, str]:
-        status, body = self.request(
-            "POST", f"/repos/{self.repository}/actions/runs/{run_id}/approve"
-        )
+        status, body = self.request("POST", f"/repos/{self.repository}/actions/runs/{run_id}/approve")
         message = ""
         if isinstance(body, dict):
             message = str(body.get("message", ""))
         return status, message
 
-    def set_status(
-        self, sha: str, state: str, context: str, description: str, target_url: str
-    ) -> int:
+    def set_status(self, sha: str, state: str, context: str, description: str, target_url: str) -> int:
         payload: Dict[str, Any] = {
             "state": state,
             "context": context,
@@ -838,7 +829,7 @@ def inspect_self_hosted_pool(
         # budget on here, rather than letting the API's ordering choose.
         running = api.recent_runs(per_page=MAX_RUNS_PER_PAGE, run_status="in_progress")
     except WatchdogApiError as exc:
-        print(f"  runner liveness unknown: {exc}")
+        _emit(f"  runner liveness unknown: {exc}")
         return PoolState(None, overdue)
     # OLDEST FIRST — the correction that makes this detector able to fire at all
     # (#13341). `GET /actions/runs` returns newest-first, and a wedged run is by
@@ -854,7 +845,7 @@ def inspect_self_hosted_pool(
         try:
             jobs = api.run_jobs(int(run["id"]))
         except WatchdogApiError as exc:
-            print(f"  runner liveness partial: {exc}")
+            _emit(f"  runner liveness partial: {exc}")
             continue
         for job in jobs:
             if job.get("status") != "in_progress" or not job_is_self_hosted(job):
@@ -979,8 +970,21 @@ def budget_exhausted_message(deferred: Set[int], cap: int) -> str:
     )
 
 
+def _emit(text: str, *, err: bool = False) -> None:
+    """
+    The one place this module writes to a stream.
+
+    A CI script's output IS its product: a workflow step reads stdout, not a
+    logger. Funnelling it here keeps that a single, stated exception to the
+    no-print rule (#1082), as in ci_red_cause.py.
+    """
+    print(text, file=sys.stderr if err else sys.stdout)  # noqa: print
+
+
 def _run_url(repository: str, run: Dict[str, Any]) -> str:
-    return str(run.get("html_url") or f"https://github.com/{repository}/actions")
+    """The run's page; else the repository's Actions page when the web root is known; else nothing."""
+    server = os.environ.get("GITHUB_SERVER_URL", "").strip().rstrip("/")
+    return str(run.get("html_url") or (f"{server}/{repository}/actions" if server else ""))
 
 
 def needs_another_look(runs: Sequence[Dict[str, Any]]) -> bool:
@@ -1009,44 +1013,38 @@ def _approve_head(
         eligible, reason = is_approvable(run, api.repository)
         if not eligible:
             if is_parked(run):
-                print(f"  PR #{number}: leaving '{run.get('name')}' parked — {reason}")
+                _emit(f"  PR #{number}: leaving '{run.get('name')}' parked — {reason}")
             continue
         if budget <= 0:
             # Named, counted and escalated by the caller. "Deferring to the next
             # sweep" is only true if a next sweep happens, and the schedule that
             # was supposed to guarantee one has never fired.
-            print(f"  PR #{number}: approval budget exhausted, deferring to the next sweep")
+            _emit(f"  PR #{number}: approval budget exhausted, deferring to the next sweep")
             exhausted = True
             break
         # Decremented on a dry run too, so the preview reflects the cap a real
         # sweep would hit rather than promising more than it would do.
         budget -= 1
         if dry_run:
-            print(f"  PR #{number}: would approve '{run.get('name')}' ({run['id']})")
+            _emit(f"  PR #{number}: would approve '{run.get('name')}' ({run['id']})")
             continue
         status, message = api.approve_run(int(run["id"]))
         if status in (200, 201, 204):
             approved += 1
-            print(f"  PR #{number}: approved '{run.get('name')}' ({run['id']})")
+            _emit(f"  PR #{number}: approved '{run.get('name')}' ({run['id']})")
         elif is_already_released(message):
             # A concurrent sweep got there first. The run is released, which is
             # the outcome this tool wanted — not a failure, and emphatically not
             # evidence that the credential is inadequate.
             raced += 1
-            print(
-                f"  PR #{number}: '{run.get('name')}' already released by a concurrent sweep — no action needed"
-            )
+            _emit(f"  PR #{number}: '{run.get('name')}' already released by a concurrent sweep — no action needed")
         else:
             refused += 1
-            print(
-                f"  PR #{number}: could NOT approve '{run.get('name')}' — HTTP {status}: {message}"
-            )
+            _emit(f"  PR #{number}: could NOT approve '{run.get('name')}' — HTTP {status}: {message}")
     return ApprovalOutcome(approved, refused, raced, budget, exhausted)
 
 
-def _sweep_once(
-    api: GitHubApi, heads: Sequence[PullHead], budget: int, dry_run: bool
-) -> SweepOutcome:
+def _sweep_once(api: GitHubApi, heads: Sequence[PullHead], budget: int, dry_run: bool) -> SweepOutcome:
     """One pass over every head."""
     approved = 0
     refused = 0
@@ -1058,16 +1056,14 @@ def _sweep_once(
         try:
             runs = api.runs_for_sha(head.sha)
         except WatchdogApiError as exc:
-            print(f"  PR #{head.number}: cannot inspect runs — {exc}")
+            _emit(f"  PR #{head.number}: cannot inspect runs — {exc}")
             unsettled = True
             continue
         if needs_another_look(runs):
             unsettled = True
         if not head.same_repo:
             if any(is_parked(run) for run in runs):
-                print(
-                    f"  PR #{head.number}: fork pull request — parked runs left for a human to approve"
-                )
+                _emit(f"  PR #{head.number}: fork pull request — parked runs left for a human to approve")
             continue
         outcome = _approve_head(api, head.number, runs, budget, dry_run)
         budget = outcome.budget
@@ -1178,7 +1174,7 @@ def publish_dispatch_states(
     workflow_dir = config.get("workflow_dir", DEFAULT_WORKFLOW_DIR)
     self_hosted_paths = self_hosted_workflow_paths(workflow_dir)
     if self_hosted_paths is None:
-        print(  # noqa: print
+        _emit(
             f"::warning::{workflow_dir} unreadable — a starved run cannot be "
             "attributed to a runner pool, so pool verdicts fall back to unfiltered."
         )
@@ -1204,10 +1200,10 @@ def publish_dispatch_states(
             )
         target = _run_url(api.repository, runs[0]) if runs else head.url
         if dry_run:
-            print(f"  PR #{head.number}: would set {state} — {description}")
+            _emit(f"  PR #{head.number}: would set {state} — {description}")
         else:
             code = api.set_status(head.sha, state, config["status_context"], description, target)
-            print(f"  PR #{head.number}: {state} — {description} (status API HTTP {code})")
+            _emit(f"  PR #{head.number}: {state} — {description} (status API HTTP {code})")
         if state != "success":
             blocked += 1
     return blocked
@@ -1226,52 +1222,46 @@ def report_overdue_jobs(overdue: Sequence[OverdueJob], overdue_minutes: int) -> 
     """
     if not overdue:
         return
-    print(
+    _emit(
         f"::error::{len(overdue)} self-hosted job(s) still executing after {overdue_minutes}m. "
         "Every job in this repository declares a shorter timeout, so these are wedged, not slow. "
         "They hold the singleton runner and any required context they carry."
     )
     for entry in overdue:
-        print(f"  {entry.describe()} on {entry.head_sha[:12] or 'unknown head'} ({entry.url})")
+        _emit(f"  {entry.describe()} on {entry.head_sha[:12] or 'unknown head'} ({entry.url})")
 
 
 def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False) -> int:
     """Approve what can be approved, then publish dispatch state on every open PR."""
     if dry_run:
-        print("DRY RUN: nothing is approved, no commit status is written, and no probe is issued.")
+        _emit("DRY RUN: nothing is approved, no commit status is written, and no probe is issued.")
     pulls = api.open_pull_requests(config["base_branch"])
-    heads = collect_heads(pulls, api.repository)
+    heads = collect_heads(pulls + release_sync_pulls(api, config["base_branch"]), api.repository)
     forks = sum(1 for head in heads if not head.same_repo)
-    print(
-        f"Open PRs targeting {config['base_branch']}: {len(pulls)} ({forks} from forks, never auto-approved)"
-    )
+    _emit(f"Open PRs targeting {config['base_branch']}: {len(pulls)} ({forks} from forks, never auto-approved)")
 
     only_pr = config.get("only_pr", 0)
     if only_pr:
         heads = select_heads(heads, only_pr)
-        print(f"Scoped to PR #{only_pr}: {len(heads)} head(s) selected")
+        _emit(f"Scoped to PR #{only_pr}: {len(heads)} head(s) selected")
         if not heads:
-            print(
-                f"PR #{only_pr} is not an open PR targeting {config['base_branch']} — nothing to sweep."
-            )
+            _emit(f"PR #{only_pr} is not an open PR targeting {config['base_branch']} — nothing to sweep.")
             return 0
 
     permitted, explanation = probe_approval_capability(api, dry_run)
-    print(f"Approval capability probe: {explanation}")
+    _emit(f"Approval capability probe: {explanation}")
 
     approved, refused, raced, _touched, deferred = sweep_parked_runs(api, heads, config, dry_run)
     pool = inspect_self_hosted_pool(api, config["max_job_lookups"], config["job_overdue_minutes"])
     report_overdue_jobs(pool.overdue, config["job_overdue_minutes"])
     blocked = publish_dispatch_states(api, heads, config, dry_run, pool.serving, pool.overdue)
 
-    print(
+    _emit(
         f"Sweep complete: {approved} approved, {raced} already released, "
         f"{refused} refused, {blocked} PR(s) not dispatched."
     )
     if raced:
-        print(
-            f"{raced} run(s) had already been released by a concurrent sweep — routine, not a failure."
-        )
+        _emit(f"{raced} run(s) had already been released by a concurrent sweep — routine, not a failure.")
 
     failed = False
     if deferred and not dry_run:
@@ -1279,17 +1269,14 @@ def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False
         # "next sweep" is not enough when the schedule that would provide one
         # has never fired, so the run goes red and names what was left.
         left = ", ".join(f"#{number}" for number in sorted(deferred))
-        print(
-            "::error::"
-            + budget_exhausted_message(deferred, config["max_approvals"]).replace("\n", "%0A")
-        )
-        print(budget_exhausted_message(deferred, config["max_approvals"]))
-        print(f"PR(s) left with parked runs: {left}")
+        _emit("::error::" + budget_exhausted_message(deferred, config["max_approvals"]).replace("\n", "%0A"))
+        _emit(budget_exhausted_message(deferred, config["max_approvals"]))
+        _emit(f"PR(s) left with parked runs: {left}")
         failed = True
 
     if refused or permitted is False:
-        print("::error::" + REMEDIATION.replace("\n", "%0A"))
-        print(REMEDIATION)
+        _emit("::error::" + REMEDIATION.replace("\n", "%0A"))
+        _emit(REMEDIATION)
         failed = True
     if failed:
         return 1
@@ -1300,9 +1287,7 @@ def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False
         # it skips the probe deliberately, and `--check probe` answers the
         # question on its own, so warning here would be noise that trains
         # readers to ignore the warning that matters.
-        print(
-            f"::warning::Approval capability is UNRESOLVED — {explanation}. Do not treat #12823 as proven fixed."
-        )
+        _emit(f"::warning::Approval capability is UNRESOLVED — {explanation}. Do not treat #12823 as proven fixed.")
     return 0
 
 
@@ -1316,15 +1301,15 @@ def check_probe(api: GitHubApi) -> int:
     cannot answer it.
     """
     permitted, explanation = probe_approval_capability(api)
-    print(f"Approval capability probe: {explanation}")
+    _emit(f"Approval capability probe: {explanation}")
     if permitted is False:
-        print("::error::" + REMEDIATION.replace("\n", "%0A"))
-        print(REMEDIATION)
+        _emit("::error::" + REMEDIATION.replace("\n", "%0A"))
+        _emit(REMEDIATION)
         return 1
     if permitted is None:
-        print(f"::warning::Approval capability is UNRESOLVED — {explanation}")
+        _emit(f"::warning::Approval capability is UNRESOLVED — {explanation}")
         return 0
-    print("This credential may approve parked runs; no owner action is required for #12823.")
+    _emit("This credential may approve parked runs; no owner action is required for #12823.")
     return 0
 
 
@@ -1362,55 +1347,41 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
     # disk because the job checks the repository out. Attribution is therefore a
     # local read rather than an API call, and costs no budget.
     queued = api.recent_runs(run_status="queued")
-    self_hosted_paths = self_hosted_workflow_paths(
-        config.get("workflow_dir", DEFAULT_WORKFLOW_DIR)
-    )
+    self_hosted_paths = self_hosted_workflow_paths(config.get("workflow_dir", DEFAULT_WORKFLOW_DIR))
     starved = [
         run
         for run in starved_runs(queued, now, config["stall_minutes"])
         if run_requires_self_hosted(run, self_hosted_paths)
     ]
-    pool = inspect_self_hosted_pool(
-        api, config["max_job_lookups"], config["job_overdue_minutes"], now
-    )
+    pool = inspect_self_hosted_pool(api, config["max_job_lookups"], config["job_overdue_minutes"], now)
     report_overdue_jobs(pool.overdue, config["job_overdue_minutes"])
 
     if not starved:
         if pool.overdue:
             return 1
-        print(  # noqa: print
-            f"No self-hosted run has been queued longer than {config['stall_minutes']}m — "
-            "runner pool is keeping up."
+        _emit(
+            f"No self-hosted run has been queued longer than {config['stall_minutes']}m — " "runner pool is keeping up."
         )
         return 0
 
     if pool.serving is None:
-        print(
-            f"::warning::{len(starved)} run(s) queued over {config['stall_minutes']}m; runner liveness UNKNOWN"
-        )
+        _emit(f"::warning::{len(starved)} run(s) queued over {config['stall_minutes']}m; runner liveness UNKNOWN")
         return 1 if pool.overdue else 0
     if pool.serving:
         # `pool.serving` excludes wedged jobs, so this really is healthy work in
         # flight rather than the hung job that used to masquerade as liveness.
-        print(
+        _emit(
             f"{len(starved)} run(s) queued over {config['stall_minutes']}m, but a self-hosted job is executing — "
             "contention, not an outage."
         )
         return 1 if pool.overdue else 0
 
-    reason = (
-        "while a self-hosted job is wedged"
-        if pool.overdue
-        else "while no self-hosted job is executing"
-    )
-    print(  # noqa: print
-        f"::error::{len(starved)} self-hosted workflow run(s) queued over "
-        f"{config['stall_minutes']}m {reason}"
-    )
+    reason = "while a self-hosted job is wedged" if pool.overdue else "while no self-hosted job is executing"
+    _emit(f"::error::{len(starved)} self-hosted workflow run(s) queued over " f"{config['stall_minutes']}m {reason}")
     for run in starved:
         waited = age_minutes(run.get("created_at"), now)
         waited_text = f"{waited:.0f}m" if waited is not None else "unknown"
-        print(
+        _emit(
             f"  {run.get('name')} on {run.get('head_branch')} — queued {waited_text} ({_run_url(api.repository, run)})"
         )
     return 1
@@ -1433,22 +1404,16 @@ def load_config() -> Dict[str, Any]:
         "stall_minutes": _env_int("WATCHDOG_STALL_MINUTES", DEFAULT_STALL_MINUTES),
         "max_approvals": _env_int("WATCHDOG_MAX_APPROVALS", DEFAULT_MAX_APPROVALS),
         "poll_attempts": _env_int("WATCHDOG_POLL_ATTEMPTS", DEFAULT_POLL_ATTEMPTS),
-        "poll_interval_seconds": _env_int(
-            "WATCHDOG_POLL_INTERVAL_SECONDS", DEFAULT_POLL_INTERVAL_SECONDS
-        ),
+        "poll_interval_seconds": _env_int("WATCHDOG_POLL_INTERVAL_SECONDS", DEFAULT_POLL_INTERVAL_SECONDS),
         "status_context": os.environ.get("WATCHDOG_STATUS_CONTEXT", DEFAULT_STATUS_CONTEXT),
         "max_job_lookups": _env_int("WATCHDOG_MAX_JOB_LOOKUPS", DEFAULT_MAX_JOB_LOOKUPS),
-        "job_overdue_minutes": _env_int(
-            "WATCHDOG_JOB_OVERDUE_MINUTES", DEFAULT_JOB_OVERDUE_MINUTES
-        ),
+        "job_overdue_minutes": _env_int("WATCHDOG_JOB_OVERDUE_MINUTES", DEFAULT_JOB_OVERDUE_MINUTES),
         "only_pr": _env_non_negative_int("WATCHDOG_ONLY_PR", DEFAULT_ONLY_PR),
     }
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--check",
         choices=("dispatch", "probe", "runner-starvation"),
@@ -1468,7 +1433,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         config = load_config()
     except WatchdogConfigError as exc:
-        print(f"Configuration error: {exc}", file=sys.stderr)
+        _emit(f"Configuration error: {exc}", err=True)
         return 2
 
     api = GitHubApi(config["token"], config["repository"], config["api_root"])
@@ -1479,7 +1444,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return check_probe(api)
         return check_runner_starvation(api, config)
     except WatchdogError as exc:
-        print(f"::error::watchdog could not complete: {exc}")
+        _emit(f"::error::watchdog could not complete: {exc}")
         return 2
 
 

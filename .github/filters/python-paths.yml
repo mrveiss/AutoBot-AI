@@ -38,6 +38,10 @@ python:
   # confined to security.yml takes the required-context shim's green while the guard
   # that reads it never runs.
   - '.github/workflows/security.yml'
+  # #16302: repo_tests/codeql_query_filters_match_queries_16302_test.py fails on a
+  # `query-filters` key CodeQL does not match on. Without this, a change confined to
+  # the CodeQL config -- a new file-scoped exclusion -- skips the guard written for it.
+  - '.github/codeql/codeql-config.yml'
   # The shim gates a required context, so editing it must run the real suite for
   # the same reason editing ci.yml does.
   - '.github/workflows/python-required-context.yml'
@@ -118,6 +122,10 @@ python:
   # adding a fourth by-path load is exactly the change that skips the guard
   # asserting those loads stay package-free.
   - '.github/workflows/slm-migration-gate.yml'
+  # #16246: `release_sync_main_test.py` reads this workflow's triggers, permissions
+  # and steps. Without an entry here, a change confined to it takes the shim's
+  # green while the guard that reads it never runs.
+  - '.github/workflows/sync-main-to-dev.yml'
   - 'autobot-frontend/package.json'
   - 'install.sh'
   # #15983: `ansible_core_pin_frozen_15983_test.py` reads this pin to assert the
@@ -125,3 +133,9 @@ python:
   # change that skips the suite guarding it -- the guard would be bypassable by
   # touching the one file it exists to watch. #15900's coverage checker caught it.
   - 'constraints/ansible-core.txt'
+  # #16275: `no_tracked_key_material_test.py` asserts every entry in the
+  # detect-secrets baseline carries an audited verdict and that its version
+  # matches the hook and the CI install. Without an entry here, a change confined
+  # to the baseline -- an unaudited finding parked in it -- skips that guard. The
+  # ungated `secret-detection` job in security.yml checks the verdicts too.
+  - '.secrets.baseline'
