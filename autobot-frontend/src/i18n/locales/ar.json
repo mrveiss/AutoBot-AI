@@ -6399,7 +6399,8 @@
       "justNow": "الآن",
       "minutesAgo": "منذ {count} دقيقة",
       "accept": "قبول",
-      "decline": "رفض"
+      "decline": "رفض",
+      "bellTitle": "الدعوات المعلقة"
     }
   },
   "research": {

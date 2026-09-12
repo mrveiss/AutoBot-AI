@@ -6399,7 +6399,8 @@
       "justNow": "gerade eben",
       "minutesAgo": "vor {count} Min.",
       "accept": "Annehmen",
-      "decline": "Ablehnen"
+      "decline": "Ablehnen",
+      "bellTitle": "Ausstehende Einladungen"
     }
   },
   "research": {

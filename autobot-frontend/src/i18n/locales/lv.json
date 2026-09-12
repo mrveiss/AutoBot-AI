@@ -6399,7 +6399,8 @@
       "justNow": "tikko",
       "minutesAgo": "pirms {count} min",
       "accept": "Pieņemt",
-      "decline": "Noraidīt"
+      "decline": "Noraidīt",
+      "bellTitle": "Gaidošie uzaicinājumi"
     }
   },
   "research": {

@@ -5032,7 +5032,8 @@
       "justNow": "ابھی ابھی",
       "minutesAgo": "{count} منٹ پہلے",
       "accept": "قبول کریں",
-      "decline": "مسترد کریں"
+      "decline": "مسترد کریں",
+      "bellTitle": "زیر التوا دعوت نامے"
     }
   },
   "chat": {

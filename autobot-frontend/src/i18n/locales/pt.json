@@ -6399,7 +6399,8 @@
       "justNow": "agora mesmo",
       "minutesAgo": "há {count} min",
       "accept": "Aceitar",
-      "decline": "Recusar"
+      "decline": "Recusar",
+      "bellTitle": "Convites pendentes"
     }
   },
   "research": {

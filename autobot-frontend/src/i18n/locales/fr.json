@@ -6399,7 +6399,8 @@
       "justNow": "à l'instant",
       "minutesAgo": "il y a {count} min",
       "accept": "Accepter",
-      "decline": "Refuser"
+      "decline": "Refuser",
+      "bellTitle": "Invitations en attente"
     }
   },
   "research": {
