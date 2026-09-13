@@ -10,6 +10,8 @@ Handles user ownership, visibility, and sharing for knowledge base facts.
 Issue #688: User ownership model for chat-derived knowledge
 """
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_knowledge import (
@@ -61,7 +63,7 @@ async def _get_fact_with_ownership(kb, fact_id: str, user_id: str):
     Raises:
         HTTPException: 404 if not found, 403 if no access
     """
-    fact = await kb.get_fact(fact_id)
+    fact = await asyncio.to_thread(kb.get_fact, fact_id)  # #16670: get_fact is synchronous
     if not fact:
         raise HTTPException(status_code=404, detail="Fact not found")
 
@@ -283,7 +285,7 @@ async def _fetch_fact_details(
     """
     facts = []
     for fact_id in all_fact_ids[:limit]:
-        fact = await kb.get_fact(fact_id)
+        fact = await asyncio.to_thread(kb.get_fact, fact_id)
         if fact:
             facts.append(
                 {
@@ -395,7 +397,7 @@ async def get_shared_facts(
     # Fetch fact details
     facts = []
     for fact_id in shared_fact_ids:
-        fact = await kb.get_fact(fact_id)
+        fact = await asyncio.to_thread(kb.get_fact, fact_id)
         if fact:
             facts.append(
                 {

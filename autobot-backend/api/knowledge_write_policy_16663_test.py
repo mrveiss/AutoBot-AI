@@ -97,7 +97,7 @@ async def _admin_sets_visibility(kb, visibility: str):
 
 def _ownership_kb(write_status: str = "success"):
     kb = MagicMock()
-    kb.get_fact = AsyncMock(return_value={"metadata": {"owner_id": "u1", "visibility": "system"}})
+    kb.get_fact = MagicMock(return_value={"metadata": {"owner_id": "u1", "visibility": "system"}})  # sync (#16670)
     kb.ownership_manager = MagicMock()
     kb.ownership_manager.check_access = AsyncMock(return_value=True)
     kb.update_fact = AsyncMock(return_value={"status": write_status})
