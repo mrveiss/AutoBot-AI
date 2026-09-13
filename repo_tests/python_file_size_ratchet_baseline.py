@@ -85,7 +85,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/cache_management.py": 779,
     "autobot-backend/api/canvas.py": 637,
     "autobot-backend/api/chat.py": 2778,
-    "autobot-backend/api/chat_sessions.py": 2090,
+    "autobot-backend/api/chat_sessions.py": 1953,
     "autobot-backend/api/code_intelligence.py": 2156,
     "autobot-backend/api/code_search.py": 924,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
