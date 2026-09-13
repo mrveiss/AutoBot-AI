@@ -78,21 +78,24 @@ def test_the_generated_key_decodes_to_the_length_the_loader_demands() -> None:
     assert len(decode(hex_style)) != 32, "a 64-char hex value must not pass for a root key"
 
 
-def test_the_ansible_generator_asks_for_the_right_length() -> None:
-    """The password lookup must request 32 chars, since b64 of N chars decodes to N bytes."""
-    tasks = (
-        REPO_ROOT
-        / "autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml"
-    ).read_text(encoding="utf-8")
+def test_the_ansible_generator_asks_for_the_right_byte_count() -> None:
+    """`openssl rand -base64 N` must ask for exactly 32 bytes (#16405).
+
+    Before #16405 this generator was a `lookup('password', ...)` and the guard
+    pinned its `length=` argument instead — that generator is gone (it drew
+    from a 62-character alphabet, ~190 bits, not 32 full-range bytes), so the
+    thing worth pinning now is the byte count `openssl rand -base64` reads: a
+    different N here means every provisioned key fails to decode to the 32
+    bytes `load_root_key` requires.
+    """
+    tasks = (REPO_ROOT / "autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml").read_text(encoding="utf-8")
     assert ROOT_KEY in tasks or "autobot_secrets_root_key" in tasks
 
-    # Every generator feeding the root key must be length=32 — a 48-char lookup
-    # (the length the sibling secrets use) would decode to 48 bytes and be rejected.
-    generators = re.findall(
-        r"autobot_secrets_root_key.*?length=(\d+)", tasks, re.DOTALL
-    ) + re.findall(r"AUTOBOT_SECRETS_ROOT_KEY=.*?length=(\d+)", tasks)
+    generators = re.findall(r"autobot_secrets_root_key.*?openssl rand -base64 (\d+)", tasks, re.DOTALL) + re.findall(
+        r"AUTOBOT_SECRETS_ROOT_KEY=.*?openssl rand -base64 (\d+)", tasks
+    )
     assert generators, "found no generator for the root key to check"
-    assert set(generators) == {"32"}, f"root key generated at wrong length(s): {set(generators)}"
+    assert set(generators) == {"32"}, f"root key generated at wrong byte count(s): {set(generators)}"
 
 
 def test_every_root_key_jinja_expression_compiles() -> None:
