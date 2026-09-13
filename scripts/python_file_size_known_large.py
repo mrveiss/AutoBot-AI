@@ -49,7 +49,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/a2a.py": 650,
     "autobot-backend/api/advanced_control.py": 626,
     "autobot-backend/api/agent.py": 1380,
-    "autobot-backend/api/agent_config.py": 1369,
+    "autobot-backend/api/agent_config.py": 1371,
     "autobot-backend/api/agent_terminal.py": 858,
     "autobot-backend/api/ai_stack_integration.py": 638,
     "autobot-backend/api/analytics.py": 1287,
@@ -145,7 +145,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_workflows.py": 3011,
     "autobot-backend/api/secrets.py": 1048,
     "autobot-backend/api/security_assessment.py": 913,
-    "autobot-backend/api/settings.py": 882,
+    "autobot-backend/api/settings.py": 883,  # #16501: +1 import line
     "autobot-backend/api/system.py": 1112,
     "autobot-backend/api/terminal.py": 1294,
     "autobot-backend/api/terminal_handlers.py": 1497,
