@@ -422,6 +422,14 @@
       {{ chromadb_auth_token
          if (chromadb_auth_token | default('') | trim | length > 0)
          else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    # #16627 (P1b of #13568): the Redis password every consumer sends as user
+    # `default` while the server stays nopass (P2, #16628, enforces it). The SLM
+    # generates it here once; roles and the SLM itself only ever read it back.
+    # Alphanumeric, so it is URL-safe in the backend's AUTOBOT_REDIS_URL too.
+    slm_redis_password: >-
+      {{ slm_redis_password
+         if (slm_redis_password | default('') | trim | length > 0)
+         else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
     # #14758: the canonical envelope secret store's root key. Nothing generated
     # it, so the store raised at import on every provisioned deployment and each
     # consumer swallowed the failure — an absent store was indistinguishable
@@ -515,6 +523,61 @@
   when:
     - slm_secrets_stat.stat.exists
     - _slm_chroma_tok_check.rc != 0
+  no_log: true
+  tags: ['slm', 'secrets']
+
+# #16627: same back-fill for the Redis credential. The username goes in first:
+# this file is the SLM's own EnvironmentFile, and while the server's default user
+# is nopass a password sent WITHOUT a username (AUTH <password>) is refused, so
+# the password must never be present without it. Both are append-only, gated on
+# the key being absent or empty, so an operator-supplied value is never rewritten
+# and the password is never regenerated.
+- name: "SLM | Check if AUTOBOT_REDIS_USERNAME present in secrets file (#16627)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^AUTOBOT_REDIS_USERNAME=.\+'
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_redis_user_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Add AUTOBOT_REDIS_USERNAME to existing secrets file (#16627)"
+  ansible.builtin.lineinfile:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+    regexp: "^AUTOBOT_REDIS_USERNAME="
+    line: "AUTOBOT_REDIS_USERNAME={{ slm_redis_username }}"
+    create: false
+  when:
+    - slm_secrets_stat.stat.exists
+    - _slm_redis_user_check.rc != 0
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Check if AUTOBOT_REDIS_PASSWORD present in secrets file (#16627)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^AUTOBOT_REDIS_PASSWORD=.\+'
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_redis_pw_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  no_log: true
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Add AUTOBOT_REDIS_PASSWORD to existing secrets file (#16627)"
+  ansible.builtin.lineinfile:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+    regexp: "^AUTOBOT_REDIS_PASSWORD="
+    line: >-
+      AUTOBOT_REDIS_PASSWORD={{ slm_redis_password
+         if (slm_redis_password | default('') | trim | length > 0)
+         else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    create: false
+  when:
+    - slm_secrets_stat.stat.exists
+    - _slm_redis_pw_check.rc != 0
   no_log: true
   tags: ['slm', 'secrets']
 

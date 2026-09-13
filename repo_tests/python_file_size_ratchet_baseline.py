@@ -134,7 +134,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/monitoring.py": 1320,
     "autobot-backend/api/multimodal.py": 848,
     "autobot-backend/api/natural_language_search.py": 1258,
-    "autobot-backend/api/npu_workers.py": 1482,
+    "autobot-backend/api/npu_workers.py": 1481,
     "autobot-backend/api/orchestration.py": 610,
     "autobot-backend/api/playwright.py": 917,
     "autobot-backend/api/provider_auth.py": 646,
@@ -464,7 +464,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/api/security.py": 962,
     "autobot-slm-backend/api/services.py": 1208,
     "autobot-slm-backend/api/setup_wizard.py": 1354,
-    "autobot-slm-backend/api/stateful.py": 692,
+    "autobot-slm-backend/api/stateful.py": 688,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1129,
     "autobot-slm-backend/main.py": 806,  # #15728: local admin socket lifespan wiring
@@ -474,7 +474,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/monitoring/performance_benchmark.py": 1136,
     "autobot-slm-backend/monitoring/performance_monitor.py": 785,
     "autobot-slm-backend/monitoring/performance_optimizer.py": 773,
-    "autobot-slm-backend/services/backup.py": 826,
+    "autobot-slm-backend/services/backup.py": 816,
     "autobot-slm-backend/services/blue_green.py": 1287,
     "autobot-slm-backend/services/deployment.py": 1016,
     "autobot-slm-backend/services/drift_checker.py": 839,
@@ -485,7 +485,7 @@ RATCHET_BASELINE: dict[str, int] = {
     # Not legacy debt: created after this guard existed (#14465/#14548). Tracked
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 843,
-    "autobot-slm-backend/services/replication.py": 886,
+    "autobot-slm-backend/services/replication.py": 846,
     "autobot-slm-backend/services/role_registry.py": 715,
     "autobot-slm-backend/services/service_orchestrator.py": 955,
     "autobot-slm-backend/services/sync_orchestrator.py": 649,
