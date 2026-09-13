@@ -17,13 +17,13 @@ Endpoints:
 - GET /import_claude_memory/status/{task_id} - Poll background job status
 """
 
-import asyncio
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 
 from auth_middleware import check_admin_permission
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.schemas.population import TaskQueuedResponse, TaskStatusResponse
@@ -61,7 +61,10 @@ async def import_claude_memory_endpoint(request: dict, req: Request):
         total_items=0,
     )
 
-    asyncio.create_task(_import_claude_memory_background(task_id, req.app, memory_dir_override))
+    fire_and_forget(
+        _import_claude_memory_background(task_id, req.app, memory_dir_override),
+        name=f"import_claude_memory:{task_id}",
+    )
 
     logger.info("Queued Claude Code memory import task: %s", task_id)
 
@@ -137,15 +140,4 @@ async def get_import_claude_memory_status(task_id: str):
             "task_id": task_id,
         }
 
-    return {
-        "task_id": task_status.task_id,
-        "status": task_status.status,
-        "message": task_status.message,
-        "progress_percent": task_status.progress_percent,
-        "items_processed": task_status.items_processed,
-        "items_total": task_status.items_total,
-        "error": task_status.error,
-        "elapsed_seconds": task_status.elapsed_seconds,
-        "created_at": task_status.created_at,
-        "updated_at": task_status.updated_at,
-    }
+    return task_status.to_response_dict()
