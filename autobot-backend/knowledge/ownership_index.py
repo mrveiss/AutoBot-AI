@@ -56,9 +56,10 @@ async def reindex_ownership(ownership_manager, fact_id: str, old: Dict[str, Any]
     """Move *fact_id* from the indexes *old* filed it under to the ones *new* names.
 
     Remove first, then add. A failure in between leaves the fact in fewer indexes, never
-    in one its metadata no longer grants, so it fails closed. The caller sees the error,
-    and repeating the same write converges: the next attempt's *old* is the stored
-    metadata, and the cleanup below removes the SYSTEM entry regardless.
+    in one its metadata no longer grants, so it fails closed, and the caller sees the error.
+    A retry of the same write does NOT repair the indexes: ``update_fact`` has already
+    stored the new metadata, so the retry sees no ownership change. The ownership
+    reconciliation (#16676) is what brings the indexes back in step.
     """
     # Clean up as though it had been SYSTEM: srem of a non-member is a no-op, and this
     # also drops a stale kb:system:facts entry an add-only write before #16663 left.

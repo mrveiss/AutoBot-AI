@@ -180,23 +180,18 @@ async def test_writing_back_the_whole_metadata_with_a_flag_does_not_reindex(dura
 
 
 @pytest.mark.asyncio
-async def test_a_reindex_that_fails_midway_fails_closed_and_a_retry_converges(durable_row):
+async def test_a_reindex_that_fails_midway_fails_closed_and_reports_it(durable_row):
+    """Repairing the lagging indexes is the reconciliation's job (#16676), not a retry's."""
     store = _SetStore()
     manager = KnowledgeOwnership(store)
     stored = _owned(visibility="system")
     await index_ownership(manager, "f1", stored)
-    kb = _KB(stored, manager)
 
     with patch.object(manager, "set_owner", AsyncMock(side_effect=RuntimeError("redis blip"))):
-        failed = await kb.update_fact("f1", metadata={"visibility": "private"})
+        failed = await _KB(stored, manager).update_fact("f1", metadata={"visibility": "private"})
 
     assert failed["status"] == "error"
     assert "f1" not in store.sets[_SYSTEM_INDEX]  # fewer indexes, never a stale grant
-
-    retried = await kb.update_fact("f1", metadata={"visibility": "private"})
-
-    assert retried["status"] == "success"
-    assert "f1" in store.sets["user:kb:facts:u1"] and "f1" not in store.sets[_SYSTEM_INDEX]
 
 
 @pytest.mark.asyncio
