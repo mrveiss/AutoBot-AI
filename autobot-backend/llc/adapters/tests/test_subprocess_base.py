@@ -11,6 +11,7 @@ Duplicate sets removed from test_claude_code_adapter.py and
 test_copilot_local_adapter.py as part of GH#9844.
 """
 
+import asyncio
 import json
 import os
 import signal
@@ -18,15 +19,22 @@ import tempfile
 import time
 from unittest.mock import AsyncMock, patch
 
+import psutil
 import pytest
 
+from autobot_shared.eventually import eventually
 from llc.adapters.subprocess_base import (
     ADAPTER_TIMEOUT_SECONDS,
+    FIRST_OUTPUT_DEADLINE_SECONDS,
     SIGTERM_GRACE_SECONDS,
+    STALL_DEADLINE_SECONDS,
     SubprocessLifecycleAdapter,
     resolve_cli_binary,
+    resolve_first_output_deadline,
+    resolve_stall_deadline,
     resolve_timeout,
 )
+from llc.adapters.subprocess_support import spawn_create_time
 from llc.models.enums import LLCRunStatus
 
 # ---------------------------------------------------------------------------
@@ -36,6 +44,9 @@ from llc.models.enums import LLCRunStatus
 
 def _state_path(output_dir: str, run_id: str) -> str:
     return os.path.join(output_dir, f"base_state_{run_id.replace('/', '_')}.json")
+
+
+_PSUTIL_PROCESS = "llc.adapters.subprocess_support.psutil.Process"
 
 
 class _DummyAdapter(SubprocessLifecycleAdapter):
@@ -63,6 +74,39 @@ class TestResolveTimeout:
     def test_adapter_default(self, monkeypatch) -> None:
         monkeypatch.delenv("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS", raising=False)
         assert resolve_timeout({}) == ADAPTER_TIMEOUT_SECONDS == 3600
+
+
+# ---------------------------------------------------------------------------
+# resolve_first_output_deadline / resolve_stall_deadline — same 3-tier shape (GH#13099)
+# ---------------------------------------------------------------------------
+
+
+class TestResolveFirstOutputDeadline:
+    def test_per_agent_override(self, monkeypatch) -> None:
+        monkeypatch.setenv("AUTOBOT_LLC_FIRST_OUTPUT_DEADLINE_SECONDS", "9")
+        assert resolve_first_output_deadline({"first_output_deadline_seconds": 3}) == 3
+
+    def test_global_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("AUTOBOT_LLC_FIRST_OUTPUT_DEADLINE_SECONDS", "7")
+        assert resolve_first_output_deadline({}) == 7
+
+    def test_adapter_default(self, monkeypatch) -> None:
+        monkeypatch.delenv("AUTOBOT_LLC_FIRST_OUTPUT_DEADLINE_SECONDS", raising=False)
+        assert resolve_first_output_deadline({}) == FIRST_OUTPUT_DEADLINE_SECONDS == 120
+
+
+class TestResolveStallDeadline:
+    def test_per_agent_override(self, monkeypatch) -> None:
+        monkeypatch.setenv("AUTOBOT_LLC_STALL_DEADLINE_SECONDS", "45")
+        assert resolve_stall_deadline({"stall_deadline_seconds": 5}) == 5
+
+    def test_global_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("AUTOBOT_LLC_STALL_DEADLINE_SECONDS", "30")
+        assert resolve_stall_deadline({}) == 30
+
+    def test_adapter_default(self, monkeypatch) -> None:
+        monkeypatch.delenv("AUTOBOT_LLC_STALL_DEADLINE_SECONDS", raising=False)
+        assert resolve_stall_deadline({}) == STALL_DEADLINE_SECONDS == 600
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +330,12 @@ class TestSharedStatus:
                 cancel_called.append(run_id)
 
             adapter.cancel = fake_cancel  # type: ignore[assignment]
-            result = await adapter.status({"adapter_config": {"output_dir": td}}, run_id)
+            # PR#16284 review: _status() now probes liveness FIRST. No
+            # create_time is recorded here, so probe_pid_identity falls back
+            # to a plain liveness probe — force it alive so the test reaches
+            # the timeout check deterministically, not by luck of a real PID.
+            with patch("os.kill", return_value=None):
+                result = await adapter.status({"adapter_config": {"output_dir": td}}, run_id)
 
         assert result.status == LLCRunStatus.TIMEOUT
         assert run_id in cancel_called
@@ -347,15 +396,99 @@ class TestSharedGracefulTimeout:
         with tempfile.TemporaryDirectory() as td:
             state_file = _state_path(td, "123/session-x")
             os.makedirs(os.path.dirname(state_file), exist_ok=True)
+            # PR#16284 review: _cancel() now loads the state file and passes
+            # its create_time to terminate_pid, which never signals without
+            # it verifying — record one a mocked psutil.Process will confirm.
             with open(state_file, "w", encoding="utf-8") as f:
-                json.dump({"pid": 123, "session_id": "session-x"}, f)
+                json.dump({"pid": 123, "session_id": "session-x", "create_time": 100.0}, f)
 
+            # GH#13097: force the single-PID fallback so this test stays about the
+            # SIGTERM/SIGKILL sequence, not process-group resolution (covered separately).
             with (
+                patch("os.getpgid", side_effect=ProcessLookupError),
                 patch("os.kill", side_effect=fake_kill),
                 patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+                patch(_PSUTIL_PROCESS) as mock_psutil_cls,
             ):
+                mock_psutil_cls.return_value.create_time.return_value = 100.0
                 await adapter.cancel({"adapter_config": {"output_dir": td}}, "123/session-x")
 
         assert kill_signals[0] == (123, signal.SIGTERM)
         assert mock_sleep.await_count == SIGTERM_GRACE_SECONDS * 10
         assert (123, signal.SIGKILL) in kill_signals
+
+
+# ---------------------------------------------------------------------------
+# A dead process is judged by its exit, never as stalled (PR#16284 review,
+# MEDIUM) — the stall/timeout checks apply only to a live, identity-verified
+# process. Real processes: POSIX has no useful mock for "genuinely exited".
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestDeadRunNeverReportsStalled:
+    async def test_finished_run_polled_after_stall_deadline_is_completed(self) -> None:
+        """A run that completed normally, polled long after its last write
+        (e.g. after a backend outage), reports COMPLETED, not "stalled".
+
+        Captured via :func:`spawn_create_time`, exactly as every real adapter's
+        ``invoke()`` does right after spawn (#13097 review) -- a bare
+        ``psutil.Process(proc.pid).create_time()`` here raced ``true``'s own
+        near-instant exit: the child can be reaped by asyncio's child watcher
+        before this line runs, and ``Process()`` then raises
+        ``psutil.NoSuchProcess`` with no adapter code on the stack to guard it.
+        ``spawn_create_time`` is the same helper production code uses to
+        absorb exactly that race, degrading to ``None`` rather than raising.
+        """
+        proc = await asyncio.create_subprocess_exec("true", start_new_session=True)
+        create_time = spawn_create_time(proc.pid)
+        await proc.wait()
+        await eventually(lambda: not psutil.pid_exists(proc.pid))
+
+        with tempfile.TemporaryDirectory() as td:
+            output_file = os.path.join(td, "out.jsonl")
+            with open(output_file, "w", encoding="utf-8") as fh:
+                fh.write("hello\n")
+            run_id = f"{proc.pid}/session-late"
+            state = {
+                "pid": proc.pid,
+                "output_file": output_file,
+                "started_at": time.time() - 9999,  # e.g. an outage-delayed poll
+                "create_time": create_time,
+                "timeout_seconds": 3600,
+                "first_output_deadline_seconds": 1,
+                "stall_deadline_seconds": 1,  # long expired relative to the write above
+            }
+            with open(_state_path(td, run_id), "w", encoding="utf-8") as fh:
+                json.dump(state, fh)
+
+            result = await _DummyAdapter().status({"adapter_config": {"output_dir": td}}, run_id)
+
+        assert result.status == LLCRunStatus.COMPLETED
+
+    async def test_reused_pid_is_also_judged_completed_not_stalled(self) -> None:
+        """The same reorder covers PID reuse: a live process under a
+        DIFFERENT identity is not this run -- reported COMPLETED, and never
+        reaches the stall check that would otherwise try to signal it."""
+        with tempfile.TemporaryDirectory() as td:
+            output_file = os.path.join(td, "out.jsonl")
+            with open(output_file, "w", encoding="utf-8") as fh:
+                fh.write("hello\n")
+            run_id = "424242/session-reused"
+            state = {
+                "pid": 424242,
+                "output_file": output_file,
+                "started_at": time.time() - 9999,
+                "create_time": 100.0,
+                "timeout_seconds": 3600,
+                "first_output_deadline_seconds": 1,
+                "stall_deadline_seconds": 1,
+            }
+            with open(_state_path(td, run_id), "w", encoding="utf-8") as fh:
+                json.dump(state, fh)
+
+            with patch(_PSUTIL_PROCESS) as mock_cls:
+                mock_cls.return_value.create_time.return_value = 200.0  # different process
+                result = await _DummyAdapter().status({"adapter_config": {"output_dir": td}}, run_id)
+
+        assert result.status == LLCRunStatus.COMPLETED

@@ -31,7 +31,6 @@ import asyncio
 import json
 import os
 import re
-import time
 import uuid
 from typing import Optional
 
@@ -39,9 +38,16 @@ from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
-from .copilot_local_adapter import CopilotLocalAdapter, _output_path, _resolve_gh_cli, _state_path
+from .copilot_local_adapter import CopilotLocalAdapter, _output_path, _resolve_gh_cli, _state_path, build_copilot_state
 from .subprocess_base import placeholder_run_id
-from .subprocess_support import inject_agent_credentials, serialize_invoke_context
+from .subprocess_base import resolve_first_output_deadline as _resolve_first_output_deadline
+from .subprocess_base import resolve_stall_deadline as _resolve_stall_deadline
+from .subprocess_support import (
+    inject_agent_credentials,
+    serialize_invoke_context,
+    spawn_detached,
+    spawn_with_workspace_retry,
+)
 
 logger = get_logger(__name__)
 
@@ -64,6 +70,12 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
 
         output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
         timeout_sec: int = int(cfg.get("timeout_seconds", 3600))
+        # GH#13099 AC4 / PR#16284 review: same unverified-buffering reasoning
+        # as CopilotLocalAdapter (identical `gh copilot suggest` invocation)
+        # — default to the run's own timeout so the watchdog never fires
+        # before the run would have timed out anyway.
+        first_output_sec: int = _resolve_first_output_deadline(cfg, default=timeout_sec)
+        stall_sec: int = _resolve_stall_deadline(cfg, default=timeout_sec)
         # GH#10217: prefer a credential stored in the LLC secrets vault
         # (gh_token_secret = secret name) over a plaintext gh_token in config.
         gh_token: Optional[str] = await self._resolve_gh_token(agent_config, cfg)
@@ -89,9 +101,48 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
         # GH#9623/GH#9789: forward the run-scoped LLC bearer token + API base.
         inject_agent_credentials(env, context)
 
-        # Verify GitHub authentication (subscription mode requires logged-in gh CLI)
+        await self._verify_gh_authenticated(gh_cli, env)
+
+        out_fh = open(output_file, "w", encoding="utf-8")
         try:
-            proc_check = await asyncio.create_subprocess_exec(
+            proc, workspace_dir = await spawn_with_workspace_retry(
+                cmd,
+                context=context,
+                env=env,
+                workspace_dir=workspace_dir,
+                stdout=out_fh,
+                stderr=asyncio.subprocess.DEVNULL,
+                log_name="CopilotSubscriptionAdapter",
+            )
+        finally:
+            out_fh.close()
+
+        run_id = f"{proc.pid}/{session_id}"
+        logger.info(
+            "CopilotSubscriptionAdapter: spawned PID %d session %s agent %s output=%s (subscription mode)",
+            proc.pid,
+            session_id,
+            agent_id,
+            output_file,
+        )
+
+        # No stderr sidecar here (stderr goes to DEVNULL above).
+        state = build_copilot_state(
+            proc, session_id, agent_id, output_file, None, timeout_sec, first_output_sec, stall_sec
+        )
+        with open(_state_path(output_dir, run_id), "w", encoding="utf-8") as fh:
+            json.dump(state, fh)
+
+        return run_id
+
+    async def _verify_gh_authenticated(self, gh_cli: str, env: dict) -> None:
+        """Verify the gh CLI has a logged-in session (subscription mode requires it).
+
+        Raises ``RuntimeError`` with an actionable message when unauthenticated;
+        any other exception from the check itself is logged and re-raised.
+        """
+        try:
+            proc_check = await spawn_detached(
                 gh_cli,
                 "auth",
                 "status",
@@ -107,59 +158,6 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
         except Exception as exc:
             logger.error("CopilotSubscriptionAdapter: GitHub auth check failed: %s", exc)
             raise
-
-        out_fh = open(output_file, "w", encoding="utf-8")
-        try:
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=asyncio.subprocess.DEVNULL,
-                    env=env,
-                    cwd=workspace_dir or None,
-                )
-            except FileNotFoundError as e:
-                if workspace_dir and e.filename and os.path.abspath(str(e.filename)) == os.path.abspath(workspace_dir):
-                    logger.warning(
-                        "CopilotSubscriptionAdapter: workspace_dir %r missing, retrying without cwd",
-                        workspace_dir,
-                    )
-                    env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                    workspace_dir = None
-                    context.pop("workspace_dir", None)
-                    env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
-                else:
-                    raise
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=asyncio.subprocess.DEVNULL,
-                    env=env,
-                )
-        finally:
-            out_fh.close()
-
-        run_id = f"{proc.pid}/{session_id}"
-        logger.info(
-            "CopilotSubscriptionAdapter: spawned PID %d session %s agent %s output=%s (subscription mode)",
-            proc.pid,
-            session_id,
-            agent_id,
-            output_file,
-        )
-
-        state = {
-            "pid": proc.pid,
-            "session_id": session_id,
-            "agent_id": agent_id,
-            "output_file": output_file,
-            "started_at": time.time(),
-            "timeout_seconds": timeout_sec,
-        }
-        with open(_state_path(output_dir, run_id), "w", encoding="utf-8") as fh:
-            json.dump(state, fh)
-
-        return run_id
 
     async def _resolve_gh_token(self, agent_config: dict, cfg: dict) -> Optional[str]:
         """Resolve the GitHub token, preferring the LLC secrets vault (GH#10217).

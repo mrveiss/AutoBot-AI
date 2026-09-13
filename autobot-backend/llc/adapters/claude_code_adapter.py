@@ -28,7 +28,6 @@ The state-file / status / cancel lifecycle is shared via
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import time
@@ -47,6 +46,8 @@ from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter, placeholder_run_id
 from .subprocess_base import resolve_cli_binary as _resolve_cli_binary
+from .subprocess_base import resolve_first_output_deadline as _resolve_first_output_deadline
+from .subprocess_base import resolve_stall_deadline as _resolve_stall_deadline
 from .subprocess_base import resolve_timeout as _resolve_timeout
 from .subprocess_support import (
     extract_usage,
@@ -55,6 +56,8 @@ from .subprocess_support import (
     is_rate_limit_output,
     read_output_tail,
     serialize_invoke_context,
+    spawn_create_time,
+    spawn_with_workspace_retry,
 )
 
 logger = get_logger(__name__)
@@ -213,6 +216,15 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
 
         output_dir: str = cfg.get("output_dir", _DEFAULT_OUTPUT_DIR)
         timeout_sec: int = _resolve_timeout(cfg)
+        # GH#13099 AC4 / PR#16284 review: the global stall/first-output
+        # defaults are appropriate here, not just assumed — _build_command
+        # passes --output-format stream-json --print --verbose (below), so
+        # the CLI is verified to emit one JSON object per line as the turn
+        # progresses (that incremental JSONL is exactly what final_result_event()
+        # and the mid-run rate-limit scan in _status() read), not a single
+        # blob buffered to exit.
+        first_output_sec: int = _resolve_first_output_deadline(cfg)
+        stall_sec: int = _resolve_stall_deadline(cfg)
 
         session_id = str(uuid.uuid4())
         run_id_placeholder = placeholder_run_id(session_id)
@@ -230,22 +242,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             logger.info("ClaudeCodeAdapter: resuming session %s for agent %s", session_id, agent_id)
 
         cmd = self._build_command(cli, resume_session_id, cfg, prompt, session_id=session_id)
-
-        workspace_dir: str | None = context.get("workspace_dir")
-        env = {**os.environ, "LLC_INVOKE_CONTEXT": serialize_invoke_context(context)}
-        if workspace_dir:
-            env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
-
-        # GH#9624: inject wake env vars for comment-driven wakes
-        wake_reason = context.get("wake_reason")
-        if wake_reason:
-            env["AUTOBOT_LLC_WAKE_REASON"] = wake_reason
-        wake_comment_id = context.get("wake_comment_id")
-        if wake_comment_id:
-            env["AUTOBOT_LLC_WAKE_COMMENT_ID"] = wake_comment_id
-
-        # GH#9623/GH#9789: forward the run-scoped LLC bearer token + API base.
-        inject_agent_credentials(env, context)
+        env, workspace_dir = self._build_env(context)
 
         # GH#9992: redirect stderr to a sidecar file instead of an unread PIPE.
         # The run is detached (we return run_id immediately), so an unread PIPE
@@ -255,28 +252,15 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         out_fh = open(output_file, "w", encoding="utf-8")
         err_fh = open(stderr_file, "w", encoding="utf-8")
         try:
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=err_fh,
-                    env=env,
-                    cwd=workspace_dir or None,
-                )
-            except FileNotFoundError as e:
-                if not (workspace_dir and e.filename and os.path.abspath(e.filename) == os.path.abspath(workspace_dir)):
-                    raise  # missing binary or unrelated path
-                logger.warning("ClaudeCodeAdapter: workspace_dir %r missing, retrying without cwd", workspace_dir)
-                context.pop("workspace_dir", None)
-                env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
-                workspace_dir = None
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=err_fh,
-                    env=env,
-                )
+            proc, workspace_dir = await spawn_with_workspace_retry(
+                cmd,
+                context=context,
+                env=env,
+                workspace_dir=workspace_dir,
+                stdout=out_fh,
+                stderr=err_fh,
+                log_name="ClaudeCodeAdapter",
+            )
         finally:
             out_fh.close()
             err_fh.close()
@@ -290,20 +274,65 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             output_file,
         )
 
-        state = {
-            "pid": proc.pid,
-            "session_id": session_id,
-            "agent_id": agent_id,
-            "output_file": output_file,
-            "stderr_file": stderr_file,  # GH#9992
-            "started_at": time.time(),
-            "timeout_seconds": timeout_sec,
-        }
+        state = self._build_state(
+            proc, session_id, agent_id, output_file, stderr_file, timeout_sec, first_output_sec, stall_sec
+        )
         with open(_state_path(output_dir, run_id), "w", encoding="utf-8") as fh:
             json.dump(state, fh)
 
         await self._store_session(agent_id, session_id)
         return run_id
+
+    def _build_env(self, context: dict) -> tuple[dict, str | None]:
+        """Build the child's environment and resolve its workspace_dir.
+
+        Forwards the workspace dir (GH#9624 wake env vars for comment-driven
+        wakes, GH#9623/GH#9789 the run-scoped LLC bearer token + API base).
+        """
+        workspace_dir: str | None = context.get("workspace_dir")
+        env = {**os.environ, "LLC_INVOKE_CONTEXT": serialize_invoke_context(context)}
+        if workspace_dir:
+            env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
+        wake_reason = context.get("wake_reason")
+        if wake_reason:
+            env["AUTOBOT_LLC_WAKE_REASON"] = wake_reason
+        wake_comment_id = context.get("wake_comment_id")
+        if wake_comment_id:
+            env["AUTOBOT_LLC_WAKE_COMMENT_ID"] = wake_comment_id
+        inject_agent_credentials(env, context)
+        return env, workspace_dir
+
+    def _build_state(
+        self,
+        proc,
+        session_id: str,
+        agent_id: str,
+        output_file: str,
+        stderr_file: str | None,
+        timeout_sec: int,
+        first_output_sec: int,
+        stall_sec: int,
+    ) -> dict:
+        """Assemble the run's persisted state, including its psutil create_time
+        (PR#16284 review) — the PID-reuse guard every later signal/status check
+        verifies against before ever acting on this PID again. Reused by
+        :class:`ClaudeCodeSubscriptionAdapter`, which has no stderr sidecar
+        file (``stderr_file=None`` omits that key, matching its own shape).
+        """
+        state = {
+            "pid": proc.pid,
+            "session_id": session_id,
+            "agent_id": agent_id,
+            "output_file": output_file,
+            "started_at": time.time(),
+            "create_time": spawn_create_time(proc.pid),  # PR#16284 review
+            "timeout_seconds": timeout_sec,
+            "first_output_deadline_seconds": first_output_sec,  # GH#13099
+            "stall_deadline_seconds": stall_sec,  # GH#13099
+        }
+        if stderr_file is not None:
+            state["stderr_file"] = stderr_file  # GH#9992
+        return state
 
     async def _status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
         """Extend base status to detect provider rate-limiting on process exit (GH#9773).

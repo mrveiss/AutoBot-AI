@@ -41,7 +41,9 @@ from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .claude_code_adapter import ClaudeCodeAdapter, _output_path, _resolve_claude_cli, _state_path
 from .subprocess_base import placeholder_run_id
-from .subprocess_support import inject_agent_credentials, serialize_invoke_context
+from .subprocess_base import resolve_first_output_deadline as _resolve_first_output_deadline
+from .subprocess_base import resolve_stall_deadline as _resolve_stall_deadline
+from .subprocess_support import inject_agent_credentials, serialize_invoke_context, spawn_with_workspace_retry
 
 logger = get_logger(__name__)
 
@@ -58,7 +60,6 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
 
     async def _invoke(self, agent_config: dict, context: dict) -> str:
         """Invoke Claude Code CLI in subscription mode (no API key)."""
-        import time
         import uuid
 
         cli = _resolve_claude_cli()
@@ -67,6 +68,12 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
 
         output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
         timeout_sec: int = int(cfg.get("timeout_seconds", 3600))
+        # GH#13099 AC4 / PR#16284 review: the global (streaming-CLI) defaults
+        # apply — _build_command (inherited, GH#11186) is the SAME builder as
+        # ClaudeCodeAdapter, passing --output-format stream-json --print
+        # --verbose, so this is the identical verified-incremental-JSONL CLI.
+        first_output_sec: int = _resolve_first_output_deadline(cfg)
+        stall_sec: int = _resolve_stall_deadline(cfg)
 
         session_id = str(uuid.uuid4())
         run_id_placeholder = placeholder_run_id(session_id)
@@ -96,32 +103,15 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
 
         out_fh = open(output_file, "w", encoding="utf-8")
         try:
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                    cwd=workspace_dir or None,
-                )
-            except FileNotFoundError as e:
-                if workspace_dir and e.filename and os.path.abspath(str(e.filename)) == os.path.abspath(workspace_dir):
-                    logger.warning(
-                        "ClaudeCodeSubscriptionAdapter: workspace_dir %r missing, retrying without cwd",
-                        workspace_dir,
-                    )
-                    context.pop("workspace_dir", None)
-                    env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                    env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
-                    workspace_dir = None
-                else:
-                    raise
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                )
+            proc, workspace_dir = await spawn_with_workspace_retry(
+                cmd,
+                context=context,
+                env=env,
+                workspace_dir=workspace_dir,
+                stdout=out_fh,
+                stderr=asyncio.subprocess.PIPE,
+                log_name="ClaudeCodeSubscriptionAdapter",
+            )
         finally:
             out_fh.close()
 
@@ -134,14 +124,12 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
             output_file,
         )
 
-        state = {
-            "pid": proc.pid,
-            "session_id": session_id,
-            "agent_id": agent_id,
-            "output_file": output_file,
-            "started_at": time.time(),
-            "timeout_seconds": timeout_sec,
-        }
+        # No stderr sidecar here (stderr goes to a PIPE above) -- reuses the
+        # parent's state builder (incl. GH#13099 fields + PR#16284 review's
+        # create_time) with stderr_file=None so that key is simply omitted.
+        state = self._build_state(
+            proc, session_id, agent_id, output_file, None, timeout_sec, first_output_sec, stall_sec
+        )
         with open(_state_path(output_dir, run_id), "w", encoding="utf-8") as fh:
             json.dump(state, fh)
 
