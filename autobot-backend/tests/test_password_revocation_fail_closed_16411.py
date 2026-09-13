@@ -83,6 +83,16 @@ async def test_a_token_from_before_a_password_change_is_still_refused(get_curren
 
 
 @pytest.mark.asyncio
+async def test_a_token_from_after_a_password_change_is_admitted(real_auth_middleware, monkeypatch):
+    """The other side of the epoch: a marker older than the token's iat does not revoke it."""
+    get_current_user = _signed_in_as(real_auth_middleware, monkeypatch, {**_JWT_USER, "iat": 2000})
+    with patch(_REDIS, _redis_answering(value="1000")):
+        user = await get_current_user(_REQUEST)
+
+    assert user["username"] == "alice"
+
+
+@pytest.mark.asyncio
 async def test_the_denial_names_the_check_and_error_type_never_the_token(get_current_user):
     with patch(_REDIS, _redis_answering(error=RedisError("down"))):
         with patch.object(auth_revocation.logger, "error") as log_error:
