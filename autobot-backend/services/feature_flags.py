@@ -6,7 +6,7 @@
 Feature Flags Service for AutoBot Access Control Rollout
 
 Provides Redis-backed feature flag management for gradual enforcement rollout
-across distributed 6-VM infrastructure.
+across AutoBot's distributed, role-based infrastructure.
 
 Features:
 - DISABLED, LOG_ONLY, ENFORCED enforcement modes

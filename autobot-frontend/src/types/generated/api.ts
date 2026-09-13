@@ -35563,7 +35563,7 @@ export interface paths {
          *     - Response time
          *     - Throughput
          *     - Resource utilization
-         *     - Cross-VM load distribution
+         *     - Cross-role load distribution
          */
         post: operations["optimize_system_performance_api_enterprise_performance_optimize_post"];
         delete?: never;
@@ -35581,7 +35581,7 @@ export interface paths {
         };
         /**
          * Get Infrastructure Status
-         * @description Get 6-VM distributed infrastructure status and topology.
+         * @description Get role-based distributed infrastructure status and topology.
          */
         get: operations["get_infrastructure_status_api_enterprise_infrastructure_get"];
         put?: never;

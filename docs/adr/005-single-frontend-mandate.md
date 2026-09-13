@@ -22,21 +22,21 @@ Developers would accidentally start frontend servers locally while the VM was al
 
 ## Decision
 
-**Only VM1 (<frontend-ip>:5173) may run the frontend server.**
+**Only the designated frontend host (<frontend-ip>:5173) may run the frontend server.**
 
 This is an absolute mandate with zero exceptions:
 
-| Machine | Frontend Server | Status |
+| Host | Frontend Server | Status |
 |---------|-----------------|--------|
-| Main (<backend-ip>) | **FORBIDDEN** | Never start Vite here |
-| VM1 (<frontend-ip>) | **REQUIRED** | Only frontend server |
-| All other VMs | **FORBIDDEN** | No frontend capability |
+| Backend host (<backend-ip>) | **FORBIDDEN** | Never start Vite here |
+| Frontend host (<frontend-ip>) | **REQUIRED** | Only frontend server |
+| Any other host | **FORBIDDEN** | No frontend capability |
 
 ### Development Workflow
 
 1. **Edit locally** in `autobot-frontend/`
-2. **Sync to VM1** using `./sync-frontend.sh` or sync scripts
-3. **VM1 serves** the frontend (dev or production mode)
+2. **Sync to the frontend host** using `./sync-frontend.sh` or sync scripts
+3. **The frontend host serves** the frontend (dev or production mode)
 4. **Access** via `http://<frontend-ip>:5173`
 
 ### Alternatives Considered
@@ -67,11 +67,11 @@ This is an absolute mandate with zero exceptions:
 
 - **Sync Step Required**: Must sync changes before seeing them
 - **Slight Latency**: Network round-trip to VM
-- **VM Dependency**: Frontend unavailable if VM1 is down
+- **Host Dependency**: Frontend unavailable if the frontend host is down
 
 ### Neutral
 
-- HMR still works on VM1, just triggers after sync
+- HMR still works on the frontend host, just triggers after sync
 - Can use watch mode with auto-sync for smoother workflow
 
 ## Implementation Notes
@@ -80,7 +80,7 @@ This is an absolute mandate with zero exceptions:
 
 - `sync-frontend.sh` - Quick sync script for frontend changes
 - `scripts/utilities/sync-to-vm.sh` - General purpose VM sync utility
-- Systemd services on VM1 manage frontend startup (replaces deprecated `run_autobot.sh`)
+- Systemd services on the frontend host manage frontend startup (replaces deprecated `run_autobot.sh`)
 
 ### Forbidden Commands
 
@@ -102,7 +102,7 @@ pnpm dev
 # 1. Edit code locally
 vim autobot-frontend/src/components/MyComponent.vue
 
-# 2. Sync to VM1
+# 2. Sync to the frontend host
 ./sync-frontend.sh
 # OR
 ./scripts/utilities/sync-to-vm.sh frontend autobot-frontend/ /home/autobot/autobot-frontend/
@@ -115,8 +115,8 @@ firefox http://<frontend-ip>:5173
 
 The systemd service configuration enforces this by:
 1. Never starting Vite on main machine
-2. SSH to VM1 to start/restart frontend
-3. Health checking VM1's frontend server
+2. SSH to the frontend host to start/restart frontend
+3. Health checking the frontend host's frontend server
 
 ### Pre-commit Hook (Optional)
 
@@ -127,7 +127,7 @@ The systemd service configuration enforces this by:
 # Warn if Vite process running locally
 if pgrep -f "vite" > /dev/null; then
     echo "WARNING: Vite is running locally. This violates ADR-005."
-    echo "Only VM1 (<frontend-ip>) should run the frontend."
+    echo "Only the frontend host (<frontend-ip>) should run the frontend."
     exit 1
 fi
 ```
@@ -145,7 +145,8 @@ fi
 
 ## Related ADRs
 
-- [ADR-001](001-distributed-vm-architecture.md) - VM1 is dedicated frontend server
+- [ADR-001](001-distributed-vm-architecture.md) - historical: VM1 was the dedicated frontend server in that install
+- [ADR-010](010-role-separation-count-agnostic-placement.md) - Frontend is its own role; this ADR's one-instance mandate applies regardless of host count
 
 ---
 

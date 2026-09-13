@@ -5,7 +5,7 @@
 ################################################################################
 # Access Control Monitoring Dashboard
 #
-# Real-time monitoring of access control rollout across 6-VM infrastructure.
+# Real-time monitoring of access control rollout across AutoBot's distributed, role-based infrastructure.
 # Displays enforcement mode, audit logs, unauthorized access attempts, and
 # performance metrics.
 #

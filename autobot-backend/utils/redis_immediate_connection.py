@@ -266,7 +266,7 @@ async def get_redis_with_immediate_test(
     """
 
     # Define fallback configurations
-    # Redis runs on VM3, use direct connection
+    # Redis runs on the database role's host, use direct connection
     fallback_configs = [
         {
             "host": NetworkConstants.REDIS_VM_IP,

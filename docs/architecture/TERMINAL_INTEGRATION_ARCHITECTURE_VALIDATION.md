@@ -557,12 +557,13 @@ class MultiMachineSSHAdapter:
 
 ### 3.1 SSH Integration Architecture
 
-**Target Machines:**
-- **VM1 Frontend** (`<frontend-ip>`): Web interface operations
-- **VM2 NPU Worker** (`<npu-ip>`): AI hardware commands
-- **VM3 Redis** (`<database-ip>`): Database operations
-- **VM4 AI Stack** (`<aiml-ip>`): AI model operations
-- **VM5 Browser** (`<browser-ip>`): Browser automation
+**Target Roles** (each may be co-located or on its own host — see
+[VM_ROLES.md](VM_ROLES.md)):
+- **Frontend role** (`<frontend-ip>`): Web interface operations
+- **NPU Worker role** (`<npu-ip>`): AI hardware commands
+- **Database role** (`<database-ip>`): Database operations
+- **AI Stack role** (`<aiml-ip>`): AI model operations
+- **Browser role** (`<browser-ip>`): Browser automation
 
 **SSH Connection Flow:**
 ```

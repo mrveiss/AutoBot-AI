@@ -17,7 +17,7 @@ flowchart TB
         Browser[Web Browser]
     end
 
-    subgraph Frontend["VM1: Frontend (<frontend-ip>)"]
+    subgraph Frontend["Frontend Role (<frontend-ip>)"]
         Vue[Vue 3 Application]
         WS_Client[WebSocket Client]
     end
@@ -30,19 +30,19 @@ flowchart TB
         KB_Manager[Knowledge Base Manager]
     end
 
-    subgraph Redis["VM3: Redis (<database-ip>)"]
+    subgraph Redis["Database Role: Redis (<database-ip>)"]
         DB0[(DB0: Main)]
         DB1[(DB1: Knowledge)]
         DB2[(DB2: Prompts)]
         DB3[(DB3: Analytics)]
     end
 
-    subgraph AI["VM4: AI Stack (<aiml-ip>)"]
+    subgraph AI["AI Stack Role (<aiml-ip>)"]
         Ollama[Ollama Server]
         Models[LLM Models]
     end
 
-    subgraph NPU["VM2: NPU Worker (<npu-ip>)"]
+    subgraph NPU["NPU Worker Role (<npu-ip>)"]
         NPU_API[NPU API]
         OpenVINO[OpenVINO Runtime]
     end
@@ -76,14 +76,14 @@ This diagram shows how a user message flows through the system to generate a res
 ```mermaid
 sequenceDiagram
     participant User
-    participant Frontend as VM1: Frontend
+    participant Frontend as Frontend Role
     participant API as Main: Backend API
     participant Session as Session Manager
-    participant Redis as VM3: Redis
+    participant Redis as Database Role: Redis
     participant KB as Knowledge Base
     participant LLM as LLM Interface
-    participant Ollama as VM4: Ollama
-    participant NPU as VM2: NPU
+    participant Ollama as AI Stack Role: Ollama
+    participant NPU as NPU Worker Role
 
     User->>Frontend: Send message
     Frontend->>API: POST /api/chat/message
@@ -193,9 +193,9 @@ flowchart TB
     end
 
     subgraph External["External Services"]
-        Browser_VM[VM5: Playwright]
-        AI_VM[VM4: Ollama]
-        Redis_VM[VM3: Redis]
+        Browser_VM[Browser Role: Playwright]
+        AI_VM[AI Stack Role: Ollama]
+        Redis_VM[Database Role: Redis]
     end
 
     subgraph Output["Results"]
@@ -234,10 +234,10 @@ flowchart TB
 ```mermaid
 sequenceDiagram
     participant User
-    participant Frontend as VM1: Frontend
+    participant Frontend as Frontend Role
     participant API as Main: Backend
     participant Auth as Auth Service
-    participant Redis as VM3: Redis
+    participant Redis as Database Role: Redis
     participant Session as Session Store
 
     User->>Frontend: Login request
@@ -271,7 +271,7 @@ flowchart LR
         Browser_Client[Browser Client]
     end
 
-    subgraph Browser_VM["VM5: Browser (<browser-ip>)"]
+    subgraph Browser_VM["Browser Role (<browser-ip>)"]
         Playwright[Playwright Server]
         Chromium[Chromium Browser]
         Context[Browser Context]
@@ -356,7 +356,7 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph Redis["VM3: Redis Stack (<database-ip>:6379)"]
+    subgraph Redis["Database Role: Redis Stack (<database-ip>:6379)"]
         subgraph DB0["Database 0: Main"]
             Sessions[Sessions]
             Cache[API Cache]

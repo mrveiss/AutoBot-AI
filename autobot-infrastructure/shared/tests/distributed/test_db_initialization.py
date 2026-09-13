@@ -500,34 +500,35 @@ class TestFrontendFileUpload:
 
 
 class TestConcurrentVMInitialization:
-    """Test concurrent initialization from multiple VMs."""
+    """Test concurrent initialization from multiple simulated role hosts."""
 
     @pytest.mark.asyncio
     async def test_concurrent_initialization_safe(self, shared_db_path):
         """
-        Test Case 2.5: Concurrent initialization from multiple VMs is safe
+        Test Case 2.5: Concurrent initialization from multiple role hosts is safe
 
-        Scenario:
-        1. All 6 VMs start simultaneously (system restart scenario)
-        2. Each VM's ConversationFileManager initializes
-        3. Only one VM successfully creates schema
-        4. Other VMs safely skip initialization
-        5. All VMs can operate normally
+        Scenario (role hosts are simulated below; the count is a test fixture,
+        not an assertion about deployment topology — see ADR-010):
+        1. All simulated role hosts start simultaneously (system restart scenario)
+        2. Each host's ConversationFileManager initializes
+        3. Only one host successfully creates schema
+        4. Other hosts safely skip initialization
+        5. All hosts can operate normally
 
         This is CRITICAL for production deployments where:
-        - VMs may restart independently
+        - Role hosts may restart independently
         - Network partitions may cause initialization retries
         - Race conditions could corrupt database
 
         Validates:
         - No database corruption during concurrent initialization
         - Schema version recorded only once
-        - All VMs report correct schema version
-        - File operations work from all VMs after initialization
+        - All hosts report correct schema version
+        - File operations work from all hosts after initialization
         """
         logger.info("=== Test 2.5: Concurrent VM initialization safety ===")
 
-        # Create manager instances for all 6 VMs
+        # Create manager instances for simulated role hosts (fixture count, not topology)
         vm_names = [
             "VM0_Main_10.0.0.1",
             "VM1_Frontend_10.0.0.2",
@@ -547,10 +548,10 @@ class TestConcurrentVMInitialization:
             for vm_name in vm_names
         }
 
-        logger.info(f"Created {len(managers)} VM manager instances")
+        logger.info(f"Created {len(managers)} role-host manager instances")
 
         # Initialize all managers concurrently (simulating simultaneous VM startup)
-        logger.info("Starting concurrent initialization from all 6 VMs...")
+        logger.info(f"Starting concurrent initialization from all {len(managers)} simulated role hosts...")
 
         initialization_tasks = [manager.initialize() for manager in managers.values()]
 
@@ -563,7 +564,7 @@ class TestConcurrentVMInitialization:
             logger.error(f"Exceptions during initialization: {exceptions}")
             raise AssertionError(f"Concurrent initialization had {len(exceptions)} failures: {exceptions}")
 
-        logger.info("✓ All 6 VMs initialized successfully without errors")
+        logger.info(f"✓ All {len(managers)} simulated role hosts initialized successfully without errors")
 
         # Verify database integrity (Issue #618: use async sqlite helper)
         db_path_str = str(shared_db_path["db_path"])

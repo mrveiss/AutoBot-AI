@@ -2,7 +2,7 @@
   "url": "https://context7.com/mrveiss/autobot-ai",
   "public_key": "pk_2lkpZukfMqQ54FxypyPxu",
   "projectTitle": "AutoBot AI Platform",
-  "description": "Autonomous AI-powered Linux administration platform with multi-modal AI, 20+ specialized agents, distributed fleet management via SLM, NPU hardware acceleration, RAG knowledge pipelines, and RBAC security across a 6-VM architecture",
+  "description": "Autonomous AI-powered Linux administration platform with multi-modal AI, 20+ specialized agents, distributed fleet management via SLM, NPU hardware acceleration, RAG knowledge pipelines, and RBAC security across a distributed, role-based architecture",
   "folders": [
     "docs"
   ],

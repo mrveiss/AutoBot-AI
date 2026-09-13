@@ -197,7 +197,7 @@ class EnterpriseFeatureManager:
         return topology
 
     def _initialize_vm_topology(self) -> Dict[str, Dict[str, Any]]:
-        """Initialize 6-VM distributed topology."""
+        """Initialize the role-based topology map (requires every role's host/port to be configured)."""
         cfg = self._get_vm_env_config()
         self._validate_vm_env_config(cfg)
         return self._build_vm_topology(cfg)
@@ -282,7 +282,7 @@ class EnterpriseFeatureManager:
         return EnterpriseFeature(
             name="Cross-VM Load Balancing",
             category=FeatureCategory.LOAD_BALANCING,
-            description="Intelligent load distribution across 6-VM infrastructure",
+            description="Intelligent load distribution across role-based infrastructure",
             configuration={
                 "enable_adaptive_routing": True,
                 "load_balance_algorithm": "weighted_round_robin",

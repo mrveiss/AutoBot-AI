@@ -142,7 +142,8 @@ redis-cli -h <database-ip> BGSAVE
 
 ## Related ADRs
 
-- [ADR-001](001-distributed-vm-architecture.md) - Redis runs on VM3 (<database-ip>)
+- [ADR-001](001-distributed-vm-architecture.md) - historical: Redis ran on VM3 in that install
+- [ADR-010](010-role-separation-count-agnostic-placement.md) - Redis runs on the `database` role's host, wherever that is placed
 
 ---
 

@@ -5,8 +5,8 @@
 Architecture Compliance Tests
 =============================
 
-Tests to ensure AutoBot's distributed architecture is properly configured
-and services are running on their designated VMs.
+Tests to ensure AutoBot's distributed, role-based architecture (ADR-010) is
+properly configured and services resolve to their designated role hosts.
 
 This replaces manual architecture fix scripts with automated validation.
 """
@@ -88,52 +88,90 @@ class TestServiceDistribution:
             ai_host == NetworkConstants.AI_STACK_VM_IP
         ), f"AI stack must run on VM4 (AI Stack VM), currently configured for: {ai_host}"
 
-    @pytest.mark.skip(
-        reason=(
-            "#15194: asserts a fixed VM topology the platform does not have. AutoBot "
-            "runs in Docker, on one VM, or on any number the operator chooses, so this "
-            "assertion is false by construction rather than merely unmet here. Skipped "
-            "with the reason recorded instead of adjusted to pass: rewriting it needs "
-            "the topology decision on #15194, and editing it green would hide the very "
-            "defect #15051 wired this file in to expose."
-        )
-    )
-    def test_browser_service_on_vm5(self):
-        """Ensure browser service runs on VM5 (Browser VM)"""
-        services_config = unified_config_manager.get_distributed_services_config()
-        browser_config = services_config.get("browser_service", {})
-        browser_host = browser_config.get("host")
+    # get_distributed_services_config() key -> autobot_shared.ssot_config VMConfig attribute
+    _ROLE_TO_SSOT_VM_ATTR = {
+        "frontend": "frontend",
+        "npu_worker": "npu",
+        "redis": "redis",
+        "ai_stack": "aistack",
+        "browser": "browser",
+    }
 
-        assert (
-            browser_host == NetworkConstants.BROWSER_VM_IP
-        ), f"Browser service must run on VM5 (Browser VM), currently configured for: {browser_host}"
+    def test_service_hosts_resolve_via_ssot_config(self):
+        """Every role's configured host matches the SSOT config, whatever that host is.
+
+        #15194: the old assertion pinned the browser role to a specific fixed address
+        (``NetworkConstants.BROWSER_VM_IP``), presuming a fixed VM5 exists. AutoBot is
+        role-based and count-agnostic (ADR-010): a role's host can be a ``127.0.0.x``
+        loopback alias (Docker/single-VM, see VM_ROLES.md), a dedicated VM, or one of
+        several machines. What must hold in every deployment is that the value
+        ``unified_config_manager`` reports for a role is not an independent literal --
+        it is the same value the canonical SSOT config
+        (``autobot_shared.ssot_config.config.vm``) declares. Comparing against SSOT
+        directly here -- rather than against ``NetworkConstants``, which is itself only
+        a ``ConfigRegistry`` proxy in front of the same SSOT -- is what makes this a real
+        check rather than a tautology: a stray hardcoded literal, or a stale
+        ``ConfigRegistry``/Redis-cache value that has drifted from SSOT, would diverge
+        from this comparison and fail here.
+        """
+        from autobot_shared.ssot_config import config as ssot_config
+
+        services_config = unified_config_manager.get_distributed_services_config()
+
+        for service_key, ssot_attr in self._ROLE_TO_SSOT_VM_ATTR.items():
+            host = services_config.get(service_key, {}).get("host")
+            expected = str(getattr(ssot_config.vm, ssot_attr))
+
+            assert host, f"'{service_key}' role has no host configured"
+            assert host == expected, (
+                f"'{service_key}' role host ({host!r}) does not match SSOT "
+                f"config.vm.{ssot_attr} ({expected!r}) -- host resolution must go "
+                "through SSOT, not a separate literal"
+            )
 
 
 class TestNetworkConfiguration:
     """Test network configuration compliance"""
 
-    @pytest.mark.skip(
-        reason=(
-            "#15194: asserts a fixed VM topology the platform does not have. AutoBot "
-            "runs in Docker, on one VM, or on any number the operator chooses, so this "
-            "assertion is false by construction rather than merely unmet here. Skipped "
-            "with the reason recorded instead of adjusted to pass: rewriting it needs "
-            "the topology decision on #15194, and editing it green would hide the very "
-            "defect #15051 wired this file in to expose."
-        )
-    )
-    def test_no_localhost_in_distributed_services(self):
-        """Ensure no services use localhost in distributed configuration"""
+    def test_distributed_service_hosts_are_resolved(self):
+        """Every role's host is a real, resolved value -- loopback included.
+
+        #15194: the old assertion rejected ``localhost``/``127.0.0.1`` outright,
+        presuming every role must live on a distinct machine. Docker and single-VM
+        deployments correctly bind roles to loopback (or a ``127.0.0.x`` alias --
+        see VM_ROLES.md's co-located addressing scheme), so rejecting that failed a
+        supported deployment shape rather than catching a bug. What must hold in
+        every deployment is that resolution actually happened: each role's host is
+        a non-empty, syntactically valid address or hostname -- not ``None``, an
+        empty string, or an unresolved template placeholder.
+        """
+        import ipaddress
+
         services_config = unified_config_manager.get_distributed_services_config()
 
         for service_name, service_config in services_config.items():
-            if isinstance(service_config, dict):
-                host = service_config.get("host")
-                if host:
-                    assert host not in [
-                        "localhost",
-                        "127.0.0.1",
-                    ], f"Service '{service_name}' uses localhost ({host}), must use actual IP"
+            if not isinstance(service_config, dict):
+                continue
+
+            host = service_config.get("host")
+            assert host, f"Service '{service_name}' has no host configured"
+
+            if host == NetworkConstants.LOCALHOST_NAME:
+                continue
+
+            try:
+                ipaddress.ip_address(host)
+                continue
+            except ValueError:
+                pass
+
+            labels = host.split(".")
+            assert labels and all(
+                label and all(c.isascii() and (c.isalnum() or c == "-") for c in label) for label in labels
+            ), (
+                f"Service '{service_name}' host '{host}' is not a valid loopback, "
+                "IP address, or hostname"
+            )
 
     def test_backend_binds_to_all_interfaces(self):
         """Ensure backend binds to 0.0.0.0 for network accessibility"""
@@ -311,73 +349,81 @@ class TestRedisConnection:
 class TestPortConfiguration:
     """Test port assignments"""
 
-    @pytest.mark.skip(
-        reason=(
-            "#15194: asserts a fixed VM topology the platform does not have. AutoBot "
-            "runs in Docker, on one VM, or on any number the operator chooses, so this "
-            "assertion is false by construction rather than merely unmet here. Skipped "
-            "with the reason recorded instead of adjusted to pass: rewriting it needs "
-            "the topology decision on #15194, and editing it green would hide the very "
-            "defect #15051 wired this file in to expose."
-        )
-    )
-    def test_standard_port_assignments(self):
-        """Ensure services use their standard ports"""
+    def test_service_ports_match_ssot_constants(self):
+        """Each role's configured port matches the SSOT port config, not a hardcoded literal.
+
+        #15194: the old test asserted fixed literals (8001, 6379, 5173, 8081, 8080,
+        3000) -- inverting the "never hardcode" rule into the very assertion meant to
+        guard it. It also asserted the wrong number for the browser role: 3000 is
+        Grafana's port, while the SSOT default is 9001 (#4052) -- a literal-vs-literal
+        comparison could not catch that, because both sides were spelled by hand from
+        the same stale assumption. It also read the browser role under the wrong key
+        (``browser_service``, which ``get_distributed_services_config()`` never
+        populates -- the key is ``browser``), so it silently compared ``None`` to a
+        literal. Comparing against ``autobot_shared.ssot_config.config.port`` directly
+        holds for whatever port an operator configures, while still catching a config
+        path that silently diverges from what SSOT declares.
+        """
+        from autobot_shared.ssot_config import config as ssot_config
+
         backend_config = unified_config_manager.get_backend_config()
         redis_config = unified_config_manager.get_redis_config()
         services_config = unified_config_manager.get_distributed_services_config()
 
-        # Backend
-        assert backend_config.get("port") == 8001, "Backend must use port 8001"
+        assert (
+            backend_config.get("port") == ssot_config.port.backend
+        ), "Backend port must come from SSOT config.port.backend"
 
-        # Redis
-        assert redis_config.get("port") == 6379, "Redis must use port 6379"
+        assert (
+            redis_config.get("port") == ssot_config.port.redis
+        ), "Redis port must come from SSOT config.port.redis"
 
-        # Frontend
-        frontend_port = services_config.get("frontend", {}).get("port")
-        assert frontend_port == 5173, "Frontend must use port 5173"
-
-        # NPU Worker
-        npu_port = services_config.get("npu_worker", {}).get("port")
-        assert npu_port == 8081, "NPU worker must use port 8081"
-
-        # AI Stack
-        ai_port = services_config.get("ai_stack", {}).get("port")
-        assert ai_port == 8080, "AI stack must use port 8080"
-
-        # Browser Service
-        browser_port = services_config.get("browser_service", {}).get("port")
-        assert browser_port == 3000, "Browser service must use port 3000"
+        role_to_ssot_port_attr = {
+            "frontend": "frontend",
+            "npu_worker": "npu",
+            "ai_stack": "aistack",
+            "browser": "browser",
+        }
+        for service_key, ssot_attr in role_to_ssot_port_attr.items():
+            port = services_config.get(service_key, {}).get("port")
+            expected = getattr(ssot_config.port, ssot_attr)
+            assert port == expected, (
+                f"'{service_key}' role port ({port!r}) does not match SSOT "
+                f"config.port.{ssot_attr} ({expected!r})"
+            )
 
 
 class TestSingleFrontendServer:
     """Test that only one frontend server is configured"""
 
-    @pytest.mark.skip(
-        reason=(
-            "#15194: asserts a fixed VM topology the platform does not have. AutoBot "
-            "runs in Docker, on one VM, or on any number the operator chooses, so this "
-            "assertion is false by construction rather than merely unmet here. Skipped "
-            "with the reason recorded instead of adjusted to pass: rewriting it needs "
-            "the topology decision on #15194, and editing it green would hide the very "
-            "defect #15051 wired this file in to expose."
-        )
-    )
     def test_only_one_frontend_instance(self):
-        """Ensure frontend only runs on VM1, not on main machine"""
+        """Exactly one frontend role exists platform-wide, regardless of host count.
+
+        #15194: the old assertion required backend and frontend to be on different
+        hosts ("Backend must not run on frontend VM"), which fails a correct
+        co-located or single-VM deployment where every role can legitimately share
+        one host (ADR-010). ADR-005's single-frontend mandate governs how many
+        frontend *processes* may run, not which host a role shares with another --
+        co-location is allowed; a second frontend role is not. ``get_host_configs()``
+        is the canonical fleet-wide host registry (also used to generate CORS
+        origins); asserting exactly one ``frontend`` entry there is a real check on
+        the schema, independent of what host that entry resolves to.
+        """
+        host_configs = NetworkConstants.get_host_configs()
+        frontend_entries = [h for h in host_configs if h.get("id") == "frontend"]
+
+        assert len(frontend_entries) == 1, (
+            f"Expected exactly one 'frontend' role entry in get_host_configs(), "
+            f"found {len(frontend_entries)}"
+        )
+
         services_config = unified_config_manager.get_distributed_services_config()
-        frontend_config = services_config.get("frontend", {})
-        frontend_host = frontend_config.get("host")
+        frontend_host = services_config.get("frontend", {}).get("host")
+        assert frontend_host, "frontend role must resolve to a non-empty host"
 
-        # Frontend must ONLY be on VM1
-        assert (
-            frontend_host == NetworkConstants.FRONTEND_VM_IP
-        ), f"Frontend must run ONLY on VM1 ({NetworkConstants.FRONTEND_VM_IP}), found: {frontend_host}"
-
-        # Backend should NOT be configured to run frontend
-        backend_config = unified_config_manager.get_backend_config()
-        backend_host = backend_config.get("host")
-        assert backend_host != NetworkConstants.FRONTEND_VM_IP, "Backend must not run on frontend VM"
+        # Co-location is allowed: backend and frontend may legitimately share a
+        # host in Docker or single-VM deployments (ADR-010). This test does not,
+        # and must not, assert that they differ.
 
 
 if __name__ == "__main__":

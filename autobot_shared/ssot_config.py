@@ -161,15 +161,15 @@ class RedactedSettings(RedactedReprMixin, BaseSettings):
 
 class VMConfig(RedactedSettings):
     """
-    VM IP address configuration.
+    Service host configuration, resolved per role.
 
-    Supports the 6-VM distributed architecture:
-    - Main (WSL) - Backend API + VNC Desktop
-    - Frontend (VM1) - Web interface
-    - NPU Worker (VM2) - Hardware AI acceleration
-    - Redis (VM3) - Data layer
-    - AI Stack (VM4) - AI processing
-    - Browser (VM5) - Web automation
+    Role-based, count-agnostic placement (ADR-010): co-located or split hosts.
+    - Main (backend role) - Backend API + VNC Desktop
+    - Frontend (frontend role) - Web interface
+    - NPU Worker (aiml role) - Hardware AI acceleration
+    - Redis (database role) - Data layer
+    - AI Stack (aiml role) - AI processing
+    - Browser (browser role) - Web automation
     """
 
     model_config = SettingsConfigDict(
