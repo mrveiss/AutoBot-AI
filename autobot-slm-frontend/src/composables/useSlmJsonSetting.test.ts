@@ -5,7 +5,6 @@ import { useSlmJsonSetting } from './useSlmJsonSetting'
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
-    getApiUrl: () => '',
     getAuthHeaders: () => ({}),
   }),
 }))
