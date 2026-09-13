@@ -293,3 +293,17 @@ register_env_var(
         component="slm",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_GPU_PROBE_TIMEOUT_S",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds a GPU vendor tool (nvidia-smi, rocm-smi) may run before the probe gives up. "
+            "Read by autobot_shared.gpu_telemetry for the SLM agent's heartbeat GPU telemetry (#16280)."
+        ),
+        component="slm",
+        range=(0.5, 60.0),
+    )
+)
