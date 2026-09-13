@@ -18,8 +18,13 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
+from autobot_shared.store_authority import system_of_record
 from autobot_shared.time_utils import utc_timestamp
 from user_management.models.base import Base
+
+# #16464: declares Postgres as the durable, sole home of this concept --
+# see autobot_shared/store_authority.py.
+SYSTEM_OF_RECORD = system_of_record("session_collaboration")
 
 
 class PermissionLevel(str, Enum):

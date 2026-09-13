@@ -11251,7 +11251,7 @@ export interface components {
              */
             sync_type: string;
             /** Systemd Service */
-            systemd_service?: string | null;
+            systemd_service?: string[] | null;
             /** Target Path */
             target_path: string;
         } & {
@@ -11395,7 +11395,7 @@ export interface components {
             /** Sync Type */
             sync_type?: string | null;
             /** Systemd Service */
-            systemd_service?: string | null;
+            systemd_service?: string[] | null;
             /** Target Path */
             target_path?: string | null;
         } & {
@@ -13974,7 +13974,7 @@ export interface components {
             /** Sync Type */
             sync_type?: string | null;
             /** Systemd Service */
-            systemd_service?: string | null;
+            systemd_service?: string[] | null;
             /** Target Path */
             target_path: string;
         } & {
