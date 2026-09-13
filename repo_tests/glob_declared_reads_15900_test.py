@@ -117,7 +117,10 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "root-relative `*.conf.j2` sweep; the matching files live outside the python filter's trees",
     ),
     "*.j2": (
-        {"repo_tests/slm_frontend_publish_contract_test.py"},
+        {
+            "repo_tests/nginx_internal_api_key_auth_gate_test.py",
+            "repo_tests/slm_frontend_publish_contract_test.py",
+        },
         "root-relative `*.j2` sweep; the matching files live outside the python filter's trees",
     ),
     "*.md": (

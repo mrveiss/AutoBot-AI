@@ -13,10 +13,20 @@
  * fallback, no 401 cleanup, no timeout). The live-log WebSocket below stays on
  * the native transport — `useAutobotApi` is HTTP-only and a socket has no
  * equivalent there.
+ *
+ * #16374: the nginx `/autobot-api/` location now runs an `auth_request`
+ * session check before it forwards anything to the backend. A browser
+ * WebSocket handshake cannot carry a custom `Authorization` header, so the
+ * log-stream socket carries the SLM session token as a `Sec-WebSocket-Protocol`
+ * subprotocol instead (`new WebSocket(url, ['bearer', token])`) — the
+ * dedicated nginx stream location reads it from that header, never the URL,
+ * so the JWT never lands in an access log, browser history, or the request
+ * forwarded to the backend.
  */
 
 import { ref } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
+import { useAuthStore } from '@/stores/auth'
 import {
   useAutobotApi,
   autobotApiErrorMessage,
@@ -24,6 +34,7 @@ import {
 } from '@/composables/useAutobotApi'
 
 const api = useAutobotApi()
+const authStore = useAuthStore()
 const processes = ref<ProcessRun[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -93,11 +104,25 @@ function buildWsUrl(path: string): string {
   return `${proto}//${wsBase}${path}`
 }
 
+/**
+ * #16374: a native `new WebSocket()` handshake cannot set an `Authorization`
+ * header, so the SLM session token rides in the `Sec-WebSocket-Protocol`
+ * subprotocol list instead of the URL — JWT characters (base64url plus the
+ * `.` segment separators) are all valid HTTP token characters (RFC 7230
+ * `tchar`), so the token is a legal subprotocol value. nginx's dedicated
+ * stream location reads it back out of that header (never the URL) to run
+ * the session check, then strips it before proxying to the backend, which
+ * accepts the same `bearer` subprotocol so the browser completes the
+ * handshake (RFC 6455 4.2.2 requires the server to echo one of the offered
+ * subprotocols).
+ */
 function streamLogs(processId: string) {
   stopStream()
   fullLog.value = ''
   isStreaming.value = true
-  const ws = new WebSocket(buildWsUrl(`/processes/${processId}/stream`))
+  const ws = authStore.token
+    ? new WebSocket(buildWsUrl(`/processes/${processId}/stream`), ['bearer', authStore.token])
+    : new WebSocket(buildWsUrl(`/processes/${processId}/stream`))
   streamSocket.value = ws
   ws.onmessage = (event) => {
     try {
