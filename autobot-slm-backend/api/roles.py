@@ -38,7 +38,7 @@ class RoleResponse(BaseModel):
     sync_type: str | None = None
     source_paths: list
     target_path: str
-    systemd_service: str | None = None
+    systemd_service: list[str] | None = None
     auto_restart: bool
     health_check_port: int | None = None
     health_check_path: str | None = None
@@ -60,7 +60,7 @@ class RoleCreate(BaseModel):
     sync_type: str = SyncType.COMPONENT.value
     source_paths: list = Field(default_factory=list)
     target_path: str = Field(..., min_length=1)
-    systemd_service: str | None = None
+    systemd_service: list[str] | None = None
     auto_restart: bool = False
     health_check_port: int | None = None
     health_check_path: str | None = None
@@ -78,7 +78,7 @@ class RoleUpdate(BaseModel):
     sync_type: str | None = None
     source_paths: list | None = None
     target_path: str | None = None
-    systemd_service: str | None = None
+    systemd_service: list[str] | None = None
     auto_restart: bool | None = None
     health_check_port: int | None = None
     health_check_path: str | None = None
@@ -531,14 +531,14 @@ def _classify_post_sync(role: Role) -> List[PostSyncAction]:
             )
         )
 
-    if role.systemd_service and role.auto_restart:
+    if role.systemd_service and role.auto_restart:  # #16025: a role can own >1 unit; restart all of them
         actions.append(
             PostSyncAction(
                 role_name=role.name,
                 display_name=display,
                 category="restart",
-                label=f"Restart {role.systemd_service}",
-                systemd_service=role.systemd_service,
+                label=f"Restart {' '.join(role.systemd_service)}",
+                systemd_service=" ".join(role.systemd_service),
             )
         )
 
@@ -625,7 +625,7 @@ async def execute_node_action(
             )
         success, output = await _run_ssh_cmd(
             node,
-            f"sudo -n systemctl restart {role.systemd_service}",
+            f"sudo -n systemctl restart {' '.join(role.systemd_service)}",  # #16025: >1 unit, one call
         )
     else:
         cmd = role.post_sync_cmd
