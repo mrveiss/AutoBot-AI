@@ -59,6 +59,23 @@ class TestGitTracker:
                 assert success is True
 
     @pytest.mark.asyncio
+    async def test_fetch_prunes_stale_remote_tracking_refs(self):
+        """#16610: a stale ``origin/release/*`` ref blocks a new ``origin/release``
+        branch unless the fetch prunes first, so the fetch must pass ``--prune``."""
+        tracker = GitTracker(repo_path="/path/to/repo")
+
+        with patch.object(git_tracker, "_is_git_repo", return_value=True):
+            with patch("asyncio.create_subprocess_exec") as mock_exec:
+                mock_process = AsyncMock()
+                mock_process.communicate = AsyncMock(return_value=(b"", b""))
+                mock_process.returncode = 0
+                mock_exec.return_value = mock_process
+
+                await tracker.fetch_remote()
+
+        assert mock_exec.call_args.args == ("git", "-C", "/path/to/repo", "fetch", "--prune", "origin")
+
+    @pytest.mark.asyncio
     async def test_get_remote_commit_hash(self):
         """Test getting latest commit hash from remote."""
         tracker = GitTracker(repo_path="/path/to/repo")
