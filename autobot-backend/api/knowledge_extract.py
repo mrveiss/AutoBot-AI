@@ -43,11 +43,12 @@ API contract::
     }
 """
 
-from typing import Any, Dict, Literal
+from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.schemas_knowledge_web import ExtractRequest, ExtractResponse
+from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from web_fetch import FetchResult, RenderMode, WebFetcher
 from web_fetch.extractors import extract_url
@@ -55,33 +56,9 @@ from web_fetch.ingest import ingest_markdown
 
 logger = get_logger(__name__)
 
-router = APIRouter()
-
-
-class ExtractRequest(BaseModel):
-    """Request body for POST /knowledge/extract.
-
-    The field ``json_schema`` is serialised as ``schema`` on the wire via
-    ``alias``.  ``schema`` is a reserved attribute on ``BaseModel`` so we
-    cannot use it as a Python field name directly.
-    """
-
-    model_config = {"populate_by_name": True}
-
-    url: str = Field(..., min_length=1, max_length=2000, description="Absolute URL to fetch and extract from")
-    json_schema: Dict[str, Any] = Field(
-        ..., alias="schema", description="JSON Schema (draft 2020-12) for the expected output shape"
-    )
-    render: Literal["auto", "fast", "playwright"] = Field(default="auto", description="Render mode")
-    ingest: bool = Field(default=False, description="Index raw page markdown into ChromaDB when True")
-
-
-class ExtractResponse(BaseModel):
-    """Success response for POST /knowledge/extract."""
-
-    url: str
-    data: Dict[str, Any]
-    schema_valid: bool
+# #16375: mounted with no auth dependency. Owner decision: any signed-in user
+# may extract — only the web-research settings mutations stay admin-only.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.post("/extract", response_model=ExtractResponse, summary="Extract structured data from a URL via LLM")
