@@ -12,6 +12,14 @@
  * The live-log WebSocket is deliberately NOT migrated — `useAutobotApi` is an
  * HTTP client and has no socket equivalent — so these tests also pin that the
  * plain-text log body still arrives verbatim rather than JSON-parsed.
+ *
+ * #16374 — the nginx `/autobot-api/` proxy now runs an `auth_request` session
+ * check before it forwards anything, and a browser WebSocket handshake cannot
+ * carry a custom `Authorization` header. `FakeWebSocket` below pins that the
+ * SLM session token instead rides the `Sec-WebSocket-Protocol` subprotocol
+ * list (`new WebSocket(url, ['bearer', token])`), which nginx's dedicated
+ * stream location reads via `$http_sec_websocket_protocol`, and that the URL
+ * itself carries no token.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -24,6 +32,22 @@ import en from '@/locales/en.json'
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ token: 'test-token' }),
 }))
+
+class FakeWebSocket {
+  static instances: FakeWebSocket[] = []
+  url: string
+  protocols: string | string[] | undefined
+  onmessage: ((event: MessageEvent) => void) | null = null
+  onclose: (() => void) | null = null
+  onerror: (() => void) | null = null
+  constructor(url: string, protocols?: string | string[]) {
+    this.url = url
+    this.protocols = protocols
+    FakeWebSocket.instances.push(this)
+  }
+  close(): void {}
+}
+vi.stubGlobal('WebSocket', FakeWebSocket)
 
 vi.mock('axios', () => {
   const instance = {
@@ -74,6 +98,7 @@ type Vm = {
   fetchFullLog: (id: string) => Promise<void>
   signalProcess: (id: string, sig: string) => Promise<void>
   spawnProcess: () => Promise<void>
+  streamLogs: (id: string) => void
   spawnForm: { agent_id: string; command: string; args: string; timeout_seconds: number }
 }
 
@@ -170,5 +195,19 @@ describe('ProcessMonitorTab transport (#13079)', () => {
         timeout_seconds: 120,
       },
     ])
+  })
+
+  it('carries the SLM session token as a WebSocket subprotocol, never the URL (#16374)', () => {
+    FakeWebSocket.instances.length = 0
+    const { vm } = mountTab()
+
+    vm.streamLogs('p1')
+
+    expect(FakeWebSocket.instances).toHaveLength(1)
+    const socket = FakeWebSocket.instances[0]
+    expect(socket.url).toContain('/processes/p1/stream')
+    expect(socket.url).not.toContain('test-token')
+    expect(socket.url).not.toContain('?')
+    expect(socket.protocols).toEqual(['bearer', 'test-token'])
   })
 })
