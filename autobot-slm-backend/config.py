@@ -18,7 +18,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Optional
 
-from pydantic import ConfigDict, computed_field
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 from autobot_shared.secret_redaction import RedactedReprMixin
@@ -425,11 +425,12 @@ class Settings(RedactedReprMixin, BaseSettings):
     #
     # #16262: a plain field default here calls _get_local_ip() (a real
     # socket.connect) the moment this class body executes -- at import time,
-    # unconditionally, even when SLM_EXTERNAL_URL is set. A computed,
-    # cached property defers that call to the first actual access of
-    # `settings.external_url`, and caches it since the machine's outbound IP
-    # does not change during the process's lifetime.
-    @computed_field  # type: ignore[prop-decorator]
+    # unconditionally, even when SLM_EXTERNAL_URL is set. A plain cached
+    # property (not @computed_field) defers that call to the first actual
+    # access of `settings.external_url`, and caches it since the machine's
+    # outbound IP does not change during the process's lifetime --
+    # @computed_field would also run the probe from settings.model_dump()/
+    # .json(), reintroducing a network call inside a serialization path.
     @cached_property
     def external_url(self) -> str:
         return os.getenv("SLM_EXTERNAL_URL") or f"https://{_get_local_ip()}"
