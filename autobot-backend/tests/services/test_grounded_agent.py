@@ -29,13 +29,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.grounded_agent import (
-    Claim,
-    ClaimStatus,
-    GroundedAgent,
-    GroundedResponse,
-    VerifiedClaim,
-)
+from services.grounded_agent import GroundedAgent
+from services.grounded_agent_models import Claim, ClaimStatus, GroundedResponse, VerifiedClaim
 from services.knowledge_grounding_models import VerificationMethod
 
 
