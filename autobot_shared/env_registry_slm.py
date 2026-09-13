@@ -265,3 +265,31 @@ register_env_var(
         component="slm",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_API_KEY_LEGACY_GRACE_DAYS",
+        type=int,
+        default=90,
+        description=(
+            "Days an API key created before scope enforcement keeps its owner's full "
+            "authority, with a warning on every use, before it is refused until re-issued "
+            "with explicit scopes (#16040 AC5; owner ruling: 90)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_API_KEY_SCOPES_ENFORCED_FROM",
+        type=str,
+        default="2026-09-11",
+        description=(
+            "ISO date from which API-key scopes are enforced; keys created before it get "
+            "the legacy grace period. Set it to the day enforcement reached this "
+            "deployment if that was later (#16040 AC5)."
+        ),
+        component="slm",
+    )
+)

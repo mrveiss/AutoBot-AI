@@ -18758,9 +18758,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_111_get_current_user_info_mixed_pattern(self):
         """Verify get_current_user_info endpoint uses Mixed Pattern"""
-        from api import auth
+        from api import auth_me
 
-        source = inspect.getsource(auth.get_current_user_info)
+        source = inspect.getsource(auth_me.get_current_user_info)
         # Should have @with_error_handling decorator
         self.assertIn("@with_error_handling", source)
         # Should have category parameter
@@ -18832,13 +18832,13 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_111_all_auth_endpoints_have_decorator(self):
         """Verify all auth endpoints have @with_error_handling decorator"""
-        from api import auth
+        from api import auth, auth_me
 
         # List of all endpoint functions in auth.py
         endpoint_functions = [
             auth.login,
             auth.logout,
-            auth.get_current_user_info,
+            auth_me.get_current_user_info,
             auth.check_authentication,
             auth.check_permission,
             auth.change_password,
@@ -18854,13 +18854,13 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_111_auth_100_percent_milestone(self):
         """Verify auth.py has reached 100% migration"""
-        from api import auth
+        from api import auth, auth_me
 
         # List of all endpoint functions
         endpoint_functions = [
             auth.login,
             auth.logout,
-            auth.get_current_user_info,
+            auth_me.get_current_user_info,
             auth.check_authentication,
             auth.check_permission,
             auth.change_password,
@@ -18883,7 +18883,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_111_migration_preserves_authentication_logic(self):
         """Verify migration preserves authentication logic"""
-        from api import auth
+        from api import auth, auth_me
 
         # Check login preserves authentication flow
         source_login = inspect.getsource(auth.login)
@@ -18893,7 +18893,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("LoginResponse", source_login)
 
         # Check get_current_user_info preserves user data retrieval
-        source_me = inspect.getsource(auth.get_current_user_info)
+        source_me = inspect.getsource(auth_me.get_current_user_info)
         self.assertIn("get_user_from_request", source_me)
         self.assertIn("username", source_me)
         self.assertIn("role", source_me)
