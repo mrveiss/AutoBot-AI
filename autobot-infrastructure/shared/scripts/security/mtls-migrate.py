@@ -150,8 +150,9 @@ class MTLSMigration:
                 # Create admin user with ACL - escape password for shell safety
                 # +@all = all commands, ~* = all keys, &* = all channels
                 escaped_pass = shlex.quote(current_password)
+                user_flag = self._redis_cli_user_flag()
                 acl_cmd = (
-                    f"redis-cli --no-auth-warning -a {escaped_pass} "
+                    f"redis-cli --no-auth-warning{user_flag} -a {escaped_pass} "
                     f"ACL SETUSER {admin_user} on \\>{admin_password} ~* \\&* +@all"
                 )
                 result = await conn.run(acl_cmd)
@@ -160,7 +161,7 @@ class MTLSMigration:
                     return False
 
                 # Persist config using CONFIG REWRITE (ACL file not configured)
-                save_result = await conn.run(f"redis-cli --no-auth-warning -a {escaped_pass} CONFIG REWRITE")
+                save_result = await conn.run(f"redis-cli --no-auth-warning{user_flag} -a {escaped_pass} CONFIG REWRITE")
                 if save_result.returncode != 0:
                     logger.warning("CONFIG REWRITE failed - user may not persist after restart")
 
@@ -184,19 +185,30 @@ class MTLSMigration:
             logger.error(f"Admin user setup failed: {e}")
             return False
 
-    def _get_redis_password(self) -> Optional[str]:
-        """Get Redis password from environment or config."""
-        # Try environment variable first
-        password = os.environ.get("AUTOBOT_REDIS_PASSWORD")
-        if password:
-            return password
-        # Try .env file
+    def _get_redis_setting(self, name: str) -> Optional[str]:
+        """Read an AUTOBOT_REDIS_* setting from the environment, then the .env file."""
+        value = os.environ.get(name)
+        if value:
+            return value
         if self.env_file.exists():
             with open(self.env_file, encoding="utf-8") as f:
                 for line in f:
-                    if line.startswith("AUTOBOT_REDIS_PASSWORD="):
+                    if line.startswith(f"{name}="):
                         return line.split("=", 1)[1].strip()
         return None
+
+    def _get_redis_password(self) -> Optional[str]:
+        """Get Redis password from environment or config."""
+        return self._get_redis_setting("AUTOBOT_REDIS_PASSWORD")
+
+    def _get_redis_username(self) -> Optional[str]:
+        """Get the optional Redis ACL username (#16626); None keeps password-only AUTH."""
+        return self._get_redis_setting("AUTOBOT_REDIS_USERNAME")
+
+    def _redis_cli_user_flag(self) -> str:
+        """`` --user <name>`` for redis-cli when an ACL username is set (#16626), else ""."""
+        username = self._get_redis_username()
+        return f" --user {shlex.quote(username)}" if username else ""
 
     def check_certificates(self) -> bool:
         """Verify all certificates exist and are valid."""
@@ -327,6 +339,7 @@ class MTLSMigration:
                 host=redis_ip,
                 port=6380,
                 password=self._get_redis_password(),
+                username=self._get_redis_username(),
                 ssl=True,
                 ssl_ca_certs=str(self.config.ca_cert_path),
                 ssl_certfile=str(cert_dir / "server-cert.pem"),
@@ -589,6 +602,7 @@ class MTLSMigration:
             host=redis_ip,
             port=6380,
             password=password,
+            username=self._get_redis_username(),
             ssl=True,
             ssl_ca_certs=str(self.config.ca_cert_path),
             ssl_certfile=str(cert_dir / "server-cert.pem"),
