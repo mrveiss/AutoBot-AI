@@ -1,0 +1,15 @@
+# actionlint configuration (auto-detected from .github/actionlint.yaml).
+#
+# #16320: GitHub added `queue` to concurrency blocks on 2026-05-07 (`queue: max`
+# holds up to 100 pending jobs or runs per group):
+#   https://github.blog/changelog/2026-05-07-github-actions-concurrency-groups-now-allow-larger-queues/
+# actionlint v1.7.12 (2026-03-30) is the newest release, and it's the version
+# pinned both in .pre-commit-config.yaml and in .github/workflows/actionlint.yml.
+# It still reports the key as unknown. This ignores exactly that message, in
+# exactly the file that uses the key; every other check still runs on ci.yml.
+#
+# Remove this entry once a pinned actionlint release knows `queue` (#16325).
+paths:
+  .github/workflows/ci.yml:
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section'

@@ -82,8 +82,8 @@ concurrency:
   #
   # The group is scoped to WHAT IS BEING SWEPT, not to the workflow (#13384).
   # A repo-global group looks like it honours `cancel-in-progress: false`, but
-  # GitHub keeps at most one in-progress AND one pending run per group: the
-  # third arrival cancels the pending one. With a `pull_request` trigger on
+  # by default (`queue: single`) GitHub keeps one in-progress AND one pending run
+  # per group: the third arrival cancels the pending one. With a `pull_request` trigger on
   # every synchronize and a busy queue, the watchdog's own sweeps therefore
   # cancelled each other and nothing was published. Observed 2026-08-03 (two
   # cancelled one second apart, ~120 runs left parked for a human) and again
@@ -205,12 +205,13 @@ jobs:
           # branch. When the PR DOES touch them, the sweep drops to --dry-run,
           # so unreviewed watchdog code never reaches `approve` or `statuses`
           # while holding write permission. The listing failing is treated as
-          # self-modification — fail closed, never open.
+          # self-modification — fail closed, never open. The pattern names every
+          # module the sweep imports, not only its entry script.
           SELF_MODIFYING=yes
           if CHANGED=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" \
                 --paginate --jq '.[].filename'); then
             case "$CHANGED" in
-              *ci_dispatch_watchdog*|*ci-dispatch-watchdog*|*ci_dispatch_retry*) SELF_MODIFYING=yes ;;
+              *ci_dispatch_watchdog*|*ci_dispatch_labels*|*release_sync_pull*|*ci-dispatch-watchdog*|*ci_dispatch_retry*) SELF_MODIFYING=yes ;;
               *) SELF_MODIFYING=no ;;
             esac
           else

@@ -66,11 +66,11 @@ concurrency:
   # base branch was effectively never verified, and measuring the #13162 backlog
   # repeatedly meant hunting for a run that happened to survive.
   #
-  # This does not queue unboundedly. With cancel-in-progress false, GitHub keeps
-  # at most one run in progress plus one pending per group — a newly queued run
-  # cancels the previously pending one. So base runs serialise, each completes,
-  # and at most one waits. Under a burst you get a verdict for a recent commit
-  # rather than for every commit, which is the useful half.
+  # This does not queue unboundedly. This group keeps GitHub's default
+  # `queue: single` (python-shard opts into `queue: max`, #16320): with
+  # cancel-in-progress false, at most one run is in progress and one pending per
+  # group, and a newly queued run cancels the pending one. Base runs serialise and
+  # at most one waits; under a burst you get a verdict for a recent commit.
   #
   # Cost is bounded to GitHub-hosted capacity: every job in THIS workflow is
   # ubuntu-latest (the twelve python-suite shards included, see the note above
@@ -129,6 +129,31 @@ jobs:
     needs: changes
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
+    # #16320: first in, first out across PRs.
+    #
+    # Every push used to start all twelve shards at once, and GitHub interleaved
+    # them with every other PR's jobs, so no suite finished early. Over five PRs
+    # on 2026-09-11 the median push-to-green was 132.6 min, and 44-98 min of it
+    # passed before the first shard even started.
+    #
+    # A job-level group per shard with `queue: max` holds up to 100 pending shard
+    # jobs and starts them in turn, so a PR that pushed earlier gets its shards
+    # through ahead of one that pushed later.
+    #
+    # - The shard number is in the key. One shared key would make a PR's own
+    #   twelve shards wait on each other.
+    # - Pushes and merge groups key on the ref as well, so a post-merge
+    #   verification never queues behind PR work.
+    # - `queue: max` can't be combined with cancel-in-progress, and doesn't need
+    #   to be. A superseded push is still cancelled by the workflow-level group
+    #   above, and its pending shards go with it.
+    # - A shard waiting here is `pending`, not `queued`: it holds a place in
+    #   line and isn't waiting for a runner. Watchdogs must not read it as an
+    #   outage (#16309).
+    concurrency:
+      group: ${{ github.event_name == 'pull_request' && format('python-suite-shard-{0}', matrix.shard) || format('python-suite-shard-{0}-{1}', matrix.shard, github.ref) }}
+      queue: max
+      cancel-in-progress: false
     # A twelfth of a ~51-minute run, with generous headroom: observed runner
     # variance on this suite is roughly 2x for identical work (12m18s and
     # 1h24m have both been recorded), and a shard whose durations have drifted
@@ -240,7 +265,7 @@ jobs:
         # about indicators whose red carries no information must not add that.
         curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 \
           -o "/tmp/${TARBALL}.tar.gz" \
-          "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/${TARBALL}.tar.gz"
+          "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/${TARBALL}.tar.gz"  # noqa: pinned upstream release URL (#14053); the version is PROM_VERSION above
         tar xzf "/tmp/${TARBALL}.tar.gz" -C /tmp
         sudo install -m 0755 "/tmp/${TARBALL}/promtool" /usr/local/bin/promtool
 
