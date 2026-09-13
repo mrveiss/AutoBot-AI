@@ -588,9 +588,8 @@ async def _get_connector_bridged_secret(secret_id: str, owner_id: str) -> Dict |
     if secret is None:
         return None
     ConnectorCredentialStore._require_owner(secret, secret_id, owner_id)
-    # #16428: normalise to the same "type" key create_secret's connector-bridge
-    # response and the legacy path both use -- SecretsService's own row shape
-    # names it "secret_type".
+    # #16428: normalise to the same "type" key create_secret's connector-bridge response
+    # and the legacy path both use -- SecretsService's own row shape names it "secret_type".
     secret = dict(secret)
     secret["type"] = secret.pop("secret_type", None)
     return secret
