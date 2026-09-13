@@ -107,7 +107,7 @@ AES-GCM + PBKDF2 for data at rest · [`autobot_shared/field_encryption.py`](../.
 [`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py)
 `ConnectorCredentialStore` (:178) for connector/OAuth creds, ownership via `_require_owner` (:604) ·
 [`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:959)
-for service-to-service · [`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:119) for SLM token revocation.
+for service-to-service · [`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:121) for SLM token revocation.
 
 **Invariants**
 
