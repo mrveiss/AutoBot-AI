@@ -224,11 +224,18 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
     ".github/workflows/*.yaml": (
-        {"repo_tests/python_version_declaration_drift_test.py"},
+        {
+            "repo_tests/python_version_declaration_drift_test.py",
+            "repo_tests/workflow_rc_capture_test.py",
+        },
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
     ".github/workflows/*.yml": (
-        {"repo_tests/comment_line_number_citations_test.py", "repo_tests/python_version_declaration_drift_test.py"},
+        {
+            "repo_tests/comment_line_number_citations_test.py",
+            "repo_tests/python_version_declaration_drift_test.py",
+            "repo_tests/workflow_rc_capture_test.py",
+        },
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
     "libs/autobot-sdk-ts/src/resources/*.ts": (
