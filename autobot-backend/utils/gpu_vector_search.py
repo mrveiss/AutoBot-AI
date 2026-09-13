@@ -175,6 +175,17 @@ class GPUVectorIndex:
 
                 if is_wsl and self.config.use_gpu:
                     logger.info("WSL environment detected - using CPU mode " "(GPU operations may hang in WSL)")
+                elif self.config.use_gpu and not FAISS_GPU_AVAILABLE and not is_wsl:
+                    # #15163: distinguish "no GPU present" (use_gpu was never
+                    # set, or _initialize_gpu_index below fails and says so)
+                    # from this case -- GPU requested, but the installed
+                    # faiss build has no faiss.StandardGpuResources at all,
+                    # so the attempt below was never going to happen.
+                    logger.warning(
+                        "GPU vector search requested but faiss-gpu is not installed "
+                        "(only faiss-cpu) — falling back to CPU. Install requirements-gpu-faiss.txt "
+                        "on a GPU host to enable it (#15163)."
+                    )
 
                 # Try GPU initialization first (skip in WSL)
                 if use_gpu:

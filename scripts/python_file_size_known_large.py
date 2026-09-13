@@ -426,7 +426,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/utils/distributed_service_discovery.py": 684,
     "autobot-backend/utils/error_catalog.py": 775,
     "autobot-backend/utils/file_categorization.py": 724,
-    "autobot-backend/utils/gpu_vector_search.py": 1220,
+    "autobot-backend/utils/gpu_vector_search.py": 1231,
     "autobot-backend/utils/graceful_degradation.py": 704,
     "autobot-backend/utils/hardware_metrics.py": 1554,
     "autobot-backend/utils/monitoring_alerts.py": 858,
