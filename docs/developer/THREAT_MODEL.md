@@ -119,11 +119,9 @@ for service-to-service · [`services/auth.py`](../../autobot-slm-backend/service
   Exception text counts; a boto3 `ClientError` carries the account number in an ARN (#15324).
 - Keys come from SSOT config, never a literal. A default value for an encryption key is a
   finding even when production overrides it via env var.
-- SLM token revocation fails CLOSED (#16387, owner decision): when the HS256 jti-denylist check
-  (`is_jti_revoked` (:132) in [`token_denylist.py`](../../autobot-slm-backend/services/token_denylist.py))
-  or the password-epoch check can't run because Redis errored, `decode_token_async` denies the token (401)
-  instead of reading "could not check" as "not revoked" — a Redis outage takes SLM login down, including
-  the backend admin path reached through the proxy (#16374).
+- SLM token revocation fails CLOSED (#16387, owner decision): when the HS256 jti-denylist check (`is_jti_revoked` (:132) in
+  [`token_denylist.py`](../../autobot-slm-backend/services/token_denylist.py)) or the password-epoch check can't run because Redis errored,
+  `decode_token_async` denies the token (401) instead of reading "could not check" as "not revoked" — a Redis outage takes SLM login down, including the backend admin path reached through the proxy (#16374).
 - The RS256 authority-token path fails CLOSED the same way (#16412): [`rs256_denylist.py`](../../autobot-slm-backend/services/rs256_denylist.py)
   `is_rs256_jti_revoked` (:91) raises on a Redis error rather than reporting "not revoked"; its caller
   [`jwks_verifier.py`](../../autobot-slm-backend/services/jwks_verifier.py) `verify_authority_token` (:218) denies the token (401) at both call sites; the write side stays best-effort.
