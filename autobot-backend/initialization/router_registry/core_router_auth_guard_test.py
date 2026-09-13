@@ -172,21 +172,19 @@ _INTENTIONALLY_OPEN = {
     "frontend_config": "api/frontend_config.py -- unauthenticated by design, owner ruling on #15745 (#16240)",
 }
 
-# Recorded, not certified -- #15745's own ten. See the module docstring.
-# #15794 removed "agent_org" from this set as a consequence of gating it, not
-# as bookkeeping: the router now carries Depends(get_current_user), and its two
-# reports_to writes additionally carry require_reporting_line_write. Leaving the
-# entry would have recorded a violation that no longer exists, which is the
-# failure #15762 describes from the other side — a record outliving its fix.
-# #16240 did the same for redis, developer, wake_word and knowledge_sync, which
-# it gated admin-only. It also moved frontend_config to _INTENTIONALLY_OPEN
-# above, on the owner's ruling: that entry records a decision, not a pending fix.
-_TRACKED_BY_15745 = {
-    "knowledge_suggestions": "api/knowledge_suggestions.py",
-    "knowledge_search": "api/knowledge_search.py",
-    "knowledge_search_aggregator": "api/knowledge_search_aggregator.py",
-    "voice_stream": "api/voice_stream.py",
-}
+# Recorded, not certified -- #15745's own ten, now all gated. See the module
+# docstring. #15794 removed "agent_org" from this set as a consequence of
+# gating it, not as bookkeeping: the router now carries
+# Depends(get_current_user), and its two reports_to writes additionally carry
+# require_reporting_line_write. Leaving the entry would have recorded a
+# violation that no longer exists, which is the failure #15762 describes from
+# the other side — a record outliving its fix. #16240 did the same for redis,
+# developer, wake_word and knowledge_sync, which it gated admin-only, and moved
+# frontend_config to _INTENTIONALLY_OPEN above on the owner's ruling. #16507
+# gated the last four -- knowledge_suggestions, knowledge_search,
+# knowledge_search_aggregator, voice_stream -- emptying this dict. Kept, not
+# deleted: #15745 may still record a future entry here before it closes.
+_TRACKED_BY_15745: dict[str, str] = {}
 
 # Recorded, not certified -- found while building this guard, tracked by
 # their own issues since neither is the same defect shape as #15745's ten.
