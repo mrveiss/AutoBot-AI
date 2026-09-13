@@ -156,3 +156,9 @@ python:
   # backend_gpu_faiss_gating_test.py both read this manifest; without an entry
   # here, a change confined to it skips both guards.
   - 'requirements-gpu-faiss.txt'
+  # #15151: `configuration_guide_env_vars_test.py` asserts every AUTOBOT_* name
+  # this guide documents is either registered in env_registry.REGISTRY or listed
+  # in _KNOWN_GAPS naming the issue tracking it. Without an entry here, a change
+  # confined to the guide -- documenting a name that resolves to nothing -- skips
+  # the guard written to catch exactly that.
+  - 'docs/guides/CONFIGURATION_GUIDE.md'
