@@ -36,10 +36,25 @@ from pathlib import Path
 from services.drift_checker import _NONSTANDARD_COMPONENT_PATHS
 
 
+def deployed_root() -> str:
+    """The real, resolved deployed root -- read at call time, never import time.
+
+    Read live (not cached at import) so tests can monkeypatch
+    ``SLM_DEPLOYED_ROOT`` per-test. ``os.path.realpath`` so a caller building
+    a containment check (e.g. ``api/_pricing_post_sync._load_env_file``,
+    #16229 review) compares two resolved paths -- comparing a resolved
+    candidate against an unresolved root would let a symlink escape the
+    containment check (CodeQL py/path-injection). That check is inlined at
+    each call site rather than shared here, because CodeQL only recognises a
+    guard as a sanitiser within the same scope as the value it protects.
+    """
+    return os.path.realpath(os.environ.get("SLM_DEPLOYED_ROOT", "/opt/autobot"))
+
+
 def _resolve_deployed_dir(component: str = "autobot-slm-backend") -> str:
     """Shared path arithmetic behind both public resolvers below.
 
-    Reads ``SLM_DEPLOYED_ROOT`` from the environment so the path is
+    Reads the deployed root through :func:`deployed_root` so the path is
     configurable without hardcoding. Components listed in
     ``_NONSTANDARD_COMPONENT_PATHS`` (#12450, owned by ``drift_checker``) use
     their verified override sub-path instead of the standard
@@ -50,10 +65,9 @@ def _resolve_deployed_dir(component: str = "autobot-slm-backend") -> str:
     the read/write distinction stays enforced at the one place both funnel
     through, even though today (flat layout) they compute the same value.
     """
-    deployed_root = os.environ.get("SLM_DEPLOYED_ROOT", "/opt/autobot")
     override = _NONSTANDARD_COMPONENT_PATHS.get(component)
     rel_path = override[1] if override else component
-    return str(Path(deployed_root) / rel_path)
+    return str(Path(deployed_root()) / rel_path)
 
 
 def get_live_dir(component: str = "autobot-slm-backend") -> str:
