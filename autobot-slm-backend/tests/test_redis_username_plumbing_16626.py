@@ -99,10 +99,23 @@ def _url_userinfo(rendered: str) -> str:
     return re.search(r"AUTOBOT_REDIS_URL=redis://([^@\n]*)@", rendered).group(1)
 
 
-def test_backend_env_without_a_username_is_unchanged():
+def test_backend_env_sends_default_with_a_password_and_no_username():
+    """#16668: a password-only URL is refused by a nopass server, so the password never travels alone."""
     out = _render(_backend_redis_block(), backend_redis_host="h", backend_redis_port=6379, backend_redis_password=_PW)
-    assert "AUTOBOT_REDIS_USERNAME" not in out
-    assert _url_userinfo(out) == f":{_PW}"
+    assert "AUTOBOT_REDIS_USERNAME=default" in out
+    assert _url_userinfo(out) == f"default:{_PW}"
+
+
+def test_backend_env_without_a_password_sends_no_credential():
+    out = _render(
+        _backend_redis_block(),
+        backend_redis_host="h",
+        backend_redis_port=6379,
+        backend_redis_password="",
+        backend_redis_username="default",
+    )
+    assert "AUTOBOT_REDIS_USERNAME" not in out and "AUTOBOT_REDIS_PASSWORD" not in out
+    assert "AUTOBOT_REDIS_URL=redis://h:6379" in out
 
 
 def test_backend_env_renders_the_username():
