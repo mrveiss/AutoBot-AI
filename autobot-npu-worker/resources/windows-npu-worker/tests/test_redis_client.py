@@ -112,6 +112,28 @@ class TestRedisConnectionManager:
         assert pool.connection_kwargs["db"] == 1
 
     @pytest.mark.asyncio
+    async def test_create_connection_pool_with_username(self, config_with_password):
+        """#16626: an ACL username reaches the pool alongside the password"""
+        from utils.redis_client import RedisConnectionManager
+
+        config_with_password["redis"]["username"] = "default"
+        manager = RedisConnectionManager(config_with_password)
+        pool = manager._create_connection_pool()
+
+        assert pool.connection_kwargs["username"] == "default"
+        assert pool.connection_kwargs["password"] == "secret_password"
+
+    @pytest.mark.asyncio
+    async def test_create_connection_pool_without_username(self, config_with_password):
+        """#16626: no username configured keeps today's password-only AUTH"""
+        from utils.redis_client import RedisConnectionManager
+
+        manager = RedisConnectionManager(config_with_password)
+        pool = manager._create_connection_pool()
+
+        assert pool.connection_kwargs.get("username") is None
+
+    @pytest.mark.asyncio
     async def test_create_connection_pool_without_retry(self, config_no_retry):
         """Test connection pool creation without retry logic"""
         from utils.redis_client import RedisConnectionManager

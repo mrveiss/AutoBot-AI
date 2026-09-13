@@ -33,6 +33,10 @@ ExecStart=/opt/redis_exporter/redis_exporter \
 {% if redis_password is defined and redis_password %}
 Environment="REDIS_PASSWORD={{ redis_password }}"
 {% endif %}
+{# #16626: ACL username, sent with REDIS_PASSWORD as AUTH <user> <password> #}
+{% if redis_username is defined and redis_username %}
+Environment="REDIS_USER={{ redis_username }}"
+{% endif %}
 Restart=on-failure
 RestartSec=5s
 NoNewPrivileges=true
