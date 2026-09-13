@@ -40,10 +40,13 @@ also surfaced `roles/frontend` and `roles/slm_manager`, which the bare match
 had been crediting for the same reason. Both do provision it -- through
 variables -- and both now verify as such rather than by coincidence.
 
-Three roles still carry their own openssl block for this keypair instead of
-including the shared task. Consolidating them is the point of the shared task
-and is tracked separately; this control only requires that the guarantee is
-*held*, not yet that it is held in one place.
+Three roles (backend, frontend, slm_manager) carried their own openssl block
+for this keypair instead of including the shared task; all three now include
+it, so `roles/*/tasks/main.yml` has exactly one place that generates the
+shared pair (`roles/vnc`'s own `openssl req` is the separate, deliberately
+dedicated VNC keypair, #13060). `test_the_hand_rolled_shape_still_counts`
+keeps the classifier's hand-rolled-generation branch exercised with a
+synthetic fixture now that no real example remains in the tree.
 """
 
 from __future__ import annotations
@@ -212,22 +215,29 @@ def test_an_unrelated_openssl_call_does_not_count_as_provisioning_this_keypair()
     )
 
 
-def test_a_role_that_writes_the_shared_pair_itself_still_counts():
+def test_the_hand_rolled_shape_still_counts():
     """The other direction: hand-rolled generation of THIS pair is provisioning.
 
-    `roles/backend` writes `/etc/autobot/certs/server-cert.pem` with its own
-    openssl block rather than including the shared task. That is duplication
-    worth removing, but it is not the defect this guard is for -- and a
-    classifier that called it a gap would be wrong in the opposite direction.
+    `roles/backend` used to write `/etc/autobot/certs/server-cert.pem` with its
+    own openssl block rather than including the shared task -- duplication, not
+    the defect this guard is for, but a classifier that called it a gap would
+    be wrong in the opposite direction. Now that all three formerly hand-rolled
+    roles include the shared task (#16020), this exercises the same branch with
+    a synthetic fixture shaped like backend's old task, rather than losing the
+    coverage once the real example was fixed.
     """
-    backend = (_ROLES / "backend" / "tasks" / "main.yml").read_text(encoding="utf-8")
-    assert _provisions_shared_keypair(backend, _role_scalars(_ROLES / "backend")), (
-        "roles/backend generates the shared keypair at the shared path and must "
-        "classify as a provisioner"
-    )
-    assert _SHARED_TASK not in backend, (
-        "roles/backend now includes the shared task -- delete this assertion and "
-        "the duplication note in the docstring, the consolidation is complete"
+    synthetic = """
+- name: Generate self-signed TLS certificate
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -nodes -days 365 -newkey rsa:2048
+      -keyout /etc/autobot/certs/server-key.pem
+      -out /etc/autobot/certs/server-cert.pem
+      -subj '/C=US/ST=State/L=City/O=AutoBot/CN=autobot-backend'
+"""
+    assert _provisions_shared_keypair(synthetic, {}), (
+        "a hand-rolled openssl block writing the shared cert path must still "
+        "classify as provisioning it, whether or not any real role does this today"
     )
 
 
@@ -241,6 +251,5 @@ def test_the_shared_task_delegates_rather_than_re_implementing_openssl():
     text = shared.read_text(encoding="utf-8")
     assert "generate_self_signed_cert.yml" in text
     assert not _GENERATES.search(text), (
-        "the shared ensure-task re-implements openssl instead of including the "
-        "already-extracted generator"
+        "the shared ensure-task re-implements openssl instead of including the " "already-extracted generator"
     )

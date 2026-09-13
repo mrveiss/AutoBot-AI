@@ -58,8 +58,8 @@ slm_self_update_socket_mode: "0660"
 # ==========================================================
 slm_tls_cert: "{{ slm_certs_dir }}/server-cert.pem"
 slm_tls_key: "{{ slm_certs_dir }}/server-key.pem"
-slm_tls_days: 365
-slm_tls_subject: "/C=US/ST=State/L=City/O=AutoBot/CN={{ ansible_host }}"
+# slm_tls_days / slm_tls_subject retired (#16020): generation is now the
+# shared _shared/tasks/ensure_node_tls_cert.yml, which owns those values.
 
 # ==========================================================
 # Nginx Configuration
