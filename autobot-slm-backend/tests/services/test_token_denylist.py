@@ -359,6 +359,51 @@ class TestDecodeTokenAsyncRevocation:
 
         assert exc_info.value.status_code == fastapi.status.HTTP_401_UNAUTHORIZED
 
+    @pytest.mark.asyncio
+    async def test_a_real_epoch_store_error_denies_token(self):
+        """#16659: the epoch store's own Redis read raising reaches the REAL
+        get_password_epoch, which raises RevocationCheckUnavailable, and
+        decode_token_async denies (401). Unlike the test above, nothing between
+        decode_token_async and the Redis client is mocked."""
+        service = AuthService()
+        token = service.create_access_token(data={"sub": "grace", "admin": False, "role": "user"})
+
+        with (
+            patch.object(_auth_mod, "is_jti_revoked", new=AsyncMock(return_value=False)),
+            _epoch_store_answering(error=ConnectionError("redis refused")),
+        ):
+            with pytest.raises(fastapi.HTTPException) as exc_info:
+                await service.decode_token_async(token)
+
+        assert exc_info.value.status_code == fastapi.status.HTTP_401_UNAUTHORIZED
+
+    @pytest.mark.asyncio
+    async def test_a_healthy_epoch_store_with_no_marker_accepts_token(self):
+        """Control for the test above: the same wiring with a store that answers
+        "no marker" admits the token, so the 401 there comes from the Redis
+        error, not from the fake failing to reach the real helper."""
+        service = AuthService()
+        token = service.create_access_token(data={"sub": "grace", "admin": False, "role": "user"})
+
+        with (
+            patch.object(_auth_mod, "is_jti_revoked", new=AsyncMock(return_value=False)),
+            _epoch_store_answering(),
+        ):
+            result = await service.decode_token_async(token)
+
+        assert result is not None
+        assert result["sub"] == "grace"
+
+
+def _epoch_store_answering(error: Exception | None = None):
+    """Patch the REAL password-epoch module's Redis client with one whose get()
+    returns no marker, or raises *error* (#16659)."""
+    import autobot_shared.user_management.password_epoch as password_epoch_mod
+
+    client = MagicMock()
+    client.get = AsyncMock(return_value=None, side_effect=error)
+    return patch.object(password_epoch_mod, "get_async_redis_client", AsyncMock(return_value=client))
+
 
 # ---------------------------------------------------------------------------
 # token_denylist: bounded Redis access + negative cache (#11443)
