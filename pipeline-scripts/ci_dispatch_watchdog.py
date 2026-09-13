@@ -87,7 +87,7 @@ Environment:
     GITHUB_REPOSITORY                required — "owner/repo"
     GITHUB_API_URL                   API root (default https://api.github.com)
     GITHUB_SERVER_URL                web root for fallback run links (set by Actions; unset, no link)
-    WATCHDOG_BASE_BRANCH             PR base to watch (default Dev_new_gui)
+    WATCHDOG_BASE_BRANCH             PR base to watch (default main)
     WATCHDOG_GRACE_MINUTES           age before "no runs at all" is a failure
     WATCHDOG_STALL_MINUTES           age before a job-less queued run is a failure
     WATCHDOG_WORKFLOW_DIR            workflow definitions, for runner-pool attribution
@@ -182,7 +182,7 @@ STUCK_QUEUE_STATUSES = frozenset({"queued", "pending"})
 NO_RESPONSE_STATUS = 0
 
 DEFAULT_API_ROOT = "https://api.github.com"
-DEFAULT_BASE_BRANCH = "Dev_new_gui"
+DEFAULT_BASE_BRANCH = "main"
 DEFAULT_GRACE_MINUTES = 10
 DEFAULT_STALL_MINUTES = 45
 # Sized from measurement, not preference. A single base merge parks every run

@@ -74,7 +74,7 @@ _KNOWN_OFFENDERS = {
     #
     # 75 -> 73 with #14989: api/simple_terminal_e2e_test.py's own new
     # early-return offender was converted to an assert in the same commit that
-    # added it, and merging Dev_new_gui landed one further pre-existing fix
+    # added it, and merging main landed one further pre-existing fix
     # elsewhere in the tree.
     #
     # Both reductions survive together: the ratchet only turns down, so where

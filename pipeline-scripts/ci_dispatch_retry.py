@@ -99,9 +99,7 @@ def rerun_run(api: Any, run_id: int) -> Tuple[int, str]:
     rejects the request on state grounds if the run is not re-runnable, which is
     returned rather than raised.
     """
-    status, body = api.request(
-        "POST", f"/repos/{api.repository}/actions/runs/{run_id}/rerun-failed-jobs"
-    )
+    status, body = api.request("POST", f"/repos/{api.repository}/actions/runs/{run_id}/rerun-failed-jobs")
     message = str(body.get("message", "")) if isinstance(body, dict) else ""
     return status, message
 
@@ -163,14 +161,12 @@ def job_run_context(api: Any, job_id: int) -> Tuple[Optional[int], int]:
         return None, 0
     run_id = body.get("run_id")
     attempt = body.get("run_attempt")
-    return (int(run_id) if isinstance(run_id, int) else None,
-            int(attempt) if isinstance(attempt, int) else 0)
+    return (int(run_id) if isinstance(run_id, int) else None, int(attempt) if isinstance(attempt, int) else 0)
 
 
 def retry_candidates(report: Any) -> List[Any]:
     """Infrastructure-caused reds carrying a job id, in report order."""
-    return [red for red in report.reds
-            if red.cause in INFRASTRUCTURE_CAUSES and red.job_id]
+    return [red for red in report.reds if red.cause in INFRASTRUCTURE_CAUSES and red.job_id]
 
 
 class PrCandidate(NamedTuple):
@@ -194,8 +190,9 @@ def collect_candidates(api: Any, heads: Sequence[Any]) -> List[PrCandidate]:
     return candidates
 
 
-def redispatch(api: Any, candidates: Sequence[PrCandidate], limits: Dict[str, int],
-               dry_run: bool) -> Tuple[int, List[str]]:
+def redispatch(
+    api: Any, candidates: Sequence[PrCandidate], limits: Dict[str, int], dry_run: bool
+) -> Tuple[int, List[str]]:
     """Re-dispatch up to the sweep budget, spent across ALL candidates -- not
     reset per pull request. Returns ``(count, lines)``."""
     lines: List[str] = []
@@ -213,7 +210,9 @@ def redispatch(api: Any, candidates: Sequence[PrCandidate], limits: Dict[str, in
             lines.append(f"  PR #{pr} {red.check_name}: attempt {attempt} — a repeat is not transient, left red")
             continue
         if dry_run:
-            lines.append(f"  would re-dispatch PR #{pr} {red.check_name} (run {run_id}, attempt {attempt}, {red.cause})")
+            lines.append(
+                f"  would re-dispatch PR #{pr} {red.check_name} (run {run_id}, attempt {attempt}, {red.cause})"
+            )
             done += 1
             continue
         status, message = rerun_run(api, run_id)
@@ -259,9 +258,10 @@ def run(dry_run: bool, base_branch: str = DEFAULT_BASE_BRANCH) -> int:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Re-dispatch infrastructure-caused red checks across open PRs (#15139)")
-    parser.add_argument("--base", default=None,
-                         help="PR base branch to sweep (default: $WATCHDOG_BASE_BRANCH or Dev_new_gui)")
+    parser = argparse.ArgumentParser(
+        description="Re-dispatch infrastructure-caused red checks across open PRs (#15139)"
+    )
+    parser.add_argument("--base", default=None, help="PR base branch to sweep (default: $WATCHDOG_BASE_BRANCH or main)")
     parser.add_argument("--dry-run", action="store_true", help="classify and report, re-dispatch nothing")
     args = parser.parse_args(argv)
     base_branch = args.base or os.environ.get("WATCHDOG_BASE_BRANCH", "").strip() or DEFAULT_BASE_BRANCH

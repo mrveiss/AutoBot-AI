@@ -38,10 +38,13 @@ python:
   # confined to security.yml takes the required-context shim's green while the guard
   # that reads it never runs.
   - '.github/workflows/security.yml'
-  # #16302: repo_tests/codeql_query_filters_match_queries_16302_test.py fails on a
-  # `query-filters` key CodeQL does not match on. Without this, a change confined to
-  # the CodeQL config -- a new file-scoped exclusion -- skips the guard written for it.
-  - '.github/codeql/codeql-config.yml'
+  # #16302 / #16283: repo_tests/codeql_query_filters_match_queries_16302_test.py fails
+  # on a `query-filters` key CodeQL does not match on, and
+  # repo_tests/codeql_config_files_are_referenced_16283_test.py fails on a file under
+  # .github/codeql/ that nothing references. Without these entries, a change confined
+  # to that directory or to the workflow that reads it skips both guards.
+  - '.github/codeql/**'
+  - '.github/workflows/codeql.yml'
   # The shim gates a required context, so editing it must run the real suite for
   # the same reason editing ci.yml does.
   - '.github/workflows/python-required-context.yml'
@@ -86,7 +89,7 @@ python:
   # templates -- and the filter named only three .j2 files from it, added
   # one at a time by #14544 as each broke. #15704 changed role defaults only,
   # touched no `**/*.py`, took the shim's green, and merged: it left
-  # Dev_new_gui red on all twelve shards, because two of those eighteen
+  # main red on all twelve shards, because two of those eighteen
   # resolve role defaults and neither could resolve one deriving from
   # `autobot.base_dir`.
   #
@@ -125,7 +128,7 @@ python:
   # #16246: `release_sync_main_test.py` reads this workflow's triggers, permissions
   # and steps. Without an entry here, a change confined to it takes the shim's
   # green while the guard that reads it never runs.
-  - '.github/workflows/sync-main-to-dev.yml'
+  - '.github/workflows/sync-main-to-release.yml'
   - 'autobot-frontend/package.json'
   - 'install.sh'
   # #15983: `ansible_core_pin_frozen_15983_test.py` reads this pin to assert the
@@ -139,3 +142,23 @@ python:
   # to the baseline -- an unaudited finding parked in it -- skips that guard. The
   # ungated `secret-detection` job in security.yml checks the verdicts too.
   - '.secrets.baseline'
+  # #16237: `workflow_rc_capture_test.py` runs one step of each of these on a
+  # planted failing path, proving it captures its exit code instead of aborting
+  # under `bash -e`. Without an entry here, a change confined to one of them --
+  # the only change that could reintroduce the abort -- skips the guard.
+  - '.github/workflows/ci-dispatch-watchdog.yml'
+  - '.github/workflows/import-hermeticity-sweep.yml'
+  - '.github/workflows/ratchet-base-guard.yml'
+  # #15163: a repo-root file, so `**/requirements*.txt` above does not reach it --
+  # this filter is matched with fnmatch, which (unlike the real dorny/paths-filter
+  # matcher) requires a literal `/` before `requirements` for a `**/` prefix, and a
+  # bare root-level filename has none. ansible_manifest_resolution.py and
+  # backend_gpu_faiss_gating_test.py both read this manifest; without an entry
+  # here, a change confined to it skips both guards.
+  - 'requirements-gpu-faiss.txt'
+  # #15151: `configuration_guide_env_vars_test.py` asserts every AUTOBOT_* name
+  # this guide documents is either registered in env_registry.REGISTRY or listed
+  # in _KNOWN_GAPS naming the issue tracking it. Without an entry here, a change
+  # confined to the guide -- documenting a name that resolves to nothing -- skips
+  # the guard written to catch exactly that.
+  - 'docs/guides/CONFIGURATION_GUIDE.md'

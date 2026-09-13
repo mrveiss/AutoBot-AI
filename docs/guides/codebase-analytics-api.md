@@ -1342,7 +1342,7 @@ List all registered code sources.
       "name": "autobot-backend",
       "source_type": "local",
       "repo": null,
-      "branch": "Dev_new_gui",
+      "branch": "main",
       "clone_path": "/opt/autobot/autobot-backend",
       "status": "ready",
       "last_synced": "2026-03-15T10:00:00",

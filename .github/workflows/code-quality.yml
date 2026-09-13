@@ -11,7 +11,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   push:
-    branches: [ main, Dev_new_gui, develop ]
+    branches: [ release, main, develop ]
     paths:
       - '**/*.py'
       - '**/requirements*.txt'
@@ -68,7 +68,7 @@ on:
   # Branch-protection promotion to required is the separate owner-confirmed
   # follow-up (#10022).
   pull_request:
-    branches: [ main, Dev_new_gui, develop ]
+    branches: [ release, main, develop ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -139,8 +139,8 @@ jobs:
     #
     # What the evidence actually shows is two populations, not one:
     #
-    #   push on Dev_new_gui, small diff    10m54s   success
-    #   pull_request into main, 2195 files >60m     cancelled (twice)
+    #   push on main, small diff    10m54s   success
+    #   pull_request into release, 2195 files >60m     cancelled (twice)
     #
     # This job's cost scales with the number of changed files, so normal work
     # finishes in ~11 minutes and only a release-sized promotion is pathological.

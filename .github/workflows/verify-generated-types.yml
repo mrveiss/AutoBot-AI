@@ -40,7 +40,7 @@
 # So a change confined to autobot_shared/ could alter either generated api.ts
 # while this workflow computed "nothing to verify" and self-skipped — and
 # `verify-generated-types` is a REQUIRED context, so that reported green over a
-# check that never ran. 46 of the last 300 first-parent commits on Dev_new_gui
+# check that never ran. 46 of the last 300 first-parent commits on main
 # touch only autobot_shared/**/*.py; that is the blind spot's size, and it is
 # also the added cost of closing it.
 #
@@ -68,7 +68,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     paths:
       - 'autobot-backend/**/*.py'
       # #14885: both products' schemas are dumped by importing the application,
@@ -88,7 +88,7 @@ on:
   # job below; #13862 made the required context a separate reporting job so that
   # "nothing to verify" is stated rather than inferred from a skip.
   pull_request:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

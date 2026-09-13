@@ -247,7 +247,14 @@ class TestStoreAndLogUserMessageWiring:
 
 @pytest.mark.asyncio
 class TestStoreAiStackUserMessageWiring:
-    async def test_pii_blocked_message_never_reaches_storage(self):
+    """_store_ai_stack_user_message no longer scans (#16561): the scan moved to
+    its callers (chat_ai_stack, stream_ai_stack_chat), so it no longer
+    double-scans. This is the storage step alone -- PII-blocking coverage for
+    the AI-stack path now lives in TestChatAiStackWiring/TestStreamAiStackChatWiring,
+    exercised through the real call sites rather than this helper in isolation.
+    """
+
+    async def test_stores_whatever_content_it_is_given(self):
         from api.chat import _store_ai_stack_user_message
         from api.schemas_chat import ChatMessage
 
@@ -255,23 +262,185 @@ class TestStoreAiStackUserMessageWiring:
         chat_history_manager = MagicMock()
         chat_history_manager.add_messages_batch = AsyncMock()
 
-        with pytest.raises(HTTPException) as exc_info:
-            await _store_ai_stack_user_message(message, "sess-1", chat_history_manager)
-
-        assert exc_info.value.status_code == 400
-        chat_history_manager.add_messages_batch.assert_not_called()
-
-    async def test_injection_flagged_message_still_reaches_storage(self):
-        from api.chat import _store_ai_stack_user_message
-        from api.schemas_chat import ChatMessage
-
-        message = ChatMessage(content=INJECTION_MESSAGE, session_id="sess-1")
-        chat_history_manager = MagicMock()
-        chat_history_manager.add_messages_batch = AsyncMock()
-
         await _store_ai_stack_user_message(message, "sess-1", chat_history_manager)  # must not raise
 
         chat_history_manager.add_messages_batch.assert_called_once()
+
+
+@pytest.mark.asyncio
+class TestChatAiStackWiring:
+    """/ai-stack scans message.content before the pipeline runs (#16561)."""
+
+    async def test_pii_blocked_message_never_reaches_the_pipeline(self):
+        from api.chat import chat_ai_stack
+        from api.schemas_chat import ChatMessage
+
+        message = ChatMessage(content=FAKE_SSN_MESSAGE, session_id="sess-1")
+
+        with patch("api.chat.process_ai_stack_chat_message", new_callable=AsyncMock) as mock_process:
+            with pytest.raises(HTTPException) as exc_info:
+                await chat_ai_stack(
+                    current_user={"user_id": "u1"},
+                    message=message,
+                    request=MagicMock(),
+                    preferences=None,
+                    config=MagicMock(),
+                    knowledge_base=MagicMock(),
+                )
+
+        assert exc_info.value.status_code == 400
+        mock_process.assert_not_called()
+
+    async def test_injection_flagged_message_still_reaches_the_pipeline(self):
+        """#16530 false-positive guard, through the real wiring: flagged and
+        logged, never blocking the turn (#16567 review: restores coverage
+        the deleted stale test used to give this path, for the new call site)."""
+        from api.chat import chat_ai_stack
+        from api.schemas_chat import ChatMessage
+
+        message = ChatMessage(content=INJECTION_MESSAGE, session_id="sess-1")
+
+        with patch("api.chat.process_ai_stack_chat_message", new_callable=AsyncMock) as mock_process:
+            await chat_ai_stack(  # must not raise
+                current_user={"user_id": "u1"},
+                message=message,
+                request=MagicMock(),
+                preferences=None,
+                config=MagicMock(),
+                knowledge_base=MagicMock(),
+            )
+
+        mock_process.assert_called_once()
+
+
+@pytest.mark.asyncio
+class TestStreamAiStackChatWiring:
+    """/stream-ai-stack scans before StreamingResponse is built, unconditionally (#16561).
+
+    #16561 AC1: a PII-blocked message must surface as a real 400, not a 200
+    with a swallowed SSE error -- the scan now runs before StreamingResponse
+    is even constructed, mirroring stream_message() (#16529/#16530).
+
+    #16561 AC2: the scan must not depend on use_ai_stack -- it used to run
+    only inside _generate_ai_stack_stream's non-fallback branch, so a
+    client-set use_ai_stack=False skipped it entirely. The scan now happens
+    one level up, before message.use_ai_stack is ever read.
+    """
+
+    async def test_pii_blocked_message_never_starts_streaming(self):
+        from api.chat import stream_ai_stack_chat
+        from api.schemas_chat import ChatMessage
+
+        message = ChatMessage(content=FAKE_SSN_MESSAGE, session_id="sess-1", use_ai_stack=True)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await stream_ai_stack_chat(
+                current_user={"user_id": "u1"},
+                message=message,
+                request=MagicMock(),
+                preferences=None,
+            )
+
+        assert exc_info.value.status_code == 400
+
+    async def test_pii_blocked_message_is_scanned_even_with_use_ai_stack_false(self):
+        """AC2: the fallback branch (use_ai_stack=False) must not bypass the scan."""
+        from api.chat import stream_ai_stack_chat
+        from api.schemas_chat import ChatMessage
+
+        message = ChatMessage(content=FAKE_SSN_MESSAGE, session_id="sess-1", use_ai_stack=False)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await stream_ai_stack_chat(
+                current_user={"user_id": "u1"},
+                message=message,
+                request=MagicMock(),
+                preferences=None,
+            )
+
+        assert exc_info.value.status_code == 400
+
+    async def test_benign_message_still_streams(self):
+        from api.chat import stream_ai_stack_chat
+        from api.schemas_chat import ChatMessage
+
+        message = ChatMessage(content="Hello, how are you today?", session_id="sess-1")
+
+        with patch("api.chat._generate_ai_stack_stream", return_value=iter(())):
+            response = await stream_ai_stack_chat(
+                current_user={"user_id": "u1"},
+                message=message,
+                request=MagicMock(),
+                preferences=None,
+            )
+
+        assert response.status_code == 200
+
+    async def test_injection_flagged_message_still_starts_streaming(self):
+        """#16530 false-positive guard, through the real wiring (#16567 review:
+        restores coverage the deleted stale test used to give this path)."""
+        from api.chat import stream_ai_stack_chat
+        from api.schemas_chat import ChatMessage
+
+        message = ChatMessage(content=INJECTION_MESSAGE, session_id="sess-1")
+
+        with patch("api.chat._generate_ai_stack_stream", return_value=iter(())):
+            response = await stream_ai_stack_chat(  # must not raise
+                current_user={"user_id": "u1"},
+                message=message,
+                request=MagicMock(),
+                preferences=None,
+            )
+
+        assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+class TestResumeChatGraphWiring:
+    """/chats/{chat_id}/resume scans request_data["reason"] before it reaches
+    the graph (#16561 AC3).
+
+    Traced (not assumed): the raw reason reaches chat_workflow/graph.py's
+    execute_tools -> a "Command denied: {reason}" message that is both
+    streamed to the user and persisted via _persist_workflow_messages, which
+    feeds the next turn's LLM context -- not an audit-only field.
+    """
+
+    async def test_pii_blocked_reason_never_reaches_the_graph(self):
+        from api.chat import resume_chat_graph
+
+        workflow_manager = MagicMock()
+
+        with patch("api.chat.get_chat_workflow_manager", AsyncMock(return_value=workflow_manager)):
+            with pytest.raises(HTTPException) as exc_info:
+                await resume_chat_graph(
+                    chat_id="chat-1",
+                    current_user={"user_id": "u1"},
+                    request_data={"approved": False, "reason": FAKE_SSN_MESSAGE},
+                    request=MagicMock(),
+                    ownership={},
+                )
+
+        assert exc_info.value.status_code == 400
+
+    async def test_benign_reason_still_resumes(self):
+        from api.chat import resume_chat_graph
+
+        workflow_manager = MagicMock()
+
+        with (
+            patch("api.chat.get_chat_workflow_manager", AsyncMock(return_value=workflow_manager)),
+            patch("api.chat._stream_graph_resume", return_value=iter(())),
+        ):
+            response = await resume_chat_graph(
+                chat_id="chat-1",
+                current_user={"user_id": "u1"},
+                request_data={"approved": True, "reason": "looks fine to me"},
+                request=MagicMock(),
+                ownership={},
+            )
+
+        assert response.status_code == 200
 
 
 @pytest.mark.asyncio

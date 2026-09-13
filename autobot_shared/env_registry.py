@@ -219,7 +219,7 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_GIT_BRANCH",
         type=str,
-        default="Dev_new_gui",
+        default="main",
         description="Git branch that the running instance was built from.",
         component="system",
     )

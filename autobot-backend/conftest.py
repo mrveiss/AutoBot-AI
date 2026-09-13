@@ -800,17 +800,7 @@ if "llm_shared" not in sys.modules:
     # provider_registry, …) held classes from the first copy while later test
     # imports got the second, breaking isinstance checks.  Nothing depends on
     # reload semantics — the re-load ran once, immediately after the first
-    # load, inside the same conftest pass.  Only semantic_cache still loads
-    # here (its first and only load), through the canonical helper.
-
-    # Load llm_shared.semantic_cache (Issue #8168) — pure Python + numpy,
-    # no heavy deps at import time.  On load failure _real_load_and_bind
-    # installs a pkg stub whose __getattr__ yields a MagicMock, so the
-    # SemanticLLMCache re-export below stays mock-backed as before.
-    _real_load_and_bind("llm_shared.semantic_cache", _llm_root / "semantic_cache.py")
-    _sc_mod = sys.modules.get("llm_shared.semantic_cache")
-    if _sc_mod is not None and hasattr(_sc_mod, "SemanticLLMCache"):
-        _llm_stub.SemanticLLMCache = _sc_mod.SemanticLLMCache  # type: ignore[attr-defined]
+    # load, inside the same conftest pass.
 
 # auth_middleware stub -- moved to testkit/auth_middleware_stub.py (#14982,
 # #13257) so removing the module's auto-vivifying __getattr__ catch-all did

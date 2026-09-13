@@ -1,7 +1,7 @@
-# Auto-update PR branches when Dev_new_gui advances — serialized (#14022)
+# Auto-update PR branches when main advances — serialized (#14022)
 #
-# Whenever Dev_new_gui receives a push (merge, direct commit), this workflow
-# refreshes AT MOST ONE open PR targeting Dev_new_gui: the oldest one that is
+# Whenever main receives a push (merge, direct commit), this workflow
+# refreshes AT MOST ONE open PR targeting main: the oldest one that is
 # both behind base AND not currently mid-run. Eliminates the manual "Update
 # branch" click and keeps the next PR to land tested against current base,
 # without resetting PRs that are still executing a check set. A PR that is
@@ -9,7 +9,12 @@
 # behind PR in the queue rather than doing nothing (see #14022 review fix
 # below; an earlier version of this change got that wrong).
 #
-# See: #9300 post-mortem — direct hotfixes on main caused drift.
+# See: #9300 post-mortem — direct hotfixes on release caused drift.
+#
+# Dev_new_gui: this only lists and refreshes PRs with `--base main`/`base_branch:
+# main`, and only calls `gh api update-branch` on a PR's HEAD -- it can never
+# list, merge into or push the temporary Dev_new_gui mirror (kept for the live
+# updater; remove with #16461).
 #
 # #14022: this used to refresh the single oldest-behind PR on EVERY push,
 # with no regard for whether that PR's own checks (from the last refresh)
@@ -34,7 +39,7 @@
 # merge while its branch is behind, and this job is the only thing that
 # clears that". That is no longer the configuration:
 #
-#   $ gh api repos/OWNER/REPO/branches/Dev_new_gui/protection \
+#   $ gh api repos/OWNER/REPO/branches/main/protection \
 #       --jq '.required_status_checks.strict'
 #   false
 #
@@ -50,7 +55,7 @@
 # WHY NOT REMOVE THE REFRESH ENTIRELY: doing so would mean a PR's CI last
 # ran against a base that has since moved, so a merge could still introduce
 # a semantic break that no check ever ran against. Base-branch push CI
-# (ci.yml on `push: [Dev_new_gui]`) partially covers this — it runs the full
+# (ci.yml on `push: [main]`) partially covers this — it runs the full
 # python-suite once per merge — but ci.yml's own history shows base-push
 # runs get starved by rapid merges the same way this job's targets did (see
 # the `cancel-in-progress` comment in ci.yml, #13432: 26 of the last 39 base
@@ -66,7 +71,7 @@
 # available here (public repo, owner is a User account, Free plan). It is
 # not enabled today — checked directly:
 #
-#   $ gh api repos/OWNER/REPO/rules/branches/Dev_new_gui
+#   $ gh api repos/OWNER/REPO/rules/branches/main
 #   [only the review-count ruleset; no `merge_queue` rule]
 #
 # Turning it on requires every workflow that publishes one of the ten
@@ -101,7 +106,7 @@ name: Auto-update PR branches
 on:
   push:
     branches:
-      - Dev_new_gui
+      - main
 
 jobs:
   auto-update:
@@ -150,9 +155,9 @@ jobs:
           # queue-blocking effect is bypassed.
           STALE_BOUND_SECONDS: '5400'
         run: |
-          echo "Dev_new_gui was updated — checking open PRs for staleness..."
+          echo "main was updated — checking open PRs for staleness..."
 
-          # List all open PRs targeting Dev_new_gui that are behind.
+          # List all open PRs targeting main that are behind.
           # .number is always a GitHub-assigned integer — safe to iterate.
           #
           # #12801: this used `--json number,behindBy`, but `behindBy` is not a
@@ -177,7 +182,7 @@ jobs:
           # re-introducing the abort-before-exit-0 behaviour.
           OPEN_PRS=$(gh pr list \
             --repo "$REPO" \
-            --base Dev_new_gui \
+            --base main \
             --state open \
             --json number,headRefName \
             --jq '.[] | "\(.number) \(.headRefName)"' || true)
@@ -198,7 +203,7 @@ jobs:
               continue
             fi
             BEHIND=$(gh api \
-              "repos/$REPO/compare/Dev_new_gui...$HEAD_REF" \
+              "repos/$REPO/compare/main...$HEAD_REF" \
               --jq '.behind_by' 2>/dev/null || echo "")
             case "$BEHIND" in
               ''|0) ;;
@@ -211,7 +216,7 @@ jobs:
             exit 0
           fi
 
-          echo "PRs behind Dev_new_gui: $(echo "$OUTDATED" | tr '\n' ' ')"
+          echo "PRs behind main: $(echo "$OUTDATED" | tr '\n' ' ')"
 
           # Oldest PR first (lowest number) keeps the queue FIFO instead of
           # starving whichever PR happens to sort last.
@@ -349,5 +354,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          WATCHDOG_BASE_BRANCH: Dev_new_gui
+          WATCHDOG_BASE_BRANCH: main
         run: python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch

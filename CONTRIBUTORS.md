@@ -150,7 +150,7 @@ Edit the code, write tests, update docs if needed.
 - Follow existing code style
 
 ### 6️⃣ Submit a Pull Request
-Push to your fork and open a PR against `Dev_new_gui` branch.
+Push to your fork and open a PR against `main` branch.
 
 In your PR description:
 - Reference the issue: "Closes #1234"

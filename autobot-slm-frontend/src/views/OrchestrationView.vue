@@ -38,6 +38,8 @@ import {
   type PlaybookMigrateResult,
   type NodeRolesInfo,
   type PostSyncAction,
+  joinSystemdUnits,
+  parseSystemdUnits,
 } from '@/composables/useRoles'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
@@ -775,7 +777,7 @@ function openEditRoleForm(role: Role): void {
     sync_type: role.sync_type || 'component',
     source_paths: (role.source_paths || []).join(', '),
     target_path: role.target_path,
-    systemd_service: role.systemd_service || '',
+    systemd_service: joinSystemdUnits(role.systemd_service),
     auto_restart: role.auto_restart,
     health_check_port: role.health_check_port?.toString() || '',
     health_check_path: role.health_check_path || '',
@@ -796,7 +798,7 @@ async function saveRole(): Promise<void> {
       ? roleFormData.value.source_paths.split(',').map((s) => s.trim()).filter(Boolean)
       : [],
     target_path: roleFormData.value.target_path,
-    systemd_service: roleFormData.value.systemd_service || null,
+    systemd_service: parseSystemdUnits(roleFormData.value.systemd_service),
     auto_restart: roleFormData.value.auto_restart,
     health_check_port: roleFormData.value.health_check_port
       ? parseInt(roleFormData.value.health_check_port)
@@ -1744,7 +1746,7 @@ onUnmounted(() => {
                   </span>
                 </td>
                 <td class="px-4 py-2 text-sm text-gray-600 font-mono">{{ role.target_path }}</td>
-                <td class="px-4 py-2 text-sm text-gray-600">{{ role.systemd_service || '-' }}</td>
+                <td class="px-4 py-2 text-sm text-gray-600">{{ joinSystemdUnits(role.systemd_service) || '-' }}</td>
                 <td class="px-4 py-2 text-right">
                   <button
                     @click="openEditRoleForm(role)"
@@ -1797,7 +1799,7 @@ onUnmounted(() => {
                   <p class="text-sm font-medium text-gray-900 truncate">
                     {{ role.display_name || role.name }}
                   </p>
-                  <p class="text-xs text-gray-400 truncate">{{ role.systemd_service || role.name }}</p>
+                  <p class="text-xs text-gray-400 truncate">{{ joinSystemdUnits(role.systemd_service) || role.name }}</p>
                   <p
                     v-if="getRoleOwnerLabel(role.name) && roleOwners[role.name] !== assignNodeId"
                     class="text-xs text-amber-600 truncate"
@@ -1846,7 +1848,7 @@ onUnmounted(() => {
                 </span>
               </div>
               <div class="text-xs text-gray-500 mt-1 truncate">
-                {{ role.systemd_service || $t('orchestrationView.noSystemdService') }}
+                {{ joinSystemdUnits(role.systemd_service) || $t('orchestrationView.noSystemdService') }}
               </div>
               <div class="flex items-center gap-2 mt-1">
                 <span class="text-xs bg-gray-100 text-gray-600 rounded-sm px-1.5 py-0.5">
@@ -1879,7 +1881,7 @@ onUnmounted(() => {
           <div class="bg-gray-50 rounded-lg p-3 mb-4 text-sm grid grid-cols-2 gap-y-1">
             <div>
               <span class="text-gray-500">{{ $t('orchestrationView.service2') }}</span>
-              {{ migrationRole.systemd_service || $t('orchestrationView.none') }}
+              {{ joinSystemdUnits(migrationRole.systemd_service) || $t('orchestrationView.none') }}
             </div>
             <div>
               <span class="text-gray-500">{{ $t('orchestrationView.syncType2') }}</span>

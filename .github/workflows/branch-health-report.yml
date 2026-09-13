@@ -62,7 +62,7 @@ jobs:
           source scripts/lib/branch-guards.sh
 
           # The PR base for this repository, which is not the GitHub default branch.
-          BASE_REF=origin/Dev_new_gui
+          BASE_REF=origin/main
 
           # Count branches
           total_local=$(git branch | wc -l)
@@ -86,9 +86,10 @@ jobs:
           # re-prefixed to the unresolvable `origin/<remote>/<branch>`. Every
           # git question about it failed, and the branch was classified from
           # those failures rather than skipped.
+          # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
           all_branches=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
             | sed 's|^origin/||' \
-            | grep -vx "HEAD\|main\|master\|Dev_new_gui" || true)
+            | grep -vx "HEAD\|release\|master\|main\|Dev_new_gui" || true)
 
           while IFS= read -r branch; do
             [ -z "$branch" ] && continue

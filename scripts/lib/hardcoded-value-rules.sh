@@ -400,8 +400,11 @@ _hv_rule_url() {
         # #16260: a CI workflow's vendor downloads and dashboard links are not
         # deployment config -- nothing a deployment varies. Only this generic URL
         # rule stands down here: the IP and port rules still run on workflow
-        # files, so an AutoBot address in a workflow is still reported.
+        # files, so an AutoBot address in a workflow is still reported. A
+        # composite action under .github/actions/ is a piece of a workflow, so
+        # the same holds there (#15515: editing one tripped on its pip index).
         .github/workflows/*|*/.github/workflows/*) return 0 ;;
+        .github/actions/*|*/.github/actions/*) return 0 ;;
     esac
     # Example domains, W3C/SVG namespaces, licence URLs and placeholders.
     [[ $3 =~ $_HV_URL_SKIP_RE ]] && return 0

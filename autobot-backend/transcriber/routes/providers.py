@@ -13,10 +13,11 @@ Privacy note: never returns API keys or credentials.
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
+from transcriber.deps import authenticate, require_admin
 from voice_processing.providers.selection import (
     get_active_provider_id,
     list_available_providers,
@@ -25,7 +26,7 @@ from voice_processing.providers.selection import (
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["transcriber-providers"])
+router = APIRouter(tags=["transcriber-providers"], dependencies=[Depends(authenticate)])
 
 
 class ProviderInfo(BaseModel):
@@ -57,7 +58,7 @@ async def list_providers() -> Dict[str, Any]:
     }
 
 
-@router.patch("/providers")
+@router.patch("/providers", dependencies=[Depends(require_admin)])
 async def set_provider(body: SetProviderRequest) -> Dict[str, Any]:
     """Set the active cloud ASR provider.
 

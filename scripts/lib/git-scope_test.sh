@@ -144,7 +144,7 @@ check "three-dot base"  "A"   "$(git_scope_split_range 'A...B' base)"
 check "three-dot head"  "B"   "$(git_scope_split_range 'A...B' head)"
 # The regression this pins: stripping `..` from a three-dot range leaves a
 # trailing dot on the base ref, which then does not resolve.
-check "three-dot base has no trailing dot" "origin/Dev_new_gui" "$(git_scope_split_range 'origin/Dev_new_gui...HEAD' base)"
+check "three-dot base has no trailing dot" "origin/main" "$(git_scope_split_range 'origin/main...HEAD' base)"
 git_scope_split_range 'not-a-range' base >/dev/null 2>&1; check "a non-range is fatal" "1" "$?"
 
 echo "== git_scope_diff_names: a failed diff is not an empty diff =="

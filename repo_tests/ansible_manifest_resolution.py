@@ -70,6 +70,7 @@ NPU_DOCKER = "autobot-infrastructure/autobot-npu-worker/docker/requirements-npu.
 TTS = "autobot-tts-worker/requirements.txt"
 GPU_TORCH = "requirements-gpu-torch.txt"
 GPU = "requirements-gpu.txt"
+GPU_FAISS = "requirements-gpu-faiss.txt"
 ROOT_REQUIREMENTS = "requirements.txt"
 
 # Not a path: the one resolution that legitimately spans the whole tree. Used by
@@ -135,9 +136,9 @@ SITE_MANIFESTS: dict[tuple[str, str], Resolution] = {
         "scripts/build-filtered-requirements.sh and installs the result into this venv (#14272, #14809)",
     ),
     (f"{_ROLES}/backend/tasks/main.yml", "{{ backend_code_dir }}/venv"): Resolution(
-        (BACKEND, GPU_TORCH, GPU),
+        (BACKEND, GPU_TORCH, GPU, GPU_FAISS),
         "the role rsyncs autobot-backend/ to the code dir, filters its manifest into the venv, and "
-        "adds the two repo-root GPU manifests on a GPU host (#11134, #15162, #10288)",
+        "adds the three repo-root GPU manifests on a GPU host (#11134, #15162, #10288, #15163)",
     ),
     (f"{_ROLES}/browser/tasks/main.yml", "{{ browser_install_dir }}/venv"): Resolution(
         (BROWSER,),
@@ -359,17 +360,17 @@ def _names_a_component_package(value: object) -> bool:
     return False
 
 
-# Only a pip task carrying BOTH a literal `requirements:` and a literal
-# `virtualenv:` produces a derived edge. A `name:`-list pip task is invisible
-# here whether or not a manifest exists behind it, so the three "no manifest"
-# sites are asserted by their recorded reason rather than cross-checked.
+# Only a pip task carrying BOTH a literal `requirements:` and a literal `virtualenv:` produces a derived edge. A
+# `name:`-list pip task is invisible here whether or not a manifest exists behind it, so the three "no manifest" sites
+# are asserted by their recorded reason rather than cross-checked.
 def _record_task(key: object, value: object, path: str, edges: _Edges) -> None:
     """Record the delivery and install edges one task key opens."""
     if key in _PIP_TASK_KEYS and isinstance(value, dict):
         if isinstance(value.get("requirements"), str) and isinstance(value.get("virtualenv"), str):
             edges.installs.append((path, value["virtualenv"], value["requirements"]))
             edges.sources.append((path, value["virtualenv"], MANIFEST_SOURCE))
-        if isinstance(value.get("virtualenv"), str) and _names_a_component_package(value.get("name")):
+        removing = value.get("state") == "absent"
+        if not removing and isinstance(value.get("virtualenv"), str) and _names_a_component_package(value.get("name")):
             edges.sources.append((path, value["virtualenv"], INLINE_SOURCE))
     if key in _SYNCHRONIZE_KEYS and isinstance(value, dict):
         source, destination = str(value.get("src", "")), str(value.get("dest", ""))

@@ -10,7 +10,7 @@
 #
 # Usage:
 #   ansible-playbook playbooks/update-all-nodes.yml
-#   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=main
+#   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=release
 #   ansible-playbook playbooks/update-all-nodes.yml -e skip_branch_check=true
 #   ansible-playbook playbooks/update-all-nodes.yml --skip-tags restart   # code-only, no restarts
 #
@@ -54,10 +54,10 @@
     # fallback is a literal, and it cannot be derived until
     # `autobot.services` stops carrying unrendered templates (#15731).
     git_repo_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
-    deploy_ref: "Dev_new_gui"
+    deploy_ref: "main"
     allowed_branches:
-      - Dev_new_gui
       - main
+      - release
     skip_branch_check: false
     deploy_tmp: "/tmp/autobot-deploy"
 

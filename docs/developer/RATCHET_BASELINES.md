@@ -34,13 +34,13 @@ Every count below is labelled with its scope and predicate, because this page's
 own subject is numbers that do not carry the frame they depend on — and an
 earlier draft presented these without one.
 
-All figures are measured against **`origin/Dev_new_gui`** on the date of the
+All figures are measured against **`origin/main`** on the date of the
 commit that introduced them, over the **whole of git history on that branch**
 (12,786 commits) unless stated otherwise.
 
 | Cluster | Predicate | Population |
 |---|---|---|
-| 2,426 · 7,087 · 7,373 · 5,033 | `no-commit-trailers.yml:79-95`, applied as the workflow applies it — `grep -iE`, owner and bot identity exemptions | commits on `Dev_new_gui` |
+| 2,426 · 7,087 · 7,373 · 5,033 | `no-commit-trailers.yml:79-95`, applied as the workflow applies it — `grep -iE`, owner and bot identity exemptions | commits on `main` |
 | 497 · 501 · 499 · 5,574 · 5,244 · 47 | `check_python_file_size.py`'s walk, `EXCLUDED_PREFIXES` applied, `MAX_LINES = 600` | tracked `.py` files |
 | 8 · 26 · 35 · 246 · 464 | #15896's citation filter versus its `tokenize.STRING` re-derivation | `repo_tests/*.py` |
 
@@ -66,6 +66,13 @@ declares `EXCLUDED_PREFIXES` **and** pins it with
 `test_excluded_prefixes_mirror_the_pre_commit_config`, which fails if the audit's
 scope and the hook's `exclude:` diverge. That pairing is what makes the exclusion
 a decision rather than an accident.
+
+`duplication-guard.yml`'s SLM scope is the same shape (#16401): it excludes
+`autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/`, the Ansible
+mirror that `ansible/tests/detect_agent_code_drift_test.py` already forces
+byte-identical to its source, so jscpd stopped counting the mandatory copy as a
+clone of the original. `duplication_guard_excludes_agent_mirror_test.py` fails
+if that ignore entry disappears or widens past the one path.
 
 ### 3. Derive the population a second way before freezing it
 
@@ -189,7 +196,7 @@ it: deleting unrelated code, or splitting a file.
 ## Worked example — the one that passes
 
 `repo_tests/python_file_size_ratchet_baseline.py`, measured against
-`origin/Dev_new_gui`:
+`origin/main`:
 
 | | |
 |---|---|
@@ -260,6 +267,59 @@ The fix is one paragraph saying what the count is a count of.
 That case separates **"the boundary is invisible"** from **"the code is wrong"**
 more cleanly than any of the others, and it is why rule 1 is about disclosure
 rather than coverage.
+
+## The secrets baseline: scan, audit, strip (#16353)
+
+`.secrets.baseline` is not one of the five ratchets above — entries are added as
+well as removed — but it is a baseline the same way: frozen output a detector
+produced, read by a hook and a CI gate that must agree with it. Since #16353 it
+carries no `line_number`. A loaded entry's `line_number` defaults to 0
+(`PotentialSecret.load_secret_from_dict`'s default, detect-secrets v1.5.0), the
+pre-commit hook's `SecretsCollection.trim` only overwrites a **non-zero** stored
+value, and `PotentialSecret.json` omits a zero field on write — so a stripped
+baseline stays stripped through the hook, and a line-only move in an
+already-findings file produces no diff.
+
+**Adding a newly audited entry must follow this order, not any other:**
+
+1. **Scan** — `detect-secrets scan --baseline .secrets.baseline`. This is a full
+   fresh rescan (`baseline.create()` in `detect_secrets/main.py`) merged with
+   the existing verdicts via `SecretsCollection.merge()`: the merge keeps the
+   *fresh scan's* secrets — every one of them, old and new, now carrying a
+   real, non-zero `line_number` from the live scan — and that same `merge()`
+   copies over only `is_secret`/`is_verified` from the old baseline. This is
+   the step the design comment on #16353 already established re-adds the
+   field; `--slim` is ignored alongside `--baseline`.
+2. **Audit** — `detect-secrets audit .secrets.baseline`, to label whatever the
+   scan added. This step needs the line numbers step 1 just restored.
+   `audit_baseline` (in `detect_secrets/audit/audit.py`) calls `secrets.trim()`
+   with no `scanned_results` — on a baseline that already has an entry for
+   every currently-existing file, this only drops entries whose file vanished,
+   it does not touch `line_number` — then `_classify_secrets`, which iterates
+   `get_secret_iterator(secrets)`. That iterator yields only entries with
+   `is_secret is None` — the newly-scanned, unlabelled ones. For each,
+   `_classify_secrets` calls the singular `get_raw_secret_from_file(secret)`
+   to render the code snippet the auditor labels. That function raises
+   `NoLineNumberError` when `not secret.line_number`, and the caller's
+   `except NoLineNumberError` **breaks the whole classification loop** — one
+   unlabelled entry with `line_number == 0` stops the audit at whatever entry
+   the iterator reaches first, silently, with no further entries reviewed.
+   Running `audit` before `scan`, or after stripping, hits exactly this on any
+   baseline that still has something unlabelled.
+3. **Strip** — `jq --indent 2 'del(.results[][].line_number)' .secrets.baseline
+   > tmp && mv tmp .secrets.baseline`, then commit. Re-run this every time
+   after step 1, since step 1 re-adds the field to every entry, not only the
+   new ones.
+
+**Traced, not run — what happens if `audit` is run directly on the committed,
+already-stripped baseline, with no prior scan.** Every entry in the committed
+baseline already carries `is_secret: false`, so `get_secret_iterator` yields
+nothing, `_classify_secrets` returns without ever calling
+`get_raw_secret_from_file`, and the command is a harmless no-op: nothing to
+classify, nothing to render, `NoLineNumberError` never raised. The failure mode
+above is specific to an **unlabelled** entry with a zero line number — which is
+exactly why the strip is the *last* step, applied only once nothing unlabelled
+remains, and never a substitute for running audit first.
 
 ## Checklist for a new ratchet
 

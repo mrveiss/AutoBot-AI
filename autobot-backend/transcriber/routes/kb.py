@@ -8,17 +8,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from transcriber.database import Database
-from transcriber.deps import can_access, get_db
+from transcriber.deps import authenticate, caller_can_access, caller_id_of, get_db
 from transcriber.export.segments import build_segment_list
 from transcriber.knowledge.kb_push import push_to_kb
 from transcriber.models import KbPushRequest, KbPushStatus
 
-router = APIRouter(tags=["transcriber-kb"])
-
-
-def _user_id(request: Request) -> str:
-    user = getattr(request.state, "user", None)
-    return user.id if user else "default"
+router = APIRouter(tags=["transcriber-kb"], dependencies=[Depends(authenticate)])
 
 
 @router.post("/recordings/{recording_id}/kb/push")
@@ -29,7 +24,7 @@ async def kb_push(
     db: Database = Depends(get_db),
 ):
     rec = await db.get_recording(recording_id)
-    if not rec or not can_access(rec, _user_id(request)):
+    if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")
     if rec["status"] != "complete":
         raise HTTPException(400, "Recording not yet transcribed")
@@ -39,16 +34,16 @@ async def kb_push(
         recording_filename=rec["filename"],
         segments=segments,
         collection_id=body.collection_id,
-        pushed_by=_user_id(request),
+        pushed_by=caller_id_of(request),
     )
-    await db.create_kb_push(recording_id, body.collection_id, _user_id(request))
+    await db.create_kb_push(recording_id, body.collection_id, caller_id_of(request))
     return {"status": "ok", "indexed": result.get("indexed", len(segments))}
 
 
 @router.get("/recordings/{recording_id}/kb/status", response_model=KbPushStatus)
 async def kb_status(recording_id: int, request: Request, db: Database = Depends(get_db)):
     rec = await db.get_recording(recording_id)
-    if not rec or not can_access(rec, _user_id(request)):
+    if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")
     push = await db.get_latest_kb_push(recording_id)
     if not push:

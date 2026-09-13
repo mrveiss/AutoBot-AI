@@ -181,6 +181,32 @@ async def get_current_user_info(
     }
 
 
+@router.get("/proxy-check", status_code=status.HTTP_204_NO_CONTENT)
+async def proxy_check(
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
+) -> None:
+    """nginx auth_request target for the /autobot-api/ internal-key gate (#16374).
+
+    A side-effect-free membership check, deliberately separate from ``/me``:
+    ``/me`` answers "is this a live SLM session?", which any backend login
+    token satisfies by design (epic #10193) -- every read-only or non-admin
+    user therefore passed the old gate too, and nginx then attached the
+    trusted internal key that ``autobot-backend/auth_middleware.py`` treats
+    as full admin. This answers "does this session hold the role the key
+    actually confers?": 204 for a session whose role grants
+    ``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it
+    -- including SUPERADMIN, which holds no granular permissions (#13854)
+    and is refused here as on every other permission-gated SLM admin route
+    -- and an unknown role resolves to USER, so it also fails closed. 401
+    covers a missing Authorization header (the upstream ``HTTPBearer``'s
+    ``auto_error=True`` raises it before this dependency runs) or an
+    invalid/expired token (``get_current_user`` raises it). Returns no body
+    either way -- an ``auth_request`` subrequest's body is discarded, only
+    the status code is read.
+    """
+    return None
+
+
 def _build_end_session_url(link: "UserSSOLink") -> str | None:
     """Return the IdP end-session URL for *link*, or None if not configured."""
     endpoint = link.provider.config.get("end_session_endpoint") if link and link.provider else None

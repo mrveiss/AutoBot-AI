@@ -3,12 +3,13 @@
 # Scans the three languages GitHub's default setup covered (python,
 # javascript-typescript, actions) under the same `/language:<lang>` category,
 # and applies .github/codeql/codeql-config.yml, which default setup cannot
-# read. That file's three file-scoped `query-filters` entries exclude nothing
-# under either setup (#16302); returning here does not by itself make them
-# apply.
+# read. That file no longer carries file-scoped `query-filters` entries --
+# they excluded nothing under either setup (#16302, removed in #16311). Its
+# reviewed false positives are code-scanning alert dismissals instead, with
+# each dismissal's reason kept as a comment there.
 #
 # Triggers
-# - push to main or Dev_new_gui, the weekly schedule and workflow_dispatch:
+# - push to release or main, the weekly schedule and workflow_dispatch:
 #   unfiltered, every language. A pull request's results are compared with the
 #   analysis of its base branch, so a base scan must never be skipped by a path
 #   filter; GitHub's CodeQL docs advise against `paths` on `on.push` for that
@@ -20,24 +21,20 @@
 #   the workflow, so what it would have found surfaces only after merge, in the
 #   base scan.
 #
-# Switching over from default setup, in this order (owner decision, #16283):
-# 1. land this file;
-# 2. re-enable this workflow in Actions -- it was disabled there, not here;
-# 3. run it by workflow_dispatch with `upload: never` and confirm all three
-#    languages go green. It must be `never` while default setup is still on:
-#    code scanning refuses advanced-setup results then ("CodeQL analyses from
-#    advanced configurations cannot be processed when the default setup is
-#    enabled"), which is how this workflow's last run before #16283 failed;
-# 4. only then turn default setup off, and confirm the next uploading run
-#    succeeds. Until step 4, every run that uploads fails on that refusal.
+# Default setup vs. this workflow (owner decision, #16283): default setup is
+# OFF, reporting `not-configured` from the code-scanning API. This workflow is
+# the only source of python, javascript-typescript and actions analyses now.
+# Advanced-setup uploads have landed for all three languages on Dev_new_gui
+# and on PR refs; main hasn't been pushed to since the switch, so it will
+# pick up uploads on its next push.
 
 name: CodeQL Analysis
 
 on:
   push:
-    branches: [main, Dev_new_gui]
+    branches: [release, main]
   pull_request:
-    branches: [main, Dev_new_gui]
+    branches: [release, main]
     paths:
       # python
       - "**/*.py"
@@ -148,13 +145,13 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4.37.9
+        uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
         with:
           languages: ${{ matrix.language }}
           config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4.37.9
+        uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
         with:
           category: "/language:${{ matrix.language }}"
           upload: ${{ inputs.upload || 'always' }}

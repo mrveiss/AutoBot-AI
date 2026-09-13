@@ -29,7 +29,7 @@
 # therefore never checked for removal — they still have to be fixed, and their
 # line still has to be deleted by hand when they are.
 #
-# Generated from real sessions on Dev_new_gui, not by hand: both invocation
+# Generated from real sessions on main, not by hand: both invocation
 # shapes CI uses, since pytest.ini forbids one combined session (#13084), each
 # run collect-only to find the owners whose stub is live from import, and then
 # in full to add the ones that only appear once their own tests execute.

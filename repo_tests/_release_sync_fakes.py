@@ -21,9 +21,9 @@ from repo_tests._paths import repo_root
 SCRIPT = repo_root() / "pipeline-scripts" / "release_sync_main.py"
 
 REPO = "mrveiss/AutoBot-AI"
-HEAD = "release-sync-main"
-SOURCE = "Dev_new_gui"
-BASE = "main"
+HEAD = "release-sync-release"
+SOURCE = "main"
+BASE = "release"
 REFUSAL = {"message": "GitHub Actions is not permitted to create or approve pull requests."}
 
 Route = Tuple[str, str, Tuple[int, Any]]

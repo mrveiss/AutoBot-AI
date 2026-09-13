@@ -97,7 +97,7 @@ main() {
     echo "       cd ${conflict}"
     echo ""
     echo "    3. Checkout a different branch in the main directory:"
-    echo "       git checkout Dev_new_gui"
+    echo "       git checkout main"
     echo -e "${CYAN}──────────────────────────────────────────────────────${NC}"
     echo ""
 

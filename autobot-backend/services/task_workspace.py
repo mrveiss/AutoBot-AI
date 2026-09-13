@@ -53,7 +53,7 @@ _MAX_WORKTREES_PER_AGENT = 5
 # had last fetched -- and a stale base makes "is this already done?" answer NO
 # when the truth is yes, which costs a whole session's work and never looks like
 # a mistake while it is happening.
-_WORKSPACE_BASE_REF = os.environ.get("AUTOBOT_WORKSPACE_BASE_REF") or "origin/Dev_new_gui"
+_WORKSPACE_BASE_REF = os.environ.get("AUTOBOT_WORKSPACE_BASE_REF") or "origin/main"
 
 
 @contextmanager

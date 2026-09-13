@@ -28,8 +28,16 @@ gen_hex() {
 # signing secrets above. `load_root_key` base64-decodes it and REQUIRES exactly
 # 32 bytes, so a 64-hex-char value decodes to 48 and is rejected. Emit url-safe
 # base64 of 32 random bytes instead.
+#
+# #16405: this used to draw `tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32`
+# first -- 32 random ALPHANUMERIC CHARACTERS (~190 bits), not 32 random bytes
+# -- then base64-encoded that ASCII string into something that also happened
+# to decode back to 32 bytes. `load_root_key` cannot tell the difference: both
+# shapes satisfy its length check. Reading the 32 bytes straight off
+# /dev/urandom, full byte range, then base64-encoding them is what the comment
+# above already claimed this did.
 gen_b64_32() {
-    tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32 | base64 | tr '+/' '-_' | tr -d '\n'
+    head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '\n'
 }
 
 # Append one key only when it is absent. Per-key rather than all-or-nothing: an

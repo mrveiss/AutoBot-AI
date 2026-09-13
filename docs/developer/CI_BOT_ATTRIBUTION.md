@@ -72,25 +72,25 @@ Workflows is needed because the release-sync push carries changes under
 
 - `.github/workflows/auto-fix-generated-types.yml`
 - `.github/workflows/auto-update-pr-branches.yml`
-- `.github/workflows/sync-main-to-dev.yml` — pushes the `release-sync-main` branch
+- `.github/workflows/sync-main-to-release.yml` — pushes the `release-sync-release` branch
   and opens the release-sync PR from it, or, where GitHub refuses the PR, keeps
   the tracking issue described below (#16246).
 
 ## The release sync in this repository: by hand
 
-The owner ruled that this repository syncs `main` by hand (#15834 Q2). It has no
+The owner ruled that this repository syncs `release` by hand (#15834 Q2). It has no
 `AUTOBOT_PUSH_TOKEN`, and "Allow GitHub Actions to create and approve pull
 requests" stays off. Measured 11 Sep 2026: `actions/permissions/workflow` returns
 `default_workflow_permissions: read` and `can_approve_pull_request_reviews:
 false`, and the repository holds no Actions secrets.
 
-So `sync-main-to-dev.yml` pushes `release-sync-main` but can never open the sync
+So `sync-main-to-release.yml` pushes `release-sync-release` but can never open the sync
 PR. When GitHub refuses it, the workflow keeps ONE tracking issue instead, titled
-`release: main is behind Dev_new_gui — open the sync PR by hand` and labelled
+`release: release is behind main — open the sync PR by hand` and labelled
 `automation`. The issue carries the PR body (the commit count, the scheduled
 workflows the sync activates, changes or stops, and the merge-commit
 instruction), the compare link, and the one command that opens the PR. Each run
-updates it in place, and closes it once a sync PR is open or `main` has nothing
+updates it in place, and closes it once a sync PR is open or `release` has nothing
 left to sync. If the issue cannot be written the run fails, so a green run means
 the PR or the issue is current. The job declares `issues: write` because the
 default token here is read-only.
@@ -109,15 +109,15 @@ owner, whose runs do not park.
 
 `ci-dispatch-watchdog.yml` sweeps parked runs and approves only those whose head
 repository is this repository **and** whose triggering actor is the bot — fork
-PRs are never approved, only reported. It sweeps open PRs into `Dev_new_gui`,
-plus the one open release-sync PR into `main` (head `release-sync-main`, from
-this repository), and no other PR into `main` (#16272).
+PRs are never approved, only reported. It sweeps open PRs into `main`,
+plus the one open release-sync PR into `release` (head `release-sync-release`, from
+this repository), and no other PR into `release` (#16272).
 
 Its cron is `*/15`, but do not count on a release within minutes: measured on
 11 Sep 2026, its scheduled runs fired every 1.5 to 4 hours (#16272).
 
 That cron only fires from the **default branch**. The workflow must therefore
-exist on `main`, not only on `Dev_new_gui`; until it does, the schedule never
+exist on `main`, not only on `release`; until it does, the schedule never
 runs and the sweep is limited to `push` and `pull_request` events:
 
 ```
