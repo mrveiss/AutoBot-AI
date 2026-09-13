@@ -77,7 +77,7 @@ the one read-side gate · `validate_ownership` (:613).
 **Canonical enforcement:** every route in
 [`autobot-backend/plugin_manager.py`](../../autobot-backend/plugin_manager.py) carries a
 `Depends` on [`auth_middleware.py`](../../autobot-backend/auth_middleware.py)
-`check_admin_permission` (:972).
+`check_admin_permission` (:967).
 Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-backend/archive_safety.py)
 — `validate_zip_metadata` (:27), `safe_extract` (:58), `MAX_UPLOAD_BYTES` (:19).
 
@@ -103,7 +103,7 @@ AES-GCM + PBKDF2 for data at rest · [`autobot_shared/field_encryption.py`](../.
 `encrypt_field`/`decrypt_field` for single columns ·
 [`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py)
 `ConnectorCredentialStore` (:178) for connector/OAuth creds, ownership via `_require_owner` (:604) ·
-[`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:959)
+[`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:954)
 for service-to-service · [`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:121) for SLM token revocation.
 
 **Invariants**
@@ -127,6 +127,12 @@ for service-to-service · [`services/auth.py`](../../autobot-slm-backend/service
 - The RS256 authority-token path fails CLOSED the same way (#16412): [`rs256_denylist.py`](../../autobot-slm-backend/services/rs256_denylist.py)
   `is_rs256_jti_revoked` (:91) raises on a Redis error rather than reporting "not revoked"; its caller
   [`jwks_verifier.py`](../../autobot-slm-backend/services/jwks_verifier.py) `verify_authority_token` (:218) denies the token (401) at both call sites; the write side stays best-effort.
+- The password-epoch revocation check fails closed (#16411, #16422, owner decisions; the SLM's rule since
+  #16387): when Redis cannot answer, or the stored marker or the token's `iat` is not an integer, the check
+  raises `RevocationCheckUnavailable`, a `ConnectionError`, and
+  [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401. Rationale: a token that
+  may be revoked is never honoured, and a Redis outage taking login down with it is the accepted cost. An
+  `except` around it that returns "not revoked" is a fail-open.
 
 ## Cross-cutting
 

@@ -154,7 +154,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/vnc_mcp.py": 763,
     "autobot-backend/api/websockets.py": 1128,
     "autobot-backend/api/workflow.py": 1027,
-    "autobot-backend/auth_middleware.py": 1099,
+    "autobot-backend/auth_middleware.py": 1094,
     "autobot-backend/autobot_memory_graph/property_graph.py": 630,
     "autobot-backend/autobot_memory_graph/relations.py": 641,
     "autobot-backend/autobot_memory_graph/semantic_search.py": 717,
