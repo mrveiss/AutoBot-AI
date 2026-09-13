@@ -101,6 +101,7 @@ class DeploymentValidator:
                     "REDIS_PASSWORD",
                     os.environ.get("AUTOBOT_REDIS_PASSWORD", ""),
                 ),
+                username=os.environ.get("AUTOBOT_REDIS_USERNAME") or None,  # #16626
                 socket_timeout=service.timeout,
                 decode_responses=True,
             )
@@ -271,6 +272,7 @@ def _test_redis_connectivity() -> Dict:
                 "REDIS_PASSWORD",
                 os.environ.get("AUTOBOT_REDIS_PASSWORD", ""),
             ),
+            username=os.environ.get("AUTOBOT_REDIS_USERNAME") or None,  # #16626
             decode_responses=True,
         )
         r.ping()
