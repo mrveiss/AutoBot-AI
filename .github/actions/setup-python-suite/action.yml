@@ -107,34 +107,103 @@ runs:
     # own schedule -- waiting is the point, not a longer single wait)
     # converts a roughly 1-in-12 per-shard race into something far smaller,
     # without pretending to know the right single-attempt budget. Exhausting
-    # all three still fails the step: the retry loop's own exit status IS
-    # the last attempt's exit status, propagated by `set -e` because the
-    # function call is a bare statement, not wrapped in an `if`/`&&` that
-    # would swallow it -- a genuinely unavailable toolchain must still
-    # redden the run.
-    - name: Install CI system packages (#14550)
+    # all three still fails the step: `apt_retry` returns 1, and `set -e`
+    # stops the step because the call is a bare statement, not wrapped in an
+    # `if`/`&&` that would swallow it -- a genuinely unavailable toolchain
+    # must still redden the run.
+    #
+    # #15515: the retry could not recover from its own timeout. A slow mirror
+    # pushed one install past `timeout 300` while dpkg was unpacking. The kill
+    # left dpkg interrupted, so attempts 2 and 3 failed at once ("dpkg was
+    # interrupted, you must manually run 'sudo dpkg --configure -a'"). Now:
+    # - Packages are fetched first, with `--download-only`. Killing a download
+    #   is harmless and the next attempt resumes it. The install still runs
+    #   under the same bound; a kill there is what the repair below is for.
+    #   apt also retries a failed fetch itself, and drops a connection that
+    #   has sent nothing for a while.
+    # - Between attempts, `dpkg --configure -a` repairs an interrupted unpack.
+    # - `apt-get update` is advisory. The runner image carries third-party
+    #   sources this step never installs from, and one of them failing fails
+    #   update even when the Ubuntu indexes arrived: a Hash Sum mismatch on
+    #   dl.google.com's Chrome repository failed all twelve shards of five runs
+    #   that way on 2026-09-09. So an exhausted update warns and the installs,
+    #   which fail if the Ubuntu indexes are really missing, stay the gate.
+    # - Each failure names its step and apt's own exit code, saved before
+    #   anything else runs. The last one is an annotation titled as a
+    #   provisioning failure, so a red shard that ran no tests says so.
+    # Caching or pre-baking the packages was considered and not done: hosted
+    # runners are single-use images this repo cannot pre-bake, and a .deb
+    # cache keyed on the runner image adds a moving part for a failure mode
+    # the recovery above addresses directly. Revisit if provisioning reds
+    # persist after it.
+    #
+    # #13896: the OCR fallback needs the tesseract *binary*, not just the
+    # pytesseract binding. Ansible installs tesseract-ocr on every backend host
+    # (roles/backend/tasks/main.yml), but nothing installed it here — so
+    # pytesseract imported fine, get_tesseract_version() raised, and every OCR
+    # test skipped. That is #13885's exact shape reproduced in CI: the binding
+    # present, the binary absent, and a green run that proved nothing.
+    #
+    # Deliberately NOT inside the venv-cache guard below: the cache holds the
+    # virtualenv, not apt state, so a cache hit would skip this and the binary
+    # would be missing on exactly the runs that reuse a warm cache.
+    - name: "Install CI system packages (#14550, #13896)"
       shell: bash
       run: |
         set -euo pipefail
-        if command -v ffmpeg >/dev/null 2>&1; then
-          echo "ffmpeg already present: $(ffmpeg -version | head -1)"
+        if command -v ffmpeg >/dev/null 2>&1 && command -v tesseract >/dev/null 2>&1; then
+          echo "ffmpeg and tesseract already present"
           exit 0
         fi
         export DEBIAN_FRONTEND=noninteractive
 
+        # Every bound this step uses, named once (#15515).
+        readonly APT_ATTEMPTS=3           # tries per apt command
+        readonly APT_TIMEOUT_S=300        # wall-clock bound per try, and per dpkg repair
+        readonly APT_BACKOFF_S=15         # the sleep after try N is N times this
+        readonly APT_FETCH_RETRIES=3      # apt's own retries of one failed download
+        readonly APT_HTTP_IDLE_S=30       # drop a connection that sends nothing this long
+        readonly APT_LOCK_WAIT_S=120      # wait this long for the dpkg lock
+        readonly TIMEOUT_KILLED=124       # coreutils timeout's exit status when it kills
+
+        # apt_retry LABEL COMMAND...: up to APT_ATTEMPTS tries (#15515, above).
+        # With APT_ADVISORY=1 an exhausted command warns and returns 0.
         apt_retry() {
-          local attempt
-          for attempt in 1 2 3; do
-            "$@" && return 0
-            echo "apt attempt ${attempt}/3 failed (exit $?) — retrying" >&2
-            sleep $((attempt * 15))
+          local label=$1 attempt rc=0 why=""
+          shift
+          for ((attempt = 1; attempt <= APT_ATTEMPTS; attempt++)); do
+            rc=0
+            "$@" || rc=$?
+            if [ "$rc" -eq 0 ]; then return 0; fi
+            why=""
+            if [ "$rc" -eq "$TIMEOUT_KILLED" ]; then why=", timed out"; fi
+            echo "apt: ${label}: attempt ${attempt}/${APT_ATTEMPTS} failed (exit ${rc}${why})" >&2
+            if [ "$attempt" -eq "$APT_ATTEMPTS" ]; then break; fi
+            timeout "$APT_TIMEOUT_S" sudo dpkg --configure -a || echo "apt: dpkg --configure -a exited $?; the next attempt reports why" >&2
+            sleep $((attempt * APT_BACKOFF_S))
           done
-          echo "::error::apt did not succeed after 3 attempts — toolchain provisioning failed" >&2
+          if [ "${APT_ADVISORY:-0}" = 1 ]; then
+            echo "::warning title=apt ${label} failed (continuing)::${label} failed ${APT_ATTEMPTS} times, last exit ${rc}${why}; the installs decide" >&2
+            return 0
+          fi
+          echo "::error title=CI toolchain provisioning failed (no tests ran)::${label} failed ${APT_ATTEMPTS} times, last exit ${rc}${why}" >&2
           return 1
         }
 
-        apt_retry timeout 300 sudo apt-get update -qq -o DPkg::Lock::Timeout=120
-        apt_retry timeout 300 sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=120 ffmpeg
+        # Retry and lock settings for every apt call below. Unlike the image
+        # builds (#16291) there is no Error-Mode here: the runner image's own
+        # sources are outside this repo, and one of them failing must not fail
+        # a shard whose packages come from the Ubuntu archive.
+        printf '%s\n' "Acquire::Retries \"${APT_FETCH_RETRIES}\";" "Acquire::http::Timeout \"${APT_HTTP_IDLE_S}\";" \
+          "DPkg::Lock::Timeout \"${APT_LOCK_WAIT_S}\";" \
+          | sudo tee /etc/apt/apt.conf.d/80-ci-provisioning >/dev/null
+
+        APT_ADVISORY=1 apt_retry "update" timeout "$APT_TIMEOUT_S" sudo apt-get update -qq
+        apt_retry "download ffmpeg" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --download-only --no-install-recommends ffmpeg
+        apt_retry "download tesseract-ocr" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --download-only tesseract-ocr
+        apt_retry "install ffmpeg" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --no-install-recommends ffmpeg
+        apt_retry "install tesseract-ocr" timeout "$APT_TIMEOUT_S" sudo apt-get install -y tesseract-ocr
+        echo "installed: $(ffmpeg -version | head -1); $(tesseract --version 2>&1 | head -1)"
 
     # The venv lives OUTSIDE the workspace on purpose. Inside it, `actions/
     # checkout` and the several `rm -rf .venv` cleanup steps elsewhere in this
@@ -166,28 +235,6 @@ runs:
         # tool bump would have silently reused an environment still holding the
         # old versions.
         key: venv-python-suite-${{ runner.os }}-py${{ steps.env.outputs.pyversion }}-${{ hashFiles('requirements-ci.txt', 'requirements-ci/*.txt', 'requirements-ci-test.txt', 'constraints/*.txt') }}
-
-    # #13896: the OCR fallback needs the tesseract *binary*, not just the
-    # pytesseract binding. Ansible installs tesseract-ocr on every backend host
-    # (roles/backend/tasks/main.yml), but nothing installed it here — so
-    # pytesseract imported fine, get_tesseract_version() raised, and every OCR
-    # test skipped. That is #13885's exact shape reproduced in CI: the binding
-    # present, the binary absent, and a green run that proved nothing.
-    #
-    # Deliberately NOT inside the venv-cache guard below: the cache holds the
-    # virtualenv, not apt state, so a cache hit would skip this and the binary
-    # would be missing on exactly the runs that reuse a warm cache.
-    - name: Install OCR system packages (#13896)
-      shell: bash
-      run: |
-        set -euo pipefail
-        if command -v tesseract >/dev/null 2>&1; then
-          echo "tesseract already present: $(tesseract --version 2>&1 | head -1)"
-        else
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq tesseract-ocr
-          echo "installed: $(tesseract --version 2>&1 | head -1)"
-        fi
 
     - name: Install Python dependencies
       # Only on a miss. On a hit the venv is already complete and this whole
