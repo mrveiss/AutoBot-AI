@@ -8,7 +8,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, get_db
+from transcriber.deps import authenticate, caller_can_access, get_db
 from transcriber.models import (
     NoteCreate,
     NoteOut,
@@ -22,27 +22,26 @@ from transcriber.models import (
     TranscriptOut,
 )
 
-router = APIRouter(tags=["transcriber-transcripts"])
+router = APIRouter(tags=["transcriber-transcripts"], dependencies=[Depends(authenticate)])
 
 
-def _user_id(request: Request) -> str:
-    user = getattr(request.state, "user", None)
-    return user.id if user else DEFAULT_USER
+async def _require_recording_owner(recording_id: int, request: Request, db: Database) -> None:
+    """Raise 403 unless the caller may access the project containing this recording.
 
-
-async def _require_recording_owner(recording_id: int, user_id: str, db: Database) -> None:
-    """Raise 403 if user does not own the project that contains this recording."""
+    Goes through can_access like every other transcriber check -- this helper
+    used to compare owners itself, which forked the policy (#9863, #15758).
+    """
     recording = await db.get_recording(recording_id)
     if not recording:
         raise HTTPException(404, "Recording not found")
     project = await db.get_project(recording["project_id"])
-    if not project or project["user_id"] != user_id:
+    if not project or not caller_can_access(project, request):
         raise HTTPException(403, "Not authorized")
 
 
 @router.get("/recordings/{recording_id}/transcript", response_model=TranscriptOut)
 async def get_transcript(recording_id: int, request: Request, db: Database = Depends(get_db)):
-    await _require_recording_owner(recording_id, _user_id(request), db)
+    await _require_recording_owner(recording_id, request, db)
     rec = await db.get_recording(recording_id)
     speakers = await db.list_speakers(recording_id)
     segments = await db.list_segments(recording_id)
@@ -58,7 +57,7 @@ async def update_segment(segment_id: int, body: SegmentUpdate, request: Request,
     segment = await db.get_segment(segment_id)
     if not segment:
         raise HTTPException(404, "Segment not found")
-    await _require_recording_owner(segment["recording_id"], _user_id(request), db)
+    await _require_recording_owner(segment["recording_id"], request, db)
     await db.update_segment_text(segment_id, body.text)
     updated = await db.get_segment(segment_id)
     return SegmentOut(**updated)
@@ -69,7 +68,7 @@ async def update_speaker(speaker_id: int, body: SpeakerUpdate, request: Request,
     speaker = await db.get_speaker(speaker_id)
     if not speaker:
         raise HTTPException(404, "Speaker not found")
-    await _require_recording_owner(speaker["recording_id"], _user_id(request), db)
+    await _require_recording_owner(speaker["recording_id"], request, db)
     await db.update_speaker(speaker_id, body.display_name)
     updated = await db.get_speaker(speaker_id)
     return SpeakerOut(**updated)
@@ -84,7 +83,7 @@ async def merge_speakers(body: SpeakerMerge, request: Request, db: Database = De
     source = await db.get_speaker(body.source_speaker_id)
     if not source:
         raise HTTPException(404, f"no speaker with id={body.source_speaker_id}")
-    await _require_recording_owner(source["recording_id"], _user_id(request), db)
+    await _require_recording_owner(source["recording_id"], request, db)
     try:
         await db.merge_speakers(body.source_speaker_id, body.target_speaker_id)
         return {"success": True, "message": f"Speaker {body.source_speaker_id} merged into {body.target_speaker_id}"}
@@ -100,7 +99,7 @@ async def create_note(segment_id: int, body: NoteCreate, request: Request, db: D
     if not segment:
         raise HTTPException(404, "Segment not found")
     recording_id = segment["recording_id"]
-    await _require_recording_owner(recording_id, _user_id(request), db)
+    await _require_recording_owner(recording_id, request, db)
     nid = await db.create_note(segment_id, recording_id, body.content)
     note = await db.get_note(nid)
     return NoteOut(**note)
@@ -111,7 +110,7 @@ async def update_note(note_id: int, body: NoteUpdate, request: Request, db: Data
     note = await db.get_note(note_id)
     if not note:
         raise HTTPException(404, "Note not found")
-    await _require_recording_owner(note["recording_id"], _user_id(request), db)
+    await _require_recording_owner(note["recording_id"], request, db)
     await db.update_note(note_id, body.content)
     return NoteOut(**await db.get_note(note_id))
 
@@ -121,6 +120,6 @@ async def delete_note(note_id: int, request: Request, db: Database = Depends(get
     note = await db.get_note(note_id)
     if not note:
         raise HTTPException(404, "Note not found")
-    await _require_recording_owner(note["recording_id"], _user_id(request), db)
+    await _require_recording_owner(note["recording_id"], request, db)
     await db.delete_note(note_id)
     return Response(status_code=204)

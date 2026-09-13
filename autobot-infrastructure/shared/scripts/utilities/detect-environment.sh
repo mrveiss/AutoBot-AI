@@ -3,6 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # Detect AutoBot deployment environment
 
+# The env files this repo actually tracks (#15143). Four of the five branches
+# below used to name a file outside this set, so every one of them silently
+# fell through to "using defaults" instead of loading anything.
+TRACKED_ENV_FILES=(".env.docker" ".env.example" ".env.localhost" ".env.native-vm" ".env.network" ".env.network-template")
+
 detect_environment() {
     # Check if running in WSL
     if grep -qi microsoft /proc/version 2>/dev/null; then
@@ -28,29 +33,27 @@ detect_environment() {
     fi
 }
 
-# Export the detected environment
-AUTOBOT_ENVIRONMENT=$(detect_environment)
+# Export the detected environment. Set already (e.g. by a test forcing one
+# branch) wins over detection, since faking /proc/version, /.dockerenv or the
+# docker socket to reach a specific branch is not worth the trouble.
+AUTOBOT_ENVIRONMENT="${AUTOBOT_ENVIRONMENT:-$(detect_environment)}"
 echo "🔍 Detected environment: $AUTOBOT_ENVIRONMENT"
 
 case $AUTOBOT_ENVIRONMENT in
     "wsl-docker-desktop")
         echo "📦 WSL with Docker Desktop on Windows"
         echo "   Using localhost for service access"
-        ENV_FILE=".env.wsl-docker-desktop"
+        ENV_FILE=".env.localhost"
         ;;
-    "linux-native")
-        echo "🐧 Native Linux with Docker"
-        echo "   Using direct Docker IPs for performance"
-        ENV_FILE=".env.linux-native"
-        ;;
-    "wsl-native-docker")
-        echo "📦 WSL with native Docker"
-        echo "   Using Docker IPs directly"
-        ENV_FILE=".env.linux-native"
-        ;;
-    "containerized")
-        echo "🐳 Running inside Docker"
-        ENV_FILE=".env.distributed"
+    "linux-native" | "wsl-native-docker" | "containerized")
+        # #15143: none of the three real modes this repo tracks -- localhost,
+        # native-vm (a genuinely distributed multi-VM deployment), network --
+        # is what these three actually describe (same-host Docker networking,
+        # and in-container networking, respectively). Guessing one would
+        # point services at the wrong host silently; fail instead.
+        echo "❌ No environment file is mapped for '$AUTOBOT_ENVIRONMENT' yet (#15143)"
+        echo "   Tracked env files: ${TRACKED_ENV_FILES[*]}"
+        exit 1
         ;;
     *)
         echo "⚠️  No Docker detected or unsupported environment"

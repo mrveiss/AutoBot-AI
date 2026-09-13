@@ -30,6 +30,7 @@ from api.schemas_agent import (
     AgentModelUpdate,
 )
 from api.schemas_common import DataResponse
+from api.settings_config import require_settings_admin
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -1055,6 +1056,7 @@ async def _apply_agent_model_update(
     update: "AgentModelUpdate",
     unified_config_manager,
     session: "AsyncSession",
+    created_by: str,
 ) -> dict:
     """Persist model/provider change and record audit revision. Ref: #2735.
 
@@ -1081,7 +1083,7 @@ async def _apply_agent_model_update(
         before_config=before_config,
         after_config=after_config,
         source="api",
-        created_by="admin",
+        created_by=created_by,
     )
 
     logger.info(
@@ -1110,7 +1112,7 @@ async def _apply_agent_model_update(
 async def update_agent_model(
     agent_id: str,
     update: AgentModelUpdate,
-    admin_check: bool = Depends(check_admin_permission),
+    created_by: str = Depends(require_settings_admin),
     session: AsyncSession = Depends(get_db_session),
 ):
     """
@@ -1130,7 +1132,7 @@ async def update_agent_model(
             detail="Agent ID in URL must match agent ID in request body",
         )
 
-    updated_config = await _apply_agent_model_update(agent_id, update, unified_config_manager, session)
+    updated_config = await _apply_agent_model_update(agent_id, update, unified_config_manager, session, created_by)
 
     return JSONResponse(
         status_code=200,
@@ -1150,7 +1152,7 @@ async def update_agent_model(
 )
 async def enable_agent(
     agent_id: str,
-    admin_check: bool = Depends(check_admin_permission),
+    created_by: str = Depends(require_settings_admin),
     session: AsyncSession = Depends(get_db_session),
 ):
     """
@@ -1176,7 +1178,7 @@ async def enable_agent(
         before_config={"enabled": before_enabled},
         after_config={"enabled": True},
         source="api",
-        created_by="admin",
+        created_by=created_by,
     )
 
     logger.info("Enabled agent %s", agent_id)
@@ -1199,7 +1201,7 @@ async def enable_agent(
 )
 async def disable_agent(
     agent_id: str,
-    admin_check: bool = Depends(check_admin_permission),
+    created_by: str = Depends(require_settings_admin),
     session: AsyncSession = Depends(get_db_session),
 ):
     """
@@ -1225,7 +1227,7 @@ async def disable_agent(
         before_config={"enabled": before_enabled},
         after_config={"enabled": False},
         source="api",
-        created_by="admin",
+        created_by=created_by,
     )
 
     logger.info("Disabled agent %s", agent_id)
