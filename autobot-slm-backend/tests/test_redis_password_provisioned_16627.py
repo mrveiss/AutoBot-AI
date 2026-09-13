@@ -199,6 +199,9 @@ def test_the_legacy_env_and_an_explicit_password_still_set_requirepass(rel, mark
     line = _requirepass_line(rel, marker)
     assert f"requirepass {_LEGACY_PW}" in _render(line, env={"AUTOBOT_REDIS_PASSWORD": _LEGACY_PW})
     assert f"requirepass {_PINNED_PW}" in _render(line, env={}, autobot_redis_password=_PINNED_PW)
+    # An explicit server password is enforced even where the SLM env carries a username.
+    slm_env = {"AUTOBOT_REDIS_PASSWORD": _PW, "AUTOBOT_REDIS_USERNAME": "default"}
+    assert f"requirepass {_PINNED_PW}" in _render(line, env=slm_env, autobot_redis_password=_PINNED_PW)
 
 
 @pytest.mark.parametrize("rel", ["playbooks/deploy-hybrid-docker.yml", "playbooks/deploy-native-services.yml"])
