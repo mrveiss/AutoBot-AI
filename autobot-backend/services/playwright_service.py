@@ -15,6 +15,7 @@ import aiohttp
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from autobot_shared.url_safety import is_public_url_async
 from constants.network_constants import NetworkConstants, ServiceURLs
 from exceptions import ServiceUnavailableError
 from type_defs.common import Metadata
@@ -315,7 +316,16 @@ class PlaywrightService:
 
         Returns:
             Screenshot metadata and status
+
+        Unlike ``test_frontend``/``send_test_message`` (deliberately internal,
+        default to ``ServiceURLs.FRONTEND_LOCAL``), *url* here names arbitrary
+        caller-supplied web content, so it gets the same DNS-resolving guard
+        ``api/browser_mcp.py::send_to_browser_vm`` applies (#13204).
         """
+        if not await is_public_url_async(url):
+            logger.warning("Blocked screenshot capture of non-public URL: %s", url)
+            return {"success": False, "error": "URL is not a public address", "url": url}
+
         try:
             if not await self.is_ready():
                 raise RuntimeError("Playwright service not available")
