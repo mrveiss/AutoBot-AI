@@ -85,7 +85,10 @@
   connection: local
 
   vars:
-    autobot_root: /opt/autobot
+    # #16348: never a hard-coded install-root literal — the same variable
+    # the service_auth role's service_auth_keys_source_dir derives from
+    # (roles/service_auth/defaults/main.yml), so both resolve one directory.
+    autobot_root: "{{ autobot.base_dir }}"
     key_generator: >-
       {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-infrastructure/shared/scripts/generate_service_keys.py
     keys_backup_dir: "{{ autobot_root }}/config/service-keys"
@@ -141,7 +144,8 @@
 
     - name: Generate new service keys
       ansible.builtin.command:
-        cmd: "python3 {{ key_generator }}"
+        # #16348: --output-dir explicit, never relative to chdir.
+        cmd: "python3 {{ key_generator }} --output-dir {{ keys_backup_dir }}"
         chdir: "{{ autobot_root }}"
       register: key_generation
       tags: [generate]
@@ -166,10 +170,13 @@
       tags: [generate]
 
     - name: Display latest backup file
+      # #16348: sort by path (filename timestamp), matching deploy-keys.yml
+      # and the generator's own prune -- never mtime, which a restored or
+      # copied export can disagree with.
       ansible.builtin.debug:
         msg: >-
           Latest backup:
-          {{ (backup_files.files | sort(attribute='mtime') | last).path }}
+          {{ (backup_files.files | sort(attribute='path') | last).path }}
       tags: [generate]
 
 # ======================================================================
@@ -310,7 +317,10 @@
   connection: local
 
   vars:
-    keys_backup_dir: /opt/autobot/config/service-keys
+    # #16348: same expression as Phase 1 and the service_auth role's
+    # service_auth_keys_source_dir — never a separate hard-coded install
+    # root literal.
+    keys_backup_dir: "{{ autobot.base_dir }}/config/service-keys"
 
   tasks:
     - name: Find latest backup file
@@ -321,6 +331,8 @@
       tags: [summary]
 
     - name: Display rotation summary
+      # #16348: sort by path (filename timestamp), matching deploy-keys.yml
+      # and the generator's own prune -- never mtime.
       ansible.builtin.debug:
         msg:
           - "Key Rotation Complete"
@@ -331,7 +343,7 @@
           - "Backend: restarted and healthy"
           - "Verification: all keys validated"
           - ""
-          - "Backup: {{ (final_backup_files.files | sort(attribute='mtime') | last).path | default('N/A') }}"
+          - "Backup: {{ (final_backup_files.files | sort(attribute='path') | last).path | default('N/A') }}"
           - ""
           - "Next rotation due: ~80 days (before 90-day TTL)"
           - "Automated via: systemctl status autobot-key-rotation.timer"

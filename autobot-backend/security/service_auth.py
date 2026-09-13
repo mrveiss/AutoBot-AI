@@ -42,9 +42,33 @@ class ServiceAuthManager:
         # hard-coded, so the documented knob silently did nothing.
         self.timestamp_window = config.service_auth_timestamp_window
 
+    def generate_key_material(self) -> str:
+        """
+        Generate a 256-bit hex-encoded API key. Pure -- touches no I/O (#16348).
+
+        Split out of ``generate_service_key`` so a caller that must not put a
+        key in Redis until it has an exported copy on disk (see
+        ``generate_service_keys.py``) can generate first and store later.
+
+        Returns:
+            Hex-encoded 256-bit API key
+        """
+        return secrets.token_bytes(32).hex()  # 256 bits
+
+    async def store_service_key(self, service_id: str, key_hex: str) -> None:
+        """
+        Store an already-generated key in Redis with 90-day expiration (#16348).
+
+        Args:
+            service_id: Unique identifier for the service (e.g., 'main-backend', 'npu-worker')
+            key_hex: Hex-encoded key, as returned by ``generate_key_material``
+        """
+        await self.redis.set(f"service:key:{service_id}", key_hex, ex=TTL_90_DAYS)
+        logger.info("Stored service key for %s", service_id, extra={"service_id": service_id})
+
     async def generate_service_key(self, service_id: str) -> str:
         """
-        Generate 256-bit API key for a service.
+        Generate a 256-bit API key for a service and store it in Redis.
 
         Args:
             service_id: Unique identifier for the service (e.g., 'main-backend', 'npu-worker')
@@ -52,13 +76,8 @@ class ServiceAuthManager:
         Returns:
             Hex-encoded 256-bit API key
         """
-        key = secrets.token_bytes(32)  # 256 bits
-        key_hex = key.hex()
-
-        # Store in Redis with 90-day expiration
-        await self.redis.set(f"service:key:{service_id}", key_hex, ex=TTL_90_DAYS)
-
-        logger.info("Generated service key for %s", service_id, extra={"service_id": service_id})
+        key_hex = self.generate_key_material()
+        await self.store_service_key(service_id, key_hex)
         return key_hex
 
     async def get_service_key(self, service_id: str) -> str | None:

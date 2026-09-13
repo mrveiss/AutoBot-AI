@@ -157,6 +157,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.yaml": (
         {
+            "repo_tests/generate_service_keys_export_dir_16348_test.py",
             "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
             "repo_tests/hook_suites_run_in_ci_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
