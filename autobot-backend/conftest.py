@@ -647,6 +647,11 @@ if "llm_shared" not in sys.modules:
     # so base_provider (and then provider_registry) load real.
     _real_load_and_bind("llm_shared.cross_worker_rate_limiter", _llm_root / "cross_worker_rate_limiter.py")
     _real_load_and_bind("llm_shared.observability", _llm_root / "observability" / "__init__.py")
+    # #15026: quota headroom store — rate_limit_backoff imports it at module
+    # level (`from .quota_headroom import get_quota_headroom_store`) to persist
+    # what it already parses; light dep (autobot_shared.env_utils/
+    # logging_manager/singleton_factory only), load real before rate_limit_backoff.
+    _real_load_and_bind("llm_shared.quota_headroom", _llm_root / "quota_headroom.py")
     _real_load_and_bind("llm_shared.rate_limit_backoff", _llm_root / "rate_limit_backoff.py")
     # #11541: pre-request cumulative token budget gate — base_provider imports it
     # at module level (`from .token_budget import get_token_budget_gate`); light
