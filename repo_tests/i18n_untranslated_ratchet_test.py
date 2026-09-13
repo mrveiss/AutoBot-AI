@@ -75,7 +75,7 @@ BASELINE = {
     "lv": 2259,
     "pl": 2225,
     "pt": 2062,
-    "ur": 3804,
+    "ur": 3791,
 }
 
 # Below this length a match is far more likely to be a shared token than an
