@@ -107,7 +107,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/filesystem_mcp.py": 1968,
     "autobot-backend/api/git_mcp.py": 1357,
     "autobot-backend/api/http_client_mcp.py": 963,
-    "autobot-backend/api/ide_integration.py": 1110,
+    "autobot-backend/api/ide_integration.py": 928,
     "autobot-backend/api/knowledge.py": 3477,
     "autobot-backend/api/knowledge_ai_stack.py": 712,
     "autobot-backend/api/knowledge_api_integration_test.py": 623,
