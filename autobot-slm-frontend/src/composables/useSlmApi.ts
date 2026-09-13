@@ -10,6 +10,7 @@
  */
 
 import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
+import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
 import type {
   SLMNode,
   NodeHealth,
@@ -497,8 +498,11 @@ export function useSlmApi() {
     if (options?.lines) params.append('lines', options.lines.toString())
     if (options?.since) params.append('since', options.since)
 
+    // A journal fetch runs over SSH, like /nodes/{id}/exec — the client's
+    // default CRUD-read timeout is too short for it (#16256).
     const response = await client.get<ServiceLogsResponse>(
-      `/nodes/${nodeId}/services/${serviceName}/logs?${params.toString()}`
+      `/nodes/${nodeId}/services/${serviceName}/logs?${params.toString()}`,
+      { timeout: REMOTE_EXEC_TIMEOUT_MS }
     )
     return response.data
   }
