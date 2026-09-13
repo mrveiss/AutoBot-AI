@@ -156,7 +156,6 @@ per-file-ignores =
     autobot-backend/planner/planner.py:E501
     autobot-backend/prompt_manager.py:E501
     # Dashboard/monitoring files with long command strings and JS templates
-    autobot-slm-backend/monitoring/performance_dashboard.py:E501
     autobot-slm-backend/monitoring/performance_optimizer.py:E501
     # Backward-compatibility re-export shims (intentionally long inline comments)
     autobot-backend/context_aware_decision_system.py:E501

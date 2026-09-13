@@ -258,7 +258,7 @@ API Base:  http://<slm-manager-ip>:8000/api
 
 **Legacy Code Deprecated:**
 - `/monitoring/` directory - Scheduled for removal in v3.0
-- `claude_api_monitor.py` - Already deprecated (Issue #348)
+- `claude_api_monitor.py` - Deprecated (Issue #348), retired (Issue #16282)
 
 ---
 

@@ -878,7 +878,6 @@
 1|other|autobot-slm-backend/migrations/consolidate_slm_users_to_uuid.py|"postgresql://"
 1|other|autobot-slm-backend/migrations/utils.py|"postgresql://"
 1|other|autobot-slm-backend/monitoring/performance_benchmark.py|"/tmp/autobot_disk_benchmark.tmp
-1|other|autobot-slm-backend/monitoring/performance_dashboard.py|https://cdn.plot.ly/plotly-latest.min.js
 1|other|autobot-slm-backend/scripts/autobot-admin.py|"/opt/autobot/autobot-slm-backend/.env
 1|other|autobot-slm-backend/services/agent_seeder.py|30
 1|other|autobot-slm-backend/services/backup.py|60
