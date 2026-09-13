@@ -15,6 +15,9 @@ from autobot_shared.status_enums import CommandRisk
 from models.command_execution import CommandExecution, CommandState, RiskLevel
 
 if TYPE_CHECKING:
+    from autobot_logging.terminal_logger import TerminalLogger
+    from type_defs.common import Metadata
+
     from .models import AgentTerminalSession
 
 
@@ -203,3 +206,106 @@ def is_interactive_command(command: str) -> tuple[bool, list[str]]:
             matched_patterns.append(description)
 
     return (len(matched_patterns) > 0, matched_patterns)
+
+
+async def log_command_approval(
+    terminal_logger: "TerminalLogger",
+    session: "AgentTerminalSession",
+    command: str,
+    user_id: str | None,
+) -> None:
+    """Record an approved command against the session's conversation transcript.
+
+    Issue #665 extracted this from ``_execute_approved_command``; #14959 moved it
+    off ``AgentTerminalService`` — it reads no service state beyond the logger it
+    is handed, and the service had reached its recorded size ceiling.
+
+    A session with no conversation has nowhere to write, and logs nothing.
+    """
+    if session.has_conversation():
+        await terminal_logger.log_command(
+            session_id=session.conversation_id,
+            command=command,
+            run_type="manual",
+            status="approved",
+            user_id=user_id,
+        )
+
+
+async def log_command_result(
+    terminal_logger: "TerminalLogger",
+    session: "AgentTerminalSession",
+    command: str,
+    result: "Metadata",
+    user_id: str | None,
+) -> None:
+    """Record the outcome of an approved command (#665, moved in #14959).
+
+    Anything other than a ``success`` status is written as ``error`` — the
+    transcript records what happened, not what was attempted.
+    """
+    if session.has_conversation():
+        await terminal_logger.log_command(
+            session_id=session.conversation_id,
+            command=command,
+            run_type="manual",
+            status="success" if result.get("status") == "success" else "error",
+            result=result,
+            user_id=user_id,
+        )
+
+
+async def log_autobot_command(
+    terminal_logger: "TerminalLogger",
+    session: "AgentTerminalSession",
+    command: str,
+    status: str,
+    result: "Metadata | None" = None,
+) -> None:
+    """Record an auto-approved (``autobot`` run type) command against the transcript.
+
+    The same six-argument call was spelled out twice in
+    ``_execute_auto_approved_command`` — once before the command ran, once with
+    its result — inside a service already at its recorded size ceiling. Same
+    reason ``log_command_approval`` moved here in #14959; kept together with it
+    so the two run types stay one edit apart (#15073).
+
+    A session with no conversation has nowhere to write, and logs nothing.
+    """
+    if session.has_conversation():
+        await terminal_logger.log_command(
+            session_id=session.conversation_id,
+            command=command,
+            run_type="autobot",
+            status=status,
+            result=result,
+            user_id=None,
+        )
+
+
+def security_warning_payload(command: str, risk: CommandRisk) -> dict:
+    """The `security_warning` message a blocked command sends to the client (#14995).
+
+    Here rather than at the call site so the wire vocabulary is decided next to
+    ``map_risk_to_level``, which is where someone checking what the client
+    receives will look. The producers kept sending the raw ``CommandRisk``
+    precisely because the conversion lived somewhere else.
+    """
+    wire_risk = map_risk_to_level(risk).value
+    return {
+        "type": "security_warning",
+        "content": f"Command blocked due to {wire_risk} risk level: {command}",
+        "risk_level": wire_risk,
+    }
+
+
+def command_assessment_payload(command: str, risk: CommandRisk) -> dict:
+    """The `POST /terminal/command` assessment body (#14992). Same reasoning."""
+    wire_risk = map_risk_to_level(risk).value
+    return {
+        "command": command,
+        "risk_level": wire_risk,
+        "status": "assessed",
+        "message": f"Command assessed as {wire_risk} risk",
+        "requires_confirmation": risk != CommandRisk.SAFE,
+    }

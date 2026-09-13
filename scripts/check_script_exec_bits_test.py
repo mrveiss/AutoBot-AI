@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 _MODULE_PATH = Path(__file__).resolve().parent / "check_script_exec_bits.py"
 _spec = importlib.util.spec_from_file_location("check_script_exec_bits", _MODULE_PATH)
 checker = importlib.util.module_from_spec(_spec)
@@ -98,7 +100,13 @@ def test_ignores_interpreter_prefixed_and_directives(line):
 # whatever the developer or runner has set globally — `commit.gpgsign = true`
 # alone made every test here fail — and `core.hooksPath` / `init.templateDir`
 # could reach into the throwaway repo.
-_GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
+#
+# #15246: `{**os.environ, ...}` here previously carried GIT_DIR straight
+# through. The pre-push hook exports it pointing at the pushing worktree's
+# own git directory, so `git init`/`add`/`update-index` below would write to
+# THAT repository instead of `root` -- the identical bug autobot_shared/
+# paths_test.py hit under the same hook. scrubbed_git_env() strips it first.
+_GIT_ENV = {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
 
 
 def _init_repo(root: Path) -> None:
@@ -189,3 +197,30 @@ def test_archival_files_are_not_scanned():
     """A changelog records what someone once ran; it is not an instruction."""
     assert "CHANGELOG.md" in checker._ARCHIVAL
     assert ".session/" in checker._ARCHIVAL
+
+
+def test_a_yaml_comment_naming_a_script_is_not_an_invocation(tmp_path):
+    """A rationale comment that NAMES a script must not be read as running it.
+
+    Found in CI on #15366: `branch-health-report.yml` carries a comment saying it
+    uses `branch_landing_evidence` from `scripts/lib/branch-guards.sh`, and the
+    scanner reported that as a direct invocation of a mode-644 file. The remedy
+    it suggested would have been actively wrong -- that file is a library three
+    workflows `source`, so 644 is correct and `chmod +x` would have been the bug.
+
+    Markdown is deliberately not skipped the same way: there `#` is a heading,
+    and prose can legitimately show a command a reader is meant to run.
+    """
+    _init_repo(tmp_path)
+    (tmp_path / "scripts" / "lib").mkdir(parents=True)
+    (tmp_path / "scripts" / "lib" / "branch-guards.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "report.yml").write_text(
+        "# uses `branch_landing_evidence` from scripts/lib/branch-guards.sh instead.\n"
+        "jobs:\n  a:\n    steps:\n      - run: source scripts/lib/branch-guards.sh\n",
+        encoding="utf-8",
+    )
+    _stage_all(tmp_path)
+
+    assert checker.find_disagreements(tmp_path) == [], "a YAML comment naming a script is not an invocation"

@@ -1,5 +1,8 @@
 # Vector Store Migration Strategy
 
+> **Freshness:** historical — 2026-08-30. Completion record, not architecture; relocation out of `docs/architecture/` is #15191's scope, tracked there.
+
+
 **Status**: ✅ COMPLETED
 **Migration Date**: 2025-10-22
 **Decision**: Redis → ChromaDB → Qdrant (phased approach)

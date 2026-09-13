@@ -1,5 +1,7 @@
 # NPU Pipeline Parallelism — Architecture Design
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 **Parent:** MVA-1082 — Cross-host pipeline parallelism for 70B+ models  
 **Status:** Draft  
 **Date:** 2026-05-25
@@ -338,4 +340,4 @@ update the dispatcher's in-memory worker pool atomically under an `asyncio.Lock`
   coordinating draft and verify passes across the chain — out of scope for this
   revision.
 - **Metrics**: TTFT and hidden-state transfer time should be emitted as
-  Prometheus histograms (see `TIMEOUT_CONFIGURATION_PROMETHEUS_METRICS_DESIGN.md`).
+  Prometheus histograms (see `../design/TIMEOUT_CONFIGURATION_PROMETHEUS_METRICS_DESIGN.md`).

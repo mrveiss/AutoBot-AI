@@ -1,0 +1,156 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""A blanket module-level skip must say what is parked and which issue lifts it (#15488).
+
+A module-level ``pytestmark = pytest.mark.skip(...)`` silences an entire file.
+At a glance that is indistinguishable from a file that passes -- the suite reports
+green and asserts nothing, the same shape as #15018 (an enumeration matching zero
+files) and #15161 (a conftest that makes a directory collect nothing).
+
+Found while closing #15173, where `api_endpoint_migrations_test.py` had been
+skipped wholesale since #5359 with no record of what coverage was parked. The
+decision to park it was legitimate; the absence of a record was not.
+
+Scope is deliberately narrow: **unconditional** skips only. A ``skipif`` with a
+real condition is a different thing -- it runs when the condition allows, and
+its reason names an environment rather than a debt. Those are not counted.
+"""
+
+from __future__ import annotations
+
+import ast
+import re
+from pathlib import Path
+
+from repo_tests._paths import repo_root
+from repo_tests._reach import declare
+
+# `git_repo_root()` with no argument asks from the process working directory, so
+# this guard's root was whatever pytest happened to be invoked from. `repo_root()`
+# anchors on the tree this file belongs to (#15925).
+REPO = repo_root()
+
+# Every blanket skip in base, with the issue that would lift it. THIS ONLY SHRINKS.
+# Never add an entry to make a new skip pass -- record the reason on the skip instead.
+KNOWN_BLANKET_SKIPS = {
+    "autobot-backend/api/api_endpoint_migrations_test.py": "15173",
+}
+
+_ISSUE = re.compile(r"#(\d{3,6})")
+
+
+def _test_files(root: Path = REPO) -> list[Path]:
+    """Tracked test modules, by the same two patterns pytest collects.
+
+    #14484: the exclusion is checked on the path RELATIVE to the repo root. An
+    absolute check neuters the sweep when the checkout is itself a worktree under
+    ``.worktrees/``, because every path then contains that segment -- which is how
+    this guard first scored 0 modules and was caught only by the population floor.
+
+    Takes a root so the declaration below can be driven against an empty
+    directory by `reach_declarations_test`; without that, nothing can prove the
+    floor fires (#15928).
+    """
+    out: list[Path] = []
+    for pattern in ("*_test.py", "test_*.py"):
+        for path in root.rglob(pattern):
+            if ".worktrees" not in path.relative_to(root).parts:
+                out.append(path)
+    return out
+
+
+#: MEASURED 2026-09-11 against this tree: 2329 test modules by this walk's own
+#: two patterns. The previous 1800 was 23% below its own population; migrated
+#: to `_reach.declare` (#15928) rather than raised in place. `growth=200`
+#: absorbs ordinary churn -- test files are added constantly -- while staying
+#: far below the size of any collection-root loss this exists to catch.
+#: `skips=0`: every parsed module here IS the population `examined()` bounds,
+#: there is no narrower "completed" step.
+REACH = declare(
+    "blanket-skip-test-module-sweep",
+    discover=_test_files,
+    floor=2329,
+    growth=200,
+    skips=0,
+    what="test modules",
+)
+
+
+def _blanket_skip_reason(tree: ast.AST) -> str | None:
+    """The reason of a module-level unconditional ``pytest.mark.skip``, if any.
+
+    Returns None when the module has no blanket skip. Returns "" when it has one
+    whose reason is missing or empty -- the case this guard exists to catch.
+    """
+    for node in tree.body if isinstance(tree, ast.Module) else []:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in node.targets):
+            continue
+        call = node.value
+        if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
+            continue
+        if call.func.attr != "skip":  # skipif is conditional, and out of scope
+            continue
+        for kw in call.keywords:
+            if kw.arg == "reason" and isinstance(kw.value, ast.Constant):
+                return str(kw.value.value)
+        return ""
+    return None
+
+
+def _scan() -> tuple[dict[str, str], int]:
+    """(relative path -> reason) for every blanket skip, and the modules parsed."""
+    found, parsed = {}, 0
+    for path in REACH.examined(REPO):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        parsed += 1
+        reason = _blanket_skip_reason(tree)
+        if reason is not None:
+            found[path.relative_to(REPO).as_posix()] = reason
+    return found, parsed
+
+
+def test_the_sweep_reaches_enough_modules_to_mean_anything() -> None:
+    """Defined before every other check: an empty sweep must not read as clean.
+
+    `REACH.examined` inside `_scan` already bounds the raw population on every
+    call; `completed` here bounds the narrower count that actually parsed,
+    which is the one the other tests in this module read conclusions from.
+    """
+    _, parsed = _scan()
+    REACH.completed(parsed)
+
+
+def test_every_blanket_skip_names_the_issue_that_would_lift_it() -> None:
+    found, _ = _scan()
+    undocumented = {path: reason for path, reason in found.items() if not _ISSUE.search(reason or "")}
+    assert not undocumented, (
+        "these files are skipped wholesale, which is indistinguishable from passing, "
+        "and their skip reason names no issue that would lift it. State what coverage "
+        "is parked and the issue number:\n  "
+        + "\n  ".join(f"{p} (reason: {r!r})" for p, r in sorted(undocumented.items()))
+    )
+
+
+def test_the_blanket_skip_population_only_ever_shrinks() -> None:
+    found, _ = _scan()
+    added = sorted(set(found) - set(KNOWN_BLANKET_SKIPS))
+    assert not added, (
+        "new blanket module-level skip(s) -- a whole file silenced reads as green.\n  "
+        + "\n  ".join(added)
+        + "\nPark individual tests with their own reason, or record why the file "
+        "cannot run. Do not add an entry to KNOWN_BLANKET_SKIPS to make this pass."
+    )
+
+
+def test_known_entries_are_still_live() -> None:
+    """A resolved entry must be deleted, so the map cannot rot into a wish list."""
+    found, _ = _scan()
+    stale = sorted(set(KNOWN_BLANKET_SKIPS) - set(found))
+    assert not stale, "these files no longer carry a blanket skip -- remove them from " f"KNOWN_BLANKET_SKIPS: {stale}"

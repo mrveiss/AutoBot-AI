@@ -22,6 +22,8 @@ from check_git_safe_directory import (  # noqa: E402
     find_violations,
 )
 
+from autobot_shared.paths import scrubbed_git_env
+
 
 def _write(tmp: Path, name: str, body: str) -> Path:
     p = tmp / name
@@ -121,7 +123,7 @@ def test_the_same_alternately_named_vars_pass_once_guarded() -> None:
     the blind one — it would block every site #7150 already fixed.
     """
     bodies = [
-        "- name: t\n  cmd: \"git -c safe.directory={{ _code_source_dest }} -C {{ _code_source_dest }} log -1\"\n",
+        '- name: t\n  cmd: "git -c safe.directory={{ _code_source_dest }} -C {{ _code_source_dest }} log -1"\n',
         "- name: t\n"
         "  cmd: >-\n"
         "    git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}\n"
@@ -187,7 +189,7 @@ def test_an_unguarded_command_used_as_a_mapping_key_is_caught() -> None:
     pre-#14196 line-based scanner (which matched anywhere in a line) caught
     it.
     """
-    body = "- name: t\n  vars:\n    \"git -C {{ git_repo_root }} log -1\": marker\n"
+    body = '- name: t\n  vars:\n    "git -C {{ git_repo_root }} log -1": marker\n'
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "key_git.yml", body)
         assert len(find_violations(f)) == 1
@@ -221,6 +223,7 @@ def test_the_repository_guarded_sites_stay_visible() -> None:
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
+        env=scrubbed_git_env(),
     )
     assert listing.returncode == 0, "git ls-files failed — refusing to report clean"
     tracked = listing.stdout.split()
@@ -256,13 +259,30 @@ def test_the_repository_guarded_sites_stay_visible() -> None:
     # across several physical lines, unlike a per-line marker search).
     must_be_visible = {
         "autobot-slm-backend/ansible/playbooks/sync-code-source.yml": "_code_source_dest",
-        "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml": "code_source_dir",
-        "autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml": "code_source_dir",
+        # #15557 extracted the marker write out of update-all-nodes.yml into this
+        # shared include, so the guarded command lives here now and the pin follows
+        # it. The point of the pin is that SOME file still shows the checker a real
+        # guarded `git -C <code_source>`; pinning the old file would only assert
+        # that the extraction never happened.
+        # slm_manager/tasks/main.yml was pinned here too and no longer carries a
+        # `safe.directory` invocation of its own — #15557 folded its marker write
+        # into the same shared include, so both pins now describe one site. It is
+        # dropped rather than kept pointing at a file that cannot satisfy it.
+        # Its coverage is not lost: slm_frontend_staged_publish_15557_test.py
+        # resolves the include the way Ansible does, so a rename or a removal of
+        # the include breaks that test instead.
+        "autobot-slm-backend/ansible/roles/_shared/tasks/record_slm_deployed_commit.yml": "code_source_dir",
     }
+    assert len(must_be_visible) >= 2, "FIX THE SWEEP — too few pinned sites left to prove anything"
     for name, marker in sorted(must_be_visible.items()):
         path = REPO_ROOT / name
-        if not path.is_file():  # pragma: no cover - file moved
-            continue
+        # Was `continue`, which made a pin whose file moved pass by asserting
+        # nothing — the silent direction. #15557 moved two of the three pinned
+        # commands into a shared include and only CI's *other* assertions noticed.
+        assert path.is_file(), (
+            f"{name} is pinned as a guarded site but does not exist. If the "
+            "command moved, move the pin; do not leave it dangling."
+        )
         text = path.read_text(encoding="utf-8")
         docs = list(yaml.compose_all(text, Loader=yaml.SafeLoader))
         matching = []
@@ -295,6 +315,7 @@ def _tracked_yaml_files() -> list:
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
+        env=scrubbed_git_env(),
     )
     return listing.stdout.split()
 

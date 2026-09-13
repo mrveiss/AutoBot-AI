@@ -35,6 +35,7 @@ import json
 import time
 from typing import List
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -57,11 +58,11 @@ def publish_skill_promoted(skill_name: str, tools: List[str] | None = None) -> N
         "promoted_at": time.time(),
     }
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
     except RuntimeError:
         logger.debug("no running event loop; skipping skill_promoted publish for %s", skill_name)
         return
-    loop.create_task(_publish_async(payload))
+    fire_and_forget(_publish_async(payload), name="skill-promoted-publish")
 
 
 async def _publish_async(payload: dict) -> None:

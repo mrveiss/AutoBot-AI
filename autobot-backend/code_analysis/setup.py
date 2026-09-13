@@ -51,7 +51,7 @@ setup(
         ],
         "npu": [
             # #14476: floor raised to match the SSOT (autobot-npu-worker/requirements.txt).
-            "openvino>=2026.3.0",
+            "openvino>=2026.3.1",
             "onnxruntime>=1.12.0",
         ],
         "web": [

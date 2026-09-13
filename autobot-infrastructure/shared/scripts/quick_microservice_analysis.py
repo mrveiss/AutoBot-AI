@@ -503,17 +503,18 @@ def _generate_migration_phases_md(migration: dict) -> str:
 ### Recommended Phases
 """
     for phase in migration["migration_phases"]:
-        report += """
-#### Phase {phase["phase"]}: {phase["name"]}
-- **Duration:** {phase["duration_weeks"]} weeks
-- **Services:** {len(phase["services"])}
-  - {', '.join(phase["services"])}
-- **Rationale:** {phase["rationale"]}
+        report += f"""
+#### Phase {phase['phase']}: {phase['name']}
+- **Duration:** {phase['duration_weeks']} weeks
+- **Services:** {len(phase['services'])}
+  - {', '.join(phase['services'])}
+- **Rationale:** {phase['rationale']}
 """
 
-    report += """
+    report += f"""
 ### Migration Timeline
-- **Total Duration:** {migration["estimated_total_duration_weeks"]} weeks (~{migration["estimated_total_duration_weeks"]//4} months)
+- **Total Duration:** {migration['estimated_total_duration_weeks']} weeks
+  (~{migration['estimated_total_duration_weeks']//4} months)
 - **Parallel Development:** Possible for some phases
 - **Rollback Strategy:** Maintain monolith during transition
 """
@@ -528,40 +529,41 @@ def _generate_markdown_report(analysis):
     to _generate_service_recommendations_md() and _generate_migration_phases_md()
     to reduce function length from 174 to ~110 lines.
     """
-    analysis["codebase_metrics"]
+    metrics = analysis["codebase_metrics"]
     api = analysis["api_analysis"]
     agents = analysis["agent_analysis"]
     recommendations = analysis["service_recommendations"]
     migration = analysis["migration_assessment"]
 
-    report = """# 🏗️ AutoBot Microservice Architecture Analysis
+    report = f"""# 🏗️ AutoBot Microservice Architecture Analysis
 
-**Analysis Date:** {analysis["timestamp"]}
+**Analysis Date:** {analysis['timestamp']}
 
 ## 📊 Executive Summary
 
-AutoBot shows **{migration["readiness_level"].upper()}** readiness for microservice architecture migration.
+AutoBot shows **{migration['readiness_level'].upper()}** readiness for microservice architecture migration.
 
-- **Readiness Score:** {metrics["microservice_readiness_score"]}/10
-- **Recommended Services:** {migration["total_services"]}
-- **Migration Duration:** {migration["estimated_total_duration_weeks"]} weeks
-- **Recommendation:** {migration["recommendation"]}
+- **Readiness Score:** {metrics['microservice_readiness_score']}/10
+- **Recommended Services:** {migration['total_services']}
+- **Migration Duration:** {migration['estimated_total_duration_weeks']} weeks
+- **Recommendation:** {migration['recommendation']}
 
 ## 🔍 Codebase Analysis
 
 ### Metrics
-- **Estimated Total Lines of Code:** {metrics["estimated_total_loc"]:,}
-- **Python Files:** {metrics["total_python_files"]:,}
-- **Files Analyzed:** {metrics["python_files_analyzed"]}
+- **Estimated Total Lines of Code:** {metrics['estimated_total_loc']:,}
+- **Python Files:** {metrics['total_python_files']:,}
+- **Files Analyzed:** {metrics['python_files_analyzed']}
 
 ### Architecture Assessment
-- **Microservice Readiness:** {metrics["microservice_readiness_score"]}/10
-- **Overall Size:** {"Large" if metrics["estimated_total_loc"] >= 50000 else "Medium" if metrics["estimated_total_loc"] >= 20000 else "Small"}
+- **Microservice Readiness:** {metrics['microservice_readiness_score']}/10
+- **Overall Size:** {"Large" if metrics['estimated_total_loc'] >= 50000
+  else "Medium" if metrics['estimated_total_loc'] >= 20000 else "Small"}
 
 ## 🌐 API Structure Analysis
 
-- **API Modules:** {api["api_modules"]}
-- **Total Endpoints:** {api["total_endpoints"]}
+- **API Modules:** {api['api_modules']}
+- **Total Endpoints:** {api['total_endpoints']}
 
 ### API Modules by Size
 """
@@ -569,10 +571,10 @@ AutoBot shows **{migration["readiness_level"].upper()}** readiness for microserv
     for module in sorted(api["modules"], key=lambda x: x["endpoints"], reverse=True):
         report += f"- **{module['name']}:** {module['endpoints']} endpoints\n"
 
-    report += """
+    report += f"""
 ## 🤖 AI Agent Analysis
 
-- **Agent Modules:** {agents["agent_modules"]}
+- **Agent Modules:** {agents['agent_modules']}
 
 ### Agents by Type
 """
@@ -591,7 +593,7 @@ AutoBot shows **{migration["readiness_level"].upper()}** readiness for microserv
     report += _generate_service_recommendations_md(recommendations)
     report += _generate_migration_phases_md(migration)
 
-    report += """
+    report += f"""
 ## 📋 Key Recommendations
 
 ### Immediate Actions (Next 2-4 weeks)
@@ -633,7 +635,7 @@ AutoBot shows **{migration["readiness_level"].upper()}** readiness for microserv
 
 ## 🎯 Next Steps
 
-Based on the **{migration["readiness_level"].upper()}** readiness assessment:
+Based on the **{migration['readiness_level'].upper()}** readiness assessment:
 
 """
 

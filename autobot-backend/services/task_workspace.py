@@ -27,7 +27,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
+from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.time_utils import utc_timestamp
 from services.task_workspace_common import validate_task_id
 
@@ -45,6 +47,13 @@ _ACTIVE_LOCK_FILENAME = ".active-lock"
 # cleanup worker and the request-handler resume path run in different processes.
 _GUARD_LOCK_FILENAME = ".wt-guard"
 _MAX_WORKTREES_PER_AGENT = 5
+# The ref every new workspace branches from (#15938). Env-var backed, never a
+# literal at the call site. Without an explicit start point `git worktree add`
+# branches from the main tree's HEAD, so a workspace inherits whatever that tree
+# had last fetched -- and a stale base makes "is this already done?" answer NO
+# when the truth is yes, which costs a whole session's work and never looks like
+# a mistake while it is happening.
+_WORKSPACE_BASE_REF = os.environ.get("AUTOBOT_WORKSPACE_BASE_REF") or "origin/main"
 
 
 @contextmanager
@@ -216,6 +225,11 @@ def release(
             check=True,
             capture_output=True,
             text=True,
+            # #15246: an inherited GIT_DIR (a caller invoked from inside a git
+            # hook, or a test with one ambient from the pre-push hook running
+            # this suite) overrides cwd, so this can silently act on the WRONG
+            # repository -- worktree removal AND the branch -D below it.
+            env=scrubbed_git_env(),
         )
         # Best-effort branch deletion — ignore failures (e.g. branch pushed / not
         # found). Cleanup/eviction passes force_branch=False → ``-d`` keeps a
@@ -225,6 +239,7 @@ def release(
             cwd=str(root),
             check=False,
             capture_output=True,
+            env=scrubbed_git_env(),  # #15246: see the worktree-remove call above
         )
         logger.info("Released workspace for task=%s", task_id)
     except subprocess.CalledProcessError as exc:
@@ -338,15 +353,69 @@ async def release_for_task(
 # ---------------------------------------------------------------------------
 
 
+def _fetched_base_ref(root: Path) -> str | None:
+    """Refresh and return the ref new workspaces branch from, or None (#15938).
+
+    The fetch is best effort: offline, the last-known base is still far better
+    than the main tree's HEAD, which is what an absent start point uses. A
+    missing ref is different and raises -- branching from an unknown base is the
+    defect, and silently falling back to HEAD would restore it while looking
+    like success.
+
+    **A repository with no remotes is not that case.** Returning None there is a
+    real answer, not a fallback: with no remote there is no base to be stale
+    against, so HEAD is the only base that exists. The distinction is what keeps
+    the guard meaningful -- a remote that IS configured with the ref missing is
+    still an error, because that is a checkout that should know its base and
+    does not. Collapsing the two would either break every local-only repository
+    or silently restore the defect for real ones.
+    """
+    probe = run_git(["remote"], cwd=root)
+    if probe.returncode != 0:
+        # A `git remote` that FAILS is not "no remotes": both give empty stdout,
+        # so reading output alone let a broken checkout take the local-only
+        # path and skip the ref check in silence (#16128 review).
+        detail = probe.stderr.strip() or "git remote failed with no output"
+        raise RuntimeError(f"cannot enumerate remotes in {root}: {detail}")
+    if not probe.stdout.strip():
+        return None
+
+    remote, _, ref = _WORKSPACE_BASE_REF.partition("/")
+    if remote and ref:
+        # run_git's strict env, not the ambient scrub: a fetch crosses a
+        # transport, where GIT_CONFIG_* could set core.sshCommand (#15783, CWE-15).
+        try:
+            fetched = run_git(["fetch", "--quiet", remote, ref], cwd=root)
+            if fetched.returncode != 0:
+                logger.warning("fetch of %s failed in %s: %s", _WORKSPACE_BASE_REF, root, fetched.stderr.strip())
+        except subprocess.TimeoutExpired:
+            logger.warning("fetch of %s timed out in %s; using the last-known base", _WORKSPACE_BASE_REF, root)
+    resolved = run_git(["rev-parse", "--verify", "--quiet", f"{_WORKSPACE_BASE_REF}^{{commit}}"], cwd=root)
+    if resolved.returncode != 0:
+        raise RuntimeError(
+            f"cannot resolve workspace base ref {_WORKSPACE_BASE_REF!r} in {root}; "
+            "refusing to branch from the main tree's HEAD, which may be stale "
+            "(set AUTOBOT_WORKSPACE_BASE_REF, or fetch the remote)"
+        )
+    return _WORKSPACE_BASE_REF
+
+
 def _git_add_worktree(root: Path, workspace_dir: Path, branch: str) -> None:
     """Run git worktree add, handling pre-existing branch/directory gracefully."""
+    base_ref = _fetched_base_ref(root)
+    add_argv = ["git", "worktree", "add", "-b", branch, str(workspace_dir)]
+    if base_ref is not None:
+        add_argv.append(base_ref)
     try:
         subprocess.run(  # nosec B603 B607  # fixed git argv; branch and workspace_dir are validated Path/str values
-            ["git", "worktree", "add", "-b", branch, str(workspace_dir)],
+            add_argv,
             cwd=str(root),
             check=True,
             capture_output=True,
             text=True,
+            # #15246: see _git_add_worktree's sibling call below and release()'s
+            # worktree-remove above -- an inherited GIT_DIR overrides cwd here too.
+            env=scrubbed_git_env(),
         )
     except subprocess.CalledProcessError as exc:
         stderr = exc.stderr or ""
@@ -359,6 +428,7 @@ def _git_add_worktree(root: Path, workspace_dir: Path, branch: str) -> None:
                     check=True,
                     capture_output=True,
                     text=True,
+                    env=scrubbed_git_env(),  # #15246: see the first worktree-add call above
                 )
             except subprocess.CalledProcessError as exc2:
                 stderr2 = exc2.stderr or ""

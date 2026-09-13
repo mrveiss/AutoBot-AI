@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 _MODULE = Path(__file__).with_name("check_env_var_registry.py")
 _REPO_ROOT = _MODULE.resolve().parents[1]
 
@@ -45,9 +47,7 @@ def test_the_reader_set_is_derived_not_hardcoded(checker):
     readers = checker._env_reader_names()
     declared = {
         node.name
-        for node in ast.parse(
-            (_REPO_ROOT / "autobot_shared" / "env_utils.py").read_text(encoding="utf-8")
-        ).body
+        for node in ast.parse((_REPO_ROOT / "autobot_shared" / "env_utils.py").read_text(encoding="utf-8")).body
         if isinstance(node, ast.FunctionDef)
         and node.name.startswith("env_")
         and node.args.args
@@ -168,27 +168,33 @@ def test_a_monkeypatched_name_read_back_is_not_reported(checker, tmp_path):
     """The real case: env_utils_blank_test sets AUTOBOT_TEST_BLANK and reads it
     to prove blank-is-absent. Registering it would document a variable no
     deployment sets."""
-    assert _extract(
-        checker,
-        tmp_path,
-        '''
+    assert (
+        _extract(
+            checker,
+            tmp_path,
+            """
         def test_blank(monkeypatch):
             monkeypatch.setenv("AUTOBOT_TEST_BLANK", "   ")
             assert env_raw("AUTOBOT_TEST_BLANK") is None
-        ''',
-    ) == []
+        """,
+        )
+        == []
+    )
 
 
 def test_an_os_environ_assignment_counts_as_self_provided(checker, tmp_path):
-    assert _extract(
-        checker,
-        tmp_path,
-        '''
+    assert (
+        _extract(
+            checker,
+            tmp_path,
+            """
         import os
         os.environ["AUTOBOT_LOCAL_ONLY"] = "1"
         x = os.getenv("AUTOBOT_LOCAL_ONLY")
-        ''',
-    ) == []
+        """,
+        )
+        == []
+    )
 
 
 def test_a_name_only_read_is_still_reported(checker, tmp_path):
@@ -211,6 +217,7 @@ def test_the_repository_has_no_unbaselined_unregistered_names(checker):
         capture_output=True,
         text=True,
         check=False,
+        env=scrubbed_git_env(),
     )
     assert listing.returncode == 0, listing.stderr
     files = [f for f in listing.stdout.split() if f]
@@ -218,12 +225,7 @@ def test_the_repository_has_no_unbaselined_unregistered_names(checker):
 
     known = set(checker.REGISTRY) | checker._UNREGISTERED_BASELINE
     missing = sorted(
-        {
-            name
-            for f in files
-            for _, name in checker._extract_autobot_getenv_names(_REPO_ROOT / f)
-            if name not in known
-        }
+        {name for f in files for _, name in checker._extract_autobot_getenv_names(_REPO_ROOT / f) if name not in known}
     )
 
     assert missing == [], f"neither registered nor baselined: {missing}"

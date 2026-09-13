@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Config Registry Consolidation Design
 
 > **Issue:** [#751 - Consolidate Common Utilities](https://github.com/mrveiss/AutoBot-AI/issues/751)
@@ -35,7 +37,7 @@ ConfigRegistry.get_section("redis")                 # Full section as dict
 ConfigRegistry.get("redis.port", default=6379)      # With fallback
 
 # Writing config (admin/startup only)
-ConfigRegistry.set("redis.host", "172.16.168.23")
+ConfigRegistry.set("redis.host", "<database-ip>")
 ConfigRegistry.set_section("redis", {"host": "...", "port": 6379})
 
 # Cache management
@@ -46,7 +48,7 @@ ConfigRegistry.clear_cache()                        # Clear all cached
 ### Redis Storage Structure
 
 ```
-autobot:config:redis.host     → "172.16.168.23"
+autobot:config:redis.host     → "<database-ip>"
 autobot:config:redis.port     → "6379"
 autobot:config:backend.port   → "8001"
 autobot:config:*              → (namespace prefix for all config)
@@ -69,14 +71,14 @@ Redis (autobot:config:*)
     ↓ (if unavailable/missing)
 Environment Variable (AUTOBOT_REDIS_HOST)
     ↓ (if not set)
-Hardcoded Default (172.16.168.23)
+Hardcoded Default (<database-ip>)
 ```
 
 ### Key Naming Convention
 
 | Config Key | Env Variable | Default |
 |------------|--------------|---------|
-| `redis.host` | `AUTOBOT_REDIS_HOST` | `172.16.168.23` |
+| `redis.host` | `AUTOBOT_REDIS_HOST` | `<database-ip>` |
 | `redis.port` | `AUTOBOT_REDIS_PORT` | `6379` |
 | `backend.port` | `AUTOBOT_BACKEND_PORT` | `8001` |
 
@@ -156,7 +158,7 @@ def get(cls, key: str, default=None):
 
 1. **Single source of truth across all VMs** - All 6 services read from same Redis config
 2. **Runtime reconfiguration** - Update config in Redis without service restarts
-3. **Uses existing infrastructure** - Leverages Redis at 172.16.168.23
+3. **Uses existing infrastructure** - Leverages Redis at <database-ip>
 4. **Deferred resolution** - Solves circular import problem elegantly
 5. **Extensible** - Pattern extends naturally to service discovery
 

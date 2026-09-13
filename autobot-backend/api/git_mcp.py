@@ -27,7 +27,6 @@ Issue #49 - Additional MCP Bridges (Browser, HTTP, Database, Git)
 
 import asyncio
 import re
-import subprocess
 from pathlib import Path
 from typing import List
 
@@ -49,6 +48,7 @@ from api.schemas_code import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.git_probe import start_git
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_config import PROJECT_ROOT
@@ -286,11 +286,11 @@ def _validate_git_command(git_args: List[str]) -> None:
 
 
 async def _run_git_process(cmd: List[str], repo_path: str, timeout: int) -> Metadata:
-    """Execute git process and return result (Issue #665: extracted helper)."""
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+    """Execute git process (Issue #665) via `start_git`, which scrubs the ambient env:
+    GIT_DIR outranks `-C` and `cwd=`, so an inherited one made the VALIDATED path the
+    one git did not operate on (#15991)."""
+    process = await start_git(
+        *cmd[1:],  # `cmd[0]` is "git"; start_git supplies the executable itself
         cwd=repo_path,
     )
 

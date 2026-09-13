@@ -28,15 +28,22 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from autobot_shared.paths import scrubbed_git_env
+
+_REPO_ROOT = repo_root()
 _INSTALLER = _REPO_ROOT / "scripts" / "install-git-hooks.sh"
 _TEMPLATES = _REPO_ROOT / "tools" / "git-hooks"
 _MANAGED = ("pre-commit", "pre-push")
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True)
+    """#15246: env scrubbed -- an inherited GIT_DIR would point these calls,
+    including `worktree add`/`worktree remove`, at the real repository
+    instead of the throwaway one under tmp_path.
+    """
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True, env=scrubbed_git_env())
 
 
 def _seed_repo(tmp_path: Path) -> Path:

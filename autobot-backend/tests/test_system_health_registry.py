@@ -27,6 +27,7 @@ from api.system_health import (
     _PROBE_TIMEOUT_S,
     ComponentHealth,
     _reset_probes_for_testing,
+    _restore_probes_for_testing,
     collect_system_health,
     list_registered_probes,
     probe_app_state,
@@ -41,9 +42,18 @@ from api.system_health import (
 
 @pytest.fixture(autouse=True)
 def _isolate_registry():
-    _reset_probes_for_testing()
+    """Give each test an empty registry, then put the real one BACK.
+
+    Clearing on teardown left the process-wide registry empty for everything
+    that ran afterwards in the same worker. Probes register as an import side
+    effect, so nothing re-registers them — ``api.sandbox_health`` is already in
+    ``sys.modules`` and its decorator will not run again. The sandbox probe read
+    as unregistered in whichever shard happened to schedule this file first
+    (#14518).
+    """
+    saved = _reset_probes_for_testing()
     yield
-    _reset_probes_for_testing()
+    _restore_probes_for_testing(saved)
 
 
 def test_register_and_list_probes_returns_sorted_names():
@@ -261,24 +271,53 @@ def test_register_app_state_probe_one_liner_registers_under_name():
     assert "toy_state" in names
 
 
-def test_probes_run_concurrently_not_serially():
-    sleeps = [0.5, 0.5, 0.5]
+# Generous: it bounds a deadlock, not the work. A correct implementation
+# reaches the barrier immediately, so this never elapses in the passing case.
+_BARRIER_TIMEOUT_SECONDS = 5.0
 
-    for index, duration in enumerate(sleeps):
+
+def test_probes_run_concurrently_not_serially():
+    """#14157: proven by rendezvous, not by a stopwatch.
+
+    This asserted ``elapsed < 1.0`` against three 0.5s sleeps — serial is 1.5s,
+    concurrent is 0.5s, so the bound sat exactly at the midpoint. A loaded
+    runner failed it while the code was correct, and an implementation that ran
+    two probes concurrently and one serially landed on 1.0s, right on the
+    boundary. It also cost 0.5s of wall clock on every run.
+
+    A barrier decides it outright: all three probes must be inside the barrier
+    at once before any is released. Serial execution cannot reach the second
+    probe, so the first blocks and the wait times out. There is no slack to
+    tune and nothing for machine load to perturb.
+    """
+    probe_count = 3
+    state = {"arrived": 0}
+    # An Event rather than asyncio.Barrier: Barrier is 3.11+, and this suite
+    # also runs on older interpreters. The last probe to arrive releases them
+    # all, which is the same rendezvous.
+    all_arrived = asyncio.Event()
+
+    for index in range(probe_count):
 
         @register_health_probe(f"sleeper_{index}")
-        async def _probe(_request=None, _d=duration, _i=index):
-            await asyncio.sleep(_d)
+        async def _probe(_request=None, _i=index):
+            state["arrived"] += 1
+            if state["arrived"] == probe_count:
+                all_arrived.set()
+            # Only satisfiable if every probe is in flight together — exactly
+            # the serial case this test exists to reject.
+            await asyncio.wait_for(all_arrived.wait(), timeout=_BARRIER_TIMEOUT_SECONDS)
             return ComponentHealth(name=f"sleeper_{_i}", status="ok")
 
-    import time
+    try:
+        asyncio.run(collect_system_health())
+    except (TimeoutError, asyncio.TimeoutError) as exc:
+        raise AssertionError(
+            f"probes ran serially: only {state['arrived']} of {probe_count} were in flight "
+            f"together before the rendezvous timed out ({exc!r})"
+        ) from exc
 
-    started = time.perf_counter()
-    asyncio.run(collect_system_health())
-    elapsed = time.perf_counter() - started
-    # Serial would be sum(sleeps) == 1.5s. Concurrent should be ~0.5s. Allow
-    # generous slack for CI noise but reject the serial outcome.
-    assert elapsed < 1.0, f"probes ran serially: elapsed={elapsed:.2f}s"
+    assert state["arrived"] == probe_count, f"expected {probe_count} probes, saw {state['arrived']}"
 
 
 # ---------------------------------------------------------------------------
@@ -503,3 +542,27 @@ def test_register_redis_probe_one_liner_with_callback():
     component = next(c for c in result.components if c.name == "toy_redis_cb")
     assert component.status == "ok"
     assert component.data == {"redis_connected": True, "service": "test"}
+
+
+def test_a_probe_error_detail_carries_no_exception_message():
+    """#14126: `GET /api/system/health` is public (api/system.py:450).
+
+    #10460 interpolated `str(exc)` into `detail` "so a down status is
+    actionable", on the stated premise that the endpoint was admin-only. It is
+    not, so any exception message a registered probe raised was reachable
+    unauthenticated. The type name stays - it is what every individual probe
+    already emits - and the message goes to the log instead.
+    """
+
+    @register_health_probe("leaky")
+    async def _leaky(_request=None):
+        raise RuntimeError("connect failed: postgres://svc:hunter2@10.0.0.5/db")
+
+    result = asyncio.run(collect_system_health())
+    detail = result.components[0].detail or ""
+
+    assert result.components[0].status == "down"
+    assert "RuntimeError" in detail, "the type name is what makes it actionable"
+    assert "hunter2" not in detail
+    assert "10.0.0.5" not in detail
+    assert "postgres://" not in detail

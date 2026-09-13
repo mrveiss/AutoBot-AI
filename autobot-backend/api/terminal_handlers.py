@@ -31,27 +31,23 @@ from typing import Awaitable, Callable, Dict
 from fastapi import WebSocket
 
 # Import models from dedicated module (Issue #185)
-from api.schemas_terminal import (
-    SecurityLevel,
-)
+from api.schemas_terminal import SecurityLevel
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import CommandRisk
 from chat_history import ChatHistoryManager
 from constants.path_constants import PATH
-from constants.terminal_constants import (
-    MODERATE_RISK_PATTERNS,
-    RISKY_COMMAND_PATTERNS,
-)
+from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from constants.threshold_constants import TimingConstants
+from services.agent_terminal.utils import security_warning_payload
 from services.simple_pty import simple_pty_manager
 from services.terminal_completion_service import TerminalCompletionService
 
+# Issue #14961: session_configs moved to Redis so any uvicorn worker can
+# resolve a session another worker created; see that module's docstring.
+from services.terminal_session_store import SessionConfigStore
+
 # Import extracted modules (Issue #290)
-from services.terminal_websocket import (
-    HIGH_RISK_COMMAND_LEVELS,
-    LOGGING_SECURITY_LEVELS,
-    SHELL_OPERATORS,
-)
+from services.terminal_websocket import HIGH_RISK_COMMAND_LEVELS, LOGGING_SECURITY_LEVELS, SHELL_OPERATORS
 
 # Issue #380: Module-level frozenset for terminal close event types
 _TERMINAL_CLOSE_EVENTS = frozenset({"eo", "close"})
@@ -733,14 +729,9 @@ class TerminalWebSocket:
 
         # Apply security restrictions
         if await self._should_block_command(command, risk_level):
-            await self.send_message(
-                {
-                    "type": "security_warning",
-                    "content": (f"Command blocked due to {risk_level.value} " f"risk level: {command}"),
-                    "risk_level": risk_level.value,
-                    "timestamp": time.time(),
-                }
-            )
+            # #14995: the audit log and history above keep the raw member on
+            # purpose — internal records, and more precise than the wire.
+            await self.send_message({**security_warning_payload(command, risk_level), "timestamp": time.time()})
             return True  # Command was blocked
 
         # Send to terminal
@@ -1303,7 +1294,9 @@ class TerminalManager:
 
     def __init__(self):
         """Initialize manager with session tracking dictionaries."""
-        self.session_configs = {}  # session_id -> config
+        # Issue #14961: Redis-backed, not a process-local dict -- shared
+        # across every uvicorn worker. See services/terminal_session_store.py.
+        self.session_configs = SessionConfigStore()  # session_id -> config
         self.active_connections = {}  # session_id -> TerminalWebSocket
         self.session_stats = {}  # session_id -> statistics
         self._lock = asyncio.Lock()  # CRITICAL: Protect concurrent dictionary access

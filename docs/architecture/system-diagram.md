@@ -1,5 +1,7 @@
 # AutoBot System Diagrams
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 A reference for AutoBot's architecture, data flows, and deployment topologies using Mermaid diagrams.
 
 ---

@@ -141,7 +141,7 @@ async def test_slm_self_sync_remote_code_source_uses_ssh_rsync():
 
         await _CS._sync_slm_self_node(MagicMock(), job, node_state)
 
-    ssh_sync.assert_awaited_once_with("slm-node-1")
+    ssh_sync.assert_awaited_once_with("slm-node-1", "job-remote")
     ansible_update.assert_not_called()
     assert node_state.status == "success"
 

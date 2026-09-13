@@ -22,6 +22,7 @@ a 2048 default ``max_tokens``, and penalty-param forwarding from
 from __future__ import annotations
 
 from autobot_shared.ssot_config import config
+from services.provider_key_vault import resolve_provider_key
 
 from .openai_compatible import OpenAICompatibleProvider
 
@@ -55,7 +56,10 @@ class NousPortalProvider(OpenAICompatibleProvider):
         if self._api_key:
             return self._api_key
         self._api_key = (
-            self._get_setting("api_key") or config.hf_token or config.huggingface_api_token or config.nous_api_key
+            self._get_setting("api_key")
+            or resolve_provider_key("HF_TOKEN", config.hf_token)
+            or resolve_provider_key("HUGGINGFACE_API_TOKEN", config.huggingface_api_token)
+            or resolve_provider_key("NOUS_API_KEY", config.nous_api_key)
         )
         return self._api_key
 

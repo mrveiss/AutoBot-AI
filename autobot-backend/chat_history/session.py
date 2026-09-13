@@ -26,6 +26,7 @@ from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
 from chat_history.file_io import run_in_chat_io_executor
 from constants.redis_constants import REDIS_KEY
+from security.session_owner_errors import SessionOwnerUnreadable
 
 logger = get_logger(__name__)
 
@@ -931,9 +932,8 @@ class SessionMixin:
                 metadata = chat_data.get("metadata", {})
                 return metadata.get("owner") or metadata.get("username")
 
-        except OSError as e:
-            logger.warning("Failed to read session file %s: %s", chat_file, e)
         except Exception as e:
             logger.warning("Failed to get session owner for %s: %s", session_id, e)
+            raise SessionOwnerUnreadable(session_id) from e
 
         return None

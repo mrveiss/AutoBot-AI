@@ -13,6 +13,7 @@ from typing import Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from media.document.extraction import extract_docx, extract_pdf
+from media.document.provenance import render_text_and_tables
 
 logger = get_logger(__name__)
 
@@ -127,28 +128,28 @@ class DocumentParser:
 
         Used to carry its own pypdf loop with a ``--- Page N ---`` marker; now
         shares the one implementation and the one ``## Page N`` convention.
+        Tables fold into the same string via the shared renderer (#14970) —
+        used to be dropped outright here, unlike the DOCX path below.
         """
         extracted = extract_pdf(file_path.read_bytes())
         metadata["page_count"] = extracted.page_count
-        return extracted.text
+        metadata["table_count"] = len(extracted.tables)
+        return render_text_and_tables(extracted)
 
     def _parse_docx(self, file_path: Path, metadata: Dict) -> str:
-        """Extract text and tables from DOCX via the canonical extractor (#13893)."""
-        extracted = extract_docx(file_path.read_bytes())
+        """Extract text and tables from DOCX via the canonical extractor (#13893).
 
+        Used to join tables with its own local logic; now shares the renderer
+        every table-bearing consumer uses (#14970), so identical tables produce
+        identical text regardless of which caller found them.
+        """
+        extracted = extract_docx(file_path.read_bytes())
         paragraphs = [line for line in extracted.text.split("\n") if line.strip()]
-        table_text = []
-        for table in extracted.tables:
-            for row in table:
-                row_text = " | ".join(row)
-                if row_text.strip():
-                    table_text.append(row_text)
 
         metadata["paragraph_count"] = len(paragraphs)
         metadata["table_count"] = len(extracted.tables)
 
-        all_text = paragraphs + (["--- Tables ---"] if table_text else []) + table_text
-        return "\n".join(all_text)
+        return render_text_and_tables(extracted)
 
     def _parse_xlsx(self, file_path: Path, metadata: Dict) -> str:
         """Extract text from Excel using openpyxl"""

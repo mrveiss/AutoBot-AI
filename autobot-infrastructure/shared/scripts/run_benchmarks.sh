@@ -129,22 +129,36 @@ echo ""
 if [ "$SAVE_RESULTS" = true ]; then
     echo -e "${BLUE}Saving benchmark results...${NC}"
 
-    # Generate JSON results using pytest-json-report if available
-    if python -c "import pytest_json_report" 2>/dev/null; then
-        python -m pytest "$BENCHMARK_DIR/" --json-report --json-report-file="$RESULTS_FILE" --quiet 2>/dev/null || true
+    # (#14876) pytest-json-report is what produces the machine-readable
+    # benchmark report; it is declared in
+    # autobot-infrastructure/shared/scripts/requirements.txt. Two things were
+    # wrong here. The plugin check discarded stderr, so a broken install read
+    # as an absent one; and the fallback wrote a file with the same name and
+    # extension as a real report while containing no measurements at all, so a
+    # run that measured nothing was indistinguishable downstream from one that
+    # measured everything.
+    if python -c "import pytest_json_report"; then
+        if ! python -m pytest "$BENCHMARK_DIR/" --json-report --json-report-file="$RESULTS_FILE" --quiet; then
+            echo -e "${RED}Benchmark report generation FAILED - ${RESULTS_FILE} is incomplete or absent${NC}" >&2
+            exit 1
+        fi
+        echo -e "${GREEN}Results saved to: ${RESULTS_FILE}${NC}"
     else
-        # Basic results file
-        cat > "$RESULTS_FILE" << EOF
+        echo -e "${RED}pytest-json-report is not installed, so NO benchmark report was produced.${NC}" >&2
+        echo -e "${RED}Install it with: pip install -r autobot-infrastructure/shared/scripts/requirements.txt${NC}" >&2
+        # Deliberately marked, and deliberately not named like a report: a
+        # consumer that finds this file must not be able to read it as results.
+        cat > "${RESULTS_FILE}.no-report" << EOF
 {
+  "measured": false,
+  "reason": "pytest-json-report not installed; no benchmark results were recorded",
   "timestamp": "$(date -Iseconds)",
   "category": "$CATEGORY",
-  "exit_code": $BENCHMARK_EXIT_CODE,
-  "results_dir": "$RESULTS_DIR"
+  "exit_code": $BENCHMARK_EXIT_CODE
 }
 EOF
+        exit 1
     fi
-
-    echo -e "${GREEN}Results saved to: ${RESULTS_FILE}${NC}"
 fi
 
 # Compare against baseline if requested

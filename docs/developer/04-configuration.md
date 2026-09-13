@@ -277,6 +277,39 @@ AutoBot supports environment variable overrides using the `AUTOBOT_` prefix:
 | `AUTOBOT_REDIS_ENABLED` | `memory.redis.enabled` | Enable/disable Redis | `true` |
 | `AUTOBOT_USE_LANGCHAIN` | `orchestrator.use_langchain` | Enable LangChain | `true` |
 
+### Gateway Configuration
+
+Documented under #14145 — every variable below was read from `ssot_config.py` and its
+consumer, not from prose. `AUTOBOT_GATEWAY_REQUIRE_OUTBOUND_APPROVAL` is described in
+[`CLAUDE_RULES.md`](CLAUDE_RULES.md) and is not repeated here.
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `GATEWAY_RATE_LIMIT_USER` | Messages per user per window | `60` |
+| `GATEWAY_RATE_LIMIT_CHANNEL` | Messages per channel per window | `100` |
+| `GATEWAY_SESSION_TIMEOUT` | Idle session lifetime, seconds | `1800` |
+| `GATEWAY_MAX_SESSIONS_USER` | Concurrent sessions per user | `5` |
+| `GATEWAY_MAX_MESSAGE_SIZE` | Largest accepted message, bytes | `1048576` (1 MiB) |
+| `GATEWAY_HEARTBEAT_INTERVAL` | Heartbeat period, seconds | `30` |
+| `GATEWAY_MESSAGE_RETENTION_HOURS` | How long messages are kept | `24` |
+| `GATEWAY_ENABLE_SANDBOX` | Sandbox mode; compared as `.lower() == "true"` | unset (off) |
+
+**Ingest governor** (#14028). These three are declared with an empty default in
+`ssot_config` and resolved to a real value by their consumer, so an unset variable is not
+a missing setting — `services/gateway/ingest_governor.py` supplies the fallback:
+
+| Variable | Purpose | Default when unset |
+|----------|---------|--------------------|
+| `AUTOBOT_GATEWAY_INGEST_DEDUP_TTL_SECONDS` | TTL for `gateway:ingest:seen:*` keys | 5 minutes |
+| `AUTOBOT_GATEWAY_INGEST_MAX_CHAIN_DEPTH` | Agent-to-agent recursion ceiling | `5` |
+| `AUTOBOT_GATEWAY_INGEST_CHAIN_WINDOW_SECONDS` | Sliding window for the recursion counter | `120` |
+
+**Bot identity.** One per channel adapter, used to recognise the platform's own bot so its
+messages are not re-ingested:
+
+`AUTOBOT_GATEWAY_BOT_ID_SLACK` · `AUTOBOT_GATEWAY_BOT_ID_DISCORD` ·
+`AUTOBOT_GATEWAY_BOT_ID_TELEGRAM` · `AUTOBOT_GATEWAY_BOT_ID_WEBSOCKET`
+
 ### Setting Environment Variables
 
 **Linux/macOS:**

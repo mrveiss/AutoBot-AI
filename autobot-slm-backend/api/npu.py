@@ -19,7 +19,7 @@ from typing_extensions import Annotated
 
 from autobot_shared.time_utils import utc_timestamp
 from models.database import Node, Setting
-from models.schemas import (
+from models.npu_schemas import (
     NPUCapabilities,
     NPUDetectionRequest,
     NPUDetectionResponse,

@@ -22,11 +22,16 @@ from api.security import create_audit_log
 from autobot_shared.proxy_utils import get_client_ip
 from autobot_shared.rate_limiter import RateLimiter
 from config import settings
+from models.schemas import TokenResponse
 from services.auth import auth_service
 from services.database import get_db
 from user_management.database import get_slm_session
 from user_management.models.sso import SSOProviderType
-from user_management.schemas.sso import LDAPLoginRequest, SSOLoginInitResponse
+from user_management.schemas.sso import (
+    ActiveProviderResponse,
+    LDAPLoginRequest,
+    SSOLoginInitResponse,
+)
 from user_management.services.base_service import TenantContext
 from user_management.services.sso_service import (
     SSOAuthenticationError,
@@ -137,22 +142,22 @@ def _build_callback_url(request: Request) -> str:
     return f"{scheme}://{netloc}/api/auth/sso/callback"
 
 
-@router.get("/providers", response_model=list[dict])
+@router.get("/providers", response_model=list[ActiveProviderResponse])
 async def list_active_providers(
     db: AsyncSession = Depends(get_slm_db),
-) -> list[dict]:
+) -> list[ActiveProviderResponse]:
     """List active SSO providers for login page."""
     context = TenantContext(is_platform_admin=False)
     sso_service = SSOService(db, context)
 
     providers, _ = await sso_service.list_providers(active_only=True)
     return [
-        {
-            "id": str(p.id),
-            "name": p.name,
-            "provider_type": p.provider_type,
-            "is_social": p.is_social,
-        }
+        ActiveProviderResponse(
+            id=str(p.id),
+            name=p.name,
+            provider_type=p.provider_type,
+            is_social=p.is_social,
+        )
         for p in providers
     ]
 
@@ -312,13 +317,13 @@ async def oauth_callback(
         )
 
 
-@router.post("/ldap/login")
+@router.post("/ldap/login", response_model=TokenResponse)
 async def ldap_login(
     login_data: LDAPLoginRequest,
     response: Response,
     db: AsyncSession = Depends(get_slm_db),
     audit_db: AsyncSession = Depends(get_audit_db),
-) -> dict:
+) -> TokenResponse:
     """Authenticate via LDAP/Active Directory."""
     # Rate limiting (MVA-3397 M-1): prevent LDAP bruteforce attacks
     rate_key = f"username:{login_data.username}"
@@ -373,12 +378,11 @@ async def ldap_login(
             },
         )()
 
-        token_response = await auth_service.create_token_response(user_dict)
-        return {
-            "access_token": token_response.access_token,
-            "token_type": token_response.token_type,
-            "expires_in": token_response.expires_in,
-        }
+        # #13139: return the model itself rather than re-packing three of its
+        # fields into a dict. The repack dropped `token`, which #12216 added so
+        # a client written against the core backend reads the SLM JWT too --
+        # every other SLM token-issuing route already emits it.
+        return await auth_service.create_token_response(user_dict)
     except SSOAuthenticationError as e:
         logger.error("LDAP login failed: %s", e)
         try:

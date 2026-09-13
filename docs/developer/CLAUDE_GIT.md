@@ -5,7 +5,7 @@
 **NO `git checkout` or `git switch` on shared branches during parallel work sessions.**
 
 - **Each parallel task MUST have its own worktree:** `.worktrees/issue-XXXX/` with dedicated branch `issue-XXXX`
-- **Main session stays on `Dev_new_gui`** — never check out feature branches
+- **Main session stays on `main`** — never check out feature branches
 - **Why:** Switching branches in main session breaks all active worktrees that depend on that branch
 
 **Preflight — REQUIRED before creating (#13964):**
@@ -43,7 +43,11 @@ git worktree unlock <path>     # restore the state you found
 
 **Worktree Creation:**
 ```bash
-git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui   # do NOT pipe this
+# #15884: chained deliberately. As separate lines a FAILED fetch still lets the
+# worktree be created from the previous origin/main — a stale base, which
+# is the exact thing this rule exists to prevent.
+git fetch origin main && \
+  git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/main   # do NOT pipe this
 cd .worktrees/issue-XXXX && git branch --unset-upstream
 # Commit and push from here. Do NOT switch branches.
 ```
@@ -69,19 +73,46 @@ merge.
    (#4969).
 2. `git stash list` — if it is non-empty, **ask before proceeding**. The stash stack is shared
    across every worktree in the clone, so an entry may belong to another session.
-3. `git fetch origin Dev_new_gui` — do this *before* step 4, or the check below reads a stale
+   See [Never Stash](#never-stash-14078) below — reading the stack is safe, writing to it
+   is not.
+3. `git fetch origin main` — do this *before* step 4, or the check below reads a stale
    ref and reports work as unlanded when it already merged.
 4. Verify the issue isn't already resolved:
-   `git log origin/Dev_new_gui --oneline --grep="#XXXX"`
+   `git log origin/main --oneline --grep="#XXXX"`
 
 **Additionally, before spawning agents or starting batch work:**
 
-5. `git branch --show-current` — the **main session** must be on `Dev_new_gui`. This step is
+5. `git branch --show-current` — the **main session** must be on `main`. This step is
    scoped to the dispatching session only; a worktree session is on `issue-XXXX` by mandate
    and must not "correct" itself onto the base.
 6. Confirm Bash is approved in the main session — sub-agents inherit from the parent.
 7. No stale worktree already claims the target path (see the preflight above).
 8. For architectural decisions, state them in 1–2 sentences and wait for confirmation.
+
+---
+
+## Never Stash (#14078)
+
+**`git stash` is a shared, repo-wide stack — not a per-worktree one.** Every worktree in the clone
+pushes onto and pops from the same stack, and entries carry no owner, no branch and no issue link.
+
+- **Never `git stash`.** Park work as a `wip:` commit on your own branch instead. It is owned,
+  named, pushable, and cannot be consumed by anyone else.
+- **Never `git stash pop`, `drop`, `clear` or `apply`.** The entry you take is very likely another
+  session's, and popping it destroys their work with no recovery path.
+- **Never `git restore --staged --worktree`.** Not a shared-stack hazard — a different one: it
+  resets your own index and worktree from HEAD, discarding uncommitted work with no recovery.
+  Back files up before reverting an experiment.
+
+This is not hypothetical. #14078 found **113 stash entries** spanning three months, unowned and
+unlinked. Rescuing them to branches and triaging them one by one took a full session; 17 of the 18
+that looked stranded turned out to be work that had already landed, and the eighteenth was a
+security fix nobody knew was sitting there (#15023).
+
+**If you find a non-empty stack:** inventory it, never sweep it. Rescue an entry to a branch
+(`git branch rescued/stash-<date>-<sha> <stash-sha>`) and open an issue naming the branch. Dropping
+an entry is only correct once its content is demonstrably present in `main`, and that is a
+deliberate, evidenced act — not cleanup.
 
 ---
 
@@ -92,36 +123,36 @@ merge.
 - `git push --force` / `git push -f` — rewrites remote history
 - `git branch -D` — permanent unless reflog exists
 - `git clean -fd` — unrecoverable
-- Any operation touching `main` or `master` directly
+- Any operation touching `release` or `master` directly
 
 **Before any bulk git operation:**
 1. `git status` + `git diff --stat` — confirm exactly what will be affected
 2. State operation and scope in one sentence before executing
-3. For branch deletions: verify merged via `git branch -r --merged origin/Dev_new_gui`.
+3. For branch deletions: verify merged via `git branch -r --merged origin/main`.
    This is **ancestor-based and deliberately conservative** — under a squash merge it reports
    a landed branch as unmerged, which fails safe. It is *not* evidence that work is stranded:
    confirm that with `gh pr list --head <branch> --state all` before concluding anything was
    lost, and delete with `-D` once the PR shows MERGED.
 
-**Why:** Past incidents: staged 5,371 files for deletion in a worktree, nearly reset `main` during a cherry-pick with 30+ conflicts, committed fixes to wrong branches.
+**Why:** Past incidents: staged 5,371 files for deletion in a worktree, nearly reset `release` during a cherry-pick with 30+ conflicts, committed fixes to wrong branches.
 
 ---
 
 ## Branching Discipline (Issue #4113)
 
-**Protected (blocked by pre-commit hook):** `main`, `master`
+**Protected (blocked by pre-commit hook):** `release`, `master`
 
-**Allowed:** `Dev_new_gui`, `issue-*`, `hotfix-*`, worktree branches matching those patterns
+**Allowed:** `main`, `issue-*`, `hotfix-*`, worktree branches matching those patterns
 
 **Workflow:**
-1. `git checkout -b issue-XXXX origin/Dev_new_gui`
+1. `git checkout -b issue-XXXX origin/main`
 2. Commit on feature branch
 3. `git push -u origin issue-XXXX`
-4. Open PR: `issue-XXXX` → `Dev_new_gui` (NOT directly to main)
+4. Open PR: `issue-XXXX` → `main` (NOT directly to release)
 
 **If you see "COMMIT BLOCKED":**
 ```bash
-git checkout issue-XXXX  # or: git checkout -b issue-XXXX origin/Dev_new_gui
+git checkout issue-XXXX  # or: git checkout -b issue-XXXX origin/main
 git add -A && git commit -m "..."
 ```
 
@@ -129,13 +160,17 @@ git add -A && git commit -m "..."
 
 ## Hook Scripts
 
-**Install/refresh git hooks (one-time per clone, idempotent):** `bash scripts/install-git-hooks.sh` — copies real `pre-commit` (blocks commits to `main`/`master`) and `pre-push` files into the repo's hooks dir, normalises a bad `core.hooksPath`, and replaces any dangling symlink. Never symlinks into a worktree (#11598). Complementary to the pre-commit framework (`pre-commit install`, the preferred full quality suite): the installer is the fallback when the `pre-commit` binary isn't present and **preserves a framework-managed hook** (detected via its `generated by pre-commit` marker) instead of clobbering it.
+**Install/refresh git hooks (one-time per clone, idempotent):** `bash scripts/install-git-hooks.sh` — copies real `pre-commit` (blocks commits to `release`/`master`) and `pre-push` files into the repo's hooks dir, normalises a bad `core.hooksPath`, and replaces any dangling symlink. Never symlinks into a worktree (#11598). Complementary to the pre-commit framework (`pre-commit install`, the preferred full quality suite): the installer is the fallback when the `pre-commit` binary isn't present and **preserves a framework-managed hook** (detected via its `generated by pre-commit` marker) instead of clobbering it.
+
+**Worktrees already share the main checkout's hooks — never override `core.hooksPath` to "help" them (#15961).** Git resolves hooks through `$GIT_COMMON_DIR/hooks`, which for every worktree *is* the main checkout's hooks directory, so no override is needed. Passing one is the only thing that can break it: inside a worktree `.git` is a *file*, a relative value resolves to nothing, and the commit then runs **no** hooks while looking exactly like a verified one. Same rule as the `--no-verify` prohibition in [`CLAUDE_RULES.md`](CLAUDE_RULES.md); guarded by `repo_tests/hooks_path_override_15961_test.py`.
 
 Before committing any change to `.claude/hooks/block-dangerous-commands.sh`, run:
 ```bash
 bash .claude/hooks/block-dangerous-commands_test.sh
 ```
-Must be 27/27. Add test cases for new rules. Use `bash` (GNU grep 3.7), not interactively — the shell `grep` alias is `ugrep` (PCRE2) which has different variable-length lookbehind support. See #8262.
+Must be 0 failed, with at least 60 cases run — the suite asserts that floor itself, so a sandbox that failed to build cannot report clean (#15296). Add test cases for new rules. Use `bash` (GNU grep 3.7), not interactively — the shell `grep` alias is `ugrep` (PCRE2) which has different variable-length lookbehind support. See #8262.
+
+CI runs it too, via `repo_tests/shell_lib_test.py`; before #15296 no workflow invoked it and it had been dormant since it was written. A new `*_test.sh` anywhere in the tree must be registered in that file's `SHELL_SUITES`: its registration check sweeps every tracked suite and fails until it is (#15933).
 
 ---
 
@@ -144,7 +179,7 @@ Must be 27/27. Add test cases for new rules. Use `bash` (GNU grep 3.7), not inte
 Stale branches are pruned automatically — do not sweep by hand:
 
 - **GitHub setting** *Automatically delete head branches* removes a PR's head branch on merge (repo owner toggles this; it is not code).
-- **`branch-cleanup.yml`** (daily) deletes remote branches that are either merged-ancestor of `Dev_new_gui` and 7+ days old, or tied to a closed issue with a merged PR.
+- **`branch-cleanup.yml`** (daily) deletes remote branches that are either merged-ancestor of `main` and 7+ days old, or tied to a closed issue with a merged PR.
 - **`scripts/cleanup-worktrees.sh`** prunes stale worktrees and local/remote branches for closed issues; also used for one-time backfills (#9911) — always `--dry-run` first.
 
 **Safety guards (shared in `scripts/lib/branch-guards.sh`, tested by `branch-guards_test.sh`):** automated pruning must never delete a branch that is

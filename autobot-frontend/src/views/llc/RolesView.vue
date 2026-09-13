@@ -274,6 +274,7 @@
               panel-key="tools"
               :title="t('llcRoles.tools')"
               :items="tools"
+              :options="toolOptions"
               :add-label="t('llcRoles.attach')"
               :remove-label="t('llcRoles.detach')"
               :empty-label="t('llcRoles.noTools')"
@@ -334,6 +335,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
+import type { components } from '@/types/generated/api'
 import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCard from '@/components/base/BaseCard.vue'
@@ -365,11 +367,29 @@ const { t } = useI18n()
 const route = useRoute()
 const api = useApiClient()
 
+/**
+ * From the generated contract, not hand-declared (#12363/#12420). A local
+ * `interface` here would be a claim about the server's shape that TypeScript
+ * cannot check — it stays green while the two drift.
+ */
+type ToolCatalogueEntry = components['schemas']['ToolCatalogueEntry']
+
 const roles = ref<RoleRow[]>([])
 const holders = ref<HolderRow[]>([])
 const permissions = ref<string[]>([])
 const workflows = ref<string[]>([])
 const tools = ref<string[]>([])
+/**
+ * The company's tool catalogue (#14852) — registry identity plus this
+ * company's own URL and logo. Company-scoped, so it loads with the role list
+ * rather than per role: it does not change when the selection does.
+ *
+ * Empty is a valid state and must not block the tab. A 503 here means the tool
+ * registry is unpopulated, which is an environment problem; the panel falls
+ * back to its text box rather than presenting an empty picker that reads as
+ * "this company has no tools".
+ */
+const toolCatalogue = ref<ToolCatalogueEntry[]>([])
 const credentials = ref<string[]>([])
 
 /**
@@ -461,6 +481,20 @@ const newRoleName = ref('')
 const newRoleDescription = ref('')
 
 const companyId = computed(() => (route.params.companyId as string) || '')
+
+/**
+ * Picker options for the tools panel. `undefined` — not an empty array — when
+ * the catalogue is unavailable, because the panel treats "no options prop" as
+ * "use the text box" and an empty array as "a catalogue exists and is empty".
+ */
+const toolOptions = computed(() =>
+  toolCatalogue.value.length
+    ? toolCatalogue.value.map((entry) => ({
+        value: entry.name,
+        label: entry.description ? `${entry.name} — ${entry.description}` : entry.name,
+      }))
+    : undefined,
+)
 const selectedRole = computed(
   () => roles.value.find((role) => role.id === selectedRoleId.value) ?? null,
 )
@@ -484,6 +518,7 @@ async function loadRoles(): Promise<void> {
   try {
     const loaded = await api.get<RoleRow[]>(`/api/llc/roles/${companyId.value}`)
     roles.value = Array.isArray(loaded) ? loaded : []
+    await loadToolCatalogue()
     if (roles.value.length > 0 && !selectedRoleId.value) {
       await selectRole(roles.value[0].id)
     }
@@ -492,6 +527,30 @@ async function loadRoles(): Promise<void> {
     errorMessage.value = describeError(error, 'llcRoles.errorLoad')
   } finally {
     isLoading.value = false
+  }
+}
+
+/**
+ * The catalogue is a convenience, not a prerequisite: a failure here leaves the
+ * tools panel on its text box, which still works. So this swallows the error
+ * rather than surfacing it on the tab — a red banner over a working Roles tab
+ * because a picker could not be populated would be worse than the picker's
+ * absence, and the attach call reports a bad name on its own anyway.
+ */
+async function loadToolCatalogue(): Promise<void> {
+  if (!companyId.value) return
+  try {
+    // Typed by annotation rather than by an inline type argument on the call.
+    // The contract ratchet scans source text for a type argument applied to a
+    // client method, and counts one wherever it appears — including inside a
+    // comment, which is how an earlier version of this note failed the check
+    // while the code it described was already correct. The annotation infers
+    // the same type and keeps the shape the server actually declares.
+    const loaded: ToolCatalogueEntry[] = await api.get(`/api/llc/tools/${companyId.value}`)
+    toolCatalogue.value = Array.isArray(loaded) ? loaded : []
+  } catch (error) {
+    logger.warn('Tool catalogue unavailable; the tools panel falls back to free text', error)
+    toolCatalogue.value = []
   }
 }
 

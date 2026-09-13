@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 # Transitional aliases — Phase 3 of #6951 consolidates the two #381-derivative
 # shapes here onto canonical types. ``orchestration.types`` had zero importers
-# of these names by the time this landed (verified on Dev_new_gui), so the
+# of these names by the time this landed (verified on main), so the
 # alias is risk-free and preserves the import path for any future caller.
 WorkflowStep = _WorkflowTask
 

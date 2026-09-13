@@ -1,5 +1,7 @@
 # AutoBot Authentication & RBAC Architecture
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 > **Status:** Active — all 6 acceptance criteria from GH #6511 implemented.
 > **Single source of truth:** [`autobot_shared/auth/permissions.py`](../../autobot_shared/auth/permissions.py)
 > **Cross-service parity test:** [`autobot-backend/tests/integration/test_cross_service_auth_parity.py`](../../autobot-backend/tests/integration/test_cross_service_auth_parity.py)

@@ -1,5 +1,7 @@
 # Agent Communication Protocol Documentation
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 ## Overview
 
 The Agent Communication Protocol provides a standardized messaging system for inter-agent communication within the AutoBot ecosystem, supporting both direct and Redis-based message routing.

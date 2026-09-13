@@ -131,9 +131,9 @@ sudo systemctl restart autobot-backend
 **Diagnostic Commands**:
 ```bash
 # Test VM-to-VM connectivity
-for vm in 21 22 23 24 25; do
-    echo "Testing VM 172.16.168.$vm"
-    nc -zv 172.16.168.$vm 22 2>&1 | head -1
+for host in <frontend-ip> <npu-ip> <database-ip> <aiml-ip> <browser-ip>; do
+    echo "Testing VM $host"
+    nc -zv $host 22 2>&1 | head -1
 done
 
 # Check firewall rules
@@ -155,8 +155,8 @@ nc -zv <browser-ip> 3000  # Browser Service
 ssh-keygen -t ed25519 -f ~/.ssh/autobot_key -N ""
 
 # Copy keys to all VMs
-for vm in 21 22 23 24 25; do
-    ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@172.16.168.$vm
+for host in <frontend-ip> <npu-ip> <database-ip> <aiml-ip> <browser-ip>; do
+    ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@$host
 done
 
 # Test SSH connectivity
@@ -630,8 +630,25 @@ free -m
 redis-cli -h <database-ip> info stats | grep cache
 
 # 4. Profile application
-python3 -m cProfile -o profile.stats backend/main.py
+# (#15079) `backend/` has not existed since the #926 restructure; the backend
+# package is `autobot-backend/`.
+python3 -m cProfile -o profile.stats autobot-backend/main.py
 ```
+
+#### Slow backend startup
+
+`autobot-infrastructure/shared/scripts/profile_startup.py` is the maintained tool for this.
+It is a **manual operator tool** -- nothing in CI or the deployment path calls it, and that is
+deliberate; it is reached for when startup latency regresses.
+
+```bash
+python3 autobot-infrastructure/shared/scripts/profile_startup.py
+```
+
+It runs the startup sequence under `cProfile` and prints the slowest calls, with `autobot-backend/`
+already placed on `sys.path` (#14518). Recorded here because it previously had no reference an
+operator could find: its only inbound mention was a stale shell wrapper that regenerated a divergent
+copy of it at a path that no longer exists, retired in #15079.
 
 **Optimization Solutions**:
 

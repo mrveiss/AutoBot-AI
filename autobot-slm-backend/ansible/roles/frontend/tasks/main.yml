@@ -70,7 +70,7 @@
 
 - name: "Frontend | Sync frontend code from code_source"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-frontend/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-frontend/"
     dest: "{{ frontend_install_dir }}/autobot-frontend/"
     rsync_opts:
       - "--exclude=node_modules"
@@ -101,7 +101,7 @@
 # must be synced separately — mirrors the slm_manager role (MVA-893 / #10750 C2c).
 - name: "Frontend | Sync autobot-plugins (shared @autobot/vnc,terminal) from code_source (#12112)"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-plugins/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-plugins/"
     dest: "{{ frontend_install_dir }}/autobot-plugins/"
     rsync_opts:
       - "--exclude=node_modules"
@@ -124,7 +124,7 @@
 
 - name: "Frontend | Sync libs (shared @autobot/ui kit) from code_source (#12112)"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/libs/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/libs/"
     dest: "{{ frontend_install_dir }}/libs/"
     rsync_opts:
       - "--exclude=node_modules"

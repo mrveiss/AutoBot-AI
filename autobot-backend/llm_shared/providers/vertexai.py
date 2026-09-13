@@ -35,6 +35,7 @@ from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
 
 from ..base_provider import BaseProvider
+from .anthropic import _route_sampling_kwargs
 from .cache_utils import sorted_for_cache
 
 logger = get_logger(__name__)
@@ -328,6 +329,9 @@ class VertexAIProvider(BaseProvider):
             for key, value in api_kwargs.items():
                 if key not in {"preserve_reasoning", "extra_headers", "betas"}:
                     kwargs[key] = value
+            # #15016: anthropic>=1.0 dropped temperature/top_p/top_k from
+            # messages.create() -- route them through extra_body instead.
+            kwargs = _route_sampling_kwargs(kwargs)
 
             call_kwargs = sorted_for_cache(kwargs)
             response = await client.messages.create(**call_kwargs)
@@ -400,6 +404,9 @@ class VertexAIProvider(BaseProvider):
         for key, value in api_kwargs.items():
             if key not in {"preserve_reasoning", "extra_headers", "betas"}:
                 kwargs[key] = value
+        # #15016: anthropic>=1.0 dropped temperature/top_p/top_k from
+        # messages.stream() -- route them through extra_body instead.
+        kwargs = _route_sampling_kwargs(kwargs)
 
         call_kwargs = sorted_for_cache(kwargs)
         async with client.messages.stream(**call_kwargs) as stream:

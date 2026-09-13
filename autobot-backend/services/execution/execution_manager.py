@@ -103,7 +103,18 @@ class ExecutionManager:
                     logger.info(f"Task incompatible with {backend_type.value}: {reason}")
                     continue
 
-                # Execute
+                # #14872: a task routed to DOCKER that ends up anywhere else ran
+                # UNCONTAINERISED. That downgrade used to be visible only as
+                # "trying next backend" in the loop below, which reads like
+                # routine failover rather than a loss of isolation.
+                if backends_to_try[0] == BackendType.DOCKER and backend_type != BackendType.DOCKER:
+                    logger.warning(
+                        "Task %s was routed to the containerised backend but is running on %s "
+                        "instead - this execution is NOT sandboxed (#14872)",
+                        task.task_id,
+                        backend_type.value,
+                    )
+
                 logger.info(f"Executing task {task.task_id} on {backend_type.value}")
                 result = await backend.execute(task)
                 return result

@@ -19,17 +19,30 @@ repository.
 
 from __future__ import annotations
 
-import os
 import shutil
 import stat
 import subprocess
 from pathlib import Path
 
+from autobot_shared.paths import scrubbed_git_env
+
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-worktree-branch-guard"
 
 
+def _test_git_env() -> dict[str, str]:
+    """#15246: env for every git subprocess this suite spawns.
+
+    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    GIT_DIR pointing at the worktree it is pushing (every checkout here is
+    one), and an unscrubbed `git init`/`git add`/`git commit` in a
+    fixture then operates on THAT repository instead of tmp_path's. See
+    autobot_shared/paths_test.py and #15246 for the reproduced incident.
+    """
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+
+
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env())
 
 
 def _init_repo(tmp_path: Path) -> Path:
@@ -57,7 +70,7 @@ def _stage_worktree_conflict(repo: Path, linked_wt: Path) -> None:
 
 def test_no_conflict_is_allowed(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
-    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True)
+    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -65,7 +78,7 @@ def test_real_conflict_is_blocked(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     linked_wt = tmp_path.parent / "linked-wt"
     _stage_worktree_conflict(repo, linked_wt)
-    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True)
+    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
     assert result.returncode != 0, result.stdout + result.stderr
     assert "shared-branch" in result.stdout
 
@@ -111,7 +124,7 @@ class TestFailsClosedWhenGitWorktreeListFails:
         _stage_worktree_conflict(repo, linked_wt)
 
         fake_bin = self._make_fake_git(tmp_path)
-        env = dict(os.environ)
+        env = dict(_test_git_env())
         env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
 
         result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=env)

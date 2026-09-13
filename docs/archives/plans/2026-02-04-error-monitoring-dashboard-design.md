@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Error Monitoring Dashboard Design
 
 **Issue:** #563 - [Frontend] Error Monitoring Dashboard - 13 Endpoints
@@ -6,7 +8,7 @@
 
 ## Overview
 
-Implement comprehensive Error Monitoring Dashboard backend in SLM server (172.16.168.19) with 13 REST endpoints, plus frontend integration in slm-admin.
+Implement comprehensive Error Monitoring Dashboard backend in SLM server (<slm-manager-ip>) with 13 REST endpoints, plus frontend integration in slm-admin.
 
 ## Backend Endpoints
 

@@ -83,8 +83,15 @@ import { ref, computed } from 'vue'
 const props = defineProps<{
   userId: string
   requireCurrentPassword?: boolean
-  /** Full API path for the change-password POST. Defaults to /api/users/{userId}/change-password. */
-  apiEndpoint?: string
+  /**
+   * Full API path for the change-password POST. Required (#15533): this
+   * component is mounted by both frontends, which talk to different services,
+   * so there is no path that is correct by default. The default it used to
+   * carry — `/api/users/{userId}/change-password` — is served by neither the
+   * SLM (which mounts `slm-users` and `autobot-users`) nor the main backend
+   * (which mounts `/api/user-management/users`).
+   */
+  apiEndpoint: string
   /** Bearer token to include in the Authorization header. Falls back to localStorage 'authToken'. */
   authToken?: string
 }>()
@@ -179,8 +186,7 @@ async function handleSubmit() {
   try {
     const token = props.authToken || localStorage.getItem('authToken') || ''
 
-    const endpoint = props.apiEndpoint ?? `/api/users/${props.userId}/change-password`
-    const response = await fetch(endpoint, {
+    const response = await fetch(props.apiEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

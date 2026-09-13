@@ -11,10 +11,38 @@ from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import require_path_string
+from autobot_shared.ssot_config import config as ssot_config
 from config import unified_config_manager
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
+
+
+def _resolve_directory(configured: object | None, canonical: Path, context: str) -> Path:
+    """Resolve a configured directory spec to an ABSOLUTE path (#14113).
+
+    Every accessor below used to end in ``Path("data")`` / ``Path("logs")`` —
+    a *relative* literal, resolved by the OS against whatever working
+    directory the process happened to be launched with. That never raised, so
+    the divergence stayed invisible: `ssot_config` answered `/var/lib/autobot`
+    for the data directory while this resolver answered `data`, and under the
+    deployed unit (``WorkingDirectory=/opt/autobot/autobot-user-backend``) the
+    files landed somewhere no operator setting ``AUTOBOT_DATA_DIR`` would look.
+
+    The `paths:` key these accessors read has never existed in any
+    ``config.yaml`` this repository's ``ConfigManager`` loads, so *every* call
+    took the fallback. The fallback is therefore the real behaviour, and it is
+    what changes here: an unconfigured directory now resolves through the SSOT
+    (`AUTOBOT_DATA_DIR`/`AUTOBOT_LOG_DIR` relative to `AUTOBOT_BASE_DIR`), and
+    a configured *relative* value resolves against the SSOT base rather than
+    against CWD. Both answers are absolute, so neither depends on how the
+    process was started.
+    """
+    if configured is None:
+        return canonical
+    value = require_path_string(configured, context=context)
+    candidate = Path(value)
+    return candidate if candidate.is_absolute() else ssot_config.path.resolve(value)
 
 
 class PathsManager:
@@ -88,12 +116,10 @@ class PathsManager:
 
         # Check if specific log path is configured
         if log_name in logs_config:
-            configured = require_path_string(logs_config[log_name], context=f"paths.logs.{log_name}")
-            return Path(configured)
+            return _resolve_directory(logs_config[log_name], ssot_config.path.logs_path, f"paths.logs.{log_name}")
 
-        # Fall back to logs directory + filename
-        logs_dir = require_path_string(logs_config.get("directory", "logs"), context="paths.logs.directory")
-        return Path(logs_dir) / f"{log_name}.log"
+        # Fall back to logs directory + filename (#14113: absolute, never CWD-relative)
+        return PathsManager.get_logs_directory() / f"{log_name}.log"
 
     @staticmethod
     def get_data_path(data_name: str) -> Path:
@@ -107,44 +133,40 @@ class PathsManager:
 
         # Check if specific data path is configured
         if data_name in data_config:
-            configured = require_path_string(data_config[data_name], context=f"paths.data.{data_name}")
-            return Path(configured)
+            return _resolve_directory(data_config[data_name], ssot_config.path.data_path, f"paths.data.{data_name}")
 
-        # Fall back to data directory + filename
-        data_dir = require_path_string(data_config.get("directory", "data"), context="paths.data.directory")
-        return Path(data_dir) / data_name
+        # Fall back to data directory + filename (#14113: absolute, never CWD-relative)
+        return PathsManager.get_data_directory() / data_name
 
     @staticmethod
     def get_logs_directory() -> Path:
         """Get the main logs directory"""
         paths = PathsManager.get_paths()
         logs_config = paths.get("logs", {})
-        logs_dir = require_path_string(logs_config.get("directory", "logs"), context="paths.logs.directory")
-        return Path(logs_dir)
+        return _resolve_directory(logs_config.get("directory"), ssot_config.path.logs_path, "paths.logs.directory")
 
     @staticmethod
     def get_data_directory() -> Path:
         """Get the main data directory"""
         paths = PathsManager.get_paths()
         data_config = paths.get("data", {})
-        data_dir = require_path_string(data_config.get("directory", "data"), context="paths.data.directory")
-        return Path(data_dir)
+        return _resolve_directory(data_config.get("directory"), ssot_config.path.data_path, "paths.data.directory")
 
     @staticmethod
     def get_static_directory() -> Path:
         """Get the static files directory"""
         paths = PathsManager.get_paths()
         static_config = paths.get("static", {})
-        static_dir = require_path_string(static_config.get("directory", "static"), context="paths.static.directory")
-        return Path(static_dir)
+        canonical = ssot_config.path.resolve("static")
+        return _resolve_directory(static_config.get("directory"), canonical, "paths.static.directory")
 
     @staticmethod
     def get_config_directory() -> Path:
         """Get the configuration directory"""
         paths = PathsManager.get_paths()
         config_config = paths.get("config", {})
-        config_dir = require_path_string(config_config.get("directory", "config"), context="paths.config.directory")
-        return Path(config_dir)
+        canonical = ssot_config.path.resolve("config")
+        return _resolve_directory(config_config.get("directory"), canonical, "paths.config.directory")
 
     @staticmethod
     def ensure_directory_exists(path: Path) -> Path:
@@ -171,8 +193,10 @@ class PathsManager:
             return PathsManager.get_log_path("audit")
         except Exception as e:
             logger.error("Error getting audit log path: %s", str(e))
-            # Ultimate fallback
-            return Path("logs/audit.log")
+            # #14113: absolute, not CWD-relative. This branch fires when config
+            # lookup itself failed, which is exactly when a silently CWD-relative
+            # audit log is least acceptable.
+            return ssot_config.path.logs_path / "audit.log"
 
     @staticmethod
     def get_chat_data_dir() -> Path:
@@ -189,8 +213,8 @@ class PathsManager:
             return PathsManager.get_data_path("chats")
         except Exception as e:
             logger.error("Error getting chat data directory: %s", str(e))
-            # Ultimate fallback
-            return Path("data/chats")
+            # #14113: absolute, not CWD-relative.
+            return ssot_config.path.data_path / "chats"
 
     @staticmethod
     def get_chat_history_file() -> Path:
@@ -207,8 +231,8 @@ class PathsManager:
             return PathsManager.get_data_path("chat_history.json")
         except Exception as e:
             logger.error("Error getting chat history file path: %s", str(e))
-            # Ultimate fallback
-            return Path("data/chat_history.json")
+            # #14113: absolute, not CWD-relative.
+            return ssot_config.path.data_path / "chat_history.json"
 
     @staticmethod
     def get_knowledge_base_db() -> Path:
@@ -225,8 +249,8 @@ class PathsManager:
             return PathsManager.get_data_path("knowledge_base.db")
         except Exception as e:
             logger.error("Error getting knowledge base database path: %s", str(e))
-            # Ultimate fallback
-            return Path("data/knowledge_base.db")
+            # #14113: absolute, not CWD-relative.
+            return ssot_config.path.data_path / "knowledge_base.db"
 
     @staticmethod
     def get_reliability_stats_file() -> Path:
@@ -243,8 +267,8 @@ class PathsManager:
             return PathsManager.get_data_path("reliability_stats.json")
         except Exception as e:
             logger.error("Error getting reliability stats file path: %s", str(e))
-            # Ultimate fallback
-            return Path("data/reliability_stats.json")
+            # #14113: absolute, not CWD-relative.
+            return ssot_config.path.data_path / "reliability_stats.json"
 
     @staticmethod
     def get_chromadb_path() -> Path:
@@ -262,8 +286,8 @@ class PathsManager:
             return PathsManager.get_data_path("chromadb")
         except Exception as e:
             logger.error("Error getting ChromaDB path: %s", str(e))
-            # Ultimate fallback
-            return Path("data/chromadb")
+            # #14113: absolute, not CWD-relative.
+            return ssot_config.path.data_path / "chromadb"
 
 
 # Convenience functions for common paths

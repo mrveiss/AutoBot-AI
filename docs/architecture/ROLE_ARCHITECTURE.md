@@ -1,5 +1,7 @@
 # AutoBot Role Architecture
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 > **Status:** Active — implemented in Phase 1-2 of [#926](https://github.com/mrveiss/AutoBot-AI/issues/926)
 > **Single source of truth:** `autobot-infrastructure/autobot-<role>/manifest.yml`
 

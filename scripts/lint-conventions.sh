@@ -55,8 +55,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-scope.sh" || {
   echo "FATAL: cannot load scripts/lib/git-scope.sh — refusing to report clean" >&2
   exit 1
 }
+# shellcheck source=scripts/lib/git-root.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || {
+  echo "FATAL: cannot load scripts/lib/git-root.sh — refusing to report clean" >&2
+  exit 1
+}
 
-cd "$(git rev-parse --show-toplevel)" || { echo "not a git repo" >&2; exit 2; }
+cd "$(git_repo_root)" || { echo "not a git repo" >&2; exit 2; }
 
 FAILURES=0
 fail() { FAILURES=$((FAILURES+1)); printf '  FAIL  %s\n' "$1"; }
@@ -72,7 +77,24 @@ if [ "$MODE" = "--commit-msg" ]; then
     "Merge "*|"Revert "*|"fixup!"*|"squash!"*|chore:\ claim\ worktree*)
       echo "lint-conventions: subject exempt"; exit 0 ;;
   esac
-  if ! printf '%s' "$SUBJECT" | grep -qE '^[a-z]+(\([a-z0-9._-]+\))?: .+'; then
+  # #14076: `/` belongs in the scope class. The repo uses slashed scopes for
+  # nested areas — `fix(llc/frontend):`, `test(hooks/guard):` — and 14 of the
+  # last 400 commits on main carry one. Without it this rule rejects
+  # subjects the repository itself writes, so the linter was wrong, not them.
+  #
+  # The scope must still START with an alphanumeric. A bare character class
+  # accepts `fix(/llc):` and `fix(-llc):`, which no scope convention intends —
+  # widening for `/` should not also widen for a leading separator.
+  #
+  # Two more of the same defect, found by running this rule over real history
+  # rather than over its own test cases. The repo also writes hyphenated types
+  # (`a11y(...)`, `test-guard(...)`, `tech-debt(...)`) and comma-joined scopes
+  # (`docs(architecture,design)`), and `^[a-z]+` rejected every one. Over the
+  # last 400 commits on main the rule rejected 12 subjects the project
+  # itself authored; it now rejects 1, and that one is genuinely malformed —
+  # capitalised, with no type at all. A linter whose own repository cannot
+  # satisfy it gets ignored, which is worse than not having it.
+  if ! printf '%s' "$SUBJECT" | grep -qE '^[a-z][a-z0-9-]*(\([a-z0-9][a-z0-9._/,-]*\))?: .+'; then
     echo "  FAIL  subject is not '<type>(scope): <description>'"; exit 1
   fi
   if ! printf '%s' "$SUBJECT" | grep -qE '#[0-9]{3,}'; then
@@ -87,8 +109,8 @@ case "$MODE" in
     LIST=$(git diff --cached --name-only --diff-filter=ACMR) \
       || die "git diff --cached failed — cannot determine scope, refusing to report clean" ;;
   --all)
-    LIST=$(git ls-files) \
-      || die "git ls-files failed — cannot determine scope, refusing to report clean" ;;
+    LIST=$(git_tracked_files .) \
+      || die "git_tracked_files failed — cannot determine scope, refusing to report clean" ;;
   --range)
     [ -n "$RANGE" ] || die "--range needs A..B"
     # Range splitting and ref validation come from scripts/lib/git-scope.sh
@@ -224,7 +246,7 @@ else
       case "$author$email" in
         *'[bot]'*) continue ;;
       esac
-      if ! printf '%s' "$subj" | grep -qE '^[a-z]+(\([a-z0-9._-]+\))?: .+'; then
+      if ! printf '%s' "$subj" | grep -qE '^[a-z][a-z0-9-]*(\([a-z0-9][a-z0-9._/,-]*\))?: .+'; then
         # #13921: the parsed author is echoed on failure. The previous version
         # rejected commits without saying who it thought wrote them, so a
         # non-firing exemption could only be diagnosed by inference.

@@ -1,5 +1,7 @@
 # AutoBot Data Flow Diagrams
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 **Last Updated**: 2025-12-13
 **Related Issue**: [#251](https://github.com/mrveiss/AutoBot-AI/issues/251)
 

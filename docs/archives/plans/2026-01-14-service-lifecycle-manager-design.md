@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Service Lifecycle Manager (SLM) Design
 
 > **Status**: Draft
@@ -20,7 +22,7 @@ Service Lifecycle Manager (SLM) is a dedicated admin machine that orchestrates t
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                   Admin Machine (new VM)                     │
-│                     172.16.168.10                            │
+│                     <slm-manager-ip>                        │
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │         Service Lifecycle Manager (SLM)             │    │
 │  │  - FastAPI backend (admin-only)                     │    │
@@ -463,7 +465,7 @@ Phase 5: SWITCHBACK + CLEANUP
 2. **Run Bootstrap Script**: Installs Python, Ansible, SLM, PKI CA
 3. **Configure**: Edit `/opt/autobot-admin/config/admin.yaml`
 4. **Start Services**: `systemctl start autobot-slm autobot-reconciler`
-5. **Access UI**: `https://172.16.168.10:8443` - setup wizard
+5. **Access UI**: `https://<slm-manager-ip>:8443` - setup wizard
 
 ### Directory Structure
 
@@ -565,7 +567,7 @@ Phase 5: SWITCHBACK + CLEANUP
 
 - [x] Vue admin dashboard (`slm-admin/`)
   - Standalone Vue 3 + TypeScript + Tailwind application
-  - Deployed on 172.16.168.19 (dedicated admin host)
+  - Deployed on <slm-manager-ip> (dedicated admin host)
   - Multi-page SPA with sidebar navigation
 - [x] Fleet overview with real-time health status
   - NodeCard with health metrics and quick actions

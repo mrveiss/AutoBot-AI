@@ -16,6 +16,11 @@ from llm_shared.pricing.sources import BaselinePricingSource
 
 _PROVIDER = "vertexai"
 
+# The canonical table is `autobot_shared.model_pricing.MODEL_PRICING_PER_1M_TOKENS`.
+# This file carried no pointer to it at all, which is how a name-based search for
+# the four sibling baselines missed an eighth pricing table (#15912). Agreement is
+# enforced by `repo_tests/model_pricing_tables_agree_15912_test.py`, which
+# discovers tables by shape rather than by name for exactly that reason.
 # (model_id, input_per_1m_usd, output_per_1m_usd)
 _BASELINE: list[tuple[str, float, float]] = [
     # Gemini — same rates as Google AI Studio on Vertex

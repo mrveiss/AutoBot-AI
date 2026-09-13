@@ -30,14 +30,15 @@ DAGExecutor
 """
 
 import asyncio
-import ssl
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slm_rest_url import rest_url
 from autobot_shared.ssot_config import config
+from autobot_shared.tls import get_internal_tls_context
 from constants.status_enums import TaskStatus
 from utils.safe_expression_evaluator import safe_evaluator
 
@@ -788,13 +789,6 @@ class DAGExecutor:
 # ---------------------------------------------------------------------------
 
 
-def _build_slm_ssl_context() -> ssl.SSLContext:
-    """Create SSL context for SLM HTTP calls (#6702: delegates to shared tls.py)."""
-    from autobot_shared.tls import get_internal_tls_context
-
-    return get_internal_tls_context()
-
-
 async def _execute_on_node(
     slm_url: str,
     auth_token: str,
@@ -809,10 +803,10 @@ async def _execute_on_node(
     """
     import aiohttp  # lazy import — not available in all environments
 
-    url = f"{slm_url}/api/nodes/{node_id}/execute"
+    url = rest_url(slm_url, f"/api/nodes/{node_id}/execute")
     payload = {"command": script, "language": language, "timeout": timeout}
     headers = {"Authorization": f"Bearer {auth_token}"}
-    ssl_ctx = _build_slm_ssl_context()
+    ssl_ctx = get_internal_tls_context()
     connector = aiohttp.TCPConnector(ssl=ssl_ctx)
 
     try:

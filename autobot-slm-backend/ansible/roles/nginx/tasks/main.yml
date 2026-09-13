@@ -44,6 +44,20 @@
   become: true
   tags: ['deps', 'nginx']
 
+# #16020: nginx must not be started before the keypair its config references
+# exists. Every AutoBot nginx vhost carries `ssl_certificate
+# /etc/autobot/certs/server-cert.pem`, and `nginx -t` runs in ExecStartPre --
+# so a missing cert is not a degraded start, it is a unit that can never come
+# up. Observed on a VNC node: six consecutive failed restarts over ten hours,
+# each ending `[emerg] cannot load certificate ... No such file or directory`,
+# every one of them failing the manage-service play that requested it.
+#
+# This role previously did three things -- refresh apt, install nginx, start it
+# -- and starting was the only one that could fail for a reason outside itself.
+- name: "nginx | Ensure the shared node TLS keypair exists (#16020)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
+  tags: ['deps', 'nginx']
+
 - name: "nginx | Ensure service is enabled and running"
   ansible.builtin.systemd:
     name: nginx

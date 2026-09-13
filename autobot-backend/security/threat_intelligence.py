@@ -31,6 +31,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.ssot_config import config
+from services.provider_key_vault import resolve_provider_key
 
 # Single-window duration used by the per-client rate limiters below — both
 # VirusTotal and URLVoid clients were rate-limited on a 1-minute window
@@ -63,15 +64,6 @@ class ThreatScore:
     details: Dict[str, Any] = field(default_factory=dict)
     sources_checked: int = 0
     cached: bool = False
-
-
-@dataclass
-class RateLimitState:
-    """Rate limiter state for API calls"""
-
-    requests_made: int = 0
-    window_start: float = field(default_factory=time.time)
-    requests_per_minute: int = 4  # Default VirusTotal free tier
 
 
 class ThreatIntelligenceCache:
@@ -138,7 +130,7 @@ class VirusTotalClient:
             rate_limit: Requests per minute (default: 4 for free tier)
             timeout: Request timeout in seconds
         """
-        self._api_key = api_key or config.virustotal_api_key
+        self._api_key = api_key or resolve_provider_key("VIRUSTOTAL_API_KEY", config.virustotal_api_key)
         self._rate_limiter = _SharedRateLimiter(scope_prefix="threat_intel")
         self._rate_limit = rate_limit
         self._rl_key = f"virustotal:{id(self)}"
@@ -313,7 +305,7 @@ class URLVoidClient:
             rate_limit: Requests per minute
             timeout: Request timeout in seconds
         """
-        self._api_key = api_key or config.urlvoid_api_key
+        self._api_key = api_key or resolve_provider_key("URLVOID_API_KEY", config.urlvoid_api_key)
         self._rate_limiter = _SharedRateLimiter(scope_prefix="threat_intel")
         self._rate_limit = rate_limit
         self._rl_key = f"urlvoid:{id(self)}"
@@ -756,16 +748,16 @@ if __name__ == "__main__":
 
         logger.info("\nTesting URLs:")
         for url in test_urls:
-            logger.info("\n  Checking: {url}")
+            logger.info(f"\n  Checking: {url}")
             result = await service.check_url_reputation(url)
-            logger.info("    Overall Score: {result.overall_score:.2f}")
-            logger.info("    Threat Level: {result.threat_level.value}")
-            logger.info("    Sources Checked: {result.sources_checked}")
-            logger.info("    Cached: {result.cached}")
+            logger.info(f"    Overall Score: {result.overall_score:.2f}")
+            logger.info(f"    Threat Level: {result.threat_level.value}")
+            logger.info(f"    Sources Checked: {result.sources_checked}")
+            logger.info(f"    Cached: {result.cached}")
 
             if result.virustotal_score is not None:
-                logger.info("    VirusTotal: {result.virustotal_score:.2f}")
+                logger.info(f"    VirusTotal: {result.virustotal_score:.2f}")
             if result.urlvoid_score is not None:
-                logger.info("    URLVoid: {result.urlvoid_score:.2f}")
+                logger.info(f"    URLVoid: {result.urlvoid_score:.2f}")
 
     run_or_schedule(test_threat_intel())

@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # SLM Bootstrap Script Design
 
 **Issue:** #789
@@ -16,7 +18,7 @@
 ./infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh [OPTIONS]
 
 Options:
-  -h, --host HOST       Target host (default: 172.16.168.19)
+  -h, --host HOST       Target host (default: <slm-manager-ip>)
   -u, --user USER       SSH user with sudo (required)
   -k, --key PATH        SSH key path (tries ~/.ssh/id_rsa first)
   -p, --password        Prompt for SSH password (fallback if no key)
@@ -29,13 +31,13 @@ Options:
 
 ```bash
 # With SSH key
-./infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh -u root -h 172.16.168.19
+./infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh -u root -h <slm-manager-ip>
 
 # With password prompt
-./infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh -u root -h 172.16.168.19 -p
+./infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh -u root -h <slm-manager-ip> -p
 
 # Custom admin password
-./infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh -u root -h 172.16.168.19 --admin-password
+./infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh -u root -h <slm-manager-ip> --admin-password
 ```
 
 ## Target Architecture
@@ -46,7 +48,7 @@ nginx (:443 HTTPS, :80 redirect)
   └── /api/* → proxy to uvicorn (:8000)
 ```
 
-All-in-one deployment on SLM node (172.16.168.19).
+All-in-one deployment on SLM node (<slm-manager-ip>).
 
 ## Directory Structure on Target
 
@@ -127,7 +129,7 @@ The `autobot_admin` user is normally disabled and only enabled during key/cert r
 - Create Python venv: `/opt/autobot/autobot-slm-backend/venv/`
 - Install requirements: `pip install -r requirements.txt`
 - Generate `.env` config:
-  - `REDIS_HOST=172.16.168.23`
+  - `REDIS_HOST=<database-ip>`
   - `REDIS_PORT=6379`
   - `SECRET_KEY=<generated>`
   - `DATABASE_URL=sqlite:///data/slm.db`
@@ -171,7 +173,7 @@ The `autobot_admin` user is normally disabled and only enabled during key/cert r
 
 Display:
 
-- SLM URL: `https://172.16.168.19`
+- SLM URL: `https://<slm-manager-ip>`
 - Admin username: `admin`
 - Admin password: `<generated or provided>`
 - `autobot_admin` password: `<SAVE THIS - displayed once>`
@@ -204,7 +206,7 @@ Re-run behavior:
 
 ## Dependencies
 
-**Redis:** Assumes Redis available at 172.16.168.23:6379. SLM should gracefully handle Redis unavailability (future enhancement).
+**Redis:** Assumes Redis available at <database-ip>:6379. SLM should gracefully handle Redis unavailability (future enhancement).
 
 ## Files to Create
 

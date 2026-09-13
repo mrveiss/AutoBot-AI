@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Layer Separation - Files Marked for Deletion
 
 **Related Issue:** #729 - Migrate admin functionality from main frontend/backend to SLM
@@ -19,7 +21,7 @@ This document tracks backend files that have been marked for deletion as part of
 
 ### autobot-backend/api/slm/ (Entire Directory)
 All files in this directory are non-functional after `backend/services/slm/` removal.
-SLM server (172.16.168.19) provides equivalent functionality.
+SLM server (<slm-manager-ip>) provides equivalent functionality.
 
 - [ ] `autobot-backend/api/slm/stateful.py` - See `slm-server/api/stateful.py`
 - [ ] `autobot-backend/api/slm/nodes.py` - See `slm-server/api/nodes.py`
@@ -46,7 +48,7 @@ SLM server (172.16.168.19) provides equivalent functionality.
 ## Verification Checklist
 
 Before deleting the remaining files, verify:
-- [ ] SLM server (172.16.168.19) is operational
+- [ ] SLM server (<slm-manager-ip>) is operational
 - [ ] All SLM endpoints accessible via SLM server
 - [ ] No frontend components calling backend SLM endpoints
 - [ ] No other backend services depending on these files

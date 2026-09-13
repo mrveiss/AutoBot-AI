@@ -6,10 +6,9 @@
 AWS Bedrock provider for the multi-provider LLM layer (GH#9010).
 
 Supports Claude, Llama, Mistral, Amazon Titan, and Amazon Nova models via
-AWS Bedrock's managed inference. Credentials are read (in priority order) from:
-  1. ``settings["aws_access_key_id"]`` / ``settings["aws_secret_access_key"]``
-  2. Environment variables ``AWS_ACCESS_KEY_ID`` / ``AWS_SECRET_ACCESS_KEY``
-  3. IAM role via instance profile (automatic in EC2/ECS)
+AWS Bedrock's managed inference. Credentials are read (in priority order) from
+``SecretsService`` (encrypted, audited), then ``settings``/environment variables
+(plain-text fallback, logged as a warning), then an IAM role instance profile.
 
 Streaming is supported via ``invoke_model_with_response_stream``. Cross-region
 inference profiles can be used for higher availability.
@@ -25,12 +24,20 @@ import time
 from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import redact_provider_error
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
 
 from ..base_provider import BaseProvider
+from .bedrock_credentials import (
+    build_boto3_client,
+    load_credentials_from_vault,
+    scrub_credentials,
+    validate_credential_pair,
+)
 
 logger = get_logger(__name__)
+
 
 # Model families supported by Bedrock
 BEDROCK_MODELS = {
@@ -71,10 +78,8 @@ class BedrockProvider(BaseProvider):
     Supports Claude, Llama, Mistral, Amazon Titan, and Amazon Nova models via
     AWS Bedrock's managed inference. Requires ``boto3`` (``pip install boto3``).
 
-    AWS credentials are read from settings, environment, or IAM role. Region
-    can be configured via ``settings["region"]`` or ``AWS_DEFAULT_REGION``.
-
-    Streaming is supported via ``invoke_model_with_response_stream``.
+    AWS credentials are read from SecretsService, settings, environment, or IAM
+    role -- see the module docstring for priority order.
     """
 
     provider_name = ProviderType.BEDROCK.value
@@ -85,42 +90,57 @@ class BedrockProvider(BaseProvider):
         self._runtime_client = None
         self._region: str | None = None
 
+    #: Kept as an attribute so ``BedrockProvider._load_credentials_from_vault.__globals__``
+    #: still points at the module that actually calls ``get_secrets_service`` -- which is
+    #: how ``bedrock_test.py`` injects its vault stand-in.
+    _load_credentials_from_vault = staticmethod(load_credentials_from_vault)
+
     def _resolve_credentials(self) -> tuple[str | None, str | None, str | None]:
         """
-        Resolve AWS credentials from settings or environment.
+        Resolve AWS credentials: SecretsService, then settings/environment,
+        then the boto3 default chain (IAM role).
 
         Returns:
             Tuple of (access_key_id, secret_access_key, region).
             Any value can be None to use boto3's default credential chain.
+
+        Raises:
+            ValueError: If the resolved access-key/secret-key pair is malformed --
+                see validate_credential_pair(). Raised here rather than only at
+                client construction so every caller of this method gets the same
+                guarantee: a returned pair is either well-formed or both-absent.
         """
-        access_key = self._get_setting("aws_access_key_id") or os.getenv("AWS_ACCESS_KEY_ID")
-        secret_key = self._get_setting("aws_secret_access_key") or os.getenv("AWS_SECRET_ACCESS_KEY")
-        region = self._get_setting("region") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+        access_key, secret_key, region = self._load_credentials_from_vault()
+
+        if not (access_key and secret_key):
+            access_key = self._get_setting("aws_access_key_id") or os.getenv("AWS_ACCESS_KEY_ID")
+            secret_key = self._get_setting("aws_secret_access_key") or os.getenv("AWS_SECRET_ACCESS_KEY")
+            if access_key and secret_key:
+                logger.warning(
+                    "Bedrock: using plain-text AWS credentials from settings/environment, "
+                    "not SecretsService. Run migrate_bedrock_credentials.py to store them securely."
+                )
+
+        region = region or self._get_setting("region") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+        validate_credential_pair(access_key, secret_key)
         return access_key, secret_key, region
 
-    def _ensure_runtime_client(self):
-        """Lazily initialize the bedrock-runtime client."""
+    def _ensure_runtime_client(self, credentials: tuple[str | None, str | None, str | None] | None = None):
+        """Lazily initialize the bedrock-runtime client.
+
+        *credentials* lets a caller that has already resolved a pair thread it
+        through, so a single operation never resolves twice and therefore cannot
+        straddle a change of credential source between the two reads (#15071).
+        Omitted, the pair is resolved here as before.
+        """
         if self._runtime_client is not None:
             return self._runtime_client
 
-        try:
-            import boto3
-        except ImportError as exc:
-            raise ImportError("boto3 not installed. Run: pip install boto3") from exc
-
-        access_key, secret_key, region = self._resolve_credentials()
-        self._region = region
-
-        # Build client kwargs
-        client_kwargs: Dict[str, Any] = {"region_name": region, "service_name": "bedrock-runtime"}
-
-        # Only specify credentials if explicitly provided (otherwise use IAM role)
-        if access_key and secret_key:
-            client_kwargs["aws_access_key_id"] = access_key
-            client_kwargs["aws_secret_access_key"] = secret_key
-
-        self._runtime_client = boto3.client(**client_kwargs)
-        logger.info("Initialized Bedrock runtime client in region %s", region)
+        if credentials is None:
+            credentials = self._resolve_credentials()
+        self._runtime_client = build_boto3_client("bedrock-runtime", credentials)
+        self._region = credentials[2]
+        logger.info("Initialized Bedrock runtime client")
         return self._runtime_client
 
     def _resolve_model_id(self, model_name: str) -> str:
@@ -470,14 +490,18 @@ class BedrockProvider(BaseProvider):
 
         except Exception as exc:
             self._total_errors += 1
-            logger.error("Bedrock chat_completion error for model %s: %s", model_id, exc)
+            # #15324: a boto3 ClientError message names the caller's ARN, which
+            # carries the AWS account number. It was logged raw and returned to
+            # the caller verbatim.
+            safe = redact_provider_error(exc)
+            logger.error("Bedrock chat_completion error for model %s: %s", model_id, safe)
             return LLMResponse(
                 content="",
                 model=model_id,
                 provider=self.provider_name,
                 processing_time=time.time() - start,
                 request_id="",
-                error=str(exc),
+                error=safe,
             )
 
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
@@ -528,26 +552,30 @@ class BedrockProvider(BaseProvider):
 
         except Exception as exc:
             self._total_errors += 1
-            logger.error("Bedrock stream_completion error for model %s: %s", model_id, exc)
-            raise
+            safe = redact_provider_error(exc)
+            logger.error("Bedrock stream_completion error for model %s: %s", model_id, safe)
+            # `from None`, not `from exc`: chaining preserves the original as
+            # __cause__, so any traceback printed downstream re-exposes the raw
+            # message this redaction exists to suppress. The redacted text keeps
+            # the error class, service and region, which is the diagnostic value.
+            raise RuntimeError(safe) from None
 
     async def is_available(self) -> bool:
         """Return True if Bedrock credentials are configured and the service is reachable."""
+        credentials: tuple[str | None, str | None, str | None] = (None, None, None)
         try:
-            self._ensure_runtime_client()
+            # Resolved once and threaded through both clients. Resolving per
+            # client re-reads mutable state, so the two reads can straddle a
+            # settings reload or a vault rotation and build a client from a
+            # mismatched key pair -- which does not raise, it fails opaquely at
+            # call time and surfaces here only as False (#15071).
+            credentials = self._resolve_credentials()
+            self._ensure_runtime_client(credentials)
             # Simple health check - list foundation models (no cost)
-            import boto3
-
-            bedrock_client = boto3.client(
-                "bedrock",
-                region_name=self._region,
-                aws_access_key_id=self._resolve_credentials()[0],
-                aws_secret_access_key=self._resolve_credentials()[1],
-            )
-            bedrock_client.list_foundation_models(maxResults=1)
+            build_boto3_client("bedrock", credentials).list_foundation_models(maxResults=1)
             return True
         except Exception as exc:
-            logger.debug("Bedrock availability check failed: %s", exc)
+            logger.debug("Bedrock availability check failed: %s", scrub_credentials(str(exc), credentials))
             return False
 
     async def list_models(self) -> List[str]:

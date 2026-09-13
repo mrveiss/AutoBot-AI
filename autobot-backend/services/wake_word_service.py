@@ -171,63 +171,51 @@ class WakeWordDetector:
         return self.config.wake_words.copy()
 
     def check_text_for_wake_word(self, text: str, confidence: float = 1.0) -> WakeWordEvent | None:
-        """
-        Check if text contains a wake word.
+        """Detect a wake word and record it: honours cooldown, updates state on a match.
 
-        Args:
-            text: Transcribed text to check
-            confidence: Confidence score from speech recognition
-
-        Returns:
-            WakeWordEvent if detected, None otherwise
+        The stateful path. For evaluation with no side effects, use :meth:`match_text`.
         """
         if not self.config.enabled:
             return None
-
         # Check cooldown - support both async and sync contexts
         if self.state == WakeWordState.COOLDOWN:
-            # Check if cooldown has expired (for sync context)
             if self._cooldown_end_time and time.time() >= self._cooldown_end_time:
                 self.state = WakeWordState.LISTENING
                 self._cooldown_end_time = None
             else:
                 logger.debug("In cooldown period, ignoring detection")
                 return None
+        event = self.match_text(text, confidence)
+        if event:
+            self._on_detection(event)
+        return event
 
+    def match_text(self, text: str, confidence: float = 1.0) -> WakeWordEvent | None:
+        """Evaluate *text* against the wake words without changing any detector state.
+
+        Reads config and adaptive thresholds only -- never cooldown, stats, history
+        or callbacks -- so POST /check cannot hold the shared detector in cooldown or
+        plant detections that /feedback then trains on (#16247).
+        """
+        if not self.config.enabled:
+            return None
         text_lower = text.lower().strip()
-
         for wake_word in self.config.wake_words:
             wake_word_lower = wake_word.lower()
-
-            # Check if wake word is in the text
-            if self._contains_wake_word(text_lower, wake_word_lower):
-                # Get adaptive threshold for this wake word
-                threshold = self._adaptive_thresholds.get(wake_word_lower, self.config.confidence_threshold)
-
-                # Calculate effective confidence
-                effective_confidence = self._calculate_effective_confidence(text_lower, wake_word_lower, confidence)
-
-                if effective_confidence >= threshold:
-                    event = WakeWordEvent(
-                        wake_word=wake_word,
-                        confidence=effective_confidence,
-                        timestamp=time.time(),
-                        metadata={
-                            "original_text": text,
-                            "threshold_used": threshold,
-                            "detection_method": "text_matching",
-                        },
-                    )
-
-                    # Update stats and trigger callbacks
-                    self._on_detection(event)
-                    return event
-                else:
-                    logger.debug(
-                        f"Wake word '{wake_word}' found but confidence "
-                        f"{effective_confidence:.2f} < threshold {threshold:.2f}"
-                    )
-
+            if not self._contains_wake_word(text_lower, wake_word_lower):
+                continue
+            threshold = self._adaptive_thresholds.get(wake_word_lower, self.config.confidence_threshold)
+            effective_confidence = self._calculate_effective_confidence(text_lower, wake_word_lower, confidence)
+            if effective_confidence >= threshold:
+                return WakeWordEvent(
+                    wake_word=wake_word,
+                    confidence=effective_confidence,
+                    timestamp=time.time(),
+                    metadata={"original_text": text, "threshold_used": threshold, "detection_method": "text_matching"},
+                )
+            logger.debug(
+                f"Wake word '{wake_word}' found but confidence {effective_confidence:.2f} < threshold {threshold:.2f}"
+            )
         return None
 
     def _contains_wake_word(self, text: str, wake_word: str) -> bool:

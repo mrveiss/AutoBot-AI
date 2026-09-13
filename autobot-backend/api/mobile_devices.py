@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user, require_device_jwt
+from autobot_shared.auth.device_capabilities import NO_CAPABILITIES_JSON
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
@@ -312,6 +313,57 @@ async def get_device_identity(
         scope=str(device_user.get("scope", "read")),
         last_seen_at=device.last_seen_at.isoformat(),
     )
+
+
+@router.post("/{device_id}/revoke", status_code=status.HTTP_204_NO_CONTENT)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="revoke_device",
+    error_code_prefix="MOBILE_DEVICE",
+)
+async def revoke_device(
+    device_id: uuid.UUID,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Soft-revoke one paired device (#14964).
+
+    Distinct from ``DELETE /{device_id}``, which unpairs by deleting the row.
+    Revocation keeps the record — the pairing history and anything referencing
+    the device survive — while denying the credential every capability and
+    every future authentication. Scoped to one row, so the user's other
+    devices are untouched.
+
+    Takes effect on the **next** handshake: ``validate_device_jwt`` reads this
+    per authentication, and the existence cache is invalidated here so there is
+    no TTL to wait out. A session already established stays up until it closes;
+    a running socket is never re-authenticated.
+
+    Idempotent — revoking an already-revoked device keeps the original
+    ``revoked_at`` rather than moving the recorded time.
+    """
+    user_id: str = str(current_user.get("id") or current_user.get("user_id", ""))
+
+    result = await session.execute(
+        select(MobileDevice).where(
+            MobileDevice.id == device_id,
+            MobileDevice.user_id == user_id,
+        )
+    )
+    device = result.scalar_one_or_none()
+    if device is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+
+    if device.revoked_at is None:
+        device.revoked_at = now_utc()
+        device.permissions = NO_CAPABILITIES_JSON
+        await session.commit()
+
+    from services.device_jwt import invalidate_device_cache
+
+    await invalidate_device_cache(str(device_id))
+
+    logger.info("Mobile device %s revoked for user %s", device_id, user_id)
 
 
 @router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)

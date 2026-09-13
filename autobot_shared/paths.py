@@ -1,3 +1,7 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
 """Canonical project-root resolution for Python code (#13149).
 
 Every call site used to paste the shell placeholder
@@ -22,6 +26,8 @@ one implementation rather than two that can drift.
 from __future__ import annotations
 
 import os
+import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
+from collections.abc import Mapping
 from pathlib import Path
 
 #: Markers that identify a source checkout root and nothing below it. Both must
@@ -187,3 +193,158 @@ def resolve_project_root(start: Path) -> Path:
             else ""
         )
     )
+
+
+#: Git variables a hook exports into every process it starts. With ``GIT_DIR``
+#: set and ``GIT_WORK_TREE`` unset — exactly what a ``pre-commit``/``pre-push``
+#: hook hands its children — git treats the **current directory** as the work
+#: tree, so ``rev-parse --show-toplevel`` answers with wherever the caller
+#: happens to be rather than the repository root.
+#:
+#: The answer is wrong without being an error, which is the whole reason this
+#: is a named constant rather than a line inside one caller: a guard that
+#: resolves the wrong root reads a different (usually empty) set of files and
+#: reports clean. #15018 hit the raising half of that — ``pytest.ini`` read from
+#: ``repo_tests/`` and ``FileNotFoundError`` — and #15176 measured the silent
+#: half: two pre-commit guards printed their success line having inspected
+#: nothing at all.
+#:
+#: Measured on git 2.34.1 rather than assumed. A hook run in a **git worktree**
+#: -- this repository's entire workflow -- is handed
+#: ``GIT_DIR=<main>/.git/worktrees/<name>`` with no ``GIT_WORK_TREE``, for both
+#: ``pre-commit`` and ``pre-push``; a hook in a plain checkout on that version is
+#: handed neither. Git also chdirs the hook to the worktree top level, even when
+#: the user ran ``git commit`` from a subdirectory, so the *hook itself* still
+#: gets the right answer. What breaks is anything the hook then runs from
+#: somewhere else -- a helper passing ``cwd=``, a test module, a CI step
+#: invoking a guard directly. That is the whole distance between "correct today"
+#: and "correct".
+#: The two object-directory variables joined the list in #15783, measured on
+#: git 2.34.1 the same way the rest were. In a repository that does NOT contain
+#: an object, ``git cat-file -p <sha>`` exits 128 ("Not a valid object name");
+#: with either variable pointing at another repository's ``objects``, the same
+#: command exits **0 and prints that repository's content**. Both are therefore
+#: the ``GIT_DIR`` shape — a wrong answer with a successful exit — and neither
+#: is the loud failure they are sometimes assumed to be, which is why both are
+#: listed rather than only the one that looks more obviously dangerous.
+AMBIENT_GIT_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+)
+
+
+class GitRepoRootUnavailable(RuntimeError):
+    """``git rev-parse --show-toplevel`` could not name a repository root.
+
+    Raised rather than returning ``None`` so a caller has to decide what an
+    absent root means for it: the tooling scripts exit fatally, the pytest
+    guards skip. Both are correct answers; silently continuing with a
+    plausible-looking wrong path is not (#14544 records what that costs).
+    """
+
+
+def scrubbed_git_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """*env* (default :data:`os.environ`) minus every :data:`AMBIENT_GIT_VARS` entry.
+
+    Use for **any** git subprocess whose answer depends on the work tree, not
+    only ``rev-parse``: ``ls-files`` inherits the same confusion, and so does
+    ``status``.
+
+    THE FAMILY THIS ENDS (#15783)
+    -----------------------------
+    Four independent fixes were written for one defect before anything gated
+    it, each correct and local, none of them preventing the next:
+
+    * #13882 / #13983 — ``code_evolution_miner.git_env()``: a crawler reported
+      another repository's history.
+    * #15176 — two pre-commit guards resolved the wrong root and printed their
+      success line having inspected nothing.
+    * #15245 / #15303 — the same in shell root resolution.
+    * #15777 — a destructive-delete guard's ``git status`` answered about a
+      different tree. That one is the sharpest: the others produced a wrong
+      *answer*, this produced a wrong *permission*, because a guard that asks
+      "is this tree clean?" and hears "yes" about somewhere else does not fail
+      — it consents.
+
+    WHOLESALE VS DENYLIST, DECIDED ONCE
+    -----------------------------------
+    This helper strips the four variables measured to override ``-C``/``cwd=``.
+    A caller that also clones, fetches or authenticates has no reason to keep
+    the rest either, and may narrow further to every ``GIT_`` name — that is
+    what ``code_evolution_miner.git_env()`` does, composing this function
+    rather than repeating it. What is *not* acceptable is a fifth hand-written
+    list: #13882 found one of seven names beside one of nine, both correct for
+    the failure already seen and silently short for the next.
+
+    ``tools/lint/check_git_toplevel_env_scrubbed.py`` is the gate that makes a
+    sixth recurrence a blocked commit rather than a later incident.
+    """
+    source = os.environ if env is None else env
+    return {key: value for key, value in source.items() if key not in AMBIENT_GIT_VARS}
+
+
+def strict_git_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """*env* minus **every** ``GIT_`` variable, not only the ambient four.
+
+    :func:`scrubbed_git_env` answers "which repository does git act on"; this
+    answers "what else can the environment make git do". They are different
+    questions and the second one only matters for a subset of callers -- but
+    that subset is the dangerous one:
+
+    * ``GIT_CONFIG_COUNT`` / ``GIT_CONFIG_KEY_n`` / ``GIT_CONFIG_VALUE_n`` set
+      arbitrary config for the child, including ``core.sshCommand`` -- which is
+      a command git then executes
+    * ``GIT_SSH_COMMAND`` and ``GIT_PROXY_COMMAND`` redirect transport. This
+      repository already classifies the first as a hijack variable and strips it
+      from executed environments (``services/execution/env_sanitizer.py``)
+    * ``GIT_NAMESPACE`` silently changes which refs a fetch or push sees
+
+    So anything that fetches, pulls, or resolves refs over a transport uses this
+    rather than the ambient scrub (#15783 review, CWE-15). It is a prefix rule,
+    not a list, because a denylist of these is the mistake #13882 already made
+    once: git gains variables between releases and the list is only ever
+    extended one incident at a time.
+
+    Wholesale is safe for that subset because none of them commit: stripping
+    ``GIT_AUTHOR_*`` / ``GIT_COMMITTER_*`` costs nothing when nothing authors.
+    SSH agent auth is unaffected -- ``SSH_AUTH_SOCK`` is not a ``GIT_`` name.
+    """
+    return {key: value for key, value in scrubbed_git_env(env).items() if not key.startswith("GIT_")}
+
+
+def git_repo_root(start: Path | str | None = None) -> Path:
+    """Repository root containing *start*, asked of git with the environment scrubbed.
+
+    *start* is the directory the question is asked from (default: the process
+    working directory). It selects which checkout answers — this repository's
+    workflow runs from worktrees, so "the repository root" is genuinely
+    caller-relative — while :data:`AMBIENT_GIT_VARS` scrubbing is what stops an
+    inherited hook environment from turning that directory into the answer.
+
+    Deliberately git-driven rather than :func:`project_root`: every caller here
+    goes on to run ``git ls-files`` against the result, so the root and the file
+    enumeration must come from the same checkout. Resolving the root by walking
+    for markers and then enumerating with git is two answers that can disagree.
+
+    Raises:
+        GitRepoRootUnavailable: git is absent, failed, or named nothing.
+    """
+    try:
+        result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=None if start is None else str(start),
+            env=scrubbed_git_env(),
+            check=False,
+        )
+    except OSError as exc:  # git not installed, or *start* is not a directory
+        raise GitRepoRootUnavailable(f"could not run git rev-parse: {exc}") from exc
+    if result.returncode != 0 or not result.stdout.strip():
+        raise GitRepoRootUnavailable(f"git rev-parse --show-toplevel exit {result.returncode}: {result.stderr.strip()}")
+    return Path(result.stdout.strip())

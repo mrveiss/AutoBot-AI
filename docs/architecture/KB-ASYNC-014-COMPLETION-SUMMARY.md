@@ -1,5 +1,11 @@
 # KB-ASYNC-014: Timeout Configuration Centralization - Completion Summary
 
+> **Correction (2026-08-30, #15206):** this document names `unified_config` / `unified_config_manager` / `UnifiedConfigManager` as current or pending. That name is a **deprecated alias** (`autobot-backend/config/__init__.py:148-157`) or, for the module path specifically, never existed. The canonical configuration entry point is `autobot_shared/ssot_config.py` (infrastructure/SSOT) plus `config_manager` / `get_config_manager()` from `config.manager` (`autobot-backend/config/manager.py:51`) for everything else. See `docs/developer/SSOT_CONFIG_GUIDE.md`. Historical content below is otherwise unchanged.
+
+
+> **Freshness:** historical — 2026-08-30. Completion record, not architecture; relocation out of `docs/architecture/` is #15191's scope (overloaded-name / feature-record problem), tracked there.
+
+
 **Status:** ✅ **COMPLETE**
 **Date:** 2025-10-10
 **Implementation Time:** 1 day (as planned)
@@ -358,7 +364,7 @@ If issues arise, rollback is simple:
 ## Related Work
 
 **Design Document:**
-[`docs/architecture/TIMEOUT_CONFIGURATION_PROMETHEUS_METRICS_DESIGN.md`](TIMEOUT_CONFIGURATION_PROMETHEUS_METRICS_DESIGN.md)
+[`docs/design/TIMEOUT_CONFIGURATION_PROMETHEUS_METRICS_DESIGN.md`](../design/TIMEOUT_CONFIGURATION_PROMETHEUS_METRICS_DESIGN.md)
 
 **Assessment Document:**
 [`planning/tasks/async-optimization-follow-up-assessment.md`](../../planning/tasks/async-optimization-follow-up-assessment.md)

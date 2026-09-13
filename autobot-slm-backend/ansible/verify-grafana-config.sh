@@ -101,6 +101,10 @@ else
     echo ""
     echo "To fix, run:"
     echo "  cd autobot-slm-backend/ansible"
-    echo "  ansible-playbook playbooks/deploy-slm-manager.yml -i inventory.ini --tags grafana"
+    # #15659: this hint named "inventory.ini", which has never existed under
+    # this directory -- only inventory.yml and the one-time
+    # inventory-grafana-migration.ini do. inventory.yml is this play's real
+    # default inventory.
+    echo "  ansible-playbook playbooks/deploy-slm-manager.yml -i inventory.yml --tags grafana"
     exit 1
 fi

@@ -1,5 +1,7 @@
 # Terminal System Architecture Diagram
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 **AutoBot Terminal Integration - Complete Overview**
 
 ---
@@ -15,6 +17,19 @@
 │  2. Chat Terminal   - AI chat-integrated terminal with approval workflow   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Authentication and ownership (#14960, #14961):** every `/api/terminal/ws/{id}`
+handshake below is authenticated before `accept()` (a JWT via `?token=`, an
+`Authorization` header, a session header, or the internal-service key), and
+the connecting caller must own the session -- stamped at creation by
+whichever REST endpoint created it (`POST /api/terminal/sessions` for Tools
+Terminal, `POST /api/agent-terminal/sessions` for Chat Terminal). A
+session_id that was never created, or that belongs to a different caller,
+is rejected outright; neither a default terminal nor a default security
+level is ever substituted for one. The deprecated SSH endpoint
+(`/api/terminal/ws/ssh/{host_id}`, not diagrammed here) additionally
+requires admin role (#14991) -- there is no per-host permission model to
+scope a `host_id` against a caller more finely.
 
 ---
 
@@ -586,7 +601,7 @@ AutoBot/
 │
 └── docs/architecture/
     ├── TERMINAL_ARCHITECTURE_DIAGRAM.md  ← This file
-    └── TERMINAL_CONSOLIDATION_ANALYSIS.md
+    └── ../analysis/ANA_terminal-consolidation-2025-11-09.md
 ```
 
 ---

@@ -5,6 +5,8 @@ date: 2026-06-04
 
 # Agent Terminal Service — Architecture
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 The Agent Terminal Service provides PTY-based command execution with security controls, session persistence, approval workflows, and audit logging.
 
 **Location:** `autobot-backend/services/agent_terminal/`

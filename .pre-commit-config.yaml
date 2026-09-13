@@ -27,6 +27,14 @@ repos:
   # after any shebang / coding line), de-dupes the legacy "Copyright (c)"
   # line, and skips vendored/generated/.vue/workflow/infrastructure paths
   # (scope identical to the original sweep — see EXCLUDE_RE in the script).
+  #
+  # No --all here, on purpose (#15817). --all is the tree-wide mode and it
+  # carries SPDX_FLOOR, a reach floor bound to files examined; pre-commit
+  # passes only the staged files, so a floor on this path would fail every
+  # one-file commit. The tree-wide floored run belongs to CI — see the
+  # "Enforce SPDX/Apache-2.0 license header" step in enforce-precommit.yml.
+  # --fix is also exempt from the "examined nothing" error for the same
+  # reason: it is an action, not a verdict.
   - repo: local
     hooks:
       - id: insert-license
@@ -69,23 +77,31 @@ repos:
         # needed is the hook below, not a hole in this line.
         exclude: ^(tests/|autobot-infrastructure/|autobot-backend/code_analysis/)
 
-      # #14405 -- undefined names ARE production defects, wherever they live.
+      # #14405, #15914 -- undefined names ARE production defects, wherever they live.
       # `autobot-infrastructure/` sat behind the exclude above with nothing else
       # linting it (no CI flake8 invocation passes the tree either), and 12 operator
-      # scripts accumulated 103 undefined names -- live NameErrors, not style. This
-      # hook carves that one subtree back in for F821 alone, so the gate is clean
-      # today with no exemption list to grandfather the very defect it guards. The
-      # other codes there (E501, F841, F401, F541, E741) stay excluded as a separate
+      # scripts accumulated 103 undefined names -- live NameErrors, not style.
+      #
+      # #14405 carved back that ONE subtree, and #15914 is what that cost: five
+      # classes in `autobot-backend/code_analysis/` -- the second tree named in the
+      # exclude above -- each kept a `self.config = config` whose import had been
+      # dropped, so every construction raised NameError for six to nine months.
+      # `CodeQualityDashboard` and its three entry-point scripts were never runnable
+      # in this repo. A carve-back scoped to where the defect was found can only
+      # cover the instance already known about, so this hook now carries NO scope at
+      # all: every Python file pre-commit sees, F821 alone.
+      #
+      # The other codes (E501, F841, F401, F541, E741) stay excluded as a separate
       # cosmetic backlog. `--isolated` skips .flake8, whose `count`/`statistics`/
-      # `show-source` settings exist for the hook above's human output.
-      # tools/lint/check_infra_scripts_undefined_names.py --audit re-proves from the
-      # REQUIRED code-quality check that this hook still reaches the tree, because a
+      # `show-source` settings exist for the hook above's human output -- and whose
+      # own `exclude` list would otherwise re-apply the very holes this hook closes.
+      # tools/lint/check_undefined_names.py --audit re-proves from the REQUIRED
+      # code-quality check that this hook still reaches EVERY tracked file, because a
       # regression here lints fewer files and would make every lint job look greener.
       - id: flake8
-        alias: flake8-infra-scripts-undefined-names
-        name: flake8 F821 (autobot-infrastructure/shared/scripts) (#14405)
+        alias: flake8-undefined-names
+        name: 'flake8 F821 (whole repo) (#14405, #15914)'
         args: [--isolated, --select=F821]
-        files: ^autobot-infrastructure/shared/scripts/.*\.py$
 
   # Remove unused imports and variables with autoflake
   - repo: https://github.com/PyCQA/autoflake
@@ -276,6 +292,50 @@ repos:
         stages: [pre-commit]
         description: "A ${AUTOBOT_*_PORT:-N} fallback that disagrees with ssot_config.py points at the wrong service whenever the shell library fails to load"
 
+      # #15176: six guards resolved the repository root with `git rev-parse
+      # --show-toplevel` and no scrub of the git environment. A hook exports
+      # GIT_DIR and no GIT_WORK_TREE, so git calls the caller's CWD the work
+      # tree and the flag answers with the CWD -- silently. Three of the six
+      # were hook entries; two of those printed their success line having
+      # inspected nothing, one of them over a deliberately planted violation.
+      # #15245 extended the same scanner to shell (text-based, not AST) after
+      # sixteen more sites turned up there.
+      # #15776: 80 of 90 migrations drop a column, table or constraint, and
+      # nothing read migrations/versions/ at all. The five most recent already
+      # carry a NO DATA LOSS statement voluntarily, so this enforces the
+      # convention on new work rather than retrofitting 75 historic files: the
+      # floor is a single revision, not an allowlist that can outlive its fix.
+      - id: destructive-migration-marker
+        name: "A destructive migration must say why no data is lost (#15776)"
+        entry: tools/lint/check_destructive_migration_marker.py
+        language: python
+        files: ^autobot-backend/migrations/versions/.*\.py$
+        stages: [pre-commit]
+        description: "drop_column/drop_table/drop_constraint at or above the convention floor needs a NO DATA LOSS statement naming what it touches and why nothing is lost"
+
+      - id: git-toplevel-env-scrubbed
+        name: "Asking git for the repo root must scrub GIT_DIR first (#15176, #15245)"
+        entry: tools/lint/check_git_toplevel_env_scrubbed.py
+        language: python
+        files: \.(py|sh)$
+        stages: [pre-commit]
+        description: "An inherited GIT_DIR makes --show-toplevel answer with the caller's CWD; resolve the root with autobot_shared.paths.git_repo_root() (Python) or scripts/lib/git-root.sh's git_repo_root() (shell)"
+
+      # #15246: a test that shells out to `git init`/`add`/`commit`/`checkout`/
+      # etc. in a tmp_path fixture, with subprocess.run's default of inheriting
+      # os.environ, does not touch that fixture at all under the pre-push hook
+      # -- it writes to whatever GIT_DIR names, which is the pushing worktree's
+      # own git directory. autobot_shared/paths_test.py did exactly that and
+      # dropped 86 tracked files from the live index (#15243 fixed the
+      # instance; this gates the class).
+      - id: git-write-env-scrubbed
+        name: "A test's git write must scrub GIT_DIR first (#15246)"
+        entry: tools/lint/check_git_write_env_scrubbed.py
+        language: python
+        files: (_test\.py|(^|/)test_[^/]+\.py)$
+        stages: [pre-commit]
+        description: "An inherited GIT_DIR makes a test fixture's git init/add/commit/etc. write to the real repository instead of tmp_path; pass env=scrubbed_git_env()"
+
       # #14228: autobot-backend/requirements.txt ends with `-r ../requirements.txt`,
       # so pip sees both files as one set and aborts when the same distribution
       # arrives with different specifiers. openpyxl and python-pptx did exactly
@@ -451,10 +511,16 @@ repos:
       - id: no-local-schemas
         name: Block local BaseModel definitions in non-schema API files (#6056)
         entry: tools/lint/check_no_local_schemas.py
+        # --changed-lines-only (#16178): judge the models this commit ADDED, read
+        # from the staged diff. Whole-file, a one-line edit to a legacy module failed
+        # the commit for a model it never touched, and every original domain
+        # schemas_*.py is frozen at its size ceiling, so the fix it asked for was
+        # impossible. A direct run of the hook still reads whole files.
+        args: [--changed-lines-only]
         language: python
         files: ^autobot-backend/api/(?!schemas_).*\.py$
         stages: [pre-commit]
-        description: "Move BaseModel subclasses to domain schemas_*.py files (#6056)"
+        description: "New BaseModel subclasses go in a schemas_*.py module with headroom (#6056, #16178)"
 
   # AutoBot custom: regression-prevention for #6558 (decorator order) +
   # #6633 (stacked-duplicate). In Python ``@A @B def f`` ≡ ``f = A(B(f))``;
@@ -543,6 +609,26 @@ repos:
         exclude: (code_analysis/|_test\.py|\.e2e_test\.py|\.integration_test\.py|\.performance_test\.py|conftest\.py)$
         additional_dependencies: ["bandit[toml]"]
 
+  # Secret scanning over EVERY staged file, any extension, root and extensionless
+  # dotfiles included (#16275). There is deliberately no `files`, `types` or
+  # `exclude` here: upstream declares `files: .*`, and the only filter left is this
+  # config's top-level `exclude`, which matches no tracked file. Findings are
+  # compared with .secrets.baseline, whose every entry carries an audited verdict.
+  # detect-secrets does not see a bare key file (it reads quoted strings), so the
+  # Fernet/PEM shape is checked in CI by pipeline-scripts/tracked_key_material.py.
+  # repo_tests/no_tracked_key_material_test.py holds the rev equal to the CI
+  # install in security.yml and to the baseline's "version".
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        # #16343: one process at a time. Upstream's manifest sets no
+        # require_serial, so pre-commit ran this hook in parallel batches that each
+        # rewrote .secrets.baseline and raced. The last writer won, and a large
+        # commit (any base merge) failed on every attempt.
+        require_serial: true
+
   # Block commits when branch is shared with a worktree (Issue #1654)
   # Must run BEFORE the stash/restore cycle to prevent branch corruption.
   - repo: local
@@ -557,7 +643,7 @@ repos:
         description: "Blocks commits when current branch is also checked out in another worktree"
 
   # Enforce branching discipline: block direct commits on protected branches (Issue #4113)
-  # Prevents commits to main/master; all work flows through Dev_new_gui
+  # Prevents commits to release/master; all work flows through main
   - repo: local
     hooks:
       - id: target-branch-guard
@@ -567,7 +653,7 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
-        description: "Blocks direct commits on main/master (protected branches); all commits flow through Dev_new_gui"
+        description: "Blocks direct commits on release/master (protected branches); all commits flow through main"
 
   # Detect mass file deletions that indicate stash-handling bugs (Issue #4111)
   - repo: local
@@ -664,7 +750,9 @@ repos:
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-function-length
         language: script
         types: [python]
-        pass_filenames: false
+        # Files are passed so a `--from-ref` run, which stages nothing, still has a
+        # change to judge; the checker scopes to the functions it touched (#16191).
+        pass_filenames: true
         stages: [pre-commit]
         description: "Blocks commits with functions >65 lines, warns for 51-65 lines"
 
@@ -691,6 +779,17 @@ repos:
         pass_filenames: true
         stages: [pre-commit]
         description: "Warns on new module-level singletons in agent/runtime paths — use SharedRuntimeBag instead"
+
+  # No analysis/design/plan documents under docs/architecture/ (Issues #15190, #15192, #15206)
+  - repo: local
+    hooks:
+      - id: no-doc-kind-in-architecture
+        name: 'No Analysis/Design/Plan Documents Under docs/architecture/ (Issues #15190, #15192, #15206)'
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-doc-kind-in-architecture
+        language: script
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks new *_ANALYSIS.md, *_DESIGN.md, *_IMPLEMENTATION_PLAN.md files under docs/architecture/ — they belong in docs/analysis|design|planning/"
 
   # No new /health routes outside api/system_health.py (Issue #3333)
   - repo: local
@@ -727,6 +826,18 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
         description: "Blocks new ad-hoc *Status(Enum) declarations outside autobot_shared/status_enums.py; lifecycle-shaped enums must use canonical TaskStatus/JobStatus/WorkflowStatus aliases"
+
+  # No cross-GUI duplicate composable/type outside the shared kit (Issues #14907, #14908)
+  - repo: local
+    hooks:
+      - id: no-cross-gui-duplicate
+        name: 'No Cross-GUI Duplicate Composable/Type Outside @autobot/ui (Issues #14907, #14908)'
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-cross-gui-duplicate
+        language: python
+        types_or: [ts, vue]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks a composable filename or a utils/types export name declared in both autobot-frontend and autobot-slm-frontend without going through libs/autobot-ui"
 
   # Lint GitHub Actions workflow files with actionlint (Issue #7083)
   - repo: https://github.com/rhysd/actionlint

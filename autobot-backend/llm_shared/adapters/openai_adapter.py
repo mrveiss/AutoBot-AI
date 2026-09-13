@@ -16,6 +16,7 @@ from typing import List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from services.provider_key_vault import resolve_provider_key
 
 from ..models import LLMRequest, LLMResponse
 from .base import (
@@ -38,7 +39,7 @@ class OpenAIAdapter(AdapterBase):
 
     def _get_api_key(self) -> str | None:
         """Resolve OpenAI API key from config or environment."""
-        return self.config.settings.get("api_key") or config.openai_api_key
+        return self.config.settings.get("api_key") or resolve_provider_key("OPENAI_API_KEY", config.openai_api_key)
 
     def _ensure_provider(self):
         """Lazily construct the canonical OpenAIProvider."""

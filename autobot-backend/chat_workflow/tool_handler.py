@@ -56,6 +56,7 @@ from chat_workflow.tool_dispatch_guards import (
     enforce_repetition,
     enforce_work_item_approval,
 )
+from chat_workflow.tool_permission_gate import permission_denial
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
@@ -2249,6 +2250,7 @@ class ToolHandlerMixin:
 
         Issue #665: Extracted from _process_tool_calls for single responsibility.
         Issue #654: Original respond tool handling logic.
+        #14529: ungated by decision — see chat_workflow/tool_permission_gate.
 
         Returns:
             Tuple of (message, break_loop_requested, respond_content)
@@ -2280,6 +2282,8 @@ class ToolHandlerMixin:
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
         ctx: "LLMIterationContext" | None = None,
+        session_id: str = "",
+        role: str = "user",
     ):
         """Handle the 'delegate' tool (Issue #657; GH#11207 execution).
 
@@ -2287,6 +2291,9 @@ class ToolHandlerMixin:
         record-only behaviour — no change to the live chat path. When on, it runs
         the subtask as a governed subagent (its ``forbidden_work`` constrains it) via
         the selected engine and returns the result. Yields WorkflowMessage(s).
+
+        #14529: gated on AGENT_EXECUTE, ABOVE the DELEGATION_ENABLED check
+        on purpose — below it, the permission would depend on a feature flag.
         """
         from chat_workflow.delegation import (
             DELEGATION_ENABLED,
@@ -2297,6 +2304,13 @@ class ToolHandlerMixin:
         params = tool_call.get("params", {})
         task = params.get("task", "")
         reason = params.get("reason", "Task delegation")
+
+        denial = await permission_denial(
+            "delegate", params, session_id, Permission.AGENT_EXECUTE.value, role, execution_results
+        )
+        if denial is not None:
+            yield denial
+            return
 
         if not DELEGATION_ENABLED:
             logger.info("[Issue #657] Delegate tool invoked (record-only): task=%s, reason=%s", task[:100], reason)
@@ -2500,20 +2514,12 @@ class ToolHandlerMixin:
 
         # Issue #4261/#14469: Wire BEFORE_TOOL_EXECUTE hook for web_search,
         # declaring the browser-read permission it requires.
-        should_execute = await _emit_before_tool_execute(
-            "web_search",
-            params,
-            session_id,
-            tool_permission=Permission.MCP_BROWSER_READ.value,
-            user_role=role,
+        # #14529: folded onto the shared gate; also gains the execution_results record.
+        denial = await permission_denial(
+            "web_search", params, session_id, Permission.MCP_BROWSER_READ.value, role, execution_results
         )
-        if not should_execute:
-            logger.info("[Issue #4261] Web search cancelled by hook")
-            yield WorkflowMessage(
-                type="error",
-                content="Web search execution cancelled",
-                metadata={"tool": "web_search", "cancelled_by_hook": True, "reason": "permission_denied"},
-            )
+        if denial is not None:
+            yield denial
             return
 
         try:
@@ -2583,21 +2589,10 @@ class ToolHandlerMixin:
         # this tool name on the MCP-registry path — no bridge_name here (this
         # is the builtin path), so only the exact-name lookup can hit.
         declared_permission = required_permission(tool_name)
-        should_execute = await _emit_before_tool_execute(
-            tool_name,
-            params,
-            session_id,
-            tool_permission=declared_permission.value if declared_permission else None,
-            user_role=role,
-        )
-        if not should_execute:
-            logger.info("[#14491] Web research tool %s cancelled by permission hook (role=%s)", tool_name, role)
-            execution_results.append({"tool": tool_name, "status": "error", "error": "permission_denied"})
-            yield WorkflowMessage(
-                type="error",
-                content=f"{tool_name} execution cancelled",
-                metadata={"tool": tool_name, "cancelled_by_hook": True, "reason": "permission_denied"},
-            )
+        perm = declared_permission.value if declared_permission else None
+        denial = await permission_denial(tool_name, params, session_id, perm, role, execution_results)
+        if denial is not None:
+            yield denial
             return
 
         yield WorkflowMessage(
@@ -2656,21 +2651,11 @@ class ToolHandlerMixin:
         # context, never from LLM-supplied params.
         user_id = _cctx.get("user_id")
 
-        should_execute = await _emit_before_tool_execute(
-            tool_name,
-            params,
-            session_id,
-            tool_permission=Permission.WORKFLOW_CREATE.value,
-            user_role=role,
+        denial = await permission_denial(
+            tool_name, params, session_id, Permission.WORKFLOW_CREATE.value, role, execution_results
         )
-        if not should_execute:
-            logger.info("[#14491] LLC tool %s cancelled by permission hook (role=%s)", tool_name, role)
-            execution_results.append({"tool": tool_name, "status": "error", "error": "permission_denied"})
-            yield WorkflowMessage(
-                type="error",
-                content=f"{tool_name} execution cancelled",
-                metadata={"tool": tool_name, "cancelled_by_hook": True, "reason": "permission_denied"},
-            )
+        if denial is not None:
+            yield denial
             return
 
         try:
@@ -2798,6 +2783,7 @@ class ToolHandlerMixin:
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
         session_id: str = "",
+        role: str = "user",
     ):
         """Dispatch the extract_content builtin. Issue #11540.
 
@@ -2805,10 +2791,19 @@ class ToolHandlerMixin:
         whatever page the browser session is already on — post-login,
         post-click, post-form-fill — so it works behind auth walls a fresh
         fetch could never reach.
+
+        #14529: gated on MCP_BROWSER_READ — the hook never fired here at all.
         """
         params = tool_call.get("params", {})
         goal = params.get("goal", "")
         logger.info("[Issue #11540] extract_content: goal=%s", goal[:100])
+
+        denial = await permission_denial(
+            "extract_content", params, session_id, Permission.MCP_BROWSER_READ.value, role, execution_results
+        )
+        if denial is not None:
+            yield denial
+            return
 
         yield WorkflowMessage(
             type="tool_execution",
@@ -2839,6 +2834,7 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
     ):
         """Re-read a window of a tool result that was spilled out of context (#13919).
+        #14529: ungated by decision — see chat_workflow/tool_permission_gate.
 
         #13692 writes oversized tool output aside and leaves a bounded excerpt
         plus an anchor, and the excerpt's note tells the model to call this tool.
@@ -3333,7 +3329,9 @@ class ToolHandlerMixin:
         if tool_name == "delegate":
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
-            async for msg in self._handle_delegate_tool(tool_call, execution_results, ctx):
+            async for msg in self._handle_delegate_tool(
+                tool_call, execution_results, ctx, session_id=session_id, role=role
+            ):
                 yield msg
             return
 
@@ -3416,10 +3414,11 @@ class ToolHandlerMixin:
         the shared gate. Adding a builtin that follows the standard gate takes a
         schema entry plus one row here — no new branch at the dispatch seam.
 
-        Issue #14469/#14491: ``role`` is forwarded to every handler that
-        declares a ``tool_permission`` (browser, web_search, execute_command,
-        web research) — live-page-extract/read_spilled_output remain
-        undeclared, tracked separately (#14491's per-branch table).
+        Issue #14469/#14491/#14529: ``role`` is forwarded to every handler
+        that declares a ``tool_permission`` — browser, web_search,
+        execute_command, web research, and now live-page-extract.
+        ``read_spilled_output`` stays undeclared by decision, not by omission;
+        the reasoning is on the handler itself.
         """
         if tool_name in BROWSER_TOOL_NAMES:  # Issue #1368: route to browser VM
             return self._handle_browser_tool(tool_call, execution_results, session_id, role=role)
@@ -3428,7 +3427,7 @@ class ToolHandlerMixin:
         if tool_name in WEB_RESEARCH_TOOL_NAMES:  # Issue #7509
             return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id, role=role)
         if tool_name in LIVE_PAGE_EXTRACT_TOOL_NAMES:  # Issue #11540
-            return self._handle_extract_content_tool(tool_call, execution_results, session_id)
+            return self._handle_extract_content_tool(tool_call, execution_results, session_id, role=role)
         if tool_name == "read_spilled_output":  # #13919: the excerpt's note names this
             return self._handle_read_spilled_output(tool_call, execution_results)
         if tool_name == "execute_command":
@@ -3607,7 +3606,7 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
         ctx: "LLMIterationContext | None",
     ):
-        """Handle the compose tool call — main chat agent only (GH#11568)."""
+        """Handle the compose tool call (GH#11568). #14529: ungated — see tool_permission_gate."""
         program: str = tool_call.get("params", {}).get("program", "")
         agent_id: str | None = ctx.agent_context.agent_id if (ctx and ctx.agent_context) else None
         subagent_msg = self._reject_delegated_compose(agent_id)

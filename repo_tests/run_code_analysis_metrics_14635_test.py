@@ -21,13 +21,13 @@ through -- not fallback constants.
 """
 
 import importlib.util
-import pathlib
 import re
 import sys
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _MODULE_PATH = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "run_code_analysis.py"
 _DASHBOARD_PATH = _REPO_ROOT / "autobot-backend" / "code_analysis" / "src" / "code_quality_dashboard.py"
 
@@ -40,9 +40,20 @@ def _load_module():
     """Import run_code_analysis by path -- its directory is not a package."""
     spec = importlib.util.spec_from_file_location("run_code_analysis_14635", _MODULE_PATH)
     module = importlib.util.module_from_spec(spec)
+    # The ``sys.modules`` entry exists only so ``exec_module`` can resolve the
+    # script's self-references; it is removed again immediately (#15076). Leaving
+    # it installed trips the session-finish leak guard (#13361), which fails the
+    # run *after* every test passes -- a failure with no failing test in the log.
+    previous = sys.modules.get("run_code_analysis_14635")
     sys.modules["run_code_analysis_14635"] = module
-    spec.loader.exec_module(module)
-    return module
+    try:
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        if previous is None:
+            sys.modules.pop("run_code_analysis_14635", None)
+        else:
+            sys.modules["run_code_analysis_14635"] = previous
 
 
 def _real_quality_metrics_keys() -> set:

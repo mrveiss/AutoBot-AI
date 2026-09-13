@@ -74,7 +74,7 @@ def _get_core_system_routers() -> Dict[str, RouterConfig]:
         ),
         "chat_consolidated": RouterConfig(
             name="chat_consolidated",
-            module_path="api.chat_consolidated",
+            module_path="api.chat",
             prefix="/api",
             tags=["chat", "consolidated", "all"],
             description=("CONSOLIDATED chat router with ALL functionality from 5 routers -" "ZERO functionality loss"),
@@ -89,7 +89,7 @@ def _get_core_system_routers() -> Dict[str, RouterConfig]:
         ),
         "cache": RouterConfig(
             name="cache",
-            module_path="api.cache",
+            module_path="api.cache_management",
             prefix="/api/cache",
             tags=["cache", "management"],
             description="Cache management and clearing operations",
@@ -111,7 +111,7 @@ def _get_core_system_routers() -> Dict[str, RouterConfig]:
         "websockets": RouterConfig(
             name="websockets",
             module_path="api.websockets",
-            prefix="",  # WebSocket routes don't use prefix
+            prefix="/api",  # routes carry their own /ws/... path below this
             tags=["websockets", "realtime"],
             description="WebSocket endpoints for real-time communication",
         ),
@@ -140,7 +140,7 @@ def _get_knowledge_and_ai_routers() -> Dict[str, RouterConfig]:
         "agent_config": RouterConfig(
             name="agent_config",
             module_path="api.agent_config",
-            prefix="/api/agent-config",
+            prefix="/api/agent_config",
             tags=["agent", "config"],
             description="Agent configuration and management",
         ),
@@ -162,7 +162,7 @@ def _get_knowledge_and_ai_routers() -> Dict[str, RouterConfig]:
         "intelligent_agent": RouterConfig(
             name="intelligent_agent",
             module_path="api.intelligent_agent",
-            prefix="/api/intelligent-agent",
+            prefix="/api/intelligent_agent",
             tags=["ai", "agent", "intelligence"],
             status=RouterStatus.LAZY_LOAD,  # Lazy load to avoid startup blocking
             description="Intelligent agent system for goal processing",
@@ -262,15 +262,15 @@ def _get_dev_workflow_routers() -> Dict[str, RouterConfig]:
         ),
         "batch": RouterConfig(
             name="batch",
-            module_path="api.batch",
-            prefix="/api/batch",
+            module_path="api.batch_jobs",
+            prefix="/api/batch-jobs",
             tags=["batch", "optimization"],
             description="Batch API endpoints for optimized initial loading",
         ),
         "research_browser": RouterConfig(
             name="research_browser",
             module_path="api.research_browser",
-            prefix="/api/research",
+            prefix="/api/research-browser",
             tags=["research", "browser", "automation"],
             status=RouterStatus.ENABLED,
             description="Browser automation for research tasks with user interaction support",
@@ -313,13 +313,13 @@ def _get_monitoring_routers() -> Dict[str, RouterConfig]:
         "service_monitor": RouterConfig(
             name="service_monitor",
             module_path="api.service_monitor",
-            prefix="/api/monitoring",
+            prefix="/api/service-monitor",
             tags=["monitoring", "services"],
             description="Real-time service monitoring and health checks",
         ),
         "infrastructure_monitor": RouterConfig(
             name="infrastructure_monitor",
-            module_path="api.infrastructure_monitor",
+            module_path="api.infrastructure",
             prefix="/api/infrastructure",
             tags=["monitoring", "infrastructure", "multi-machine"],
             status=RouterStatus.ENABLED,
@@ -338,7 +338,7 @@ def _get_monitoring_routers() -> Dict[str, RouterConfig]:
         "system_validation": RouterConfig(
             name="system_validation",
             module_path="api.system_validation",
-            prefix="/api/system_validation",
+            prefix="/api/system-validation",
             tags=["validation", "system", "testing"],
             description="Comprehensive system validation and integration testing",
         ),

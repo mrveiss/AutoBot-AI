@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Service Lifecycle Manager - Phase 1 Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -78,7 +80,7 @@ class TestSLMNodeModel:
         node = SLMNode(
             id="node-001",
             name="redis-vm",
-            ip_address="172.16.168.23",
+            ip_address="<database-ip>",
             state=NodeState.PENDING.value,
             current_role="redis",
             capability_tags=["can_be_redis", "has_ssd"],
@@ -97,7 +99,7 @@ class TestSLMNodeModel:
         node = SLMNode(
             id="node-002",
             name="frontend-vm",
-            ip_address="172.16.168.21",
+            ip_address="<frontend-ip>",
             state=NodeState.ONLINE.value,
         )
         db_session.add(node)
@@ -749,14 +751,14 @@ class TestSLMNodeCRUD:
 
     def test_get_node_by_name(self, slm_db):
         """Test retrieving node by name."""
-        slm_db.create_node(name="redis-vm", ip_address="172.16.168.23")
+        slm_db.create_node(name="redis-vm", ip_address="<database-ip>")
         node = slm_db.get_node_by_name("redis-vm")
         assert node is not None
-        assert node.ip_address == "172.16.168.23"
+        assert node.ip_address == "<database-ip>"
 
     def test_update_node_state(self, slm_db):
         """Test updating node state with transition logging."""
-        node = slm_db.create_node(name="frontend-vm", ip_address="172.16.168.21")
+        node = slm_db.create_node(name="frontend-vm", ip_address="<frontend-ip>")
         slm_db.update_node_state(
             node.id,
             NodeState.PENDING,
@@ -768,7 +770,7 @@ class TestSLMNodeCRUD:
 
     def test_state_transition_logged(self, slm_db):
         """Test that state transitions are logged."""
-        node = slm_db.create_node(name="npu-vm", ip_address="172.16.168.22")
+        node = slm_db.create_node(name="npu-vm", ip_address="<npu-ip>")
         slm_db.update_node_state(node.id, NodeState.PENDING, trigger="api")
 
         transitions = slm_db.get_state_transitions(node.id)
@@ -1474,7 +1476,7 @@ from src.slm.agent.health_collector import HealthCollector
 logger = logging.getLogger(__name__)
 
 # Default configuration
-DEFAULT_ADMIN_URL = "https://172.16.168.10:8443"
+DEFAULT_ADMIN_URL = "https://<slm-manager-ip>:8443"
 DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
 DEFAULT_BUFFER_DB = "/var/lib/autobot-agent/events.db"
 
@@ -1746,7 +1748,7 @@ mkdir -p ansible/roles/slm_agent/{tasks,templates,defaults,handlers}
 # ansible/roles/slm_agent/defaults/main.yml
 ---
 # SLM Agent configuration defaults
-slm_admin_url: "https://172.16.168.10:8443"
+slm_admin_url: "https://<slm-manager-ip>:8443"
 slm_heartbeat_interval: 30
 slm_agent_user: autobot
 slm_agent_group: autobot

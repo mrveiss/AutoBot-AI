@@ -79,7 +79,7 @@ backend_host: "<backend-ip>"  # eth2 only, instead of 0.0.0.0
 ```
 
 This makes local-loopback tests impossible but has no production impact since all
-legitimate clients connect via 172.16.168.x.
+legitimate clients connect via <network-subnet>.
 
 ### Option 2: nginx reverse proxy on .20 ✅ IMPLEMENTED (Issue #957)
 
@@ -123,6 +123,20 @@ networkingMode=nat
 
 Requires WSL2 restart (`wsl --shutdown`). Changes the entire WSL2 network stack
 and may affect other services.
+
+## Repair script
+
+`autobot-infrastructure/shared/scripts/network/fix-wsl-networking.sh` diagnoses and repairs the
+port forwarding described above: it checks what is listening, reconciles the frontend and backend
+ports against `network/network-config.sh`, and reports what it changed.
+
+```bash
+bash autobot-infrastructure/shared/scripts/network/fix-wsl-networking.sh
+```
+
+It is a manual operator tool — nothing calls it automatically, by design. Recorded here because it
+had no inbound reference of any kind, which is how a maintained tool becomes indistinguishable from
+debris (#15127).
 
 ## Background
 

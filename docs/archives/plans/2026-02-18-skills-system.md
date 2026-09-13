@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # AutoBot Skills System Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -2181,13 +2183,13 @@ Replace `#TBD` in all commits with the actual issue number:
 sudo systemctl restart autobot-backend
 
 # Wait for startup (~60s)
-ssh autobot@172.16.168.19 'curl -sk https://172.16.168.20:8443/api/skills/governance'
+ssh autobot@<slm-manager-ip> 'curl -sk https://<backend-ip>:8443/api/skills/governance'
 # Expected: {"mode": "semi_auto", "gap_detection_enabled": true, ...}
 
-ssh autobot@172.16.168.19 'curl -sk https://172.16.168.20:8443/api/skills/drafts'
+ssh autobot@<slm-manager-ip> 'curl -sk https://<backend-ip>:8443/api/skills/drafts'
 # Expected: []
 
-ssh autobot@172.16.168.19 'curl -sk -X POST https://172.16.168.20:8443/api/skills/repos \
+ssh autobot@<slm-manager-ip> 'curl -sk -X POST https://<backend-ip>:8443/api/skills/repos \
   -H "Content-Type: application/json" \
   -d "{\"name\":\"community\",\"url\":\"mcp://skills.example.com\",\"repo_type\":\"mcp\"}"'
 # Expected: {"id": "...", "name": "community", "status": "registered"}

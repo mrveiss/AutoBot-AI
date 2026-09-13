@@ -247,3 +247,63 @@ def test_the_role_rule_still_detects_the_same_values_as_before() -> None:
     assert _suggestions('MSG = {"role": "system"}')
     assert not _scan("MSG = {'role': CategoryDefaults.ROLE_USER}")
     assert not _scan('ROLE_USER = "user"')
+
+
+# ── #14073: the enum/union skip guard ───────────────────────────────────────
+#
+# The role and category rules exist to catch a hardcoded default -- a
+# `.get('role', 'user')` that pins a value the config should own. A Zod schema
+# declaring `role: z.enum(['user', 'assistant', 'system'])` is the opposite: a
+# declaration of the accepted values, which is what a rule set wants to see.
+# The pipe form `'user' | 'assistant'` was already skipped; the call form was
+# not, and tripped.
+#
+# Every fixture here is one the rule genuinely fires on without the guard --
+# checked by removing the guard and watching these fail. A fixture chosen
+# without that check passes whether or not the guard exists, which is how a
+# skip-guard test ends up proving nothing: an earlier draft of this block used
+# `const Role = z.enum(['user', 'admin'])`, which has no `role:` keyword and a
+# value outside the rule's set, so it never tripped the rule in the first place.
+
+
+def test_a_zod_enum_is_not_a_hardcoded_role() -> None:
+    """The exact line from the tracker schema that produced the baseline entry."""
+    line = "  role: z.enum(['user', 'assistant', 'system']),"
+    assert _scan(line, "autobot-frontend/src/schema.ts") == ""
+
+
+def test_a_zod_union_is_not_a_hardcoded_role() -> None:
+    line = "  role: z.union(['user', 'assistant']),"
+    assert _scan(line, "autobot-frontend/src/schema.ts") == ""
+
+
+def test_a_bare_enum_call_is_skipped_so_a_re_export_is_covered() -> None:
+    """The pattern matches `enum([` without the `z.` prefix on purpose: the
+    schema library is routinely imported under an alias or re-exported."""
+    line = "  role: enum(['user', 'assistant']),"
+    assert _scan(line, "autobot-frontend/src/schema.ts") == ""
+
+
+def test_a_genuine_role_default_still_reports() -> None:
+    """The direction that matters. If this stops firing, the guard has eaten
+    the rule and nothing else will say so."""
+    emitted = _scan("role = payload.get('role', 'user')")
+    assert emitted != "", (
+        "a hardcoded role default no longer reports -- the #14073 enum skip is "
+        "too broad and has disabled the rule it was meant to refine."
+    )
+
+
+def test_a_genuine_role_assignment_still_reports() -> None:
+    emitted = _scan("role: 'user',", "autobot-frontend/src/defaults.ts")
+    assert emitted != "", "a hardcoded role assignment no longer reports"
+
+
+def test_the_skip_needs_the_call_form_so_a_word_alone_is_not_enough() -> None:
+    """`enum` as a bare word must not disable the rule for the whole line.
+
+    The pattern requires `([` precisely so a comment or an identifier mentioning
+    an enum cannot wave a real default through.
+    """
+    emitted = _scan("role = cfg.get('role', 'user')  # not an enum, a default")
+    assert emitted != "", "the word 'enum' in a comment disabled the role rule"

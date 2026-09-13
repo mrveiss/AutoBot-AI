@@ -1,5 +1,8 @@
 # AutoBot Distributed 6-VM Architecture Setup Complete
 
+> **Freshness:** historical — 2026-08-30. Completion record ("SUCCESSFULLY CONFIGURED"), not architecture; see #15194 for the VM-count discrepancy this document is part of. Relocation out of `docs/architecture/` is #15191's scope.
+
+
 ## ✅ DISTRIBUTED ARCHITECTURE SUCCESSFULLY CONFIGURED
 
 AutoBot is now properly configured for the **6-VM distributed architecture** with the main WSL machine (<backend-ip>) serving as the **Backend API Coordinator**.

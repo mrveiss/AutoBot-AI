@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _ORCHESTRATOR = _REPO_ROOT / "autobot-slm-backend" / "services" / "sync_orchestrator.py"
 _REGISTRY = _REPO_ROOT / "autobot-slm-backend" / "services" / "role_registry.py"
@@ -129,6 +131,7 @@ def test_no_exclude_blocks_a_directory_that_is_source_for_some_role():
                     capture_output=True,
                     text=True,
                     check=False,
+                    env=scrubbed_git_env(),
                 )
                 if listing.returncode == 0 and listing.stdout.strip():
                     clashes.append(f"{entry.get('name')}: {relative}/ is tracked source but excluded")

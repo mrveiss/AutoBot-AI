@@ -29,7 +29,9 @@ import ast
 from pathlib import Path
 from typing import List
 
-_REPO = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+_REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
 
 _MODULE = _BACKEND / "orchestration" / "workflow_planner.py"
@@ -62,15 +64,32 @@ _WIRING_INSTRUCTIONS = (
 )
 
 
-def _production_sources() -> List[Path]:
-    """Backend .py files excluding tests and the deprecated module itself."""
+# #15350: `"tests"` is deliberately absent. Pruning by DIRECTORY name dropped
+# every file under a `tests/` tree, test or not — so a WorkflowPlanner call site
+# in a non-test helper there was invisible to a guard whose whole job is to find
+# call sites. The per-file name filter below (`_test.py` / `test_` prefix) is
+# what excludes actual tests, and it does so without hiding their neighbours.
+# The sibling guard `with_error_handling_single_definition_test.py` made this
+# same narrowing for #15258 and names this file as the one still to do it.
+_SKIP_PARTS = {"node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
+
+
+def _production_sources(root: Path = _BACKEND) -> List[Path]:
+    """Backend .py files excluding tests and the deprecated module itself.
+
+    `root` is a parameter so the exclusion can be exercised against a fixture
+    tree that itself lives under `.worktrees/` (#15121).
+    """
     skip_names = {_MODULE.name}
     out: List[Path] = []
-    for path in _BACKEND.rglob("*.py"):
+    for path in root.rglob("*.py"):
         name = path.name
         if name in skip_names or name.endswith("_test.py") or name.startswith("test_"):
             continue
-        if "/tests/" in path.as_posix() or "/node_modules/" in path.as_posix():
+        # Relative parts, not an absolute substring (#15121): a checkout under a
+        # directory named `tests` or `.worktrees` -- the mandated layout here --
+        # would otherwise match on the repo root and skip the whole tree.
+        if any(part in _SKIP_PARTS for part in path.relative_to(root).parts):
             continue
         out.append(path)
     return out
@@ -164,3 +183,64 @@ def test_deprecated_code_is_retained_in_full():
     defined = {n.name for n in planner.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
     missing = [m for m in _REQUIRED_METHODS if m not in defined]
     assert not missing, f"Deprecated-in-place module lost methods {missing}; code is retained, never deleted (#13751)"
+
+
+def test_a_checkout_under_worktrees_is_still_scanned(tmp_path):
+    """#15121: the exclusion keys on parts relative to the scan root.
+
+    An absolute-substring check matches the repo root itself in the mandated
+    `.worktrees/<branch>/` layout and skips every file, leaving the assertions
+    above iterating an empty list — a guard that passes because it looked at
+    nothing.
+    """
+    root = tmp_path / ".worktrees" / "issue-9999" / "tests" / "autobot-backend"
+    (root / "orchestration").mkdir(parents=True)
+    live = root / "orchestration" / "caller.py"
+    live.write_text("x = 1\n", encoding="utf-8")
+    (root / "node_modules").mkdir()
+    (root / "node_modules" / "vendored.py").write_text("y = 1\n", encoding="utf-8")
+
+    scanned = _production_sources(root)
+
+    assert scanned == [live], (
+        "a scan rooted under .worktrees/ and tests/ skipped its own tree — the "
+        "exclusion is matching the absolute path instead of relative parts"
+    )
+
+
+def test_a_non_test_helper_inside_a_tests_directory_is_still_scanned(tmp_path):
+    """#15350 contrast mutation: a call site in a non-test file under `tests/`.
+
+    Pruning `tests` by directory name dropped everything beneath it — test or
+    not — so a `WorkflowPlanner` reference in a helper module there was invisible
+    to the guard that exists to find references. Real instances of that shape
+    live at `autobot-backend/llc/tests/_e2e_harness.py` and
+    `autobot-infrastructure/shared/tests/mock_llm_interface.py`.
+
+    Narrowing the exclusion to file NAME means such a helper is scanned, while an
+    actual test file in the same directory stays excluded — the distinction the
+    per-file filter was already making and the directory filter was overriding.
+    """
+    root = tmp_path / "autobot-backend"
+    (root / "orchestration").mkdir(parents=True)
+    live = root / "orchestration" / "caller.py"
+    live.write_text("x = 1\n", encoding="utf-8")
+
+    helper_dir = root / "llc" / "tests"
+    helper_dir.mkdir(parents=True)
+    helper = helper_dir / "_e2e_harness.py"
+    helper.write_text("from orchestration import WorkflowPlanner\n", encoding="utf-8")
+    real_test = helper_dir / "test_something.py"
+    real_test.write_text("from orchestration import WorkflowPlanner\n", encoding="utf-8")
+    also_a_test = helper_dir / "harness_test.py"
+    also_a_test.write_text("from orchestration import WorkflowPlanner\n", encoding="utf-8")
+
+    scanned = _production_sources(root)
+
+    assert helper in scanned, (
+        "a non-test helper under tests/ was skipped — a WorkflowPlanner call site "
+        "placed there would never be reported"
+    )
+    assert real_test not in scanned, "an actual test file under tests/ must stay excluded"
+    assert also_a_test not in scanned, "the _test.py suffix must stay excluded too"
+    assert sorted(scanned) == sorted([live, helper])

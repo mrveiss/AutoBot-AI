@@ -1,5 +1,7 @@
 # Async Work — Unified Architecture
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 > Tracks the consolidation effort under umbrella issue [#6495](https://github.com/mrveiss/AutoBot-AI/issues/6495). This document is updated as each phase lands.
 >
 > - **Phase 1 — Task queues** ([#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505)): ✅ **COMPLETE** — all 7 `BackgroundTaskManager` callers migrated to Celery; `background_task_manager.py` deleted; `task_queue.py` retained as [#6468](https://github.com/mrveiss/AutoBot-AI/issues/6468) carve-out

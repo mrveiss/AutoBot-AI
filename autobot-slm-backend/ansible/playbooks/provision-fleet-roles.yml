@@ -36,8 +36,12 @@
 
   vars:
     github_repo: "https://github.com/mrveiss/AutoBot-AI.git"
-    git_repo_root: "/opt/autobot/code_source"
-    deploy_ref: "Dev_new_gui"
+    # #15705: the code_source checkout root, derived rather than restated.
+    # This is an alias for `code_source_dir` -- same directory, and the
+    # messages below already call it code_source -- so an explicit
+    # `code_source_dir` override steers it too.
+    git_repo_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
+    deploy_ref: "main"
 
   tasks:
     - name: "[PRE-FLIGHT] Verify code_source exists"
@@ -202,7 +206,7 @@
       tags: [always]
 
 # -------------------------------------------------------------------
-# Phase 0: Shared Dependencies (nginx, python314, nodejs)
+# Phase 0: Shared Dependencies (nginx, python_interpreter, nodejs)
 # Resolved from ROLE_DEPENDENCIES map via node_dependencies host var.
 # -------------------------------------------------------------------
 - name: "Provision Phase 0: Shared Dependencies"
@@ -210,11 +214,13 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
-  # for why this is needed (SLM-triggered provision uses temp inventory
-  # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "Deps | Install nginx"
@@ -225,13 +231,17 @@
       when: "'nginx' in (node_dependencies | default([]))"
       tags: ['deps', 'nginx']
 
-    - name: "Deps | Install Python 3.14"
+    # #13843: python_interpreter was renamed from python314. node_dependencies
+    # is computed FRESH every provisioning run from role_registry.ROLE_DEPENDENCIES
+    # (setup_wizard._compute_node_dependencies), never persisted, so checking only
+    # the new name here is safe -- unlike pending_dep_removals below.
+    - name: "Deps | Install Python interpreter"
       ansible.builtin.include_role:
-        name: python314
+        name: python_interpreter
         apply:
-          tags: ['deps', 'python314']
-      when: "'python314' in (node_dependencies | default([]))"
-      tags: ['deps', 'python314']
+          tags: ['deps', 'python_interpreter']
+      when: "'python_interpreter' in (node_dependencies | default([]))"
+      tags: ['deps', 'python_interpreter']
 
     - name: "Deps | Install Node.js"
       ansible.builtin.include_role:
@@ -250,7 +260,13 @@
       when: "'nginx' in (pending_dep_removals | default([]))"
       tags: ['deps', 'removal']
 
-    - name: "Deps | Remove Python 3.14 if marked for removal"
+    # #13843: pending_dep_removals comes from node.extra_data (api/nodes.py),
+    # which IS persisted -- an admin could have marked "python314" for removal
+    # before this rename shipped. Checked against both spellings so a stored
+    # pre-rename value is not silently ignored; the freshly-computed
+    # node_dependencies check above does not need this because it is never
+    # persisted.
+    - name: "Deps | Remove Python interpreter if marked for removal"
       ansible.builtin.apt:
         name:
           - python3.14
@@ -258,7 +274,9 @@
           - python3.14-dev
         state: absent
         purge: true
-      when: "'python314' in (pending_dep_removals | default([]))"
+      when: >-
+        'python_interpreter' in (pending_dep_removals | default([]))
+        or 'python314' in (pending_dep_removals | default([]))
       tags: ['deps', 'removal']
 
     - name: "Deps | Remove Node.js if marked for removal"
@@ -308,11 +326,13 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
-  # for why this is needed (SLM-triggered provision uses temp inventory
-  # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "Data | Deploy Redis role"
@@ -330,11 +350,13 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
-  # for why this is needed (SLM-triggered provision uses temp inventory
-  # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "App | Deploy backend role"
@@ -345,6 +367,29 @@
       # #7051: gate via shared role-active fact (group_vars/all.yml)
       when: role_backend_active | bool
       tags: ['backend', 'provision']
+
+    # #14866: the access control enforcement posture. Until this task existed,
+    # `deploy-access-control.yml` was the only playbook that included the
+    # access_control role and nothing invoked it, so no install-time path ever
+    # wrote feature_flag:access_control:enforcement_mode -- every install
+    # resolved the unset key and skipped every gated ownership check.
+    #
+    # Applied via `tasks_from` rather than as a whole role, matching the
+    # delivery contract #12959 established: the whole role also renders policy
+    # files, runs the ownership backfill and reads `groups['redis'][0]`, which
+    # is fatal on the temp inventories the wizard and node-add paths generate
+    # (they carry no `redis` group). enforcement_mode.yml contains no
+    # provisioning -- it runs one idempotent SET NX -- so it is safe on every
+    # inventory shape. The rest of the role stays reachable only from
+    # deploy-access-control.yml; see the follow-up issue.
+    - name: "App | Provision access control enforcement mode (#14866)"
+      ansible.builtin.include_role:
+        name: access_control
+        tasks_from: enforcement_mode
+        apply:
+          tags: ['access-control', 'enforcement', 'provision']
+      when: role_backend_active | bool
+      tags: ['access-control', 'enforcement', 'provision']
 
     - name: "App | Deploy VNC role"
       ansible.builtin.include_role:
@@ -372,11 +417,13 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
-  # for why this is needed (SLM-triggered provision uses temp inventory
-  # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "App | Deploy frontend role"
@@ -478,15 +525,31 @@
       when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
-    - name: "SLM | Rebuild SLM frontend with co-located API prefix (#3268)"
-      ansible.builtin.command:
-        cmd: npm run build
-        chdir: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
-      become_user: "{{ slm_user | default('autobot') }}"
-      environment:
-        VITE_API_URL: "/slm"
+    # #15557: this used to run a plain `npm run build` straight into the served
+    # dist/. Two defects in one task — `build:slm` is the canonical script (a
+    # plain build bakes the wrong API base, #9563/#9710/#10435), and vite empties
+    # the outDir first, so a failed build left nginx answering 403 for every
+    # /slm/ path with nothing failing the play. Both are fixed once, in
+    # roles/_shared/tasks/build_publish_slm_frontend.yml.
+    - name: "SLM | Rebuild and publish SLM frontend with co-located API prefix (#3268, #15557)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
+      vars:
+        slm_frontend_publish_label: "SLM"
+        slm_frontend_publish_dir: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
+        slm_frontend_publish_user: "{{ slm_user | default('autobot') }}"
       when: _is_slm_frontend_colocated | bool
-      changed_when: true
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    # #15557: fleet provisioning rebuilt the SLM tree and recorded nothing about
+    # which deployment produced it. This phase runs on the SLM manager host,
+    # which carries code_source, so the shared task resolves the commit there.
+    - name: "SLM | Record the deployed commit marker (#15557)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/record_slm_deployed_commit.yml
+      vars:
+        deployed_commit_label: "SLM"
+        deployed_commit_dir: "{{ slm_backend_dir | default(autobot.base_dir ~ '/autobot-slm-backend') }}"
+        deployed_commit_owner: "{{ slm_user | default('autobot') }}"
+      when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
     # #9933: In co-located mode the SLM nginx config (autobot-slm) owns the
@@ -529,11 +592,13 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
-  # for why this is needed (SLM-triggered provision uses temp inventory
-  # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "AI | Deploy AI stack role"
@@ -562,11 +627,13 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
-  # for why this is needed (SLM-triggered provision uses temp inventory
-  # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "AI | Deploy NPU worker role"
@@ -586,11 +653,13 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
-  # for why this is needed (SLM-triggered provision uses temp inventory
-  # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "AI | Deploy TTS worker role"
@@ -610,11 +679,13 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
-  # for why this is needed (SLM-triggered provision uses temp inventory
-  # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "LLM | Deploy LLM role (GPU auto-detected)"
@@ -634,11 +705,13 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
-  # for why this is needed (SLM-triggered provision uses temp inventory
-  # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "Auto | Deploy browser role"

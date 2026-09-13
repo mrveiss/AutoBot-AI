@@ -1,4 +1,7 @@
 # Code Vectorization and Semantic Analysis Architecture
+
+> **Freshness:** superseded — 2026-08-30. "Design Phase" is stale: the subsystem shipped — see `autobot-backend/api/codebase_analytics/`, `code_embedding_generator.py`, `npu_semantic_search.py`, `agents/npu_code_search_agent.py`, `api/codebase_analytics/duplicate_detector.py`.
+
 **Version**: 1.0
 **Date**: 2025-10-25
 **Status**: Design Phase

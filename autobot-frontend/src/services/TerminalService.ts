@@ -13,6 +13,8 @@ import appConfig from '@/config/AppConfig.js'
 import apiClient from '@/utils/ApiClient'
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
+import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
+import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
 
 const logger = createLogger('TerminalService')
 
@@ -117,6 +119,8 @@ interface WsMessage {
   prefix?: string
   common_prefix?: string
   commands?: string[]
+  /** #14995: RiskLevel on the wire — LOW/MEDIUM/HIGH/CRITICAL, never a raw CommandRisk. */
+  risk_level?: string
   matches?: string[]
   query?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -352,8 +356,16 @@ class TerminalService {
     this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTING)
     this.callbacks.set(sessionId, callbacks)
 
-    const wsUrl = `${this.baseUrl}/${sessionId}`
-    logger.debug(`Connecting to WebSocket: ${wsUrl}`)
+    // #14960: the backend now authenticates the handshake -- attach the JWT
+    // via the shared helper (#6700) rather than connecting unauthenticated.
+    const wsUrl = buildAuthenticatedWsUrl(`${this.baseUrl}/${sessionId}`)
+    if (wsUrl === null) {
+      logger.warn(`No auth token available, deferring terminal connect for session ${sessionId}`)
+      this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
+      this.triggerCallback(sessionId, 'onError', 'Not authenticated')
+      throw new Error('No auth token available for terminal WebSocket')
+    }
+    logger.debug(`Connecting to WebSocket: ${this.baseUrl}/${sessionId}`)
 
     this._validateWsUrl(wsUrl)
 
@@ -372,7 +384,10 @@ class TerminalService {
   /** Throw if the URL is not a valid WebSocket URL. */
   private _validateWsUrl(wsUrl: string): void {
     if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
-      throw new Error(`Invalid WebSocket URL: ${wsUrl}`)
+      // #14989: wsUrl carries the auth token (buildAuthenticatedWsUrl) --
+      // this message reaches logger.error('Failed to connect...', err) via
+      // _handleConnectCatchError, so it must not embed the raw value.
+      throw new Error(`Invalid WebSocket URL: ${redactUrlForLogging(wsUrl)}`)
     }
   }
 
@@ -438,9 +453,34 @@ class TerminalService {
     callbacks: TerminalCallbacks,
     reject: (reason: Error) => void,
   ): void {
+    // #14989: a close before this attempt ever reached CONNECTED is a
+    // handshake-level rejection -- unknown/unowned session, expired token,
+    // or a genuine network failure. The WHATWG WebSocket spec requires
+    // browsers to normalise the close code (and reason) to 1006 for any
+    // closure before the opening handshake completes, so `event.code`
+    // cannot distinguish "denied" from "offline" here -- that information
+    // is only available server-side. Retrying blindly against a session
+    // that will never be authorized produces the same 6-attempt storm
+    // regardless of cause, so this never auto-retries a connection that
+    // never connected; the caller (or an explicit user action) decides
+    // whether to try a different/new session.
+    const neverConnected =
+      this.getConnectionState(sessionId) === CONNECTION_STATES.CONNECTING
     this.cleanupSession(sessionId)
-    const attempts = this.reconnectAttempts.get(sessionId) ?? 0
 
+    if (neverConnected) {
+      this.reconnectAttempts.delete(sessionId)
+      this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
+      this.triggerCallback(
+        sessionId,
+        'onError',
+        'Connection rejected before it was established -- the session may be invalid, expired, or unauthorized',
+      )
+      reject(new Error(`WebSocket rejected before it was established (code ${event.code})`))
+      return
+    }
+
+    const attempts = this.reconnectAttempts.get(sessionId) ?? 0
     if (event.code !== 1000 && attempts < this.maxReconnectAttempts) {
       this.attemptReconnect(sessionId, callbacks)
     } else {
@@ -456,7 +496,11 @@ class TerminalService {
     reject: (reason: Error) => void,
   ): void {
     const err = error instanceof Error ? error : new Error(String(error))
-    logger.error(`Failed to connect to terminal session ${sessionId}:`, err)
+    // #14989: _validateWsUrl closes the wrong-scheme case, but not every
+    // WHATWG URL parse failure (unusual host, percent-encoding) -- a
+    // native new WebSocket() SyntaxError can still embed the raw
+    // token-bearing URL in .message, so redact defensively here too.
+    logger.error(`Failed to connect to terminal session ${sessionId}:`, redactErrorForLogging(err))
     this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
     this.triggerCallback(sessionId, 'onError', err.message)
     reject(err)
@@ -549,6 +593,9 @@ class TerminalService {
       case 'history_search':
         this._handleHistorySearch(sessionId, message)
         break
+      case 'security_warning':
+        this._handleSecurityWarning(sessionId, message)
+        break
       default:
         logger.warn(`Unknown message type: ${message.type}`, message)
     }
@@ -578,6 +625,31 @@ class TerminalService {
   private _handleErrorMessage(sessionId: string, msg: WsMessage): void {
     this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
     this.triggerCallback(sessionId, 'onError', msg.error || msg.content || '')
+  }
+
+  /**
+   * Surface a blocked command to the user (#14995).
+   *
+   * The backend sends this when it refuses to run a command. It was reaching
+   * the browser and being discarded: there was no case for it, so it fell to
+   * `default:` and was logged as an unknown type. The user saw their command
+   * do nothing, with no reason given.
+   *
+   * The decision this issue asked for is *handle*, not remove. Dropping a
+   * security refusal is the worse of the two options — the block still
+   * happens, and the only thing removal changes is whether the person who
+   * typed the command finds out why.
+   *
+   * Severity follows the wire value, which is now `RiskLevel` rather than a
+   * raw `CommandRisk`: a blocked destructive command arrives as CRITICAL and
+   * renders through `line-error`, never neutral output the eye skips.
+   */
+  private _handleSecurityWarning(sessionId: string, msg: WsMessage): void {
+    const critical = msg.risk_level === 'CRITICAL' || msg.risk_level === 'HIGH'
+    this.triggerCallback(sessionId, 'onOutput', {
+      content: msg.content || '',
+      stream: critical ? 'error' : 'warning',
+    })
   }
 
   /** Handle process exit notification. */

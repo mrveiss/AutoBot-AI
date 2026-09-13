@@ -769,16 +769,14 @@ class TestShellVarFamiliesWithNoPriorSsot14173:
 
 
 class TestNoHardcodedLiveInstallLiterals:
-    """Sweep guard (#14050 AC): no ``/opt/autobot`` Field default literal may
-    return to this file. A regex over the source, not an import-time check,
-    so it also catches new fields nobody wrote a dedicated test for."""
+    """Sweep guard (#14050 AC): no ``/opt/autobot`` Field default may return here, in any
+    spelling. Check: ``tools/lint/check_field_defaults.py`` (#14070)."""
 
     def test_no_field_default_hardcodes_the_live_install(self) -> None:
-        import re
-
         from autobot_shared import ssot_config
+        from tools.lint.check_field_defaults import FIELD_CALL_FLOOR, field_call_count, live_install_field_defaults
 
         source = Path(ssot_config.__file__).read_text(encoding="utf-8")
-        offenders = re.findall(r'default(?:_factory)?\s*=\s*"[^"]*/opt/autobot[^"]*"', source)
-
-        assert offenders == [], f"hardcoded /opt/autobot Field default(s) found: {offenders}"
+        reached = field_call_count(source)  # population floor FIRST -- see the message below
+        assert reached >= FIELD_CALL_FLOOR, f"the Field sweep reached only {reached} call(s) — it broke"
+        assert live_install_field_defaults(source) == []

@@ -465,12 +465,12 @@ class ErrorCatalog:
         backend's static dir in any layout that keeps ``utils/`` beside
         ``static/`` — which is every layout, because they ship together.
 
-        ``PATH.CONFIG_DIR`` is kept and its repo spelling added beside it: the
-        constant says ``infrastructure/shared/config`` and the directory in this
-        repository is ``autobot-infrastructure/shared/config``, so that
-        candidate has never resolved in a checkout. Fixing the constant is #14892
-        — it has nine other consumers whose behaviour is unverified, and this
-        loader must not depend on that being right.
+        ``PATH.CONFIG_DIR`` said ``infrastructure/shared/config`` while the
+        directory here is ``autobot-infrastructure/shared/config``, so that
+        candidate never resolved; #14892 corrected the constant. Both explicit
+        spellings stay: this loader must not depend on the constant being right,
+        deduplication makes the now-correct one free, and a deployed layout may
+        still use the bare ``infrastructure/`` spelling.
         """
         here = Path(__file__).resolve()
         backend_dir = here.parent.parent

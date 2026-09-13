@@ -36,17 +36,34 @@ import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
 
+# The scrubbed root resolver lives in ``autobot_shared``; this script is run
+# directly, so the import path is bootstrapped from this file's own location
+# -- the one derivation an inherited GIT_DIR cannot confuse (#15176).
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from autobot_shared.paths import (  # noqa: E402
+    GitRepoRootUnavailable,
+    git_repo_root,
+    scrubbed_git_env,
+)
+
 VAR = "autobot_ssh_key_path"
 _GUARDED = re.compile(rf"{VAR}\s*\|\s*default\(")
 
 
 def _repo_root() -> Path:
-    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, encoding="utf-8"
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        sys.exit(f"FATAL: cannot locate the repo root: {result.stderr.strip()}")
-    return Path(result.stdout.strip())
+    """Absolute repo root, with the ambient git environment scrubbed first.
+
+    Measured for #15176 before the scrub: run from ``repo_tests/`` with
+    ``GIT_DIR`` exported, this resolved the root to ``repo_tests/`` and died
+    with an uncaught ``FileNotFoundError`` on the first
+    ``roles/*/defaults/main.yml`` read — loud, but blaming a missing role
+    default rather than the root it was joined to.
+    """
+    try:
+        return git_repo_root()
+    except GitRepoRootUnavailable as exc:
+        sys.exit(f"FATAL: cannot locate the repo root: {exc}")
 
 
 def _tracked_yaml(root: Path) -> list[str]:
@@ -56,6 +73,9 @@ def _tracked_yaml(root: Path) -> list[str]:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        # Same scrub as the root: an inherited GIT_DIR would enumerate one
+        # checkout's index while *root* names another (#15176).
+        env=scrubbed_git_env(),
     )
     if result.returncode != 0:
         sys.exit(f"FATAL: git ls-files failed: {result.stderr.strip()}")

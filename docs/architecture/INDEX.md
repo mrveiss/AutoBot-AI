@@ -1,4 +1,7 @@
 # AutoBot Architecture Documentation Index
+
+> **Freshness:** historical — 2026-08-30. This is a sub-index for the code-vectorization document set, not a general architecture index (see `_index.md` for that). Every document it references is marked superseded — the subsystem shipped; see each file's freshness note. The implementation plan it links moved to `docs/planning/CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md`.
+
 **Last Updated**: 2025-10-25
 
 ---
@@ -53,7 +56,7 @@ Complete API documentation including:
 ---
 
 #### 4. Implementation Plan
-**File**: `CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md`
+**File**: `../planning/CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md`
 
 Detailed 8-week implementation roadmap including:
 - Phase-by-phase breakdown
@@ -165,7 +168,7 @@ CODE_VECTORIZATION_SUMMARY.md (Start Here)
     ├─→ CODE_VECTORIZATION_ARCHITECTURE.md (Technical Deep Dive)
     │   └─→ CODE_VECTORIZATION_DATA_FLOWS.md (Visual Flows)
     ├─→ CODE_VECTORIZATION_API.md (API Reference)
-    ├─→ CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md (Project Plan)
+    ├─→ ../planning/CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md (Project Plan)
     └─→ CODE_VECTORIZATION_PERFORMANCE_RISK.md (Operations Guide)
 ```
 
@@ -186,10 +189,10 @@ CODE_VECTORIZATION_SUMMARY.md (Start Here)
 ### For Developers
 1. Read `CODE_VECTORIZATION_SUMMARY.md` for overview
 2. Study `CODE_VECTORIZATION_API.md` for endpoint details
-3. Follow `CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md` for tasks
+3. Follow `../planning/CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md` for tasks
 
 ### For Project Managers
-1. Focus on `CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md`
+1. Focus on `../planning/CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md`
 2. Track milestones and checkpoints
 3. Monitor success criteria
 

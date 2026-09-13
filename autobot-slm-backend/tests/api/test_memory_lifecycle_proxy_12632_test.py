@@ -62,7 +62,9 @@ class _Client:
 def _install(monkeypatch, result, *, key: str = "k", url: str = "https://node") -> None:
     monkeypatch.setattr(proxy, "_INTERNAL_API_KEY", key)
     monkeypatch.setattr(proxy, "_NODE_URL", url)
-    monkeypatch.setattr(proxy.httpx, "AsyncClient", lambda **_k: _Client(result))
+    # The seam is the shared node client now (#14886): TLS policy, timeout and
+    # the internal-key header are its business, not this module's.
+    monkeypatch.setattr(proxy.node_proxy, "node_client", lambda **_k: _Client(result))
 
 
 _HEALTHY: Dict[str, Any] = {
@@ -151,39 +153,38 @@ async def test_the_payload_nests_per_node(monkeypatch):
     assert body["nodes"][0]["node"] == "https://node"
 
 
-def test_tls_verification_is_on_unless_explicitly_disabled(monkeypatch):
-    """Verify by default, opt out explicitly.
+def test_this_module_holds_no_opinion_about_tls(monkeypatch):
+    """Verify by default, opt out explicitly — and decided somewhere else.
 
     An earlier revision read its own `AUTOBOT_NODE_PROXY_VERIFY_TLS` with a
     "false" default, shipping verification OFF unless an operator opted in — the
     inverse of the `voice_proxy` pattern this module cites, on the channel that
-    carries the internal API key. Pinned by reloading the module under both env
-    states, because the value is captured at import.
+    carries the internal API key (#14653). A per-module switch is how that
+    happens, so the assertion is now that this module has no switch at all: the
+    policy lives in `autobot_shared.node_proxy`, whose own guard pins the
+    default. `autobot_shared/node_proxy_test.py` is the other half of this.
     """
-    import importlib
+    from autobot_shared import node_proxy
 
     monkeypatch.delenv("AUTOBOT_SKIP_TLS_VERIFY", raising=False)
-    assert importlib.reload(proxy)._VERIFY_TLS is True, "TLS verification is off by default"
+    assert node_proxy.verify_tls() is True, "TLS verification is off by default"
 
     monkeypatch.setenv("AUTOBOT_SKIP_TLS_VERIFY", "true")
-    assert importlib.reload(proxy)._VERIFY_TLS is False, "the documented opt-out no longer works"
-
-    monkeypatch.delenv("AUTOBOT_SKIP_TLS_VERIFY", raising=False)
-    importlib.reload(proxy)
+    assert node_proxy.verify_tls() is False, "the documented opt-out no longer works"
 
 
-def test_the_same_opt_out_variable_as_the_sibling_proxies(monkeypatch):
+def test_no_private_tls_or_timeout_switch_is_reintroduced():
     """One switch for every node proxy, not a second one only this module reads.
 
     A per-module variable means an operator disabling verification for a
     self-signed dev node silently leaves this proxy verifying, or vice versa.
+    Read from the AST rather than the text: the module's own comment names the
+    rejected variable to explain why it is gone, and a substring check would
+    trip on that explanation rather than on any code.
     """
     import ast
 
     source = (Path(__file__).resolve().parents[2] / "api" / "memory_lifecycle_proxy.py").read_text(encoding="utf-8")
-    # Read from the AST, not the text: the module's own comment names the rejected
-    # variable to explain why it is gone, and a substring check would trip on that
-    # explanation rather than on any code.
     read_vars = {
         node.args[0].value
         for node in ast.walk(ast.parse(source))
@@ -194,6 +195,6 @@ def test_the_same_opt_out_variable_as_the_sibling_proxies(monkeypatch):
         and isinstance(node.args[0], ast.Constant)
         and isinstance(node.args[0].value, str)
     }
-    assert "AUTOBOT_SKIP_TLS_VERIFY" in read_vars, f"the shared opt-out is not read; found {sorted(read_vars)}"
-    private = {v for v in read_vars if "VERIFY_TLS" in v and v != "AUTOBOT_SKIP_TLS_VERIFY"}
-    assert not private, f"a private TLS switch was reintroduced: {sorted(private)}"
+    private = {v for v in read_vars if "TLS" in v or "TIMEOUT" in v}
+    assert not private, f"a private TLS/timeout switch was reintroduced: {sorted(private)}"
+    assert "node_proxy" in source, "the shared node client is no longer used here"

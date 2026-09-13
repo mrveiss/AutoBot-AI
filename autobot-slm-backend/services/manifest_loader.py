@@ -9,6 +9,22 @@ Loads, validates, and caches role manifests from
 autobot-infrastructure/autobot-<role>/manifest.yml.
 Single source of truth reader for deployment, health, conflict, and
 policy decisions.
+
+Environment:
+    ``SLM_MANIFEST_CACHE_TTL`` -- seconds a parsed manifest is served from
+    cache, default 300. ``0`` or negative disables caching, which is the
+    dev-mode bypass for editing a manifest on the SLM host (#16026).
+    Read through ``autobot_shared.env_utils.env_int``, as the other SLM knobs
+    are. Documented here rather than in ``autobot_shared/env_registry.py``:
+    that registry holds ``AUTOBOT_*`` names and carries no ``SLM_*`` entry.
+
+    ``SLM_INFRA_BASE_DIR`` -- overrides where ``autobot-infrastructure/`` is
+    read from, default ``$AUTOBOT_BASE_DIR/autobot-infrastructure``. Kept
+    separate from ``AUTOBOT_BASE_DIR`` (#16025) because ``role_registry.py``
+    reads that same variable for the unrelated deploy *target* directory
+    (``/opt/autobot`` in production); a test or dev host pointing manifests at
+    the repo's own ``autobot-infrastructure/`` must not also redirect every
+    role's deploy target.
 """
 
 import logging
@@ -19,16 +35,29 @@ from typing import Dict, List, Tuple
 
 import yaml
 
+from autobot_shared.env_utils import env_int
 from models.manifest import RoleManifest, UpdatePolicy
 
 logger = logging.getLogger(__name__)
 
 # Base dir where autobot-infrastructure/ lives on the SLM server
 _AUTOBOT_BASE = Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
-_INFRA_BASE = _AUTOBOT_BASE / "autobot-infrastructure"
+# #16025: independent override -- see the module docstring for why this is
+# not just AUTOBOT_BASE_DIR / "autobot-infrastructure".
+_INFRA_BASE_OVERRIDE = os.environ.get("SLM_INFRA_BASE_DIR")
+_INFRA_BASE = Path(_INFRA_BASE_OVERRIDE) if _INFRA_BASE_OVERRIDE else (_AUTOBOT_BASE / "autobot-infrastructure")
 
-# Cache TTL in seconds (5 minutes)
-_CACHE_TTL = 300
+# Cache TTL in seconds, env-backed rather than a bare literal (#16026): a
+# manifest is an operator-edited file, so the staleness window has to be tunable
+# on the host that edits it. `<= 0` disables caching, which is the dev-mode
+# bypass.
+#
+# `env_int` rather than a local reader: it already treats a blank value as
+# absent (#12782 -- a template rendering an undefined var exports `NAME=`, which
+# defeats every `os.environ.get(name, default)` fallback) and already warns and
+# falls back on a non-integer instead of raising at import. services/reconciler.py
+# and api/code_sync.py in this same service already read their knobs this way.
+_CACHE_TTL = env_int("SLM_MANIFEST_CACHE_TTL", 300)
 
 
 class ManifestLoader:
@@ -63,25 +92,40 @@ class ManifestLoader:
     def load(self, role_name: str, *, force_reload: bool = False) -> RoleManifest | None:
         """Return the RoleManifest for role_name, using cache if fresh."""
         cached = self._cache.get(role_name)
-        if cached and not force_reload:
+        if cached and not force_reload and _CACHE_TTL > 0:
             manifest, loaded_at = cached
             if time.monotonic() - loaded_at < _CACHE_TTL:
                 return manifest
 
         manifest = self._load_from_disk(role_name)
-        if manifest is not None:
+        if manifest is None:
+            # A failed read must not leave the previous entry behind (#16204). A
+            # forced reload that fails returns None to its caller; if the old entry
+            # survived, every later plain load() inside the TTL would serve the
+            # pre-reload manifest -- the one caller that asked for fresh data told
+            # the truth, every later caller told the old answer. An expired entry
+            # whose reload fails is dropped for the same reason: it is never served,
+            # so keeping it only leaves the cache asserting what the disk no longer says.
+            self._cache.pop(role_name, None)
+        else:
             self._cache[role_name] = (manifest, time.monotonic())
         return manifest
 
-    def load_all(self) -> Dict[str, RoleManifest]:
-        """Load manifests for all roles found under infra_base."""
+    def load_all(self, *, force_reload: bool = False) -> Dict[str, RoleManifest]:
+        """Load manifests for all roles found under infra_base.
+
+        ``force_reload`` is threaded through to :meth:`load` because
+        ``services/reconciler.py`` reads the whole set through this method and
+        had no way to reach the per-role bypass (#16026) -- an override that a
+        caller cannot get at is not an override.
+        """
         result: Dict[str, RoleManifest] = {}
         if not self._infra_base.exists():
             logger.warning("Infrastructure base dir not found: %s", self._infra_base)
             return result
         for child in sorted(self._infra_base.iterdir()):
             if child.is_dir() and child.name.startswith("autobot-"):
-                manifest = self.load(child.name)
+                manifest = self.load(child.name, force_reload=force_reload)
                 if manifest:
                     result[child.name] = manifest
         return result

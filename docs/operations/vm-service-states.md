@@ -203,7 +203,7 @@ curl http://localhost:8001/api/vm-services/critical
 
 ### Service Won't Come Online
 
-1. **Check VM is running**: `ssh autobot@172.16.168.XX "hostname"`
+1. **Check VM is running**: `ssh autobot@<node-ip> "hostname"`
 2. **Check service is started**: SSH in and check service status
 3. **Check port is listening**: `netstat -tlnp | grep <port>`
 4. **Check firewall rules**: Ensure port is accessible

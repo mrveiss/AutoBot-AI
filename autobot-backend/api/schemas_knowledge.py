@@ -6,7 +6,6 @@
 Knowledge base collection, category, fact, grounding, and audit schemas.
 """
 
-import os
 import re
 from datetime import datetime
 from enum import Enum
@@ -20,6 +19,7 @@ from autobot_memory_graph.core import (
     RELATION_TYPES,
     canonical_relation_type,
 )
+from autobot_shared.env_utils import env_float
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from knowledge.ownership import AccessLevel, VisibilityLevel
 from type_defs.common import Metadata
@@ -4641,7 +4641,7 @@ class GraphRAGSearchResponse(BaseModel):
 # #13474: a "both"-direction walk branches twice per node and issues a Redis
 # round-trip per edge, so the traversal always carries a deadline. Overridable
 # per request; never unbounded.
-DEFAULT_PATH_TIMEOUT_SECONDS = float(os.getenv("AUTOBOT_GRAPH_PATH_TIMEOUT_SECONDS", "10.0"))
+DEFAULT_PATH_TIMEOUT_SECONDS = env_float("AUTOBOT_GRAPH_PATH_TIMEOUT_SECONDS", 10.0)
 
 
 class GraphRAGPathRequest(BaseModel):

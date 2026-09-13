@@ -169,9 +169,9 @@
 - name: Create filtered AI-stack requirements file (#14272)
   ansible.builtin.shell:
     cmd: >-
-      bash {{ code_source_dir | default('/opt/autobot/code_source') }}/scripts/build-filtered-requirements.sh
+      bash {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/scripts/build-filtered-requirements.sh
       {{ ai_install_dir }}/requirements-ai.txt
-      {{ code_source_dir | default('/opt/autobot/code_source') }}
+      {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}
       > {{ ai_install_dir }}/requirements-ai-filtered.txt
   become_user: "{{ ai_user }}"
   changed_when: true
@@ -191,31 +191,49 @@
   timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when: _ai_requirements_file.stat.exists
 
+# #15598: this list runs only when requirements-ai.txt is missing, so `-r` is
+# not available to it by construction -- the degraded path is defined by that
+# file's absence. The floors therefore stay literal, and every one of them is
+# the SAME specifier text `autobot-infrastructure/shared/docker/ai-stack/
+# requirements-ai.txt` declares, so the fallback can no longer land a stack the
+# happy path would refuse. They were one to two majors below it (chromadb
+# `>=0.4.0` against `>=1.5.9,<2.0.0`, langchain `>=0.1.0` against
+# `>=1.3.18,<2.0.0`), which is exactly the version a silent degraded path is
+# least likely to have anyone check. Upper bounds come across with the floors:
+# unbounded here, pip would resolve chromadb 2.x into a venv the manifest caps
+# below it. `repo_tests/ansible_requirements_parity_test.py` (#15568) fails the
+# PR that moves the manifest without moving these.
+#
+# numpy stays bare against constraints/shared.txt (#10524) -- the `-c` was
+# missing here, so nothing bound it. Same shape as roles/npu-worker and
+# roles/tts-worker.
 - name: Install AI Python packages (fallback list)
   ansible.builtin.pip:
     name:
-      - chromadb>=0.4.0
-      - langchain>=0.1.0
+      - chromadb>=1.5.9,<2.0.0
+      - langchain>=1.4.0,<2.0.0
       - langchain-community
-      - transformers>=4.30.0
-      - sentence-transformers
-      - torch>=2.0.0
+      - transformers>=5.16.1
+      - sentence-transformers>=6.0.1
+      - torch>=2.14.0
       - numpy
       - pandas
       - pillow
       - openai
       - anthropic
-      - fastapi>=0.115.0
-      - "uvicorn[standard]>=0.35.0"
+      - fastapi>=0.141.1
+      - "uvicorn[standard]>=0.52.4"
       - httpx
-      - pydantic>=2.0.0
+      - pydantic>=2.13.5
       - python-dotenv
-      - redis>=5.0.0
-      - sqlalchemy>=2.0.0
+      - redis>=8.1.0
+      - sqlalchemy>=2.0.52
       - aiosqlite
     virtualenv: "{{ ai_install_dir }}/venv"
     state: present
-    extra_args: "--timeout 300"
+    extra_args: >-
+      --timeout 300
+      -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
   become_user: "{{ ai_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "300"
@@ -256,7 +274,17 @@
 
 - name: Create src/ symlinks to backend modules (co-located deployment)
   ansible.builtin.file:
-    src: "{{ backend_install_dir }}/{{ item }}"
+    # #15560/1 (same family as #13539/B4): was "{{ backend_install_dir }}/{{ item }}",
+    # which renders absolute. A link whose target does not depend on where the
+    # link itself lives cannot survive the tree moving -- it re-anchors to the
+    # live root under any deploy-root relocation, which is exactly the property
+    # #13539's release scheme depends on. The link lives at
+    # `{{ ai_install_dir }}/src/`, and ai_install_dir and backend_install_dir are
+    # always siblings under the same deploy root, so `../../<backend dir name>`
+    # resolves identically today and stays correct under a relocation. The
+    # basename is taken FROM backend_install_dir rather than spelled out, so an
+    # install that renames the backend component directory still resolves.
+    src: "../../{{ backend_install_dir | basename }}/{{ item }}"
     dest: "{{ ai_install_dir }}/src/{{ item }}"
     state: link
     owner: "{{ ai_user }}"
@@ -267,7 +295,9 @@
     - autobot_shared
   tags: ['ai', 'deploy']
 
-# #12513: see roles/redis/tasks/chromadb.yml — same read, same reason. Whichever
+# #12513: see roles/redis/tasks/code_only.yml — same read, same reason. (#13535
+# moved that read out of roles/redis/tasks/chromadb.yml, which this used to
+# name and which now carries no auth tasks at all.) Whichever
 # of the two roles owns chroma on this topology must land the same credential the
 # backend sends, so both defer to the SLM-generated value.
 # #13460: these service files are defined once, in code_only.yml, so the

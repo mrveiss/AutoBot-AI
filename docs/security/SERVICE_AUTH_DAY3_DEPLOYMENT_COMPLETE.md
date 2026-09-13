@@ -306,8 +306,8 @@ curl -s https://<backend-ip>:8443/api/health | jq -r '.status'
 grep "Service auth failed" logs/backend.log | tail -100
 
 # Clock synchronization check
-for vm in 20 21 22 23 24 25; do
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.$vm "date '+%s'" 2>/dev/null
+for host in <backend-ip> <frontend-ip> <npu-ip> <database-ip> <aiml-ip> <browser-ip>; do
+  ssh -i ~/.ssh/autobot_key autobot@$host "date '+%s'" 2>/dev/null
 done
 ```
 

@@ -15,6 +15,30 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 import { POLLED_READ_MAX_RETRIES } from '@/constants/api-timeouts'
+// Shared with autobot-frontend's usePrometheusMetrics.ts — see the kit
+// file's doc comment for which fields are main-app-only extensions (#14907).
+// ServiceHealth is used only inside ServicesSummary's shape (not referenced
+// directly in this file), so it is re-exported but not locally imported —
+// avoids an unused-import lint failure while keeping the export surface.
+import type {
+  GPUMetrics,
+  NPUMetrics,
+  ServicesSummary,
+  PerformanceAlert,
+  AlertsSummary,
+  OptimizationRecommendation,
+  UsePrometheusMetricsOptions,
+} from '@autobot/ui'
+export type {
+  GPUMetrics,
+  NPUMetrics,
+  ServiceHealth,
+  ServicesSummary,
+  PerformanceAlert,
+  AlertsSummary,
+  OptimizationRecommendation,
+  UsePrometheusMetricsOptions,
+} from '@autobot/ui'
 
 const logger = createLogger('usePrometheusMetrics')
 
@@ -65,67 +89,6 @@ export interface SystemMetricsViewModel {
   network_bytes_recv: number
   process_count: number
   timestamp: number
-}
-
-export interface GPUMetrics {
-  available: boolean
-  utilization_percent: number
-  memory_utilization_percent: number
-  temperature_celsius: number
-  power_watts: number
-  name?: string
-  thermal_throttling?: boolean
-}
-
-export interface NPUMetrics {
-  available: boolean
-  utilization_percent: number
-  acceleration_ratio: number
-  inference_count: number
-  wsl_limitation?: boolean
-}
-
-export interface ServiceHealth {
-  name: string
-  host: string
-  port: number
-  status: 'healthy' | 'degraded' | 'critical' | 'offline'
-  response_time_ms: number
-  health_score: number
-  uptime_hours: number
-}
-
-export interface ServicesSummary {
-  total_services: number
-  healthy_services: number
-  degraded_services: number
-  critical_services: number
-  overall_status: 'healthy' | 'degraded' | 'critical'
-  health_percentage: number
-  services: ServiceHealth[]
-}
-
-export interface PerformanceAlert {
-  category: string
-  severity: 'info' | 'warning' | 'critical' | 'high'
-  message: string
-  recommendation: string
-  timestamp: number
-}
-
-export interface AlertsSummary {
-  total_count: number
-  critical_count: number
-  warning_count: number
-  alerts: PerformanceAlert[]
-}
-
-export interface OptimizationRecommendation {
-  category: string
-  priority: 'high' | 'medium' | 'low'
-  recommendation: string
-  action: string
-  expected_improvement: string
 }
 
 /**
@@ -199,12 +162,6 @@ export interface NPUFleetMetrics {
   avg_utilization_percent: number
   total_inferences: number
   avg_inference_time_ms: number
-}
-
-export interface UsePrometheusMetricsOptions {
-  autoFetch?: boolean
-  pollInterval?: number
-  useWebSocket?: boolean
 }
 
 /**

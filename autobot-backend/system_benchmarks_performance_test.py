@@ -7,13 +7,17 @@ Tests performance characteristics, resource usage, and scalability
 
 import asyncio
 import os
+import socket
+import sys
 import time
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, Mock, patch
 
 import psutil
 import pytest
 
 from autobot_shared.env_utils import env_flag, env_float, env_int, env_str
+from autobot_shared.perf_work_budget import assert_within_work_budget, recording_work_units
 from config.manager import ConfigManager as ConfigManager
 from memory import MemoryManager, TaskPriority
 from multimodal_processor import (
@@ -24,33 +28,69 @@ from multimodal_processor import (
 )
 from services.config_service import ConfigService
 
-# #13162: every test in this module asserts a wall-clock budget (ms elapsed) or
-# an RSS delta — there is not one functional-only test here, and the filename
-# already declares it (`*_performance_test.py`). That makes the module a
-# benchmark suite, so it belongs to the `performance` selection rather than the
-# unit selection, where a millisecond budget measures the CI runner's
-# contention instead of the code. No budget in this file was changed.
+# #13162: every test in this module asserts a wall-clock budget (ms elapsed) or an RSS delta — there is not one
+# functional-only test here, and the filename already declares it (`*_performance_test.py`). That makes the module a
+# benchmark suite, so it belongs to the `performance` selection rather than the unit selection, where a millisecond
+# budget measures the CI runner's contention instead of the code. No budget in this file was changed.
 pytestmark = pytest.mark.performance
+
+
+# #15055: the budgets below are RUNNER-CALIBRATED WORK UNITS, not milliseconds against a hardcoded constant. The
+# doctrine, the unit and the assertion live in `autobot_shared.perf_work_budget` — read its module docstring before
+# changing any number here: a millisecond ceiling measures the runner, so each budget is a ratio against pure-Python
+# work timed in the same process, and a uniformly slow runner scales both sides. DERIVATION: five local runs per
+# site, converted to CI units by the ~3.2x factor run 33156790797 measured for `Config manager startup`, then given
+# headroom (3x large/steady, 8x single-digit-microsecond, floored at 0.20 units).
+# ONE SITE HAS NO BUDGET HERE AT ALL (#15055, #15235): `Multimodal processor startup` is disk-bound (CLIP + BLIP-2
+# loaded every construction), so a CPU work-unit ratio can't track it. #15342's re-based 2200 budget still failed
+# three later CI runs (33368810264, 33364129751, 33579228276: 2327/4348/3743 units) with no code change; a baseline
+# ratio can't replace it either (it would time its own numerator as the baseline). See
+# `test_system_startup_performance` for the deterministic check that replaced it. Ratchet DOWN elsewhere only.
+
+
+@pytest.fixture(autouse=True)
+def _record_work_units(record_property):
+    """#15055: send every measurement to the junit XML, green runs included."""
+    with recording_work_units(record_property):
+        yield
+
+
+@contextmanager
+def _blocked_sockets():
+    """Raise on any outbound network connection, for the scope of a `with` block (#15055)."""
+
+    def _refuse_connect(*_args, **_kwargs):
+        raise OSError("network access blocked for a warm-construction no-network check (#15055)")
+
+    with patch.object(socket.socket, "connect", side_effect=_refuse_connect):
+        yield
 
 
 class TestSystemPerformanceBenchmarks:
     """Performance benchmarks for system components"""
 
     def measure_execution_time(self, func, *args, **kwargs):
-        """Measure function execution time"""
-        start_time = time.time()
+        """Measure function execution time.
+
+        #15055: `time.perf_counter()`, not `time.time()` — a duration needs the
+        monotonic clock. A wall-clock delta can go backwards across an NTP step.
+        """
+        start_time = time.perf_counter()
         result = func(*args, **kwargs)
-        end_time = time.time()
+        end_time = time.perf_counter()
         return (
             result,
             (end_time - start_time) * 1000,
         )  # Return result and time in milliseconds
 
     async def measure_async_execution_time(self, coro):
-        """Measure async function execution time"""
-        start_time = time.time()
+        """Measure async function execution time.
+
+        #15055: monotonic clock, same reason as `measure_execution_time`.
+        """
+        start_time = time.perf_counter()
         result = await coro
-        end_time = time.time()
+        end_time = time.perf_counter()
         return (
             result,
             (end_time - start_time) * 1000,
@@ -78,7 +118,7 @@ class TestSystemPerformanceBenchmarks:
 
         # Test single config access performance
         _, access_time = self.measure_execution_time(config_manager.get, "llm.orchestrator_llm")
-        assert access_time < 1.0, f"Config access too slow: {access_time}ms"
+        assert_within_work_budget(access_time, 0.20, "Config access")
 
         # Test bulk config access performance
         def bulk_access():
@@ -88,13 +128,13 @@ class TestSystemPerformanceBenchmarks:
             return results
 
         _, bulk_time = self.measure_execution_time(bulk_access)
-        assert bulk_time < 50.0, f"Bulk config access too slow: {bulk_time}ms"
+        assert_within_work_budget(bulk_time, 1.0, "Bulk config access (100 keys)")
 
         # Test section retrieval performance
         # #13199: the section reader on ConfigManager is get_config_section()
         # (dot-path traversal via get_nested); get_section() belongs to ConfigRegistry.
         _, section_time = self.measure_execution_time(config_manager.get_config_section, "multimodal")
-        assert section_time < 2.0, f"Section retrieval too slow: {section_time}ms"
+        assert_within_work_budget(section_time, 0.60, "Config section retrieval")
 
     def test_config_service_caching_performance(self):
         """Test config service caching performance"""
@@ -118,7 +158,7 @@ class TestSystemPerformanceBenchmarks:
         assert cached_config is first_config, "Second get_full_config() rebuilt the config instead of serving the cache"
 
         # Cached calls should be very fast
-        assert cached_call_time < 5.0, f"Cached config access too slow: {cached_call_time}ms"
+        assert_within_work_budget(cached_call_time, 0.20, "Cached config access")
 
     @pytest.mark.asyncio
     async def test_multimodal_processor_performance(self):
@@ -133,8 +173,14 @@ class TestSystemPerformanceBenchmarks:
             data="Test processing performance",
         )
 
-        # Mock the context processor for consistent timing
-        with patch.object(processor.context_processor, "process", new_callable=AsyncMock) as mock_process:
+        # Mock the context processor for consistent timing. #15232: `_store_result` is mocked here too, for the reason
+        # the two siblings below record under #13162 — it writes to the shared SQLite memory database, so leaving it
+        # live timed disk contention instead of the processing path this test names, and a CPU-bound work unit (#15055)
+        # cannot normalise a disk-bound numerator — the limitation `Multimodal processor startup` records at its budget.
+        with (
+            patch.object(processor.context_processor, "process", new_callable=AsyncMock) as mock_process,
+            patch.object(processor, "_store_result", new_callable=AsyncMock) as mock_store,
+        ):
             mock_process.return_value = Mock(
                 success=True,
                 confidence=0.8,
@@ -147,8 +193,14 @@ class TestSystemPerformanceBenchmarks:
 
             result, processing_time = await self.measure_async_execution_time(processor.process(test_input))
 
-            assert processing_time < 100.0, f"Single processing too slow: {processing_time}ms"
+            # 6.5 units, down from a 50.0 first-observation ceiling over the disk-bound measurement. DERIVATION: with
+            # storage mocked, marker run 33181196014 read 0.250 units on CI and 17 local runs 0.596-1.626 (against
+            # 68.709 unmocked locally, 164.422 on CI run 33161132835). 4x the highest reading anywhere, 1.626; the
+            # header's x3.2 local->CI conversion does not apply, that CI figure sitting below every local one.
+            assert_within_work_budget(processing_time, 6.5, "Single multimodal processing")
             assert result.success is True
+            # #15232: storage is off the clock, not out of the contract — dropping the write must not read as faster.
+            mock_store.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_concurrent_processing_performance(self):
@@ -209,7 +261,7 @@ class TestSystemPerformanceBenchmarks:
             total_time = (end_time - start_time) * 1000  # Convert to ms
 
             # Concurrent processing should be faster than sequential
-            assert total_time < 500.0, f"Concurrent processing too slow: {total_time}ms"
+            assert_within_work_budget(total_time, 12.0, "Concurrent processing (10 inputs)")
             assert peak_in_flight == 10, f"Processing serialized: peak concurrency was {peak_in_flight}, expected 10"
             assert len(results) == 10
             assert all(r.success for r in results)
@@ -247,7 +299,7 @@ class TestSystemPerformanceBenchmarks:
         # Test validation performance
         _, validation_time = self.measure_execution_time(config_manager.validate_config)
 
-        assert validation_time < 10.0, f"Config validation too slow: {validation_time}ms"
+        assert_within_work_budget(validation_time, 0.30, "Config validation")
 
         # Test multiple validations (should be consistent)
         validation_times = []
@@ -256,7 +308,7 @@ class TestSystemPerformanceBenchmarks:
             validation_times.append(time_taken)
 
         avg_validation_time = sum(validation_times) / len(validation_times)
-        assert avg_validation_time < 15.0, f"Average validation time too slow: {avg_validation_time}ms"
+        assert_within_work_budget(avg_validation_time, 0.20, "Config validation (mean of 5)")
 
     def test_environment_variable_parsing_performance(self):
         """Test environment variable parsing performance"""
@@ -285,37 +337,65 @@ class TestSystemPerformanceBenchmarks:
                 total_parse_time += parse_time
 
                 # Each parse should be very fast
-                assert parse_time < 1.0, f"Environment value parsing too slow: {parse_time}ms for {value}"
+                assert_within_work_budget(parse_time, 0.25, f"Environment value parsing of {value!r}")
 
             # Total parsing time should be minimal
-            assert total_parse_time < 5.0, f"Total parsing time too slow: {total_parse_time}ms"
+            assert_within_work_budget(total_parse_time, 1.2, "Environment value parsing (all cases)")
         finally:
             for name, _value, _parse in parse_cases:
                 os.environ.pop(name, None)
 
     @pytest.mark.asyncio
-    async def test_system_startup_performance(self):
-        """Test system component startup performance"""
-        # Test config manager startup
-        start_time = time.time()
-        ConfigManager()
-        config_startup_time = (time.time() - start_time) * 1000
+    async def test_system_startup_performance(self, record_property, monkeypatch):
+        """Test system component startup performance.
 
-        assert config_startup_time < 100.0, f"Config manager startup too slow: {config_startup_time}ms"
+        #15055: each component is constructed ONCE before the clock starts; the budget is measured on a second
+        construction. The discarded first pays one-time costs (lazy `import torch`, primed module caches/
+        singletons for `ConfigManager`/`MemoryManager`) that belong to the interpreter or worker ordering, not
+        to this code. The second construction is the per-instance cost, which is what "component startup" means
+        and what a regression moves: an eager model load, a network call or a file read added to `__init__` is
+        paid on EVERY construction, so it lands here.
+        """
+        ConfigManager()  # discard: primes module-level caches, not startup cost
+        start_time = time.perf_counter()
+        config_manager = ConfigManager()
+        config_startup_time = (time.perf_counter() - start_time) * 1000
 
-        # Test multimodal processor startup
-        start_time = time.time()
-        MultiModalProcessor()
-        processor_startup_time = (time.time() - start_time) * 1000
+        assert isinstance(config_manager, ConfigManager), "ConfigManager() returned no instance to time"
+        assert_within_work_budget(config_startup_time, 8.0, "Config manager startup")
 
-        assert processor_startup_time < 500.0, f"Multimodal processor startup too slow: {processor_startup_time}ms"
+        cold = MultiModalProcessor()  # not timed: pays the one-time lazy `import torch`, caches CLIP + BLIP-2
+
+        # #15055, #15235: work-unit and baseline-ratio budgets are both unsound here — CLIP + `blip2-opt-2.7b`
+        # load from disk every construction (I/O, not CPU), and a baseline ratio would time the SAME construction
+        # as its own baseline. A WARM construction instead promises no NEW import and no network call
+        # (`huggingface_hub` falls back to its on-disk cache on a connection error) — a deterministic pass/fail.
+        modules_before_warm_construction = set(sys.modules)
+        start_time = time.perf_counter()
+        monkeypatch.setenv("HF_HUB_OFFLINE", "1")  # #16404: a keep-alive connection could evade the socket patch
+        with _blocked_sockets():
+            processor = MultiModalProcessor()
+        processor_startup_time = (time.perf_counter() - start_time) * 1000
+        new_imports = sorted(set(sys.modules) - modules_before_warm_construction)
+
+        assert isinstance(processor, MultiModalProcessor), "MultiModalProcessor() returned no instance to time"
+        assert not new_imports, f"Multimodal processor startup imported {new_imports} on the WARM construction (#15055)"
+        vps = (cold.vision_processor, processor.vision_processor)  # #16404: _load_models swallows load errors
+        loaded = [(vp.clip_model is None, vp.blip_model is None) for vp in vps]
+        assert loaded[0] == loaded[1], f"online vs offline model load differs: {loaded} (#16404)"
+        record_property("perf_multimodal_processor_startup_ms", processor_startup_time)
 
         # Test memory manager startup
-        start_time = time.time()
-        MemoryManager()
-        memory_startup_time = (time.time() - start_time) * 1000
+        MemoryManager()  # discard: primes the shared memory backend
+        start_time = time.perf_counter()
+        memory_manager = MemoryManager()
+        memory_startup_time = (time.perf_counter() - start_time) * 1000
 
-        assert memory_startup_time < 200.0, f"Memory manager startup too slow: {memory_startup_time}ms"
+        # First-observation ceiling: no CI reading yet — run 33156790797 failed
+        # at the assertion above before reaching this one. Ratchet DOWN once the
+        # junit report carries a number for it.
+        assert isinstance(memory_manager, MemoryManager), "MemoryManager() returned no instance to time"
+        assert_within_work_budget(memory_startup_time, 1.0, "Memory manager startup")
 
     def test_configuration_file_loading_performance(self):
         """Test configuration file loading performance"""
@@ -343,7 +423,7 @@ class TestSystemPerformanceBenchmarks:
             # Test loading performance
             _, load_time = self.measure_execution_time(ConfigManager, config_dir=config_dir)
 
-            assert load_time < 1000.0, f"Large config file loading too slow: {load_time}ms"
+            assert_within_work_budget(load_time, 420.0, "Large config file loading")
 
     def test_statistics_tracking_performance(self):
         """Test performance statistics tracking overhead"""
@@ -366,7 +446,7 @@ class TestSystemPerformanceBenchmarks:
         stats_time = (time.time() - start_time) * 1000
 
         # Stats tracking should have minimal overhead
-        assert stats_time < 10.0, f"Statistics tracking too slow: {stats_time}ms for 100 updates"
+        assert_within_work_budget(stats_time, 0.80, "Statistics tracking (100 updates)")
 
         # Verify stats are correct
         stats = processor.get_stats()
@@ -386,7 +466,7 @@ class TestSystemPerformanceBenchmarks:
             config_manager.get, "level1.level2.level3.level4.level5.deep_value"
         )
 
-        assert deep_access_time < 5.0, f"Deep config access too slow: {deep_access_time}ms"
+        assert_within_work_budget(deep_access_time, 0.20, "Deep config access")
 
         # Test bulk deep access
         def bulk_deep_access():
@@ -397,7 +477,7 @@ class TestSystemPerformanceBenchmarks:
             return results
 
         _, bulk_deep_time = self.measure_execution_time(bulk_deep_access)
-        assert bulk_deep_time < 25.0, f"Bulk deep access too slow: {bulk_deep_time}ms"
+        assert_within_work_budget(bulk_deep_time, 0.60, "Bulk deep config access (50 keys)")
 
 
 class TestScalabilityBenchmarks:
@@ -417,7 +497,7 @@ class TestScalabilityBenchmarks:
         set_time = (time.time() - start_time) * 1000
 
         # Setting 1000 keys should be reasonable
-        assert set_time < 500.0, f"Setting {num_keys} keys too slow: {set_time}ms"
+        assert_within_work_budget(set_time, 6.0, f"Setting {num_keys} config keys")
 
         # Test retrieval performance with many keys
         start_time = time.time()
@@ -426,7 +506,7 @@ class TestScalabilityBenchmarks:
             assert value == f"value_{i}"
 
         get_time = (time.time() - start_time) * 1000
-        assert get_time < 100.0, f"Getting keys with many configs too slow: {get_time}ms"
+        assert_within_work_budget(get_time, 1.0, "Reading config keys with many configs loaded")
 
     @pytest.mark.asyncio
     async def test_multimodal_processor_scalability(self):
@@ -471,7 +551,7 @@ class TestScalabilityBenchmarks:
             total_time = (time.time() - start_time) * 1000
 
             # Should handle many concurrent requests efficiently
-            assert total_time < 2000.0, f"Scaling to {num_inputs} requests too slow: {total_time}ms"
+            assert_within_work_budget(total_time, 30.0, f"Scaling to {num_inputs} concurrent requests")
             assert len(results) == num_inputs
             assert all(r.success for r in results)
 

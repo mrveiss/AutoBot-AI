@@ -34,6 +34,7 @@ from constants.model_constants import (
 )
 from llm_shared.models import LLMRequest
 from llm_shared.types import ProviderType
+from services.provider_key_vault import resolve_provider_key
 
 from .openai_compatible import OpenAICompatibleProvider
 from .reasoning_effort import map_effort_to_provider_params
@@ -64,18 +65,20 @@ class OpenAIProvider(OpenAICompatibleProvider):
     missing_key_error = "OpenAI API key not configured. Set OPENAI_API_KEY or provide api_key in provider settings."
 
     def _resolve_api_key(self) -> str | None:
-        """Resolve API key from settings, environment, or SSOT config."""
+        """Resolve API key from settings, then the vault seam (env wins; else System vault, #15276).
+
+        Exactly two tiers -- no third bare-config retry. A prior revision of this
+        method carried a second ``config.openai_api_key`` read behind a fresh
+        ``ssot_config`` import (nested-submodel access, ``_ssot_config.llm.openai_api_key``),
+        but ``config`` (the flat proxy) and ``config.llm`` resolve to the same
+        singleton via ``AutoBotConfig.__getattr__`` delegation -- once the first read is
+        falsy, the second could only ever repeat it. That tier was dead code that could
+        not fire; removed rather than kept as a decoration (#15276, the same class of
+        find #15269 made for ``voice_processing/realtime/openai_provider.py``).
+        """
         if self._api_key:
             return self._api_key
-        key = self._get_setting("api_key") or config.openai_api_key
-        if not key:
-            try:
-                from autobot_shared.ssot_config import config as _ssot_config
-
-                key = _ssot_config.llm.openai_api_key
-            except Exception:
-                pass
-        self._api_key = key
+        self._api_key = self._get_setting("api_key") or resolve_provider_key("OPENAI_API_KEY", config.openai_api_key)
         return self._api_key
 
     def _resolve_base_url(self) -> str | None:

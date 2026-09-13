@@ -493,7 +493,7 @@ class TestBudgetGate:
 
         with patch("llc.api.replay._get_budget_svc", return_value=mock_svc):
             with pytest.raises(HTTPException) as exc_info:
-                await _validate_budget(AsyncMock(), "agent-abc")
+                await _validate_budget(AsyncMock(), "agent-abc", "company-1")
         assert exc_info.value.status_code == 402
 
     @pytest.mark.asyncio
@@ -505,7 +505,7 @@ class TestBudgetGate:
 
         with patch("llc.api.replay._get_budget_svc", return_value=mock_svc):
             # Should not raise.
-            await _validate_budget(AsyncMock(), "agent-abc")
+            await _validate_budget(AsyncMock(), "agent-abc", "company-1")
 
 
 # ---------------------------------------------------------------------------

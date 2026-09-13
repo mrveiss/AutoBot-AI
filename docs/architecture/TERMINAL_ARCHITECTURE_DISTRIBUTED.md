@@ -1,5 +1,7 @@
 # Terminal Architecture for Distributed Deployment
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 ## Current Architecture (Co-located with Backend)
 
 ### Overview

@@ -27,6 +27,7 @@ from fastapi import HTTPException, UploadFile, status
 
 import archive_safety as _arch
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import strict_git_env
 from autobot_shared.plugin_sdk.base import PluginManifest
 from autobot_shared.ssot_config import config
 
@@ -216,6 +217,11 @@ async def _git_clone(url: str, ref: str | None, dest: Path) -> None:
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        # strict_git_env, not scrubbed_git_env: this is a TRANSPORT call against a
+        # caller-supplied URL. The ambient scrub answers "which repository", which is
+        # not the question here -- GIT_CONFIG_COUNT/KEY/VALUE survive it and can set
+        # credential.helper or core.sshCommand, which git executes (#16179 review).
+        env=strict_git_env(),  # #16179
     )
     try:
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_CLONE_TIMEOUT_SECONDS)

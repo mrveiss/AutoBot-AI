@@ -103,7 +103,7 @@ pip install pyinstaller --upgrade
 **Key Dependencies:**
 - `fastapi>=0.104.0` - Web framework
 - `uvicorn[standard]>=0.24.0` - ASGI server
-- `openvino>=2026.3.0` - NPU acceleration (no `openvino-dev`: deprecated meta-package, incompatible with openvino 2026.x -- #14447)
+- `openvino>=2026.3.1` - NPU acceleration (no `openvino-dev`: deprecated meta-package, incompatible with openvino 2026.x -- #14447)
 - `numpy>=1.24.0` - Scientific computing
 - `scikit-learn>=1.3.0` - Machine learning utilities
 - `redis>=5.0.0` - Redis client

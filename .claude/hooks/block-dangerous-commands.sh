@@ -10,6 +10,9 @@
 # Issue: #3021
 
 if ! command -v jq >/dev/null 2>&1; then
+  # Before `deny()` exists, so this repeats its stderr write rather than calling
+  # it. With no jq, every command is blocked and this is the only explanation.
+  printf '%s\n' "jq is required for command protection hooks but is not installed." >&2
   echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"jq is required for command protection hooks but is not installed."}}'
   exit 2
 fi
@@ -33,6 +36,12 @@ if [[ "$COMMAND" =~ git[[:space:]]+commit ]]; then
 fi
 
 deny() {
+  # STDERR, because this exits 2 (#15956). The harness parses the JSON below
+  # from stdout only on exit 0 and takes an exit-2 reason from stderr, so
+  # without this line a blocked command is reported with no explanation at all.
+  # Found by the channel guard in repo_tests/hook_decision_exit_codes_15956_test.py,
+  # which was written for two other hooks and caught this one on its first run.
+  printf '%s\n' "$1" >&2
   echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"$1\"}}"
   exit 2
 }
@@ -43,15 +52,17 @@ deny() {
 
 if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+push'; then
 
-  # Block push to main, master, or Dev_new_gui directly
-  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push.*(origin[[:space:]]+|:)(main|master|Dev_new_gui)\b'; then
-    deny "Blocked: cannot push directly to main/master/Dev_new_gui. Use a feature branch and create a PR."
+  # Block push to release, master, or main directly
+  # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
+  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push.*(origin[[:space:]]+|:)(release|master|main|Dev_new_gui)\b'; then
+    deny "Blocked: cannot push directly to release/master/main/Dev_new_gui. Use a feature branch and create a PR."
   fi
 
   # Block bare git push when on protected branches
+  # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
   if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push[[:space:]]*($|[;&|])'; then
     CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
-    if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "Dev_new_gui" ]; then
+    if [ "$CURRENT_BRANCH" = "release" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "Dev_new_gui" ]; then
       deny "Blocked: you are on $CURRENT_BRANCH. Use a feature branch and create a PR."
     fi
   fi
@@ -70,90 +81,253 @@ if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+commit.*--no-verify'; the
   deny "Blocked: --no-verify bypasses pre-commit hooks. Fix the underlying hook failure instead."
 fi
 
-# ──────────────────────────────────────────────
-# Destructive git operations
-# ──────────────────────────────────────────────
-
-if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+reset[[:space:]]+--hard'; then
-  deny "Blocked: git reset --hard discards uncommitted changes permanently. Use git stash or git reset --soft instead."
-fi
-
-if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+clean[[:space:]]+-[a-zA-Z]*f'; then
-  deny "Blocked: git clean -f permanently deletes untracked files. Review with git clean -n first, then run manually if intended."
-fi
+# Destructive git operations are judged further down, from the parser's
+# records rather than from a grep over the command text (#15835). A grep could
+# not tell a command from a mention of one, so a heredoc WRITING a file about
+# these patterns was refused — three times in one session: a memory file, an
+# issue body, and a commit message explaining the fix.
 
 # ──────────────────────────────────────────────
-# Worktree isolation — block checkouts to protected branches (#6512)
-# Parallel Claude sessions that run `git checkout main` or `git switch main`
-# trample HEAD on other sessions sharing the same working tree. CLAUDE.md
-# states main is read-only and the main session must stay on Dev_new_gui;
-# checking out main locally has no legitimate use case here.
-# ──────────────────────────────────────────────
-
-# Optional git GLOBAL options that may sit between `git` and the subcommand
-# (#10434). `git -c core.foo=bar checkout some-branch` must not slip past the
-# branch-switch guards. Tolerate any run of -c/-C/--git-dir global options.
-# Written as a fixed-length-free ERE so GNU grep 3.7 (bash) handles it.
-GIT_GLOBAL_OPTS='(-c[[:space:]]+[^[:space:]]+[[:space:]]+|-C[[:space:]]+[^[:space:]]+[[:space:]]+|--git-dir[=[:space:]][^[:space:]]+[[:space:]]+)*'
-
-if echo "$COMMAND_TO_CHECK" | grep -qE "(^|[;&|()]+[[:space:]]*)git[[:space:]]+${GIT_GLOBAL_OPTS}(checkout|switch)[[:space:]]+(main|master)([[:space:]]|\$)"; then
-  deny "Blocked: never check out main/master locally (#4113, #6512). Main is read-only; commits flow Dev_new_gui → main via release cycle. If you need to inspect main, use git log origin/main or create a worktree: git worktree add .worktrees/inspect-main main"
-fi
-
-# Block bare branch *switches* from the main working tree (#6512, #10126)
-# Subagents running in parallel would trample the shared HEAD for every other
-# session if they switched onto an existing shared branch. Only that form is
-# dangerous — the worktree mandate targets branch-switching on the MAIN tree.
+# Worktree isolation — branch-switch guards (#4113, #6512, #10126, #15296)
+#
+# Parallel Claude sessions share one main working tree. A session that moves
+# HEAD there tramples every other session, so the thing these guards exist to
+# stop is a branch switch on the MAIN WORKING TREE OF THIS REPOSITORY — and
+# nothing wider than that.
+#
+# They used to be wider, in the direction that costs the most (#15296). A regex
+# over the whole command string turned a redirection into the branch argument
+# (`git switch -` was allowed, the same command with `2>&1 | tail -2` appended
+# was denied), ignored `-C`'s value so an unrelated checkout was covered too,
+# and matched the words inside quoted prose so a PR body that merely described
+# a switch was denied. A guard that denies correct work teaches people to route
+# around it, which is how a control stops being one. So all three fixes narrow
+# WHEN the guard fires; none of them widens WHAT it permits on the main tree of
+# this repository, which is still judged by exactly the rules below.
+#
 # The following git forms are SAFE and explicitly allowed even on the main tree:
 #   - new-branch creation (-b/-B/-c/--create/--orphan): forks a fresh branch,
 #     does not move HEAD onto a shared one
-#   - file restore: `git checkout -- <path>`, `git checkout .`
+#   - file restore FROM THE INDEX: `git checkout -- <path>`, `git checkout .`,
+#     `git restore <path>` — bounded by what you staged
 #   - detached / toggle switches: `git switch -`, `git switch --detach`
-#   - SHA / tag / Dev_new_gui checkouts
-if echo "$COMMAND_TO_CHECK" | grep -qE "(^|[;&|()]+[[:space:]]*)git[[:space:]]+${GIT_GLOBAL_OPTS}(checkout|switch)[[:space:]]"; then
-  CURRENT_DIR=$(pwd)
-  if [[ ! "$CURRENT_DIR" =~ \.worktrees/ ]]; then
-    # New-branch creation (-b/-B/-c/--create/--orphan) anywhere in the args.
-    # ${GIT_GLOBAL_OPTS} tolerates global opts before the subcommand (#10434);
-    # the new-branch flags are still only recognised AFTER checkout/switch.
-    IS_NEW_BRANCH=0
-    if echo "$COMMAND_TO_CHECK" | grep -qE "git[[:space:]]+${GIT_GLOBAL_OPTS}(checkout|switch)[[:space:]]+(.*[[:space:]])?(-b|-B|-c|--create|--orphan)([[:space:]]|\$)"; then
-      IS_NEW_BRANCH=1
-    fi
+#   - SHA / tag / main checkouts that move HEAD and nothing else
+#
+# What that list used to say, and why it was wrong (#15835): it read "file
+# restore: `git checkout -- <path>`" next to "SHA / tag / main
+# checkouts", and `git checkout origin/main -- .` matches BOTH entries.
+# It was allowed by design, and it destroyed 147 lines of uncommitted work in
+# this repository. Two different operations share that syntax:
+#
+#   `git checkout -- <path>`        content comes from the INDEX — bounded
+#   `git checkout <ref> -- <path>`  content comes from ANOTHER COMMIT — an
+#   `git restore --source=<ref> …`  overwrite, with no copy of what it replaced
+#
+# Adding a ref changes the operation while leaving the syntax matching the safe
+# pattern. So the rule is one condition, not two: a path-scoped checkout or
+# restore naming a source other than the index is a destructive overwrite, and
+# it is refused when — and only when — the tree it targets holds uncommitted
+# work. A clean tree has nothing to lose, and a guard that refuses harmless
+# commands is a guard people switch off.
+# ──────────────────────────────────────────────
 
-    # Explicit file restore: `git checkout -- <path>` (the `--` separator).
-    IS_FILE_RESTORE=0
-    if echo "$COMMAND_TO_CHECK" | grep -qE "git[[:space:]]+${GIT_GLOBAL_OPTS}checkout[[:space:]]+--([[:space:]]|\$)"; then
-      IS_FILE_RESTORE=1
-    fi
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GIT_INVOCATION_PARSER="$HOOK_DIR/git_invocation_parse.py"
 
-    if [[ "$IS_NEW_BRANCH" -eq 0 && "$IS_FILE_RESTORE" -eq 0 ]]; then
-      # First non-dash positional after checkout/switch (the branch/ref/path arg).
-      BRANCH_ARG=$(echo "$COMMAND_TO_CHECK" | awk '{
-        found=0
-        for(i=1;i<=NF;i++) {
-          if ($i=="checkout" || $i=="switch") { found=i; break }
-        }
-        if (found) {
-          for(j=found+1;j<=NF;j++) {
-            if (substr($j,1,1)!="-") { print $j; break }
-          }
-        }
-      }')
+# Ask git about a path with the inherited git environment scrubbed: a stray
+# GIT_DIR or GIT_WORK_TREE would make rev-parse answer about a different
+# repository than the command targets, and mis-identifying the repository is
+# the one error this guard cannot afford. Same scrub as
+# scripts/install-git-hooks.sh.
+git_scrubbed() {
+  local dir="$1" gitdir="$2"
+  shift 2
+  local -a opts=()
+  [ -n "$dir" ] && opts+=(-C "$dir")
+  [ -n "$gitdir" ] && opts+=(--git-dir "$gitdir")
+  (
+    unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+    git "${opts[@]}" "$@" 2>/dev/null
+  )
+}
 
-      # Block only when a concrete branch-name arg is present and is not one of
-      # the safe targets (base branch, file restore, detached HEAD, SHA, tag, path).
-      if [[ -n "$BRANCH_ARG" ]] && \
-         [[ "$BRANCH_ARG" != "Dev_new_gui" ]] && \
-         [[ "$BRANCH_ARG" != "." ]] && \
-         [[ "$BRANCH_ARG" != "HEAD" ]] && \
-         ! [[ "$BRANCH_ARG" =~ ^[0-9a-f]{7,40}$ ]] && \
-         ! [[ "$BRANCH_ARG" =~ ^v[0-9]+\.[0-9]+ ]] && \
-         ! [[ "$BRANCH_ARG" =~ ^/ ]]; then
-        deny "Blocked: switching branches on the main working tree tramples HEAD for parallel sessions (#6512). Use a worktree instead: git worktree add .worktrees/<name> <branch> && cd .worktrees/<name>. Then do your work and remove with: git worktree remove .worktrees/<name>"
-      fi
-    fi
+git_query() {
+  local dir="$1" gitdir="$2"
+  shift 2
+  git_scrubbed "$dir" "$gitdir" rev-parse "$@"
+}
+
+# True when the tree an invocation targets holds uncommitted work — the only
+# state in which an overwrite can destroy anything (#15835).
+worktree_is_dirty() {
+  local dir="$1" gitdir="$2"
+  # A directory only the shell could resolve: assume there is work to lose,
+  # the same conservative reading targets_this_main_tree already applies.
+  [ "$dir" = "?" ] && return 0
+  [ -n "$(git_scrubbed "$dir" "$gitdir" status --porcelain)" ]
+}
+
+# The recovery form, which must stay available: undoing an overwrite means
+# pulling the content back from where this very branch was PUSHED, so only a
+# remote-qualified source is that recovery. The bare branch name is not: while
+# it is checked out it resolves to the same commit as HEAD, so a source naming
+# it is the very overwrite this rule exists to stop, wearing a second spelling
+# (PR #15849 review). The HEAD spelling was already refused; both are now.
+source_is_own_branch() {
+  local dir="$1" gitdir="$2" source="$3" branch remote
+  branch=$(git_scrubbed "$dir" "$gitdir" rev-parse --abbrev-ref HEAD)
+  [ -n "$branch" ] && [ "$branch" != "HEAD" ] || return 1
+  remote="${source%%/*}"
+  [ "$source" = "$remote/$branch" ] || return 1
+  git_scrubbed "$dir" "$gitdir" remote | grep -qxF "$remote"
+}
+
+# release/master/main, local or through origin.
+# Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
+is_protected_ref() {
+  case "${1#origin/}" in
+    release | master | main | Dev_new_gui) return 0 ;;
+  esac
+  return 1
+}
+
+# The repository this guard speaks for is the one the hook file itself lives in.
+# Empty when the hook is not inside a checkout at all, in which case every main
+# tree is treated as in scope — the conservative direction.
+# `--path-format=absolute` does not resolve symlinks, so two paths that reach
+# the same directory by different routes compare unequal. Every comparison below
+# goes through the physical path instead; a mismatch there would silently put
+# this repository out of the guard's own scope.
+canon_dir() { (cd "$1" 2>/dev/null && pwd -P); }
+
+GUARD_COMMON_DIR=$(canon_dir "$(git_query "$HOOK_DIR" "" --path-format=absolute --git-common-dir)")
+
+# True when the invocation acts on the main working tree of THIS repository.
+# A linked worktree is somebody's own tree and a different repository is none of
+# this guard's business; the comment above has always said so, and now the code
+# does too (#15296).
+targets_this_main_tree() {
+  local dir="$1" gitdir="$2" common worktree
+  # A directory only the shell could have resolved (`cd $VAR`, `cd -`): the
+  # parser reports `?` rather than guessing, and unknown is treated as ours.
+  [ "$dir" = "?" ] && return 0
+  common=$(canon_dir "$(git_query "$dir" "$gitdir" --path-format=absolute --git-common-dir)")
+  [ -n "$common" ] || return 1              # not inside a git repository at all
+  worktree=$(canon_dir "$(git_query "$dir" "$gitdir" --path-format=absolute --git-dir)")
+  [ "$common" = "$worktree" ] || return 1   # a linked worktree, not the main tree
+  [ -z "$GUARD_COMMON_DIR" ] || [ "$common" = "$GUARD_COMMON_DIR" ]
+}
+
+# Cheap pre-filter so the parser only runs for commands that could contain one.
+# A literal "checkout"/"switch" catches the ordinary case; "git" alongside a
+# "$" or a backtick catches the #15303 shape too -- a subcommand that arrives
+# through a variable or substitution and so never spells the word "switch" or
+# "checkout" anywhere in the command text (`git ${SUB} main` is the case that
+# slips past a literal-only filter; `SUB=switch; git $SUB main` happens to
+# still contain the word, by coincidence of the assignment, not by design).
+# Broader than strictly necessary, on purpose: this only decides whether the
+# already-safe parser runs, never whether a command is denied, so widening it
+# costs a python3 start on more commands, not a new false denial.
+if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch -e restore -e reset -e clean ||
+  { printf '%s' "$COMMAND" | grep -qF git && printf '%s' "$COMMAND" | grep -qE '[$`]'; }; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    deny "Blocked: the branch-switch guard needs python3 to tell a real invocation from the same words quoted inside an argument (#15296), and python3 is not installed. Install python3 rather than removing the guard."
   fi
+
+  BRANCH_INVOCATIONS=$(python3 "$GIT_INVOCATION_PARSER" "$COMMAND")
+  PARSE_STATUS=$?
+
+  # Refusing to judge, out loud, beats judging a command that was mis-parsed.
+  if [ "$PARSE_STATUS" -eq 3 ]; then
+    deny "Blocked: the branch-switch guard could not tokenize this command — an unbalanced quote or an unterminated heredoc (#15296). It will not guess at where one command's arguments end, so it makes no ruling. Rewrite the command with balanced quotes and run it again."
+  fi
+  if [ "$PARSE_STATUS" -ne 0 ]; then
+    deny "Blocked: the branch-switch guard's parser exited $PARSE_STATUS, so nothing was checked (#15296). Restore .claude/hooks/git_invocation_parse.py instead of working around the guard."
+  fi
+
+  # 0x1f, not tab: tab is IFS whitespace, so `read` collapses a run of them
+  # and every leading empty field vanishes -- the branch name would land in
+  # WT_DIR and the guard would go looking for a directory by that name (#15296).
+  while IFS=$'\x1f' read -r WT_DIR WT_GIT_DIR SUBCOMMAND INVOCATION_FLAGS REF_ARG; do
+    [ -n "$WT_DIR$WT_GIT_DIR$SUBCOMMAND$INVOCATION_FLAGS$REF_ARG" ] || continue
+
+    # ── Destructive operations ────────────────────────────────────────────
+    # Judged in whatever tree they name. Losing uncommitted work is not a
+    # property of WHICH tree it happens in, so unlike the worktree-isolation
+    # rules below these are not gated on the main tree of this repository —
+    # the 147 lines #15835 was filed for were lost inside a linked worktree,
+    # which the isolation rules deliberately do not police.
+    case ",$INVOCATION_FLAGS," in
+      *,hard,*)
+        deny "Blocked: git reset --hard discards uncommitted changes permanently. Use git stash or git reset --soft instead."
+        ;;
+      *,force,*)
+        deny "Blocked: git clean -f permanently deletes untracked files. Review with git clean -n first, then run manually if intended."
+        ;;
+    esac
+
+    # A reset onto a protected ref moves HEAD and can drop commits a parallel
+    # session has not pushed yet (#6512).
+    if [ "$SUBCOMMAND" = "reset" ] && is_protected_ref "$REF_ARG"; then
+      deny "Blocked: resetting onto a protected ref moves HEAD and can lose unpushed commits in parallel sessions (#6512). Use 'git fetch && git merge --ff-only' or create a fresh branch with 'git checkout -b NEW origin/main'."
+    fi
+
+    # A path-scoped checkout or restore that names a source other than the
+    # index (see the allow-list note above): an overwrite, not a restore.
+    case ",$INVOCATION_FLAGS," in
+      *,overwrite,*)
+        if worktree_is_dirty "$WT_DIR" "$WT_GIT_DIR" &&
+          ! source_is_own_branch "$WT_DIR" "$WT_GIT_DIR" "$REF_ARG"; then
+          deny "Blocked: '$SUBCOMMAND' from '$REF_ARG' would overwrite this working tree with another commit's content, and the tree holds uncommitted work (#15835). This is an overwrite, not a file restore — what it replaces has no copy. Commit or stash the work first. Recovering from an overwrite is still allowed: git restore --source=<remote>/<this branch> -- <path>"
+        fi
+        # Rewrites files; never moves HEAD. None of the isolation rules apply.
+        continue
+        ;;
+    esac
+
+    # A subcommand position the parser could not read as a literal --
+    # `SUB=switch; git $SUB main` and the like (#15303). Judged HERE, ahead of
+    # the isolation gate below, because an unreadable subcommand could be any
+    # of them: the destructive rules above apply in every tree, so gating this
+    # one on the main tree let `git -C <a linked worktree> $SUB --hard` through
+    # with nothing checked at all (PR #15849 review). Denied rather than
+    # skipped, on the same reasoning as an unresolved directory (UNKNOWN_DIR):
+    # an invocation this guard cannot classify is not "nothing to judge".
+    case ",$INVOCATION_FLAGS," in
+      *,ambiguous,*)
+        deny "Blocked: this git invocation's subcommand arrives through a variable or command substitution the guard cannot evaluate (#15303), e.g. \`SUB=switch; git \$SUB main\`. Rewrite the command with a literal subcommand so it can be judged, or use a worktree: git worktree add .worktrees/<name> <branch>"
+        ;;
+    esac
+
+    # ── Worktree isolation ────────────────────────────────────────────────
+    # Only a branch move can trample a parallel session's HEAD, and only on
+    # the main working tree of this repository.
+    case "$SUBCOMMAND" in
+      checkout | switch | "") ;;
+      *) continue ;;
+    esac
+    targets_this_main_tree "$WT_DIR" "$WT_GIT_DIR" || continue
+
+    # Forking a new branch, or restoring files, never moves HEAD onto a shared
+    # branch. Allowed on the main tree, exactly as before.
+    case ",$INVOCATION_FLAGS," in *,new,* | *,restore,*) continue ;; esac
+
+    if [ "$REF_ARG" = "release" ] || [ "$REF_ARG" = "master" ]; then
+      deny "Blocked: never check out release/master locally (#4113, #6512). Release is read-only; commits flow main → release via release cycle. If you need to inspect release, use git log origin/release or create a worktree: git worktree add .worktrees/inspect-release release"
+    fi
+
+    # Deny only when a concrete branch-name arg is present and is not one of the
+    # safe targets (base branch, file restore, detached HEAD, SHA, tag, path).
+    if [ -n "$REF_ARG" ] &&
+      [ "$REF_ARG" != "main" ] &&
+      [ "$REF_ARG" != "." ] &&
+      [ "$REF_ARG" != "HEAD" ] &&
+      ! [[ "$REF_ARG" =~ ^[0-9a-f]{7,40}$ ]] &&
+      ! [[ "$REF_ARG" =~ ^v[0-9]+\.[0-9]+ ]] &&
+      ! [[ "$REF_ARG" =~ ^/ ]]; then
+      deny "Blocked: switching branches on the main working tree tramples HEAD for parallel sessions (#6512). Use a worktree instead: git worktree add .worktrees/<name> <branch> && cd .worktrees/<name>. Then do your work and remove with: git worktree remove .worktrees/<name>"
+    fi
+  done <<<"$BRANCH_INVOCATIONS"
 fi
 
 # Warn if committing outside a worktree when issue-specific worktree exists (#6512)
@@ -169,20 +343,13 @@ if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+c
   # If NOT in a worktree, warn about parallel work isolation
   if [ "$IN_WORKTREE" -eq 0 ]; then
     # Check if any issue-specific worktrees exist
-    REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+    REPO_ROOT=$(git_query "" "" --show-toplevel)
     if [ -d "$REPO_ROOT/.worktrees" ] && ls "$REPO_ROOT/.worktrees"/issue-* >/dev/null 2>&1; then
       # Worktrees exist—you should be using one
       AVAILABLE=$(ls -d "$REPO_ROOT/.worktrees"/issue-* 2>/dev/null | xargs basename -a | paste -sd "," -)
       echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"warn\",\"permissionDecisionReason\":\"Git commit outside worktree detected (#6512). Parallel work worktrees exist: $AVAILABLE. Consider: cd $REPO_ROOT/.worktrees/issue-XXXX && git commit (...) to avoid shared tree conflicts.\"}}" >&2
     fi
   fi
-fi
-
-# Block bare `git reset <ref>` on Dev_new_gui — parallel sessions doing
-# `git reset origin/Dev_new_gui` from a feature branch silently move HEAD
-# and lose committed work that wasn't pushed yet (#6512).
-if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+reset[[:space:]]+(--mixed[[:space:]]+|--soft[[:space:]]+)?(origin/)?(main|master|Dev_new_gui)([[:space:]]|$)'; then
-  deny "Blocked: git reset onto a protected ref moves HEAD and can lose unpushed commits in parallel sessions (#6512). Use 'git fetch && git merge --ff-only' or create a fresh branch with 'git checkout -b NEW origin/Dev_new_gui'."
 fi
 
 # ──────────────────────────────────────────────
@@ -241,6 +408,43 @@ fi
 
 if echo "$COMMAND_TO_CHECK" | grep -qE 'twine[[:space:]]+upload'; then
   deny "Blocked: publishing Python packages should be done manually or via CI, not through Claude Code."
+fi
+
+# ──────────────────────────────────────────────
+# Untrusted-repo clone safety (#16488)
+#
+# The research/adopt skills read other people's repositories, and a clone
+# brings an untrusted `.git` onto the machine with it -- hooks, `core.fsmonitor`,
+# `core.sshCommand`, filter drivers, and recursive submodules can all execute
+# during or after a plain `git clone`. `scripts/research/safe_clone.py` is the
+# one path that neutralises all of that (shallow, hooks/fsmonitor/file-protocol
+# disabled, `.git` deleted, agent-instruction files renamed `*.untrusted`)
+# before anything reads the tree.
+#
+# The helper's own subprocess call never appears as a literal `git clone` in a
+# Bash command -- it runs a fixed argv directly, from a `python3` invocation --
+# so it never reaches this rule at all and needs no explicit exemption. Adding
+# one (e.g. "allow if the command merely MENTIONS the helper's path") would be
+# a bypass: an unsafe `git clone` sitting next to unrelated text that names the
+# helper would then slip through. Every literal `git ... clone` is judged the
+# same way, whether or not the helper is mentioned anywhere else on the line.
+# ──────────────────────────────────────────────
+
+if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git([[:space:]]+[^;&|]*)?[[:space:]]+clone([[:space:]]|$)'; then
+
+  CLONE_DENY_MSG="Blocked: git clone must go through scripts/research/safe_clone.py (python3 scripts/research/safe_clone.py <url> --id <id>), or carry every one of its safe flags itself: --depth 1 --no-tags --single-branch; the config values core.hooksPath=/dev/null, core.fsmonitor=false, protocol.file.allow=never and protocol.ext.allow=never, each passed with -c; and never --recurse-submodules (#16488)."
+
+  if echo "$COMMAND_TO_CHECK" | grep -qE '\-\-recurse-submodules'; then
+    deny "$CLONE_DENY_MSG"
+  fi
+
+  for required_flag in '\-\-depth[[:space:]]+1' '\-\-no-tags' '\-\-single-branch' \
+    'core\.hooksPath=/dev/null' 'core\.fsmonitor=false' \
+    'protocol\.file\.allow=never' 'protocol\.ext\.allow=never'; do
+    if ! echo "$COMMAND_TO_CHECK" | grep -qE "$required_flag"; then
+      deny "$CLONE_DENY_MSG"
+    fi
+  done
 fi
 
 exit 0

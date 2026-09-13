@@ -245,7 +245,7 @@ _ANALYSIS_FORMATS = {
         "emoji": "🏗️",
         "fields": [
             ("total_components", "Analyzed {} architectural components"),
-            ("architectural_issues", "Found {} architectural issues"),
+            ("architectural_issues_count", "Found {} architectural issues"),
         ],
     },
 }

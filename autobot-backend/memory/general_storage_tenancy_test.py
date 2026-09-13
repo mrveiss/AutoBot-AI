@@ -22,7 +22,7 @@ import pytest
 from memory.enums import MemoryCategory
 from memory.manager import MemoryManager
 from memory.models import MemoryEntry
-from memory.storage.general_storage import LEGACY_UNSCOPED_OWNER, GeneralStorage
+from memory.storage.general_storage import LEGACY_UNSCOPED_OWNER, SYSTEM_OWNER, GeneralStorage
 
 ALICE = "user-alice"
 BOB = "user-bob"
@@ -335,3 +335,142 @@ class TestRetentionDoesNotEatParkedRows:
         assert deleted == 1, "the owned row expires; the parked one must not"
         parked = await storage.search(LEGACY_UNSCOPED_OWNER, "pre-existing")
         assert len(parked) == 1
+
+
+# ---------------------------------------------------------------------------
+# The parked bucket can be enumerated and resolved (#13719)
+# ---------------------------------------------------------------------------
+
+
+class TestParkedBucketReporting:
+    @pytest.mark.asyncio
+    async def test_count_unscoped_is_zero_on_an_empty_bucket(self, storage):
+        report = await storage.count_unscoped()
+        assert report == {"count": 0, "oldest": None, "newest": None}
+
+    @pytest.mark.asyncio
+    async def test_count_unscoped_reports_volume_and_age(self, tmp_path):
+        db = tmp_path / "legacy_count.db"
+        with sqlite3.connect(db) as conn:
+            conn.execute("""
+                CREATE TABLE memory_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    metadata_json TEXT,
+                    timestamp TIMESTAMP NOT NULL,
+                    reference_path TEXT,
+                    embedding BLOB
+                )
+            """)
+            conn.execute(
+                "INSERT INTO memory_entries (category, content, timestamp) VALUES (?, ?, ?)",
+                ("fact", "old row", datetime(2020, 1, 1, tzinfo=timezone.utc)),
+            )
+            conn.execute(
+                "INSERT INTO memory_entries (category, content, timestamp) VALUES (?, ?, ?)",
+                ("fact", "less old row", datetime(2021, 1, 1, tzinfo=timezone.utc)),
+            )
+
+        storage = GeneralStorage(db)
+        await storage.initialize()
+        await storage.store(_entry(ALICE, "alice row"))  # must not be counted
+
+        report = await storage.count_unscoped()
+
+        assert report["count"] == 2
+        assert report["oldest"] is not None
+        assert report["newest"] is not None
+        assert report["oldest"] <= report["newest"]
+
+
+class TestReassignUnscopedEntries:
+    @pytest.mark.asyncio
+    async def test_dry_run_reports_without_moving_anything(self, tmp_path):
+        db = tmp_path / "legacy_dry_run.db"
+        with sqlite3.connect(db) as conn:
+            conn.execute("""
+                CREATE TABLE memory_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    metadata_json TEXT,
+                    timestamp TIMESTAMP NOT NULL,
+                    reference_path TEXT,
+                    embedding BLOB
+                )
+            """)
+            conn.execute(
+                "INSERT INTO memory_entries (category, content, timestamp) VALUES (?, ?, ?)",
+                ("fact", "pre-existing row", datetime(2020, 1, 1, tzinfo=timezone.utc)),
+            )
+
+        storage = GeneralStorage(db)
+        await storage.initialize()
+
+        report = await storage.reassign_unscoped_entries(ALICE, dry_run=True)
+
+        assert report == {
+            "count": 1,
+            "oldest": report["oldest"],
+            "newest": report["newest"],
+            "reassigned": 0,
+            "dry_run": True,
+            "new_owner_id": ALICE,
+        }
+        assert len(await storage.search(LEGACY_UNSCOPED_OWNER, "pre-existing")) == 1
+        assert await storage.search(ALICE, "pre-existing") == []
+
+    @pytest.mark.asyncio
+    async def test_real_run_moves_exactly_the_parked_rows(self, tmp_path):
+        db = tmp_path / "legacy_real_run.db"
+        with sqlite3.connect(db) as conn:
+            conn.execute("""
+                CREATE TABLE memory_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    metadata_json TEXT,
+                    timestamp TIMESTAMP NOT NULL,
+                    reference_path TEXT,
+                    embedding BLOB
+                )
+            """)
+            conn.execute(
+                "INSERT INTO memory_entries (category, content, timestamp) VALUES (?, ?, ?)",
+                ("fact", "pre-existing row", datetime(2020, 1, 1, tzinfo=timezone.utc)),
+            )
+
+        storage = GeneralStorage(db)
+        await storage.initialize()
+        await storage.store(_entry(BOB, "bob's own row"))
+
+        report = await storage.reassign_unscoped_entries(ALICE, dry_run=False)
+
+        assert report["reassigned"] == 1
+        assert report["dry_run"] is False
+        assert await storage.search(LEGACY_UNSCOPED_OWNER, "pre-existing") == []
+        [moved] = await storage.search(ALICE, "pre-existing")
+        assert moved.user_id == ALICE
+        # Bob's unrelated row is untouched.
+        [bobs] = await storage.search(BOB, "bob's own row")
+        assert bobs.user_id == BOB
+
+    @pytest.mark.asyncio
+    async def test_reserved_id_is_rejected_as_a_reassignment_target(self, storage):
+        """Neither reserved owner id is a valid reassignment target (#13719 review).
+
+        LEGACY_UNSCOPED_OWNER cannot be reassigned to itself. SYSTEM_OWNER is
+        a legitimate *write* target elsewhere (see store()) but carries no
+        retention exemption in cleanup_old — reassigning parked rows there
+        would silently strip their "never auto-delete" protection ahead of
+        the next retention sweep, so it must be rejected here too.
+        """
+        with pytest.raises(ValueError, match="reserved"):
+            await storage.reassign_unscoped_entries(LEGACY_UNSCOPED_OWNER, dry_run=True)
+        with pytest.raises(ValueError, match="reserved"):
+            await storage.reassign_unscoped_entries(LEGACY_UNSCOPED_OWNER, dry_run=False)
+        with pytest.raises(ValueError, match="not a valid reassignment target"):
+            await storage.reassign_unscoped_entries(SYSTEM_OWNER, dry_run=True)
+        with pytest.raises(ValueError, match="not a valid reassignment target"):
+            await storage.reassign_unscoped_entries(SYSTEM_OWNER, dry_run=False)

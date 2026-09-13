@@ -1,5 +1,7 @@
 # Agent Belief State Architecture
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 **Status:** Phase 1 prototype  
 **Issue:** [GH#6629](https://github.com/mrveiss/AutoBot-AI/issues/6629) (MVA-1644)  
 **Related:** #6627 (stagnation detection), #6626 (confidence reasoning), #6628 (error-severity retry)

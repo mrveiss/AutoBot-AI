@@ -32,6 +32,13 @@
     - access_control
     - sessions
 
+- name: Provision access control enforcement mode
+  include_tasks: enforcement_mode.yml
+  tags:
+    - access_control
+    - sessions
+    - enforcement
+
 - name: Execute rollout phase
   include_tasks: rollout.yml
   when: rollout_phase is defined and rollout_phase > 0

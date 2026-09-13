@@ -16,6 +16,7 @@ from typing import List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from services.provider_key_vault import resolve_provider_key
 
 from ..models import LLMRequest, LLMResponse
 from .base import (
@@ -45,7 +46,7 @@ class GroqAdapter(AdapterBase):
         if self._provider is None:
             from llm_shared.providers.groq import GroqProvider
 
-            api_key = self.config.settings.get("api_key") or config.groq_api_key
+            api_key = self.config.settings.get("api_key") or resolve_provider_key("GROQ_API_KEY", config.groq_api_key)
             self._provider = GroqProvider(settings={"api_key": api_key} if api_key else {})
         return self._provider
 
@@ -59,7 +60,7 @@ class GroqAdapter(AdapterBase):
         diagnostics: List[DiagnosticMessage] = []
         start = time.time()
 
-        api_key = self.config.settings.get("api_key") or config.groq_api_key
+        api_key = self.config.settings.get("api_key") or resolve_provider_key("GROQ_API_KEY", config.groq_api_key)
         if not api_key:
             diagnostics.append(
                 DiagnosticMessage(

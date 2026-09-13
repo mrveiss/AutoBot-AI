@@ -39,7 +39,7 @@ This skill is the **fast path**. Reach for it when the answer is wanted now.
 # Pick whichever matches the ask; run exactly one.
 git diff                                  # uncommitted changes
 git diff --staged                         # staged changes
-git diff origin/Dev_new_gui...HEAD        # whole branch vs base
+git diff origin/main...HEAD        # whole branch vs base
 gh pr diff <number>                       # a specific PR
 ```
 
@@ -65,6 +65,13 @@ If the diff is genuinely clean, print the table header with `— no findings —
 and go straight to the verdict. Do not pad it with speculation.
 
 ## Review checklist
+
+If the diff touches **path validation, session/chat ownership, plugin loading, or
+secrets/credentials**, read the matching section of
+[`docs/developer/THREAT_MODEL.md`](../../../docs/developer/THREAT_MODEL.md) first — it
+carries the trust boundary, the canonical enforcement point, and the invariants for each,
+so the model is loaded instead of re-derived. It is one read, and it counts against the
+3-call ceiling only when a listed subsystem is actually in the diff.
 
 These categories have produced real hits in this repo — cover each one.
 

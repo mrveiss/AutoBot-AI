@@ -20,6 +20,28 @@ import { getApiBase, getBackendWsUrl } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from './useLoadingState'
+// Shared with autobot-slm-frontend's usePrometheusMetrics.ts — see the
+// kit file's doc comment for which fields are main-only extensions (#14907).
+import type {
+  GPUMetrics,
+  NPUMetrics,
+  ServiceHealth,
+  ServicesSummary,
+  PerformanceAlert,
+  AlertsSummary,
+  OptimizationRecommendation,
+  UsePrometheusMetricsOptions,
+} from '@autobot/ui'
+export type {
+  GPUMetrics,
+  NPUMetrics,
+  ServiceHealth,
+  ServicesSummary,
+  PerformanceAlert,
+  AlertsSummary,
+  OptimizationRecommendation,
+  UsePrometheusMetricsOptions,
+} from '@autobot/ui'
 
 // Create scoped logger
 const logger = createLogger('usePrometheusMetrics')
@@ -36,31 +58,6 @@ export interface SystemMetrics {
   timestamp: number
 }
 
-export interface GPUMetrics {
-  available: boolean
-  utilization_percent: number
-  memory_utilization_percent: number
-  temperature_celsius: number
-  power_watts: number
-  name?: string
-  // Issue #469: Extended fields for Prometheus metrics
-  gpu_id?: string
-  thermal_throttling?: boolean
-  power_throttling?: boolean
-}
-
-export interface NPUMetrics {
-  available: boolean
-  utilization_percent: number
-  acceleration_ratio: number
-  inference_count: number
-  wsl_limitation?: boolean
-  // Issue #469: Extended fields for Prometheus metrics
-  hardware_detected?: boolean
-  driver_available?: boolean
-  openvino_support?: boolean
-}
-
 // Issue #469: Performance metrics from Prometheus
 export interface PerformanceScores {
   performance_score: number
@@ -74,71 +71,6 @@ export interface MultiModalMetrics {
   audio_processing_ms: number
   operations_total: number
   success_rate: number
-}
-
-export interface ServiceHealth {
-  name: string
-  host: string
-  port: number
-  status: 'healthy' | 'degraded' | 'critical' | 'offline'
-  response_time_ms: number
-  health_score: number
-  uptime_hours: number
-}
-
-export interface ServicesSummary {
-  total_services: number
-  healthy_services: number
-  degraded_services: number
-  critical_services: number
-  overall_status: 'healthy' | 'degraded' | 'critical'
-  health_percentage: number
-  services: ServiceHealth[]
-}
-
-/**
- * Performance alert from monitoring system.
- * Issue #474: Extended to support AlertManager fields.
- */
-export interface PerformanceAlert {
-  category: string
-  severity: 'info' | 'warning' | 'critical' | 'high'
-  message: string
-  recommendation: string
-  timestamp: number
-  // Issue #474: AlertManager-specific fields (optional for backward compatibility)
-  source?: 'alertmanager' | 'autobot_monitor'
-  alertname?: string
-  fingerprint?: string
-  description?: string
-  starts_at?: string
-  ends_at?: string | null
-  status?: string
-  labels?: Record<string, string>
-}
-
-/**
- * Alert summary from backend.
- * Issue #474: Extended to include high_count and source breakdown.
- */
-export interface AlertsSummary {
-  total_count: number
-  critical_count: number
-  warning_count: number
-  high_count?: number  // Issue #474: Added for AlertManager severity
-  alerts: PerformanceAlert[]
-  sources?: {
-    alertmanager: number
-    autobot_monitor: number
-  }
-}
-
-export interface OptimizationRecommendation {
-  category: string
-  priority: 'high' | 'medium' | 'low'
-  recommendation: string
-  action: string
-  expected_improvement: string
 }
 
 export interface DashboardAnalysis {
@@ -188,17 +120,6 @@ export interface PrometheusMetricsState {
   error: Ref<string | null>
   lastUpdate: Ref<Date | null>
   isConnected: Ref<boolean>
-}
-
-export interface UsePrometheusMetricsOptions {
-  /** Auto-fetch on mount (default: true) */
-  autoFetch?: boolean
-  /** Polling interval in milliseconds (default: 30000 = 30s) */
-  pollInterval?: number
-  /** Enable WebSocket real-time updates (default: false) */
-  useWebSocket?: boolean
-  /** WebSocket update interval in seconds (default: 2) */
-  wsUpdateInterval?: number
 }
 
 export interface UsePrometheusMetricsReturn extends PrometheusMetricsState {

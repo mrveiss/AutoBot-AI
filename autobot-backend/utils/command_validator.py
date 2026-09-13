@@ -23,8 +23,20 @@ from dataclasses import dataclass
 from typing import Dict, List, Pattern
 
 from autobot_shared.logging_manager import get_logger
+from security.command_patterns import _normalize_for_matching, check_dangerous_patterns
 
-# Issue #380: Pre-compiled dangerous patterns for command validation
+# Issue #380: Pre-compiled dangerous patterns for command validation.
+#
+# #14042 - why this is not folded into security/command_patterns.py: the two
+# sets are near-disjoint, not one a subset of the other. Of the 20 patterns
+# here, exactly 1 appears verbatim in the canonical 21. This list is shell-shape
+# oriented (chained-delete forms, backtick and dollar-paren substitution, writes
+# into system directories) - the ways a *composed* command line smuggles a
+# destructive call past a naive check. The canonical set is target-oriented
+# (root-directed recursive deletes, fork bombs, raw device writes). Dropping
+# either loses coverage, so `_check_dangerous_patterns` runs BOTH: this list
+# after `_normalize_for_matching`, then `check_dangerous_patterns`. Merging the
+# two is behaviour-affecting and is tracked separately.
 _DANGEROUS_PATTERNS: List[Pattern] = [
     re.compile(pattern, re.IGNORECASE)
     for pattern in [
@@ -356,12 +368,34 @@ class CommandValidator:
             return self._invalid_result("Command validation error")
 
     def _check_dangerous_patterns(self, command: str) -> Dict[str, bool | str]:
-        """Check if command contains dangerous patterns."""
+        """Check if command contains dangerous patterns.
+
+        #14042: this matched the RAW command, so every bypass #14027 closed in
+        ``security/command_patterns.py`` still worked here — a homoglyph, an
+        ANSI-wrapped command, or one split by a NUL/C0 control character passed
+        every pattern below. Normalising first, through the same canonical
+        helper the security module uses, closes that.
+
+        The canonical check runs as well. The two pattern sets are NOT
+        equivalent: each carries several patterns the other lacks, in both
+        directions, so replacing either with the other would silently drop
+        protection. Both run until they are deliberately converged (#15449,
+        which lists the divergence).
+        """
+        normalized = _normalize_for_matching(command)
+
         # Issue #380: Use pre-compiled patterns from module level
         for compiled_pattern in _DANGEROUS_PATTERNS:
-            if compiled_pattern.search(command):
+            if compiled_pattern.search(normalized):
                 self.logger.warning(f"Dangerous pattern detected: {compiled_pattern.pattern} in command: " f"{command}")
                 return {"safe": False, "pattern": compiled_pattern.pattern}
+
+        canonical = check_dangerous_patterns(command)
+        if canonical:
+            description, _severity, matched = canonical[0]
+            self.logger.warning("Dangerous pattern detected: %s in command: %s", description, command)
+            return {"safe": False, "pattern": matched}
+
         return {"safe": True, "pattern": ""}
 
     def _validate_arguments(self, args: List[str], pattern: CommandPattern) -> Dict[str, bool | str]:

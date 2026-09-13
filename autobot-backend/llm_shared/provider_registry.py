@@ -620,8 +620,10 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     else:
         logger.debug("MISTRAL_API_KEY not set — Mistral provider not registered")
 
-    # HuggingFace — registered when HF token is present
-    hf_token = config.hf_token or config.huggingface_api_token
+    # HuggingFace — HF token, reused below as the Nous Portal fallback (env wins; else vault, #15268).
+    hf_token = resolve_provider_key("HF_TOKEN", config.hf_token) or resolve_provider_key(
+        "HUGGINGFACE_API_TOKEN", config.huggingface_api_token
+    )
     if hf_token:
         hf_provider = HuggingFaceProvider(settings={"api_token": hf_token})
         registry.register(hf_provider)
@@ -662,10 +664,8 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     else:
         logger.debug("OPENROUTER_API_KEY not set — OpenRouter provider not registered")
 
-    # Nous Portal — registered when API key is present (Issue #4341; env wins else vault, #10088 Task 7)
-    nous_key = (
-        resolve_provider_key("NOUS_API_KEY", config.nous_api_key) or config.hf_token or config.huggingface_api_token
-    )
+    # Nous Portal — registered when API key is present (Issue #4341; env wins else vault, #10088 Task 7).
+    nous_key = resolve_provider_key("NOUS_API_KEY", config.nous_api_key) or hf_token
     if nous_key:
         try:
             nous_provider = NousPortalProvider(

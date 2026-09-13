@@ -241,8 +241,8 @@ if __name__ == "__main__":
 
     stats = get_tier_statistics()
     for tier, data in stats.items():
-        logger.info("{tier.name}:")
-        logger.info("  Count: {data['count']}")
-        logger.info("  Cache Hit Rate: {data['cache_hit_rate']}")
-        logger.info("  Base Prompt: {data['base_prompt']}")
+        logger.info(f"{tier.name}:")
+        logger.info(f"  Count: {data['count']}")
+        logger.info(f"  Cache Hit Rate: {data['cache_hit_rate']}")
+        logger.info(f"  Base Prompt: {data['base_prompt']}")
         logger.info("  Agents: %s%s", ", ".join(data["agents"][:5]), "..." if len(data["agents"]) > 5 else "")

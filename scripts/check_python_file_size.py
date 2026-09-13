@@ -70,6 +70,12 @@ import sys
 # pattern table allows for exactly this case.
 logger = logging.getLogger(__name__)
 
+# scripts/ is not a Python package; put the repository root on the path so
+# the canonical git-env scrub is importable when this runs as a bare hook.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+
+from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+
 MAX_LINES = 600
 
 #: Repo-relative path of this hook, quoted in the messages that ask for an edit.
@@ -174,6 +180,9 @@ def tracked_python_files(root: pathlib.Path) -> list[str]:
         text=True,
         encoding="utf-8",
         check=True,
+        # An inherited GIT_DIR outranks `cwd=` and would enumerate another
+        # checkout's index while *root* names this one (#14896).
+        env=scrubbed_git_env(),
     )
     return [line for line in out.stdout.splitlines() if line.strip() and not line.startswith(EXCLUDED_PREFIXES)]
 

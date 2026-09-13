@@ -22,10 +22,8 @@ register tasks on a lightweight in-process Celery app.
 from __future__ import annotations
 
 import importlib
-import logging
 import sys
 import types
-from unittest.mock import MagicMock
 
 import celery as _real_celery
 
@@ -50,53 +48,34 @@ _celery_app_mod.celery_app = _test_celery_app  # type: ignore[attr-defined]
 sys.modules.setdefault("celery_app", _celery_app_mod)
 
 # ---------------------------------------------------------------------------
-# 3. Stub autobot_shared sub-packages that are imported at module level in
-#    knowledge_tasks.py / memory_tasks.py / system_tasks.py.
-#    The top-level conftest.py already stubs the root ``autobot_shared``
-#    package — here we only add the specific sub-modules.
+# 3. ``autobot_shared.logging_manager`` / ``type_defs.common`` need no stub
+#    here (#13224). Both used to go through a local ``_ensure_stub`` helper
+#    that fell back to whatever was already in ``sys.modules`` for a name —
+#    silently handing back the REAL module whenever an earlier import had
+#    already pulled it in — and then rebound an attribute on it with no
+#    restore, leaking into every test collected afterwards on that worker.
+#    ``run_or_schedule`` on ``autobot_shared.async_compat`` was the third such
+#    rebind and was already removed for exactly this reason in #13162.
+#
+#    - ``get_logger``: this is an ancestor conftest's job, not this one's.
+#      ``autobot-backend/conftest.py`` (a parent directory, so pytest always
+#      loads it before this file) already imports the REAL
+#      ``autobot_shared.logging_manager`` and rebinds ``get_logger`` to a
+#      stdlib-logger factory exactly once, guarded by
+#      ``_get_logger_patched_for_tests`` (issue #7766). Redoing it here on the
+#      same real module was pure duplication — no test relied on this copy's
+#      slightly different default ``name="autobot"``; every caller under
+#      ``tasks/`` passes ``__name__`` explicitly.
+#
+#    - ``type_defs.common.Metadata``: ``type_defs/common.py`` depends on
+#      nothing but ``enum``/``typing``, and the rest of ``type_defs/__init__``
+#      pulls in only ``pydantic``, already a hard dependency everywhere in
+#      this backend. There was no import cost or cycle to avoid, so the real
+#      module (``Metadata = Dict[str, Any]``) loads directly — forcing it to
+#      plain ``dict`` bought nothing, and on a worker where some other test
+#      had already imported the real module first would have rebound it
+#      permanently for the rest of that worker's run.
 # ---------------------------------------------------------------------------
-
-
-def _ensure_stub(name: str) -> types.ModuleType:
-    """Return existing module or create+register a MagicMock stub."""
-    if name in sys.modules:
-        return sys.modules[name]
-    mod = types.ModuleType(name)
-    mod.__path__ = []  # mark as package
-    mod.__package__ = name.rpartition(".")[0] or name
-    _m = MagicMock()
-    mod.__getattr__ = lambda attr: _m  # type: ignore[attr-defined]
-    sys.modules[name] = mod
-    return mod
-
-
-# GH#12522: ``get_logger`` must return a REAL stdlib logger, not a MagicMock.
-# ``_ensure_stub`` may hand back the already-imported real logging_manager
-# module, so overwriting ``get_logger`` here mutates a process-global that every
-# later import sees. A MagicMock return value made any module imported after
-# this conftest (e.g. api.codebase_analytics.chromadb_storage) log to a mock,
-# so ``caplog`` captured nothing and order-dependent log assertions failed. A
-# thin ``logging.getLogger`` factory keeps the heavy real logging_manager import
-# stubbed out while still emitting propagating records that caplog can capture.
-_logging_stub = _ensure_stub("autobot_shared.logging_manager")
-_logging_stub.get_logger = lambda name="autobot", *args, **kwargs: logging.getLogger(name)  # type: ignore[attr-defined]
-
-# #13162: ``autobot_shared.async_compat`` is deliberately NOT stubbed. It is
-# pure stdlib (asyncio + concurrent.futures), so it imports cleanly with no
-# infrastructure at all — there was never anything for a stub to break the
-# chain on. Worse, ``_ensure_stub`` hands back the ALREADY-IMPORTED real module
-# whenever some earlier import pulled it in (circuit_breaker.py, event_manager.py
-# and ~30 other backend modules import it at module level), so assigning
-# ``run_or_schedule`` here overwrote the real shared helper process-wide, exactly
-# like the GH#12522 ``get_logger`` trap noted above. Every test collected later
-# in that worker got the MagicMock: ``autobot_shared/async_compat_test.py``'s
-# whole file (7/7) failed in CI with ``assert <MagicMock name='mock()'> == 42``
-# and never in isolation.
-
-# type_defs.common is imported by knowledge_tasks.py
-_type_defs = _ensure_stub("type_defs")
-_type_defs_common = _ensure_stub("type_defs.common")
-_type_defs_common.Metadata = dict  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
 # 4. Real-load services.knowledge.doc_indexer (#11606).

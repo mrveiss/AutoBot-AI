@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from api.agent import _enhance_context_with_kb, comprehensive_research_task
-from api.schemas_agent import ResearchTaskRequest
+from api.schemas_agent_requests import ResearchTaskRequest
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 

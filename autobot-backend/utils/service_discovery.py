@@ -30,7 +30,6 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
 from constants.network_constants import NetworkConstants
-from constants.path_constants import PATH
 from constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
 
 logger = get_logger(__name__)
@@ -117,12 +116,13 @@ class ServiceDiscovery:
     Eliminates hardcoded IP addresses and provides dynamic service resolution
     """
 
-    def __init__(self, config_file: str | None = None):
-        """Initialize service discovery with config file and health checks."""
+    def __init__(self):
+        """Initialize service discovery with health checks.
+
+        #14892: dropped a ``config_file`` argument defaulting to the never-added
+        ``CONFIG_DIR/services.json``; endpoints come from the SSOT below.
+        """
         self.services: Dict[str, ServiceEndpoint] = {}
-        # Use centralized PathConstants (Issue #380)
-        default_config = PATH.CONFIG_DIR / "services.json"
-        self.config_file = config_file or str(default_config)
         self.health_check_interval = ServiceDiscoveryConfig.HEALTH_CHECK_INTERVAL_S
         self.circuit_breaker_threshold = ServiceDiscoveryConfig.CIRCUIT_BREAKER_THRESHOLD
         self._health_check_task: asyncio.Task | None = None

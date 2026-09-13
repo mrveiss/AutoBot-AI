@@ -1,5 +1,9 @@
 # Infrastructure config (IPs, ports, hosts, LLM endpoints) comes from SSOT/.env
 # See: docs/developer/SSOT_CONFIG_GUIDE.md
+agent_behavior:
+  # #14892: event_manager.debug_publish() reads this. The key was absent
+  # from this file for its whole life, so the setting could not be turned on.
+  debug_mode: false
 backend:
   audit_log_file: logs/audit.log
   chat_data_dir: data/chats

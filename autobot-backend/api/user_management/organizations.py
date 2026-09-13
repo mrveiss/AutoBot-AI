@@ -25,7 +25,7 @@ from api.schemas_agent import (
 from api.user_management.dependencies import (
     get_organization_service,
     require_platform_admin,
-    require_user_management_enabled,
+    user_management_route_marker,
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
@@ -50,7 +50,7 @@ logger = get_logger(__name__)
     summary="List organizations",
     description="List all organizations (platform admin only).",
     dependencies=[
-        Depends(require_user_management_enabled),
+        Depends(user_management_route_marker),
         Depends(require_platform_admin),
     ],
 )
@@ -83,7 +83,7 @@ async def list_organizations(
     summary="Create organization",
     description="Create a new organization (platform admin only).",
     dependencies=[
-        Depends(require_user_management_enabled),
+        Depends(user_management_route_marker),
         Depends(require_platform_admin),
     ],
 )
@@ -119,7 +119,7 @@ async def create_organization(
     response_model=OrganizationResponse,
     summary="Get organization",
     description="Get a specific organization by ID.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def get_organization(
     org_id: uuid.UUID,
@@ -141,7 +141,7 @@ async def get_organization(
     response_model=OrganizationResponse,
     summary="Get organization by slug",
     description="Get a specific organization by slug.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def get_organization_by_slug(
     slug: str,
@@ -164,7 +164,7 @@ async def get_organization_by_slug(
     summary="Update organization",
     description="Update an organization's details.",
     dependencies=[
-        Depends(require_user_management_enabled),
+        Depends(user_management_route_marker),
         Depends(require_platform_admin),
     ],
 )
@@ -199,7 +199,7 @@ async def update_organization(
     summary="Delete organization",
     description="Delete an organization (soft delete by default).",
     dependencies=[
-        Depends(require_user_management_enabled),
+        Depends(user_management_route_marker),
         Depends(require_platform_admin),
     ],
 )
@@ -233,7 +233,7 @@ async def delete_organization(
     summary="Deactivate organization",
     description="Deactivate an organization.",
     dependencies=[
-        Depends(require_user_management_enabled),
+        Depends(user_management_route_marker),
         Depends(require_platform_admin),
     ],
 )
@@ -264,7 +264,7 @@ async def deactivate_organization(
     response_model=OrganizationStatsResponse,
     summary="Get organization statistics",
     description="Get usage statistics for an organization.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def get_organization_stats(
     org_id: uuid.UUID,

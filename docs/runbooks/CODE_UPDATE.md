@@ -55,7 +55,7 @@ git add autobot-backend/api/some_endpoint.py
 git add autobot_shared/utils/helper.py
 
 git commit -m "feat(backend): add new API endpoint (#926)"
-git push origin Dev_new_gui
+git push origin main
 ```
 
 ### 2. Post-Commit Hook Auto-Fires
@@ -183,9 +183,82 @@ ansible-playbook playbooks/update-all-nodes.yml \
   --limit 01-Backend
 
 # 4. Return to development branch
-git checkout Dev_new_gui
+git checkout main
 git stash pop
 ```
+
+---
+
+## Recovery when the SLM dashboard itself is unreachable (#15462)
+
+A failed SLM frontend build can leave `/slm/` serving 403 for the whole
+dashboard — including the "Update All Nodes" button and the code-sync UI you
+would normally use to fix it — while every `autobot-*` service still reports
+`active (running)`. The backend API stays reachable throughout; only its UI
+is gone.
+
+For that situation, a static, dependency-free recovery page is served
+directly by the SLM backend, independent of the frontend build:
+
+```
+https://<slm-manager-ip>/slm/api/recovery
+```
+
+It shows the backend's own `/api/health` (including the frontend-bundle
+probe below), and lets you sign in and trigger the same self-update the
+dashboard's "Update All Nodes" button runs — with no build step of its own,
+so a broken frontend build cannot take it down too.
+
+A degraded `frontend` field in `/api/health` (`unhealthy: build output has
+no index.html — a build failed or was never published`) is the signal that
+this is the situation you are in, versus a process actually being down.
+
+---
+
+## Triggering a self-update from the SLM host itself, with no credentials (#15728)
+
+`POST /api/code-sync/self-update` requires an authenticated user — correct
+for the network-facing API, but it means routine maintenance run from a
+shell already on the box still needs a password every time, which is
+exactly the kind of place a credential ends up typed into a script or a
+CI job where it shouldn't be.
+
+An operator with a shell on the SLM host has a second, credential-free way
+to fire the SAME update — no login, no bearer token, nothing on a command
+line to leak into shell history:
+
+```bash
+curl -s --unix-socket /run/autobot/slm-self-update.sock \
+  -X POST http://localhost/self-update
+```
+
+`/run/autobot/slm-self-update.sock` is the **default** path, not a fixed one:
+it comes from the `slm_self_update_socket_path` variable in the `slm_manager`
+role's defaults, and a deployment may override it. On a host where it has been
+overridden the command above targets a socket that does not exist and fails
+with a connection error rather than anything explanatory. Confirm the actual
+path first:
+
+```bash
+systemctl show autobot-slm-self-update.socket -p Listen
+```
+
+This reaches a second ASGI listener bound ONLY to a Unix domain socket that
+systemd's `autobot-slm-self-update.socket` unit creates and owns. The
+socket file's own permissions (root, or a member of the backend's service
+group) ARE the access control — the same boundary that already lets that
+operator restart every service on the box by hand. Nothing here is a secret
+to type, store, or rotate: reachability of the socket IS the credential.
+
+Ansible role `slm_manager`'s `slm_self_update_socket_enabled` (default
+`true`) can turn both the socket unit and the backend's `Sockets=` wiring
+off for a host that should not carry this surface at all.
+
+This is deliberately NOT a replacement for `/recovery` above: `/recovery`
+solves a BROKEN frontend, reachable from any browser, off-host included.
+This solves "trigger routine maintenance from a shell that already has
+root, without a password" — a different problem, and neither folds into
+the other.
 
 ---
 
@@ -199,6 +272,7 @@ git stash pop
 | Backend takes 6 min after restart | Normal startup (GPUSemanticChunker + ChromaDB) | Wait; check `/var/log/autobot/backend.log` |
 | `rsync` wipes `/opt/autobot/data/` | Missing `--exclude` | Never use `--delete` without excludes in sync scripts |
 | Node shows wrong commit | Heartbeat overwrote mark-synced | Issue fixed in #918; check `code_version` in DB |
+| `/slm/` returns 403, all services green | Frontend build failed/incomplete (#15462) | Use `https://<slm-manager-ip>/slm/api/recovery` — see section above |
 
 ---
 
@@ -217,3 +291,5 @@ git stash pop
 - `update-all-nodes.yml` — code update playbook
 - `scripts/hooks/slm-post-commit` — post-commit hook
 - `docs/runbooks/SYSTEM_UPDATE.md` — OS package updates (separate from code)
+- `autobot-slm-backend/static/recovery.html` — backend-served recovery page (#15462)
+- `autobot-slm-backend/services/local_admin_socket.py` — credential-free local self-update socket (#15728)

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.schemas import TokenResponse
 from services.auth import auth_service, get_current_user
 from user_management.database import get_slm_session
 from user_management.models.user import User
@@ -25,6 +26,7 @@ from user_management.schemas.mfa import (
     MFASetupResponse,
     MFAStatusResponse,
     MFAVerifyRequest,
+    MFAVerifySetupResponse,
 )
 from user_management.services.base_service import TenantContext
 from user_management.services.mfa_service import (
@@ -67,12 +69,12 @@ async def setup_mfa(
         raise HTTPException(status_code=400, detail="Internal server error")
 
 
-@router.post("/verify-setup")
+@router.post("/verify-setup", response_model=MFAVerifySetupResponse)
 async def verify_mfa_setup(
     request: MFAVerifyRequest,
     current_user: Annotated[dict, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_slm_db)],
-) -> dict:
+) -> MFAVerifySetupResponse:
     """Verify MFA setup with initial TOTP code."""
     context = TenantContext(is_platform_admin=True)
     mfa_service = MFAService(db, context)
@@ -85,7 +87,7 @@ async def verify_mfa_setup(
     try:
         await mfa_service.verify_setup(user.id, request.code)
         logger.info("MFA enabled for user: %s", username)
-        return {"success": True, "message": "MFA enabled"}
+        return MFAVerifySetupResponse(success=True, message="MFA enabled")
     except InvalidTOTPError:
         raise HTTPException(status_code=400, detail="Internal server error")
     except MFAServiceError as e:
@@ -93,12 +95,12 @@ async def verify_mfa_setup(
         raise HTTPException(status_code=400, detail="Internal server error")
 
 
-@router.post("/verify-login")
+@router.post("/verify-login", response_model=TokenResponse)
 async def verify_mfa_login(
     request: MFAVerifyRequest,
     temp_token: str,
     db: Annotated[AsyncSession, Depends(get_slm_db)],
-) -> dict:
+) -> TokenResponse:
     """Verify MFA code during login (no auth required, uses temp token)."""
     payload = auth_service.decode_token(temp_token)
     if not payload or not payload.get("mfa_pending"):

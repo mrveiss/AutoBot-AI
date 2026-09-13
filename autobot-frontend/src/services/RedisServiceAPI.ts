@@ -29,8 +29,11 @@ export interface ServiceOperationResult {
   message?: string
 }
 
-/** Snapshot of the Redis service runtime status. */
-export interface ServiceStatus {
+/**
+ * Snapshot of the Redis service runtime status. Named for Redis (#15401): the
+ * SLM's `ServiceStatus` / `ServiceHealth` are different concepts under the same names.
+ */
+export interface RedisServiceStatus {
   status: string
   pid: number | null
   uptime_seconds: number | null
@@ -41,7 +44,7 @@ export interface ServiceStatus {
 }
 
 /** Health-check payload from the service-monitor endpoint. */
-export interface ServiceHealth {
+export interface RedisServiceHealth {
   status: string
   /** Additional fields depend on the backend implementation. */
   [key: string]: unknown
@@ -54,8 +57,14 @@ export interface ServiceLogs {
   [key: string]: unknown
 }
 
+// #14908: renamed from `LogLevel` — same name, incompatible value set as
+// the console-logging LogLevel ('debug'|'info'|'warn'|'error' in
+// debugUtils/@autobot/ui). This one is a backend Redis log-filter
+// parameter sent on the wire as-is; changing its values would be a wire
+// contract change requiring backend verification, so it stays separate —
+// only the confusing shared NAME is fixed here.
 /** Valid log-level filter values accepted by the getLogs endpoint. */
-export type LogLevel = 'error' | 'warning' | 'info'
+export type RedisLogLevel = 'error' | 'warning' | 'info'
 
 /** Parameters for the stopService method. */
 export interface StopServiceParams {
@@ -66,7 +75,7 @@ export interface StopServiceParams {
 export interface GetLogsParams {
   lines?: number
   since?: string | null
-  level?: LogLevel | null
+  level?: RedisLogLevel | null
 }
 
 // ---------------------------------------------------------------------------
@@ -150,9 +159,9 @@ class RedisServiceAPI {
   /**
    * Get current service status.
    */
-  async getStatus(): Promise<ServiceStatus> {
+  async getStatus(): Promise<RedisServiceStatus> {
     try {
-      return await this.get<ServiceStatus>(
+      return await this.get<RedisServiceStatus>(
         `${this.baseEndpoint}/status`,
       )
     } catch (error) {
@@ -164,9 +173,9 @@ class RedisServiceAPI {
   /**
    * Get detailed health information.
    */
-  async getHealth(): Promise<ServiceHealth> {
+  async getHealth(): Promise<RedisServiceHealth> {
     try {
-      return await this.get<ServiceHealth>(
+      return await this.get<RedisServiceHealth>(
         `${this.baseEndpoint}/health`,
       )
     } catch (error) {
@@ -185,7 +194,7 @@ class RedisServiceAPI {
   async getLogs(
     lines = 50,
     since: string | null = null,
-    level: LogLevel | null = null,
+    level: RedisLogLevel | null = null,
   ): Promise<ServiceLogs> {
     try {
       const endpoint = this._buildLogsEndpoint(lines, since, level)
@@ -204,7 +213,7 @@ class RedisServiceAPI {
   private _buildLogsEndpoint(
     lines: number,
     since: string | null,
-    level: LogLevel | null,
+    level: RedisLogLevel | null,
   ): string {
     const params = new URLSearchParams()
     if (lines) params.append('lines', String(lines))

@@ -62,6 +62,14 @@ from autobot_shared.secret_redaction import RedactedReprMixin
 # isolation twice (#4945, #13092) and both times failed to propagate.
 PROJECT_ROOT = project_root()
 
+
+def default_audit_log_file() -> str:
+    """The ONE definition of the audit-log default (#14070): was ALSO spelled out
+    as ``security_layer._AUDIT_LOG_FILE_DEFAULT``, kept in step by an equality
+    test -- agreement today, not derivation. A function, so it stays lazy."""
+    return str(project_root() / "logs" / "audit.log")
+
+
 # Default model constants - single source of truth for fallback values (#2553)
 # These are used when .env doesn't specify a value.
 # All agent/tier model assignments MUST reference these constants — never hardcode
@@ -1464,7 +1472,7 @@ class MiscConfig(RedactedSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
-    Vars default to empty string ("") when not set in environment.
+    Field defaults vary field to field -- do not assume "" / 0 / False (#13264).
     Issue: GH#7437 — Migrate 675 os.getenv/os.environ callsites
     """
 
@@ -1483,22 +1491,12 @@ class MiscConfig(RedactedSettings):
     # data-retention decision rather than a wiring change.
     mesh_brain_scheduler_enabled: bool = Field(default=False, alias="AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED")
 
-    anthropic_api_base_url: str = Field(default="", alias="ANTHROPIC_API_BASE_URL")
+    anthropic_api_base_url: str = Field(default="https://api.anthropic.com/v1", alias="ANTHROPIC_API_BASE_URL")
     api_key: str = Field(default="", alias="API_KEY")
     # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
     ast_cache_max_size: int = Field(default=1000, alias="AST_CACHE_MAX_SIZE")
-    # #14050: lazily resolved via project_root() rather than a hardcoded
-    # literal. security_layer.py's own module-level fallback (#13149) is
-    # only ever reached when this field is falsy, so a frozen "/opt/autobot"
-    # default here silently overrode that fix — a checkout without
-    # AUTOBOT_AUDIT_LOG_FILE set would still write into the live install.
-    # A real deployment always sets AUTOBOT_AUDIT_LOG_FILE explicitly (see
-    # ansible/roles/backend/templates/backend.env.j2), so only the unset
-    # case changes here.
-    audit_log_file: str = Field(
-        default_factory=lambda: str(project_root() / "logs" / "audit.log"),
-        alias="AUTOBOT_AUDIT_LOG_FILE",
-    )
+    # #14050 lazy, not a live-install literal frozen at import; #14070 via the module global.
+    audit_log_file: str = Field(default_factory=lambda: default_audit_log_file(), alias="AUTOBOT_AUDIT_LOG_FILE")
     # #11834: restore pre-#7437 autoresearch defaults — ""/0 defaults made
     # AutoResearchConfig() crash on int("")/float("") and silently zeroed
     # timeouts/thresholds (same class as #11681).
@@ -1526,8 +1524,8 @@ class MiscConfig(RedactedSettings):
             "deployments — configure an elevation_client instead.  Issue #10799."
         ),
     )
-    cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
-    cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
+    cache_enabled: bool = Field(default=True, alias="AUTOBOT_CACHE_ENABLED")
+    cache_size: int = Field(default=128, alias="AUTOBOT_CACHE_SIZE")
     cache_l1_size: int = Field(
         default=100,
         alias="AUTOBOT_CACHE_L1_SIZE",
@@ -1567,10 +1565,7 @@ class MiscConfig(RedactedSettings):
     # layer before the extraction is treated as usable. Below it the document is
     # reported as having no usable text layer rather than as a successful
     # extraction that happens to be empty.
-    document_min_text_page_ratio: str = Field(
-        default="",
-        alias="AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO",
-    )
+    document_min_text_page_ratio: str = Field(default="", alias="AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO")
     # #13884: minimum average characters per page, alongside the ratio above.
     # The ratio alone counts a page as readable when it carries a single
     # character, which a page-number stamp, Bates number, or filename footer
@@ -1594,13 +1589,16 @@ class MiscConfig(RedactedSettings):
     document_ocr_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_TIMEOUT")
     document_extraction_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_EXTRACTION_TIMEOUT")
     document_max_table_pages: str = Field(default="", alias="AUTOBOT_DOCUMENT_MAX_TABLE_PAGES")
+    # #14970: bounds the *rendered* table text folded into ingest content, the
+    # way document_max_table_pages bounds the extraction work that produces it.
+    document_max_table_chars: str = Field(default="", alias="AUTOBOT_DOCUMENT_MAX_TABLE_CHARS")
     # #13896: master switch for the OCR fallback. Default on where the toolchain
     # is present, since it only runs on pages that produced no text at all — a
     # born-digital document never rasterizes. Set to "false" to trade scanned
     # documents for a guaranteed CPU ceiling.
     document_ocr_enabled: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_ENABLED")
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
-    chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
+    chat_timeout: int = Field(default=30, alias="AUTOBOT_CHAT_TIMEOUT")
     chromadb_auth_token: str = Field(
         default="",
         alias="AUTOBOT_CHROMADB_AUTH_TOKEN",
@@ -1653,7 +1651,7 @@ class MiscConfig(RedactedSettings):
         default="",
         validation_alias=AliasChoices("AUTOBOT_ENCRYPTION_KEY", "ENCRYPTION_KEY"),
     )
-    env: str = Field(default="", alias="AUTOBOT_ENV")
+    env: str = Field(default="development", alias="AUTOBOT_ENV")  # #13264 batch 3
     error_resolved_ttl_seconds: str = Field(
         default="",
         alias="AUTOBOT_ERROR_RESOLVED_TTL_SECONDS",
@@ -1665,9 +1663,9 @@ class MiscConfig(RedactedSettings):
         ),
     )
     feature_routers_strict: str = Field(default="1", alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
-    gc_threshold_0: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_0")
-    gc_threshold_1: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_1")
-    gc_threshold_2: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_2")
+    gc_threshold_0: int = Field(default=700, alias="AUTOBOT_GC_THRESHOLD_0")  # #13264 batch 3
+    gc_threshold_1: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_1")  # #13264 batch 3
+    gc_threshold_2: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_2")  # #13264 batch 3
     hnsw_construction_ef: str = Field(default="", alias="AUTOBOT_HNSW_CONSTRUCTION_EF")
     hnsw_m: str = Field(default="", alias="AUTOBOT_HNSW_M")
     hnsw_quantization_type: str = Field(
@@ -1723,8 +1721,8 @@ class MiscConfig(RedactedSettings):
     llm_key_rotation_interval_minutes: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES")
     llm_models_yaml: str = Field(default="", alias="AUTOBOT_LLM_MODELS_YAML")
     llm_temperature: str = Field(default="", alias="AUTOBOT_LLM_TEMPERATURE")
-    log_backup_count: int = Field(default=0, alias="AUTOBOT_LOG_BACKUP_COUNT")
-    log_max_bytes: int = Field(default=0, alias="AUTOBOT_LOG_MAX_BYTES")
+    log_backup_count: int = Field(default=5, alias="AUTOBOT_LOG_BACKUP_COUNT")
+    log_max_bytes: int = Field(default=52428800, alias="AUTOBOT_LOG_MAX_BYTES")
     # #13263: deliberately NO default. The pre-#7437 value was "dev", but a
     # working default credential is a vulnerability in its own right — the
     # secret is the whole check, and "dev" is published in this repo, so any
@@ -1775,9 +1773,9 @@ class MiscConfig(RedactedSettings):
         alias="AUTOBOT_VOICE_REALTIME_SESSION_TTL_DAYS",
         description="Redis TTL (days) for voice_realtime_session:* keys. Default 90 days.",
     )
-    memory_log_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
-    memory_pool_size: int = Field(default=0, alias="AUTOBOT_MEMORY_POOL_SIZE")
-    memory_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
+    memory_log_threshold_mb: int = Field(default=1, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
+    memory_pool_size: int = Field(default=100, alias="AUTOBOT_MEMORY_POOL_SIZE")
+    memory_threshold_mb: int = Field(default=500, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
     # #11834: restore pre-#7437 meta-agent defaults (see #11681 pattern);
     # llm_model default stays "" — backend falls back to its model constant.
     meta_agent_approval_threshold: float = Field(default=0.1, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD")
@@ -1785,11 +1783,11 @@ class MiscConfig(RedactedSettings):
     meta_agent_max_module_lines: int = Field(default=500, alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES")
     meta_agent_test_timeout: int = Field(default=60, alias="AUTOBOT_META_AGENT_TEST_TIMEOUT")
     ollama_url: str = Field(default="", alias="AUTOBOT_OLLAMA_URL")
-    postgres_db: str = Field(default="", alias="AUTOBOT_POSTGRES_DB")
+    postgres_db: str = Field(default="autobot", alias="AUTOBOT_POSTGRES_DB")  # #13264 batch 3
     postgres_host: str = Field(default="", alias="AUTOBOT_POSTGRES_HOST")
     postgres_password: str = Field(default="", alias="AUTOBOT_POSTGRES_PASSWORD")
-    postgres_port: int = Field(default=0, alias="AUTOBOT_POSTGRES_PORT")
-    postgres_user: str = Field(default="", alias="AUTOBOT_POSTGRES_USER")
+    postgres_port: int = Field(default=5432, alias="AUTOBOT_POSTGRES_PORT")  # #13264 batch 3
+    postgres_user: str = Field(default="autobot", alias="AUTOBOT_POSTGRES_USER")  # #13264 batch 3
     project_root: str = Field(default="", alias="AUTOBOT_PROJECT_ROOT")
     project_state_db_path: str = Field(default="", alias="AUTOBOT_PROJECT_STATE_DB_PATH")
     prompt_compression_enabled: bool = Field(default=False, alias="AUTOBOT_PROMPT_COMPRESSION_ENABLED")
@@ -1880,11 +1878,11 @@ class MiscConfig(RedactedSettings):
     schema_dir: str = Field(default="", alias="AUTOBOT_SCHEMA_DIR")
     secrets_key: str = Field(default="", alias="AUTOBOT_SECRETS_KEY")
     skip_tls_verify: str = Field(default="", alias="AUTOBOT_SKIP_TLS_VERIFY")
-    smtp_from: str = Field(default="", alias="AUTOBOT_SMTP_FROM")
-    smtp_host: str = Field(default="", alias="AUTOBOT_SMTP_HOST")
+    smtp_from: str = Field(default="autobot@localhost", alias="AUTOBOT_SMTP_FROM")
+    smtp_host: str = Field(default="localhost", alias="AUTOBOT_SMTP_HOST")
     smtp_password: str = Field(default="", alias="AUTOBOT_SMTP_PASSWORD")
-    smtp_port: int = Field(default=0, alias="AUTOBOT_SMTP_PORT")
-    smtp_tls: str = Field(default="", alias="AUTOBOT_SMTP_TLS")
+    smtp_port: int = Field(default=587, alias="AUTOBOT_SMTP_PORT")
+    smtp_tls: str = Field(default="true", alias="AUTOBOT_SMTP_TLS")
     smtp_user: str = Field(default="", alias="AUTOBOT_SMTP_USER")
     speculation_draft_model: str = Field(default="", alias="AUTOBOT_SPECULATION_DRAFT_MODEL")
     speculation_enabled: bool = Field(default=False, alias="AUTOBOT_SPECULATION_ENABLED")
@@ -1898,7 +1896,7 @@ class MiscConfig(RedactedSettings):
     tls_cert_path: str = Field(default="", alias="AUTOBOT_TLS_CERT_PATH")
     tls_key_path: str = Field(default="", alias="AUTOBOT_TLS_KEY_PATH")
     trace_console: str = Field(default="", alias="AUTOBOT_TRACE_CONSOLE")
-    trace_sample_rate: float = Field(default=0.0, alias="AUTOBOT_TRACE_SAMPLE_RATE")
+    trace_sample_rate: float = Field(default=1.0, alias="AUTOBOT_TRACE_SAMPLE_RATE")  # #13264 batch 3
     tts_stream_probe_ttl: str = Field(
         default="",
         alias="AUTOBOT_TTS_STREAM_PROBE_TTL",
@@ -1912,12 +1910,12 @@ class MiscConfig(RedactedSettings):
     urlhaus_feed_url: str = Field(default="", alias="AUTOBOT_URLHAUS_FEED_URL")
     user_mode: str = Field(default="", alias="AUTOBOT_USER_MODE")
     vue_root: str = Field(default="", alias="AUTOBOT_VUE_ROOT")
-    vllm_async_output: bool = Field(default=False, alias="AUTOBOT_VLLM_ASYNC_OUTPUT")
+    vllm_async_output: bool = Field(default=True, alias="AUTOBOT_VLLM_ASYNC_OUTPUT")
     vllm_multi_step: str = Field(default="", alias="AUTOBOT_VLLM_MULTI_STEP")
-    vllm_prefix_caching: str = Field(default="", alias="AUTOBOT_VLLM_PREFIX_CACHING")
+    vllm_prefix_caching: str = Field(default="true", alias="AUTOBOT_VLLM_PREFIX_CACHING")
     vnc_host: str = Field(default="", alias="AUTOBOT_VNC_HOST")
     vosk_model_path: str = Field(default="", alias="AUTOBOT_VOSK_MODEL_PATH")
-    weak_cache_size: int = Field(default=0, alias="AUTOBOT_WEAK_CACHE_SIZE")
+    weak_cache_size: int = Field(default=128, alias="AUTOBOT_WEAK_CACHE_SIZE")
     web_fetch_cache_ttl: str = Field(default="", alias="AUTOBOT_WEB_FETCH_CACHE_TTL")
     web_fetch_max_bytes: int = Field(default=0, alias="AUTOBOT_WEB_FETCH_MAX_BYTES")
     # #13019: bounds redirect-hop count for the pinned-redirect SSRF fetch path
@@ -1933,13 +1931,13 @@ class MiscConfig(RedactedSettings):
     ci: str = Field(default="", alias="CI")
     codebase_index_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_BATCH_SIZE")
     codebase_index_embedding_mode: str = Field(default="precompute", alias="CODEBASE_INDEX_EMBEDDING_MODE")
-    codebase_index_embed_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
+    codebase_index_embed_batch_size: int = Field(default=100, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
     codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
     codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
-    codebase_index_parallel_files: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_FILES")
+    codebase_index_parallel_files: str = Field(default="50", alias="CODEBASE_INDEX_PARALLEL_FILES")
     # #12392: restore pre-#7437 default (True) — "" silently disabled parallel indexing
     codebase_parallel_mode: str = Field(default="true", alias="CODEBASE_PARALLEL_MODE")
-    codebase_scan_parallel_files: str = Field(default="", alias="CODEBASE_SCAN_PARALLEL_FILES")
+    codebase_scan_parallel_files: str = Field(default="50", alias="CODEBASE_SCAN_PARALLEL_FILES")
     config: str = Field(default="", alias="CONFIG")
     # #11681: restore pre-#7437 default (500) — 0 silently disabled the content cache
     content_cache_max_size: int = Field(default=500, alias="CONTENT_CACHE_MAX_SIZE")
@@ -1967,22 +1965,23 @@ class MiscConfig(RedactedSettings):
     # #11681: restore pre-#7437 default (300 s) — 0 made every file-list entry expire instantly
     file_cache_ttl_seconds: int = Field(default=300, alias="FILE_CACHE_TTL_SECONDS")
     gateway_enable_sandbox: str = Field(default="", alias="GATEWAY_ENABLE_SANDBOX")
-    gateway_heartbeat_interval: str = Field(default="", alias="GATEWAY_HEARTBEAT_INTERVAL")
+    gateway_heartbeat_interval: str = Field(default="30", alias="GATEWAY_HEARTBEAT_INTERVAL")
     # #14028: ingest governance stage in front of MessageRouter/agent routing —
     # dedup TTL, recursion-depth ceiling, and the recursion counter's sliding
     # window. See services/gateway/ingest_governor.py.
     gateway_ingest_chain_window_seconds: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_CHAIN_WINDOW_SECONDS")
     gateway_ingest_dedup_ttl_seconds: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_DEDUP_TTL_SECONDS")
     gateway_ingest_max_chain_depth: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_MAX_CHAIN_DEPTH")
-    gateway_max_message_size: int = Field(default=0, alias="GATEWAY_MAX_MESSAGE_SIZE")
-    gateway_max_sessions_user: str = Field(default="", alias="GATEWAY_MAX_SESSIONS_USER")
-    gateway_message_retention_hours: str = Field(default="", alias="GATEWAY_MESSAGE_RETENTION_HOURS")
-    gateway_rate_limit_channel: int = Field(default=0, alias="GATEWAY_RATE_LIMIT_CHANNEL")
-    gateway_rate_limit_user: int = Field(default=0, alias="GATEWAY_RATE_LIMIT_USER")
-    gateway_session_timeout: int = Field(default=0, alias="GATEWAY_SESSION_TIMEOUT")
+    gateway_max_message_size: int = Field(default=1048576, alias="GATEWAY_MAX_MESSAGE_SIZE")
+    gateway_max_sessions_user: str = Field(default="5", alias="GATEWAY_MAX_SESSIONS_USER")
+    gateway_message_retention_hours: str = Field(default="24", alias="GATEWAY_MESSAGE_RETENTION_HOURS")
+    gateway_rate_limit_channel: int = Field(default=100, alias="GATEWAY_RATE_LIMIT_CHANNEL")
+    gateway_rate_limit_user: int = Field(default=60, alias="GATEWAY_RATE_LIMIT_USER")
+    gateway_session_timeout: int = Field(default=1800, alias="GATEWAY_SESSION_TIMEOUT")
     github_actions: str = Field(default="", alias="GITHUB_ACTIONS")
     google_api_key: str = Field(default="", alias="GOOGLE_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
+    grounding_stats_ttl: str = Field(default="", alias="AUTOBOT_GROUNDING_STATS_TTL")
     hf_hub_cache: str = Field(default="", alias="HF_HUB_CACHE")
     hf_hub_disable_progress_bars: bool = Field(default=False, alias="HF_HUB_DISABLE_PROGRESS_BARS")
     hf_token: str = Field(default="", alias="HF_TOKEN")
@@ -1992,9 +1991,9 @@ class MiscConfig(RedactedSettings):
     jenkins_url: str = Field(default="", alias="JENKINS_URL")
     keras_backend: str = Field(default="", alias="KERAS_BACKEND")
     layer_inference_model: str = Field(default="", alias="LAYER_INFERENCE_MODEL")
-    log_level: str = Field(default="", alias="LOG_LEVEL")
+    log_level: str = Field(default="INFO", alias="LOG_LEVEL")  # #13264 batch 3
     master_key: str = Field(default="", alias="MASTER_KEY")
-    mcp_isolation_mode: str = Field(default="", alias="MCP_ISOLATION_MODE")
+    mcp_isolation_mode: str = Field(default="inprocess", alias="MCP_ISOLATION_MODE")
     mcp_registry_cache_enabled: bool = Field(default=True, alias="MCP_REGISTRY_CACHE_ENABLED")
     mcp_registry_cache_ttl: str = Field(default="60", alias="MCP_REGISTRY_CACHE_TTL")
     mcp_run_jwt: str = Field(default="", alias="MCP_RUN_JWT")
@@ -2014,7 +2013,7 @@ class MiscConfig(RedactedSettings):
     # Restoring the "1" default is #13263's call and is left to that issue.
     mcp_run_jwt_enforce: str = Field(default="", alias="MCP_RUN_JWT_ENFORCE")
     mcp_worker_cpu_seconds: int = Field(default=0, alias="MCP_WORKER_CPU_SECONDS")
-    mcp_worker_log_level: str = Field(default="", alias="MCP_WORKER_LOG_LEVEL")
+    mcp_worker_log_level: str = Field(default="INFO", alias="MCP_WORKER_LOG_LEVEL")
     mcp_worker_mem_mb: int = Field(default=0, alias="MCP_WORKER_MEM_MB")
     mcp_worker_nofile: str = Field(default="", alias="MCP_WORKER_NOFILE")
     mistral_api_base_url: str = Field(default="", alias="MISTRAL_API_BASE_URL")
@@ -2029,7 +2028,7 @@ class MiscConfig(RedactedSettings):
     openai_api_base_url: str = Field(default="", alias="OPENAI_API_BASE_URL")
     openrouter_api_base_url: str = Field(default="", alias="OPENROUTER_API_BASE_URL")
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
-    openrouter_default_model: str = Field(default="", alias="OPENROUTER_DEFAULT_MODEL")
+    openrouter_default_model: str = Field(default="gpt-3.5-turbo", alias="OPENROUTER_DEFAULT_MODEL")
     password: str = Field(default="", alias="PASSWORD")
     pytest_current_test: str = Field(default="", alias="PYTEST_CURRENT_TEST")
     pytest_running: str = Field(default="", alias="PYTEST_RUNNING")
@@ -2146,11 +2145,11 @@ class MiscConfig(RedactedSettings):
     vertex_ai_location: str = Field(default="us-central1", alias="VERTEX_AI_LOCATION")
     vertex_ai_project: str = Field(default="", alias="VERTEX_AI_PROJECT")
     vertex_ai_service_account_json: str = Field(default="", alias="VERTEX_AI_SERVICE_ACCOUNT_JSON")
-    vllm_dtype: str = Field(default="", alias="VLLM_DTYPE")
-    vllm_gpu_memory_utilization: str = Field(default="", alias="VLLM_GPU_MEMORY_UTILIZATION")
-    vllm_host: str = Field(default="", alias="VLLM_HOST")
+    vllm_dtype: str = Field(default="auto", alias="VLLM_DTYPE")
+    vllm_gpu_memory_utilization: str = Field(default="0.9", alias="VLLM_GPU_MEMORY_UTILIZATION")
+    vllm_host: str = Field(default="http://127.0.0.1:8000", alias="VLLM_HOST")
     vllm_model: str = Field(default="", alias="VLLM_MODEL")
-    vllm_tensor_parallel_size: int = Field(default=0, alias="VLLM_TENSOR_PARALLEL_SIZE")
+    vllm_tensor_parallel_size: int = Field(default=1, alias="VLLM_TENSOR_PARALLEL_SIZE")
     vnc_resolution: str = Field(default="", alias="VNC_RESOLUTION")
 
 

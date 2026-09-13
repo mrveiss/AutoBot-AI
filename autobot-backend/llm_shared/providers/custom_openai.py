@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from autobot_shared.ssot_config import config
+from services.provider_key_vault import resolve_provider_key
 
 from .openai_compatible import OpenAICompatibleProvider
 
@@ -62,7 +63,10 @@ class CustomOpenAIProvider(OpenAICompatibleProvider):
 
     def _resolve_api_key(self) -> str:
         """Resolve the API key (many local servers accept any non-empty string)."""
-        return self._get_setting("api_key") or config.custom_openai_api_key or "none"
+        key = self._get_setting("api_key") or resolve_provider_key(
+            "CUSTOM_OPENAI_API_KEY", config.custom_openai_api_key
+        )
+        return key or "none"
 
 
 __all__ = ["CustomOpenAIProvider"]

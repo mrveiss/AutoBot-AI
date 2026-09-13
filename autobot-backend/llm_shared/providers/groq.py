@@ -36,6 +36,7 @@ from constants.model_constants import (
     GROQ_MIXTRAL_8X7B,
 )
 from llm_shared.types import ProviderType
+from services.provider_key_vault import resolve_provider_key
 
 from .openai_compatible import OpenAICompatibleProvider
 
@@ -70,7 +71,7 @@ class GroqProvider(OpenAICompatibleProvider):
         """Resolve API key from settings or environment."""
         if self._api_key:
             return self._api_key
-        self._api_key = self._get_setting("api_key") or config.groq_api_key
+        self._api_key = self._get_setting("api_key") or resolve_provider_key("GROQ_API_KEY", config.groq_api_key)
         return self._api_key
 
     def _create_client(self):

@@ -49,7 +49,7 @@ from pathlib import Path
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import iter_python_files  # noqa: E402
+from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
 
 # LLM-service method names whose return value is LLMResponse. Variables
 # assigned from these calls are tracked.
@@ -178,7 +178,11 @@ def _scan_file(path: Path, source: str) -> list[tuple[int, str]]:
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     repo_root = Path(__file__).resolve().parent.parent.parent
-    files = iter_python_files(args, repo_root)
+    files, full_repo = scan_python_files(args, repo_root)
+    # Vacuity floor (#14896): full-repo mode only -- pre-commit legitimately
+    # hands this hook an argv with no Python in it.
+    if enforce_reach(len(files), PY_FLOOR, hook="no-llm-response-dict-access", full_repo=full_repo):
+        return 1
 
     total_violations = 0
     for f in files:

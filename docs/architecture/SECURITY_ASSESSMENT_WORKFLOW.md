@@ -1,5 +1,7 @@
 # Security Assessment Workflow Manager - Architecture Design
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 **Author**: mrveiss
 **Copyright**: (c) 2025 mrveiss
 **Issue**: #260

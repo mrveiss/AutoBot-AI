@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Phase 1: Create Folder Structure - Implementation Plan
 
 > **HISTORICAL NOTE**: This document describes the initial flat infrastructure structure.
@@ -219,7 +221,7 @@ Update `autobot-slm-backend/README.md` to add deployment info at the top:
 ```markdown
 # AutoBot SLM Backend
 
-> **Deploys to:** 172.16.168.19 (SLM Server)
+> **Deploys to:** <slm-manager-ip> (SLM Server)
 
 [rest of existing content]
 ```
@@ -257,7 +259,7 @@ Update `autobot-slm-frontend/README.md`:
 ```markdown
 # AutoBot SLM Frontend
 
-> **Deploys to:** 172.16.168.21 (Frontend VM)
+> **Deploys to:** <frontend-ip> (Frontend VM)
 
 [rest of existing content]
 ```
@@ -294,7 +296,7 @@ Create/update `autobot-frontend/README.md`:
 ```markdown
 # AutoBot User Frontend
 
-> **Deploys to:** 172.16.168.20 (Main Server)
+> **Deploys to:** <backend-ip> (Main Server)
 
 Vue 3 + TypeScript chat interface for AutoBot.
 
@@ -408,7 +410,7 @@ Create `autobot-backend/README.md`:
 ```markdown
 # AutoBot User Backend
 
-> **Deploys to:** 172.16.168.20 (Main Server)
+> **Deploys to:** <backend-ip> (Main Server)
 
 Core AutoBot backend - AI agents, chat workflows, and API endpoints.
 
@@ -510,7 +512,7 @@ Create `autobot-npu-worker/main.py`:
 # Author: mrveiss
 """AutoBot NPU Worker - Hardware AI acceleration service.
 
-Deploys to: 172.16.168.22 (NPU VM)
+Deploys to: <npu-ip> (NPU VM)
 
 This is a stub for Phase 1. NPU-specific code will be extracted
 from autobot-backend in a future phase.
@@ -547,7 +549,7 @@ Create `autobot-npu-worker/README.md`:
 ```markdown
 # AutoBot NPU Worker
 
-> **Deploys to:** 172.16.168.22 (NPU VM)
+> **Deploys to:** <npu-ip> (NPU VM)
 
 Hardware AI acceleration worker using Intel NPU/OpenVINO.
 
@@ -570,7 +572,7 @@ Create `autobot-browser-worker/main.py`:
 # Author: mrveiss
 """AutoBot Browser Worker - Playwright automation service.
 
-Deploys to: 172.16.168.25 (Browser VM)
+Deploys to: <browser-ip> (Browser VM)
 
 This is a stub for Phase 1. Browser-specific code will be extracted
 from autobot-backend in a future phase.
@@ -605,7 +607,7 @@ Create `autobot-browser-worker/README.md`:
 ```markdown
 # AutoBot Browser Worker
 
-> **Deploys to:** 172.16.168.25 (Browser VM)
+> **Deploys to:** <browser-ip> (Browser VM)
 
 Playwright-based browser automation worker.
 

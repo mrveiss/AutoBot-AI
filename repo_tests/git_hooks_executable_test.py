@@ -30,6 +30,20 @@ Reach floors are asserted throughout: an empty glob reports "no offenders"
 while having checked nothing, which is the same shape of bug as the one under
 guard. Extensionless files are asserted specifically — the whole of #14891 was
 a walk that saw only ``*.sh``.
+
+``autobot-infrastructure/shared/scripts/utilities`` joined the swept directories
+in #15264, closing the gap that let #15253's 22 stale modes happen in the first
+place. That directory is not the same shape as the other two, though: it also
+holds standalone Python tools that carry ``#!/usr/bin/env python3`` purely as
+convention — meant to be run ``python3 tool.py``, never ``./tool.py`` — and the
+rule's own premise does not hold for them. This is not a guess: the same pattern
+holds across the whole repository, 536 tracked ``.py`` files declare a shebang
+while tracked ``100644``, against 25 that are ``100755``. So a Python file's
+shebang under ``.../utilities`` is not read as a claim of executability here —
+scoped to that one directory, because the two original directories carry no such
+file today and this guard's job is not to relax their coverage. Every ``.sh``
+file and every extensionless file in ``utilities`` is still held to both
+directions of the rule.
 """
 
 from __future__ import annotations
@@ -39,16 +53,25 @@ import subprocess
 from pathlib import Path
 
 import yaml
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from autobot_shared.paths import scrubbed_git_env
+
+_REPO_ROOT = repo_root()
 
 # Directories whose contents git or a developer executes directly, plus the
 # canonical installer that copies them into place.
 _HOOK_DIRS = (
     "tools/git-hooks",
     "autobot-infrastructure/shared/scripts/hooks",
+    "autobot-infrastructure/shared/scripts/utilities",
 )
 _INSTALLERS = ("scripts/install-git-hooks.sh",)
+
+# Only this directory holds standalone Python tools whose shebang is
+# convention rather than a claim (see module docstring) — scoped here, not
+# lifted repo-wide, so the two original directories keep full coverage.
+_PY_SHEBANG_NOT_A_CLAIM_UNDER = "autobot-infrastructure/shared/scripts/utilities/"
 
 # Files that must be present and executable. Named individually so a walk that
 # reaches files but not *these* files still fails (#14909's three offenders,
@@ -75,6 +98,7 @@ def _tracked_modes() -> dict[str, str]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     )
     modes: dict[str, str] = {}
     for line in result.stdout.splitlines():
@@ -97,31 +121,66 @@ def _first_line(rel: str) -> str:
         return ""
 
 
+def _shebang_claims_executable(rel: str) -> bool:
+    """False for a ``.py`` shebang where it is convention, not a claim (#15264)."""
+    if not _first_line(rel).startswith("#!"):
+        return False
+    return not (rel.startswith(_PY_SHEBANG_NOT_A_CLAIM_UNDER) and rel.endswith(".py"))
+
+
 _MODES = _tracked_modes()
-_SHEBANGED = {rel for rel in _MODES if _first_line(rel).startswith("#!")}
+_SHEBANGED = {rel for rel in _MODES if _shebang_claims_executable(rel)}
+_UTILITIES = {rel for rel in _MODES if rel.startswith(_PY_SHEBANG_NOT_A_CLAIM_UNDER)}
 
 
 def test_the_sweep_actually_reached_the_hook_directories() -> None:
     """Discovery floor. An empty listing asserts nothing while reading as clean.
 
-    Four independent floors, because any one of them can be satisfied by a sweep
+    Five independent floors, because any one of them can be satisfied by a sweep
     that is still broken: the file count catches a path list that stopped
     matching, the shebang count catches a reader that returns "" for everything
     (which would make every later assertion vacuously true), the named set
-    catches a sweep that reaches files but not the ones this guard is about, and
-    the extensionless count catches the #14891 trap of a walk that only ever
-    sees ``*.sh``.
+    catches a sweep that reaches files but not the ones this guard is about, the
+    extensionless count catches the #14891 trap of a walk that only ever sees
+    ``*.sh``, and the ``utilities`` count catches ``_HOOK_DIRS`` losing that
+    entry — dropping it collapses the count to zero, since ``git ls-files -s``
+    then never returns a single path under it (#15264).
     """
-    assert len(_MODES) >= 46, (
+    assert len(_MODES) >= 125, (
         f"only {len(_MODES)} tracked files under {_HOOK_DIRS} — the path list is "
         "no longer reaching the hook directories"
     )
     # Floors sit AT the measured count rather than below it for headroom, so a
-    # retired hook has to come here and say so. Measured on this branch:
-    # 46 tracked, 25 shebanged, 22 of them extensionless.
-    assert len(_SHEBANGED) >= 25, (
-        f"only {len(_SHEBANGED)} files declare a shebang — the reader has regressed "
-        "and every assertion below would pass having checked nothing"
+    # retired hook has to come here and say so. #15127's first change did
+    # exactly that: it retired utilities/ollama_thread_utility.sh together with
+    # the companion utilities/ollama.service.new that nothing else named, and
+    # dropped both floors by their exact delta (see git blame for that count).
+    #
+    # #15127's later batch retired eleven more unreferenced infrastructure
+    # scripts, two of them under utilities/: batch-configure-vms.sh (its three
+    # subcommands are superseded by real Ansible playbooks) and
+    # complete-vm-sync-templates.sh (named paths that no longer exist and
+    # duplicated tools the project's own single-frontend ADR names as the real
+    # ones). That dropped _SHEBANGED to 45 (floor 46) and _UTILITIES to 77
+    # (floor 79), both below floor, and both had to be fixed in the same PR
+    # that dropped them — a stale floor here isn't a free pass, it's a reach
+    # guard that would otherwise let every assertion below it pass vacuously.
+    #
+    # Floor-at-exact-count taught the wrong lesson at PR-review time: lowering
+    # it to the new exact count again would go red on the very next legitimate
+    # retirement and teach whoever hits that to lower it again without
+    # thinking, rather than to look at what dropped and why. So these two
+    # floors now sit with real headroom instead of sitting at the measured
+    # count — small enough that a reader regression (which drops the count
+    # toward zero) or a directory falling out of _HOOK_DIRS (which drops
+    # _UTILITIES to zero, #15264) still trips them, large enough that the next
+    # single small retirement doesn't. Measured on this branch after #15127:
+    # 125 tracked (77 of them under utilities/), 45 shebanged and read as a
+    # claim, 23 of those extensionless.
+    assert len(_SHEBANGED) >= 40, (
+        f"only {len(_SHEBANGED)} files declare a shebang read as a claim — the "
+        "reader has regressed and every assertion below would pass having "
+        "checked nothing"
     )
     missing = sorted(_REQUIRED - set(_MODES))
     assert not missing, f"these hooks are no longer tracked at all: {missing}"
@@ -130,6 +189,12 @@ def test_the_sweep_actually_reached_the_hook_directories() -> None:
     assert len(extensionless) >= 22, (
         f"only {len(extensionless)} extensionless executables found — the sweep has "
         "narrowed to files with a suffix, which is exactly the gap #14891 closed"
+    )
+
+    assert len(_UTILITIES) >= 70, (
+        f"only {len(_UTILITIES)} tracked files found under "
+        f"{_PY_SHEBANG_NOT_A_CLAIM_UNDER!r} — the walk has stopped reaching "
+        "utilities/, which is exactly where #15253's 22 stale modes lived (#15264)"
     )
 
 
@@ -179,8 +244,7 @@ def test_no_executable_hook_relies_on_a_missing_shebang() -> None:
     assert not offenders, (
         "these files are executable but their first line is not a shebang, so the "
         "kernel refuses them and git falls back to `sh` — a bash-only script then "
-        "changes meaning silently. Move the `#!` line to line 1:\n  "
-        + "\n  ".join(offenders)
+        "changes meaning silently. Move the `#!` line to line 1:\n  " + "\n  ".join(offenders)
     )
 
 
@@ -242,6 +306,7 @@ def test_the_python_filter_reaches_the_inputs_these_guards_read() -> None:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     ).stdout.split()
     # `**/*.py` already covers the Python files by construction; what has to be
     # named explicitly is everything else.
@@ -250,11 +315,7 @@ def test_the_python_filter_reaches_the_inputs_these_guards_read() -> None:
         f"only {len(subjects)} non-Python files under {roots} — the listing "
         "regressed and this test would pass having checked almost nothing"
     )
-    unreachable = [
-        subject
-        for subject in subjects
-        if not any(_matches(pattern, subject) for pattern in patterns)
-    ]
+    unreachable = [subject for subject in subjects if not any(_matches(pattern, subject) for pattern in patterns)]
     assert not unreachable, (
         "changing these files matches no pattern in the python filter, so "
         "python-suite is reported green by the shim and the guards in this "

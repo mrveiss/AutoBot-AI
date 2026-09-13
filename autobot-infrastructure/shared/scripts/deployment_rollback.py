@@ -57,6 +57,15 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 from backup_manager import BackupManager  # noqa: E402 - must follow the sys.path setup above
 
+# `autobot_shared` lives at the repository root, which is not on the path when
+# this script is run standalone. The scrub it provides is what keeps an
+# inherited GIT_DIR from redirecting the git calls below (#15783).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.paths import scrubbed_git_env  # noqa: E402 - follows the sys.path setup above
+
 # --- Standalone replacements for backend-only modules (#11761) --------------
 # `utils/` and `constants/` exist only under autobot-backend/ and are not
 # importable from this directory; shared scripts stay standalone (#11759).
@@ -311,6 +320,7 @@ class RollbackManager:
                 capture_output=True,
                 text=True,
                 check=False,
+                env=scrubbed_git_env(),
             )
             if result.returncode == 0:
                 return result.stdout.strip()[:8]
@@ -369,6 +379,7 @@ class RollbackManager:
                 capture_output=True,
                 text=True,
                 check=False,
+                env=scrubbed_git_env(),
             )
 
             if result.returncode != 0:
@@ -715,6 +726,7 @@ class RollbackManager:
                     cwd=self.project_root,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    env=scrubbed_git_env(),
                 )
                 stdout, stderr = await process.communicate()
 

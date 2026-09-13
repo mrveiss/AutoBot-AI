@@ -31,7 +31,7 @@
 
 After agents complete:
 
-0. **Gate 0 — Squash-duplicate check:** Verify no commits are already in `Dev_new_gui` (see `docs/developer/CLAUDE_WORKFLOW.md` "Gate 0"). If all commits are duplicates, close without merging.
+0. **Gate 0 — Squash-duplicate check:** Verify no commits are already in `main` (see `docs/developer/CLAUDE_WORKFLOW.md` "Gate 0"). If all commits are duplicates, close without merging.
 1. **Enumerate ALL open PRs:** `gh pr list --state open` before starting review
 2. **Track in checklist:** One line per PR — nothing skipped
 3. **Review each PR:**
@@ -39,7 +39,7 @@ After agents complete:
    - Syntax: `npm run lint` / `python -m black --check`
    - Imports: `python -c 'import <module>'` for each modified file
    - Call sites: grep for removed/renamed functions
-4. **Merge:** each PR to `Dev_new_gui` — only with every required check green (see "Red CI Never Merges")
+4. **Merge:** each PR to `main` — only with every required check green (see "Red CI Never Merges")
 5. **Verify count:** PR count should be 0 after all merges
 
 ---
@@ -62,11 +62,47 @@ root causes and both are yours to fix:
    so a stale FAILURE can sit next to the real SUCCESS).
 2. **Absence is not success.** A PR reporting "19 success, 0 failures" is still
    blocked if a required context never reported at all. Count reported contexts
-   against `gh api repos/{owner}/{repo}/branches/Dev_new_gui/protection --jq
+   against `gh api repos/{owner}/{repo}/branches/main/protection --jq
    '.required_status_checks.contexts[]'`.
-3. **Root-cause and fix it** in the same PR. If the check itself is wrong, fix the
+3. **Name the cause before you debug the diff (#15139).** Five conditions render as
+   the same red tile, and `gh pr checks` buckets every one of them under `fail` —
+   `fail` there is **not** `conclusion: failure` and must be confirmed against the
+   run object. Run `pipeline-scripts/ci_red_cause.py --pr N` (add `--json` to parse
+   it). It reads `GET /actions/jobs/{id}`, the only endpoint carrying a `steps`
+   array — `GET /commits/{sha}/check-runs` has none, so anything classifying from
+   the check-runs listing alone is guessing.
+
+   | cause | what happened | at fault | remedy |
+   |---|---|---|---|
+   | `runner-starvation` | job executed 0 steps — it never got a runner | environment | nothing ran; push a new head commit |
+   | `provisioning-failure` | first failing step is toolchain setup (`apt` exit 124) | environment | no test result; push a new head commit |
+   | `superseded` | `conclusion: cancelled` — a newer push retired the run | neither | wait for the run already queued on the current head |
+   | `test-failure` | first failing step is a work step | **the diff** | fix the diff |
+   | `undetermined` | the cause could not be established | **assume the diff** | establish the cause before acting |
+
+   Read the **first** failing step, never the last: a setup failure makes later test
+   steps fail downstream, so the last failure lies about the cause.
+
+   **`infrastructure: true` means the diff is not indicted — it does NOT mean
+   re-running will fix it (#15139).** Measured on run `33149960063`:
+   `POST /actions/runs/{id}/rerun-failed-jobs` reported success and advanced the run
+   to `attempt=2`, but the failed matrix leg `python-suite shard 12/12` was **carried
+   forward, not re-executed** — same job id, same `started_at` — and only its
+   dependents re-ran 18 minutes later, so the `python-suite` rollup failed again on
+   `Fail if any shard failed`. All fourteen already-executed jobs kept their original
+   attempt-1 timestamps. Re-queueing twice and getting the same red does not mean the
+   classifier is wrong; it means the remedy is.
+
+   What is structurally guaranteed instead: **a new head commit starts a new run at
+   `attempt=1`**, and an attempt-1 run has no previous attempt to carry a job forward
+   from, so every job must execute. That guarantees re-execution — not success.
+
+   **A named cause never makes a red check green.** The tool publishes no status and
+   re-queues nothing; it exits 1 on any red whatever the cause, and exits 2 when
+   nothing could be classified — which is never "clean".
+4. **Root-cause and fix it** in the same PR. If the check itself is wrong, fix the
    check — in the same PR or a fast-follow that lands first.
-4. **If it genuinely cannot be fixed now:** label the PR `blocked`, post a
+5. **If it genuinely cannot be fixed now:** label the PR `blocked`, post a
    one-paragraph root-cause writeup on it, and move to the next issue. Do not merge,
    do not `--admin` past it, and do not interrupt a `/loop` to ask about it.
 
@@ -95,11 +131,11 @@ anyway (the #9968 / PR #9955 timeline — issue filed 3h before the PR merged).
 **To unblock:** close/resolve the issue, or remove the `blocks-merge` label, then
 re-run the check (or push/sync the PR to re-trigger it).
 
-Setup (owner) — **configured on `Dev_new_gui` and `main`** (2026-06-23):
+Setup (owner) — **configured on `main` and `release`** (2026-06-23):
 - The `blocks-merge` label exists (`gh label create blocks-merge --color B60205 --description "Open issue blocks merging the PR it references"`).
 - The required status-check **context is the job name** `No open blocks-merge issues reference this PR` — *not* the workflow name. GitHub matches required checks by the reported check-run name (the Actions job's `name:`), so requiring `PR Blocking Findings` would never match and would block every PR. Both branches now require the job-name context so the merge button actually blocks (the workflow only reports status; branch protection enforces it).
 
-**`required_conversation_resolution` — ENABLED** on `Dev_new_gui` and `main`
+**`required_conversation_resolution` — ENABLED** on `main` and `release`
 (2026-06-23). This zero-code branch-protection toggle blocks merge until every
 review conversation is resolved. It covers the *review-comment* half of the race;
 the `blocks-merge` gate above covers the *filed-issue* half that actually occurred.
@@ -154,6 +190,23 @@ After merging all PRs in a batch:
 - Only cancel/retrigger when a check has been in a non-running state for >30 minutes with no activity
 
 **Why:** Sessions wasted time canceling/retriggering smoke tests that were running normally.
+
+**A deep queue is the hosted-runner cap, not a dead self-hosted pool (#15139).**
+Measured 2026-08-28: **155** runs queued, **14** jobs executing — **13 of them on
+`ubuntu-latest`, 1 on self-hosted** — with both self-hosted runners `online`. A
+12-run sample of the queued runs found `ubuntu-latest` on every job. So queue depth
+tracks the GitHub-hosted concurrency cap; it is neither a dispatch gate nor a starved
+self-hosted pool, and **idle self-hosted runners next to a long queue is expected**,
+not evidence of a fault. Re-measure before assuming otherwise:
+
+```bash
+gh api 'repos/{owner}/{repo}/actions/runs?status=queued&per_page=1' --jq .total_count
+gh api repos/{owner}/{repo}/actions/runners --jq '[.runners[] | {name, status, busy}]'
+```
+
+A run queued past `WATCHDOG_STALL_MINUTES` (default **45**) is the threshold
+`ci_dispatch_watchdog.py --check runner-starvation` reports on. Below it, waiting is
+normal and your diff is not the reason.
 
 ---
 

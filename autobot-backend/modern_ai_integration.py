@@ -28,13 +28,16 @@ from constants.model_constants import (
     OPENAI_GPT4_TURBO_PREVIEW,
     OPENAI_GPT4_VISION_PREVIEW,
 )
+from llm_shared.providers.anthropic import _route_sampling_kwargs
 from memory import MemoryManager, TaskPriority
+from screen_analysis_prompt import build_screen_analysis_prompts
 from task_execution_tracker import get_task_tracker as _get_task_tracker
 
 task_tracker = _get_task_tracker()
 from utils.service_registry import get_service_url
 
 logger = get_logger(__name__)
+
 
 # Issue #380: Module-level frozenset for error filtering
 _ERROR_FINISH_REASONS = frozenset({"error", "timeout"})
@@ -334,6 +337,15 @@ class AnthropicClaudeProvider(BaseAIProvider):
             logger.warning("Anthropic library not available")
             self.client = None
 
+    def _build_call_kwargs(
+        self, model: str, request: AIRequest, default_max_tokens: int, messages: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Build messages.create() kwargs, routing sampling params via extra_body (#15016)."""
+        kwargs = {"model": model, "max_tokens": request.max_tokens or default_max_tokens, "messages": messages}
+        kwargs["temperature"] = request.temperature or self.config.temperature
+        kwargs["system"] = request.system_message
+        return _route_sampling_kwargs(kwargs)
+
     async def generate_text(self, request: AIRequest) -> AIResponse:
         """Generate text using Claude"""
         await self._check_rate_limit()
@@ -346,14 +358,8 @@ class AnthropicClaudeProvider(BaseAIProvider):
 
             # Prepare messages
             messages = [{"role": "user", "content": request.prompt}]
-
-            response = await self.client.messages.create(
-                model=self.config.model_name,
-                max_tokens=request.max_tokens or self.config.max_tokens,
-                temperature=request.temperature or self.config.temperature,
-                system=request.system_message,
-                messages=messages,
-            )
+            call_kwargs = self._build_call_kwargs(self.config.model_name, request, self.config.max_tokens, messages)
+            response = await self.client.messages.create(**call_kwargs)
 
             processing_time = time.time() - start_time
 
@@ -427,14 +433,8 @@ class AnthropicClaudeProvider(BaseAIProvider):
             start_time = time.time()
             content = self._build_anthropic_image_content(request.prompt, request.images)
             messages = [{"role": "user", "content": content}]
-
-            response = await self.client.messages.create(
-                model=ANTHROPIC_CLAUDE3_OPUS_DATED,
-                max_tokens=request.max_tokens or 1000,
-                temperature=request.temperature or self.config.temperature,
-                system=request.system_message,
-                messages=messages,
-            )
+            call_kwargs = self._build_call_kwargs(ANTHROPIC_CLAUDE3_OPUS_DATED, request, 1000, messages)
+            response = await self.client.messages.create(**call_kwargs)
 
             return self._build_anthropic_vision_response(request, response, time.time() - start_time)
 
@@ -948,38 +948,6 @@ class ModernAIIntegration:
             "context_analysis": (content[:500] + "..." if len(content) > 500 else content),
         }
 
-    def _build_screen_analysis_prompts(self) -> tuple[str, str]:
-        """
-        Build system message and prompt template for screen analysis.
-
-        Returns:
-            Tuple of (system_message, prompt_template).
-
-        Issue #620.
-        """
-        system_message = """You are an expert at analyzing screenshots and user interfaces.
-        Provide detailed analysis of what you see, including:
-        1. UI elements and their purposes
-        2. Text content and its meaning
-        3. Available actions and interactions
-        4. Current application or website context
-        5. Suggestions for automation or user actions"""
-
-        prompt_template = """
-        Please analyze this screenshot with the following goal: {analysis_goal}
-
-        Provide a detailed analysis in JSON format with the following structure:
-        {{
-            "summary": "Brief description of what's shown",
-            "ui_elements": [list of detected UI elements with descriptions and locations],
-            "text_content": [list of readable text with context],
-            "suggested_actions": [list of possible user actions],
-            "automation_opportunities": [list of tasks that could be automated],
-            "context_analysis": "Analysis of the application/website context"
-        }}
-        """
-        return system_message, prompt_template
-
     def _build_ai_metadata(self, response: Any) -> Dict[str, Any]:
         """
         Build metadata dict from AI response.
@@ -1007,7 +975,7 @@ class ModernAIIntegration:
     ) -> Dict[str, Any]:
         """Analyze screenshot using AI vision models (Issue #620: uses extracted helpers)."""
         provider = self._select_vision_provider(preferred_provider)
-        system_message, prompt = self._build_screen_analysis_prompts()
+        system_message, prompt = build_screen_analysis_prompts(analysis_goal)
 
         response = await self.process_with_ai(
             provider=provider,

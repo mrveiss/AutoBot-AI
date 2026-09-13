@@ -39,13 +39,17 @@ class ClaimExtractor:
         return patterns
 
     def _relativize(self, file_path: Path) -> str:
-        """Return path relative to repo_root if known, otherwise basename only."""
-        if self.repo_root:
-            try:
-                return str(file_path.relative_to(self.repo_root))
-            except ValueError:
-                pass
-        return file_path.name
+        """Path relative to ``repo_root`` where that is known, else the path as given.
+
+        Never the bare basename. The whole output of this stage is
+        ``file:line`` citations a reader is expected to open, and every tree in
+        this repository has a ``README.md`` in it -- dropping the directory
+        turns a precise citation into an ambiguous one without saying so, and
+        the issues ``file_issues.py`` raises from it point nowhere (#14986).
+        """
+        if self.repo_root and file_path.is_relative_to(self.repo_root):
+            return str(file_path.relative_to(self.repo_root))
+        return str(file_path)
 
     def extract_from_file(self, file_path: Path) -> List[Dict[str, Any]]:
         """Extract claims from a single file."""

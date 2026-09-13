@@ -10,6 +10,15 @@
 - **No browsers for CLI tasks:** Use `gh`, `curl`, or API calls instead of Playwright/Puppeteer
 - **3-command exploration limit:** If 3 commands haven't converged, write a hypothesis first
 - **Implementation first — clarify only on genuine ambiguity.** Default to a brief plan (max 10 lines) then implement. When the task *is* ambiguous, state the approach in 3 bullets and wait for confirmation (Rule 4 in [`CLAUDE_RULES.md`](CLAUDE_RULES.md)); inside a `/loop`, post the question with a recommendation and continue instead of blocking
+- **Acceptance criteria are ticked ONLY with code evidence — unbreakable.** A tick is a claim.
+  Verify the criterion against merged code from base (`git show origin/main:<path>`) and quote
+  the file, symbol or count in the comment. Never tick to tidy a closed issue, to match a merged PR,
+  or because the work "was obviously done". Unverifiable from the diff → leave unchecked and say why.
+- **Issue relationships are native, never prose.** Every child is attached to its umbrella with
+  `gh api -X POST repos/$REPO/issues/$UMBRELLA/sub_issues -F sub_issue_id=$(gh api repos/$REPO/issues/$NEW -q .id)`
+  and every `Depends on:` with `.../issues/$NEW/dependencies/blocked_by -F issue_id=…`, at filing
+  time. The `- [ ]` checklist stays — it carries wave grouping and PR refs the native view cannot.
+  Full commands in the `issue` skill, Step 4. Issue *types* are org-only and unavailable here
 - For large features (backend + frontend), complete and commit backend fully first
 - Commit completed work incrementally
 - If approaching context limit: stop at phase boundary, commit, add GitHub comment with next steps
@@ -51,7 +60,7 @@ paths here are for *reading and changing* the deployment, not for running it.
 - All nodes: deadsnakes PPA python3.14 venv at `/opt/autobot/<component>/venv`
 
 **Branch Strategy:**
-- Always target `Dev_new_gui` for PRs unless told otherwise
+- Always target `main` for PRs unless told otherwise
 - Delete remote feature branches after completing work
 
 **Worktree & Branch Cleanup (MANDATORY once the branch's work is merged):**
@@ -87,12 +96,15 @@ protocol lives in the `session-lifecycle` skill; the handoff schema is in
 
 **Start of session** (before any task work):
 1. `git fetch --prune`, then remove worktrees + local branches already merged
-   into `origin/Dev_new_gui` (inherited cleanup).
+   into `origin/main` (inherited cleanup).
 2. Create your **own** isolated worktree — never two sessions in one checkout:
-   `git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui`.
+   `git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/main`.
 3. Read predecessor handoffs in [`.session/`](../../.session/): if a branch is
    unmerged, decide to continue it (rebase onto base first) or start fresh —
-   never duplicate its work blind.
+   never duplicate its work blind. Step 1's sweep reaps handoffs whose branch is
+   gone (#13848), so every file still there names a live branch. A handoff the
+   sweep reports as `STRANDED` is unlanded work with no branch left: file an
+   issue for it before disposing of the file.
 
 **End of session** (mandatory — also when blocked):
 1. Leave nothing uncommitted; WIP gets a `wip:` commit and a handoff note.
@@ -115,7 +127,7 @@ never edit.
 
 ## Multi-Agent Safety
 
-- Do NOT create/apply/drop `git stash` unless explicitly requested
+- **Never** `git stash` — the stack is shared repo-wide, see [`CLAUDE_GIT.md`](CLAUDE_GIT.md#never-stash-14078)
 - Do NOT switch branches unless explicitly requested
 - When pushing, use `git pull --rebase`
 - "commit" = YOUR changes only; "commit all" = everything in grouped chunks
@@ -131,8 +143,8 @@ Two batches appending to the **same** domain module still conflict — that is a
 with concurrent appends, not a code conflict. Serialize those, or resolve deterministically:
 
 ```bash
-# Step 1: take origin/Dev_new_gui as the authoritative base
-git show origin/Dev_new_gui:autobot-backend/api/<schema-module>.py > autobot-backend/api/<schema-module>.py
+# Step 1: take origin/main as the authoritative base
+git show origin/main:autobot-backend/api/<schema-module>.py > autobot-backend/api/<schema-module>.py
 
 # Step 2: append the new schema classes from our branch at the end
 # (extract them from git diff or the conflicting branch's version)
@@ -176,7 +188,7 @@ acting on it. No artifacts ⇒ the work did not happen; resume it yourself.
 **Worktree Isolation Warning:**
 Do NOT use `isolation: "worktree"` for agents that create PRs. Instead, create manual worktrees:
 ```bash
-git worktree add .worktrees/issue-XXXX -b <branch> origin/Dev_new_gui
+git worktree add .worktrees/issue-XXXX -b <branch> origin/main
 cd .worktrees/issue-XXXX && git branch --unset-upstream
 ```
 
@@ -206,12 +218,32 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 
 **Commit format:** `<type>(scope): <description> (#issue-number)`
 
+**PR cadence — batch the scope, never block on CI.**
+
+A CI suite costs the same ~10-20 min on the singleton runner whether the PR carries one
+issue or five, so the default unit of delivery is a *batch*, and a running suite is never
+a reason to stop working.
+
+- **Group before branching.** Same files/module/layer, same kind of change, same risk →
+  one worktree, one branch, one PR, `Closes #A, #B, #C` in the body, one commit per issue.
+- **Every batched issue is fully delivered or dropped from the PR.** Partial delivery
+  closes nothing; an unfinished issue leaves the batch, it does not leave the checklist.
+- **Split when** the changes are independent, touch unrelated modules, carry different
+  risk (a migration beside a copy fix), when one is likely to go red and would hold the
+  rest hostage, or when the diff is past what one review pass can honestly cover.
+- **On push, sweep the others once** — approval gate, CI verdict, behind-ness across every
+  other open PR (`gh pr list --state open`) — merge/close what is ready, then pick the next
+  issue. Non-colliding = different files from every in-flight PR
+  (`gh pr view <n> --json files`); a colliding issue is deferred, not reordered.
+- **Never busy-poll.** The PR just pushed is not re-read until the next push-time sweep.
+  Its checks finish while the next batch is being built.
+
 **Update the issue as work progresses — not only at closure.** Post the pickup (what is being
 attempted, and the base SHA), any decision taken under a `Decision` heading, and the state you
 stopped in if the session dies. The issue is the only record that survives a lost worktree or
 a different machine.
 
-**Always close the issue after implementation.** PRs targeting `Dev_new_gui` will NOT auto-close issues — verify with `gh issue view`.
+**Always close the issue after implementation.** PRs targeting `main` will NOT auto-close issues — verify with `gh issue view`.
 
 **CI diagnosis** and **posting comments correctly**: see [`CLAUDE_REVIEW.md`](CLAUDE_REVIEW.md)
 — it owns both. In short: queued checks on the self-hosted runner are not failures, and a
@@ -270,42 +302,90 @@ comment body is literal markdown, never raw JSON or a file path.
 
 Run these gates before creating a PR or merging any branch. Gates are ordered by cost — cheapest first.
 
-**Shortcut — run the CI-facing gates in one command:**
+**Shortcut — the pre-push step: run before every push, not just once before opening the PR.** A push that turns out red costs the full 8.9-minute suite before you find out (#15932); this is the same confirmation, available locally in a fraction of that time, every time you push rather than only at the start.
 
 ```bash
 scripts/pr-preflight.sh --issue N [--body pr.md] [--message msg.txt]
+scripts/pr-preflight.sh --issue N --full   # also run the checks a path filter would otherwise skip
+scripts/pr-preflight.sh --issue N --only 'ERE'   # run only the required checks whose name matches; the rest are named as not selected
 ```
 
-It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs. The gates below remain the reference; this runs the mechanical ones early.
+It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs.
+
+It also runs (or explains why it did not) each of the ten required status checks the `Main` ruleset gates `Dev_new_gui` on. Every check is path-filtered by default, using the same `.github/filters/*.yml` set its own workflow uses, so a diff outside those paths gets the identical "nothing to check" verdict locally that it would in CI. `--full` bypasses that filter and forces every check to actually run, and is also what turns on `api-wiring` (it builds the whole backend app to dump its OpenAPI schema, so it stays behind `--full` even on a relevant diff). Two checks are out of reach either way: `migration-matrix` needs a live PostgreSQL (set `AUTOBOT_MIGRATION_TEST_ADMIN_URL` to enable it), and `smoke-test` needs a Docker daemon plus three image builds and a running compose stack — reported SKIPPED with that reason rather than approximated (#15933). The gates below remain the reference; this runs the mechanical ones early.
 
 **Match CI's interpreter first (#13573).** CI runs Python **3.14**. A box's default `python3` is often older, and every local gate silently uses it:
 
 ```bash
-scripts/setup-ci-parity-env.sh     # build once; idempotent, no sudo
+scripts/setup-ci-parity-env.sh           # build if missing, reconcile if stale; no sudo
+scripts/setup-ci-parity-env.sh --check   # report only, never installs; exit 1 if stale
 ```
 
 This builds the same environment `.github/actions/setup-python-suite/action.yml` builds — same interpreter, same `requirements-ci.txt` + `requirements-ci-test.txt`, same PyTorch CPU index, same venv path. `pr-preflight.sh` then picks it up automatically and reports which interpreter it used.
 
 Running the gates on an older interpreter is not merely a version difference. **`black` skips its AST safety check** — the pass that verifies a reformat did not change the code — for any file using syntax newer than the running interpreter. It warns and passes anyway, so the weaker check is the silent one. Version-dependent tests are also unreproducible: `\z` in a regex is a `re.error` on 3.10 and valid from 3.12, so a red CI test can be green locally and diagnosable only from shard logs.
 
+**The packages matter as much as the interpreter (#15091).** Local verification *is* expected to
+match the declared dependency set — `setup-ci-parity-env.sh` is how, and it installs nothing outside
+its own venv. Where it cannot be met, the mismatch is **reported, never gated**: a box below floor
+stays usable for ordinary work, and a gate that blocked every local run on it would simply be removed.
+
+Two places now say so, using the same reporter
+(`pipeline-scripts/check_dependency_floors.py`, which reads the `-r` closure of `requirements-ci.txt`,
+`requirements-ci-test.txt` and the two backend requirement files):
+
+- `pr-preflight.sh` prints it in its `interpreter` section.
+- every `pytest` run prints it directly beneath the pass/fail counts, so a bare `pytest` that never
+  touches preflight still says it.
+
+**The venv reconciles on every run, and refreshing is prompted, not automatic (#15130).** It used
+to stop as soon as the directory existed, so it drifted: measured against the two files it installs,
+21 of 86 declared versions were unsatisfied and **9 declared packages were not installed at all**.
+The second number is the one that costs you a diagnosis — a test module that `importorskip`s a
+missing package is never collected, so the run passes by doing less. Both are gone after one
+reconcile; a reconciled venv reports **0 of 86**, absence included.
+
+Which way each caller goes, and why:
+
+| Caller | Behaviour on a stale venv |
+|---|---|
+| `setup-ci-parity-env.sh` | repairs in place — re-runs the same two `pip install -r` commands, then re-checks. Every shortfall seen has been an installed version *older* than a satisfiable declaration, which the reinstall fixes; `rm -rf` would re-download the whole torch stack to reach the same place. `--recreate` stays for what that cannot fix. |
+| `setup-ci-parity-env.sh --check` | reports and exits 1. Installs nothing. |
+| `pr-preflight.sh` | calls `--check` and **says so instead of claiming parity**. It does not install and does not fail the run — reinstalling under someone mid-review would be slow and surprising, and #15091's "reported, never gated" applies here too. |
+
+The check is scoped with `--roots` to the two files the script installs. Judged against the backend
+requirement files as well it would look permanently short, because those describe components neither
+it nor CI's python suite ever installs — a number nobody can act on is noise. It also passes
+`--require-present`, which is the one place absence counts as a shortfall rather than a neutral fact.
+
+If your box is below floor and you cannot build the parity venv, **push and read CI** — a green local
+run is not evidence for anything version-dependent. The concrete precedent: under the declared
+fastapi 0.141.1, `APIRouter.include_router()` **defers**, appending an `_IncludedRouter` wrapper with
+`path=None` instead of copying routes onto the parent; on fastapi 0.135.2 it copies eagerly. Measured
+three ways (#15130): 0.141.1 with starlette 1.3.1 defers, 0.141.1 with starlette 1.6.0 defers, 0.135.2
+with starlette 1.6.0 does not. **The deferral is fastapi's, not starlette's** — a starlette floor will
+not reproduce or suppress it, so do not reach for one. A guard enumerating a router's routes therefore read 26 locally and 3 in CI
+(#14998), and an `hasattr`-guarded walk finds nothing at all rather than raising. #15093 records the
+behaviour and the sweep that bounds its blast radius; do not re-derive it.
+
 ### Gate 0: Squash-Duplicate Detection
 
-Before running any other validation, check whether the branch contains commits that are already squash-merged to `Dev_new_gui`. A squash merge collapses N commits into one, so the individual commit SHAs differ even though the diff is identical. `git log --cherry-pick` detects this by comparing patch IDs rather than SHAs.
+Before running any other validation, check whether the branch contains commits that are already squash-merged to `main`. A squash merge collapses N commits into one, so the individual commit SHAs differ even though the diff is identical. `git log --cherry-pick` detects this by comparing patch IDs rather than SHAs.
 
 ```bash
 # Gate 0: Squash-Duplicate Detection
-DUPES=$(git log --cherry-pick --right-only origin/Dev_new_gui...$BRANCH --oneline 2>/dev/null | wc -l)
-TOTAL=$(git log origin/Dev_new_gui...$BRANCH --oneline 2>/dev/null | wc -l)
+DUPES=$(git log --cherry-pick --right-only origin/main...$BRANCH --oneline 2>/dev/null | wc -l)
+TOTAL=$(git log origin/main...$BRANCH --oneline 2>/dev/null | wc -l)
 NEW=$((TOTAL - DUPES))
 if [ "$DUPES" -gt 0 ]; then
-  echo "WARNING: $DUPES of $TOTAL commit(s) already squash-merged to Dev_new_gui — $NEW truly new"
-  git log --cherry-pick --right-only origin/Dev_new_gui...$BRANCH --format="  %H %s"
+  echo "WARNING: $DUPES of $TOTAL commit(s) already squash-merged to main — $NEW truly new"
+  git log --cherry-pick --right-only origin/main...$BRANCH --format="  %H %s"
 fi
 ```
 
-**If DUPES == TOTAL:** The entire branch is already in `Dev_new_gui`. Close the issue without creating a PR — the work is done.
+**If DUPES == TOTAL:** The entire branch is already in `main`. Close the issue without creating a PR — the work is done.
 
-**If DUPES > 0 but < TOTAL:** Some commits are new. Rebase the branch onto `origin/Dev_new_gui` to drop the duplicate patches before opening a PR. This prevents merge conflicts and duplicate hunks in the diff.
+**If DUPES > 0 but < TOTAL:** Some commits are new. Rebase the branch onto `origin/main` to drop the duplicate patches before opening a PR. This prevents merge conflicts and duplicate hunks in the diff.
 
 **If DUPES == 0:** No duplicates — proceed to Gate 1.
 

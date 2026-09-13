@@ -438,6 +438,19 @@ async def test_get_goal_ancestry_for_work_item_chain(svc: GoalService) -> None:
 # ------------------------------------------------------- KB indexing
 
 
+def _snapshot(goal: LLCGoal) -> dict:
+    """The plain-value form ``_load_goal_snapshot`` returns for *goal* (#15612)."""
+    return {
+        "id": str(goal.id),
+        "company_id": str(goal.company_id),
+        "title": goal.title,
+        "description": goal.description,
+        "level": goal.level,
+        "status": goal.status,
+        "owner_agent_id": goal.owner_agent_id,
+    }
+
+
 @pytest.mark.asyncio
 async def test_index_goal_upserts_to_chroma(svc: GoalService) -> None:
     import sys
@@ -453,13 +466,35 @@ async def test_index_goal_upserts_to_chroma(svc: GoalService) -> None:
 
     # utils.async_chromadb_client has a module-level NameError in the test env;
     # inject a mock module so the lazy `from ... import` inside _index_goal works.
-    with patch.dict(sys.modules, {"utils.async_chromadb_client": mock_chroma_module}):
-        await svc._index_goal(goal)
+    # #15612: _index_goal takes ids and reloads the row through its own session,
+    # so the reload is stubbed here rather than a row being handed in.
+    with (
+        patch.dict(sys.modules, {"utils.async_chromadb_client": mock_chroma_module}),
+        patch.object(svc, "_load_goal_snapshot", AsyncMock(return_value=_snapshot(goal))),
+    ):
+        await svc._index_goal(str(goal.id), "co_test")
 
     mock_collection.upsert.assert_awaited_once()
     call_kwargs = mock_collection.upsert.call_args
     assert call_kwargs.kwargs["ids"] == [str(goal.id)]
     assert "Vision 2030" in call_kwargs.kwargs["documents"][0]
+
+
+@pytest.mark.asyncio
+async def test_index_goal_skips_a_goal_that_no_longer_exists(svc: GoalService) -> None:
+    """A goal deleted between commit and indexing is skipped, not guessed at (#15612)."""
+    import sys
+
+    mock_chroma_module = MagicMock()
+    mock_chroma_module.get_async_chromadb_client = AsyncMock()
+
+    with (
+        patch.dict(sys.modules, {"utils.async_chromadb_client": mock_chroma_module}),
+        patch.object(svc, "_load_goal_snapshot", AsyncMock(return_value=None)),
+    ):
+        await svc._index_goal(str(uuid.uuid4()), "co1")
+
+    mock_chroma_module.get_async_chromadb_client.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -470,8 +505,11 @@ async def test_index_goal_swallows_chroma_error(svc: GoalService) -> None:
     mock_chroma_module = MagicMock()
     mock_chroma_module.get_async_chromadb_client = AsyncMock(side_effect=RuntimeError("chroma down"))
 
-    with patch.dict(sys.modules, {"utils.async_chromadb_client": mock_chroma_module}):
-        await svc._index_goal(goal)
+    with (
+        patch.dict(sys.modules, {"utils.async_chromadb_client": mock_chroma_module}),
+        patch.object(svc, "_load_goal_snapshot", AsyncMock(return_value=_snapshot(goal))),
+    ):
+        await svc._index_goal(str(goal.id), goal.company_id)
 
 
 @pytest.mark.asyncio

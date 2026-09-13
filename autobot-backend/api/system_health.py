@@ -53,6 +53,8 @@ class KnownProbes(str, enum.Enum):
     PRICING = "pricing"  # GH#6480
     CONTENT_REACH = "content_reach"  # #10932
     SLM_LINK = "slm_link"  # #12781
+    SANDBOX = "sandbox"  # #14872
+    SECRETS_STORE = "secrets_store"  # #14126
 
 
 # Per-probe timeout. Probes slower than this become ``status="down"`` so a slow
@@ -146,13 +148,24 @@ async def _run_probe(name: str, fn: ProbeFn, request: Request | None) -> Compone
         )
     except Exception as exc:
         logger.warning("Health probe %r raised %s: %s", name, type(exc).__name__, exc)
-        # Issue #10460: surface the message, not just the type, so a "down"
-        # status is actionable (this endpoint is admin-only — no info leak).
-        reason = str(exc).strip() or "no detail"
+        # Issue #10460 added `str(exc)` here "so a down status is actionable",
+        # on the stated premise that "this endpoint is admin-only — no info
+        # leak". That premise is false: `GET /api/system/health` is public and
+        # documents itself as such (api/system.py:450, "Public endpoint — no
+        # auth required"). An arbitrary exception message from any registered
+        # probe was therefore reachable unauthenticated — file paths, connection
+        # strings, key ids, whatever the raising library happened to include.
+        #
+        # #14126: the type name only, matching what every individual probe
+        # already does (api/knowledge.py:1639, api/memory.py:1366,
+        # api/terminal.py:1006 and six more all emit
+        # `f"probe error: {type(exc).__name__}"`). The full message is not lost:
+        # it is logged one line above, where an operator who can read logs is
+        # already authenticated.
         return ComponentHealth(
             name=name,
             status="down",
-            detail=f"probe error: {type(exc).__name__}: {reason[:160]}",
+            detail=f"probe error: {type(exc).__name__}",
             latency_ms=round((time.perf_counter() - started) * 1000, 2),
         )
     if result.latency_ms is None:
@@ -195,9 +208,26 @@ def list_registered_probes() -> list[str]:
     return sorted(_PROBES.keys())
 
 
-def _reset_probes_for_testing() -> None:
-    """Clear the registry. Test-only — DO NOT call in production code."""
+def _reset_probes_for_testing() -> dict[str, ProbeFn]:
+    """Clear the registry and return what it held. Test-only — DO NOT call in production code.
+
+    Probes register as an import side effect of their own module, so clearing
+    the registry is irreversible within a process: the decorator has already
+    run and re-importing is a no-op. A test that cleared it and walked away
+    therefore emptied the registry for every test that followed it in the same
+    worker — which is how ``sandbox`` came to read as unregistered in one shard
+    while passing everywhere else (#14518). Hand the previous mapping back so
+    the caller can put it right; see ``_restore_probes_for_testing``.
+    """
+    previous = dict(_PROBES)
     _PROBES.clear()
+    return previous
+
+
+def _restore_probes_for_testing(previous: dict[str, ProbeFn]) -> None:
+    """Put back a registry captured by ``_reset_probes_for_testing``. Test-only."""
+    _PROBES.clear()
+    _PROBES.update(previous)
 
 
 # ----------------------------------------------------------------------------

@@ -529,38 +529,11 @@ class TestSynthesisSchemaCacheAutouseIsolation:
         assert rag_module._SYNTHESIS_SCHEMA_CACHE is None
 
 
-class TestAPIEndpoints:
-    """Tests for advanced RAG API endpoints."""
-
-    @pytest.mark.asyncio
-    async def test_search_with_reranking_parameter(self) -> None:
-        """Test /search endpoint accepts enable_reranking parameter."""
-        # This would require FastAPI TestClient integration
-        # Placeholder for integration test
-
-    @pytest.mark.asyncio
-    async def test_advanced_search_endpoint(self) -> None:
-        """Test /knowledge_base/rag/advanced_search endpoint."""
-        # This would require FastAPI TestClient integration
-        # Placeholder for integration test
-
-    @pytest.mark.asyncio
-    async def test_rerank_results_endpoint(self) -> None:
-        """Test /knowledge_base/rag/rerank_results endpoint."""
-        # This would require FastAPI TestClient integration
-        # Placeholder for integration test
-
-    @pytest.mark.asyncio
-    async def test_config_get_endpoint(self) -> None:
-        """Test /knowledge_base/rag/config endpoint GET."""
-        # This would require FastAPI TestClient integration
-        # Placeholder for integration test
-
-    @pytest.mark.asyncio
-    async def test_config_update_endpoint(self) -> None:
-        """Test /knowledge_base/rag/config endpoint PUT."""
-        # This would require FastAPI TestClient integration
-        # Placeholder for integration test
+# The advanced-RAG API endpoint tests (POST /advanced_search, /rerank_results,
+# GET|PUT /config/rag) moved to rag_integration_api_test.py (#15256): they exercise
+# the real router through TestClient/dependency_overrides rather than only asserting
+# a client object is not None, and keeping them here would push this file over
+# MAX_LINES.
 
 
 if __name__ == "__main__":

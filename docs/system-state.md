@@ -2,6 +2,9 @@
 
 # AutoBot System State & Updates
 
+> **Correction (2026-08-30, #15206):** this document names `unified_config` / `unified_config_manager` / `UnifiedConfigManager` as current or pending. That name is a **deprecated alias** (`autobot-backend/config/__init__.py:148-157`) or, for the module path specifically, never existed. The canonical configuration entry point is `autobot_shared/ssot_config.py` (infrastructure/SSOT) plus `config_manager` / `get_config_manager()` from `config.manager` (`autobot-backend/config/manager.py:51`) for everything else. See `docs/developer/SSOT_CONFIG_GUIDE.md`. Historical content below is otherwise unchanged.
+
+
 This document tracks all system fixes, improvements, and status updates for the AutoBot platform.
 
 **Last Updated:** 2026-05-10
@@ -255,7 +258,7 @@ API Base:  http://<slm-manager-ip>:8000/api
 
 **Legacy Code Deprecated:**
 - `/monitoring/` directory - Scheduled for removal in v3.0
-- `claude_api_monitor.py` - Already deprecated (Issue #348)
+- `claude_api_monitor.py` - Deprecated (Issue #348), retired (Issue #16282)
 
 ---
 
@@ -827,7 +830,7 @@ export class KnowledgeController {
    - `get_compatible_os_list()` - Maps OS families (Kali → Debian, Ubuntu)
    - Tested and verified on Kali 2025.2
 
-2. **Enhanced Man Page Indexer** (`scripts/utilities/index_all_man_pages.py`):
+2. **Enhanced Man Page Indexer** (`autobot-infrastructure/shared/scripts/utilities/index_all_man_pages.py`):
    - Added OS/machine context to all man page metadata
    - Unique key generation for deduplication
    - Applicability lists (compatible OSes)

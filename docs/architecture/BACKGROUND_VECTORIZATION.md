@@ -1,5 +1,7 @@
 # Background Vectorization System
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 ## Overview
 
 The Background Vectorization System automatically converts knowledge base facts into vector embeddings without blocking user operations. It processes facts in batches and can run periodically or on-demand.

@@ -19,6 +19,7 @@ import io
 
 import pytest
 
+from autobot_shared.ssot_config import config as ssot_config
 from skills.builtin.document_analysis import DocumentAnalysisSkill  # nosemgrep: skill-no-sibling-import
 
 
@@ -57,6 +58,19 @@ def _write_pdf(tmp_path, pages: list, name: str = "doc.pdf"):
 @pytest.fixture
 def skill():
     return DocumentAnalysisSkill()
+
+
+@pytest.fixture(autouse=True)
+def _scope_allowed_roots_to_tmp_path(monkeypatch, tmp_path):
+    """Fixtures below write real documents under ``tmp_path``, exercising the
+    skill directly rather than through the real upload flow. That flow always
+    writes under ``SANDBOXED_ROOT`` (a subdirectory of ``config.path.data_path``,
+    #15293) and ``_resolve_path`` also allows that data root alongside
+    ``PROJECT_ALLOWED_ROOTS``. Scope both to ``tmp_path`` here instead of
+    loosening either real default for the rest of this file's tests.
+    """
+    monkeypatch.setattr("skills.builtin.document_analysis.PROJECT_ALLOWED_ROOTS", (str(tmp_path),))
+    monkeypatch.setattr(ssot_config.path, "data_dir", str(tmp_path / "_unused_data_root"))
 
 
 # ---------------------------------------------------------------------------

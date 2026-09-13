@@ -237,7 +237,15 @@ async def resolve_safe_ip_async(
 
     safe_ip: str | None = None
     for info in infos:
-        ip_str = info[4][0].split("%", 1)[0]  # strip IPv6 scope id
+        # getaddrinfo was asked for SOCK_STREAM, so every result is AF_INET or
+        # AF_INET6 and sockaddr[0] is the address string. typeshed widens it to
+        # str | int for the packet families this call cannot return; narrow it
+        # rather than assume, and let anything else fall to the no-usable-IP
+        # raise below instead of being treated as an address (#15134).
+        host_part = info[4][0]
+        if not isinstance(host_part, str):
+            continue
+        ip_str = host_part.split("%", 1)[0]  # strip IPv6 scope id
         try:
             ip = ipaddress.ip_address(ip_str)
         except ValueError:

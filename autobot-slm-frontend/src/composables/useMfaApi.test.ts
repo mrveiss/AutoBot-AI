@@ -78,7 +78,14 @@ describe('useMfaApi — migrated onto slmApiClient (#12420 Phase 2)', () => {
   // generated contract lists it under `parameters.query`. Sending it in the body
   // (the previous behaviour) makes the backend 422 on the missing query param.
   it('verifyLogin sends temp_token as a query parameter and only `code` in the body', async () => {
-    mockPost.mockResolvedValue({ success: true, message: 'ok', access_token: 't' })
+    // #13139: `/mfa/verify-login` returns a TokenResponse — no `success`/`message`.
+    // The old fixture mocked a shape the endpoint has never produced.
+    mockPost.mockResolvedValue({
+      access_token: 't',
+      token: 't',
+      token_type: 'bearer',
+      expires_in: 3600,
+    })
 
     const result = await useMfaApi().verifyLogin('123456', 'temp-abc')
 

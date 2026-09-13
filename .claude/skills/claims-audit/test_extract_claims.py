@@ -4,14 +4,13 @@
 """Unit tests for claim extraction."""
 
 import json
-import sys
 import tempfile
 from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-# Import from hyphenated module name
+# Loaded by path, not by name: `extract-claims.py` is not a Python identifier,
+# so no import statement can name it. spec_from_file_location does not consult
+# sys.path and does not depend on what collected first, which is what makes it
+# the right loader here rather than a shim (#14986).
 import importlib.util
 
 spec = importlib.util.spec_from_file_location("extract_claims", Path(__file__).parent / "extract-claims.py")

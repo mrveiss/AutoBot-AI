@@ -27,11 +27,11 @@ Moved from enhanced_orchestration.workflow_runner to orchestration.workflow_runn
 """
 
 import asyncio
-import os
 import time
 import traceback
 from typing import Any, Dict, List, Set, Tuple
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.repo_path import to_repo_relative
 from autobot_shared.ssot_config import SELF_IMPROVEMENT_ENABLED
@@ -39,7 +39,7 @@ from events.bus import PersistStrategy, publish_event
 
 # Max concurrent background self-improvement (judge-LLM) tasks — bounds the
 # fan-out so a burst of workflow completions can't saturate the LLM tier (#11014).
-_LEARNING_MAX_CONCURRENCY = int(os.environ.get("AUTOBOT_SELF_IMPROVEMENT_MAX_CONCURRENCY", "2"))
+_LEARNING_MAX_CONCURRENCY = env_int("AUTOBOT_SELF_IMPROVEMENT_MAX_CONCURRENCY", 2)
 
 # Lazy-import helpers — exposed at module level so tests can patch them.
 

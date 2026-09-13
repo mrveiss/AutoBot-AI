@@ -6,7 +6,7 @@
 # Issue: #13879 (rebuild of the implementation removed in #13877)
 #
 #   --branch <name>    branch to judge (default: current)
-#   --base <ref>       integration branch (default: origin/Dev_new_gui)
+#   --base <ref>       integration branch (default: origin/main)
 #   --leftovers-only   audit stranded worktrees only
 #
 # Exit 0 = verified. Anything else = not done.
@@ -25,7 +25,7 @@
 
 set -uo pipefail
 
-BASE="${VERIFY_DONE_BASE:-origin/Dev_new_gui}"
+BASE="${VERIFY_DONE_BASE:-origin/main}"
 BRANCH=""
 LEFTOVERS_ONLY=0
 
@@ -48,8 +48,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-scope.sh" || {
   echo "FATAL: cannot load scripts/lib/git-scope.sh — refusing to report clean" >&2
   exit 1
 }
+# shellcheck source=scripts/lib/git-root.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || {
+  echo "FATAL: cannot load scripts/lib/git-root.sh — refusing to report clean" >&2
+  exit 1
+}
 
-cd "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || { echo "not a git repo" >&2; exit 2; }
+cd "$(git_repo_root)" 2>/dev/null || { echo "not a git repo" >&2; exit 2; }
 [ -n "$BRANCH" ] || BRANCH=$(git branch --show-current 2>/dev/null)
 
 FAILURES=0
@@ -247,7 +252,7 @@ if [ "$LEFTOVERS_ONLY" -eq 0 ]; then
   echo
   echo "[2] branch is not an integration branch"
   case "$BRANCH" in
-    main|master|Dev_new_gui) fail "'$BRANCH' is protected — work belongs on a feature branch" ;;
+    main|master|release) fail "'$BRANCH' is protected — work belongs on a feature branch" ;;
     "")                      fail "detached HEAD — no branch to verify" ;;
     *)                       ok "'$BRANCH'" ;;
   esac
@@ -311,7 +316,7 @@ echo "[5] worktree evidence"
 #
 # So: print the evidence, mark candidates, and let the operator decide.
 CANDIDATES=0; SEEN=0
-SELF=$(git rev-parse --show-toplevel)
+SELF=$(git_repo_root) || { fail "cannot resolve repository root"; SELF=""; }
 
 if ! WT_LIST=$(git worktree list --porcelain 2>&1); then
   fail "cannot enumerate worktrees: $WT_LIST"
@@ -324,7 +329,7 @@ else
       SEEN=$((SEEN+1)); info "detached HEAD at $dir — no branch to compare; cannot audit"
       continue
     fi
-    case "$wb" in main|master|Dev_new_gui) continue ;; esac
+    case "$wb" in main|master|release) continue ;; esac
     SEEN=$((SEEN+1))
 
     branch_state "$dir" "$wb"; bs=$?
@@ -340,7 +345,7 @@ else
     wt_ignored=$(git -C "$dir" status --porcelain --ignored=matching 2>/dev/null | grep -c '^!!')
     # `git status` cannot see these by design, and neither can
     # `git worktree remove` — the pair that composes into silent data loss.
-    idx_bits=$(git -C "$dir" ls-files -v 2>/dev/null | grep -c '^[a-zS]')
+    idx_bits=$(git_tracked_files "$dir" -v 2>/dev/null | grep -c '^[a-zS]')
     locked=no
     awk -v d="worktree $dir" '$0==d{f=1;next} /^worktree /{f=0} f&&/^locked/{print;exit}' \
       <<< "$WT_LIST" | grep -q . && locked=yes

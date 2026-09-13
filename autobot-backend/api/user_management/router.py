@@ -11,6 +11,7 @@ Main router that aggregates all user management endpoints.
 from fastapi import APIRouter
 
 from api.user_management.organizations import router as organizations_router
+from api.user_management.password_change import router as password_change_router
 from api.user_management.teams import router as teams_router
 from api.user_management.users import router as users_router
 
@@ -18,5 +19,6 @@ router = APIRouter(prefix="/user-management", tags=["User Management"])
 
 # Include sub-routers
 router.include_router(users_router)
+router.include_router(password_change_router)
 router.include_router(teams_router)
 router.include_router(organizations_router)

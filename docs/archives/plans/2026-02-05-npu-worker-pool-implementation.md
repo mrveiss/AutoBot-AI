@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # NPU Multi-Worker Pool Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -145,14 +147,14 @@ def test_load_worker_config_success():
         "workers": [
             {
                 "id": "worker-1",
-                "url": "http://172.16.168.22:8081",
+                "url": "http://<npu-ip>:8081",
                 "priority": 10,
                 "enabled": True,
                 "max_concurrent_tasks": 4,
             },
             {
                 "id": "worker-2",
-                "url": "http://172.16.168.20:8082",
+                "url": "http://<backend-ip>:8082",
                 "priority": 5,
                 "enabled": False,
                 "max_concurrent_tasks": 2,
@@ -349,7 +351,7 @@ async def test_npu_worker_pool_initialization():
         "workers": [
             {
                 "id": "worker-1",
-                "url": "http://172.16.168.22:8081",
+                "url": "http://<npu-ip>:8081",
                 "priority": 10,
                 "enabled": True,
                 "max_concurrent_tasks": 4,
@@ -2348,13 +2350,13 @@ NPUTaskQueue → NPUWorkerPool → NPUWorkerClient instances
 ```yaml
 workers:
   - id: npu-worker-vm2
-    url: http://172.16.168.22:8081
+    url: http://<npu-ip>:8081
     priority: 10
     enabled: true
     max_concurrent_tasks: 4
 
   - id: windows-npu-worker
-    url: http://172.16.168.20:8082
+    url: http://<backend-ip>:8082
     priority: 5
     enabled: true
     max_concurrent_tasks: 4
@@ -2403,7 +2405,7 @@ Get per-worker health states.
   "workers": [
     {
       "id": "npu-worker-vm2",
-      "url": "http://172.16.168.22:8081",
+      "url": "http://<npu-ip>:8081",
       "priority": 10,
       "enabled": true,
       "healthy": true,

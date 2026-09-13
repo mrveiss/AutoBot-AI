@@ -551,7 +551,7 @@ curl -X GET \
     }
   ],
   "total_lines": number,
-  "service": "redis-server",
+  "service": "redis-stack-server",
   "vm": string
 }
 ```
@@ -586,7 +586,7 @@ curl -X GET \
     }
   ],
   "total_lines": 20,
-  "service": "redis-server",
+  "service": "redis-stack-server",
   "vm": "<database-ip>"
 }
 ```
@@ -823,8 +823,8 @@ All API errors follow this consistent format:
   "message": "Failed to start Redis service",
   "details": {
     "exit_code": 1,
-    "stderr": "Job for redis-server.service failed",
-    "command": "sudo systemctl start redis-server"
+    "stderr": "Job for redis-stack-server.service failed",
+    "command": "sudo systemctl start redis-stack-server"
   },
   "timestamp": "2025-10-10T14:30:00Z"
 }
@@ -1077,12 +1077,12 @@ All service commands are validated using a strict whitelist:
 
 ```python
 ALLOWED_REDIS_COMMANDS = {
-    "start": "sudo systemctl start redis-server",
-    "stop": "sudo systemctl stop redis-server",
-    "restart": "sudo systemctl restart redis-server",
-    "status": "systemctl status redis-server",
-    "is-active": "systemctl is-active redis-server",
-    "logs": "journalctl -u redis-server -n {lines}",
+    "start": "sudo systemctl start redis-stack-server",
+    "stop": "sudo systemctl stop redis-stack-server",
+    "restart": "sudo systemctl restart redis-stack-server",
+    "status": "systemctl status redis-stack-server",
+    "is-active": "systemctl is-active redis-stack-server",
+    "logs": "journalctl -u redis-stack-server -n {lines}",
 }
 ```
 

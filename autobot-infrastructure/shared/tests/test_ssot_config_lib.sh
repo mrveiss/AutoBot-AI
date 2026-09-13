@@ -22,6 +22,16 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 LIB="${REPO_ROOT}/autobot-infrastructure/shared/scripts/lib/ssot-config.sh"
 
+# Tracked-file enumeration goes through the scrubbed helper. This file runs as a
+# test and is reachable from a hook context, where GIT_DIR is exported and
+# outranks the directory passed -- so a bare `git ls-files` would enumerate
+# another checkout and this suite would assert about the wrong tree (#15506).
+# shellcheck source=scripts/lib/git-root.sh
+source "${REPO_ROOT}/scripts/lib/git-root.sh" || {
+    echo "FATAL: cannot load scripts/lib/git-root.sh — refusing to report clean" >&2
+    exit 2
+}
+
 pass=0
 fail=0
 
@@ -256,7 +266,7 @@ while IFS= read -r f; do
         offenders="${offenders}${f}: ${hit}
 "
     fi
-done < <(cd "$REPO_ROOT" && git ls-files -- '*.sh')
+done < <(git_tracked_files "$REPO_ROOT" -- '*.sh')
 
 if [ -n "$offenders" ]; then
     echo "FAIL: tracked file(s) source the non-autobot- path:"
@@ -443,7 +453,7 @@ fi
 #     matching anything (an empty/near-empty result reads as "clean" unless
 #     presence is checked, not absence of failure); the var-count floor
 #     catches a regex that stops matching a variable shape. -----------------
-_all_sh_files="$(cd "$REPO_ROOT" && git ls-files -- '*.sh')"
+_all_sh_files="$(git_tracked_files "$REPO_ROOT" -- '*.sh')"
 _sh_count=$(echo "$_all_sh_files" | grep -c . || true)
 if [ "$_sh_count" -lt 100 ]; then
     echo "FAIL: reach self-check scanned too few shell scripts ($_sh_count) -- probe is too narrow"
@@ -453,13 +463,23 @@ else
     pass=$((pass + 1))
 fi
 
-_distinct_vars=$(cd "$REPO_ROOT" && git ls-files -- '*.sh' | xargs grep -ohE '\$\{?AUTOBOT_[A-Z0-9_]+' 2>/dev/null | sed -E 's/^\$\{?//' | sort -u)
+_distinct_vars=$(git_tracked_files "$REPO_ROOT" -- '*.sh' | xargs grep -ohE '\$\{?AUTOBOT_[A-Z0-9_]+' 2>/dev/null | sed -E 's/^\$\{?//' | sort -u)
 _distinct_count=$(echo "$_distinct_vars" | grep -c . || true)
-if [ "$_distinct_count" -lt 61 ]; then
-    echo "FAIL: reach self-check found only $_distinct_count distinct AUTOBOT_ names -- expected >= 61 (#14173 baseline)"
+# 59, not 61: #15127 retired
+# autobot-infrastructure/shared/scripts/utilities/load-env.sh, which was the only
+# tracked .sh file naming AUTOBOT_DEPLOYMENT_MODE, AUTOBOT_PLAYWRIGHT_API_PORT and
+# AUTOBOT_PLAYWRIGHT_HOST -- measured, the only one of that batch's five
+# retirements to carry any AUTOBOT_ name uniquely. The tree held 62 before that
+# retirement, so this floor also absorbs the one name of slack #14173 left; it is
+# now AT the count, which is what makes it catch a regressed regex. Like the
+# site-count floors in repo_tests/shell_lib_sources_resolve_test.py, this is not
+# derivable without counting the very thing under test, so a legitimate
+# retirement comes here and says which names went -- it is not given headroom.
+if [ "$_distinct_count" -lt 59 ]; then
+    echo "FAIL: reach self-check found only $_distinct_count distinct AUTOBOT_ names -- expected >= 59 (#14173 baseline, #15127 retired 3)"
     fail=$((fail + 1))
 else
-    echo "PASS: reach self-check found $_distinct_count distinct AUTOBOT_ names (>= 61 baseline)"
+    echo "PASS: reach self-check found $_distinct_count distinct AUTOBOT_ names (>= 59 baseline)"
     pass=$((pass + 1))
 fi
 

@@ -252,7 +252,7 @@ async def agent_health(agent_type: str):
             }
 
     except Exception:
-        logger.error("Health check failed for {agent_type}")
+        logger.error("Health check failed for %s", agent_type)
         return JSONResponse(
             status_code=503,
             content={
@@ -281,7 +281,7 @@ async def agent_capabilities(agent_type: str):
         return {"agent_type": agent_type, "capabilities": capabilities}
 
     except Exception:
-        logger.error("Error getting capabilities for {agent_type}")
+        logger.error("Error getting capabilities for %s", agent_type)
         return JSONResponse(
             status_code=500,
             content={"agent_type": agent_type, "error": "Internal server error"},

@@ -23,6 +23,18 @@ logger = logging.getLogger(__name__)
 _PORT_MIN = 1
 _PORT_MAX = 65535
 
+# Closed value sets for config keys that only accept a fixed vocabulary.
+# Issue #12750: these two checks were the one capability the orphaned
+# models/settings.py held that the canonical surface did not -- its
+# OrchestratorSettings.validate_transport and BackendSettings.validate_log_level
+# rejected out-of-vocabulary values, while the live config tree accepted
+# anything.  Consolidated here, on the surface that already validates ports and
+# is reached at startup from initialization.lifespan, and re-expressed in the
+# canonical UPPERCASE log-level convention that logging_manager uses rather than
+# the orphan's lowercase one.
+_VALID_TASK_TRANSPORTS = ("local", "redis")
+_VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+
 # Config keys that must resolve to a non-None value before serving requests.
 # Each entry is a dot-notation path checked via get_nested().
 # GH#9232: backend.server_host removed — defaults to 0.0.0.0 in config/defaults.py
@@ -91,6 +103,55 @@ _PORT_CONFIG_PATHS: List[tuple] = [
     (["memory", "redis", "port"], "memory.redis.port"),
 ]
 
+# Keys whose values must come from a closed vocabulary. Issue #12750.
+# task_transport.type is the key worker_node.WorkerNode reads to decide whether
+# tasks are dispatched over Redis; an unrecognised value silently degraded to
+# local dispatch. logging.log_level is the key config/defaults.py publishes.
+_ENUM_CONFIG_PATHS: List[tuple] = [
+    (["task_transport", "type"], "task_transport.type", _VALID_TASK_TRANSPORTS),
+    (["logging", "log_level"], "logging.log_level", _VALID_LOG_LEVELS),
+]
+
+
+def _validate_required_keys(raw_config: Dict[str, Any], result: ConfigValidationResult) -> None:
+    """Check _REQUIRED_CONFIG_KEYS and the feature-gated conditional ones."""
+    for dotted_key in _REQUIRED_CONFIG_KEYS:
+        if _get_nested_value(raw_config, dotted_key.split(".")) is None:
+            result.add_error(f"Required config key '{dotted_key}' is missing")
+
+    for required_key, guard_path, guard_enabled_value in _CONDITIONAL_REQUIRED_CONFIG_KEYS:
+        guard_value = _get_nested_value(raw_config, guard_path)
+        # Default to enabled when the guard key is absent (backward compat).
+        feature_enabled = guard_value if guard_value is not None else guard_enabled_value
+        if feature_enabled != guard_enabled_value:
+            continue
+        if _get_nested_value(raw_config, required_key.split(".")) is None:
+            result.add_error(
+                f"Required config key '{required_key}' is missing "
+                f"(required when {'.'.join(str(p) for p in guard_path)} "
+                f"is {guard_enabled_value!r})"
+            )
+
+
+def _validate_choice(value: Any, label: str, allowed: tuple, result: ConfigValidationResult) -> None:
+    """Fail fast when *value* is outside the closed set *allowed*.
+
+    String comparison is case-insensitive, so a config written as "Redis" or
+    "info" is accepted and reported against the canonical spelling -- the
+    orphaned validators normalised case before comparing for the same reason.
+    """
+    candidate = value.casefold() if isinstance(value, str) else value
+    if candidate not in {choice.casefold() for choice in allowed}:
+        result.add_error(f"Config key '{label}' has invalid value {value!r} " f"(must be one of: {list(allowed)})")
+
+
+def _validate_enums(raw_config: Dict[str, Any], result: ConfigValidationResult) -> None:
+    """Check every closed-vocabulary config key in _ENUM_CONFIG_PATHS."""
+    for path, label, allowed in _ENUM_CONFIG_PATHS:
+        value = _get_nested_value(raw_config, path)
+        if value is not None:
+            _validate_choice(value, label, allowed, result)
+
 
 def validate_startup_config(raw_config: Dict[str, Any]) -> ConfigValidationResult:
     """Validate *raw_config* at startup and return a structured result.
@@ -98,6 +159,7 @@ def validate_startup_config(raw_config: Dict[str, Any]) -> ConfigValidationResul
     Checks performed (Issue #3398):
     1. Required keys are present and non-empty.
     2. Port values are in the valid TCP range (1–65535).
+    2b. Closed-vocabulary keys hold a recognised value (Issue #12750).
     3. Each env var in ``ENV_VAR_MAPPINGS`` that is set is compared against the
        file-based value; a WARNING is emitted for every override so operators
        can see at a glance which values were changed by the environment.
@@ -106,33 +168,17 @@ def validate_startup_config(raw_config: Dict[str, Any]) -> ConfigValidationResul
     """
     result = ConfigValidationResult()
 
-    # --- 1a. Unconditionally required keys ---
-    for dotted_key in _REQUIRED_CONFIG_KEYS:
-        path = dotted_key.split(".")
-        value = _get_nested_value(raw_config, path)
-        if value is None:
-            result.add_error(f"Required config key '{dotted_key}' is missing")
-
-    # --- 1b. Conditionally required keys (gated on a feature flag) ---
-    for required_key, guard_path, guard_enabled_value in _CONDITIONAL_REQUIRED_CONFIG_KEYS:
-        guard_value = _get_nested_value(raw_config, guard_path)
-        # Default to enabled when the guard key is absent (backward compat).
-        feature_enabled = guard_value if guard_value is not None else guard_enabled_value
-        if feature_enabled == guard_enabled_value:
-            path = required_key.split(".")
-            value = _get_nested_value(raw_config, path)
-            if value is None:
-                result.add_error(
-                    f"Required config key '{required_key}' is missing "
-                    f"(required when {'.'.join(str(p) for p in guard_path)} "
-                    f"is {guard_enabled_value!r})"
-                )
+    # --- 1. Required keys, unconditional and feature-gated ---
+    _validate_required_keys(raw_config, result)
 
     # --- 2. Port range validation ---
     for path, label in _PORT_CONFIG_PATHS:
         value = _get_nested_value(raw_config, path)
         if value is not None:
             _validate_port(value, label, result)
+
+    # --- 2b. Closed-vocabulary validation (Issue #12750) ---
+    _validate_enums(raw_config, result)
 
     # --- 3. Env-var override conflict detection ---
     # Build a snapshot of what the file-based config would look like *without*

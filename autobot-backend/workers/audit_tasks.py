@@ -19,7 +19,7 @@ Beat pidfile MUST NOT reside on tmpfs (/run/autobot/ is wiped on reboot).
 import json
 import os
 import re
-import subprocess  # nosec B404  # internal git/gh CLI calls only
+import subprocess  # nosec B404  # internal gh CLI calls only; git goes through run_git
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,9 +28,11 @@ from typing import Any, NamedTuple
 from celery.signals import beat_init, worker_ready
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from celery_app import celery_app
+from workers.audit_queries import MAX_LOG_CHARS, list_open_issue_titles, vulture_scan
 
 logger = get_logger(__name__)
 
@@ -67,9 +69,6 @@ _FILING_CREDENTIAL_VAULT_KEY = "github_issue_filing_token"
 
 # Labels applied to all discovery issues filed by this daemon
 _AUDIT_LABELS = "enhancement,observability,priority: medium"
-
-# Max characters of gh output kept in logs on failure
-_MAX_LOG_CHARS = 500
 
 # Cap on the full-findings dump written when the dead-letter queue itself cannot
 # be persisted (#13570). Generous: at that point the log IS the queue, and a
@@ -352,30 +351,14 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
-def _list_open_issues(label: str | None = None) -> list[str]:
-    """Return titles of open GitHub issues (optionally filtered by label)."""
-    cmd = [
-        "gh",
-        "issue",
-        "list",
-        "--repo",
-        _GH_REPO,
-        "--state",
-        "open",
-        "--json",
-        "title",
-        "--limit",
-        "500",
-    ]
-    if label:
-        cmd += ["--label", label]
-    code, out, _ = _run(cmd, env=_gh_env()[0])
-    if code != 0:
-        return []
-    try:
-        return [item["title"] for item in json.loads(out)]
-    except Exception:
-        return []
+def _list_open_issues(label: str | None = None) -> tuple[list[str], bool]:
+    """Titles of open issues, and whether the listing was actually observed.
+
+    #13570: this returned a bare `[]` on failure, which is what a repo with no
+    open issues returns. "I could not look" and "there is nothing there" were
+    one answer, and the caller acted on the second.
+    """
+    return list_open_issue_titles(_GH_REPO, label, _gh_env()[0], _run)
 
 
 def _gh_available() -> bool:
@@ -416,7 +399,7 @@ def _gh_available() -> bool:
             _FILING_CREDENTIAL_VAULT_KEY,
             # stdout as well as stderr: gh routes this message to stderr today,
             # but a build that changed that would gut the diagnostic silently.
-            ((err or "").strip() or (out or "").strip())[:_MAX_LOG_CHARS] or "no output",
+            ((err or "").strip() or (out or "").strip())[:MAX_LOG_CHARS] or "no output",
         )
     return code == 0
 
@@ -440,7 +423,7 @@ def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
         env=_gh_env()[0],
     )
     if code != 0:
-        logger.error("gh issue create failed (%s): %s", title, err[:_MAX_LOG_CHARS])
+        logger.error("gh issue create failed (%s): %s", title, err[:MAX_LOG_CHARS])
         return False
     return True
 
@@ -549,6 +532,7 @@ def _dedupe_and_file(
     existing_titles: set[str],
     label: str,
     redis=None,
+    dedupe_ok: bool = True,
 ) -> FilingOutcome:
     """File GitHub issues for new findings; persist any that cannot be filed.
 
@@ -564,7 +548,12 @@ def _dedupe_and_file(
     a queue that could not be written reported ``deferred == 0``, exactly like a
     clean run (#13570).
     """
-    gh_ok = _gh_available()
+    # `dedupe_ok` False means the open-issue listing never happened, so
+    # `existing_titles` is empty for want of an answer rather than because the
+    # repo is clean. Filing on that would re-file everything already open.
+    # Deferring instead is the only outcome that does not act on an
+    # unobserved fact -- the queue is retried once the query works (#13570).
+    gh_ok = _gh_available() and dedupe_ok
     pending, queue_readable = _load_deferred(redis)
 
     filed = 0
@@ -719,34 +708,29 @@ def _audit_beat_init(**_kwargs) -> None:
 
 
 def _changed_python_modules(since_iso: str | None, repo_root: Path) -> list[Path]:
-    """Return Python source files (non-test) changed in Dev_new_gui since *since_iso*.
+    """Return Python source files (non-test) changed in main since *since_iso*.
 
     Falls back to the last 6 hours when *since_iso* is None.
     """
-    if since_iso:
-        cmd = [
-            "git",
-            "log",
-            "origin/Dev_new_gui",
-            f"--since={since_iso}",
-            "--name-only",
-            "--pretty=format:",
-            "--diff-filter=ACMR",
-        ]
-    else:
-        cmd = [
-            "git",
-            "log",
-            "origin/Dev_new_gui",
-            "--since=6 hours ago",
-            "--name-only",
-            "--pretty=format:",
-            "--diff-filter=ACMR",
-        ]
-
-    code, out, _ = _run(cmd, cwd=str(repo_root))
-    if code != 0:
+    argv = [
+        "log",
+        "origin/main",
+        f"--since={since_iso}" if since_iso else "--since=6 hours ago",
+        "--name-only",
+        "--pretty=format:",
+        "--diff-filter=ACMR",
+    ]
+    # `_run` never raised; `run_git` propagates TimeoutExpired. This runs inside a
+    # Celery task with no handler above it, so an unhandled timeout would abort the
+    # whole audit rather than degrading to "no modules changed" (#16179 review).
+    try:
+        result = run_git(argv, cwd=str(repo_root))  # #16179
+    except Exception as exc:
+        logger.warning("changed-module probe failed, treating as no data: %s", exc)
         return []
+    if result.returncode != 0:
+        return []
+    out = result.stdout
 
     paths = []
     for line in out.splitlines():
@@ -789,7 +773,7 @@ def _testgap_findings(modules: list[Path], repo_root: Path) -> list[dict]:
             title = f"discovery: test gap — {rel} has no test file"
             body = (
                 f"## Test gap detected by audit_testgaps daemon\n\n"
-                f"Module `{rel}` was recently changed in `Dev_new_gui` and has no "
+                f"Module `{rel}` was recently changed in `main` and has no "
                 f"corresponding test file with test functions.\n\n"
                 f"**Expected locations:**\n"
                 f"- `{rel.parent}/{rel.stem}_test.py`\n"
@@ -817,8 +801,8 @@ def audit_testgaps(self) -> dict:
     modules = _changed_python_modules(last_run, repo_root)
 
     findings = _testgap_findings(modules, repo_root)
-    existing_titles = set(_list_open_issues(label="observability"))
-    outcome = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS, redis)
+    existing_titles, dedupe_ok = _list_open_issues(label="observability")
+    outcome = _dedupe_and_file(findings, set(existing_titles), _AUDIT_LABELS, redis, dedupe_ok=dedupe_ok)
 
     _redis_set(redis, _TESTGAPS_LAST_RUN_KEY, run_at)
 
@@ -850,23 +834,9 @@ def audit_testgaps(self) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _run_vulture(repo_root: Path) -> list[str]:
-    """Run vulture on the backend and return lines identifying dead code."""
-    cmd = [
-        sys.executable,
-        "-m",
-        "vulture",
-        "autobot-backend",
-        "--min-confidence",
-        "80",
-        "--exclude",
-        "*/migrations/*,*/__pycache__/*,*/tests/*",
-    ]
-    code, out, err = _run(cmd, cwd=str(repo_root))
-    if code not in (0, 1):  # vulture exits 1 when dead code found
-        logger.warning("vulture exited %d: %s", code, err[:_MAX_LOG_CHARS])
-        return []
-    return [line.strip() for line in out.splitlines() if line.strip()]
+def _run_vulture(repo_root: Path) -> tuple[list[str], bool]:
+    """Dead-code lines from vulture, and whether the scan actually ran (#13570)."""
+    return vulture_scan(repo_root, _run, sys.executable)
 
 
 def _dead_code_fingerprint(line: str) -> str:
@@ -890,7 +860,7 @@ def audit_dead_code(self) -> dict:
     last_set = set(last_inventory)
 
     repo_root = _repo_root()
-    current_lines = _run_vulture(repo_root)
+    current_lines, scan_ran = _run_vulture(repo_root)
     current_fps = {_dead_code_fingerprint(ln): ln for ln in current_lines}
 
     new_findings_raw = [v for k, v in current_fps.items() if k not in last_set]
@@ -907,15 +877,19 @@ def audit_dead_code(self) -> dict:
         )
         findings.append({"title": title, "body": body})
 
-    existing_titles = set(_list_open_issues(label="observability"))
-    outcome = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS, redis)
+    existing_titles, dedupe_ok = _list_open_issues(label="observability")
+    outcome = _dedupe_and_file(findings, set(existing_titles), _AUDIT_LABELS, redis, dedupe_ok=dedupe_ok)
 
-    # Persist current full inventory for next run's diff
-    _redis_set(redis, _DEAD_CODE_INVENTORY_KEY, list(current_fps.keys()))
+    # Persist current full inventory for next run's diff -- but ONLY when there
+    # was a scan. Writing an empty inventory from a scan that never ran wipes the
+    # baseline, so the next successful run sees every finding as new (#13570).
+    if scan_ran:
+        _redis_set(redis, _DEAD_CODE_INVENTORY_KEY, list(current_fps.keys()))
 
     result = {
-        "status": _run_status(outcome),
+        "status": _run_status(outcome) if scan_ran else _STATUS_DEGRADED,
         "run_at": utc_timestamp(),
+        "scan_ran": scan_ran,
         "total_findings": len(current_lines),
         "new_findings": len(new_findings_raw),
         "issues_filed": outcome.filed,
@@ -984,11 +958,15 @@ def _verify_claim(claim: dict, repo_root: Path) -> bool:
 
     token = token_match.group(1).replace("-", "_")
     # Search for the token in Python source files
-    code, out, _ = _run(
-        ["git", "grep", "-rl", "--", token, "autobot-backend/"],
-        cwd=str(repo_root),
-    )
-    return code == 0 and bool(out.strip())
+    try:
+        result = run_git(["grep", "-rl", "--", token, "autobot-backend/"], cwd=str(repo_root))
+    except Exception as exc:
+        # False, not True: the caller has TWO buckets, so True files an unchecked
+        # claim as VERIFIED. Base returned (1, "", err) here and took this path to
+        # False, so True was a behaviour change, not a preserved contract (#16184 review).
+        logger.warning("claim probe failed for %s, recording unverified: %s", token, exc)
+        return False
+    return result.returncode == 0 and bool(result.stdout.strip())
 
 
 def _write_verification_doc(repo_root: Path, verified: list, unverified: list) -> Path:
@@ -1071,8 +1049,8 @@ def audit_claims(self) -> dict:
         )
         findings.append({"title": title, "body": body})
 
-    existing_titles = set(_list_open_issues(label="observability"))
-    outcome = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS, redis)
+    existing_titles, dedupe_ok = _list_open_issues(label="observability")
+    outcome = _dedupe_and_file(findings, set(existing_titles), _AUDIT_LABELS, redis, dedupe_ok=dedupe_ok)
 
     _redis_set(redis, _CLAIMS_LAST_RUN_KEY, run_at)
     _redis_set(

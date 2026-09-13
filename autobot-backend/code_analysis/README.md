@@ -20,11 +20,16 @@ The Code Analysis Suite provides code quality monitoring with 9 specialized anal
 
 ### Prerequisites
 
+This tool reaches Redis through `autobot_shared.redis_client`, so it needs
+AutoBot's **Redis Stack** — not a second local instance, and not plain Redis.
+The apt package and the `redis:alpine` image both lack RediSearch, RedisJSON
+and RedisTimeSeries, so they connect and then fail on the first module command.
+
+Provision it with `roles/redis`, which owns the repository, the suite pin
+(#7178) and the package. To check what you have:
+
 ```bash
-# Install Redis (required for caching)
-sudo apt install redis-server
-# or
-docker run -d -p 6379:6379 redis:alpine
+systemctl is-active redis-stack-server
 
 # Install Python dependencies
 pip install redis aioredis numpy scikit-learn chromadb
@@ -109,7 +114,7 @@ export REDIS_URL="redis://localhost:6379/0"
 ### NPU Support (Optional)
 ```bash
 # Install OpenVINO for Intel NPU acceleration (#14476: floor matches the SSOT)
-pip install "openvino>=2026.3.0"
+pip install "openvino>=2026.3.1"
 ```
 
 ## 📋 Detailed Usage
@@ -228,7 +233,11 @@ jobs:
     runs-on: ubuntu-latest
     services:
       redis:
-        image: redis
+        # redis-stack, not redis (#16071). The plain image has no RediSearch,
+        # RedisJSON or RedisTimeSeries: it starts and then fails on the first
+        # module command, which is the container form of `apt install
+        # redis-server`. The platform runs redis/redis-stack.
+        image: redis/redis-stack:7.4.0-v1
         ports:
           - 6379:6379
     steps:

@@ -41,12 +41,12 @@ import ast
 import functools
 import importlib.util
 import re
-import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 import pytest
 
 from autobot_shared.status_enums import CommandRisk, RiskLevel, SecretType, Severity
+from tools.lint._scan_helpers import TRACKED_PY_FLOOR, tracked_paths
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKEND = REPO_ROOT / "autobot-backend"
@@ -238,14 +238,14 @@ def _enum_members_from_source(path: Path, class_name: str) -> set[tuple[str, str
 
 
 def test_backup_service_type_exists_and_names_both_engines():
-    members = _enum_members_from_source(SLM / "models" / "database.py", "BackupServiceType")
-    assert members is not None, "#13578: BackupServiceType is gone from models/database.py"
+    members = _enum_members_from_source(SLM / "status_enums.py", "BackupServiceType")
+    assert members is not None, "#13578: BackupServiceType is gone from status_enums.py (moved there in #15495)"
     assert members == BACKUP_SERVICE_TYPE_UNION
 
 
 def test_the_postgres_alias_is_declared_next_to_the_enum():
     """ "postgresql" was a live dispatch key, so it is already in stored rows."""
-    source = (SLM / "models" / "database.py").read_text(encoding="utf-8")
+    source = (SLM / "status_enums.py").read_text(encoding="utf-8")
     assert "_BACKUP_SERVICE_TYPE_ALIASES" in source
     assert '"postgresql"' in source
 
@@ -303,7 +303,7 @@ DELIBERATE_SEVERITY_LITERALS = {
 }
 
 # Floor for the enumeration itself. An empty walk must not read as "clean".
-_TRACKED_PY_FLOOR = 3000
+_TRACKED_PY_FLOOR = TRACKED_PY_FLOOR  # canonical: one measured floor, was a local 3000 (#15928)
 
 # Floor for the enum scan (measured at 300+ on this tree). A parse pass that
 # silently stopped matching would otherwise report every fork as collapsed.
@@ -312,14 +312,7 @@ _DECLARED_ENUM_FLOOR = 150
 
 @functools.lru_cache(maxsize=1)
 def _tracked_python_files() -> tuple[str, ...]:
-    out = subprocess.run(  # nosec B603  # fixed argv, no shell
-        ["git", "ls-files", "*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return tuple(line for line in out.stdout.splitlines() if line)
+    return tuple(tracked_paths(REPO_ROOT, "*.py"))
 
 
 def _severity_literal_hits() -> list[tuple[str, str]]:

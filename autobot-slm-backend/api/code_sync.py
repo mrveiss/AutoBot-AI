@@ -20,7 +20,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -32,7 +32,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from api.venv_reconcile import (
+    EXPLICIT_LIST_COMPONENTS,
+)
+from api.venv_reconcile import install_pip_deps_for_component as _install_pip_deps_for_component
+from api.venv_reconcile import install_slm_pip_dependencies as _install_slm_pip_dependencies
+from api.venv_reconcile import (
+    reconcile_component,
+    refuse_explicit_list,
+)
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.db_url import assemble_postgres_url
+from autobot_shared.env_utils import env_float, env_int, env_int_clamped
 from autobot_shared.security.redaction import redact_mapping
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
@@ -75,18 +86,20 @@ from services.deploy_artifacts import (
     rsync_artifact_excludes,
     rsync_host_state_args,
 )
+from services.deployed_dir_resolver import get_live_dir, get_release_component_dir
 from services.drift_checker import (
     ALLOWED_COMPONENTS,
     VISIBILITY_COMPONENTS,
     build_drift_report,
     deploy_only_entries,
-    get_default_deployed_dir,
     get_default_source_dir,
     owned_subtrees,
 )
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.playbook_executor import get_playbook_executor
+from services.slm_frontend_build import build_slm_frontend as _build_slm_frontend
+from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
 from services.ssh_utils import _ssh_key_usable
 from services.sync_orchestrator import get_sync_orchestrator
 
@@ -266,6 +279,73 @@ def _with_blocked_paths(message: str, blocked: List[str]) -> str:
     return f"{message} Paths: {', '.join(shown)}{suffix}"
 
 
+async def _mark_resolve_job_running(job_id: str, db_service) -> None:
+    """Requeued jobs arrive as 'queued' — mark running for status pollers (#11437)."""
+    async with db_service.session() as db:
+        result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
+        job_row = result.scalar_one_or_none()
+        if job_row and job_row.status != "running":
+            job_row.status = "running"
+            await db.commit()
+
+
+async def _check_resolve_deletion_guard(
+    job_id: str, component: str, source_root: str, excludes, source_dir: str, deployed_dir: str, force: bool
+) -> bool:
+    """Same delete guard as the sync endpoint (#13851). True to proceed; False after already failing the job."""
+    if force:
+        return True
+    allowed, blocked, guard_msg = await _resolve_deletion_guard(
+        component, source_root, excludes, source_dir, deployed_dir
+    )
+    if allowed:
+        return True
+    await _fail_resolve_job(
+        job_id,
+        _with_blocked_paths(guard_msg, blocked),
+        status=RESOLVE_STATUS_BLOCKED,
+        post_steps=blocked,
+    )
+    logger.error("component resolve job %s: %s", job_id, guard_msg)
+    return False
+
+
+async def _commit_resolve_job_result(
+    job_id: str, component: str, pip_ok: bool, deps_changed: bool, post_steps: List[str], db_service
+) -> None:
+    """Commit the job row BEFORE the restart — the whole point of the async path (#11303)."""
+    async with db_service.session() as db:
+        result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
+        job_row = result.scalar_one_or_none()
+        if job_row:
+            job_row.status = "completed" if pip_ok else "failed"
+            job_row.success = pip_ok
+            job_row.deps_changed = deps_changed
+            job_row.post_steps = "\n".join(post_steps)
+            job_row.message = (
+                f"Resynced {component} from code_source" if pip_ok else "pip install failed — see post_steps"
+            )
+            job_row.completed_at = datetime.now(timezone.utc)
+            await db.commit()
+
+
+async def _persist_resolve_job_exception(job_id: str, exc: Exception) -> None:
+    """Best-effort: record an unexpected exception on the job row."""
+    try:
+        from services.database import db_service as _db_svc
+
+        async with _db_svc.session() as db:
+            result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
+            job_row = result.scalar_one_or_none()
+            if job_row:
+                job_row.status = "failed"
+                job_row.message = str(exc)
+                job_row.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+    except Exception as inner:
+        logger.error("component resolve job %s: failed to persist error state: %s", job_id, inner)
+
+
 async def _run_component_resolve_job(job_id: str, component: str, force: bool = False) -> None:
     """Background executor for an async component drift/resolve job (#11303).
 
@@ -283,13 +363,7 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
     from services.database import db_service
 
     try:
-        # Requeued jobs arrive as 'queued' — mark running for status pollers (#11437).
-        async with db_service.session() as db:
-            result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
-            job_row = result.scalar_one_or_none()
-            if job_row and job_row.status != "running":
-                job_row.status = "running"
-                await db.commit()
+        await _mark_resolve_job_running(job_id, db_service)
         try:
             source_dir = get_default_source_dir(component)
         except ValueError as exc:
@@ -297,43 +371,19 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
             logger.error("component resolve job %s: source path error: %s", job_id, exc)
             return
 
-        deployed_dir = get_default_deployed_dir(component)
+        deployed_dir = get_release_component_dir(component)
         source_root = str(Path(source_dir).parent)
-
         excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
-        excludes = excludes_map.get(
-            component,
-            [],  # artifacts excluded universally at the rsync chokepoint (#11459)
-        )
+        excludes = excludes_map.get(component, [])  # universal excludes at the rsync chokepoint (#11459)
 
         logger.info(
-            "component resolve job %s: rsync source=%s/%s deployed=%s",
-            job_id,
-            source_root,
-            component,
-            deployed_dir,
+            "component resolve job %s: rsync source=%s/%s deployed=%s", job_id, source_root, component, deployed_dir
         )
 
-        # #13851: same delete guard as the sync endpoint, before anything is
-        # touched. This path ALSO rebuilt the rsync paths from the component
-        # name, discarding the #12872 fix — for a path-overridden component
-        # (ai-stack, slm-agent) that pointed the delete-style sync at a
-        # directory that is not the component's source.
-        if not force:
-            allowed, blocked, guard_msg = await _resolve_deletion_guard(
-                component, source_root, excludes, source_dir, deployed_dir
-            )
-            if not allowed:
-                # post_steps carries the FULL path list; the message inlines a
-                # capped preview so a text-only reader still sees what is at stake.
-                await _fail_resolve_job(
-                    job_id,
-                    _with_blocked_paths(guard_msg, blocked),
-                    status=RESOLVE_STATUS_BLOCKED,
-                    post_steps=blocked,
-                )
-                logger.error("component resolve job %s: %s", job_id, guard_msg)
-                return
+        if not await _check_resolve_deletion_guard(
+            job_id, component, source_root, excludes, source_dir, deployed_dir, force
+        ):
+            return
 
         # #11611: autobot_shared-first — sync the shared library BEFORE this
         # component's own rsync + restart so a newly-added `from autobot_shared.X`
@@ -353,13 +403,8 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
             return
 
         ok, msg = await _rsync_component_local(
-            source_root,
-            component,
-            excludes,
-            source_dir=source_dir,
-            dest_dir=deployed_dir,
+            source_root, component, excludes, source_dir=source_dir, dest_dir=deployed_dir
         )
-
         if not ok:
             await _fail_resolve_job(job_id, msg or "rsync failed")
             logger.error("component resolve job %s: rsync failed: %s", job_id, msg)
@@ -368,33 +413,12 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
         deps_changed, post_steps, pip_ok = await _run_post_sync_steps(
             component, source_dir, deployed_dir, restart=False
         )
-
-        # Commit the job row BEFORE the restart — the whole point of this async
-        # path.  If the restart kills this process the row is already durable.
-        async with db_service.session() as db:
-            result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
-            job_row = result.scalar_one_or_none()
-            if job_row:
-                job_row.status = "completed" if pip_ok else "failed"
-                job_row.success = pip_ok
-                job_row.deps_changed = deps_changed
-                job_row.post_steps = "\n".join(post_steps)
-                if pip_ok:
-                    job_row.message = f"Resynced {component} from code_source"
-                else:
-                    job_row.message = "pip install failed — see post_steps"
-                job_row.completed_at = datetime.now(timezone.utc)
-                await db.commit()
-
+        await _commit_resolve_job_result(job_id, component, pip_ok, deps_changed, post_steps, db_service)
         if not pip_ok:
             logger.error("component resolve job %s: pip install failed", job_id)
             return
 
-        logger.info(
-            "component resolve job %s: completed; triggering deferred restart for %s",
-            job_id,
-            component,
-        )
+        logger.info("component resolve job %s: completed; triggering deferred restart for %s", job_id, component)
         # Deferred restart — may kill this process for autobot-slm-backend; that
         # is fine because the job row is already committed above.
         steps2: List[str] = []
@@ -407,19 +431,7 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
 
     except Exception as exc:
         logger.error("component resolve job %s: unexpected error: %s", job_id, exc, exc_info=True)
-        try:
-            from services.database import db_service as _db_svc
-
-            async with _db_svc.session() as db:
-                result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
-                job_row = result.scalar_one_or_none()
-                if job_row:
-                    job_row.status = "failed"
-                    job_row.message = str(exc)
-                    job_row.completed_at = datetime.now(timezone.utc)
-                    await db.commit()
-        except Exception as inner:
-            logger.error("component resolve job %s: failed to persist error state: %s", job_id, inner)
+        await _persist_resolve_job_exception(job_id, exc)
     finally:
         _running_tasks.pop(job_id, None)
 
@@ -626,20 +638,19 @@ async def _get_tracker_for_db(db: AsyncSession):
 # #11820: TTL for the per-component staleness scan surfaced by GET /status.
 # Never hard-code a cache TTL — read it from the environment so a frequently
 # polled status endpoint doesn't re-checksum every deployed component per call.
-_STALE_COMPONENTS_TTL_SECONDS = int(os.getenv("SLM_STALE_COMPONENTS_TTL_SECONDS", "60"))
+_STALE_COMPONENTS_TTL_SECONDS = env_int("SLM_STALE_COMPONENTS_TTL_SECONDS", 60)
 
-# #14683: how long the update-all orchestration waits for a fired self-update
-# play to report a completion before giving up on it. Generous: the play covers
-# every deployed role on the box. The poll floor is 1s so a misconfigured
-# interval cannot turn the wait into a busy loop.
-_SELF_UPDATE_WATCH_TIMEOUT_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_TIMEOUT_SECONDS", "3600")))
-_SELF_UPDATE_WATCH_POLL_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_POLL_SECONDS", "15")))
+# #14683: how long update-all waits for a fired self-update play to report
+# completion -- generous, the play covers every deployed role on the box. The
+# min_v=1 poll floor stops a misconfigured interval busy-looping.
+_SELF_UPDATE_WATCH_TIMEOUT_SECONDS = env_int_clamped("SLM_SELF_UPDATE_WATCH_TIMEOUT_SECONDS", 3600, min_v=1)
+_SELF_UPDATE_WATCH_POLL_SECONDS = env_int_clamped("SLM_SELF_UPDATE_WATCH_POLL_SECONDS", 15, min_v=1)
 
 # #14703: how long an update-all job may make no progress before a new one may
 # supersede it. Generous on purpose -- every stage transition and every fleet
 # node stamps progress, so this bounds the gap between two signs of life, not
 # the job's total duration.
-_UPDATE_ALL_STALE_SECONDS = max(60, int(os.getenv("SLM_UPDATE_ALL_STALE_SECONDS", "1800")))
+_UPDATE_ALL_STALE_SECONDS = env_int_clamped("SLM_UPDATE_ALL_STALE_SECONDS", 1800, min_v=60)
 _stale_components_cache: dict = {"ts": -_STALE_COMPONENTS_TTL_SECONDS - 1.0, "value": []}
 
 
@@ -673,7 +684,7 @@ async def _compute_stale_components(force: bool = False) -> list[str]:
     loop = asyncio.get_running_loop()
     for component in sorted(VISIBILITY_COMPONENTS):
         try:
-            deployed_dir = get_default_deployed_dir(component)
+            deployed_dir = get_live_dir(component)
             if not os.path.isdir(deployed_dir):
                 continue  # not deployed on this box — nothing to compare
             source_dir = get_default_source_dir(component)
@@ -702,6 +713,41 @@ def _invalidate_stale_components_cache() -> None:
     recompute cost exactly once — no thundering herd on repeated polls.
     """
     _stale_components_cache["ts"] = -_STALE_COMPONENTS_TTL_SECONDS - 1.0
+
+
+async def _compute_process_divergence() -> Dict[str, str]:
+    """Per-component stale/healthy/unknown verdict for GET /status (#15323).
+
+    Wraps services.process_divergence.compute_process_divergence with the
+    live _COMPONENT_SERVICES / get_live_dir wiring this module
+    already owns — keeps the generic detector layering-clean (services/
+    never imports api/, see process_divergence.py's module docstring).
+
+    Passes EVERY unit in _COMPONENT_SERVICES[component], not just the first
+    (#15323 review): autobot_shared alone restarts 6 units and
+    autobot-ai-stack's first-listed unit (autobot-chromadb) is a compiled
+    binary that never loads the .py tree being scanned — checking only
+    svcs[0] silently verified the wrong process, or 1-of-6 processes, and
+    could report "healthy" while the real Python unit stayed stale.
+
+    Frontend components (unit list == ["nginx"]) are excluded: nginx loads
+    no Python, so a deploy-time comparison against it would be meaningless —
+    the detector already answers "unknown" for them via the empty-scan path,
+    but skipping them here keeps that intentional, not incidental.
+
+    Wrapped in try/except (#15323 review) to match _compute_stale_components'
+    invariant: a failure computing this signal must degrade /status, never
+    break it.
+    """
+    try:
+        from services.process_divergence import compute_process_divergence
+
+        units_by_component = {c: svcs for c, svcs in _COMPONENT_SERVICES.items() if svcs and svcs != ["nginx"]}
+        deployed_dirs = {c: get_live_dir(c) for c in units_by_component}
+        return await compute_process_divergence(units_by_component, deployed_dirs)
+    except Exception:  # noqa: BLE001 - a bad scan must not break /status
+        logger.exception("process-divergence: /status scan failed")
+        return {}
 
 
 @router.get("/status", response_model=CodeSyncStatusResponse)
@@ -763,6 +809,11 @@ async def get_sync_status(
     # so the endpoint never reads "up to date" while a managed component is stale.
     stale_components = await _compute_stale_components()
 
+    # #15323: surface whether each running service actually LOADED the code
+    # now on disk — distinct from stale_components (source vs deployed files),
+    # this is deployed files vs the process's in-memory state.
+    process_divergence = await _compute_process_divergence()
+
     # #12776: the self-update path restarts this backend mid-run, so nothing
     # in-process can assert the playbook finished. Read the verdict off the log
     # instead, so a run that died before Play 2 stops being reported as success.
@@ -776,12 +827,21 @@ async def get_sync_status(
         outdated_nodes=outdated_nodes,
         total_nodes=total_nodes,
         stale_components=stale_components,
+        process_divergence=process_divergence,
         self_update_incomplete=verdict.degraded,
         self_update_detail=verdict.reason,
     )
 
 
-def _read_last_self_update_verdict():
+# Both self-update entry points fire the same action, and each carried its own
+# near-identical wording. One constant so the two cannot drift apart again.
+_SELF_UPDATE_QUEUED_MESSAGE = (
+    "Self-update queued: Ansible will update all roles on this machine and restart services. "
+    "Check backend health in ~60s."
+)
+
+
+def _read_last_self_update_verdict(not_before: Optional[str] = None):
     """Verdict for the last self-update run; never fails the status endpoint (#12776).
 
     #12959: the log only says whether the *playbook* finished. A run can reach
@@ -789,12 +849,16 @@ def _read_last_self_update_verdict():
     the updater applies only ``backend`` via ``tasks_from: env_only``. So the
     log verdict is combined with a probe of what actually landed on this host —
     otherwise "complete" keeps meaning "the tasks ran", not "the change arrived".
+
+    #15522: *not_before* binds the answer to the run that fired at that time, so
+    a caller asking about run N is told "no result yet" rather than handed run
+    N-1's verdict off a log last written hours earlier.
     """
     from services.playbook_executor import SELF_UPDATE_LOG_PATH
     from services.self_update_log_reader import SelfUpdateVerdict, read_self_update_verdict
 
     try:
-        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH, not_before)
     except Exception as exc:  # noqa: BLE001 — status must answer even if this cannot
         logger.warning("self-update verdict unavailable: %s", exc)
         verdict = SelfUpdateVerdict(reason=None)
@@ -857,7 +921,7 @@ async def get_file_drift(
         source_dir = get_default_source_dir(component)
     except ValueError as exc:
         raise HTTPException(status_code=500, detail="Failed to determine component path") from exc
-    deployed_dir = get_default_deployed_dir(component)
+    deployed_dir = get_live_dir(component)
 
     logger.info("drift check: comparing source=%s deployed=%s", source_dir, deployed_dir)
 
@@ -889,6 +953,62 @@ async def get_file_drift(
         )
 
     return FileDriftReport(**report)
+
+
+async def _drift_resolve_check_deletion_guard(
+    request: DriftResolveRequest, source_root: str, excludes: List[str], source_dir: str, deployed_dir: str
+) -> Optional[DriftResolveResponse]:
+    """#13851: preview what a resolve would remove; refuse unless forced. Failure response when blocked, else None."""
+    if request.force:
+        return None
+    allowed, blocked, guard_msg = await _resolve_deletion_guard(
+        request.component, source_root, excludes, source_dir, deployed_dir
+    )
+    if allowed:
+        return None
+    return DriftResolveResponse(
+        success=False,
+        component=request.component,
+        message=guard_msg,
+        source_dir=source_dir,
+        deployed_dir=deployed_dir,
+        blocked_deletions=blocked,
+    )
+
+
+async def _drift_resolve_check_shared_sync(
+    request: DriftResolveRequest, source_dir: str, deployed_dir: str
+) -> Optional[DriftResolveResponse]:
+    """#11611: sync autobot_shared before this component's rsync + restart. Failure response on failure, else None."""
+    shared_ok, shared_msg, shared_blocked = await _ensure_autobot_shared_synced(request.component, request.force)
+    if shared_ok:
+        return None
+    return DriftResolveResponse(
+        success=False,
+        component=request.component,
+        message=shared_msg,
+        source_dir=source_dir,
+        deployed_dir=deployed_dir,
+        blocked_deletions=shared_blocked,
+    )
+
+
+async def _drift_resolve_rsync_or_fail(
+    request: DriftResolveRequest, source_root: str, excludes: List[str], source_dir: str, deployed_dir: str
+) -> Optional[DriftResolveResponse]:
+    """#12872: rsync using the resolved paths verbatim. Returns a failure response on error, None on success."""
+    ok, msg = await _rsync_component_local(
+        source_root, request.component, excludes, source_dir=source_dir, dest_dir=deployed_dir
+    )
+    if ok:
+        return None
+    return DriftResolveResponse(
+        success=False,
+        component=request.component,
+        message=msg or "rsync failed",
+        source_dir=source_dir,
+        deployed_dir=deployed_dir,
+    )
 
 
 @router.post("/drift/resolve", response_model=DriftResolveResponse)
@@ -945,7 +1065,7 @@ async def resolve_drift(
         source_dir = get_default_source_dir(request.component)
     except ValueError as exc:
         raise HTTPException(status_code=500, detail="Failed to determine source path") from exc
-    deployed_dir = get_default_deployed_dir(request.component)
+    deployed_dir = get_release_component_dir(request.component)
 
     # source_dir = /opt/autobot/code_source/<component>; _rsync_component_local
     # constructs `{source_path}/{component}/` so pass the parent.
@@ -964,58 +1084,17 @@ async def resolve_drift(
         deployed_dir,
     )
 
-    # #13851: a resolve deletes. Preview what it would remove and refuse unless
-    # the caller explicitly forced it — the drift signal that prompts a resolve
-    # has itself reported foreign files as stale. This runs BEFORE the shared
-    # sync below so a refusal leaves the host untouched.
-    if not request.force:
-        allowed, blocked, guard_msg = await _resolve_deletion_guard(
-            request.component, source_root, excludes, source_dir, deployed_dir
-        )
-        if not allowed:
-            return DriftResolveResponse(
-                success=False,
-                component=request.component,
-                message=guard_msg,
-                source_dir=source_dir,
-                deployed_dir=deployed_dir,
-                blocked_deletions=blocked,
-            )
+    guard_response = await _drift_resolve_check_deletion_guard(request, source_root, excludes, source_dir, deployed_dir)
+    if guard_response is not None:
+        return guard_response
 
-    # #11611: autobot_shared-first — sync the shared library BEFORE this
-    # component's own rsync + restart so a newly-added `from autobot_shared.X`
-    # import resolves at startup and the control plane cannot crash-loop on a
-    # half-deployed shared tree. Fail the resolve if it cannot be synced.
-    shared_ok, shared_msg, shared_blocked = await _ensure_autobot_shared_synced(request.component, request.force)
-    if not shared_ok:
-        return DriftResolveResponse(
-            success=False,
-            component=request.component,
-            message=shared_msg,
-            source_dir=source_dir,
-            deployed_dir=deployed_dir,
-            blocked_deletions=shared_blocked,
-        )
+    shared_response = await _drift_resolve_check_shared_sync(request, source_dir, deployed_dir)
+    if shared_response is not None:
+        return shared_response
 
-    # #12872: pass the resolved paths verbatim. source_dir/deployed_dir already
-    # honour _NONSTANDARD_COMPONENT_PATHS; reconstructing them from the
-    # component name discarded that and pointed rsync at a nonexistent dir.
-    ok, msg = await _rsync_component_local(
-        source_root,
-        request.component,
-        excludes,
-        source_dir=source_dir,
-        dest_dir=deployed_dir,
-    )
-
-    if not ok:
-        return DriftResolveResponse(
-            success=False,
-            component=request.component,
-            message=msg or "rsync failed",
-            source_dir=source_dir,
-            deployed_dir=deployed_dir,
-        )
+    rsync_response = await _drift_resolve_rsync_or_fail(request, source_root, excludes, source_dir, deployed_dir)
+    if rsync_response is not None:
+        return rsync_response
 
     # --- Post-sync: install deps / rebuild / restart so synced code goes live (#9982) ---
     deps_changed, post_steps, pip_ok = await _run_post_sync_steps(request.component, source_dir, deployed_dir)
@@ -1526,13 +1605,13 @@ _COMPONENT_PIP_PATHS: Dict[str, Tuple[str, str]] = {
     ),
 }
 
-# Target CPython interpreter per backend component (#11323).
-# NPU worker uses py3.11 (OpenVINO ABI); every other Python service uses py3.14.
-# This is the single authoritative mapping — do not hardcode elsewhere.
+# Target CPython interpreter for the components code-sync provisions (#11323).
+# Authoritative for _COMPONENT_PIP_PATHS keys ONLY — both readers are reached
+# from that branch alone, so any other key would be unread (#15075). The NPU
+# worker targets 3.14 too (#13747), decided in roles/npu-worker/tasks/main.yml.
 _COMPONENT_PYTHON_TARGET: Dict[str, str] = {
     "autobot-backend": "python3.14",
     "autobot-slm-backend": "python3.14",
-    "autobot-npu-worker": "python3.11",
 }
 
 # Ansible assets that provision the target interpreter on THIS host (#11343).
@@ -1544,7 +1623,7 @@ _ANSIBLE_DIR: Path = Path(DEFAULT_REPO_PATH) / "autobot-slm-backend" / "ansible"
 _PROVISION_PYTHON_PLAYBOOK: Path = _ANSIBLE_DIR / "playbooks" / "provision-local-python.yml"
 # #11403: ansible resolves roles via roles_path in ansible.cfg, which it only reads
 # from its cwd (or via ANSIBLE_CONFIG). Run from an arbitrary cwd, roles_path
-# defaults to playbooks/roles/ and the python314 role (at ansible/roles/) is not
+# defaults to playbooks/roles/ and the python_interpreter role (at ansible/roles/) is not
 # found → play fails. We pass cwd=_ANSIBLE_DIR — it survives sudo's env_reset,
 # whereas changing the command args would break the exact-match NOPASSWD sudoers
 # rule. ANSIBLE_CONFIG is also set as a fallback (honored only if sudoers keeps it).
@@ -1598,7 +1677,7 @@ _WORKER_COMPONENTS: frozenset = frozenset(
 # an explicit package LIST rather than a requirements file, so there is nothing
 # a code sync can legitimately re-install:
 #   - autobot-npu-worker: roles/npu-worker/tasks/main.yml:188-218 pip-installs a
-#     named list (FastAPI + OpenVINO) into its py3.11 venv. The repo does ship
+#     named list (FastAPI + OpenVINO) into its py3.14 venv (#13747). The repo does ship
 #     autobot-npu-worker/requirements.txt, but ansible never uses it — installing
 #     from it could pull a different OpenVINO build and brick the NPU worker.
 #   - autobot-browser-worker: roles/browser/tasks/main.yml:132-140 installs
@@ -1614,12 +1693,21 @@ _WORKER_COMPONENT_PIP: Dict[str, Tuple[str, str]] = {
     ),
 }
 
+# #15063: reconcile_component's lock file is keyed off pip.parents[1] (the
+# venv directory) — if two components ever mapped to the same venv, one's
+# reconcile would compute the other's declared packages as removal
+# candidates. Nothing else enforces that these paths stay distinct; this does.
+_ALL_COMPONENT_PIP_BINS = [pip_bin for _req, pip_bin in {**_COMPONENT_PIP_PATHS, **_WORKER_COMPONENT_PIP}.values()]
+assert len(_ALL_COMPONENT_PIP_BINS) == len(
+    set(_ALL_COMPONENT_PIP_BINS)
+), "_COMPONENT_PIP_PATHS/_WORKER_COMPONENT_PIP map two components to the same venv (#15063)"
+
 # Timeout (seconds) for `npm ci` (dependency install).  Windows-generated
 # package-lock.json on WSL can be slow; 300 s default matches pip (#11351).
-_NPM_INSTALL_TIMEOUT: float = float(os.environ.get("AUTOBOT_NPM_INSTALL_TIMEOUT", "300"))
+_NPM_INSTALL_TIMEOUT: float = env_float("AUTOBOT_NPM_INSTALL_TIMEOUT", 300.0)
 
 # Timeout (seconds) for `npm run <build>` (vite build step) (#11351).
-_NPM_BUILD_TIMEOUT: float = float(os.environ.get("AUTOBOT_NPM_BUILD_TIMEOUT", "300"))
+_NPM_BUILD_TIMEOUT: float = env_float("AUTOBOT_NPM_BUILD_TIMEOUT", 300.0)
 
 # Marker file stored inside node_modules after a successful npm ci.  Holds the
 # sha256 hex-digest of the package-lock.json that was installed (#11351).
@@ -1794,7 +1882,7 @@ async def _deploy_repo_root_requirements(source_root: str, steps: List[str]) -> 
 
 
 async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
-    """Run the python314 role on localhost to install *target* (#11343).
+    """Run the python_interpreter role on localhost to install *target* (#11343).
 
     Invokes ansible-playbook via an ARG LIST (never a shell string) under sudo.
     The command matches the NOPASSWD sudoers grant from
@@ -1806,7 +1894,7 @@ async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
     # so "--limit localhost" left ansible with no hosts to target (#11352). The
     # playbook is `hosts: localhost` / `connection: local`.
     cmd = ["sudo", "ansible-playbook", str(_PROVISION_PYTHON_PLAYBOOK)]
-    cmd += ["--tags", "python314", "-i", "localhost,", "--connection", "local"]
+    cmd += ["--tags", "python314", "-i", "localhost,", "--connection", "local"]  # #13843: permanent alias tag
     steps.append(f"python-provision: installing {target} via {_PROVISION_PYTHON_PLAYBOOK.name}")
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -1838,7 +1926,7 @@ async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
 async def _ensure_target_python_installed(component: str, steps: List[str]) -> None:
     """Install the target interpreter when missing, BEFORE venv recreation (#11343).
 
-    Runs the Ansible python314 role (deadsnakes) scoped to localhost when the
+    Runs the Ansible python_interpreter role (deadsnakes) scoped to localhost when the
     interpreter mapped in _COMPONENT_PYTHON_TARGET is absent from PATH. Preserves
     the #11323 safety guard: on provision failure it appends a clear step and
     RETURNS without touching the venv, so a running service is never bricked.
@@ -1878,7 +1966,7 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> bool:
     Safety: verifies the target interpreter is present on PATH (shutil.which) BEFORE
     removing anything. If absent, the existing venv is left intact and a skip step is
     recorded — the service stays running; operators must provision the interpreter
-    first (Ansible python314 role). (#11327 review)
+    first (Ansible python_interpreter role). (#11327 review)
     """
 
     target = _COMPONENT_PYTHON_TARGET.get(component)
@@ -1892,7 +1980,7 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> bool:
             logger.warning("drift resolve: %s not on PATH — skipping venv create for %s", target, component)
             steps.append(
                 f"venv: {venv_python} missing and {target} not installed"
-                " — skipping recreation; provision the interpreter first (Ansible python314 role)"
+                " — skipping recreation; provision the interpreter first (Ansible python_interpreter role)"
             )
             return False
         steps.append(f"venv: {venv_python} missing — will create with {target}")
@@ -1921,7 +2009,7 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> bool:
                 steps.append(
                     f"venv: mismatch (have '{version_out}', need {expected_fragment})"
                     f" but {target} not installed — skipping recreation;"
-                    " provision the interpreter first (Ansible python314 role)"
+                    " provision the interpreter first (Ansible python_interpreter role)"
                 )
                 return False
             steps.append(f"venv: mismatch (have '{version_out}', need {expected_fragment}) — recreating")
@@ -1962,61 +2050,6 @@ async def _recreate_venv(component: str, python_bin: str, pip_bin: str, steps: L
         steps.append(f"venv: create error: {exc}")
 
 
-async def _install_pip_deps_for_component(component: str, steps: List[str]) -> bool:
-    """Install Python deps from the component's requirements.txt into its venv (#9982).
-
-    Unconditional — pip is fast when nothing changed (same rationale as #1603).
-    Appends human-readable step notes to *steps*.
-    Returns True on success, False when pip exits non-zero so callers can surface
-    the failure (previously the non-zero rc was swallowed — #11322).
-    """
-    # #12450: worker components carry their own (req, pip) pair — ai-stack's file
-    # is requirements-ai.txt, not requirements.txt.
-    paths = _COMPONENT_PIP_PATHS.get(component) or _WORKER_COMPONENT_PIP.get(component)
-    if paths is None:
-        return True
-    req_path, pip_bin = paths
-    if not Path(req_path).exists():
-        steps.append(f"pip: no requirements file at {req_path} — skipped")
-        return True
-    if component in _WORKER_COMPONENT_PIP and not Path(pip_bin).exists():
-        # Worker-only relaxation: a worker venv is provisioned by ansible, never
-        # by code-sync, so a missing one means "not deployed here" rather than a
-        # broken install — the code rsync + restart is still valid on its own.
-        # Backends deliberately keep the original behaviour (attempt the exec so
-        # a genuine pip failure surfaces via pip_ok=False, #11322).
-        steps.append(f"pip: no venv pip at {pip_bin} — skipped (provisioned by ansible)")
-        return True
-    steps.append(f"pip: installing {req_path} into {Path(pip_bin).parent}")
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            pip_bin,
-            "install",
-            "-r",
-            req_path,
-            "--quiet",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        if proc.returncode == 0:
-            logger.info("drift resolve: pip install ok for %s", component)
-            steps.append("pip: install succeeded")
-            return True
-        out = stdout.decode(errors="replace")[:300] if stdout else ""
-        logger.error("drift resolve: pip install failed (%d) for %s: %s", proc.returncode, component, out)
-        steps.append(f"pip: install failed (rc={proc.returncode}): {out[:150]}")
-        return False
-    except asyncio.TimeoutError:
-        logger.error("drift resolve: pip install timed out for %s", component)
-        steps.append("pip: install timed out after 300s")
-        return False
-    except Exception as exc:
-        logger.error("drift resolve: pip install error for %s: %s", component, exc)
-        steps.append(f"pip: install error: {exc}")
-        return False
-
-
 # Components whose deployed tree ships Alembic migrations, keyed to the
 # alembic.ini path RELATIVE to the deployed dir. `upgrade heads` (plural)
 # tolerates multiple heads from parallel branch migrations.
@@ -2028,7 +2061,7 @@ _COMPONENT_MIGRATION_CONFIG: Dict[str, str] = {
 # Directory where pg_dump backups are stored; override with AUTOBOT_DB_BACKUP_DIR.
 _DB_BACKUP_DIR: str = os.environ.get("AUTOBOT_DB_BACKUP_DIR", "/opt/autobot/db-backups")
 # Maximum number of backups to retain per component; older ones are pruned.
-_DB_BACKUP_KEEP: int = int(os.environ.get("AUTOBOT_DB_BACKUP_KEEP", "5"))
+_DB_BACKUP_KEEP: int = env_int("AUTOBOT_DB_BACKUP_KEEP", 5)
 
 # --- #11378: post-restart health polling ---------------------------------------
 # Total seconds to wait for a component to become healthy after restart. The
@@ -2042,27 +2075,27 @@ _DB_BACKUP_KEEP: int = int(os.environ.get("AUTOBOT_DB_BACKUP_KEEP", "5"))
 # non-failed unit — rollback is gated on a genuine systemd 'failed' state, not on
 # the timeout (see _wait_component_healthy), so the shorter window cannot cause a
 # false rollback of a slow-but-healthy deploy.
-_DEFAULT_HEALTH_POLL_TIMEOUT_S = "180"
-_HEALTH_POLL_TIMEOUT: float = float(os.environ.get("AUTOBOT_HEALTH_POLL_TIMEOUT", _DEFAULT_HEALTH_POLL_TIMEOUT_S))
+_DEFAULT_HEALTH_POLL_TIMEOUT_S = 180.0
+_HEALTH_POLL_TIMEOUT: float = env_float("AUTOBOT_HEALTH_POLL_TIMEOUT", _DEFAULT_HEALTH_POLL_TIMEOUT_S)
 # Fast window for restarts that did NOT recreate the venv (warm interpreter).
-_FAST_HEALTH_POLL_TIMEOUT_S = "60"
-_FAST_HEALTH_POLL_TIMEOUT: float = float(
-    os.environ.get("AUTOBOT_HEALTH_POLL_TIMEOUT_FAST", _FAST_HEALTH_POLL_TIMEOUT_S)
-)
+_FAST_HEALTH_POLL_TIMEOUT_S = 60.0
+_FAST_HEALTH_POLL_TIMEOUT: float = env_float("AUTOBOT_HEALTH_POLL_TIMEOUT_FAST", _FAST_HEALTH_POLL_TIMEOUT_S)
 # Per-attempt connect timeout (seconds) when probing the health endpoint.
-_DEFAULT_HEALTH_POLL_CONNECT_TIMEOUT_S = "3"
-_HEALTH_POLL_CONNECT_TIMEOUT: float = float(
-    os.environ.get("AUTOBOT_HEALTH_POLL_CONNECT_TIMEOUT", _DEFAULT_HEALTH_POLL_CONNECT_TIMEOUT_S)
+_DEFAULT_HEALTH_POLL_CONNECT_TIMEOUT_S = 3.0
+_HEALTH_POLL_CONNECT_TIMEOUT: float = env_float(
+    "AUTOBOT_HEALTH_POLL_CONNECT_TIMEOUT", _DEFAULT_HEALTH_POLL_CONNECT_TIMEOUT_S
 )
 # Delay between health-probe attempts (seconds). Env-overridable alongside the
 # windows above so the whole poll shape is configurable from one place rather
 # than a literal buried in the loop.
-_DEFAULT_HEALTH_POLL_INTERVAL_S = "2"
-_HEALTH_POLL_INTERVAL: float = float(os.environ.get("AUTOBOT_HEALTH_POLL_INTERVAL", _DEFAULT_HEALTH_POLL_INTERVAL_S))
-# Per-component health URLs (localhost only — never egress).
+_DEFAULT_HEALTH_POLL_INTERVAL_S = 2.0
+_HEALTH_POLL_INTERVAL: float = env_float("AUTOBOT_HEALTH_POLL_INTERVAL", _DEFAULT_HEALTH_POLL_INTERVAL_S)
+# Per-component health URLs (localhost only — never egress). Pre-existing
+# hardcoded ports, not touched by #15063 — resolving these through
+# ssot_config is separate, tracked work under the canonical-debt umbrella.
 _COMPONENT_HEALTH_URLS: Dict[str, str] = {
-    "autobot-backend": "http://127.0.0.1:8001/api/health",
-    "autobot-slm-backend": "http://127.0.0.1:8000/slm/api/code-sync/status",
+    "autobot-backend": "http://127.0.0.1:8001/api/health",  # canonical: ignore py-hardcoded-url (#10569)
+    "autobot-slm-backend": "http://127.0.0.1:8000/slm/api/code-sync/status",  # canonical:ignore py-hardcoded-url
     "autobot-frontend": "http://127.0.0.1/",
     "autobot-slm-frontend": "http://127.0.0.1/slm/",
 }
@@ -2357,7 +2390,7 @@ async def _npm_install_if_needed(frontend_dir: str, component: str, steps: List[
     if current_hash:
         marker = Path(frontend_dir) / "node_modules" / _NPM_LOCK_HASH_MARKER
         marker.parent.mkdir(parents=True, exist_ok=True)
-        marker.write_text(current_hash, encoding="utf-8")
+        await asyncio.to_thread(marker.write_text, current_hash, encoding="utf-8")
     steps.append("npm ci: succeeded")
     return True
 
@@ -2495,7 +2528,7 @@ async def _restart_component_services(component: str, steps: List[str], services
 
 
 _SNAPSHOT_BASE_DIR: str = os.environ.get("AUTOBOT_SNAPSHOT_DIR", "/opt/autobot/snapshots")
-_SNAPSHOT_KEEP: int = int(os.environ.get("AUTOBOT_SNAPSHOT_KEEP", "3"))
+_SNAPSHOT_KEEP: int = env_int("AUTOBOT_SNAPSHOT_KEEP", 3)
 
 
 def _prune_old_snapshots(snap_base: Path, component: str, max_keep: int) -> None:
@@ -2517,13 +2550,14 @@ async def _snapshot_component(component: str) -> Optional[str]:
     """Rsync the deployed dir to a timestamped backup before mutation (#11404).
 
     Deployed dirs are rsync copies — not git repos — so `git rev-parse HEAD`
-    always fails, leaving snapshot=None and rollback printing "manual recovery".
-    Instead: rsync the deployed dir to a snapshot under _SNAPSHOT_BASE_DIR,
-    prune old snapshots, and return the backup path.
+    always fails, leaving snapshot=None and rollback restarting onto the
+    post-sync tree unrevertable (#15323). Instead: rsync the deployed dir to
+    a snapshot under _SNAPSHOT_BASE_DIR, prune old snapshots, and return the
+    backup path.
 
     Returns the backup dir path string on success, None on failure.
     """
-    deployed_dir = get_default_deployed_dir(component)
+    deployed_dir = get_live_dir(component)
     snap_base = Path(_SNAPSHOT_BASE_DIR)
     try:
         snap_base.mkdir(parents=True, exist_ok=True)
@@ -2559,26 +2593,17 @@ async def _snapshot_component(component: str) -> Optional[str]:
         return None
 
 
-async def _rollback_component(
-    component: str,
-    snapshot: Optional[str],
-    steps: List[str],
-    dump_path: Optional[str] = None,
-) -> None:
-    """Restore *component* from the filesystem snapshot after a failed post-sync step (#11404).
+async def _restore_component_snapshot(component: str, snapshot: str, steps: List[str]) -> bool:
+    """Rsync *snapshot* back over the deployed dir for *component* (#11404).
 
-    Rsyncs from the backup dir created by _snapshot_component() back over the
-    deployed dir, then restarts services.  Does NOT restore the DB — operators
-    use the pg_dump at *dump_path*.
+    Split out of _rollback_component (#15323) so the caller can restart
+    UNCONDITIONALLY afterwards — this only reports whether the revert itself
+    landed, it never decides whether to restart.
 
-    No-op (logs warning) when *snapshot* is None.
+    Returns True on a clean rsync (rc=0); False on a failed/timed-out/errored
+    restore, each case logged and recorded in *steps*.
     """
-    if snapshot is None:
-        steps.append("rollback: no snapshot available — manual recovery required")
-        logger.warning("rollback: no snapshot for %s — cannot auto-revert", component)
-        return
-
-    deployed_dir = get_default_deployed_dir(component)
+    deployed_dir = get_release_component_dir(component)
     steps.append(f"rollback: restoring {component} from {snapshot}")
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -2595,18 +2620,46 @@ async def _rollback_component(
         if proc.returncode == 0:
             steps.append(f"rollback: restored from {snapshot}")
             logger.info("rollback: %s restored from %s", component, snapshot)
-        else:
-            steps.append(f"rollback: rsync restore failed (rc={proc.returncode}): {out[:200]}")
-            logger.error("rollback: rsync restore failed for %s: %s", component, out[-300:])
-            return
+            return True
+        steps.append(f"rollback: rsync restore failed (rc={proc.returncode}): {out[:200]}")
+        logger.error("rollback: rsync restore failed for %s: %s", component, out[-300:])
+        return False
     except asyncio.TimeoutError:
         steps.append("rollback: rsync restore timed out after 120s")
         logger.error("rollback: rsync restore timed out for %s", component)
-        return
+        return False
     except Exception as exc:
         steps.append(f"rollback: rsync restore error: {exc}")
         logger.error("rollback: rsync restore error for %s: %s", component, exc)
-        return
+        return False
+
+
+async def _rollback_component(
+    component: str,
+    snapshot: Optional[str],
+    steps: List[str],
+    dump_path: Optional[str] = None,
+) -> None:
+    """Restore *component* from its filesystem snapshot after a failed post-sync step (#11404).
+
+    #15323: the restart below is now UNCONDITIONAL. The previous version
+    returned early — without restarting — whenever the revert itself could
+    not complete (no snapshot, rsync failure/timeout/error), leaving the
+    deployed tree holding the broken post-sync code while the running
+    process kept the old code loaded: on-disk and in-memory code diverged
+    with no signal, and the job row simply read "failed". Restarting in
+    every case closes that window: when the revert succeeded the restart
+    loads the reverted, last-known-good tree (silent recovery); when it did
+    not, the restart instead loads the still-broken post-sync tree, and the
+    resulting crash or failed health poll is the loud signal that replaces
+    the previous silence. Does NOT restore the DB — operators use the
+    pg_dump at *dump_path*.
+    """
+    if snapshot is None:
+        steps.append("rollback: no snapshot available — restarting onto the post-sync tree instead (#15323)")
+        logger.warning("rollback: no snapshot for %s — restarting without revert", component)
+    else:
+        await _restore_component_snapshot(component, snapshot, steps)
 
     await _restart_component_services(component, steps)
     if dump_path and dump_path != "NO_BACKUP":
@@ -2862,7 +2915,7 @@ async def _ensure_autobot_shared_synced(component: str, force: bool = False) -> 
     source_root = str(Path(shared_source).parent)
     excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
     excludes = excludes_map.get("autobot_shared", [])
-    shared_deployed = get_default_deployed_dir("autobot_shared")
+    shared_deployed = get_release_component_dir("autobot_shared")
     if not force:
         allowed, blocked, guard_msg = await _resolve_deletion_guard(
             "autobot_shared", source_root, excludes, shared_source, shared_deployed
@@ -2881,6 +2934,122 @@ async def _ensure_autobot_shared_synced(component: str, force: bool = False) -> 
         return True, f"autobot_shared-first: resynced ahead of {component} (#11611)", []
     logger.error("autobot_shared-first: resync FAILED before %s: %s (#11611)", component, msg)
     return False, f"autobot_shared-first: resync failed before {component}: {msg} (#11611)", []
+
+
+async def _run_post_sync_backend_branch(
+    component: str,
+    source_dir: str,
+    deployed_dir: str,
+    snapshot: Optional[str],
+    steps: List[str],
+    restart: bool,
+) -> bool:
+    """Backend branch of _run_post_sync_steps: constraints/venv/pip/reconcile/alembic/symlink/restart (#9982,#15063)."""
+    source_root = str(Path(source_dir).parent)
+    await _deploy_constraints_dir(source_root, steps)
+    await _deploy_repo_root_requirements(source_root, steps)
+    await _ensure_target_python_installed(component, steps)
+    venv_recreated = await _ensure_venv_python(component, steps)
+    pip_ok = await _install_pip_deps_for_component(component, steps)
+    if not pip_ok:
+        await _rollback_component(component, snapshot, steps, None)
+        return False
+    req_path, pip_bin = _COMPONENT_PIP_PATHS[component]
+    await reconcile_component(component, req_path, pip_bin, steps)
+    alembic_ok = await _run_alembic_migrations(component, deployed_dir, steps)
+    # Extract the dump path recorded during _run_alembic_migrations for rollback msg.
+    last_dump_path = next(
+        (s.split("→")[-1].strip() for s in steps if "pg_dump: backup ok" in s),
+        None,
+    )
+    if not alembic_ok:
+        await _rollback_component(component, snapshot, steps, last_dump_path)
+        return False
+    await _ensure_autobot_shared_symlink(component, steps)
+    if not restart:
+        steps.append("post-sync: restart deferred")
+        return True
+    await _restart_component_services(component, steps)
+    # #11458: a just-recreated venv cold-starts slowly → full health-poll
+    # window; a warm restart uses the shorter fast window.
+    healthy = await _wait_component_healthy(component, steps, slow_start=venv_recreated)
+    if not healthy:
+        await _rollback_component(component, snapshot, steps, last_dump_path)
+        steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
+        return False
+    return True
+
+
+async def _run_post_sync_frontend_branch(
+    component: str, snapshot: Optional[str], steps: List[str], restart: bool
+) -> bool:
+    """Frontend branch of _run_post_sync_steps: npm ci (conditional) + build +
+    nginx reload + health (#9982)."""
+    npm_ok = await _build_npm_frontend_for_component(component, steps)
+    if not npm_ok:
+        await _rollback_component(component, snapshot, steps, None)
+        return False
+    if not restart:
+        steps.append("post-sync: restart deferred")
+        return True
+    await _restart_component_services(component, steps)
+    # Frontend keeps the full health-poll window (#11458 review): the fast
+    # window is only for warm pip-backend restarts. A fresh nginx worker
+    # after a large asset swap can lag past 60s, and the generous window
+    # avoids logging an otherwise-healthy frontend as "check manually".
+    healthy = await _wait_component_healthy(component, steps, slow_start=True)
+    if not healthy:
+        await _rollback_component(component, snapshot, steps, None)
+        steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
+        return False
+    return True
+
+
+async def _run_post_sync_worker_branch(
+    component: str, snapshot: Optional[str], steps: List[str], restart: bool
+) -> bool:
+    """Worker branch of _run_post_sync_steps (#12450,#15063). ai-stack only; others refuse+report (AC4)."""
+    pip_ok = await _install_pip_deps_for_component(component, steps)
+    if not pip_ok:
+        await _rollback_component(component, snapshot, steps, None)
+        return False
+    if component in EXPLICIT_LIST_COMPONENTS:
+        refuse_explicit_list(component, steps)
+    else:
+        worker_paths = _WORKER_COMPONENT_PIP.get(component)
+        if worker_paths is not None:
+            await reconcile_component(component, *worker_paths, steps)
+    if not restart:
+        steps.append("post-sync: restart deferred")
+        return True
+    await _restart_component_services(component, steps)
+    # Workers have no health URL, so _wait_component_healthy returns True
+    # immediately and rollback is gated purely on the systemd unit entering
+    # 'failed'. Note _is_systemd_unit_failed watches the FIRST unit in the
+    # component's _COMPONENT_SERVICES list.
+    healthy = await _wait_component_healthy(component, steps, slow_start=True)
+    if not healthy:
+        await _rollback_component(component, snapshot, steps, None)
+        steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
+        return False
+    return True
+
+
+async def _run_post_sync_shared_branch(
+    component: str, snapshot: Optional[str], steps: List[str], restart: bool
+) -> bool:
+    """autobot_shared branch of _run_post_sync_steps: restore BOTH backends'
+    symlinks (#10912) + restart dependents (self last) + per-dependent
+    health + rollback (#11496)."""
+    for backend in sorted(_BACKEND_COMPONENTS):
+        await _ensure_autobot_shared_symlink(backend, steps)
+    if not restart:
+        steps.append("post-sync: restart deferred")
+        return True
+    # #11496: was the only sync path with no post-restart health poll or
+    # rollback — a shared-lib change that broke a backend import restarted
+    # onto a dead service undetected.
+    return await _restart_dependents_with_health(component, snapshot, steps)
 
 
 async def _run_post_sync_steps(
@@ -2906,20 +3075,16 @@ async def _run_post_sync_steps(
     autobot-slm-backend).  All other steps still run; restart=True (default) keeps
     the existing synchronous behaviour for all current callers.
 
-    Component routing:
+    Component routing — one branch helper each, so this dispatcher and every
+    branch stay under the function-length guideline (Issue #620):
       - Python backend (autobot-backend, autobot-slm-backend):
-          constraints deploy (#11322) + venv version check (#11323) +
-          pip install + symlink restore (#10912) + alembic + restart + health
-      - Frontend (autobot-frontend, autobot-slm-frontend): npm ci (conditional) + build + nginx reload + health
+          _run_post_sync_backend_branch
+      - Frontend (autobot-frontend, autobot-slm-frontend): _run_post_sync_frontend_branch
       - Workers (#12450 — ai-stack, npu-worker, browser-worker, slm-agent):
-          optional pip install (ai-stack only) + restart of the unit(s) that
-          component's ansible role actually installs. No constraints/alembic/
-          venv-recreation/symlink work — none of it applies to a worker.
-      - autobot_shared: restore BOTH backends' symlinks (#10912) + restart
-          dependents (self last) + per-dependent health + rollback (#11496)
+          _run_post_sync_worker_branch
+      - autobot_shared: _run_post_sync_shared_branch
     """
     steps: List[str] = []
-    pip_ok = True
 
     # Compute deps_changed post-rsync (source == deployed now; any prior delta
     # is gone, so this is always False after a successful rsync — but we check
@@ -2929,165 +3094,20 @@ async def _run_post_sync_steps(
 
     # #11377: snapshot the deployed dir BEFORE any mutation for rollback.
     snapshot = await _snapshot_component(component)
-    # Track the last pg_dump path for rollback failure messages (#11376+#11377).
-    last_dump_path: Optional[str] = None
 
     if component in _COMPONENT_PIP_PATHS:
-        source_root = str(Path(source_dir).parent)
-        await _deploy_constraints_dir(source_root, steps)
-        await _deploy_repo_root_requirements(source_root, steps)
-        await _ensure_target_python_installed(component, steps)
-        venv_recreated = await _ensure_venv_python(component, steps)
-        pip_ok = await _install_pip_deps_for_component(component, steps)
-        if not pip_ok:
-            await _rollback_component(component, snapshot, steps, last_dump_path)
-            return deps_changed, steps, False
-        alembic_ok = await _run_alembic_migrations(component, deployed_dir, steps)
-        # Extract the dump path recorded during _run_alembic_migrations for rollback msg.
-        last_dump_path = next(
-            (s.split("→")[-1].strip() for s in steps if "pg_dump: backup ok" in s),
-            None,
-        )
-        if not alembic_ok:
-            await _rollback_component(component, snapshot, steps, last_dump_path)
-            return deps_changed, steps, False
-        await _ensure_autobot_shared_symlink(component, steps)
-        if restart:
-            await _restart_component_services(component, steps)
-            # #11458: a just-recreated venv cold-starts slowly → full health-poll
-            # window; a warm restart uses the shorter fast window.
-            healthy = await _wait_component_healthy(component, steps, slow_start=venv_recreated)
-            if not healthy:
-                await _rollback_component(component, snapshot, steps, last_dump_path)
-                steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
-                pip_ok = False
-        else:
-            steps.append("post-sync: restart deferred")
+        pip_ok = await _run_post_sync_backend_branch(component, source_dir, deployed_dir, snapshot, steps, restart)
     elif component in _COMPONENT_FRONTEND_DIRS:
-        npm_ok = await _build_npm_frontend_for_component(component, steps)
-        if not npm_ok:
-            await _rollback_component(component, snapshot, steps, None)
-            pip_ok = False
-        elif restart:
-            await _restart_component_services(component, steps)
-            # Frontend keeps the full health-poll window (#11458 review): the fast
-            # window is only for warm pip-backend restarts. A fresh nginx worker
-            # after a large asset swap can lag past 60s, and the generous window
-            # avoids logging an otherwise-healthy frontend as "check manually".
-            healthy = await _wait_component_healthy(component, steps, slow_start=True)
-            if not healthy:
-                await _rollback_component(component, snapshot, steps, None)
-                steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
-                pip_ok = False
-        else:
-            steps.append("post-sync: restart deferred")
+        pip_ok = await _run_post_sync_frontend_branch(component, snapshot, steps, restart)
     elif component in _WORKER_COMPONENTS:
-        # #12450: worker components. Only ai-stack has a re-installable
-        # requirements file; for the rest this is deliberately code-only
-        # (rsync already happened) plus a restart of the correct unit — see
-        # _WORKER_COMPONENT_PIP for why each is or isn't dep-installable.
-        #
-        # No constraints deploy, no interpreter provisioning, no venv
-        # recreation, no alembic, no autobot_shared symlink: none apply to a
-        # worker, and venv recreation in particular would wipe the venv the
-        # chroma binary lives in (MVA-79).
-        pip_ok = await _install_pip_deps_for_component(component, steps)
-        if not pip_ok:
-            await _rollback_component(component, snapshot, steps, None)
-            return deps_changed, steps, False
-        if restart:
-            await _restart_component_services(component, steps)
-            # Workers have no health URL, so _wait_component_healthy returns
-            # True immediately and rollback is gated purely on the systemd unit
-            # entering 'failed'. Note _is_systemd_unit_failed watches the FIRST
-            # unit in the component's _COMPONENT_SERVICES list.
-            healthy = await _wait_component_healthy(component, steps, slow_start=True)
-            if not healthy:
-                await _rollback_component(component, snapshot, steps, None)
-                steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
-                pip_ok = False
-        else:
-            steps.append("post-sync: restart deferred")
+        pip_ok = await _run_post_sync_worker_branch(component, snapshot, steps, restart)
     elif component in _COMPONENT_SERVICES:
-        # Library component (autobot_shared): no build step, but every service
-        # that imports it must restart so the new shared code is loaded (#10248).
-        # Restore both backends' symlinks first so services start cleanly (#10912).
-        for backend in sorted(_BACKEND_COMPONENTS):
-            await _ensure_autobot_shared_symlink(backend, steps)
-        if restart:
-            # #11496: was the only sync path with no post-restart health poll
-            # or rollback — a shared-lib change that broke a backend import
-            # restarted onto a dead service undetected.
-            if not await _restart_dependents_with_health(component, snapshot, steps):
-                pip_ok = False
-        else:
-            steps.append("post-sync: restart deferred")
+        pip_ok = await _run_post_sync_shared_branch(component, snapshot, steps, restart)
     else:
+        pip_ok = True
         steps.append(f"post-sync: no service or build step for {component}")
 
     return deps_changed, steps, pip_ok
-
-
-async def _build_slm_frontend() -> None:
-    """Run npm ci + npm run build for the SLM frontend.
-
-    Issue #1607: The Ansible path builds the frontend; the self-sync
-    path was missing this step, serving stale dist/ files.
-    Issue #1624: Fix ownership before build — Ansible deploys as root.
-    """
-    frontend_dir = "/opt/autobot/autobot-slm-frontend"
-    try:
-        # Fix ownership — Ansible may have created root-owned files (#1624)
-        proc = await asyncio.create_subprocess_exec(
-            "sudo",
-            "chown",
-            "-R",
-            "autobot:autobot",
-            frontend_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        await asyncio.wait_for(proc.communicate(), timeout=30.0)
-
-        # npm ci — install exact lockfile deps
-        proc = await asyncio.create_subprocess_exec(
-            "npm",
-            "ci",
-            "--prefix",
-            frontend_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        if proc.returncode != 0:
-            logger.warning(
-                "SLM self-sync: npm ci failed (%d): %s",
-                proc.returncode,
-                stdout.decode(errors="replace")[:500],
-            )
-            return
-
-        # npm run build
-        proc = await asyncio.create_subprocess_exec(
-            "npm",
-            "run",
-            "build",
-            "--prefix",
-            frontend_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        if proc.returncode == 0:
-            logger.info("SLM self-sync: frontend build complete")
-        else:
-            logger.warning(
-                "SLM self-sync: npm build failed (%d): %s",
-                proc.returncode,
-                stdout.decode(errors="replace")[:500],
-            )
-    except Exception as exc:
-        logger.warning("SLM self-sync: frontend build failed: %s", exc)
 
 
 async def _restart_slm_service(service: str) -> None:
@@ -3108,40 +3128,6 @@ async def _restart_slm_service(service: str) -> None:
         logger.info("Restarted service: %s", service)
     except Exception as exc:
         logger.warning("Failed to restart %s: %s", service, exc)
-
-
-async def _install_slm_pip_dependencies() -> None:
-    """Install Python dependencies from requirements.txt into the SLM venv.
-
-    Runs unconditionally after rsync — pip is fast when nothing changed (#1603).
-    """
-    req_path = "/opt/autobot/autobot-slm-backend/requirements.txt"
-    pip_bin = "/opt/autobot/autobot-slm-backend/venv/bin/pip"
-
-    if not Path(req_path).exists():
-        logger.debug("No requirements.txt at %s — skipping pip install", req_path)
-        return
-
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            pip_bin,
-            "install",
-            "-r",
-            req_path,
-            "--quiet",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        if proc.returncode == 0:
-            logger.info("SLM pip install completed successfully")
-        else:
-            output = stdout.decode(errors="replace")[:500] if stdout else ""
-            logger.error("SLM pip install failed (rc=%d): %s", proc.returncode, output)
-    except asyncio.TimeoutError:
-        logger.error("SLM pip install timed out after 300s")
-    except Exception as exc:
-        logger.error("SLM pip install error: %s", exc)
 
 
 async def _fetch_code_source_connection_info(
@@ -3196,6 +3182,7 @@ async def _mark_slm_node_up_to_date(db_service, node_id: str) -> None:
         logger.warning("SLM self-sync: could not determine current commit")
         return
 
+    await _write_slm_deployed_commit_marker(current_commit)
     try:
         async with db_service.session() as db:
             slm_result = await db.execute(select(Node).where(Node.node_id == node_id))
@@ -3212,13 +3199,19 @@ async def _mark_slm_node_up_to_date(db_service, node_id: str) -> None:
         logger.warning("SLM self-sync: could not update node status: %s", db_err)
 
 
-async def _sync_slm_from_code_source(node_id: str) -> None:
+async def _sync_slm_from_code_source(node_id: str, job_id: str) -> None:
     """Pull SLM components from the code source node and restart services.
 
     Used when the GUI triggers a sync for the SLM server itself (#913).
     The Ansible playbook cannot be used because it runs rsync FROM the
     controller (SLM server) but the source path only exists on the dev machine.
     This function reverses the direction: SLM server PULLS from the code source.
+
+    *job_id* is needed only to persist the dependency-reconciliation steps
+    (#15063) — the fleet-sync job row is already marked complete before this
+    runs (a self-restart may kill this process), so that write is the last
+    reliable place for the removal set to reach the job's own output rather
+    than only a log an operator must go find.
 
     NOTE: Must create its own DB session — the request-scoped session passed
     from sync_node is closed by FastAPI before this background task runs.
@@ -3261,10 +3254,24 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         return
 
     # --- Phase 2b: install Python dependencies if requirements.txt changed (#1603) ---
-    await _install_slm_pip_dependencies()
+    req_path, pip_bin = _COMPONENT_PIP_PATHS["autobot-slm-backend"]
+    reconcile_steps: List[str] = []
+    if await _install_slm_pip_dependencies(req_path, pip_bin):
+        await reconcile_component("autobot-slm-backend", req_path, pip_bin, reconcile_steps)
+    if reconcile_steps:
+        # #15063: written now, while a process is still alive to write it —
+        # Phase 4 below may self-restart this service before anything after
+        # it can run.
+        await _update_node_state_db(job_id, node_id, message="; ".join(reconcile_steps))
 
-    # --- Phase 2c: rebuild SLM frontend (#1607) ---
-    await _build_slm_frontend()
+    # --- Phase 2c: rebuild SLM frontend (#1607, staged publish #15462) ---
+    if not await _build_slm_frontend():
+        logger.error(
+            "SLM self-sync: frontend build failed — previous dist/ is still serving; "
+            "node NOT marked up-to-date and services NOT restarted (#15462)"
+        )
+        return
+
     # --- Phase 3: mark up-to-date in DB before restarting (#1209) ---
     await _mark_slm_node_up_to_date(db_service, node_id)
 
@@ -3395,21 +3402,43 @@ async def sync_node(
         # Use Ansible to update all deployed roles on this machine (#9073).
         # Covers backend, frontend, shared, agent, plugins, workers, etc.
         logger.info("SLM self-update via Ansible: queuing (fire-and-forget)")
-        asyncio.create_task(_ansible_self_update(node_id))
-        return NodeSyncResponse(
-            success=True,
-            message=(
-                "SLM update queued: Ansible will update all roles on this machine and restart services. "
-                "Check backend health in ~60s."
-            ),
-            node_id=node_id,
-        )
+        fire_and_forget(_ansible_self_update(node_id), name=f"ansible-self-update:{node_id}")
+        return NodeSyncResponse(success=True, message=_SELF_UPDATE_QUEUED_MESSAGE, node_id=node_id)
 
     # Normal execution - wait for result with progress updates
     return await _execute_node_playbook(executor, node, node_id, request, progress_callback, db)
 
 
-async def _ansible_self_update(node_id: str) -> None:
+async def _colocated_node_ids(slm_node_id: str) -> List[str]:
+    """Every Node row registered at THIS physical machine's own IP (#15475).
+
+    A single-box install can model a role co-located with the SLM (e.g. the
+    main frontend) as its OWN Node row sharing the SLM's IP, rather than as a
+    role token on the SLM's own row — see
+    ``setup_wizard._apply_colocation_vars``, which detects co-location the
+    same way. ``update-all-nodes.yml``'s Play 2 (``hosts: infrastructure``)
+    only runs for a host ``--limit`` includes, so limiting to the SLM's own
+    node_id alone silently skipped every co-located row: "self-update"
+    updated the SLM node, not the machine it presented itself as updating.
+    Widening the limit to every fleet host instead would turn a one-click
+    self-update into a full-fleet deploy; the correct scope is exactly this
+    physical machine — everything sharing its IP addresses.
+    """
+    from autobot_shared.network_utils import get_local_ips
+    from services.database import db_service
+
+    node_ids = {slm_node_id}
+    try:
+        local_ips = get_local_ips()
+        async with db_service.session() as db:
+            result = await db.execute(select(Node.node_id, Node.ip_address))
+            node_ids |= {nid for nid, ip in result.all() if ip in local_ips}
+    except Exception as exc:
+        logger.warning("Could not resolve co-located nodes for self-update (%s): %s", slm_node_id, exc)
+    return sorted(node_ids)
+
+
+async def _ansible_self_update(node_id: str, on_failure: Optional[Callable[[str], None]] = None) -> None:
     """Run update-all-nodes.yml against this machine to update all deployed roles (#9073).
 
     Covers every role Ansible knows about (backend, frontend, shared, agent,
@@ -3423,41 +3452,48 @@ async def _ansible_self_update(node_id: str) -> None:
     Issue #9224: Update node version in DB after successful sync.
     C2-a: Clear the resume plan on playbook failure (before restart) so stale
           plans do not auto-fire forever.
+    Issue #15475: ``--limit`` includes every Node row co-located on this same
+    physical machine, not just the SLM's own node_id, so a co-located
+    frontend (or any other co-located role) is refreshed by the same run.
+    Issue #16610: ``on_failure`` gets the reason when the run fails before the
+    restart, so the update-all stage that fired it ends FAILED, not RUNNING.
     """
     executor = get_playbook_executor()
-    limit = ["localhost", node_id]
+    limit = ["localhost", *await _colocated_node_ids(node_id)]
     try:
-        result = await executor.execute_playbook(
-            playbook_name="update-all-nodes.yml",
-            limit=limit,
-            detach=True,
-        )
-        if not result["success"]:
-            logger.error(
-                "Ansible full-machine update failed for %s: %s", node_id, summarize_playbook_failure(result["output"])
-            )
-            # C2-a: playbook failed before restart — clear plan so it never auto-fires
-            await _clear_resume_plan()
-        else:
-            logger.info("Ansible full-machine update complete for %s", node_id)
-            # Update node version in DB (Issue #9224)
-            await _update_fleet_node_version(node_id)
+        result = await executor.execute_playbook(playbook_name="update-all-nodes.yml", limit=limit, detach=True)
+        failure = None if result["success"] else summarize_playbook_failure(result["output"])
+    except Exception as exc:
+        failure = f"Ansible full-machine update error: {exc}"
+    if failure is not None:
+        logger.error("Ansible full-machine update failed for %s: %s", node_id, failure)
+        # C2-a: failed before the restart — clear the plan so it never auto-fires
+        await _clear_resume_plan()
+        if on_failure is not None:
+            on_failure(failure)
+        return
+    logger.info("Ansible full-machine update complete for %s", node_id)
+    try:
+        await _update_fleet_node_version(node_id)  # Issue #9224
     except Exception as exc:
         logger.error("Ansible full-machine update error for %s: %s", node_id, exc)
         await _clear_resume_plan()
 
 
-@router.post("/self-update", response_model=NodeSyncResponse)
-async def self_update(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-) -> NodeSyncResponse:
-    """Trigger an Ansible-based update of the SLM server itself (#9073).
+async def resolve_and_queue_self_update(db: AsyncSession) -> NodeSyncResponse:
+    """Look up this SLM's own node row and fire a full-machine update (#9073, #15728).
 
-    Looks up the SLM's own node record by matching the external_url IP,
-    then runs update-all-nodes.yml against it as a fire-and-forget task
-    (the service restarts mid-run, so the caller should poll health).
-    Returns immediately with a queued message.
+    The actual trigger logic, shared by two entry points that must never
+    diverge:
+
+    * ``POST /code-sync/self-update`` below -- the authenticated HTTP route the
+      maintenance UI and ``/recovery`` (#15462) both call.
+    * ``services/local_admin_socket.py`` -- the credential-free local admin
+      socket (#15728). It calls this SAME function so "trigger a self-update
+      from the host" is one code path with two doors, not a second updater to
+      keep in sync with the first.
+
+    Auth is each caller's own concern -- this function takes none, on purpose.
     """
     slm_own_ip = urlparse(settings.external_url).hostname or ""
     if not slm_own_ip:
@@ -3475,17 +3511,28 @@ async def self_update(
         )
 
     logger.info("Full machine update via Ansible: queuing for node %s", slm_node.node_id)
-    asyncio.create_task(_ansible_self_update(slm_node.node_id))
+    fire_and_forget(_ansible_self_update(slm_node.node_id), name=f"ansible-self-update:{slm_node.node_id}")
 
-    return NodeSyncResponse(
-        success=True,
-        message=(
-            "Full update queued: Ansible will update all roles on this machine"
-            " and restart services. Check backend health in ~60s."
-        ),
-        node_id=slm_node.node_id,
-        job_id=None,
-    )
+    return NodeSyncResponse(success=True, message=_SELF_UPDATE_QUEUED_MESSAGE, node_id=slm_node.node_id, job_id=None)
+
+
+@router.post("/self-update", response_model=NodeSyncResponse)
+async def self_update(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeSyncResponse:
+    """Trigger an Ansible-based update of the SLM server itself (#9073).
+
+    Looks up the SLM's own node record by matching the external_url IP,
+    then runs update-all-nodes.yml against it as a fire-and-forget task
+    (the service restarts mid-run, so the caller should poll health).
+    Returns immediately with a queued message.
+
+    Requires an authenticated user -- unchanged by #15728. The credential-free
+    on-host trigger is a completely separate listener
+    (``services/local_admin_socket.py``); it does not touch this dependency.
+    """
+    return await resolve_and_queue_self_update(db)
 
 
 async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) -> None:
@@ -3563,7 +3610,7 @@ async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSy
             if is_local_source:
                 await _ansible_self_update(slm_self_node.node_id)
             else:
-                await _sync_slm_from_code_source(slm_self_node.node_id)
+                await _sync_slm_from_code_source(slm_self_node.node_id, job.job_id)
         else:
             # No code source — fall back to Ansible
             await _ansible_self_update(slm_self_node.node_id)
@@ -4565,12 +4612,19 @@ async def sync_role(
 
 import json as _json  # noqa: E402
 
-_UPDATE_ALL_RESUME_KEY = "slm_update_all_resume"
 # #12450: requirements-ai.txt is the ai-stack component's dependency file (its
 # ansible role installs that name, not requirements.txt), so the deps_changed
 # signal must watch it too or an ai-stack dep bump is reported as code-only.
 _DEPS_FILES = ["requirements.txt", "requirements-ai.txt", "package-lock.json"]
-_RESUME_PLAN_VERSION = 1
+
+#: Plans written by an older SLM are still honoured (#15881). Rejecting a v1
+#: plan would discard the in-flight resume belonging to the very update that
+#: deploys this change -- the update would restart, find its own plan
+#: unreadable, and wedge. A v1 plan simply carries no `stage_logs`.
+
+#: Per-stage log lines carried across the restart. `_stage_log` already caps a
+#: stage at 200 in memory; this is the slice that survives, kept smaller because
+#: it lives in a Settings row rather than a process.
 _RESUME_PLAN_TTL_SECONDS = 7200  # 2 hours (C2-b)
 
 # In-memory slot for the active orchestration job (at most one at a time).
@@ -4711,7 +4765,7 @@ async def _compute_deps_changed(component: str) -> bool:
     """Return True if any watched dependency file differs for a component."""
     try:
         source_dir = get_default_source_dir(component)
-        deployed_dir = get_default_deployed_dir(component)
+        deployed_dir = get_live_dir(component)
     except ValueError:
         return False
     except Exception:
@@ -4756,53 +4810,19 @@ def _stage_log(stage: UpdateAllStage, msg: str) -> None:
     logger.info("[update-all:%s] %s", stage.name, msg)
 
 
-async def _persist_resume_plan(
-    job: UpdateAllJob,
-    remaining_node_ids: List[str],
-    target_commit: str,
-) -> None:
-    """Write resume plan to Settings so a fresh SLM process can continue fleet stage.
-
-    Includes target_commit (C1) and version sentinel (M2).
-    Always called even when remaining_node_ids is empty (C5).
-    """
-    from services.database import db_service
-
-    plan = {
-        "version": _RESUME_PLAN_VERSION,  # M2
-        "job_id": job.job_id,
-        "remaining_node_ids": remaining_node_ids,
-        "target_commit": target_commit,  # C1
-        "created_at": job.created_at,
-    }
-    async with db_service.session() as db:
-        result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
-        setting = result.scalar_one_or_none()
-        if setting:
-            setting.value = _json.dumps(plan)
-        else:
-            db.add(Setting(key=_UPDATE_ALL_RESUME_KEY, value=_json.dumps(plan)))
-        await db.commit()
-    logger.info(
-        "update-all: persisted resume plan for %d fleet nodes (target=%s)",
-        len(remaining_node_ids),
-        _short_sha(target_commit),
-    )
-
-
-async def _clear_resume_plan() -> None:
-    """Remove resume plan from Settings after fleet stage completes."""
-    from services.database import db_service
-
-    try:
-        async with db_service.session() as db:
-            result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
-            setting = result.scalar_one_or_none()
-            if setting:
-                await db.delete(setting)
-                await db.commit()
-    except Exception as exc:
-        logger.warning("update-all: failed to clear resume plan: %s", exc)
+# #15881: `_persist_resume_plan` / `_clear_resume_plan` moved to
+# api/_resume_plan.py -- this file is at its #14236 ceiling, so the stage-log
+# carry-over had to make room rather than take it.
+from api._resume_plan import (  # noqa: E402,F401 - re-exported; module-level import sits with its siblings above
+    _RESUME_PLAN_LOG_LINES,
+    _RESUME_PLAN_VERSION,
+    _SUPPORTED_RESUME_PLAN_VERSIONS,
+    _UPDATE_ALL_RESUME_KEY,
+    _clear_resume_plan,
+    _persist_resume_plan,
+    plan_version_is_supported,
+    restored_stage,
+)
 
 
 async def _get_slm_deployed_commit() -> Optional[str]:
@@ -4810,7 +4830,7 @@ async def _get_slm_deployed_commit() -> Optional[str]:
 
     Reads the ``.deployed_commit`` marker written by the ``slm_manager``
     Ansible role right after it rsyncs code_source into the install dir
-    (get_default_deployed_dir) — NOT ``git_tracker.get_local_commit()``,
+    (get_live_dir) — NOT ``git_tracker.get_local_commit()``,
     which reflects code_source HEAD. Stage 2 (code_source_pull) already
     advances code_source HEAD to remote before this check runs, so comparing
     against git_tracker would always read remote == remote and the self-
@@ -4819,9 +4839,9 @@ async def _get_slm_deployed_commit() -> Optional[str]:
     Returns None when the marker is absent/unreadable/empty — callers must
     treat that as "not current" (fail-safe toward firing the self-update).
     """
-    marker = Path(get_default_deployed_dir("autobot-slm-backend")) / ".deployed_commit"
+    marker = Path(get_live_dir("autobot-slm-backend")) / ".deployed_commit"
     try:
-        commit = marker.read_text(encoding="utf-8").strip()
+        commit = (await asyncio.to_thread(marker.read_text, encoding="utf-8")).strip()
     except OSError:
         return None
     return commit or None
@@ -4926,7 +4946,7 @@ async def _component_has_file_drift(component: str) -> bool:
         source_dir = get_default_source_dir(component)
     except ValueError:
         return False
-    deployed_dir = get_default_deployed_dir(component)
+    deployed_dir = get_live_dir(component)
     if not Path(deployed_dir).exists():
         return False
     report = await asyncio.get_running_loop().run_in_executor(
@@ -5165,7 +5185,9 @@ async def _run_slm_stage(
 
         _stage_log(stage, f"Firing Ansible self-update for {slm_node.node_id} (fire-and-forget)")
         stage.message = "Ansible SLM self-update queued; service will restart"
-        asyncio.create_task(_ansible_self_update(slm_node.node_id))
+        # #16610: a run that fails before the restart ends this stage FAILED instead of leaving it RUNNING
+        fail = functools.partial(_fail_fleet_stage, job, stage)
+        fire_and_forget(_ansible_self_update(slm_node.node_id, fail), name=f"ansible-self-update:{slm_node.node_id}")
         return True
 
     except Exception as exc:
@@ -5184,7 +5206,7 @@ def _fail_fleet_stage(
     stage: UpdateAllStage,
     reason: str,
 ) -> None:
-    """Mark fleet stage and job as failed with a common reason string."""
+    """Mark *stage* and its job failed with one reason string (any update-all stage)."""
     stage.status = _StageStatus.FAILED
     stage.message = reason[:300]
     stage.completed_at = utc_timestamp()
@@ -5569,6 +5591,8 @@ async def _await_self_update_completion(job: "UpdateAllJob", since: Optional[str
     deadline = time.monotonic() + _SELF_UPDATE_WATCH_TIMEOUT_SECONDS
     while True:
         await asyncio.sleep(_SELF_UPDATE_WATCH_POLL_SECONDS)
+        if job.status == "failed":  # #16610: the fired run failed before the restart; nothing will complete
+            return None
         activity = await read_deploy_activity()
         # #14703 interaction: waiting IS progress. This loop runs up to
         # _SELF_UPDATE_WATCH_TIMEOUT_SECONDS (3600s default) and the staleness
@@ -5622,17 +5646,14 @@ async def _reconcile_self_update_stage(
     completed_at = await _await_self_update_completion(job, stage.started_at)
 
     if completed_at is None:
+        if job.status == "failed":  # #16610: the fired run already failed it -- keep that reason
+            return
         reason = (
             f"self-update play reported no completion within {_SELF_UPDATE_WATCH_TIMEOUT_SECONDS}s — "
             "not continuing to the fleet stage"
         )
         logger.error("update-all: %s", reason)
-        stage.status = _StageStatus.FAILED
-        stage.message = reason[:300]
-        stage.completed_at = utc_timestamp()
-        job.status = "failed"
-        job.failure_reason = reason[:300]
-        job.completed_at = utc_timestamp()
+        _fail_fleet_stage(job, stage, reason)
         await _clear_resume_plan()
         return
 
@@ -5642,7 +5663,7 @@ async def _reconcile_self_update_stage(
     # probe_role_delivery and `/status` already gates on. Resolving this stage
     # on the weaker check would let a degraded self-update be reported as
     # resolved and then deploy to the fleet on the strength of it.
-    verdict = _read_last_self_update_verdict()
+    verdict = _read_last_self_update_verdict(stage.started_at)
     if verdict.degraded:
         # Carry the reason into the stage: the count alone gave an operator
         # nothing to act on.
@@ -5651,12 +5672,7 @@ async def _reconcile_self_update_stage(
             f"{verdict.unreachable_hosts} unreachable host(s)"
         )
         logger.error("update-all: %s", reason)
-        stage.status = _StageStatus.FAILED
-        stage.message = reason[:300]
-        stage.completed_at = utc_timestamp()
-        job.status = "failed"
-        job.failure_reason = reason[:300]
-        job.completed_at = utc_timestamp()
+        _fail_fleet_stage(job, stage, reason)
         await _clear_resume_plan()
         return
 
@@ -5745,7 +5761,7 @@ async def _read_and_validate_resume_plan() -> Optional[Dict[str, Any]]:
         return None
 
     # M2: version check
-    if plan.get("version") != _RESUME_PLAN_VERSION:
+    if not plan_version_is_supported(plan):
         logger.warning(
             "update-all resume: unknown plan version %s (expected %d) — discarding",
             plan.get("version"),
@@ -5869,14 +5885,24 @@ async def resume_update_all_orchestration() -> None:
         len(remaining),
     )
 
+    # #15881: restore the pre-restart log lines rather than papering over them.
+    # A stage rebuilt with only "completed before restart" tells the operator
+    # the stage ended and nothing about what it did -- which is indistinguishable
+    # from the update having hung, and is what "the GUI log just stops" is.
+    # A v1 plan carries no logs; those stages keep the placeholder.
+    stage_logs: Dict[str, List[str]] = plan.get("stage_logs") or {}
+
+    def _restored(name: str, status: str, message: str) -> UpdateAllStage:
+        return restored_stage(UpdateAllStage, name, status, message, stage_logs)
+
     job = UpdateAllJob(
         job_id=job_id,
         status="running",
         created_at=plan_created_at_val,
         stages=[
-            UpdateAllStage(name="github_fetch", status=_StageStatus.SUCCESS, message="completed before restart"),
-            UpdateAllStage(name="code_source_pull", status=_StageStatus.SUCCESS, message="completed before restart"),
-            UpdateAllStage(name="slm_self_update", status=_StageStatus.RUNNING, message="SLM restarting ..."),
+            _restored("github_fetch", _StageStatus.SUCCESS, "completed before restart"),
+            _restored("code_source_pull", _StageStatus.SUCCESS, "completed before restart"),
+            _restored("slm_self_update", _StageStatus.RUNNING, "SLM restarting ..."),
             _make_stage("fleet_nodes"),
         ],
     )

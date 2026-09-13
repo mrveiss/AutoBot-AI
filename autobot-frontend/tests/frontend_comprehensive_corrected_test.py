@@ -1,1009 +1,344 @@
 #!/usr/bin/env python3
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
+"""Live-stack checks for the surfaces the AutoBot frontend depends on (#14979).
+
+This module used to be an operational script wearing test names: a class with
+``__init__`` (which pytest refuses to collect), methods returning ``TestResult``
+objects, a ``run_comprehensive_test_suite`` driver and a ``main()`` that printed
+a scorecard. All ten ``test_*`` methods therefore collected zero items and
+asserted nothing.
+
+Each method is now a real test that asserts. Every one drives the running stack
+over HTTP or WebSocket, so a single module-level autouse fixture skips the
+module when the frontend or the backend is absent (#14930) — nothing here is
+exercisable without both.
+
+Endpoint paths were corrected against the router registry while converting; the
+originals targeted several routes no router has ever served (see the notes on
+``CRITICAL_ENDPOINTS``, ``test_terminal_integration``,
+``test_desktop_viewer_component`` and ``test_chat_functionality_comprehensive``).
+
+The assertion the connectivity tests make is *routed and healthy*, not
+``== 200``: most of these endpoints sit behind ``check_admin_permission`` and
+these tests carry no credentials, so 401/403 is the correct answer to an
+anonymous probe. A 404 (router not mounted) or a 5xx (handler broken) is what
+actually breaks the UI, and that is what fails here.
 """
-AutoBot Frontend Comprehensive Testing Suite - Corrected Version
-Tests all major frontend components. Set AUTOBOT_BACKEND_HOST / AUTOBOT_FRONTEND_HOST env vars.
-"""
+
+from __future__ import annotations
 
 import asyncio
 import json
-import sys
-import time
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+import uuid
+from typing import Any, AsyncIterator, Iterable
 
 import aiohttp
+import pytest
 import websockets
 
+from autobot_shared.live_service_probe import require_live_endpoint
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
-@dataclass
-class TestResult:
-    name: str
-    success: bool
-    message: str
-    details: Optional[Dict] = None
-    response_time: Optional[float] = None
+logger = get_logger(__name__)
+
+# Real HTTP and WebSocket traffic against a running stack — never a unit item.
+pytestmark = pytest.mark.integration
+
+# SSOT only (#1618): no host, port or URL is spelled out in this file.
+FRONTEND_URL = config.frontend_url
+BACKEND_URL = config.backend_url
+
+# Module constants rather than literals at the call sites, matching the shape the
+# other live-probe suites use (`api/voice_integration_test.py:34`). Deliberately
+# not env-var-backed: these are assertion budgets for one test module, not
+# deployment configuration, and every AUTOBOT_* name read here would have to be
+# carried in the env registry and its generated docs for the life of the file.
+REQUEST_TIMEOUT_SECONDS = 15.0
+CONNECT_TIMEOUT_SECONDS = 5.0
+WEBSOCKET_OPEN_TIMEOUT_SECONDS = 10.0
+WEBSOCKET_RECV_TIMEOUT_SECONDS = 5.0
+FAST_ENDPOINT_BUDGET_SECONDS = 2.0
+
+# A routed, working endpoint may answer 200 or refuse an anonymous caller.
+# These statuses mean the route is missing or the handler failed — the two
+# conditions that leave a frontend view blank.
+BROKEN_ROUTE_STATUSES = frozenset({404, 405, 500, 501, 502, 503, 504})
+
+# A WebSocket handshake refused for want of credentials still proves the route
+# is mounted and the server speaks the protocol.
+WEBSOCKET_AUTH_STATUSES = frozenset({401, 403})
+
+# Statuses that count as *clean* rejection of a malformed body. A 500 does not:
+# an unparseable payload must never reach a handler that crashes on it.
+MALFORMED_REQUEST_STATUSES = frozenset({400, 422})
+
+# Paths corrected against autobot-backend/initialization/router_registry (every
+# registry router is mounted at ``/api{prefix}``). The originals
+# ``/api/system/status``, ``/api/infrastructure/status`` and
+# ``/api/monitoring/services`` are served by no router.
+CRITICAL_ENDPOINTS: tuple[tuple[str, str], ...] = (
+    ("/api/health", "Backend health"),
+    ("/api/system/info", "System info"),
+    ("/api/knowledge_base/stats/basic", "Knowledge base stats"),
+    ("/api/validation-dashboard/status", "Validation dashboard"),
+    ("/api/infrastructure/hosts", "Infrastructure hosts"),
+    ("/api/settings/", "Settings"),
+    ("/api/monitoring/services/health", "Service monitor"),
+)
+
+# The endpoints a freshly loaded dashboard fans out to at once.
+CONCURRENT_ENDPOINTS: tuple[str, ...] = (
+    "/api/health",
+    "/api/system/info",
+    "/api/knowledge_base/stats/basic",
+    "/api/monitoring/services/health",
+)
+
+# Endpoints that must answer inside the interactive budget.
+FAST_ENDPOINTS: tuple[str, ...] = ("/api/health", "/api/system/info")
 
 
-class AutoBotComprehensiveFrontendTester:
-    def __init__(self):
-        import os
+@pytest.fixture(autouse=True)
+def _require_live_frontend_stack() -> None:
+    """Skip when the frontend or the backend is absent (#14930).
 
-        backend_host = os.environ.get("AUTOBOT_BACKEND_HOST", "localhost")
-        backend_port = os.environ.get("AUTOBOT_BACKEND_PORT", "8001")
-        frontend_host = os.environ.get("AUTOBOT_FRONTEND_HOST", "localhost")
-        frontend_port = os.environ.get("AUTOBOT_FRONTEND_PORT", "5173")
-        self.backend_base = f"http://{backend_host}:{backend_port}"
-        self.frontend_base = f"http://{frontend_host}:{frontend_port}"
-        self.results: List[TestResult] = []
-        self.session: Optional[aiohttp.ClientSession] = None
+    Both are probed because this module drives both directly: the health test
+    dials the Vite/dist server, the other nine dial the backend API. A skip
+    naming only one would misreport which half of the stack was missing.
+    """
+    require_live_endpoint(FRONTEND_URL, what="the AutoBot frontend")
+    require_live_endpoint(BACKEND_URL, what="the AutoBot backend API")
 
-    async def __aenter__(self):
-        timeout = aiohttp.ClientTimeout(total=15, connect=5)
-        self.session = aiohttp.ClientSession(timeout=timeout)
-        return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
+@pytest.fixture
+async def http_session() -> AsyncIterator[aiohttp.ClientSession]:
+    """One aiohttp session per test, closed on the way out.
 
-    async def test_frontend_health_and_accessibility(self) -> TestResult:
-        """Test frontend accessibility on correct port"""
-        try:
-            start_time = time.time()
-            async with self.session.get(f"{self.frontend_base}/") as resp:
-                response_time = time.time() - start_time
-                if resp.status == 200:
-                    content = await resp.text()
-                    has_autobot = "AutoBot" in content
-                    has_vue_app = 'id="app"' in content
-                    return TestResult(
-                        name="Frontend Health & Accessibility",
-                        success=True,
-                        message="Frontend accessible on port 5173, AutoBot app detected",
-                        details={
-                            "has_autobot_title": has_autobot,
-                            "has_vue_app": has_vue_app,
-                            "content_length": len(content),
-                        },
-                        response_time=response_time,
-                    )
-                else:
-                    return TestResult(
-                        name="Frontend Health & Accessibility",
-                        success=False,
-                        message=f"Frontend returned status {resp.status}",
-                        response_time=response_time,
-                    )
-        except Exception as e:
-            return TestResult(
-                name="Frontend Health & Accessibility",
-                success=False,
-                message=f"Frontend connection failed: {str(e)}",
-            )
+    Replaces the deleted ``__init__``/``__aenter__`` pair, which pytest could
+    not collect around.
+    """
+    timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS, connect=CONNECT_TIMEOUT_SECONDS)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        yield session
 
-    async def test_api_connectivity_from_frontend(self) -> List[TestResult]:
-        """Test API endpoints that the frontend would call"""
-        results = []
 
-        critical_endpoints = [
-            ("/api/health", "Backend Health"),
-            ("/api/system/status", "System Status"),
-            ("/api/knowledge_base/stats/basic", "KB Stats"),
-            ("/api/validation-dashboard/status", "Validation Dashboard"),
-            ("/api/infrastructure/status", "Infrastructure Monitor"),
-            ("/api/settings/", "Settings API"),
-            ("/api/monitoring/services", "Service Monitor"),
-        ]
+def _websocket_url(path: str) -> str:
+    """Return the ws(s):// form of ``BACKEND_URL`` with *path* appended."""
+    scheme, _, remainder = BACKEND_URL.partition("://")
+    ws_scheme = "wss" if scheme.lower() == "https" else "ws"
+    return f"{ws_scheme}://{remainder.rstrip('/')}{path}"
 
-        for endpoint, name in critical_endpoints:
-            try:
-                start_time = time.time()
-                async with self.session.get(f"{self.backend_base}{endpoint}") as resp:
-                    response_time = time.time() - start_time
-                    if resp.status == 200:
-                        try:
-                            data = await resp.json()
-                            results.append(
-                                TestResult(
-                                    name=f"API Connectivity: {name}",
-                                    success=True,
-                                    message="Endpoint working, returned JSON data",
-                                    details={
-                                        "status": resp.status,
-                                        "keys": (list(data.keys()) if isinstance(data, dict) else "list_data"),
-                                    },
-                                    response_time=response_time,
-                                )
-                            )
-                        except Exception:
-                            results.append(
-                                TestResult(
-                                    name=f"API Connectivity: {name}",
-                                    success=True,
-                                    message="Endpoint working (non-JSON response)",
-                                    response_time=response_time,
-                                )
-                            )
-                    else:
-                        results.append(
-                            TestResult(
-                                name=f"API Connectivity: {name}",
-                                success=False,
-                                message=f"Status {resp.status}",
-                                response_time=response_time,
-                            )
-                        )
-            except Exception as e:
-                results.append(
-                    TestResult(
-                        name=f"API Connectivity: {name}",
-                        success=False,
-                        message=f"Request failed: {str(e)}",
-                    )
+
+async def _probe_endpoints(session: aiohttp.ClientSession, endpoints: Iterable[tuple[str, str]]) -> list[str]:
+    """Return one description per endpoint that is unrouted or erroring."""
+    broken: list[str] = []
+    for path, name in endpoints:
+        async with session.get(f"{BACKEND_URL}{path}") as response:
+            if response.status in BROKEN_ROUTE_STATUSES:
+                broken.append(f"{name} ({path}) -> HTTP {response.status}")
+    return broken
+
+
+async def _json_body(response: aiohttp.ClientResponse, path: str) -> Any:
+    """Parse *response* as JSON, naming *path* when the body is not JSON."""
+    body = await response.text()
+    try:
+        return json.loads(body)
+    except ValueError as exc:
+        raise AssertionError(f"GET {path} returned HTTP 200 but the body is not JSON: {exc}") from exc
+
+
+async def _assert_probe_reply(socket: Any, url: str) -> None:
+    """Assert that any frame the server volunteers is a JSON object.
+
+    Silence is allowed: none of these routes is required to answer an
+    unsolicited ping, and the completed handshake is the assertion that matters.
+    """
+    try:
+        raw = await asyncio.wait_for(socket.recv(), timeout=WEBSOCKET_RECV_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        return
+
+    payload = json.loads(raw)
+    assert isinstance(
+        payload, dict
+    ), f"websocket {url} replied with a JSON {type(payload).__name__}, expected an object"
+
+
+async def _assert_websocket_route_served(url: str, probe: dict[str, Any] | None = None) -> None:
+    """Assert the backend serves a WebSocket route at *url*.
+
+    An open handshake is the strongest result; a 401/403 rejection still proves
+    the route is mounted, and these tests carry no credentials. A 404 means the
+    router is not mounted, and every transport error propagates untouched.
+    """
+    try:
+        async with websockets.connect(url, open_timeout=WEBSOCKET_OPEN_TIMEOUT_SECONDS) as socket:
+            state = socket.state.name
+            assert state == "OPEN", f"websocket {url} completed its handshake but the connection is {state}"
+            if probe is not None:
+                await socket.send(json.dumps(probe))
+                await _assert_probe_reply(socket, url)
+    except websockets.exceptions.InvalidStatus as exc:
+        status = exc.response.status_code
+        assert status in WEBSOCKET_AUTH_STATUSES, (
+            f"websocket {url} was refused with HTTP {status}; expected an open handshake "
+            f"or an authentication rejection {sorted(WEBSOCKET_AUTH_STATUSES)}"
+        )
+        logger.info("websocket %s is mounted but refused an anonymous handshake with HTTP %s", url, status)
+
+
+class TestFrontendSurface:
+    """The frontend page and the backend surfaces its views call."""
+
+    async def test_frontend_health_and_accessibility(self, http_session: aiohttp.ClientSession) -> None:
+        """The frontend serves an index page that mounts the AutoBot Vue app."""
+        async with http_session.get(f"{FRONTEND_URL}/") as response:
+            assert response.status == 200, f"frontend {FRONTEND_URL}/ returned HTTP {response.status}, expected 200"
+            content = await response.text()
+
+        assert "AutoBot" in content, (
+            f"frontend index from {FRONTEND_URL}/ never mentions 'AutoBot' " f"({len(content)} bytes served)"
+        )
+        assert (
+            'id="app"' in content
+        ), f'frontend index from {FRONTEND_URL}/ has no id="app" mount point for the Vue application'
+
+    async def test_api_connectivity_from_frontend(self, http_session: aiohttp.ClientSession) -> None:
+        """Every backend endpoint the shell calls on load is mounted and healthy."""
+        broken = await _probe_endpoints(http_session, CRITICAL_ENDPOINTS)
+        assert not broken, "backend endpoints the frontend calls on load are unrouted or erroring: " + "; ".join(broken)
+
+    async def test_websocket_connections(self, http_session: aiohttp.ClientSession) -> None:
+        """The realtime WebSocket the UI subscribes to is served.
+
+        The original dialled ``/api/websocket/chat`` and fell back to ``/ws``;
+        neither is registered. ``api.websockets`` mounts ``/ws`` at the ``/api``
+        prefix, so the served route is ``/api/ws``.
+        """
+        await _assert_websocket_route_served(
+            _websocket_url("/api/ws"),
+            probe={"type": "ping", "data": "connectivity_test"},
+        )
+
+    async def test_core_ui_components(self, http_session: aiohttp.ClientSession) -> None:
+        """The three APIs behind the chat, monitor and knowledge views answer."""
+        broken = await _probe_endpoints(
+            http_session,
+            (
+                ("/api/chat/chats", "Chat interface"),
+                ("/api/monitoring/services/health", "System monitor"),
+                ("/api/knowledge_base/categories", "Knowledge base browser"),
+            ),
+        )
+        assert not broken, "APIs behind core UI components are unrouted or erroring: " + "; ".join(broken)
+
+    async def test_terminal_integration(self, http_session: aiohttp.ClientSession) -> None:
+        """The terminal session WebSocket is served.
+
+        ``api/terminal.py`` registers no HTTP route at all — the integration is
+        WebSocket-only — so the original GET of ``/api/terminal/status`` could
+        only ever 404, which it then reported as a pass.
+        """
+        session_id = f"frontend-surface-{uuid.uuid4().hex}"
+        await _assert_websocket_route_served(_websocket_url(f"/api/terminal/ws/{session_id}"))
+
+    async def test_desktop_viewer_component(self, http_session: aiohttp.ClientSession) -> None:
+        """The VNC status endpoint behind the desktop viewer answers.
+
+        There is no ``/api/desktop`` router; the desktop viewer is served by
+        ``api.vnc_manager``, mounted at ``/api/vnc``.
+        """
+        broken = await _probe_endpoints(http_session, (("/api/vnc/status", "Desktop viewer (VNC)"),))
+        assert not broken, "the desktop viewer's VNC status endpoint is unrouted or erroring: " + "; ".join(broken)
+
+    async def test_knowledge_base_interface(self, http_session: aiohttp.ClientSession) -> None:
+        """Stats, categories and search all answer for the knowledge base view."""
+        broken = await _probe_endpoints(
+            http_session,
+            (
+                ("/api/knowledge_base/stats/basic", "KB stats"),
+                ("/api/knowledge_base/categories", "KB categories"),
+            ),
+        )
+        search_path = "/api/knowledge_base/search"
+        async with http_session.post(
+            f"{BACKEND_URL}{search_path}", json={"query": "AutoBot configuration"}
+        ) as response:
+            if response.status in BROKEN_ROUTE_STATUSES:
+                broken.append(f"KB search ({search_path}) -> HTTP {response.status}")
+            elif response.status == 200:
+                payload = await _json_body(response, search_path)
+                assert isinstance(payload, dict) and "results" in payload, (
+                    f"POST {search_path} returned HTTP 200 without a 'results' key; " f"got {type(payload).__name__}"
                 )
 
-        return results
+        assert not broken, "knowledge base endpoints are unrouted or erroring: " + "; ".join(broken)
 
-    async def test_websocket_connections(self) -> TestResult:
-        """Test WebSocket connectivity for real-time features"""
-        try:
-            ws_url = self.backend_base.replace("http://", "ws://") + "/api/websocket/chat"
+    async def test_chat_functionality_comprehensive(self, http_session: aiohttp.ClientSession) -> None:
+        """The chat list and chat health endpoints answer.
 
-            start_time = time.time()
-            async with websockets.connect(ws_url, timeout=10) as websocket:
-                response_time = time.time() - start_time
+        Chat *creation* is not asserted: the original posted to
+        ``/api/chat/chats/new``, which no router serves, and the message route
+        it used (``/api/chat/chats/{id}/message``) is really
+        ``/api/chats/{id}/message`` and needs an existing chat id.
+        """
+        broken = await _probe_endpoints(
+            http_session,
+            (("/api/chat/chats", "Chat list"), ("/api/chat/health", "Chat health")),
+        )
+        assert not broken, "chat endpoints are unrouted or erroring: " + "; ".join(broken)
 
-                # Send test message
-                test_message = {"type": "ping", "data": "connectivity_test"}
-                await websocket.send(json.dumps(test_message))
+    async def test_performance_and_responsiveness(self, http_session: aiohttp.ClientSession) -> None:
+        """A dashboard-sized fan-out succeeds, and hot endpoints stay inside budget."""
+        requests = [http_session.get(f"{BACKEND_URL}{path}") for path in CONCURRENT_ENDPOINTS]
+        responses = await asyncio.gather(*requests, return_exceptions=True)
 
-                # Wait for response
-                try:
-                    response = await asyncio.wait_for(websocket.recv(), timeout=5)
-                    response_data = json.loads(response)
-                    return TestResult(
-                        name="WebSocket Real-time Communication",
-                        success=True,
-                        message="WebSocket connected and responding",
-                        details={"response_type": response_data.get("type", "unknown")},
-                        response_time=response_time,
-                    )
-                except asyncio.TimeoutError:
-                    return TestResult(
-                        name="WebSocket Real-time Communication",
-                        success=True,
-                        message="WebSocket connected (no immediate response expected)",
-                        response_time=response_time,
-                    )
+        failures: list[str] = []
+        for path, result in zip(CONCURRENT_ENDPOINTS, responses):
+            if isinstance(result, BaseException):
+                failures.append(f"{path} -> {type(result).__name__}: {result}")
+                continue
+            if result.status in BROKEN_ROUTE_STATUSES:
+                failures.append(f"{path} -> HTTP {result.status}")
+            result.close()
 
-        except Exception as e:
-            # Try alternative WebSocket endpoint
-            try:
-                ws_url_alt = self.backend_base.replace("http://", "ws://") + "/ws"
-                async with websockets.connect(ws_url_alt, timeout=5) as websocket:
-                    return TestResult(
-                        name="WebSocket Real-time Communication",
-                        success=True,
-                        message="WebSocket connected on alternative endpoint",
-                        details={"endpoint": ws_url_alt},
-                    )
-            except Exception:
-                return TestResult(
-                    name="WebSocket Real-time Communication",
-                    success=False,
-                    message=f"WebSocket connection failed: {str(e)}",
-                )
+        assert (
+            not failures
+        ), f"a concurrent fan-out of {len(CONCURRENT_ENDPOINTS)} dashboard endpoints failed: " + "; ".join(failures)
+        await self._assert_response_time_budget(http_session)
 
-    async def test_core_ui_components(self) -> List[TestResult]:
-        """Test core UI components via API endpoints they depend on"""
-        results = []
+    async def test_error_handling_and_edge_cases(self, http_session: aiohttp.ClientSession) -> None:
+        """Unknown routes 404 and malformed bodies are rejected, not crashed on."""
+        unknown_path = "/api/nonexistent/endpoint"
+        async with http_session.get(f"{BACKEND_URL}{unknown_path}") as response:
+            assert response.status == 404, f"GET {unknown_path} returned HTTP {response.status}, expected 404"
 
-        # Chat interface dependencies
-        try:
-            # Test chat list
-            async with self.session.get(f"{self.backend_base}/api/chat/chats") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    results.append(
-                        TestResult(
-                            name="Chat Interface Component",
-                            success=True,
-                            message="Chat API accessible for UI component",
-                            details={"chat_count": (len(data) if isinstance(data, list) else "dict_response")},
-                        )
-                    )
-                else:
-                    results.append(
-                        TestResult(
-                            name="Chat Interface Component",
-                            success=False,
-                            message=f"Chat API returned {resp.status}",
-                        )
-                    )
-        except Exception as e:
-            results.append(
-                TestResult(
-                    name="Chat Interface Component",
-                    success=False,
-                    message=f"Chat API failed: {str(e)}",
-                )
+        search_path = "/api/knowledge_base/search"
+        async with http_session.post(
+            f"{BACKEND_URL}{search_path}",
+            data="invalid json data",
+            headers={"Content-Type": "application/json"},
+        ) as response:
+            assert response.status in MALFORMED_REQUEST_STATUSES, (
+                f"POST {search_path} with an unparseable body returned HTTP {response.status}; "
+                f"expected a clean rejection {sorted(MALFORMED_REQUEST_STATUSES)}"
             )
 
-        # System monitor component
-        try:
-            async with self.session.get(f"{self.backend_base}/api/monitoring/services") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    results.append(
-                        TestResult(
-                            name="System Monitor Component",
-                            success=True,
-                            message="Service monitoring API accessible",
-                            details={"service_data_available": bool(data)},
-                        )
-                    )
-                else:
-                    results.append(
-                        TestResult(
-                            name="System Monitor Component",
-                            success=False,
-                            message=f"Service monitoring API returned {resp.status}",
-                        )
-                    )
-        except Exception as e:
-            results.append(
-                TestResult(
-                    name="System Monitor Component",
-                    success=False,
-                    message=f"Service monitoring API failed: {str(e)}",
-                )
-            )
-
-        # Knowledge base interface
-        try:
-            # Test categories
-            async with self.session.get(f"{self.backend_base}/api/knowledge_base/categories") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    results.append(
-                        TestResult(
-                            name="Knowledge Base UI Component",
-                            success=True,
-                            message="KB categories API working",
-                            details={"categories_available": bool(data)},
-                        )
-                    )
-                else:
-                    results.append(
-                        TestResult(
-                            name="Knowledge Base UI Component",
-                            success=False,
-                            message=f"KB categories API returned {resp.status}",
-                        )
-                    )
-        except Exception as e:
-            results.append(
-                TestResult(
-                    name="Knowledge Base UI Component",
-                    success=False,
-                    message=f"KB categories API failed: {str(e)}",
-                )
-            )
-
-        return results
-
-    async def test_terminal_integration(self) -> TestResult:
-        """Test terminal integration components"""
-        try:
-            # Check if terminal endpoint exists
-            async with self.session.get(f"{self.backend_base}/api/terminal/status") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return TestResult(
-                        name="Terminal Integration",
-                        success=True,
-                        message="Terminal API accessible",
-                        details=data,
-                    )
-                elif resp.status == 404:
-                    # Terminal may be implemented differently, check WebSocket
-                    return TestResult(
-                        name="Terminal Integration",
-                        success=True,
-                        message="Terminal integration present (WebSocket-based)",
-                        details={"note": "Terminal likely uses WebSocket connection"},
-                    )
-                else:
-                    return TestResult(
-                        name="Terminal Integration",
-                        success=False,
-                        message=f"Terminal status returned {resp.status}",
-                    )
-        except Exception:
-            # Terminal might be WebSocket only
-            return TestResult(
-                name="Terminal Integration",
-                success=True,
-                message="Terminal integration assumed working (WebSocket-based xterm.js)",
-                details={"note": "xterm.js components likely present in frontend"},
-            )
-
-    async def test_desktop_viewer_component(self) -> TestResult:
-        """Test desktop viewer (VNC) integration"""
-        try:
-            # Check VNC/desktop status
-            async with self.session.get(f"{self.backend_base}/api/desktop/status") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return TestResult(
-                        name="Desktop Viewer Component",
-                        success=True,
-                        message="Desktop API accessible",
-                        details=data,
-                    )
-                else:
-                    return TestResult(
-                        name="Desktop Viewer Component",
-                        success=False,
-                        message=f"Desktop API returned {resp.status}",
-                    )
-        except Exception:
-            # Desktop might be handled by infrastructure
-            try:
-                async with self.session.get(f"{self.backend_base}/api/infrastructure/status") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return TestResult(
-                            name="Desktop Viewer Component",
-                            success=True,
-                            message="Desktop integration via infrastructure API",
-                            details={"infrastructure_status": data.get("status", "unknown")},
-                        )
-                    else:
-                        return TestResult(
-                            name="Desktop Viewer Component",
-                            success=False,
-                            message="Desktop integration endpoints not accessible",
-                        )
-            except Exception as e2:
-                return TestResult(
-                    name="Desktop Viewer Component",
-                    success=False,
-                    message=f"Desktop integration failed: {str(e2)}",
-                )
-
-    async def test_knowledge_base_interface(self) -> List[TestResult]:
-        """Comprehensive knowledge base interface testing"""
-        results = []
-
-        # Test stats display
-        try:
-            async with self.session.get(f"{self.backend_base}/api/knowledge_base/stats/basic") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    total_docs = data.get("total_documents", 0)
-                    total_chunks = data.get("total_chunks", 0)
-
-                    results.append(
-                        TestResult(
-                            name="KB Interface: Stats Display",
-                            success=True,
-                            message=f"Stats loaded: {total_docs} docs, {total_chunks} chunks",
-                            details={"stats_data": data},
-                        )
-                    )
-                else:
-                    results.append(
-                        TestResult(
-                            name="KB Interface: Stats Display",
-                            success=False,
-                            message=f"Stats API returned {resp.status}",
-                        )
-                    )
-        except Exception as e:
-            results.append(
-                TestResult(
-                    name="KB Interface: Stats Display",
-                    success=False,
-                    message=f"Stats API failed: {str(e)}",
-                )
-            )
-
-        # Test search functionality
-        try:
-            search_payload = {"query": "AutoBot configuration"}
-            async with self.session.post(f"{self.backend_base}/api/knowledge_base/search", json=search_payload) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    results_count = len(data.get("results", []))
-                    results.append(
-                        TestResult(
-                            name="KB Interface: Search Function",
-                            success=True,
-                            message=f"Search working, {results_count} results",
-                            details={"results_count": results_count},
-                        )
-                    )
-                else:
-                    results.append(
-                        TestResult(
-                            name="KB Interface: Search Function",
-                            success=False,
-                            message=f"Search API returned {resp.status}",
-                        )
-                    )
-        except Exception as e:
-            results.append(
-                TestResult(
-                    name="KB Interface: Search Function",
-                    success=False,
-                    message=f"Search API failed: {str(e)}",
-                )
-            )
-
-        # Test categories
-        try:
-            async with self.session.get(f"{self.backend_base}/api/knowledge_base/categories") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    results.append(
-                        TestResult(
-                            name="KB Interface: Categories Browsing",
-                            success=True,
-                            message="Categories API working",
-                            details={"has_categories": bool(data)},
-                        )
-                    )
-                else:
-                    results.append(
-                        TestResult(
-                            name="KB Interface: Categories Browsing",
-                            success=False,
-                            message=f"Categories API returned {resp.status}",
-                        )
-                    )
-        except Exception as e:
-            results.append(
-                TestResult(
-                    name="KB Interface: Categories Browsing",
-                    success=False,
-                    message=f"Categories API failed: {str(e)}",
-                )
-            )
-
-        return results
-
-    async def test_chat_functionality_comprehensive(self) -> List[TestResult]:
-        """Comprehensive chat functionality testing"""
-        results = []
-
-        # Test chat creation
-        try:
-            chat_data = {"title": "Frontend Test Chat", "chat_type": "general"}
-            async with self.session.post(f"{self.backend_base}/api/chat/chats/new", json=chat_data) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    chat_id = data.get("id") or data.get("chat_id")
-
-                    results.append(
-                        TestResult(
-                            name="Chat: Creation Function",
-                            success=True,
-                            message=f"Chat creation working, ID: {chat_id}",
-                            details={"chat_id": chat_id, "response": data},
-                        )
-                    )
-
-                    # Test message sending if chat was created
-                    if chat_id:
-                        try:
-                            message_data = {
-                                "content": "Frontend test message",
-                                "message_type": "user",
-                            }
-                            timeout = aiohttp.ClientTimeout(total=30)
-                            async with aiohttp.ClientSession(timeout=timeout) as msg_session:
-                                async with msg_session.post(
-                                    f"{self.backend_base}/api/chat/chats/{chat_id}/message",
-                                    json=message_data,
-                                ) as msg_resp:
-                                    if msg_resp.status == 200:
-                                        results.append(
-                                            TestResult(
-                                                name="Chat: Message Sending",
-                                                success=True,
-                                                message="Message sending working",
-                                                details={"chat_id": chat_id},
-                                            )
-                                        )
-                                    else:
-                                        results.append(
-                                            TestResult(
-                                                name="Chat: Message Sending",
-                                                success=False,
-                                                message=f"Message API returned {msg_resp.status}",
-                                            )
-                                        )
-                        except Exception as e:
-                            results.append(
-                                TestResult(
-                                    name="Chat: Message Sending",
-                                    success=False,
-                                    message=f"Message sending failed: {str(e)}",
-                                )
-                            )
-                else:
-                    results.append(
-                        TestResult(
-                            name="Chat: Creation Function",
-                            success=False,
-                            message=f"Chat creation returned {resp.status}",
-                        )
-                    )
-        except Exception as e:
-            results.append(
-                TestResult(
-                    name="Chat: Creation Function",
-                    success=False,
-                    message=f"Chat creation failed: {str(e)}",
-                )
-            )
-
-        # Test chat list
-        try:
-            async with self.session.get(f"{self.backend_base}/api/chat/chats") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    results.append(
-                        TestResult(
-                            name="Chat: List/History Function",
-                            success=True,
-                            message="Chat list accessible",
-                            details={"chat_count": (len(data) if isinstance(data, list) else "dict_response")},
-                        )
-                    )
-                else:
-                    results.append(
-                        TestResult(
-                            name="Chat: List/History Function",
-                            success=False,
-                            message=f"Chat list returned {resp.status}",
-                        )
-                    )
-        except Exception as e:
-            results.append(
-                TestResult(
-                    name="Chat: List/History Function",
-                    success=False,
-                    message=f"Chat list failed: {str(e)}",
-                )
-            )
-
-        return results
-
-    async def test_performance_and_responsiveness(self) -> List[TestResult]:
-        """Test frontend performance and responsiveness"""
-        results = []
-
-        # Test multiple API calls concurrently to simulate frontend load
-        concurrent_endpoints = [
-            "/api/health",
-            "/api/system/status",
-            "/api/knowledge_base/stats/basic",
-            "/api/monitoring/services",
-        ]
-
-        start_time = time.time()
-        tasks = []
-        for endpoint in concurrent_endpoints:
-            task = self.session.get(f"{self.backend_base}{endpoint}")
-            tasks.append(task)
-
-        try:
-            responses = await asyncio.gather(*tasks, return_exceptions=True)
-            total_time = time.time() - start_time
-
-            successful_requests = sum(1 for r in responses if hasattr(r, "status") and r.status == 200)
-
-            results.append(
-                TestResult(
-                    name="Performance: Concurrent API Calls",
-                    success=successful_requests >= 3,
-                    message=f"Concurrent API performance: {successful_requests}/{len(concurrent_endpoints)} successful in {total_time:.2f}s",
-                    details={
-                        "concurrent_requests": len(concurrent_endpoints),
-                        "successful": successful_requests,
-                    },
-                    response_time=total_time,
-                )
-            )
-
-            # Clean up responses
-            for resp in responses:
-                if hasattr(resp, "close"):
-                    resp.close()
-
-        except Exception as e:
-            results.append(
-                TestResult(
-                    name="Performance: Concurrent API Calls",
-                    success=False,
-                    message=f"Concurrent API test failed: {str(e)}",
-                )
-            )
-
-        # Test individual response times
-        fast_endpoints = ["/api/health", "/api/system/status"]
-        for endpoint in fast_endpoints:
-            try:
-                start_time = time.time()
-                async with self.session.get(f"{self.backend_base}{endpoint}") as resp:
-                    response_time = time.time() - start_time
-
-                    results.append(
-                        TestResult(
-                            name=f"Performance: {endpoint} Response Time",
-                            success=response_time < 2.0,
-                            message=f"Response time: {response_time:.3f}s ({'Fast' if response_time < 1.0 else 'Acceptable' if response_time < 2.0 else 'Slow'})",
-                            response_time=response_time,
-                        )
-                    )
-            except Exception as e:
-                results.append(
-                    TestResult(
-                        name=f"Performance: {endpoint} Response Time",
-                        success=False,
-                        message=f"Response time test failed: {str(e)}",
-                    )
-                )
-
-        return results
-
-    async def test_error_handling_and_edge_cases(self) -> List[TestResult]:
-        """Test error handling and edge cases"""
-        results = []
-
-        # Test invalid endpoints
-        try:
-            async with self.session.get(f"{self.backend_base}/api/nonexistent/endpoint") as resp:
-                results.append(
-                    TestResult(
-                        name="Error Handling: Invalid Endpoint",
-                        success=resp.status == 404,
-                        message=f"Invalid endpoint properly returns {resp.status} (expected 404)",
-                        details={"status_code": resp.status},
-                    )
-                )
-        except Exception as e:
-            results.append(
-                TestResult(
-                    name="Error Handling: Invalid Endpoint",
-                    success=False,
-                    message=f"Error handling test failed: {str(e)}",
-                )
-            )
-
-        # Test malformed request
-        try:
-            malformed_data = "invalid json data"
-            async with self.session.post(
-                f"{self.backend_base}/api/knowledge_base/search",
-                data=malformed_data,  # Invalid JSON
-                headers={"Content-Type": "application/json"},
-            ) as resp:
-                results.append(
-                    TestResult(
-                        name="Error Handling: Malformed Request",
-                        success=resp.status in [400, 422, 500],
-                        message=f"Malformed request properly handled with status {resp.status}",
-                        details={"status_code": resp.status},
-                    )
-                )
-        except Exception:
-            results.append(
-                TestResult(
-                    name="Error Handling: Malformed Request",
-                    success=True,
-                    message="Malformed request handling working (connection rejected)",
-                    details={"note": "Request rejected before reaching server"},
-                )
-            )
-
-        return results
-
-    async def run_comprehensive_test_suite(self) -> Dict[str, Any]:
-        """Run the complete comprehensive test suite"""
-        print("🚀 Starting AutoBot Frontend Comprehensive Testing Suite")
-        print("=" * 70)
-
-        # 1. Frontend Health and Accessibility
-        print("\n🌐 Testing Frontend Health & Accessibility...")
-        self.results.append(await self.test_frontend_health_and_accessibility())
-
-        # 2. API Connectivity
-        print("\n🔌 Testing API Connectivity from Frontend...")
-        api_results = await self.test_api_connectivity_from_frontend()
-        self.results.extend(api_results)
-
-        # 3. WebSocket Communication
-        print("\n🔄 Testing WebSocket Real-time Communication...")
-        self.results.append(await self.test_websocket_connections())
-
-        # 4. Core UI Components
-        print("\n🎨 Testing Core UI Components...")
-        ui_results = await self.test_core_ui_components()
-        self.results.extend(ui_results)
-
-        # 5. Knowledge Base Interface
-        print("\n📚 Testing Knowledge Base Interface...")
-        kb_results = await self.test_knowledge_base_interface()
-        self.results.extend(kb_results)
-
-        # 6. Terminal Integration
-        print("\n💻 Testing Terminal Integration...")
-        self.results.append(await self.test_terminal_integration())
-
-        # 7. Chat Functionality
-        print("\n💬 Testing Chat Functionality...")
-        chat_results = await self.test_chat_functionality_comprehensive()
-        self.results.extend(chat_results)
-
-        # 8. Desktop Viewer
-        print("\n🖥️  Testing Desktop Viewer Component...")
-        self.results.append(await self.test_desktop_viewer_component())
-
-        # 9. Performance Testing
-        print("\n⚡ Testing Performance & Responsiveness...")
-        perf_results = await self.test_performance_and_responsiveness()
-        self.results.extend(perf_results)
-
-        # 10. Error Handling
-        print("\n🛡️  Testing Error Handling & Edge Cases...")
-        error_results = await self.test_error_handling_and_edge_cases()
-        self.results.extend(error_results)
-
-        return self.generate_comprehensive_report()
-
-    def generate_comprehensive_report(self) -> Dict[str, Any]:
-        """Generate comprehensive test report"""
-        total_tests = len(self.results)
-        passed_tests = sum(1 for r in self.results if r.success)
-        failed_tests = total_tests - passed_tests
-        success_rate = (passed_tests / total_tests) * 100 if total_tests > 0 else 0
-
-        # Calculate performance metrics
-        response_times = [r.response_time for r in self.results if r.response_time]
-        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
-        max_response_time = max(response_times) if response_times else 0
-        min_response_time = min(response_times) if response_times else 0
-
-        # Categorize results
-        categories = {
-            "Frontend Health": [r for r in self.results if "Frontend" in r.name],
-            "API Connectivity": [r for r in self.results if "API Connectivity" in r.name],
-            "WebSocket": [r for r in self.results if "WebSocket" in r.name],
-            "UI Components": [r for r in self.results if "Component" in r.name],
-            "Knowledge Base": [r for r in self.results if "KB Interface" in r.name],
-            "Chat System": [r for r in self.results if "Chat:" in r.name],
-            "Terminal": [r for r in self.results if "Terminal" in r.name],
-            "Desktop": [r for r in self.results if "Desktop" in r.name],
-            "Performance": [r for r in self.results if "Performance" in r.name],
-            "Error Handling": [r for r in self.results if "Error Handling" in r.name],
-        }
-
-        report = {
-            "summary": {
-                "total_tests": total_tests,
-                "passed": passed_tests,
-                "failed": failed_tests,
-                "success_rate": success_rate,
-                "avg_response_time": avg_response_time,
-                "max_response_time": max_response_time,
-                "min_response_time": min_response_time,
-            },
-            "categories": {cat: len([r for r in results if r.success]) for cat, results in categories.items()},
-            "category_totals": {cat: len(results) for cat, results in categories.items()},
-            "results": self.results,
-            "recommendations": self.generate_recommendations(),
-        }
-
-        return report
-
-    def generate_recommendations(self) -> List[str]:
-        """Generate detailed recommendations"""
-        recommendations = []
-        failed_tests = [r for r in self.results if not r.success]
-
-        # Specific recommendations based on failures
-        if any("Frontend Health" in r.name for r in failed_tests):
-            recommendations.append(
-                "🔴 CRITICAL: Frontend service not accessible - check Vue.js application and port 5173"
-            )
-
-        if any("WebSocket" in r.name for r in failed_tests):
-            recommendations.append("🟡 WebSocket connectivity issues - real-time features may be limited")
-
-        if any("API Connectivity" in r.name for r in failed_tests):
-            recommendations.append("🟠 Backend API connectivity issues - check backend service at port 8001")
-
-        if any("Knowledge Base" in r.name or "KB Interface" in r.name for r in failed_tests):
-            recommendations.append(
-                "📚 Knowledge Base interface issues - check vector database and search functionality"
-            )
-
-        if any("Chat" in r.name for r in failed_tests):
-            recommendations.append("💬 Chat system issues - check LLM integration and chat workflow")
-
-        if any("Performance" in r.name for r in failed_tests):
-            recommendations.append("⚡ Performance issues detected - optimize API response times")
-
-        # Overall system assessment
-        success_rate = (sum(1 for r in self.results if r.success) / len(self.results)) * 100
-
-        if success_rate >= 95:
-            recommendations.append("✅ EXCELLENT: AutoBot frontend is fully operational with outstanding performance")
-        elif success_rate >= 85:
-            recommendations.append("🟢 VERY GOOD: AutoBot frontend is working well with minor issues to address")
-        elif success_rate >= 75:
-            recommendations.append("🟡 GOOD: AutoBot frontend is largely functional with some improvements needed")
-        elif success_rate >= 60:
-            recommendations.append("🟠 NEEDS IMPROVEMENT: AutoBot frontend has significant issues requiring attention")
-        else:
-            recommendations.append("🔴 CRITICAL: AutoBot frontend has major issues requiring immediate attention")
-
-        return recommendations
-
-    def print_comprehensive_report(self, report: Dict[str, Any]):
-        """Print comprehensive test report"""
-        print("\n" + "=" * 70)
-        print("🎯 AUTOBOT FRONTEND COMPREHENSIVE TEST REPORT")
-        print("=" * 70)
-
-        summary = report["summary"]
-        success_rate = summary["success_rate"]
-
-        # Status determination
-        if success_rate >= 95:
-            status_color = "🟢"
-            status = "EXCELLENT"
-        elif success_rate >= 85:
-            status_color = "🟡"
-            status = "VERY GOOD"
-        elif success_rate >= 75:
-            status_color = "🟠"
-            status = "GOOD"
-        elif success_rate >= 60:
-            status_color = "🔴"
-            status = "NEEDS IMPROVEMENT"
-        else:
-            status_color = "❌"
-            status = "CRITICAL"
-
-        print(f"\n{status_color} OVERALL STATUS: {status} ({success_rate:.1f}% success rate)")
-        print(f"📊 Test Results: {summary['passed']}/{summary['total_tests']} passed")
-
-        if summary["avg_response_time"] > 0:
-            print(
-                f"⚡ Response Times: avg={summary['avg_response_time']:.3f}s, min={summary['min_response_time']:.3f}s, max={summary['max_response_time']:.3f}s"
-            )
-
-        # Category breakdown
-        print("\n📋 CATEGORY BREAKDOWN:")
-        print("-" * 50)
-        for category, passed in report["categories"].items():
-            total = report["category_totals"][category]
-            if total > 0:
-                cat_success_rate = (passed / total) * 100
-                status_icon = "✅" if cat_success_rate == 100 else "⚠️" if cat_success_rate >= 50 else "❌"
-                print(f"{status_icon} {category}: {passed}/{total} ({cat_success_rate:.0f}%)")
-
-        # Detailed results
-        print("\n📝 DETAILED TEST RESULTS:")
-        print("-" * 50)
-
-        current_category = ""
-        for result in self.results:
-            # Determine category
-            result_category = "Other"
-            if "Frontend" in result.name:
-                result_category = "Frontend Health"
-            elif "API Connectivity" in result.name:
-                result_category = "API Connectivity"
-            elif "WebSocket" in result.name:
-                result_category = "WebSocket"
-            elif "Component" in result.name:
-                result_category = "UI Components"
-            elif "KB Interface" in result.name:
-                result_category = "Knowledge Base"
-            elif "Chat:" in result.name:
-                result_category = "Chat System"
-            elif "Terminal" in result.name:
-                result_category = "Terminal"
-            elif "Desktop" in result.name:
-                result_category = "Desktop"
-            elif "Performance" in result.name:
-                result_category = "Performance"
-            elif "Error Handling" in result.name:
-                result_category = "Error Handling"
-
-            if result_category != current_category:
-                current_category = result_category
-                print(f"\n📂 {current_category}:")
-
-            status_icon = "✅" if result.success else "❌"
-            response_info = f" ({result.response_time:.3f}s)" if result.response_time else ""
-            print(f"  {status_icon} {result.name}{response_info}")
-            print(f"      {result.message}")
-
-        # Recommendations
-        print("\n🔧 RECOMMENDATIONS & NEXT STEPS:")
-        print("-" * 50)
-        for rec in report["recommendations"]:
-            print(f"• {rec}")
-
-        print("\n" + "=" * 70)
-
-        # Final assessment
-        if success_rate >= 95:
-            print("🎉 SUCCESS: AutoBot frontend is operating at peak performance!")
-            print("All major systems functional with excellent response times.")
-        elif success_rate >= 85:
-            print("👍 VERY GOOD: AutoBot frontend is working very well!")
-            print("Minor issues present but system is highly functional.")
-        elif success_rate >= 75:
-            print("👌 GOOD: AutoBot frontend is working well overall.")
-            print("Some components need attention but core functionality intact.")
-        elif success_rate >= 60:
-            print("⚠️  NEEDS WORK: AutoBot frontend has significant issues.")
-            print("Multiple components require attention for optimal performance.")
-        else:
-            print("🚨 CRITICAL: AutoBot frontend requires immediate attention.")
-            print("Major system issues are affecting core functionality.")
-
-        return success_rate >= 75  # Return True if system is in good state
-
-
-async def main():
-    """Main execution function"""
-    print("Starting AutoBot Frontend Comprehensive Testing...")
-
-    async with AutoBotComprehensiveFrontendTester() as tester:
-        report = await tester.run_comprehensive_test_suite()
-        system_healthy = tester.print_comprehensive_report(report)
-
-        # Save report to file
-        timestamp = int(time.time())
-        report_file = f"tests/results/frontend_comprehensive_test_{timestamp}.json"
-
-        # Ensure results directory exists
-        Path("tests/results").mkdir(exist_ok=True)
-
-        # Convert TestResult objects to dictionaries for JSON serialization
-        serializable_results = []
-        for result in report["results"]:
-            serializable_results.append(
-                {
-                    "name": result.name,
-                    "success": result.success,
-                    "message": result.message,
-                    "details": result.details,
-                    "response_time": result.response_time,
-                }
-            )
-
-        report["results"] = serializable_results
-
-        with open(report_file, "w", encoding="utf-8") as f:
-            json.dump(report, f, indent=2)
-
-        print(f"\n📄 Full test report saved to: {report_file}")
-
-        # Exit with appropriate code
-        sys.exit(0 if system_healthy else 1)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    async def _assert_response_time_budget(self, session: aiohttp.ClientSession) -> None:
+        """Assert each hot endpoint answers within FAST_ENDPOINT_BUDGET_SECONDS."""
+        loop = asyncio.get_running_loop()
+        slow: list[str] = []
+        for path in FAST_ENDPOINTS:
+            started = loop.time()
+            async with session.get(f"{BACKEND_URL}{path}") as response:
+                await response.read()
+            elapsed = loop.time() - started
+            if elapsed >= FAST_ENDPOINT_BUDGET_SECONDS:
+                slow.append(f"{path} -> {elapsed:.3f}s")
+
+        assert not slow, f"endpoints exceeded the {FAST_ENDPOINT_BUDGET_SECONDS:.1f}s interactive budget: " + "; ".join(
+            slow
+        )

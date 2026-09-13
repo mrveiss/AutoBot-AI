@@ -54,3 +54,37 @@ export type {
   FieldConfig,
   UseFormValidationReturn,
 } from './src/composables/useFormValidation'
+
+// Toast notification composable (#14907) — canonical implementation, the
+// union of both prior app-local copies (see the file's own doc comment for
+// the capability diff). Both apps re-export from here.
+export {
+  useToast,
+  provideToast,
+  MAX_TOASTS,
+  TOAST_DURATIONS,
+  TOAST_INJECT_KEY,
+} from './src/composables/useToast'
+export type { ToastType, Toast, UseToastReturn } from './src/composables/useToast'
+
+// Shared Prometheus/monitoring metric shapes (#14907) — the eight type names
+// both apps' usePrometheusMetrics.ts declared identically-named. Domain
+// logic and domain-only types stay per-app; see the file's own doc comment.
+export type {
+  GPUMetrics,
+  NPUMetrics,
+  ServiceHealth,
+  ServicesSummary,
+  PerformanceAlert,
+  AlertsSummary,
+  OptimizationRecommendation,
+  UsePrometheusMetricsOptions,
+} from './src/types/prometheus-metrics'
+
+// Shared duration-formatting vocabulary (#14908).
+export type { DurationStyle } from './src/utils/duration'
+
+// Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
+// apps' utils/debugUtils.ts re-export these rather than re-declaring them.
+export { log, createLogger } from './src/utils/logger'
+export type { LogLevel } from './src/utils/logger'

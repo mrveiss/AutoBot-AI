@@ -36,6 +36,9 @@ class TestKnowledgeBaseRedisIntegration:
         await kb._ensure_redis_initialized()
 
         # Verify Redis is actually connected
+        # #14203: stays on the private attribute deliberately — this asks
+        # "is Redis available?", and `redis()` raises rather than returning a
+        # falsy value, so it cannot answer that question.
         if not kb._aioredis_client:
             pytest.skip("Redis not available at 10.0.0.4:6379")
 
@@ -52,8 +55,8 @@ class TestKnowledgeBaseRedisIntegration:
     @pytest.mark.asyncio
     async def test_redis_connection_established(self, kb):
         """Test that Redis connection is properly established"""
-        # Verify connection exists
-        assert kb._aioredis_client is not None
+        # Verify connection exists (#14203: not raising IS the assertion)
+        assert kb.redis() is not None
         assert kb.redis_client is not None
 
         # Verify connection works with ping
@@ -304,15 +307,18 @@ class TestKnowledgeBaseRedisIntegration:
     @pytest.mark.asyncio
     async def test_connection_persistence(self, kb):
         """Test that connections are properly reused and persist across operations"""
-        # Get initial connection
-        initial_client = kb._aioredis_client
+        # #14203: through the public accessor. `redis()` returns the same
+        # object and additionally raises if the client was never initialised,
+        # so an uninitialised KB fails loudly here instead of comparing two
+        # `None`s and passing.
+        initial_client = kb.redis()
 
         # Perform multiple operations
         for i in range(20):
             await kb.store_fact(f"Persistence test {i}", {"test": "persistence"})
 
         # Verify same connection is being used
-        assert kb._aioredis_client is initial_client
+        assert kb.redis() is initial_client
 
         # Verify connection is still healthy
         assert await kb.redis().ping() is True
@@ -437,7 +443,7 @@ class TestKnowledgeBaseAsyncRedisManagerIntegration:
     async def test_redis_client_initialized(self, kb):
         """The knowledge base exposes an initialised Redis client."""
         assert kb.redis_client is not None
-        assert kb._aioredis_client is not None
+        assert kb.redis() is not None  # #14203
 
     @pytest.mark.asyncio
     async def test_connection_pooling_metrics(self, kb):
@@ -470,6 +476,9 @@ class TestKnowledgeBasePerformanceIntegration:
         kb = KnowledgeBase()
         await kb._ensure_redis_initialized()
 
+        # #14203: stays on the private attribute deliberately — this asks
+        # "is Redis available?", and `redis()` raises rather than returning a
+        # falsy value, so it cannot answer that question.
         if not kb._aioredis_client:
             pytest.skip("Redis not available")
 

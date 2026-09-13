@@ -26,7 +26,6 @@ from .schemas import (
     DeploymentCreate,
     DeploymentListResponse,
     DeploymentResponse,
-    HealthResponse,
     HeartbeatRequest,
     NodeCreate,
     NodeListResponse,
@@ -42,6 +41,7 @@ from .schemas import (
     UserCreate,
     UserResponse,
 )
+from .schemas_health import HealthResponse
 
 __all__ = [
     # Database models

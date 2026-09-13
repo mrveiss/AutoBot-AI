@@ -14,7 +14,9 @@
 # Issue #5142 (original), #11598 (copy-based rewrite).
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
+# shellcheck source=scripts/lib/git-root.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../scripts/lib/git-root.sh"
+REPO_ROOT="$(git_repo_root 2>/dev/null || echo "")"
 if [ -z "$REPO_ROOT" ]; then
     echo "ERROR: not inside a git repository" >&2
     exit 1

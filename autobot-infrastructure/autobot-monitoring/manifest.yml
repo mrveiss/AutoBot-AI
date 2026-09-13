@@ -19,6 +19,7 @@ services:
     system_service: prometheus
     start_order: 1
     user: prometheus
+    slm_roles: [slm-monitoring]   # #16025: role_registry name differs from this dir
   - name: autobot-monitoring-grafana
     type: systemd
     system_service: grafana-server
@@ -63,7 +64,7 @@ coexistence:
     - autobot-slm-frontend
     - autobot-slm-database
     - autobot-slm-agent
-    - autobot_shared
+    - autobot-shared
   conflicts_with:
     - autobot-browser-worker   # both would bind port 3000 if on same node
   warns_with: []

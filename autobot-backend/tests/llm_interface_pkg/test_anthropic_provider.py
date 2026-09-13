@@ -6,7 +6,11 @@
 Unit tests for AnthropicProvider extended thinking support (#3258).
 
 These tests are fully offline — the Anthropic SDK is mocked so no real API
-calls are made.
+calls are made. The kwargs-building helpers this module covers
+(``_route_sampling_kwargs``, ``_build_request_kwargs``) are also bound
+against the REAL, installed ``anthropic`` SDK signature (#15016) in the
+sibling module ``test_anthropic_sampling_kwargs.py``, split out to keep
+this file under the repo's file-size ceiling.
 """
 
 from __future__ import annotations
@@ -203,6 +207,11 @@ class TestBuildRequestKwargs:
         assert kwargs["max_tokens"] == 4096
         assert headers == {}
         assert preserve is False
+        # #15016: LLMRequest.temperature always carries a value (never None),
+        # so it is a genuine dependency and must survive via extra_body — not
+        # as a top-level kwarg, which anthropic>=1.0 no longer accepts.
+        assert "temperature" not in kwargs
+        assert "temperature" in kwargs["extra_body"]
 
     def test_thinking_kwargs_forwarded(self):
         provider = self._provider()
@@ -212,7 +221,6 @@ class TestBuildRequestKwargs:
                 "api_kwargs": {
                     "thinking": thinking,
                     "max_tokens": 64000,
-                    "temperature": 1,
                     "extra_headers": {"anthropic-beta": "output-128k-2025-02-19"},
                 }
             }
@@ -220,7 +228,6 @@ class TestBuildRequestKwargs:
         kwargs, headers, preserve = provider._build_request_kwargs("claude-sonnet-4-6", request)
         assert kwargs["thinking"] == thinking
         assert kwargs["max_tokens"] == 64000
-        assert kwargs["temperature"] == 1
         assert headers == {"anthropic-beta": "output-128k-2025-02-19"}
         assert preserve is False
 
@@ -230,35 +237,32 @@ class TestBuildRequestKwargs:
         _, _, preserve = provider._build_request_kwargs("m", request)
         assert preserve is True
 
-    def test_thinking_enforces_temperature_1(self):
+    def test_explicit_temperature_routed_to_extra_body(self):
+        """#15016: a caller-supplied api_kwargs temperature is never a raw kwarg."""
         provider = self._provider()
-        thinking = {"type": "enabled", "budget_tokens": 8000}
-        request = self._make_request(
-            metadata={
-                "api_kwargs": {
-                    "thinking": thinking,
-                    "max_tokens": 16000,
-                    # Deliberately omit temperature — must be auto-coerced to 1.
-                }
-            }
-        )
+        request = self._make_request(metadata={"api_kwargs": {"temperature": 0}})
         kwargs, _, _ = provider._build_request_kwargs("claude-sonnet-4-6", request)
-        assert kwargs["temperature"] == 1
+        assert "temperature" not in kwargs
+        assert kwargs["extra_body"]["temperature"] == 0
 
-    def test_thinking_overrides_explicit_temperature(self):
+    def test_thinking_budget_kept_for_model_without_adaptive_requirement(self):
         provider = self._provider()
-        thinking = {"type": "enabled", "budget_tokens": 8000}
-        request = self._make_request(
-            metadata={
-                "api_kwargs": {
-                    "thinking": thinking,
-                    "max_tokens": 16000,
-                    "temperature": 0,  # Invalid with thinking — must be coerced to 1.
-                }
-            }
-        )
+        request = self._make_request(metadata={"api_kwargs": {"thinking_tokens": 8000}})
         kwargs, _, _ = provider._build_request_kwargs("claude-sonnet-4-6", request)
-        assert kwargs["temperature"] == 1
+        assert kwargs["thinking"] == {"type": "enabled", "budget_tokens": 8000}
+        # #15042: temperature must be dropped, not routed to extra_body, once
+        # thinking is active -- the API rejects a sampling kwarg outright.
+        assert "temperature" not in kwargs
+        assert "extra_body" not in kwargs
+
+    def test_thinking_budget_expands_to_adaptive_for_flagged_model(self):
+        """#15016: claude-opus-4-6 gets adaptive thinking, not budget_tokens."""
+        provider = self._provider()
+        request = self._make_request(metadata={"api_kwargs": {"thinking_tokens": 8000}})
+        kwargs, _, _ = provider._build_request_kwargs("claude-opus-4-6", request)
+        assert kwargs["thinking"] == {"type": "adaptive"}
+        assert kwargs["output_config"] == {"effort": "high"}
+        assert "budget_tokens" not in kwargs["thinking"]
 
     def test_betas_routed_to_extra_headers_via_build_request_kwargs(self):
         provider = self._provider()

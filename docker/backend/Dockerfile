@@ -1,15 +1,23 @@
 # AutoBot Backend - FastAPI Application (#1809, #1836)
-# python:3.14-slim-bookworm base — eliminates deadsnakes PPA cold build overhead (#6213)
+# python:${PYTHON_VERSION}-slim-bookworm base — eliminates deadsnakes PPA cold build overhead (#6213)
+# PYTHON_VERSION build ARG keeps the interpreter minor in one place so a 3.14 bump
+# only changes one value and the COPY site-packages path tracks it (#13842, #9949 —
+# the pattern docker/slm/Dockerfile already used; this file hardcoded 3.14 three
+# times instead).
 #
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
 # ---- Dependencies stage ----
-FROM python:3.14-slim-bookworm AS deps
+ARG PYTHON_VERSION=3.14
+FROM python:${PYTHON_VERSION}-slim-bookworm AS deps
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
+
+# apt retries, and an index failure is fatal at `apt-get update` (#16291)
+COPY docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
 
 # Install build deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -35,7 +43,8 @@ COPY constraints/shared.txt /app/constraints/shared.txt
 # torch/torchvision are excluded from the filtered list and installed explicitly from
 # the CPU index, so the default-PyPI CUDA build (libtorch_cuda.so) is never pulled into
 # this CPU image (#10251). vLLM + its CUDA stack are no longer default deps; GPU
-# deployments add them via requirements-gpu.txt.
+# deployments add CUDA torch via requirements-gpu-torch.txt and vLLM via
+# requirements-gpu.txt, independent of each other (#15162).
 COPY autobot-backend/requirements.txt /tmp/requirements.txt
 RUN grep -v -E "(autobot.shared|^-r |^-c |^torch==|^torchvision==)" /tmp/requirements.txt \
         > /app/requirements-filtered.txt \
@@ -57,9 +66,14 @@ RUN grep -v -E "(autobot.shared|^-r |^-c |^torch==|^torchvision==)" /tmp/require
 
 
 # ---- Production stage ----
-FROM python:3.14-slim-bookworm AS production
+FROM python:${PYTHON_VERSION}-slim-bookworm AS production
+# Re-declare after FROM so it is in scope for the COPY paths below.
+ARG PYTHON_VERSION=3.14
 
 ENV DEBIAN_FRONTEND=noninteractive
+
+# apt retries, and an index failure is fatal at `apt-get update` (#16291)
+COPY docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
 
 # --- claude CLI install (GH#9950) ---
 # Replaces the prior unpinned `curl | bash` supply-chain risk with Anthropic's
@@ -114,7 +128,7 @@ RUN groupadd -r --gid 999 autobot && useradd -r --uid 999 -g autobot -d /app aut
 WORKDIR /app
 
 # Copy Python packages from deps stage
-COPY --from=deps /usr/local/lib/python3.14/ /usr/local/lib/python3.14/
+COPY --from=deps /usr/local/lib/python${PYTHON_VERSION}/ /usr/local/lib/python${PYTHON_VERSION}/
 COPY --from=deps /usr/local/bin/ /usr/local/bin/
 
 # Copy shared module

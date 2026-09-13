@@ -1,26 +1,31 @@
 #!/usr/bin/env python3
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Diff guard: role_*_active facts must stay byte-equal across all copies
-until #7095 (single source of truth) lands.
+"""Diff guard: role_*_active facts must stay byte-equal across the two
+copies #14678 left tracked -- see _ROLE_FACTS_FILES below for why the third
+(#7095) never fully collapsed to one.
 
-Three consumers exist:
+Two consumers exist:
 - inventory/group_vars/all.yml               canonical; loaded by static-inventory
                                               playbooks via Ansible's own group_vars
-                                              auto-discovery
-- playbooks/vars/role_active_facts.yml       loaded by playbooks via vars_files when
-                                              invoked with dynamic temp inventories that
-                                              lack a sibling group_vars/ (e.g. the SLM
-                                              wizard, #7094)
-- tests/inventory/group_vars/all.yml         the CI regression-test inventory's copy.
-                                              Used to be a symlink to
-                                              inventory/group_vars/all.yml; this repo's
-                                              `core.symlinks=false` checkouts (WSL2)
-                                              materialize a tracked symlink as a
-                                              plain-text path string instead, so it is a
-                                              real file now (#14149)
+                                              auto-discovery, and by every dynamic
+                                              inventory builder, which links this
+                                              directory beside its temp inventory
+                                              (#11781, #14286)
+- playbooks/vars/role_active_facts.yml       loaded via vars_files by deploy.yml only.
+                                              deploy.yml's two callers
+                                              (services/deployment.py,
+                                              services/blue_green.py) invoke it with a
+                                              bare `-i "<host>,"` inventory string, which
+                                              gives Ansible no directory to discover
+                                              group_vars from, so this is load-bearing
+                                              there (#14678)
 
-If any copy drifts, behavior diverges silently. This script extracts the
+`tests/inventory/group_vars/all.yml`, the CI regression-test inventory's copy, is no
+longer a third tracked copy -- it is generated from the canonical file at CI time and
+gitignored (`check_test_inventory_is_generated.py` asserts the copy happened).
+
+If either remaining copy drifts, behavior diverges silently. This script extracts the
 role_*_active definitions from each and compares them; exits non-zero on any
 divergence so CI fails the PR.
 """
@@ -101,11 +106,12 @@ _BYTE_IDENTITY_CLAIM = re.compile(r"byte[- ]identical", re.IGNORECASE)
 # it cannot drift by hand -- `check_test_inventory_is_generated.py` asserts the
 # copy is present, is a real file (not a symlink, #14149) and matches.
 #
-# The remaining pair cannot be collapsed yet: `services/deployment.py` invokes
-# deploy.yml with a bare `-i "<host>,"` inventory string, which gives Ansible no
-# directory to discover group_vars in, so deploy.yml's `vars_files` load is
-# load-bearing on that path (#14289). Removing it needs that caller to write a
-# real inventory first -- tracked on #14678.
+# The remaining pair cannot be collapsed yet: deploy.yml's only two callers,
+# `services/deployment.py` and `services/blue_green.py`, invoke it with a bare
+# `-i "<host>,"` inventory string, which gives Ansible no directory to discover
+# group_vars in, so deploy.yml's `vars_files` load is load-bearing on that path.
+# Removing it needs those callers to write a real inventory first -- tracked as
+# its own follow-up (#15348) so it doesn't block the rest of #14678.
 _ROLE_FACTS_FILES = {
     "inventory/group_vars/all.yml": GROUP_VARS,
     "playbooks/vars/role_active_facts.yml": PLAYBOOK_VARS,
@@ -130,10 +136,13 @@ def check_no_false_byte_identity_claims() -> bool:
     """Return True (and print) if a header claims whole-file byte-identity
     the actual file contents do not back.
 
-    Scoped to exactly the three files in `_ROLE_FACTS_FILES` -- a
-    regression guard for this specific, known trio (#14201), not a
-    general repo-wide scanner for the phrase. A different pair of files
-    making the same mistake elsewhere would not be caught here.
+    Scoped to exactly the files in `_ROLE_FACTS_FILES` -- a regression
+    guard for this specific, known set (#14201), not a general repo-wide
+    scanner for the phrase. A different pair of files making the same
+    mistake elsewhere would not be caught here. The set was three copies
+    until #14679 dropped one and #14678 confirmed the remaining two; the
+    guard is written over the mapping, so it does not need updating when
+    the set changes size.
     """
     contents = {label: path.read_bytes() for label, path in _ROLE_FACTS_FILES.items()}
     found_false_claim = False
@@ -145,7 +154,7 @@ def check_no_false_byte_identity_claims() -> bool:
         if not matches_a_sibling:
             print(
                 f"HEADER CLAIM ERROR: {label}'s header claims byte-identity to a sibling, "
-                "but no two of the three role-facts files are a whole-file byte match. "
+                "but no two of the role-facts files are a whole-file byte match. "
                 "Only the role_*_active fragment (+ chromadb_service_owner) is kept in "
                 "sync, by this script — correct the header instead of restoring the "
                 "claim (#14201)."

@@ -132,7 +132,15 @@ _simple_stub(
 # resolve "services.mcp_dispatch.get_mcp_dispatcher" correctly.
 _svc_pkg = _pkg_stub("services")
 _mcp_stub = _simple_stub("services.mcp_dispatch", get_mcp_dispatcher=MagicMock())
-_svc_pkg.mcp_dispatch = _mcp_stub  # type: ignore[attr-defined]
+if not _svc_pkg.__dict__.get("__path__"):
+    # Only a stub we just created has an empty __path__; if the real "services"
+    # package is already imported its __path__ is populated and must not be
+    # overwritten — mirrors the chat_workflow guard above (#13224). The write
+    # is load-bearing only in the fresh-stub case: without it, getattr() falls
+    # through to the stub's catch-all __getattr__, which hands mock.patch() an
+    # unrelated MagicMock instead of the module tool_handler's lazy import
+    # actually reads from sys.modules.
+    _svc_pkg.mcp_dispatch = _mcp_stub  # type: ignore[attr-defined]
 
 # Load tool_handler directly from its source file, bypassing __init__.py.
 _th_path = _BACKEND_ROOT / "chat_workflow" / "tool_handler.py"

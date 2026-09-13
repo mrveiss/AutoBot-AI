@@ -72,6 +72,17 @@ echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "au
 echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "autobot_debug_websockets", "arguments": {"action": "performance"}}}' | node .mcp/autobot-mcp-server.js
 ```
 
+### Run the whole scenario at once
+
+`autobot-infrastructure/shared/scripts/debug_chat_system.sh` performs the four steps above plus
+the frontend, API, backend-health and file-system checks, logs the session to `development_log`,
+and prints recommendations keyed to what it found. It resolves the project root from its own
+location, so it runs from any directory.
+
+```bash
+bash autobot-infrastructure/shared/scripts/debug_chat_system.sh
+```
+
 ## Scenario 4: Build or Test Failures
 
 ### Symptoms

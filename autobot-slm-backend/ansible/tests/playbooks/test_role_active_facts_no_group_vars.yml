@@ -3,8 +3,13 @@
 # AutoBot - Test playbook: role_*_active facts via vars_files (#7094)
 #
 # Mirrors test_role_active_facts.yml but loads the facts via vars_files
-# instead of group_vars. Mimics the SLM-triggered provision codepath
-# where the temp inventory has NO sibling group_vars/ directory.
+# instead of group_vars -- the deploy.yml codepath (#14678). The
+# SLM-triggered provision codepath this used to mimic no longer needs
+# vars_files: every dynamic-inventory builder now links group_vars/
+# beside its temp inventory (#11781, #14286). What still has NO sibling
+# group_vars/ is deploy.yml's only two callers, services/deployment.py
+# and services/blue_green.py, which invoke it with a bare `-i "<host>,"`
+# inventory string -- not a directory at all.
 #
 # Without this test, drift between inventory/group_vars/all.yml and
 # playbooks/vars/role_active_facts.yml goes undetected (the regression

@@ -172,7 +172,7 @@ class ServiceAuthEnforcementMiddleware:
 
 **For AutoBot's 6-VM internal network**:
 - ✅ HMAC-SHA256 is industry-standard for service-to-service auth (AWS API Gateway, Azure Functions use it)
-- ✅ Private network (172.16.168.x) - no external exposure
+- ✅ Private network (<network-subnet>) - no external exposure
 - ✅ Simpler key rotation than certificate management
 - ⚠️ mTLS would be over-engineering for internal services
 

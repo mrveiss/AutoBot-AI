@@ -16,7 +16,20 @@ from .base import (
 
 
 class TestVerifier(BaseVerifier):
-    """Verifies test-related claims."""
+    """Verifies test-related claims.
+
+    ``__test__ = False`` because the name is pytest's ``python_classes``
+    pattern and this is a verifier, not a suite. Without it pytest tries to
+    collect it twice over -- once from this module, which ``python_files``
+    matches, and once from ``test_verifiers.py``, which imports the name -- and
+    warns both times that it cannot, because of the constructor below. The
+    second of those no ``collect_ignore`` could reach; the class has to say so
+    itself. Renaming is not available: ``<kind>_verifier.py`` is the naming
+    every module in this package follows, and this one verifies *test* claims
+    (#14986).
+    """
+
+    __test__ = False
 
     TEST_PATTERNS = [
         r"test[_\s]",  # test_something or "test "
@@ -71,17 +84,15 @@ class TestVerifier(BaseVerifier):
                 last_verified=datetime.now(timezone.utc),
             )
 
-    def _extract_test_subject(self, text: str) -> Optional[str]:
-        """Extract the subject being tested from claim text."""
-        # Try to extract key terms (API names, module names, etc.)
-        # Look for capitalized words or snake_case identifiers
-        words = re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b|[a-z_]+(?:_[a-z]+)+", text)
-        if words:
-            return words[0].lower()
-
-        # Fallback: extract first significant word
-        words = text.lower().split()
-        stopwords = {
+    #: Sentence scaffolding that has the shape of an identifier without being
+    #: one. A capitalised word at the start of a sentence matched the
+    #: CamelCase alternative below, so "The ChatService is tested" resolved to
+    #: "the" -- and _search_tests then grepped `def test.*the`, which matches
+    #: most of the suite, so the claim came back WIRED on evidence that says
+    #: nothing about it (#14986). Applied to both routes below, not just the
+    #: fallback that always had it.
+    NOT_A_SUBJECT = frozenset(
+        {
             "test",
             "tested",
             "unit",
@@ -94,8 +105,20 @@ class TestVerifier(BaseVerifier):
             "with",
             "for",
         }
+    )
+
+    def _extract_test_subject(self, text: str) -> Optional[str]:
+        """Extract the subject being tested from claim text."""
+        # Try to extract key terms (API names, module names, etc.)
+        # Look for capitalized words or snake_case identifiers
+        words = re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b|[a-z_]+(?:_[a-z]+)+", text)
         for word in words:
-            if word not in stopwords and len(word) > 3:
+            if word.lower() not in self.NOT_A_SUBJECT:
+                return word.lower()
+
+        # Fallback: extract first significant word
+        for word in text.lower().split():
+            if word not in self.NOT_A_SUBJECT and len(word) > 3:
                 return word
 
         return None

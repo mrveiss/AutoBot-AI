@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # PostgreSQL User Management Database Deployment
 
 **Issue:** #786
@@ -8,30 +10,30 @@
 
 This document describes the deployment of PostgreSQL databases for user management in the AutoBot platform. The architecture uses a dual-database approach:
 
-1. **SLM Server Database** (172.16.168.19) - Local SLM admin users
-2. **AutoBot Users Database** (172.16.168.23/Redis VM) - Remote application users
+1. **SLM Server Database** (<slm-manager-ip>) - Local SLM admin users
+2. **AutoBot Users Database** (<database-ip>/Redis VM) - Remote application users
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      SLM Server (172.16.168.19)                 │
-│  ┌─────────────────┐    ┌─────────────────────────────────────┐ │
-│  │  PostgreSQL     │    │          SLM Backend                │ │
-│  │  ├─ slm         │◄───│  (asyncpg + SQLAlchemy)             │ │
-│  │  └─ slm_users   │    │                                     │ │
-│  └─────────────────┘    └─────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                      SLM Server (<slm-manager-ip>)                 │
+│  ┌─────────────────┐    ┌─────────────────────────────────────┐    │
+│  │  PostgreSQL     │    │          SLM Backend                │    │
+│  │  ├─ slm         │◄───│  (asyncpg + SQLAlchemy)             │    │
+│  │  └─ slm_users   │    │                                     │    │
+│  └─────────────────┘    └─────────────────────────────────────┘    │
+└────────────────────────────────────────────────────────────────────┘
                               │
                               │ Remote connection
                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Redis VM (172.16.168.23)                    │
-│  ┌─────────────────┐                                            │
-│  │  PostgreSQL     │                                            │
-│  │  └─ autobot_users│                                           │
-│  └─────────────────┘                                            │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                      Redis VM (<database-ip>)                      │
+│  ┌──────────────────┐                                              │
+│  │  PostgreSQL      │                                              │
+│  │  └─ autobot_users│                                              │
+│  └──────────────────┘                                              │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Database Configuration
@@ -48,7 +50,7 @@ SLM_DATABASE_URL="postgresql+asyncpg://slm_app@127.0.0.1:5432/slm"
 SLM_USERS_DATABASE_URL="postgresql+asyncpg://slm_app@127.0.0.1:5432/slm_users"
 
 # AutoBot application users database (on Redis VM)
-AUTOBOT_USERS_DATABASE_URL="postgresql+asyncpg://autobot_app@172.16.168.23:5432/autobot_users"
+AUTOBOT_USERS_DATABASE_URL="postgresql+asyncpg://autobot_app@<database-ip>:5432/autobot_users"
 
 # Connection pool settings
 SLM_DB_POOL_SIZE=20
@@ -133,7 +135,7 @@ All migrations have been updated for PostgreSQL compatibility:
 ### Database Health Endpoint
 
 ```bash
-curl http://172.16.168.19:8000/api/health/database
+curl http://<slm-manager-ip>:8000/api/health/database
 ```
 
 **Response:**
@@ -147,7 +149,7 @@ curl http://172.16.168.19:8000/api/health/database
 ### General Health Endpoint
 
 ```bash
-curl http://172.16.168.19:8000/api/health
+curl http://<slm-manager-ip>:8000/api/health
 ```
 
 **Response:**

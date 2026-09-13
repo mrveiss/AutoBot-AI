@@ -19,6 +19,14 @@ from autobot_shared.paths import project_root
 sys.path.insert(0, str(project_root()))
 from constants import ServiceURLs
 from constants.network_constants import NetworkConstants
+from langchain_redis_arm import (  # noqa: E402
+    INSTALL_HINT,
+    ModernArmUnavailable,
+    load_redis_vector_store,
+    skipped_steps,
+    status_label,
+    was_skipped,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -112,6 +120,27 @@ def _build_custom_redis_recommendation():
         "risk_level": "MEDIUM-HIGH",
         "data_migration": "None - uses existing structure",
         "compatibility_issues_resolved": ["Direct Redis access bypasses library limitations"],
+    }
+
+
+def _build_unmeasured_arm_recommendation() -> Dict[str, Any]:
+    """The verdict when the modern langchain-redis arm never ran (#14871).
+
+    Not a recommendation at all, deliberately: this run compared one library,
+    not two, and saying anything else would describe a comparison that did not
+    happen.
+    """
+    return {
+        "recommendation": "INCONCLUSIVE_MODERN_ARM_NOT_MEASURED",
+        "confidence": "NONE",
+        "reasoning": [
+            "The modern langchain-redis arm was NOT measured - the package is "
+            "not importable on this machine",
+            "This run therefore compared ONE library, not two; no conclusion "
+            "about LangChain can be drawn from it",
+        ],
+        "next_step": "Install the analysis dependencies and re-run: " + INSTALL_HINT,
+        "compatibility_issues_resolved": [],
     }
 
 
@@ -372,8 +401,11 @@ class AutoBotVectorStoreAnalysis:
         fixes_attempted = []
 
         try:
-            from langchain_redis import RedisVectorStore
+            RedisVectorStore = load_redis_vector_store()
+        except ModernArmUnavailable as exc:
+            return skipped_steps(exc)
 
+        try:
             try:
                 from langchain_ollama import OllamaEmbeddings
             except ImportError:
@@ -436,6 +468,12 @@ class AutoBotVectorStoreAnalysis:
             )
         elif langchain_works and not llamaindex_works:
             return _build_migrate_langchain_recommendation(langchain_fixes)
+        elif was_skipped(langchain_result):
+            # #14871: every remaining branch below reasons about how LangChain
+            # performed. With the modern arm unmeasured there is nothing to
+            # reason from, and a confident recommendation here would be the
+            # one-arm comparison this issue exists to remove.
+            return _build_unmeasured_arm_recommendation()
         elif existing_data_valuable:
             return _build_custom_redis_recommendation()
         else:
@@ -483,6 +521,10 @@ class AutoBotVectorStoreAnalysis:
                 "fixes_attempted": llamaindex_result[2],
             },
             "langchain_test": {
+                # #14871: "measured" separates an arm that ran and lost from one
+                # that never ran. Without it a reader of this JSON cannot tell a
+                # two-arm comparison from a one-arm one.
+                "measured": not was_skipped(langchain_result),
                 "success": langchain_result[0],
                 "result_count": langchain_result[1],
                 "fixes_attempted": langchain_result[2],
@@ -540,7 +582,7 @@ class AutoBotVectorStoreAnalysis:
         logger.info("  LlamaIndex: %s (%s results)", li_status, llamaindex_result[1])
         if llamaindex_result[2]:
             logger.info("    Fixes: %s", ", ".join(llamaindex_result[2][-2:]))
-        lc_status = "WORKING" if langchain_result[0] else "FAILED"
+        lc_status = status_label(langchain_result, ok="WORKING")
         logger.info("  LangChain: %s (%s results)", lc_status, langchain_result[1])
         if langchain_result[2]:
             logger.info("    Fixes: %s", ", ".join(langchain_result[2][-2:]))
@@ -609,8 +651,11 @@ class AutoBotVectorStoreAnalysis:
         fixes_attempted = []
 
         try:
-            from langchain_redis import RedisVectorStore
+            RedisVectorStore = load_redis_vector_store()
+        except ModernArmUnavailable as exc:
+            return skipped_steps(exc)
 
+        try:
             try:
                 from langchain_ollama import OllamaEmbeddings
 

@@ -92,9 +92,20 @@ def _offenders_in(tree: ast.AST) -> list[int]:
     return lines
 
 
+#: Floor on the swept population. The backend tree carries ~2.3k non-test
+#: modules; this is set far below that so ordinary churn never trips it, while
+#: a collapsed sweep still fails by name. Before #14484 this guard had no floor
+#: at all, so a sweep reaching zero files reported a clean tree.
+MIN_SWEPT_FILES = 500
+
+
 def _python_files():
     for path in BACKEND_ROOT.rglob("*.py"):
-        if SKIP_DIR_PARTS & set(path.parts):
+        # #14484: relative to the scan root, never the absolute path. Testing
+        # ``set(path.parts)`` asks whether the *checkout* sits under a directory
+        # named `archive`/`migrations`/`venv` as well as whether the file does,
+        # so the guard's reach depended on where the tree was cloned.
+        if SKIP_DIR_PARTS & set(path.relative_to(BACKEND_ROOT).parts):
             continue
         if path.name.endswith("_test.py") or path.name.startswith("test_"):
             continue
@@ -163,8 +174,28 @@ def _hand_rolled_admin_comparisons() -> tuple[str, ...]:
     return tuple(sorted(offenders))
 
 
+def _assert_population() -> None:
+    """Raise unless the sweep reached the backend tree it claims to scan.
+
+    Called from the floor test *and* from the offender assertion, so the floor
+    is evaluated before the substantive check whatever order the tests run in.
+    """
+    swept = sum(1 for _ in _python_files())
+    assert swept >= MIN_SWEPT_FILES, (
+        f"the admin-role sweep reached only {swept} files under {BACKEND_ROOT} "
+        f"(floor {MIN_SWEPT_FILES}). FIX THE SWEEP -- an empty sweep reports no "
+        "offenders, which reads exactly like a clean tree. Do not lower this bound."
+    )
+
+
+def test_the_sweep_reached_the_backend_tree():
+    """Population floor, evaluated before the offender assertion below."""
+    _assert_population()
+
+
 def test_no_hand_rolled_admin_role_comparisons():
     """Use ``is_admin_role()`` instead — it admits superadmin, as guards do."""
+    _assert_population()
     offenders = _hand_rolled_admin_comparisons()
 
     assert not offenders, (

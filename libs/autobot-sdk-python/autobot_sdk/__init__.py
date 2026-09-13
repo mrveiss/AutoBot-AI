@@ -17,45 +17,69 @@ Quick start::
     asyncio.run(main())
 
 Auth: set AUTOBOT_API_TOKEN env var, or pass ``token=`` to AutoBot().
+
+Base URL: AUTOBOT_BASE_URL, else AUTOBOT_BACKEND_HOST/AUTOBOT_BACKEND_PORT.
+Resource paths are written without the ``/api`` root; the client adds it.
 """
 
 from .autobot import AutoBot
-from .client import AutoBotClient
+from .client import API_PREFIX, AutoBotClient, api_path, default_base_url
+from .defaults import DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT
 from .models import (
+    AgentConfig,
+    AgentConfigHealthCheck,
+    AgentConfigOptions,
+    AgentHealth,
     AnalyticsPerformance,
     AnalyticsUsage,
-    AgentConfig,
-    AgentHealth,
     ChatMessage,
     DataResponse,
     KnowledgeAddResult,
+    KnowledgeEntries,
     KnowledgeEntry,
     KnowledgeSearchResult,
     KnowledgeStats,
     Session,
     SessionCreate,
     SessionDelete,
+    SessionDeleteFileHandling,
+    SessionDeleteKbCleanup,
+    SessionDeleteTerminalCleanup,
+    SessionDeleteTranscriptCleanup,
     SessionList,
     SessionMessages,
     SessionUpdate,
 )
 
 __all__ = [
+    "API_PREFIX",
     "AutoBot",
     "AutoBotClient",
+    "api_path",
+    "default_base_url",
+    "DEFAULT_OFFSET",
+    "DEFAULT_PAGE_SIZE",
+    "DEFAULT_SEARCH_LIMIT",
     "AnalyticsPerformance",
     "AnalyticsUsage",
     "AgentConfig",
+    "AgentConfigHealthCheck",
+    "AgentConfigOptions",
     "AgentHealth",
     "ChatMessage",
     "DataResponse",
     "KnowledgeAddResult",
+    "KnowledgeEntries",
     "KnowledgeEntry",
     "KnowledgeSearchResult",
     "KnowledgeStats",
     "Session",
     "SessionCreate",
     "SessionDelete",
+    "SessionDeleteFileHandling",
+    "SessionDeleteKbCleanup",
+    "SessionDeleteTerminalCleanup",
+    "SessionDeleteTranscriptCleanup",
     "SessionList",
     "SessionMessages",
     "SessionUpdate",

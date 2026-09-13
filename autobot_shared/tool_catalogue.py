@@ -90,6 +90,33 @@ APPROVAL_CATEGORY_TOOLS = {
     # governed separately at its seam (services/gateway/egress_governor.py) —
     # a gateway send is not a tool call, so it cannot be covered by a tool name.
     "sending externally": HTTP_WRITE_TOOLS,
+    # #14903: eleven SENSITIVE_TOOLS members were reachable through no category
+    # at all -- every file write among them. A work item could declare
+    # "destructive operations", be told the gate was in force, and still have
+    # write_file run unapproved, because that category covers FILE_DELETE_TOOLS
+    # and not FILE_WRITE_TOOLS. Two of the eleven (SYSTEM_EXEC/DEPLOY out of
+    # "destructive operations", git_reset out of "pushing commits") were
+    # documented exclusions; the file-write gap was documented nowhere, which is
+    # the difference between an asserted decision and drift.
+    #
+    # These are NEW categories rather than widenings of the four above, and that
+    # is deliberate: test_approval_categories_parity treats the extraction
+    # snapshot as "a floor, not a ceiling" -- every pre-existing category must
+    # still carry exactly its original tools, so a consolidation edit cannot
+    # quietly change what an already-declared work item gates. #14067 set the
+    # same precedent when it added "sending externally". Widening "destructive
+    # operations" to reach write_file would silently change the meaning of every
+    # work item that already declared it.
+    "writing files": FILE_WRITE_TOOLS,
+    "executing code": SYSTEM_EXEC_TOOLS + TERMINAL_TOOLS + CODE_EXEC_TOOLS,
+    # Overlaps "publishing" on the bare `deploy` atom, harmlessly: a tool
+    # reachable through two categories is gateable by either, and the seam takes
+    # the first declared match. ansible/helm were reachable through neither.
+    "deploying infrastructure": DEPLOY_TOOLS,
+    # Named for the risk, not the command: `git_reset` discards uncommitted work.
+    # Deliberately its own category rather than an addition to "pushing commits",
+    # which excludes it on purpose because a reset is not a push.
+    "discarding local changes": GIT_RESET_TOOLS,
 }
 
 
@@ -106,6 +133,10 @@ class ApprovalCategory(str, Enum):
     DESTRUCTIVE_OPERATIONS = "destructive operations"
     ROTATING_CREDENTIALS = "rotating credentials"
     SENDING_EXTERNALLY = "sending externally"
+    WRITING_FILES = "writing files"
+    EXECUTING_CODE = "executing code"
+    DEPLOYING_INFRASTRUCTURE = "deploying infrastructure"
+    DISCARDING_LOCAL_CHANGES = "discarding local changes"
 
 
 _VALID_APPROVAL_CATEGORIES = frozenset(c.value for c in ApprovalCategory)

@@ -10,14 +10,18 @@ repeated here; where the two disagree, **this file wins**.
 | Trigger | Doc |
 |---|---|
 | Starting a task — the 8 core rules in full | [`CLAUDE_RULES.md`](docs/developer/CLAUDE_RULES.md) |
-| Branching, worktree collisions, force-push, push recovery | [`CLAUDE_GIT.md`](docs/developer/CLAUDE_GIT.md) |
+| Branching, worktree collisions, stashing, force-push, push recovery | [`CLAUDE_GIT.md`](docs/developer/CLAUDE_GIT.md) |
 | Labels, `gh` workarounds, deployment, pre-merge gates | [`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md) |
 | Opening, reviewing, or merging a PR (incl. the required body headings) | [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md) |
 | Closing an issue | [`CLAUDE_CLOSURE.md`](docs/developer/CLAUDE_CLOSURE.md) |
 | Running parallel agents or a batch | [`CLAUDE_BATCH.md`](docs/developer/CLAUDE_BATCH.md) |
 | Need a service, port, or architecture fact | [`AUTOBOT_REFERENCE.md`](docs/developer/AUTOBOT_REFERENCE.md) |
 | Adding an event type, WebSocket route, bus, or session state | [`EVENT_STATE_DOCTRINE.md`](docs/developer/EVENT_STATE_DOCTRINE.md) |
+| Reviewing or changing path validation, session ownership, plugin loading, or secrets | [`THREAT_MODEL.md`](docs/developer/THREAT_MODEL.md) |
+| Claiming a work scope, adding a lock/lease, or any "which agent owns this" state | [`AGENT_COORDINATION.md`](docs/developer/AGENT_COORDINATION.md) |
 | Deviating from a standard pattern on purpose | [`ARCHITECTURE_EXCEPTIONS.md`](docs/developer/ARCHITECTURE_EXCEPTIONS.md) |
+| Adding a ratchet, changing its detector or matcher, or freezing/regenerating a baseline | [`RATCHET_BASELINES.md`](docs/developer/RATCHET_BASELINES.md) |
+| Writing or changing a guard, sweep, count, or acceptance criterion — or reading an empty result | [`MEASUREMENT_DISCIPLINE.md`](docs/developer/MEASUREMENT_DISCIPLINE.md) |
 
 ## Engineering Standard
 
@@ -33,7 +37,9 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 
 ## Never violate
 
-- **PRs target `Dev_new_gui`.** `main`/`master` are blocked by the pre-commit hook — use `issue-*` or `hotfix-*`.
+- **Say "I don't know" — never fabricate.** But an admission is not a closure — it is an opening: it means *"I need help, let's find this together"*, so **ask right then** in an interactive session, and where there is nobody to ask leave the criterion unticked, file it, and never drop it. A *stated* gap is a finding; an *unstated* one is the defect. A guessed cause, count or verdict is the one error treated as serious — for an agent a wrong answer is not an opinion, it executes. "I could not determine X" is a contribution. Guards and reports distinguish *nothing found* from *did not look*. See [`MEASUREMENT_DISCIPLINE.md`](docs/developer/MEASUREMENT_DISCIPLINE.md).
+- **PRs target `main`; `release` is the release branch.** `release`/`master` are blocked by the pre-commit hook — use `issue-*` or `hotfix-*`.
+- **Never work from a stale base** — and the half that bites is the judgement, not the freshness. Answer "is this already done?" against current `origin/main` and the issue's acceptance criteria, **never against an old branch**: a stale answer points toward doing *more* work, so nothing pushes back on it, and reviving such a branch can regress newer code. `git fetch origin` and branch from (or rebase onto) current base before the first edit — the auto-update bot only refreshes branches that already have a PR, so the window this covers is everything before the first push.
 - **Commit format:** `<type>(scope): <description> (#issue-number)`. Never `--no-verify` — a PostToolUse hook auto-formats `.py`.
 - **Never hardcode.** Config via SSOT, TTLs via env-var-backed module constants, no IPs or ports in code.
 - **The codebase is the source of truth** — never edit `/opt/autobot/` or `/var/log/autobot/`.
@@ -41,7 +47,8 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 - **Security reviews are findings-first** — one-line verdict, then a severity/`file:line`/issue/fix table, within 3 tool calls. Verify *after*; never explore before the verdict lands. Skill: `secreview`.
 - **Nothing internal in outward artifacts** — no IPs, hostnames, secrets, tokens, or internal filesystem paths in issues, PRs, comments or logs. Redact to a generic role or node reference.
 - **Dispatch gates on review capacity, not PR count.** There is no open-PR limit; every PR still gets a `code-reviewer` pass before merge. PRs accumulating means review is the bottleneck — do that, don't defer new work.
-- **One PR may close several similar-scope issues** (`Closes #A, #B`) — but each must be *fully* delivered; partial delivery never closes. Independent or different-risk changes get separate PRs.
+- **Batch same-scope issues into one PR by default** (`Closes #A, #B`) — one CI suite per batch, not per issue. Each issue must still be *fully* delivered; partial delivery never closes. Independent or different-risk changes get separate PRs, as does anything too large for one honest review pass.
+- **A pushed PR ends the tick — never wait on its CI.** Pushing is the sweep point: check every *other* in-flight PR once (approval gate, CI verdict, behind-ness), act on what is green or red, then start the next non-colliding scoped issue immediately. The PR just pushed is re-checked at the next sweep, never polled.
 
 ## Essential Patterns
 
@@ -52,5 +59,6 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 | Logging | `from autobot_shared.logging_manager import get_logger` → `get_logger(__name__)` / `createLogger('Name')` — no `print()` or `console.*`; stdlib `logging` only where a config-mocking test harness forbids it (see `autobot_shared/user_management/password_epoch.py`) |
 | Encoding | Always `encoding='utf-8'` explicitly |
 | Cache TTL | Never hard-code — module-level constant from an env var (see `chat_history/cache.py`) |
+| Store authority | Persisting a concept? `from autobot_shared.store_authority import system_of_record` — one store is durable, every other copy is a rebuildable projection |
 | LEDGER/EXECUTOR | Coordination tools complete instantly — do NOT wait; continue immediately with execution tools |
 | Copyright | `mrveiss` is sole owner and author |

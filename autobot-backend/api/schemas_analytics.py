@@ -915,20 +915,8 @@ class AnalyticsDetailedHealthResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-class AnalyticsPerformanceMetricsResponse(BaseModel):
-    """Response for GET /analytics/performance/metrics — opaque collector result."""
-
-    model_config = {"extra": "allow"}
-
-
 class AnalyticsCommunicationPatternsResponse(BaseModel):
     """Response for GET /analytics/communication/patterns — opaque controller result."""
-
-    model_config = {"extra": "allow"}
-
-
-class AnalyticsUsageStatisticsResponse(BaseModel):
-    """Response for GET /analytics/usage/statistics — opaque controller result."""
 
     model_config = {"extra": "allow"}
 

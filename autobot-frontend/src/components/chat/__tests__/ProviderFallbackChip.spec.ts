@@ -31,7 +31,11 @@ vi.mock('@/components/ui/Icon.vue', () => ({
   default: { name: 'Icon', template: '<i class="icon-stub" />', props: ['name'] },
 }))
 
-vi.mock('@autobot/ui', () => ({
+// #14908 moved `log`/`createLogger` into @autobot/ui, so a full-replacement
+// mock of this module now hides them from every importer of debugUtils.
+// importOriginal keeps the real surface and stubs only the component.
+vi.mock('@autobot/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   BaseBadge: {
     name: 'BaseBadge',
     props: ['variant', 'size', 'title'],

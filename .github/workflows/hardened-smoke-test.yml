@@ -7,10 +7,10 @@ name: Hardened Smoke Test
 on:
   push:
     branches:
-      - Dev_new_gui
+      - main
   pull_request:
     branches:
-      - Dev_new_gui
+      - main
     # #13388: SAFE — this workflow publishes `hardened-smoke-test`, which is NOT
     # one of the ten required contexts (the required `smoke-test` comes from
     # docker-smoke-test.yml, which is deliberately left unfiltered).
@@ -30,6 +30,11 @@ on:
       - '.github/ISSUE_TEMPLATE/**'
   schedule:
     - cron: '0 11 * * 0'  # Every Sunday at 11 AM UTC (offset from regular smoke test)
+
+# Least privilege (#15331). Builds images, runs the compose stack and uploads
+# an artifact — no write scope needed. Flagged by CodeQL actions/missing-workflow-permissions.
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

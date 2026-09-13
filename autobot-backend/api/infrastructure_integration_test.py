@@ -29,17 +29,29 @@ pytestmark = pytest.mark.integration
 BASE_URL = f"{ServiceURLs.BACKEND_API}/api/iac"
 
 
-# ``test_celery_worker_status`` reads ``logs/celery-worker.log`` off disk and
-# issues no HTTP at all, so a backend that is down does not stop it — it was
-# passing before #14930 and must keep passing. A module-wide guard would have
-# traded a red result for lost coverage, which is the wrong trade and was caught
-# by comparing the skip count (7) against the number of tests that actually
-# failed on a refused connection (6).
-_NEEDS_NO_BACKEND = ("test_celery_worker_status",)
+# #13286: there is deliberately NO exemption list here any more.
+#
+# `test_celery_worker_status` used to be exempt, on the reasoning that it reads
+# `logs/celery-worker.log` off disk and issues no HTTP, so a backend being down
+# should not stop it. Running the marker suite on a GitHub-hosted runner falsified
+# that: the check is not really about HTTP, it is about whether THIS HOST RUNS
+# AUTOBOT SERVICES, and on a runner it does not. It reported the absent worker as
+# a defect.
+#
+# Two file-based discriminators were tried and both are unsound. "Does `logs/`
+# exist" fails because the workflows run `mkdir -p logs` before pytest. "Does
+# `logs/` hold a service log" fails because `logs/backend.log` is created when the
+# logging manager is imported, not when a service runs — measured on run
+# 32837489748, where that file was the only thing in the directory.
+#
+# A listening backend is the honest probe for "this host runs AutoBot services",
+# so every check in this module now shares one precondition and there is no
+# allowlist left to rot. An empty exemption tuple would have been worse than
+# none: it exempts nothing while still looking like a considered decision.
 
 
 @pytest.fixture(autouse=True)
-def _require_live_backend(request) -> None:
+def _require_live_backend() -> None:
     """Skip when no backend is listening, instead of failing on a refused socket (#14930).
 
     The six checks that dial ``BASE_URL`` over real HTTP reported
@@ -49,15 +61,6 @@ def _require_live_backend(request) -> None:
     is the honest report; they still run, and still fail for real, wherever a
     backend is actually up.
     """
-    stranded = [name for name in _NEEDS_NO_BACKEND if name not in globals()]
-    assert not stranded, (
-        f"_NEEDS_NO_BACKEND names {stranded}, which no longer exist in this module. "
-        f"A rename stranded the exemption: it now exempts nothing, silently."
-    )
-
-    if request.node.name in _NEEDS_NO_BACKEND:
-        return
-
     require_live_endpoint(ServiceURLs.BACKEND_API, what="the AutoBot backend API")
 
 
@@ -179,11 +182,13 @@ def test_celery_worker_status():
     could make it fail — it reported pass unconditionally, in a marker set that
     until #14930 ran in no gating workflow at all.
 
-    The only thing that legitimately excuses this check is a checkout that is not
-    a deployment, and that is decided by the ``logs/`` directory rather than by
-    the log file: if ``logs/`` is absent nothing on this host ever ran, so there
-    is nothing to report on. If ``logs/`` exists and the worker's log does not,
-    the worker never started, and that is a failure rather than a non-result.
+    The only thing that legitimately excuses this check is a host that does not
+    run AutoBot services, and #13286 established that a listening backend — not
+    the presence of a `logs/` directory, and not the presence of a log file in it
+    — is what decides that. See the comment above the module fixture for the two
+    file-based discriminators that were tried and why both were unsound. Once the
+    backend is up, an absent worker log means the worker never started, and that
+    is a failure rather than a non-result.
 
     ``main()`` calls this bare and discards whatever it returns, so unlike the
     npu_code_search drivers (#14920) there is no truthiness contract to keep and
@@ -192,15 +197,17 @@ def test_celery_worker_status():
     log_directory = project_root() / "logs"
     log_file = log_directory / "celery-worker.log"
 
+    # The module-wide fixture has already established that a backend is listening,
+    # so this host really does run AutoBot services (#13286). A missing `logs/`
+    # after that is a genuine anomaly rather than "not a deployment".
     if not log_directory.is_dir():
         pytest.skip(
-            f"{log_directory} does not exist — this checkout is not a deployment, "
-            "so no service on this host has written a log to read"
+            f"{log_directory} does not exist on a host whose backend is up — nothing here " "has written a log to read"
         )
 
     assert log_file.is_file(), (
-        f"{log_file} is absent while {log_directory} exists — this host runs services "
-        "but the Celery worker has never written a log, so it never started"
+        f"{log_file} is absent while {log_directory} exists and this host's backend is up — "
+        "the Celery worker has never written a log, so it never started"
     )
 
     logs = log_file.read_text(encoding="utf-8", errors="replace")

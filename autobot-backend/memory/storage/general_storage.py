@@ -26,6 +26,16 @@ logger = get_logger(__name__)
 # a reserved id rather than deleted (they stay queryable by asking for this id
 # explicitly) and rather than attributed to a real user (which would leak them
 # into the first caller's results). Not a valid owner for new writes.
+#
+# Parked-bucket policy (#13719): the bucket is enumerable (count_unscoped) and
+# has one resolution path — reassigning rows to a real owner
+# (reassign_unscoped_entries, dry-run by default). It has no purge path and no
+# expiry: cleanup_old's exemption for this owner (below) is currently
+# unbounded, deliberately, because a silent/automatic deletion of rows whose
+# owner is unknown is exactly the data loss the migration exists to prevent.
+# Bounding that exemption with a separate retention window was considered and
+# rejected for now — it is listed as option 3 in #13719 and explicitly needs
+# an owner decision, not a default. Revisit there before adding one.
 LEGACY_UNSCOPED_OWNER = "__unscoped__"
 
 # Owner for system-initiated work that has no human requester — scheduled scans,
@@ -310,6 +320,75 @@ class GeneralStorage:
         except aiosqlite.Error as e:
             logger.error("Failed to delete entry for owner: %s", e)
             raise RuntimeError(f"Failed to delete entry for owner: {e}")
+
+    async def count_unscoped(self) -> Dict[str, Any]:
+        """Report the parked bucket: how many rows, and how old (#13719).
+
+        AC1 of the issue — an operator could not previously see the volume at
+        all, so "how much is parked" was unanswerable without a manual query.
+        """
+        try:
+            async with self._get_connection() as conn:
+                cursor = await conn.execute(
+                    "SELECT COUNT(*), MIN(timestamp), MAX(timestamp) FROM memory_entries WHERE user_id = ?",
+                    (LEGACY_UNSCOPED_OWNER,),
+                )
+                row = await cursor.fetchone()
+        except aiosqlite.Error as e:
+            logger.error("Failed to count parked memory entries: %s", e)
+            raise RuntimeError(f"Failed to count parked memory entries: {e}")
+
+        count = row[0] if row else 0
+        return {
+            "count": count,
+            "oldest": row[1] if row and count else None,
+            "newest": row[2] if row and count else None,
+        }
+
+    async def reassign_unscoped_entries(self, new_owner_id: str, *, dry_run: bool = True) -> Dict[str, Any]:
+        """Attribute parked rows to *new_owner_id* (#13719, AC2).
+
+        Defaults to a dry run: this rewrites ownership of data whose owner was
+        never established, and getting it wrong attributes one person's memory
+        to another. Callers must opt into ``dry_run=False`` to actually move
+        rows.
+
+        ``new_owner_id`` goes through :func:`_require_user_id` with
+        ``for_write=True``, so LEGACY_UNSCOPED_OWNER is rejected as a target —
+        it cannot be reassigned to itself. SYSTEM_OWNER is rejected here too,
+        separately: ``for_write`` alone does not cover it, because SYSTEM_OWNER
+        is a legitimate write target for :meth:`store` and rejecting it there
+        would break that path. But it is not a legitimate *reassignment*
+        target — cleanup_old's retention exemption is keyed to
+        LEGACY_UNSCOPED_OWNER only, so moving parked rows to SYSTEM_OWNER would
+        silently strip that exemption and let the next retention sweep delete
+        them once they age out, with no explicit purge decision ever made.
+        """
+        owner = _require_user_id(new_owner_id, for_write=True)
+        if owner == SYSTEM_OWNER:
+            raise ValueError(
+                f"{SYSTEM_OWNER!r} is not a valid reassignment target: it carries no retention "
+                "exemption, so parked rows moved there would be silently deleted by the next "
+                "retention sweep"
+            )
+        report = await self.count_unscoped()
+        if dry_run:
+            return {**report, "reassigned": 0, "dry_run": True, "new_owner_id": owner}
+
+        try:
+            async with self._get_connection() as conn:
+                cursor = await conn.execute(
+                    "UPDATE memory_entries SET user_id = ? WHERE user_id = ?",
+                    (owner, LEGACY_UNSCOPED_OWNER),
+                )
+                await conn.commit()
+                moved = cursor.rowcount
+        except aiosqlite.Error as e:
+            logger.error("Failed to reassign parked memory entries: %s", e)
+            raise RuntimeError(f"Failed to reassign parked memory entries: {e}")
+
+        logger.info("#13719: reassigned %d parked memory entries to %s", moved, owner)
+        return {**report, "reassigned": moved, "dry_run": False, "new_owner_id": owner}
 
     async def cleanup_old(self, retention_days: int) -> int:
         """Remove entries older than retention period, across all owners.

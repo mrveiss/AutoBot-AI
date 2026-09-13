@@ -147,3 +147,25 @@ def test_the_health_probe_distinguishes_the_fallback(monkeypatch, source, expect
 
     assert deployed is expected_ok
     assert data["error_catalog_source"] == source
+
+
+def test_the_real_loader_path_finds_the_deployed_catalog():
+    """No monkeypatching at all: the loader as every service calls it (#12969).
+
+    The tests above prove the resolver copes when ``PATH`` is blind. That is the
+    reproduction, not the guarantee — a resolver whose every candidate was wrong
+    could still satisfy them by reporting its fallback honestly. This drives
+    ``load_catalog()`` exactly as the backend and celery do, with the real SSOT
+    constants in place, and asserts it lands on the YAML rather than the 42
+    built-ins that happen to agree with it.
+    """
+    catalog = ErrorCatalog()
+
+    assert catalog.load_catalog() is True, (
+        "the deployed catalog was not loaded through the unmodified path — this is "
+        "the live symptom: 'Error catalog YAML not found' about a file that exists"
+    )
+    assert catalog.source == SOURCE_YAML
+    assert catalog.catalog_path.name == CATALOG_FILENAME
+    assert catalog.catalog_path.exists()
+    assert catalog.get_catalog_stats()["version"], "loaded the built-ins, which carry no version"

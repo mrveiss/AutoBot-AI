@@ -19,6 +19,17 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from config.manager import get_config_manager as _get_config_manager
+from services.secrets_audit_store import (
+    ACTION_ACCESSED,
+    REASON_EXPIRED,
+    REASON_NOT_FOUND,
+    AuditLookup,
+    ensure_audit_schema,
+    fetch_audit_log,
+    record_action,
+    record_failed_access,
+    record_standalone_failed_access,
+)
 from type_defs.common import Metadata
 from utils.secrets_store_migration import (
     ALL_SECRETS_STORE_FILES,
@@ -116,7 +127,7 @@ class SecretsService:
 
         self._create_secrets_table(cursor)
         self._create_secrets_indexes(cursor)
-        self._create_audit_table(cursor)
+        ensure_audit_schema(cursor)
 
         conn.commit()
         conn.close()
@@ -149,20 +160,6 @@ class SecretsService:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_secrets_scope ON secrets(scope)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_secrets_chat_id ON secrets(chat_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_secrets_name ON secrets(name)")
-
-    def _create_audit_table(self, cursor: sqlite3.Cursor) -> None:
-        """Create the audit log table if it doesn't exist"""
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS secrets_audit (
-                id TEXT PRIMARY KEY,
-                secret_id TEXT NOT NULL,
-                action TEXT NOT NULL,
-                performed_by TEXT,
-                performed_at TEXT NOT NULL,
-                details TEXT,
-                FOREIGN KEY (secret_id) REFERENCES secrets(id)
-            )
-        """)
 
     def _encrypt_value(self, value: str) -> str:
         """Encrypt a secret value"""
@@ -227,7 +224,7 @@ class SecretsService:
         """,
             (now_utc().isoformat(), secret_id),
         )
-        self._audit_action(cursor, secret_id, "accessed", accessed_by)
+        self._audit_action(cursor, secret_id, ACTION_ACCESSED, accessed_by)
 
     def _build_secret_result(
         self,
@@ -355,6 +352,8 @@ class SecretsService:
         if query is None:
             return None
 
+        lookup = AuditLookup(name=name, secret_id=secret_id, scope=scope, chat_id=chat_id, performed_by=accessed_by)
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
@@ -363,12 +362,14 @@ class SecretsService:
             row = cursor.fetchone()
 
             if not row:
+                record_failed_access(cursor, lookup, REASON_NOT_FOUND)
                 return None
 
             secret = self._row_to_secret_dict(row, include_encrypted=True)
 
             # Check expiration
             if self._is_secret_expired(secret["expires_at"]):
+                record_failed_access(cursor, lookup, REASON_EXPIRED, secret["id"])
                 return None
 
             # Handle value decryption and access tracking
@@ -382,6 +383,29 @@ class SecretsService:
             return secret
         finally:
             conn.close()
+
+    def record_access_failure(
+        self,
+        reason: str,
+        name: str | None = None,
+        scope: str = "general",
+        chat_id: str | None = None,
+        accessed_by: str | None = None,
+        secret_id: str | None = None,
+    ) -> None:
+        """Record a failed access that the *caller* rejected, not the lookup.
+
+        A row can be found, unexpired, and still unusable -- the wrong
+        ``secret_type``, a value that will not parse, or a lookup that raised.
+        Those verdicts are reached after ``get_secret()`` has returned, so only
+        the caller can report them (#15023 AC3).
+        """
+        record_standalone_failed_access(
+            self.db_path,
+            AuditLookup(name=name, scope=scope, chat_id=chat_id, performed_by=accessed_by),
+            reason,
+            secret_id,
+        )
 
     def _build_list_secrets_query(
         self,
@@ -627,52 +651,11 @@ class SecretsService:
         details: Dict | None = None,
     ) -> None:
         """Add an audit log entry"""
-        cursor.execute(
-            """
-            INSERT INTO secrets_audit (id, secret_id, action, performed_by, performed_at, details)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """,
-            (
-                str(uuid4()),
-                secret_id,
-                action,
-                performed_by,
-                now_utc().isoformat(),
-                json.dumps(details) if details else None,
-            ),
-        )
+        record_action(cursor, secret_id, action, performed_by, details)
 
     def get_audit_log(self, secret_id: str | None = None, limit: int = 100) -> List[Metadata]:
         """Get audit log entries"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        if secret_id:
-            cursor.execute(
-                "SELECT * FROM secrets_audit WHERE secret_id = ? ORDER BY performed_at DESC LIMIT ?",
-                (secret_id, limit),
-            )
-        else:
-            cursor.execute(
-                "SELECT * FROM secrets_audit ORDER BY performed_at DESC LIMIT ?",
-                (limit,),
-            )
-
-        audit_entries = []
-        for row in cursor.fetchall():
-            audit_entries.append(
-                {
-                    "id": row[0],
-                    "secret_id": row[1],
-                    "action": row[2],
-                    "performed_by": row[3],
-                    "performed_at": row[4],
-                    "details": json.loads(row[5]) if row[5] else {},
-                }
-            )
-
-        conn.close()
-        return audit_entries
+        return fetch_audit_log(self.db_path, secret_id, limit)
 
 
 # Singleton instance getter (thread-safe)

@@ -1,25 +1,28 @@
-# SLM Frontend Check — type-check + build + lint for autobot-slm-frontend (#10493)
+# SLM Frontend Check — type-check + lint + build + unit tests for autobot-slm-frontend
+# (#10493, #15667)
 #
 # The /slm operator console (autobot-slm-frontend) had NO CI gate, so broken
 # TypeScript/build changes could merge undetected and cross-app migrations
 # (#10488 Workstream A) had no way to be verified. This adds that gate.
 #
-# Mirrors frontend-test.yml's "changes filter + self-skip" pattern so the check
-# always reports a conclusion (a path-filtered required check that never fires
+# Mirrors the "changes filter + self-skip" pattern so the check always reports
+# a conclusion. The two halves now live in different files: the changes filter
+# in frontend-test.yml, the self-skip job in frontend-required-context.yml
+# after the #13405 split (a path-filtered required check that never fires
 # would deadlock the PR on "Expected — Waiting for status").
 
 name: SLM Frontend Check
 
 on:
   push:
-    branches: [main, develop, 'Dev_*']
+    branches: [release, main, develop]
     paths:
       - 'autobot-slm-frontend/**'
       - '.github/workflows/slm-frontend-check.yml'
   pull_request:
-    branches: [main, develop, 'Dev_*']
+    branches: [release, main, develop]
     # #13388: SAFE — "SLM Frontend Check" is NOT one of the ten required contexts
-    # on Dev_new_gui, so this workflow may skip its run entirely. (The header note
+    # on main, so this workflow may skip its run entirely. (The header note
     # above about a path-filtered required check deadlocking a pull request is why
     # the job-level self-skip exists; it applies to required contexts, and this is
     # not one.) Mirrors the `slm_frontend` filter in `changes` below.
@@ -92,3 +95,13 @@ jobs:
         if: needs.changes.outputs.slm_frontend == 'true'
         # build:slm sets VITE_API_URL=/slm (the co-located base the vite config requires).
         run: npm run build:slm
+
+      # #15667: this app's 55 vitest files — an entire suite, including the
+      # #15640 regression guards — were invoked by no workflow at all. Every
+      # `vitest` / `test:unit` reference in the other workflows belongs to
+      # autobot-frontend, a different app. Gated on the same changes filter as
+      # its sibling steps, and deliberately WITHOUT continue-on-error: a gate
+      # that cannot turn the check red is not a gate.
+      - name: Unit tests (vitest)
+        if: needs.changes.outputs.slm_frontend == 'true'
+        run: npm run test:unit

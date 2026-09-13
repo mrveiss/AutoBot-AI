@@ -27,8 +27,9 @@ import ast
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _BACKEND = _REPO_ROOT / "autobot-backend"
 _SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", ".claude", "venv", ".venv"}
 
@@ -36,9 +37,7 @@ _SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", ".claude", "
 # Kept tiny on purpose: an entry here is a live bug, not an accepted exception.
 # The test below asserts every entry is still broken, so a fixed import forces
 # its exemption to be removed rather than sitting here exempting nothing.
-_KNOWN_BROKEN = {
-    ("chat_history/context_overflow.py", "llm_shared.gateway"): "#14840",
-}
+_KNOWN_BROKEN: dict[tuple[str, str], str] = {}
 
 
 def _first_party_roots() -> set[str]:
@@ -70,7 +69,11 @@ def _optional_import_nodes(tree: ast.AST) -> set[int]:
         # declaration that the import is optional — and in this repo it is the
         # single most common wrapper around a first-party import, including all
         # three call sites of the very function #14839 fixed
-        # (`agent_org_service.py:263`, `:331`, `portability.py:716`). Treating it
+        # (both sites in `agent_org_service.py`, and `llc/services/portability.py`
+        # -- not `llc/api/portability.py`, which is 123 lines and never held it).
+        # Symbols and files, not line numbers: the three this used to cite had
+        # drifted 37, 54 and 73 lines while the argument stayed correct (#15877).
+        # Treating it
         # as an exemption would have made this guard blind at exactly the places
         # its own docstring names. It caught the original bug only because that
         # import happened to sit in a function with no surrounding try.
@@ -136,6 +139,18 @@ def test_every_first_party_import_names_a_real_module() -> None:
         "time, and a caller with a broad `except` will swallow it — the feature is "
         "then dead with no signal (#14839):\n  " + "\n  ".join(offenders)
     )
+
+
+def test_the_resolver_can_still_say_no() -> None:
+    """Positive control, now that ``_KNOWN_BROKEN`` is empty (#14840).
+
+    While the allowlist held a live defect, its parametrized test proved the
+    resolver still reported one. With it empty, nothing did, and a resolver that
+    returned True for everything would leave every test here green.
+    """
+    assert _resolves("chat_history.context_overflow"), "a real first-party module must resolve"
+    assert not _resolves("chat_history.autobot_module_that_does_not_exist_14840")
+    assert not _resolves("llm_shared.gateway"), "the module #14840 imported never existed"
 
 
 @pytest.mark.parametrize("entry,issue", sorted(_KNOWN_BROKEN.items()))

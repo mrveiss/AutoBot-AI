@@ -19,6 +19,18 @@ Usage:
     # String comparison still works
     if status.value == "completed":
         ...
+
+Plain ``Enum`` vs ``(str, Enum)`` (#13597 scope item 3): default to plain
+``Enum``. Reach for ``(str, Enum)`` only when a member must already behave
+like ``str`` at a boundary that does not go through an explicit ``.value``
+read — SQLAlchemy column coercion (``AgentLifecycleStatus``), a pre-existing
+``== "literal"`` comparison or JSON encoder that predates the enum
+(``ConnectionStatus``), or a persisted/wire value compared directly
+(``SecretType``). Everywhere else — Prometheus labels, dataclass defaults,
+dict serialization via ``.value`` (``Severity``, ``TaskStatus``,
+``Priority``, ``LLMProvider``, ``OperationOutcome``, ``HealthStatus``,
+``AgentStatus``) — plain ``Enum`` keeps identity comparison exact and forces
+callers to be explicit about when they want the string form.
 """
 
 from enum import Enum
@@ -100,6 +112,21 @@ class Severity(Enum):
     So this enum is the severity *vocabulary*. Numeric risk grading uses the
     narrower ``score_ladder()`` — see that method for why the distinction is
     load-bearing rather than cosmetic.
+
+    #14988 measured four more words in fields named ``severity`` and none of
+    them belongs here. Each is a different vocabulary, and the fix is to type
+    the field, never to widen this enum:
+
+    * ``forbidden`` — ``CommandRisk`` below already grades that; a command
+      permission is not an outcome grade.
+    * ``none`` / ``moderate`` — ``autobot_shared.delta_engine`` classifies a
+      metric delta, and ``none`` means *no finding at all*, which no severity
+      rung can express.
+    * ``missing`` — ``autobot_shared.env_drift_detector`` records a drift
+      *kind*, not how bad the drift is.
+
+    ``repo_tests/severity_literal_shape_guard_test.py`` fails if any of the
+    four is added here.
     """
 
     UNKNOWN = "unknown"

@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Config Registry Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -80,7 +82,7 @@ USAGE:
     from src.config.registry import ConfigRegistry
 
     # Get single value with fallback
-    redis_host = ConfigRegistry.get("redis.host", "172.16.168.23")
+    redis_host = ConfigRegistry.get("redis.host", "<database-ip>")
 
     # Get section as dict
     redis_config = ConfigRegistry.get_section("redis")
@@ -242,7 +244,7 @@ git commit -m "feat(config): add ConfigRegistry core with basic get (#751)"
 
         with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
             with patch.dict(os.environ, {"AUTOBOT_REDIS_HOST": "10.0.0.99"}, clear=True):
-                result = ConfigRegistry.get("redis.host", default="172.16.168.23")
+                result = ConfigRegistry.get("redis.host", default="<database-ip>")
                 assert result == "10.0.0.99"
 
     def test_env_var_key_conversion(self):
@@ -383,7 +385,7 @@ class TestConfigRegistrySections:
 
         # Pre-populate cache with section values
         ConfigRegistry._cache = {
-            "redis.host": "172.16.168.23",
+            "redis.host": "<database-ip>",
             "redis.port": "6379",
             "redis.database": "0",
             "backend.port": "8001",
@@ -394,7 +396,7 @@ class TestConfigRegistrySections:
 
         result = ConfigRegistry.get_section("redis")
         assert result == {
-            "host": "172.16.168.23",
+            "host": "<database-ip>",
             "port": "6379",
             "database": "0",
         }
@@ -516,7 +518,7 @@ class TestConfigRegistryDefaults:
             with patch.dict(os.environ, {}, clear=True):
                 # Should get default from registry_defaults
                 result = ConfigRegistry.get("redis.host")
-                assert result == "172.16.168.23"
+                assert result == "<database-ip>"
 ```
 
 ### Step 2: Run test to verify it fails
@@ -545,25 +547,25 @@ Issue: #751 - Consolidate Common Utilities
 # VM IP addresses (6-VM distributed architecture)
 REGISTRY_DEFAULTS = {
     # VM IPs
-    "vm.main": "172.16.168.20",
-    "vm.frontend": "172.16.168.21",
-    "vm.npu": "172.16.168.22",
-    "vm.redis": "172.16.168.23",
-    "vm.aistack": "172.16.168.24",
-    "vm.browser": "172.16.168.25",
+    "vm.main": "<backend-ip>",
+    "vm.frontend": "<frontend-ip>",
+    "vm.npu": "<npu-ip>",
+    "vm.redis": "<database-ip>",
+    "vm.aistack": "<aiml-ip>",
+    "vm.browser": "<browser-ip>",
     "vm.ollama": "127.0.0.1",
     # Convenience aliases
-    "redis.host": "172.16.168.23",
+    "redis.host": "<database-ip>",
     "redis.port": "6379",
-    "backend.host": "172.16.168.20",
+    "backend.host": "<backend-ip>",
     "backend.port": "8001",
-    "frontend.host": "172.16.168.21",
+    "frontend.host": "<frontend-ip>",
     "frontend.port": "5173",
-    "npu.host": "172.16.168.22",
+    "npu.host": "<npu-ip>",
     "npu.port": "8081",
-    "aistack.host": "172.16.168.24",
+    "aistack.host": "<aiml-ip>",
     "aistack.port": "8080",
-    "browser.host": "172.16.168.25",
+    "browser.host": "<browser-ip>",
     "browser.port": "3000",
     # LLM defaults
     "llm.default_model": "qwen3.5:9b",
@@ -664,7 +666,7 @@ Key changes:
 - Remove `def _get_ssot_config()` function (~20 lines)
 - Remove `_ssot = _get_ssot_config()` line
 - Add `from src.config.registry import ConfigRegistry`
-- Replace `_ssot.redis.host if _ssot else "172.16.168.23"` with `ConfigRegistry.get("redis.host", "172.16.168.23")`
+- Replace `_ssot.redis.host if _ssot else "<database-ip>"` with `ConfigRegistry.get("redis.host", "<database-ip>")`
 
 ### Step 3: Run existing tests to verify no regression
 
@@ -979,7 +981,7 @@ For simple config access without full SSOT initialization:
 ```python
 from src.config.registry import ConfigRegistry
 
-redis_host = ConfigRegistry.get("redis.host", "172.16.168.23")
+redis_host = ConfigRegistry.get("redis.host", "<database-ip>")
 ```
 ```
 

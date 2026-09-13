@@ -88,7 +88,13 @@ class TestingCoverageAnalyzer:
 
     def __init__(self, redis_client=None):
         self.redis_client = redis_client  # Lazy init if None (#2984)
-        self.config = config
+        # #15914: `self.config = config` stood here. The class carried
+        # `from src.config import config` when it was written; #926 (2026-02-18)
+        # dropped the import and left the assignment, so every
+        # TestingCoverageAnalyzer() raised NameError from that day on.
+        # Removed rather than re-imported: nothing in the repo reads
+        # `.config` off this object, so restoring the import would
+        # reinstate dead weight. Same call as #6733 and #14634.
 
         # Caching keys
         self.COVERAGE_KEY = "testing_analysis:coverage"
@@ -138,7 +144,8 @@ class TestingCoverageAnalyzer:
         results = {
             "total_functions": len(all_functions),
             "total_tests": len(test_functions),
-            "coverage_gaps": len(coverage_gaps),
+            # #15908: was also "coverage_gaps", shadowed by the list below.
+            "coverage_gaps_count": len(coverage_gaps),
             "test_coverage_percentage": metrics.test_coverage_percentage,
             "analysis_time_seconds": analysis_time,
             "functions": [self._serialize_function(f) for f in all_functions],
@@ -845,7 +852,7 @@ async def main():
     print(f"Total functions: {results['total_functions']}")  # noqa: print
     print(f"Total tests: {results['total_tests']}")  # noqa: print
     print(f"Test coverage: {results['test_coverage_percentage']}%")  # noqa: print
-    print(f"Coverage gaps found: {results['coverage_gaps']}")  # noqa: print
+    print(f"Coverage gaps found: {results['coverage_gaps_count']}")  # noqa: print
     print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print detailed metrics

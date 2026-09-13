@@ -1,4 +1,7 @@
 # Performance Optimization and Risk Analysis
+
+> **Freshness:** superseded — 2026-08-30. Pre-implementation risk analysis; the subsystem has since shipped — see `autobot-backend/api/codebase_analytics/`. Risks below were not re-validated against the shipped implementation.
+
 **Version**: 1.0
 **Date**: 2025-10-25
 **System**: Code Vectorization and Semantic Analysis

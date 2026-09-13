@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # SLM User Management Migration Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -15,12 +17,12 @@
 ### Task 1.1: Install PostgreSQL on SLM Server
 
 **Files:**
-- System: Install PostgreSQL on 172.16.168.19
+- System: Install PostgreSQL on <slm-manager-ip>
 
 **Step 1: SSH into SLM server**
 
 ```bash
-ssh autobot@172.16.168.19
+ssh autobot@<slm-manager-ip>
 ```
 
 **Step 2: Install PostgreSQL**
@@ -72,12 +74,12 @@ Expected: PostgreSQL version info
 ### Task 1.2: Setup AutoBot Users Database on Redis VM
 
 **Files:**
-- System: Configure PostgreSQL on 172.16.168.23
+- System: Configure PostgreSQL on <database-ip>
 
 **Step 1: SSH into Redis VM**
 
 ```bash
-ssh autobot@172.16.168.23
+ssh autobot@<database-ip>
 ```
 
 **Step 2: Verify PostgreSQL is installed**
@@ -101,7 +103,7 @@ EOF
 
 ```bash
 sudo nano /etc/postgresql/14/main/pg_hba.conf
-# Add: host autobot_users autobot_user_admin 172.16.168.0/24 md5
+# Add: host autobot_users autobot_user_admin <network-subnet> md5
 sudo nano /etc/postgresql/14/main/postgresql.conf
 # Set: listen_addresses = '*'
 sudo systemctl restart postgresql
@@ -110,8 +112,8 @@ sudo systemctl restart postgresql
 **Step 5: Test remote connection from SLM**
 
 ```bash
-# From SLM server (172.16.168.19)
-psql -h 172.16.168.23 -U autobot_user_admin -d autobot_users -c "SELECT version();"
+# From SLM server (<slm-manager-ip>)
+psql -h <database-ip> -U autobot_user_admin -d autobot_users -c "SELECT version();"
 ```
 
 Expected: PostgreSQL version info
@@ -228,8 +230,8 @@ Create: `slm-server/user_management/config.py`
 Dual Database Configuration for SLM User Management
 
 Two PostgreSQL databases:
-1. slm_users (local on 172.16.168.19) - SLM admin users
-2. autobot_users (remote on 172.16.168.23) - AutoBot application users
+1. slm_users (local on <slm-manager-ip>) - SLM admin users
+2. autobot_users (remote on <database-ip>) - AutoBot application users
 """
 
 import os
@@ -277,7 +279,7 @@ def get_slm_db_config() -> DatabaseConfig:
 def get_autobot_db_config() -> DatabaseConfig:
     """Get AutoBot remote database configuration (on Redis VM)."""
     return DatabaseConfig(
-        host=os.getenv("AUTOBOT_POSTGRES_HOST", "172.16.168.23"),
+        host=os.getenv("AUTOBOT_POSTGRES_HOST", "<database-ip>"),
         port=int(os.getenv("AUTOBOT_POSTGRES_PORT", "5432")),
         database=os.getenv("AUTOBOT_POSTGRES_DB", "autobot_users"),
         user=os.getenv("AUTOBOT_POSTGRES_USER", "autobot_user_admin"),
@@ -773,7 +775,7 @@ Expected: All tables created in `autobot_users` database
 psql -h 127.0.0.1 -U slm_admin -d slm_users -c "\dt"
 
 # AutoBot database
-psql -h 172.16.168.23 -U autobot_user_admin -d autobot_users -c "\dt"
+psql -h <database-ip> -U autobot_user_admin -d autobot_users -c "\dt"
 ```
 
 Expected: List of all user management tables
@@ -806,7 +808,7 @@ Create: `slm-server/api/slm_users.py`
 """
 SLM Admin User Management API
 
-Manages users in the local SLM database (172.16.168.19:5432/slm_users).
+Manages users in the local SLM database (<slm-manager-ip>:5432/slm_users).
 These are fleet administrators who can access the SLM admin dashboard.
 """
 
@@ -993,7 +995,7 @@ Create: `slm-server/api/autobot_users.py`
 """
 AutoBot User Management API
 
-Manages users in the remote AutoBot database (172.16.168.23:5432/autobot_users).
+Manages users in the remote AutoBot database (<database-ip>:5432/autobot_users).
 These are application users who can access AutoBot chat and tools.
 """
 
@@ -1160,7 +1162,7 @@ def get_autobot_user_engine() -> AsyncEngine:
     """Get or create AutoBot user database engine."""
     global _engine
     if _engine is None:
-        host = os.getenv("AUTOBOT_POSTGRES_HOST", "172.16.168.23")
+        host = os.getenv("AUTOBOT_POSTGRES_HOST", "<database-ip>")
         port = int(os.getenv("AUTOBOT_POSTGRES_PORT", "5432"))
         database = os.getenv("AUTOBOT_POSTGRES_DB", "autobot_users")
         user = os.getenv("AUTOBOT_POSTGRES_USER", "autobot_user_admin")
@@ -1223,7 +1225,7 @@ cd /home/kali/Desktop/AutoBot
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8001
 
 # Test login endpoint
-curl -X POST https://172.16.168.20:8443/api/auth/login \
+curl -X POST https://<backend-ip>:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "testuser", "password": "testpass"}'
 ```
@@ -1295,7 +1297,7 @@ Change the API base from AutoBot to SLM:
 const API_BASE = '/autobot-api'
 
 // NEW
-const SLM_API_BASE = 'http://172.16.168.19:8000/api'
+const SLM_API_BASE = 'http://<slm-manager-ip>:8000/api'
 ```
 
 **Step 2: Add dual user management state**
@@ -1439,7 +1441,7 @@ onMounted(async () => {
 ./scripts/utilities/sync-to-vm.sh frontend slm-admin/src/ /home/autobot/AutoBot/slm-admin/src/
 
 # Open in browser
-# Navigate to: http://172.16.168.21:5173/settings/admin/users
+# Navigate to: http://<frontend-ip>:5173/settings/admin/users
 ```
 
 **Step 7: Commit**
@@ -1467,7 +1469,7 @@ Add PostgreSQL configuration for AutoBot users:
 
 ```bash
 # AutoBot User Database (on Redis VM)
-AUTOBOT_POSTGRES_HOST=172.16.168.23
+AUTOBOT_POSTGRES_HOST=<database-ip>
 AUTOBOT_POSTGRES_PORT=5432
 AUTOBOT_POSTGRES_DB=autobot_users
 AUTOBOT_POSTGRES_USER=autobot_user_admin
@@ -1489,7 +1491,7 @@ SLM_POSTGRES_USER=slm_admin
 SLM_POSTGRES_PASSWORD=<GENERATE_SECURE_PASSWORD>
 
 # AutoBot Remote Database (on Redis VM)
-AUTOBOT_POSTGRES_HOST=172.16.168.23
+AUTOBOT_POSTGRES_HOST=<database-ip>
 AUTOBOT_POSTGRES_PORT=5432
 AUTOBOT_POSTGRES_DB=autobot_users
 AUTOBOT_POSTGRES_USER=autobot_user_admin
@@ -1604,7 +1606,7 @@ Expected:
 psql -h 127.0.0.1 -U slm_admin -d slm_users -c "SELECT username, is_admin FROM users;"
 
 # AutoBot database
-psql -h 172.16.168.23 -U autobot_user_admin -d autobot_users -c "SELECT username, is_admin FROM users;"
+psql -h <database-ip> -U autobot_user_admin -d autobot_users -c "SELECT username, is_admin FROM users;"
 ```
 
 **Step 4: Commit**
@@ -1624,7 +1626,7 @@ git commit -m "feat(slm): Add admin user creation script (#576)"
 **Step 1: Test SLM admin login**
 
 ```bash
-curl -X POST http://172.16.168.19:8000/api/slm-auth/login \
+curl -X POST http://<slm-manager-ip>:8000/api/slm-auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "slm_admin", "password": "ChangeMe123!"}'
 ```
@@ -1634,7 +1636,7 @@ Expected: JWT token
 **Step 2: Test AutoBot user login**
 
 ```bash
-curl -X POST https://172.16.168.20:8443/api/auth/login \
+curl -X POST https://<backend-ip>:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "autobot_admin", "password": "ChangeMe123!"}'
 ```
@@ -1645,12 +1647,12 @@ Expected: JWT token
 
 ```bash
 # Get SLM admin token
-SLM_TOKEN=$(curl -s -X POST http://172.16.168.19:8000/api/slm-auth/login \
+SLM_TOKEN=$(curl -s -X POST http://<slm-manager-ip>:8000/api/slm-auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "slm_admin", "password": "ChangeMe123!"}' | jq -r '.access_token')
 
 # Create AutoBot user from SLM
-curl -X POST http://172.16.168.19:8000/api/autobot-users \
+curl -X POST http://<slm-manager-ip>:8000/api/autobot-users \
   -H "Authorization: Bearer $SLM_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1666,7 +1668,7 @@ Expected: Created user JSON
 **Step 4: Test AutoBot can authenticate new user**
 
 ```bash
-curl -X POST https://172.16.168.20:8443/api/auth/login \
+curl -X POST https://<backend-ip>:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "testuser", "password": "TestPass123!"}'
 ```
@@ -1675,7 +1677,7 @@ Expected: JWT token (proves AutoBot reads from same database)
 
 **Step 5: Test SLM admin UI**
 
-1. Open browser: http://172.16.168.21:5173
+1. Open browser: http://<frontend-ip>:5173
 2. Login as SLM admin
 3. Navigate to Settings → User Management
 4. Verify two tabs: "SLM Administrators" and "AutoBot Users"
@@ -1720,13 +1722,13 @@ Add section on PostgreSQL databases:
 AutoBot uses two PostgreSQL databases for user management:
 
 ### 1. SLM Users Database
-- **Location:** SLM Server (172.16.168.19:5432)
+- **Location:** SLM Server (<slm-manager-ip>:5432)
 - **Database:** `slm_users`
 - **Purpose:** Fleet administrator authentication
 - **Managed by:** SLM server
 
 ### 2. AutoBot Users Database
-- **Location:** Redis VM (172.16.168.23:5432)
+- **Location:** Redis VM (<database-ip>:5432)
 - **Database:** `autobot_users`
 - **Purpose:** Application user authentication
 - **Managed by:** SLM server (remotely)
@@ -1737,7 +1739,7 @@ AutoBot uses two PostgreSQL databases for user management:
 Add to `.env`:
 
 ```
-AUTOBOT_POSTGRES_HOST=172.16.168.23
+AUTOBOT_POSTGRES_HOST=<database-ip>
 AUTOBOT_POSTGRES_PORT=5432
 AUTOBOT_POSTGRES_DB=autobot_users
 AUTOBOT_POSTGRES_USER=autobot_user_admin
@@ -1752,7 +1754,7 @@ SLM_POSTGRES_DB=slm_users
 SLM_POSTGRES_USER=slm_admin
 SLM_POSTGRES_PASSWORD=<password>
 
-AUTOBOT_POSTGRES_HOST=172.16.168.23
+AUTOBOT_POSTGRES_HOST=<database-ip>
 AUTOBOT_POSTGRES_DB=autobot_users
 AUTOBOT_POSTGRES_USER=autobot_user_admin
 AUTOBOT_POSTGRES_PASSWORD=<password>
@@ -1881,8 +1883,8 @@ git push
 
 ## Success Criteria Checklist
 
-- [ ] SLM PostgreSQL database created on 172.16.168.19:5432
-- [ ] AutoBot PostgreSQL database created on 172.16.168.23:5432
+- [ ] SLM PostgreSQL database created on <slm-manager-ip>:5432
+- [ ] AutoBot PostgreSQL database created on <database-ip>:5432
 - [ ] All user management code migrated to `slm-server/user_management/`
 - [ ] Dual database configuration working (two engines)
 - [ ] Alembic migrations applied to both databases

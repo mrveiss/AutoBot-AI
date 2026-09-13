@@ -35,14 +35,14 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 # The two packages whose minors must agree, and the manifest that pins them.
 _OXLINT = "oxlint"
 _PLUGIN = "eslint-plugin-oxlint"
-_MANIFEST = Path(__file__).resolve().parents[1] / "autobot-frontend" / "package.json"
+_MANIFEST = repo_root() / "autobot-frontend" / "package.json"
 
 # `~1.79.0`, `^1.79.0`, `1.79.0`, `>=1.79.0` — capture major and minor only.
 _SPEC = re.compile(r"^\D*(\d+)\.(\d+)\.")

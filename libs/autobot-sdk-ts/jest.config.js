@@ -21,4 +21,7 @@ export default {
     ],
   },
   testMatch: ["**/tests/**/*.test.ts"],
+  // tests/live/ needs a REACHABLE backend, so it is not part of the gated
+  // `npm test`. `npm run test:live` clears this override to run it (#15698).
+  testPathIgnorePatterns: ["/node_modules/", "<rootDir>/tests/live/"],
 };

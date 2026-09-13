@@ -78,7 +78,7 @@ all:
       hosts:
         # ... existing nodes ...
         08-NewRole:                           # Choose a node ID (00-07 used)
-          ansible_host: 172.16.168.XX
+          ansible_host: <new-node-ip>
           ansible_user: autobot
           ansible_ssh_private_key_file: ~/.ssh/autobot_ed25519
           node_roles:
@@ -107,7 +107,7 @@ curl -sk -X POST https://<slm-manager-ip>/api/nodes \
   -d '{
     "node_id": "08-NewRole",
     "hostname": "new-vm-hostname",
-    "ip_address": "172.16.168.XX",
+    "ip_address": "<new-node-ip>",
     "role": "autobot-<role>",
     "os": "ubuntu-22.04"
   }'
@@ -155,13 +155,13 @@ This generates a CA-signed cert and reports it to SLM's `security/certificates` 
 curl -sk https://<slm-manager-ip>/api/nodes | jq '.[] | select(.node_id=="08-NewRole")'
 
 # Test role health endpoint
-curl -sk https://172.16.168.XX:<port>/health
+curl -sk https://<new-node-ip>:<port>/health
 
 # Test Ansible connectivity
 ansible 08-NewRole -i inventory/slm-nodes.yml -m ping
 
 # Check SLM agent is running
-ssh autobot@172.16.168.XX "systemctl status autobot-slm-agent"
+ssh autobot@<new-node-ip> "systemctl status autobot-slm-agent"
 ```
 
 ---

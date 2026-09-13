@@ -67,12 +67,12 @@ export function useCodeSource() {
    *
    * @param nodeId - The ID of the node to assign as code source
    * @param repoPath - The repository path on the node (default: /opt/autobot/code_source)
-   * @param branch - The git branch to track (default: Dev_new_gui)
+   * @param branch - The git branch to track (default: main)
    */
   async function assignCodeSource(
     nodeId: string,
     repoPath: string = '/opt/autobot/code_source',
-    branch: string = 'Dev_new_gui'
+    branch: string = 'main'
   ): Promise<CodeSource | null> {
     isLoading.value = true
     error.value = null

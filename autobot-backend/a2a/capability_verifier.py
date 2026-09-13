@@ -29,19 +29,17 @@ Results are cached for CAPABILITY_CACHE_TTL seconds to avoid hammering
 remote endpoints on every request.
 """
 
-import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
 # Cache TTL in seconds for remote capability checks.
-_CACHE_TTL = int(
-    os.environ.get("AUTOBOT_A2A_CAPABILITY_TTL", "300")
-)  # ssot-config-exempt: int-wrapping type conversion per GH#7743
+_CACHE_TTL = env_int("AUTOBOT_A2A_CAPABILITY_TTL", 300)
 
 
 @dataclass

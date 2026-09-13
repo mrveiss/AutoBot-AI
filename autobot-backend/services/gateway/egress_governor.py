@@ -82,12 +82,12 @@ it:
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict
 
 from autobot_shared.env_utils import truthy
 from autobot_shared.logging_manager import get_logger
 from services.audit_logger import get_audit_logger
+from services.gateway.types import GovernanceVerdict
 
 logger = get_logger(__name__)
 
@@ -108,29 +108,11 @@ EGRESS_REQUIRE_APPROVAL = _resolve_require_approval()
 Approver = Callable[..., Awaitable[bool]]
 
 
-@dataclass(frozen=True)
-class EgressVerdict:
-    """Result of running the egress governance stage on one outbound message.
-
-    ``reason`` and ``rule`` are carried on the verdict rather than logged
-    separately, so the audit trail is a by-product of the decision instead of a
-    second thing a caller has to remember to do.
-
-    ``reason`` is the audit-facing text — always the full detail. ``safe_reason``
-    is the caller-facing text; it defaults to ``reason`` and is only ever
-    overridden explicitly, by the one branch whose ``reason`` can carry raw
-    exception text (#14539). A caller building a denial response must read
-    ``safe_reason``, never ``reason``.
-    """
-
-    allowed: bool
-    reason: str = ""
-    rule: str = ""
-    safe_reason: str = ""
-
-    def __post_init__(self) -> None:
-        if not self.safe_reason:
-            object.__setattr__(self, "safe_reason", self.reason)
+# #14905: EgressVerdict was written by copying IngestVerdict's shape, then
+# grew rule/safe_reason that ingest never got — the fork that made #14905
+# collapse both onto services.gateway.types.GovernanceVerdict. Kept as a name
+# so callers and tests importing EgressVerdict from this module do not break.
+EgressVerdict = GovernanceVerdict
 
 
 class EgressGovernor:

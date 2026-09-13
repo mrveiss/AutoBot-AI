@@ -2,10 +2,14 @@ name: actionlint
 
 on:
   push:
-    branches: [main, Dev_new_gui]
+    branches: [release, main]
     paths: [".github/workflows/**"]
   pull_request:
     paths: [".github/workflows/**"]
+
+# Least privilege (#15331). Lints workflow files; no token writes.
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -41,10 +41,10 @@ from __future__ import annotations
 
 import asyncio
 import multiprocessing
-import os
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any, List, Tuple, Type
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -55,11 +55,11 @@ __all__ = ["run_directory_scan", "run_isolated", "shutdown_scan_pool"]
 # the GIL, not parallelism within a scan. More workers would multiply RSS (a scan
 # was measured growing the parent 1.58 GB -> 3.14 GB) for no latency win, since
 # analyze_directory is single-threaded.
-_MAX_WORKERS = max(1, int(os.getenv("AUTOBOT_CODE_ANALYSIS_POOL_WORKERS", "2")))
+_MAX_WORKERS = env_int_clamped("AUTOBOT_CODE_ANALYSIS_POOL_WORKERS", 2, min_v=1)
 
 # Recycle workers so a leaked reference inside a scan cannot accumulate across
 # requests. The scans are seconds long, so the respawn cost is noise.
-_MAX_TASKS_PER_CHILD = max(1, int(os.getenv("AUTOBOT_CODE_ANALYSIS_POOL_MAX_TASKS", "8")))
+_MAX_TASKS_PER_CHILD = env_int_clamped("AUTOBOT_CODE_ANALYSIS_POOL_MAX_TASKS", 8, min_v=1)
 
 _pool: ProcessPoolExecutor | None = None
 _pool_lock = asyncio.Lock()

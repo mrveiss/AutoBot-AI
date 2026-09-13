@@ -16,6 +16,14 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.paths import project_root
 from constants import ServiceURLs
+from langchain_redis_arm import (
+    INSTALL_HINT,
+    NOT_MEASURED,
+    ModernArmUnavailable,
+    load_redis_vector_store,
+    skipped_result,
+    status_label,
+)
 
 # Add project root to path
 sys.path.insert(0, str(project_root()))
@@ -260,8 +268,11 @@ class RedisVectorStoreAnalyzer:
         logger.info("\nTesting LangChain with modern approach...")
 
         try:
-            from langchain_redis import RedisVectorStore
+            RedisVectorStore = load_redis_vector_store()
+        except ModernArmUnavailable as exc:
+            return skipped_result(exc)
 
+        try:
             embeddings = _init_langchain_embeddings(
                 self.embedding_model,
                 self.ollama_base_url,
@@ -511,6 +522,24 @@ class RedisVectorStoreAnalyzer:
                     ],
                     "implementation": migration_analysis["langchain_migration"],
                 }
+            elif langchain_assessment == NOT_MEASURED:
+                # #14871: the modern arm did not run, so "neither library works"
+                # is a conclusion this run has no evidence for.
+                return {
+                    "approach": "INCONCLUSIVE_MODERN_ARM_NOT_MEASURED",
+                    "confidence": "NONE",
+                    "reasoning": [
+                        "LlamaIndex failed on valuable existing data",
+                        "The modern langchain-redis arm was NOT measured - the "
+                        "package is not installed, so this run compared one "
+                        "library, not two",
+                        "Install it and re-run before drawing any conclusion: " + INSTALL_HINT,
+                    ],
+                    "implementation": {
+                        "complexity": "UNKNOWN",
+                        "time_estimate": "re-run the comparison first",
+                    },
+                }
             else:
                 return {
                     "approach": "INVESTIGATE_FURTHER",
@@ -525,17 +554,25 @@ class RedisVectorStoreAnalyzer:
                         "time_estimate": "1 week",
                     },
                 }
-        else:
-            return {
-                "approach": "START_FRESH_WITH_LANGCHAIN",
-                "confidence": "MEDIUM",
-                "reasoning": [
-                    "Limited existing data or data not accessible",
-                    "LangChain provides better foundation",
-                    "Modern architecture and documentation",
-                ],
-                "implementation": migration_analysis["langchain_migration"],
-            }
+        reasoning = [
+            "Limited existing data or data not accessible",
+            "LangChain provides better foundation",
+            "Modern architecture and documentation",
+        ]
+        if langchain_assessment == NOT_MEASURED:
+            # #14871: recommending the modern store while never having exercised
+            # it is exactly the silent one-arm comparison this issue is about.
+            reasoning.append(
+                "CAVEAT: the modern langchain-redis arm was NOT measured - the "
+                "package is not installed. This recommendation rests on the "
+                "legacy path alone. Install it and re-run: " + INSTALL_HINT
+            )
+        return {
+            "approach": "START_FRESH_WITH_LANGCHAIN",
+            "confidence": "LOW" if langchain_assessment == NOT_MEASURED else "MEDIUM",
+            "reasoning": reasoning,
+            "implementation": migration_analysis["langchain_migration"],
+        }
 
     def print_analysis_report(
         self,
@@ -578,7 +615,7 @@ class RedisVectorStoreAnalyzer:
             ("LlamaIndex", llamaindex),
             ("LangChain", langchain),
         ]:
-            status = "OK" if results[0] else "FAILED"
+            status = status_label(results)
             logger.info(
                 "  %s: %s (%s results) - %s",
                 name,

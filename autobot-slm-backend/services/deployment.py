@@ -20,6 +20,7 @@ from typing import Dict, List, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.async_compat import retain_until_done
 from autobot_shared.ssot_config import config as ssot_config
 from config import settings
 from models.database import Deployment, DeploymentStatus, Node, NodeStatus
@@ -347,7 +348,7 @@ class DeploymentService:
         await db.commit()
         await db.refresh(deployment)
 
-        asyncio.create_task(self._run_deployment(deployment_id))
+        retain_until_done(self._running_deployments, deployment_id, self._run_deployment(deployment_id))
 
         return DeploymentResponse.model_validate(deployment)
 
@@ -473,8 +474,7 @@ class DeploymentService:
         await db.commit()
         await db.refresh(new_deployment)
 
-        # Start the deployment in background
-        asyncio.create_task(self._run_deployment(new_deployment_id))
+        retain_until_done(self._running_deployments, new_deployment_id, self._run_deployment(new_deployment_id))
 
         logger.info(
             "Retry deployment created: %s (retry of %s)",

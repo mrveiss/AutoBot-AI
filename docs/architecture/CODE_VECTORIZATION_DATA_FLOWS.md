@@ -1,4 +1,7 @@
 # Code Vectorization Data Flow Diagrams
+
+> **Freshness:** superseded — 2026-08-30. Describes the pre-implementation data-flow design; the subsystem has since shipped — see `autobot-backend/api/codebase_analytics/`.
+
 **Version**: 1.0
 **Date**: 2025-10-25
 

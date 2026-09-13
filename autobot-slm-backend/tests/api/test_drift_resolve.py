@@ -167,7 +167,7 @@ def _setup_dir_mocks(component="autobot-slm-backend"):
             return_value=f"/opt/autobot/code_source/{component}",
         ),
         patch(
-            "api.code_sync.get_default_deployed_dir",
+            "api.code_sync.get_release_component_dir",
             return_value=f"/opt/autobot/{component}",
         ),
     )
@@ -588,7 +588,7 @@ def test_shared_first_sync_is_guarded_too(stub_user):
 
     with (
         patch("api.code_sync.get_default_source_dir", side_effect=lambda c: f"/opt/autobot/code_source/{c}"),
-        patch("api.code_sync.get_default_deployed_dir", side_effect=lambda c: f"/opt/autobot/{c}"),
+        patch("api.code_sync.get_release_component_dir", side_effect=lambda c: f"/opt/autobot/{c}"),
         patch.object(_CS, "_preview_rsync_deletions", AsyncMock(side_effect=_fake_preview)),
         patch.object(_CS, "_rsync_component_local", rsync_mock),
     ):

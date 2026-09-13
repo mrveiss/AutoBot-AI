@@ -744,13 +744,13 @@ curl http://<npu-ip>:8081/health
    ```bash
    # Generate random 256-bit override token
    python3 -c "import secrets; print(secrets.token_hex(32))"
-   # Example: 7a9f3e8b2c1d4f6a8b9c2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b
+   # Example: <64-hex-token-printed-by-the-command-above>
    ```
 
    Store securely:
    ```bash
    # Add to .env (main backend only)
-   echo "SERVICE_AUTH_OVERRIDE_TOKEN=7a9f3e8b2c1d4f6a8b9c2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b" >> .env
+   echo "SERVICE_AUTH_OVERRIDE_TOKEN=<your-generated-token>" >> .env
 
    # CRITICAL: Never commit to git, store in secure vault
    ```
@@ -1988,9 +1988,9 @@ done
 
 **Clock Synchronization:**
 ```bash
-for vm in 20 21 22 23 24 25; do
-  echo -n "VM $vm: "
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.$vm "date '+%s'" 2>/dev/null
+for host in <backend-ip> <frontend-ip> <npu-ip> <database-ip> <aiml-ip> <browser-ip>; do
+  echo -n "$host: "
+  ssh -i ~/.ssh/autobot_key autobot@$host "date '+%s'" 2>/dev/null
 done
 ```
 
@@ -2095,8 +2095,8 @@ echo
 echo "[Test 6] Clock Synchronization Test"
 
 times=()
-for vm in 20 21 22 23 24 25; do
-    t=$(ssh -i ~/.ssh/autobot_key autobot@172.16.168.$vm "date '+%s'" 2>/dev/null || echo "0")
+for host in <backend-ip> <frontend-ip> <npu-ip> <database-ip> <aiml-ip> <browser-ip>; do
+    t=$(ssh -i ~/.ssh/autobot_key autobot@$host "date '+%s'" 2>/dev/null || echo "0")
     times+=($t)
 done
 
@@ -2439,8 +2439,8 @@ redis-cli -h <database-ip> -a "$REDIS_PASSWORD" GET "service:key:main-backend"
 ssh -i ~/.ssh/autobot_key autobot@<npu-ip> "sudo ntpdate -u pool.ntp.org"
 
 # Check time across all VMs
-for vm in 20 21 22 23 24 25; do
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.$vm "echo \"VM $vm: \$(date)\""
+for host in <backend-ip> <frontend-ip> <npu-ip> <database-ip> <aiml-ip> <browser-ip>; do
+  ssh -i ~/.ssh/autobot_key autobot@$host "echo \"$host: \$(date)\""
 done
 ```
 

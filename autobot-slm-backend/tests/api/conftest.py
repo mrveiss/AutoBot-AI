@@ -21,22 +21,72 @@ import types
 
 import pytest
 
-if "multipart" not in sys.modules or not hasattr(sys.modules.get("multipart"), "parse_options_header"):
-    # Stub multipart.multipart.parse_options_header so starlette.formparsers loads
-    _mp_inner = types.ModuleType("multipart.multipart")
-    _mp_inner.parse_options_header = lambda *a, **kw: (b"", {})  # type: ignore[attr-defined]
-    _mp = types.ModuleType("multipart")
-    _mp.multipart = _mp_inner  # type: ignore[attr-defined]
-    sys.modules.setdefault("multipart", _mp)
-    sys.modules.setdefault("multipart.multipart", _mp_inner)
 
-if "python_multipart" not in sys.modules:
-    _pymp_inner = types.ModuleType("python_multipart.multipart")
-    _pymp_inner.parse_options_header = lambda *a, **kw: (b"", {})  # type: ignore[attr-defined]
-    _pymp = types.ModuleType("python_multipart")
-    _pymp.multipart = _pymp_inner  # type: ignore[attr-defined]
-    sys.modules.setdefault("python_multipart", _pymp)
-    sys.modules.setdefault("python_multipart.multipart", _pymp_inner)
+def _starlette_formparsers_import_works() -> bool:
+    """Can starlette load its form parsers unaided?
+
+    #15065: the stubs below used to install whenever ``multipart`` merely was not
+    already in ``sys.modules`` — which is every fresh interpreter, so they went in
+    unconditionally, including on hosts and in CI where the real
+    ``python_multipart`` is installed and works. They then stayed in
+    ``sys.modules`` for the rest of the session, and any test file collected
+    afterwards from outside this directory tripped
+    ``repo_tests/sys_modules_leak_guard.py``.
+
+    Asking the question directly makes the stub a fallback rather than an
+    override: where the real package works, nothing is installed and there is
+    nothing to leak.
+
+    #15531: ``starlette.formparsers`` alone was the WRONG question, and asking it
+    made this whole block unreachable. ``formparsers`` imports the legacy
+    ``multipart`` shim, which is installed on these hosts, so the probe answered
+    "fine" — while ``starlette.requests`` (what ``import fastapi`` actually pulls)
+    imports ``python_multipart.multipart`` and was failing. Both are probed now,
+    so the fallback is reachable exactly when the imports it repairs are broken.
+    """
+    try:
+        import starlette.formparsers  # noqa: F401 — probing the import, not using it
+        import starlette.requests  # noqa: F401 — the import `import fastapi` actually makes
+    except Exception:
+        return False
+    return True
+
+
+def _stub_is_usable(module) -> bool:
+    """Does *module* already expose ``<pkg>.multipart.parse_options_header``?
+
+    #15531: the question the two branches below must ask. "Is the name in
+    ``sys.modules``" is a different question, and answering it instead is what
+    let a crippled stub installed by an outer conftest stand unrepaired.
+    """
+    return hasattr(getattr(module, "multipart", None), "parse_options_header")
+
+
+if not _starlette_formparsers_import_works():
+    # Dev-host fallback only. The stub cannot be installed and removed around a
+    # fixture: pytest imports every test module during collection, and they need
+    # `starlette.formparsers` to be importable at that point, which is before any
+    # fixture runs. So it is installed once here and recorded in the leak guard's
+    # baseline as an accepted owner rather than pretended away.
+    # #15531: both branches ask whether the entry in ``sys.modules`` actually
+    # PROVIDES what starlette imports — ``<pkg>.multipart.parse_options_header``
+    # — not merely whether the name is taken. Presence alone was the bug: the
+    # root ``conftest.py`` puts a bare ``python_multipart`` (no ``.multipart``)
+    # in first, so the presence check skipped the repair and starlette died on
+    # ``from python_multipart.multipart import parse_options_header``. For the
+    # same reason the entries are ASSIGNED rather than ``setdefault``: a broken
+    # entry has to be replaced, and ``setdefault`` would leave it in place.
+    # The outer probe above already established starlette cannot load unaided,
+    # so nothing here can displace a working install.
+    for _name in ("multipart", "python_multipart"):
+        if _stub_is_usable(sys.modules.get(_name)):
+            continue
+        _inner = types.ModuleType(f"{_name}.multipart")
+        _inner.parse_options_header = lambda *a, **kw: (b"", {})  # type: ignore[attr-defined]
+        _outer = types.ModuleType(_name)
+        _outer.multipart = _inner  # type: ignore[attr-defined]
+        sys.modules[_name] = _outer
+        sys.modules[f"{_name}.multipart"] = _inner
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +163,20 @@ def _blocked_subprocess_exec(*cmd: object, **kwargs: object):
     pytest.fail(_LIVE_SUBPROCESS_MESSAGE.format(argv=argv), pytrace=False)
 
 
+async def _reconcile_component_default_stub(*args: object, **kwargs: object) -> None:
+    """Default no-op stand-in for api.code_sync.reconcile_component (#15063).
+
+    reconcile_component's own subprocess calls are already caught by the guard
+    above, but this host also carries a real deployed tree (#15063's own
+    premise), so an un-stubbed call reaches a REAL requirements.txt before it
+    ever spawns anything, and the failure that surfaces names venv internals
+    rather than whatever the test actually exercises. Tests that legitimately
+    drive reconciliation install their own AsyncMock inside the test body —
+    same "inner patch wins" contract as the guards above.
+    """
+    return None
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
     """Fail fast instead of dead-waiting or touching the host."""
@@ -129,8 +193,15 @@ def pytest_runtest_call(item):
     saved_exec = asyncio.create_subprocess_exec
     httpx.AsyncClient = _LiveHealthPollBlocked
     asyncio.create_subprocess_exec = _blocked_subprocess_exec
+    code_sync = sys.modules.get("api.code_sync")
+    has_reconcile = code_sync is not None and hasattr(code_sync, "reconcile_component")
+    saved_reconcile = code_sync.reconcile_component if has_reconcile else None
+    if has_reconcile:
+        code_sync.reconcile_component = _reconcile_component_default_stub
     try:
         yield
     finally:
         httpx.AsyncClient = saved_client
         asyncio.create_subprocess_exec = saved_exec
+        if has_reconcile:
+            code_sync.reconcile_component = saved_reconcile

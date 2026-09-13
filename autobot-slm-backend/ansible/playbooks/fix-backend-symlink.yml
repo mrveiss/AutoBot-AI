@@ -18,7 +18,7 @@
   gather_facts: true
 
   vars:
-    backend_code_dir: /opt/autobot/autobot-user-backend
+    backend_code_dir: /opt/autobot/autobot-backend
     # symlink_action: remove|restore (must be provided via -e)
 
   pre_tasks:

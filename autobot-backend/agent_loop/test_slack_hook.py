@@ -247,3 +247,26 @@ class TestSlackHookDelegation:
         mock_slack_integration.request_approval = AsyncMock(side_effect=Exception("Slack down"))
         hook = self._make_hook(mock_slack_integration)
         await hook.request_approval("a-2", "Gate", "Needs sign-off")
+
+
+# ---------------------------------------------------------------------------
+# Vault-seam resolution (#15276) -- env still wins; a vault-only token still
+# resolves. Mirrors the treatment agent_loop/search/registry_test.py gives
+# the sibling CredentialGatedRegistry (#15267).
+# ---------------------------------------------------------------------------
+
+
+class TestSlackBotTokenVaultSeam:
+    """SLACK_BOT_TOKEN now routes through resolve_provider_key, not a bare read."""
+
+    def test_env_config_value_wins_over_the_vault(self, monkeypatch):
+        monkeypatch.setattr("services.provider_key_vault._hydrated_keys", {"SLACK_BOT_TOKEN": "vault-value"})
+        with patch.object(slack_hook_module.config, "slack_bot_token", "env-value"):
+            token = slack_hook_module.resolve_provider_key("SLACK_BOT_TOKEN", slack_hook_module.config.slack_bot_token)
+        assert token == "env-value"
+
+    def test_vault_only_token_still_resolves_when_env_absent(self, monkeypatch):
+        monkeypatch.setattr("services.provider_key_vault._hydrated_keys", {"SLACK_BOT_TOKEN": "vault-only-value"})
+        with patch.object(slack_hook_module.config, "slack_bot_token", ""):
+            token = slack_hook_module.resolve_provider_key("SLACK_BOT_TOKEN", slack_hook_module.config.slack_bot_token)
+        assert token == "vault-only-value"

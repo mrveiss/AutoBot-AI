@@ -10,6 +10,8 @@ aliases:
 
 # VM Roles — Distributed Deployment
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 AutoBot supports two deployment modes. In both modes the same Ansible roles apply;
 the difference is whether roles run on separate machines or are co-located.
 

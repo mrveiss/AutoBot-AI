@@ -59,7 +59,6 @@ from typing import Iterator, Sequence
 from cryptography.fernet import Fernet
 
 from autobot_shared.logging_manager import get_logger
-from utils.paths_manager import get_data_path
 
 logger = get_logger(__name__)
 
@@ -89,17 +88,35 @@ class SecretsStoreLockTimeoutError(RuntimeError):
     """Another process held the canonical secrets-store lock too long."""
 
 
+#: The pre-#14081 data directory, pinned as a literal (#14113).
+#:
+#: This is the one place in the repository where a CWD-relative data path is
+#: correct, because it is not describing where files *should* go — it is
+#: describing where the old code actually put them, so they can be found and
+#: moved. `PathsManager.get_data_path` read a `paths:` key that never existed
+#: in any loaded `config.yaml` and fell back to exactly this literal.
+_LEGACY_DATA_DIRNAME = "data"
+
+
 def _legacy_absolute_path(filename: str) -> Path:
     """Resolve *filename* the exact way the pre-#14081 code did.
 
-    Calls the real ``get_data_path`` rather than reimplementing its
-    CWD-relative fallback, so this migration stays correct even if that
-    resolver's behavior changes later (#14113 tracks fixing it directly).
-    ``get_data_path`` can return a relative path (the bug) or, if
-    ``config.yaml`` ever gains a real ``paths:`` section, an absolute one;
-    ``os.path.abspath`` handles both.
+    Pins the formula rather than delegating to ``get_data_path`` (#14113).
+    That delegation was written to keep this migration correct "even if that
+    resolver's behavior changes later" — but it does the opposite. #14113 made
+    ``get_data_path`` return the canonical SSOT directory, so a delegating
+    lookup would return the *destination* as the source, and
+    :func:`migrate_legacy_secrets_store` no-ops when the two are equal. Every
+    existing deployment's ``secrets.key``/``secrets.json``/``secrets.db``
+    would have been silently orphaned at the old location, and the backend
+    would have minted a fresh encryption key over the top — the exact
+    "upgrade silently loses access to stored secrets" outcome #14113's
+    migration note names as the change's #1 risk.
+
+    ``os.path.abspath`` (not ``Path.resolve``) preserves the original
+    behaviour exactly: CWD-relative, no symlink resolution.
     """
-    return Path(os.path.abspath(str(get_data_path(filename))))
+    return Path(os.path.abspath(str(Path(_LEGACY_DATA_DIRNAME) / filename)))
 
 
 @contextmanager

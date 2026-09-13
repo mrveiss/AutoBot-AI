@@ -18,8 +18,8 @@
   become: true
   vars:
     backend_service_file: /etc/systemd/system/autobot-backend.service
-    backend_venv: /opt/autobot/autobot-user-backend/venv
-    backend_workdir: /opt/autobot/autobot-user-backend
+    backend_venv: /opt/autobot/autobot-backend/venv
+    backend_workdir: /opt/autobot/autobot-backend
     health_check_url: "https://{{ infrastructure.hosts.backend }}:8443/api/health"
     health_check_timeout: 30
     health_check_retries: 6

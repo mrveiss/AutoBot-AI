@@ -5,7 +5,7 @@ Shared utilities deployed with each backend component.
 ## Deployment
 
 This module is included in each backend's deployment:
-- autobot-user-backend
+- autobot-backend
 - autobot-slm-backend
 - autobot-npu-worker
 - autobot-browser-worker

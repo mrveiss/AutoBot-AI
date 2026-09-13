@@ -1,0 +1,18 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Instantiated timer pairing with runner-watchdog@.service (#15309). Fires
+# every 10 minutes, matching the interval the script's own header comment has
+# always recommended.
+[Unit]
+Description=Run the AutoBot runner watchdog for %i every 10 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+Unit=runner-watchdog@%i.service
+
+[Install]
+WantedBy=timers.target

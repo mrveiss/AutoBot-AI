@@ -37,6 +37,10 @@ import sys
 from pathlib import Path
 from typing import Iterable
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOC_GLOBS = ("docs/**/*.md", "*.md", ".github/**/*.yml", ".github/**/*.yaml")
 
@@ -93,7 +97,7 @@ def _tracked_files(patterns: Iterable[str], root: Path = REPO_ROOT) -> list[Path
     for pattern in patterns:
         # Fixed argv, no shell, and `pattern` is a module constant — not input.
         result = subprocess.run(  # nosec B603 B607
-            ["git", "ls-files", pattern], cwd=root, capture_output=True, text=True, check=False
+            ["git", "ls-files", pattern], cwd=root, capture_output=True, text=True, check=False, env=scrubbed_git_env()
         )
         _require_git_ok(result, root)
         out.extend(root / line for line in result.stdout.splitlines() if line)
@@ -108,6 +112,7 @@ def _is_executable(path: Path, root: Path = REPO_ROOT) -> bool:
         capture_output=True,
         text=True,
         check=False,
+        env=scrubbed_git_env(),
     )
     _require_git_ok(result, root)
     # "100755 <sha> 0\t<path>" — read the mode git records, not the working tree,
@@ -126,7 +131,18 @@ def find_disagreements(root: Path = REPO_ROOT) -> list[str]:
             lines = doc.read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeDecodeError):
             continue
+        # In YAML a leading `#` is unambiguously a comment, so the line cannot be
+        # an invocation of anything. Without this, prose that merely NAMES a
+        # script -- e.g. a rationale comment saying "uses `branch_landing_evidence`
+        # from scripts/lib/branch-guards.sh" -- was reported as running it
+        # directly, and the suggested remedy (chmod +x) would have been wrong:
+        # that file is a library three workflows `source`, and 644 is correct for
+        # it. Markdown is deliberately NOT skipped this way: there `#` is a
+        # heading, and prose there can legitimately show a command to run.
+        yaml_doc = doc.suffix in {".yml", ".yaml"}
         for lineno, line in enumerate(lines, 1):
+            if yaml_doc and line.lstrip().startswith("#"):
+                continue
             if _INTERPRETED.search(line) or _DIRECTIVE.search(line):
                 continue
             hits = {m.group(1) for m in _INVOCATION_WITH_ARGS.finditer(line)}

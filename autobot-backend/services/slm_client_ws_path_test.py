@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -36,23 +35,19 @@ _SRC = Path(__file__).resolve().parent / "slm_client.py"
 
 
 def _load_selector():
-    """Load just the selector, without importing the whole client.
+    """The selector itself, imported rather than sliced out of the client.
 
-    slm_client pulls in config, redis and http machinery at import time; this
-    test only concerns a pure URL predicate.
+    #14039 moved it to ``autobot_shared.slm_rest_url`` so the standalone REST
+    callers could reach it; this test used to ``exec`` the function's source
+    text out of ``slm_client.py`` because importing that module pulls config,
+    redis and http machinery it does not need. The shared module has nothing
+    behind it but ``urllib``, so the import is now the cheap path AND the
+    honest one — the assertions below run against the shipped object rather
+    than a re-parsed copy of it.
     """
-    src = _SRC.read_text(encoding="utf-8")
-    ns: dict = {}
-    exec(  # noqa: S102 - deliberate: isolate a pure function from a heavy module
-        "from urllib.parse import urlparse\n"
-        "_LOOPBACK_HOSTS = frozenset({'127.0.0.1','localhost','::1','ip6-localhost'})\n"
-        "_NGINX_HTTP_PORTS = frozenset({80,443})",
-        ns,
-    )
-    start = src.index("def _is_direct_uvicorn_url")
-    end = src.index("class ServiceNotConfiguredError")
-    exec(textwrap.dedent(src[start:end]), ns)  # noqa: S102
-    return ns["_is_direct_uvicorn_url"]
+    from autobot_shared.slm_rest_url import is_direct_uvicorn_url
+
+    return is_direct_uvicorn_url
 
 
 _is_direct = _load_selector()

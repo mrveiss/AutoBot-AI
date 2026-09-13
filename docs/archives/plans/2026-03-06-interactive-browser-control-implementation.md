@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Interactive Browser Control Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -50,7 +52,7 @@ async function navInteractionResponse(page) {
 
 **Step 2: Verify file is valid**
 
-Run: `ssh autobot@172.16.168.25 "node -c /opt/autobot/autobot-browser-worker/playwright-server.js"`
+Run: `ssh autobot@<browser-ip> "node -c /opt/autobot/autobot-browser-worker/playwright-server.js"`
 
 Expected: No syntax errors
 
@@ -97,7 +99,7 @@ app.post('/click', async (req, res) => {
 
 **Step 2: Test manually**
 
-Run: `ssh autobot@172.16.168.25 "curl -s -X POST http://localhost:3000/click -H 'Content-Type: application/json' -d '{\"x\":100,\"y\":100}'" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'], d.get('viewportWidth'))"`
+Run: `ssh autobot@<browser-ip> "curl -s -X POST http://localhost:3000/click -H 'Content-Type: application/json' -d '{\"x\":100,\"y\":100}'" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'], d.get('viewportWidth'))"`
 
 Expected: `True 1280` (or similar viewport width)
 
@@ -139,7 +141,7 @@ app.post('/scroll', async (req, res) => {
 
 **Step 2: Test manually**
 
-Run: `ssh autobot@172.16.168.25 "curl -s -X POST http://localhost:3000/scroll -H 'Content-Type: application/json' -d '{\"deltaY\":300}'" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'])"`
+Run: `ssh autobot@<browser-ip> "curl -s -X POST http://localhost:3000/scroll -H 'Content-Type: application/json' -d '{\"deltaY\":300}'" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'])"`
 
 Expected: `True`
 
@@ -205,11 +207,11 @@ app.post('/hover', async (req, res) => {
 
 **Step 3: Test both**
 
-Run: `ssh autobot@172.16.168.25 "curl -s -X POST http://localhost:3000/type -H 'Content-Type: application/json' -d '{\"text\":\"hello\"}'" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'])"`
+Run: `ssh autobot@<browser-ip> "curl -s -X POST http://localhost:3000/type -H 'Content-Type: application/json' -d '{\"text\":\"hello\"}'" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'])"`
 
 Expected: `True`
 
-Run: `ssh autobot@172.16.168.25 "curl -s -X POST http://localhost:3000/hover -H 'Content-Type: application/json' -d '{\"x\":200,\"y\":200}'" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'])"`
+Run: `ssh autobot@<browser-ip> "curl -s -X POST http://localhost:3000/hover -H 'Content-Type: application/json' -d '{\"x\":200,\"y\":200}'" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'])"`
 
 Expected: `True`
 
@@ -248,7 +250,7 @@ Apply the same pattern to: `/screenshot`, `/back`, `/forward`, `/reload`.
 
 **Step 2: Test that navigate still works with new response shape**
 
-Run: `ssh autobot@172.16.168.25 "curl -s -X POST http://localhost:3000/navigate -H 'Content-Type: application/json' -d '{\"url\":\"https://example.com\"}'" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'], d.get('viewportWidth'), d.get('url'))"`
+Run: `ssh autobot@<browser-ip> "curl -s -X POST http://localhost:3000/navigate -H 'Content-Type: application/json' -d '{\"url\":\"https://example.com\"}'" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['success'], d.get('viewportWidth'), d.get('url'))"`
 
 Expected: `True 1280 https://example.com/` (or similar)
 
@@ -270,19 +272,19 @@ git commit -m "feat(browser): add viewport dimensions to all navPage responses (
 **Step 1: Sync file to .25**
 
 ```bash
-rsync -avz autobot-browser-worker/playwright-server.js autobot@172.16.168.25:/opt/autobot/autobot-browser-worker/playwright-server.js
+rsync -avz autobot-browser-worker/playwright-server.js autobot@<browser-ip>:/opt/autobot/autobot-browser-worker/playwright-server.js
 ```
 
 **Step 2: Restart service on .25**
 
 ```bash
-ssh autobot@172.16.168.25 "sudo systemctl restart autobot-playwright"
+ssh autobot@<browser-ip> "sudo systemctl restart autobot-playwright"
 ```
 
 **Step 3: Verify service is running and endpoints work**
 
 ```bash
-ssh autobot@172.16.168.25 "systemctl is-active autobot-playwright && curl -s http://localhost:3000/health | python3 -c 'import sys,json; print(json.load(sys.stdin))'"
+ssh autobot@<browser-ip> "systemctl is-active autobot-playwright && curl -s http://localhost:3000/health | python3 -c 'import sys,json; print(json.load(sys.stdin))'"
 ```
 
 Expected: `active` and `{'status': 'healthy', ...}`
@@ -290,11 +292,11 @@ Expected: `active` and `{'status': 'healthy', ...}`
 **Step 4: Smoke test all new endpoints**
 
 ```bash
-ssh autobot@172.16.168.25 "curl -s -X POST http://localhost:3000/navigate -H 'Content-Type: application/json' -d '{\"url\":\"https://example.com\"}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(\"navigate:\", d[\"success\"], d.get(\"viewportWidth\"))'"
-ssh autobot@172.16.168.25 "curl -s -X POST http://localhost:3000/click -H 'Content-Type: application/json' -d '{\"x\":100,\"y\":100}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(\"click:\", d[\"success\"])'"
-ssh autobot@172.16.168.25 "curl -s -X POST http://localhost:3000/scroll -H 'Content-Type: application/json' -d '{\"deltaY\":300}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(\"scroll:\", d[\"success\"])'"
-ssh autobot@172.16.168.25 "curl -s -X POST http://localhost:3000/type -H 'Content-Type: application/json' -d '{\"text\":\"test\"}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(\"type:\", d[\"success\"])'"
-ssh autobot@172.16.168.25 "curl -s -X POST http://localhost:3000/hover -H 'Content-Type: application/json' -d '{\"x\":200,\"y\":200}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(\"hover:\", d[\"success\"])'"
+ssh autobot@<browser-ip> "curl -s -X POST http://localhost:3000/navigate -H 'Content-Type: application/json' -d '{\"url\":\"https://example.com\"}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(\"navigate:\", d[\"success\"], d.get(\"viewportWidth\"))'"
+ssh autobot@<browser-ip> "curl -s -X POST http://localhost:3000/click -H 'Content-Type: application/json' -d '{\"x\":100,\"y\":100}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(\"click:\", d[\"success\"])'"
+ssh autobot@<browser-ip> "curl -s -X POST http://localhost:3000/scroll -H 'Content-Type: application/json' -d '{\"deltaY\":300}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(\"scroll:\", d[\"success\"])'"
+ssh autobot@<browser-ip> "curl -s -X POST http://localhost:3000/type -H 'Content-Type: application/json' -d '{\"text\":\"test\"}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(\"type:\", d[\"success\"])'"
+ssh autobot@<browser-ip> "curl -s -X POST http://localhost:3000/hover -H 'Content-Type: application/json' -d '{\"x\":200,\"y\":200}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(\"hover:\", d[\"success\"])'"
 ```
 
 Expected: All print `True`
@@ -720,13 +722,13 @@ Expected: Build succeeds with no errors
 **Step 3: Sync to frontend VM (.21)**
 
 ```bash
-./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh 172.16.168.21 /home/kali/Desktop/AutoBot/autobot-frontend /opt/autobot/autobot-frontend
-ssh autobot@172.16.168.21 "cd /opt/autobot/autobot-frontend && npm run build"
+./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh <frontend-ip> /home/kali/Desktop/AutoBot/autobot-frontend /opt/autobot/autobot-frontend
+ssh autobot@<frontend-ip> "cd /opt/autobot/autobot-frontend && npm run build"
 ```
 
 **Step 4: Verify in browser**
 
-Navigate to `https://172.16.168.21/knowledge/research` — status should show "Connected" on mount.
+Navigate to `https://<frontend-ip>/knowledge/research` — status should show "Connected" on mount.
 
 Navigate to the chat browser tab — click on a screenshot and verify the page responds.
 

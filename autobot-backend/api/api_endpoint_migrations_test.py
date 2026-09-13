@@ -26,7 +26,7 @@ Tests validated in Phase 2a migrations:
 
 When reviving a class: remove its per-class skip + add behavior coverage
 elsewhere first, OR convert the class to exercise the endpoint via TestClient.
-Do not restore the file-level skip without updating #5359.
+Do not restore the file-level skip without updating #5359 and #15173.
 """
 
 import inspect
@@ -36,13 +36,13 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-# Skip the whole module — see #5359 for the audit plan.
-# Rationale: 2148 inspect.getsource() assertions silently rot on refactors
-# (evidence: #5338, #5336). No behavior-test coverage delta if removed;
-# preserved here for audit rather than deleted.
+# Skipped at collection ON PURPOSE — #15173, which lifts it one class at a time (TestClient behaviour coverage,
+# or deletion). Not silently uncollected: `autobot-backend` is in BACKEND_RUN in repo_tests/collection_coverage_test.py.
 pytestmark = pytest.mark.skip(
-    reason="Source-inspection assertions frozen pending #5359 audit "
-    "(2148 substring asserts that rot silently on refactors)"
+    reason="#15173 — PARKED, not passing. Re-measured, not inherited: 164 classes, 1017 assert statements over "
+    "2143 inspect.getsource() call sites, 710 of those asserts substring `in` checks, covering the "
+    "@with_error_handling Phase 2a migration — incl. the 14 batch_114 chat-knowledge asserts that gave #15160 no "
+    "signal. Source text, not behaviour, so they rot on refactors (#5338, #5336); #5359 Option C froze the file."
 )
 
 
@@ -18758,9 +18758,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_111_get_current_user_info_mixed_pattern(self):
         """Verify get_current_user_info endpoint uses Mixed Pattern"""
-        from api import auth
+        from api import auth_me
 
-        source = inspect.getsource(auth.get_current_user_info)
+        source = inspect.getsource(auth_me.get_current_user_info)
         # Should have @with_error_handling decorator
         self.assertIn("@with_error_handling", source)
         # Should have category parameter
@@ -18832,13 +18832,13 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_111_all_auth_endpoints_have_decorator(self):
         """Verify all auth endpoints have @with_error_handling decorator"""
-        from api import auth
+        from api import auth, auth_me
 
         # List of all endpoint functions in auth.py
         endpoint_functions = [
             auth.login,
             auth.logout,
-            auth.get_current_user_info,
+            auth_me.get_current_user_info,
             auth.check_authentication,
             auth.check_permission,
             auth.change_password,
@@ -18854,13 +18854,13 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_111_auth_100_percent_milestone(self):
         """Verify auth.py has reached 100% migration"""
-        from api import auth
+        from api import auth, auth_me
 
         # List of all endpoint functions
         endpoint_functions = [
             auth.login,
             auth.logout,
-            auth.get_current_user_info,
+            auth_me.get_current_user_info,
             auth.check_authentication,
             auth.check_permission,
             auth.change_password,
@@ -18883,7 +18883,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_111_migration_preserves_authentication_logic(self):
         """Verify migration preserves authentication logic"""
-        from api import auth
+        from api import auth, auth_me
 
         # Check login preserves authentication flow
         source_login = inspect.getsource(auth.login)
@@ -18893,7 +18893,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("LoginResponse", source_login)
 
         # Check get_current_user_info preserves user data retrieval
-        source_me = inspect.getsource(auth.get_current_user_info)
+        source_me = inspect.getsource(auth_me.get_current_user_info)
         self.assertIn("get_user_from_request", source_me)
         self.assertIn("username", source_me)
         self.assertIn("role", source_me)

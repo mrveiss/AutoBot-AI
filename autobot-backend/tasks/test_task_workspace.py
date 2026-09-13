@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 
 def _load_tw():
     """Load task_workspace directly, bypassing the services package stub."""
@@ -40,26 +42,38 @@ release_for_task = _tw.release_for_task
 cleanup_stale = _tw.cleanup_stale
 
 
+def _test_git_env() -> dict[str, str]:
+    """#15246: env for every git subprocess this suite spawns.
+
+    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    GIT_DIR pointing at the worktree it is pushing (every checkout here is
+    one), and an unscrubbed `git init`/`git add`/`git commit` here would
+    then operate on THAT repository instead of tmp_path's. See
+    autobot_shared/paths_test.py and #15246 for the reproduced incident.
+    """
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+
+
 @pytest.fixture()
 def git_repo(tmp_path: Path) -> Path:
     """Initialise a minimal git repo in tmp_path with one initial commit."""
-    subprocess.run(["git", "init", str(tmp_path)], check=True, capture_output=True)
+    subprocess.run(["git", "init", str(tmp_path)], check=True, capture_output=True, env=_test_git_env())
     subprocess.run(
         ["git", "-C", str(tmp_path), "config", "user.email", "test@test.com"],
         check=True,
         capture_output=True,
+        env=_test_git_env(),
     )
     subprocess.run(
         ["git", "-C", str(tmp_path), "config", "user.name", "Test"],
         check=True,
         capture_output=True,
+        env=_test_git_env(),
     )
     (tmp_path / "README.md").write_text("test repo")
-    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True, capture_output=True, env=_test_git_env())
     subprocess.run(
-        ["git", "-C", str(tmp_path), "commit", "-m", "init"],
-        check=True,
-        capture_output=True,
+        ["git", "-C", str(tmp_path), "commit", "-m", "init"], check=True, capture_output=True, env=_test_git_env()
     )
     return tmp_path
 
@@ -126,11 +140,9 @@ class TestHeartbeatResume:
         ws1 = allocate(task_id, "agent-resume", repo_root=git_repo)
         wt = Path(ws1.worktree_path)
         (wt / "heartbeat_1.txt").write_text("tick 1")
-        subprocess.run(["git", "-C", str(wt), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(wt), "add", "."], check=True, capture_output=True, env=_test_git_env())
         subprocess.run(
-            ["git", "-C", str(wt), "commit", "-m", "hb1"],
-            check=True,
-            capture_output=True,
+            ["git", "-C", str(wt), "commit", "-m", "hb1"], check=True, capture_output=True, env=_test_git_env()
         )
 
         ws2 = allocate(task_id, "agent-resume", repo_root=git_repo)
@@ -325,12 +337,14 @@ def _backdate(workspace_dir: Path) -> None:
 
 def _commit_in_worktree(wt: Path, msg: str) -> None:
     (wt / "work.txt").write_text(msg)
-    subprocess.run(["git", "-C", str(wt), "add", "."], check=True, capture_output=True)
-    subprocess.run(["git", "-C", str(wt), "commit", "-m", msg], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(wt), "add", "."], check=True, capture_output=True, env=_test_git_env())
+    subprocess.run(["git", "-C", str(wt), "commit", "-m", msg], check=True, capture_output=True, env=_test_git_env())
 
 
 def _branch_exists(git_repo: Path, branch: str) -> bool:
-    r = subprocess.run(["git", "-C", str(git_repo), "branch", "--list", branch], capture_output=True, text=True)
+    r = subprocess.run(
+        ["git", "-C", str(git_repo), "branch", "--list", branch], capture_output=True, text=True, env=_test_git_env()
+    )
     return bool(r.stdout.strip())
 
 
@@ -384,3 +398,115 @@ class TestCleanupTOCTOU:
 
         assert not workspace_dir.exists()
         assert not _branch_exists(git_repo, f"task-{task_id}")
+
+
+_BASE = "origin/main"
+
+
+def _git(repo: Path, *argv: str) -> None:
+    subprocess.run(["git", "-C", str(repo), *argv], check=True, capture_output=True, env=_test_git_env())
+
+
+def _recorded_warnings(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
+    """Pin the base ref and record what `_fetched_base_ref` warns, without relying on log propagation."""
+    monkeypatch.setattr(_tw, "_WORKSPACE_BASE_REF", _BASE)
+    warnings: list[tuple] = []
+    monkeypatch.setattr(_tw.logger, "warning", lambda *args, **kwargs: warnings.append(args))
+    return warnings
+
+
+def _fetch_times_out(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
+    """Make only the fetch hang; `remote` and `rev-parse` still run for real.
+
+    Patched on the module under test, not on git_probe: task_workspace binds
+    `run_git` by name at import, so `_tw.run_git` is the name its calls resolve.
+    """
+    real_run_git = _tw.run_git
+
+    def run_git(argv: list[str], **kwargs):
+        if argv[0] == "fetch":
+            raise subprocess.TimeoutExpired(cmd=["git", *argv], timeout=1)
+        return real_run_git(argv, **kwargs)
+
+    monkeypatch.setattr(_tw, "run_git", run_git)
+    return _recorded_warnings(monkeypatch)
+
+
+class TestFetchedBaseRef:
+    """`_fetched_base_ref` has a three-way contract, so it gets three-way tests.
+
+    #16128 review: the guard covering this asserted that literal substrings
+    appeared in the source — `if probe.returncode != 0:` and friends. That
+    confirms the code was WRITTEN, not that it works: it passes unchanged if the
+    branches are reordered, inverted, or made unreachable. The three-way split is
+    exactly what stops "could not look" collapsing into "looked and found
+    nothing", so it is the branch most worth executing rather than reading.
+    """
+
+    def test_a_repo_with_no_remotes_returns_none(self, git_repo: Path) -> None:
+        """Not a fallback — a real answer. With no remote there is no base to be
+        stale against, so HEAD is the only base there is. This is the case that
+        broke every throwaway repo in this suite when the rule was one-way."""
+        assert _tw._fetched_base_ref(git_repo) is None
+
+    def test_a_failing_git_remote_raises_rather_than_looking_local(self, tmp_path: Path) -> None:
+        """The distinction the string-presence guard could not make.
+
+        A `git remote` that FAILS produces empty stdout exactly as a repo with no
+        remotes does. Testing output alone let a broken checkout take the
+        local-only path and branch from HEAD in silence.
+        """
+        not_a_repo = tmp_path / "not-a-repo"
+        not_a_repo.mkdir()
+        with pytest.raises(RuntimeError, match="cannot enumerate remotes"):
+            _tw._fetched_base_ref(not_a_repo)
+
+    def test_a_configured_remote_with_a_missing_ref_raises(self, git_repo: Path) -> None:
+        """A checkout that should know its base and does not is still an error —
+        widening the no-remote case must not widen this one."""
+        subprocess.run(
+            ["git", "-C", str(git_repo), "remote", "add", "origin", str(git_repo)],
+            check=True,
+            capture_output=True,
+            env=_test_git_env(),
+        )
+        with pytest.raises(RuntimeError, match="cannot resolve workspace base ref"):
+            _tw._fetched_base_ref(git_repo)
+
+    def test_a_timed_out_fetch_is_logged_and_the_last_known_base_is_used(
+        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The control-flow path the move to `run_git` added (#16128 delta review).
+
+        `subprocess.run(timeout=)` raises TimeoutExpired whatever `check=` is, so
+        the except branch is live. A hung transport must neither block allocation
+        nor pass in silence: the refresh that did not happen is logged, and the
+        base that already resolves is still the answer.
+        """
+        _git(git_repo, "remote", "add", "origin", str(git_repo))
+        _git(git_repo, "update-ref", f"refs/remotes/{_BASE}", "HEAD")
+        warnings = _fetch_times_out(monkeypatch)
+        assert _tw._fetched_base_ref(git_repo) == _BASE
+        assert len(warnings) == 1 and "timed out" in warnings[0][0]
+
+    def test_a_timed_out_fetch_with_no_last_known_base_still_raises(
+        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Best effort covers the refresh, never the resolve: a timeout must not
+        become a route around the missing-ref error."""
+        _git(git_repo, "remote", "add", "origin", str(git_repo))
+        warnings = _fetch_times_out(monkeypatch)
+        with pytest.raises(RuntimeError, match="cannot resolve workspace base ref"):
+            _tw._fetched_base_ref(git_repo)
+        assert len(warnings) == 1
+
+    def test_a_successful_fetch_resolves_the_ref_it_fetched(
+        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The success arm, executed rather than read: the remote has the branch,
+        the fetch creates the tracking ref, and nothing is warned."""
+        _git(git_repo, "branch", _BASE.partition("/")[2])
+        _git(git_repo, "remote", "add", "origin", str(git_repo))
+        warnings = _recorded_warnings(monkeypatch)
+        assert _tw._fetched_base_ref(git_repo) == _BASE
+        assert warnings == []

@@ -57,7 +57,9 @@ AutoBot now provides complete VNC observation capabilities through the **Model C
 **Routes**:
 - `GET  /api/vnc-proxy/{type}/vnc.html` - Serve noVNC client
 - `GET  /api/vnc-proxy/{type}/*` - Proxy static assets
-- `WS   /api/vnc-proxy/{type}/websockify` - WebSocket proxy
+- `WS   /api/vnc-proxy/{type}/websockify` - WebSocket proxy (authenticated
+  before accept() -- #14959; a JWT via `?token=`, an `Authorization`
+  header, a session header, or the internal-service key)
 - `GET  /api/vnc-proxy/{type}/status` - Check VNC availability
 
 **VNC Types**:

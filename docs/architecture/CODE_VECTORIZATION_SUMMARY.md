@@ -1,4 +1,7 @@
 # Code Vectorization Architecture - Executive Summary
+
+> **Freshness:** superseded — 2026-08-30. "Design Complete - Ready for Implementation" is stale: this shipped. See `autobot-backend/api/codebase_analytics/`, `code_embedding_generator.py`, `npu_semantic_search.py`.
+
 **Version**: 1.0
 **Date**: 2025-10-25
 **Status**: Design Complete - Ready for Implementation
@@ -257,7 +260,7 @@ All comprehensive documentation has been created:
    - WebSocket protocols
    - Error handling
 
-3. **Implementation Plan** (`CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md`)
+3. **Implementation Plan** (`../planning/CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md`)
    - Detailed 8-week timeline
    - Phase deliverables
    - Resource allocation
@@ -327,7 +330,7 @@ All architecture documents are located in `docs/`:
 
 - **architecture/CODE_VECTORIZATION_ARCHITECTURE.md** - Complete system design
 - **api/CODE_VECTORIZATION_API.md** - API specifications
-- **architecture/CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md** - 8-week implementation plan
+- **planning/CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md** - 8-week implementation plan
 - **architecture/CODE_VECTORIZATION_DATA_FLOWS.md** - Data flow diagrams
 - **architecture/CODE_VECTORIZATION_PERFORMANCE_RISK.md** - Performance optimization and risk analysis
 - **architecture/CODE_VECTORIZATION_SUMMARY.md** - This executive summary

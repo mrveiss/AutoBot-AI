@@ -301,8 +301,7 @@ class ClaudeCodeBackend(ExecutionBackend):
     ) -> None:
         super().__init__(BackendType.LOCAL)  # reuse LOCAL slot; manager keys by instance
         self._event_stream = event_stream
-        self._mcp_host = mcp_host
-        self._mcp_port = mcp_port
+        self._mcp_host, self._mcp_port = mcp_host, mcp_port
         self._mcp_token = mcp_token or config.mcp_token
         self._use_sdk = use_sdk and _SDK_AVAILABLE
         self._api_key: Optional[str] = None
@@ -312,9 +311,10 @@ class ClaudeCodeBackend(ExecutionBackend):
     # ------------------------------------------------------------------
 
     def _resolve_api_key(self) -> Optional[str]:
-        if self._api_key:
-            return self._api_key
-        self._api_key = config.anthropic_api_key or None
+        if not self._api_key:
+            from services.provider_key_vault import resolve_provider_key
+
+            self._api_key = resolve_provider_key("ANTHROPIC_API_KEY", config.anthropic_api_key) or None
         return self._api_key
 
     def _feature_flag_enabled(self) -> bool:

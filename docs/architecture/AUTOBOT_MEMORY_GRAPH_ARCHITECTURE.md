@@ -1,5 +1,8 @@
 # AutoBot Memory Graph - Enhanced Memory System Architecture
 
+> **Freshness:** superseded — 2026-08-30. "Design Specification" is stale: `autobot-backend/autobot_memory_graph/` package shipped (`AutoBotMemoryGraph` used in 48 files), but `scripts/migrate_chat_to_memory_graph.py` was never built — tracked in #15200. The graph exists with no path to backfill existing chat history.
+
+
 **Version:** 1.0
 **Date:** 2025-10-03
 **Status:** Design Specification

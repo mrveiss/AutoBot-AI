@@ -11,9 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Import the module under test
-import sys
-sys.path.insert(0, str(Path(__file__).parent))
+# Import the module under test. Resolved by pytest.ini's `pythonpath`, not by a
+# sys.path insert here -- see the note beside that entry (#14986).
 from file_issues import (
     load_inventory,
     save_inventory,

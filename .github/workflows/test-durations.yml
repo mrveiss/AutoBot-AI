@@ -23,7 +23,7 @@ on:
     - cron: '0 3 * * 0'
   workflow_dispatch:
   pull_request:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     paths:
       # A workflow that only ever runs on a schedule is never exercised until
       # the day it silently breaks, and nobody is watching a 3am cron. Running
@@ -85,8 +85,18 @@ jobs:
           # them to each other, so a fifth invocation is checked on arrival.
           # Until now they had no entries here, so the
           # shard balancer placed them by hash with zero weight.
+          # #14986: `.claude/skills/claims-audit` -- 42 tests of the claims-audit skill
+          # that no workflow collected, because pytest.ini's testpaths is an allowlist
+          # and `.claude` was not on it. Six were red against real defects in the
+          # verifiers; all six are fixed and all 42 pass, so this is a wiring fix, not a
+          # quarantine. Named in all four carriers because they are required to agree
+          # (#14917). Narrow on purpose: `.claude/` as a whole is harness territory.
+          # #15051: `autobot-infrastructure/shared/tests` and `libs` were named by no
+          # pytest invocation in any workflow -- 17 of their test functions ran
+          # nowhere at all, ever. Named in all four `repo_tests`-carrying invocations
+          # together so hook_suites_run_in_ci_test.py's root-set agreement stays true.
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs \
             -n auto --dist loadscope \
             -m "not integration and not slow and not distributed and not performance" \
             --store-durations \

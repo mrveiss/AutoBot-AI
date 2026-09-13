@@ -47,22 +47,17 @@ export type SSOProviderHealthResponse = components['schemas']['SSOProviderHealth
 export type LDAPLoginRequest = components['schemas']['LDAPLoginRequest']
 
 /**
- * `GET /auth/sso/providers` and `POST /auth/sso/ldap/login` declare no
- * response_model on the backend, so there is no generated schema to derive from
- * — these two shapes stay hand-declared until the backend types the endpoints.
+ * #13139 typed both endpoints, so these are derived rather than hand-declared.
+ *
+ * `POST /auth/sso/ldap/login` now returns the `TokenResponse` the handler had
+ * already built (`api/sso_auth.py`) instead of re-packing three of its fields
+ * into a dict — that repack dropped `token`, which every other SLM
+ * token-issuing route emits (#12216).
  */
-export interface ActiveProvider {
-  id: string
-  name: string
-  provider_type: string
-  is_social: boolean
-}
-
-interface LDAPLoginResponse {
-  access_token: string
-  token_type: string
-  expires_in: number
-}
+export type ActiveProviderResponse = components['schemas']['ActiveProviderResponse']
+// Not exported: the shape it replaces (`LDAPLoginResponse`) was file-local
+// too, so the module's public surface is unchanged.
+type TokenResponse = components['schemas']['TokenResponse']
 
 // =============================================================================
 // Composable
@@ -131,9 +126,9 @@ export function useSsoApi() {
   // SSO Login Flow (`/auth/**` — client skips 401, guard preserves logout)
   // ===========================================================================
 
-  async function getActiveProviders(): Promise<ActiveProvider[]> {
+  async function getActiveProviders(): Promise<ActiveProviderResponse[]> {
     return withAuthGuard(() =>
-      slmApiClient.get<ActiveProvider[]>('/auth/sso/providers')
+      slmApiClient.get<ActiveProviderResponse[]>('/auth/sso/providers')
     )
   }
 
@@ -149,14 +144,14 @@ export function useSsoApi() {
     providerId: string,
     username: string,
     password: string
-  ): Promise<LDAPLoginResponse> {
+  ): Promise<TokenResponse> {
     const body: LDAPLoginRequest = {
       provider_id: providerId,
       username,
       password,
     }
     return withAuthGuard(() =>
-      slmApiClient.post<LDAPLoginResponse>('/auth/sso/ldap/login', body)
+      slmApiClient.post<TokenResponse>('/auth/sso/ldap/login', body)
     )
   }
 

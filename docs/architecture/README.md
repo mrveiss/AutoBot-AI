@@ -128,7 +128,7 @@ Key architectural decisions are documented in ADRs. See [docs/adr/](../adr/READM
 |----------|-------------|
 | [NPU_WORKER_ARCHITECTURE.json](NPU_WORKER_ARCHITECTURE.json) | NPU worker design |
 | [Docker_Architecture_Documentation.md](Docker_Architecture_Documentation.md) | Docker setup |
-| [Kubernetes_Migration_Strategy.md](Kubernetes_Migration_Strategy.md) | K8s future plans |
+| [Kubernetes_Migration_Strategy.md](../planning/Kubernetes_Migration_Strategy.md) | K8s future plans |
 | [Scaling_Roadmap_and_Architecture_Evolution.md](Scaling_Roadmap_and_Architecture_Evolution.md) | Scaling strategy |
 
 ---

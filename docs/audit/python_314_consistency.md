@@ -201,3 +201,35 @@ re-establishing before anything is deleted. Filed separately.
   Removing it is a separate question from the interpreter version.
 - **Changing the local dev box** — out of repo scope. Worth knowing that it runs 3.10, which is
   what made #13727 look like five broken contracts; see the memory note on local-env floors.
+
+## Update — 2026-08-25 (#13747/#13748 follow-up)
+
+**F1a landed** in PR #13800 (merged as `317723efa9`, 2026-08-09) and the two defects it exposed on
+a real provisioning run (`openvino-dev` unsatisfiable against `openvino` 2026.x — #14447/#14449,
+#14452, #14453) are also merged. Re-measured against PyPI on 2026-08-25: `openvino` 2026.3.0,
+`torch` 2.13.0 and `numpy` 2.5.2 all still publish `cp314` `manylinux` wheels for `x86_64`; the
+repo's floor is now `openvino>=2026.3.0`, one point above what F1 measured, and still cp314.
+
+**#13747 stays open.** Every file in its stated scope (`roles/npu-worker`,
+`deploy-native-services.yml`, `deploy-full.yml`, `configure-python-provision-permissions.yml`,
+`provision-local-python.yml`) is on `python3.14`, and AC4 ("verified by deliberate failure: the
+guard rejects a venv left at the old version") now has a runnable, host-independent regression
+test: `tests/playbooks/test_ensure_venv_version.yml`, wired into `ansible-role-facts-test.yml`.
+What remains is AC1-3 — the worker actually starting and serving inference on a 3.14 venv on real
+NPU hardware. That is not a code change; no session without a route to fleet hardware can supply
+it, and this audit update does not claim to.
+
+**The Windows-worker question F1 left open is answered: no.** `redis_client.py` and
+`http_retry.py` are the only Windows-worker files that mention `autobot_shared`, and both do so
+only in a docstring explaining why they deliberately do *not* import it — the Windows worker is a
+PyInstaller standalone that cannot import `autobot_shared` at runtime, a documented exception
+(`docs/developer/ARCHITECTURE_EXCEPTIONS.md`, issue #5438). Grep for an actual `from
+autobot_shared` / `import autobot_shared` statement anywhere under
+`autobot-npu-worker/resources/windows-npu-worker/` returns zero matches. So bumping black's
+`target-version` will not reformat any code the Windows worker imports — that half of #13748's
+"Open question to settle first" is closed.
+
+**#13748 stays blocked regardless**, on the other half: its AC3 requires "every Python interpreter
+that imports `autobot_shared` is on 3.14 at the time this merges," and the Linux NPU worker's
+*running* version is exactly the unresolved AC1-3 above. The order from #13743 is unchanged —
+#13748 does not move until #13747 has host evidence, not merge evidence.

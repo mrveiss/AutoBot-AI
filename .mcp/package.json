@@ -15,6 +15,6 @@
   "author": "AutoBot Development Team",
   "license": "Apache-2.0",
   "overrides": {
-    "qs": ">=6.15.2"
+    "qs": ">=6.16.0"
   }
 }

@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # UI Improvements Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -770,12 +772,12 @@ After builds pass, sync to VMs:
 **SLM frontend → .19:**
 ```bash
 # (check existing sync script for SLM frontend path)
-ssh autobot@172.16.168.19 "sudo systemctl restart autobot-slm-frontend 2>/dev/null || true"
+ssh autobot@<slm-manager-ip> "sudo systemctl restart autobot-slm-frontend 2>/dev/null || true"
 ```
 
 **Main frontend → .21:**
 ```bash
 cd /home/kali/Desktop/AutoBot/autobot-frontend
 npm run build
-./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh 172.16.168.21 dist/ /opt/autobot/autobot-frontend/dist/
+./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh <frontend-ip> dist/ /opt/autobot/autobot-frontend/dist/
 ```

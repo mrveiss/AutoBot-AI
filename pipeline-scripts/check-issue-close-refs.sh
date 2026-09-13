@@ -20,7 +20,9 @@ if [ $# -ne 1 ] || ! [[ "$1" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 N="$1"
-ROOT=$(git rev-parse --show-toplevel)
+# shellcheck source=scripts/lib/git-root.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../scripts/lib/git-root.sh"
+ROOT=$(git_repo_root)
 cd "$ROOT"
 SELF="pipeline-scripts/check-issue-close-refs.sh"
 

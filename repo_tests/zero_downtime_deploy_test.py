@@ -14,12 +14,12 @@ import ast
 import asyncio
 import importlib.util
 import sys
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = repo_root()
 SCRIPT_PATH = REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "zero_downtime_deploy.py"
 
 
@@ -28,9 +28,7 @@ def test_no_undefined_self_references() -> None:
     tree = ast.parse(SCRIPT_PATH.read_text(encoding="utf-8"))
 
     cls = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ClassDef) and node.name == "ZeroDowntimeDeployer"
+        node for node in ast.walk(tree) if isinstance(node, ast.ClassDef) and node.name == "ZeroDowntimeDeployer"
     )
 
     defined = {n.name for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
@@ -62,9 +60,20 @@ def _load_module():
 
     spec = importlib.util.spec_from_file_location("zero_downtime_deploy_under_test", SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
+    # The ``sys.modules`` entry exists only so ``exec_module`` can resolve the
+    # script's self-references; it is removed again immediately (#15076). Leaving
+    # it installed trips the session-finish leak guard (#13361), which fails the
+    # run *after* every test passes -- a failure with no failing test in the log.
+    previous = sys.modules.get(spec.name)
     sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    try:
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        if previous is None:
+            sys.modules.pop(spec.name, None)
+        else:
+            sys.modules[spec.name] = previous
 
 
 @pytest.fixture()

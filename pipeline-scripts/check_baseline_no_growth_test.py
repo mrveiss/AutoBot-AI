@@ -25,14 +25,30 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GUARD_REL = "pipeline-scripts/check_baseline_no_growth.sh"
 BASELINE_REL = "pipeline-scripts/hardcoded_values_baseline.txt"
 LIBS = ("scripts/lib/git-scope.sh", "scripts/lib/hardcoded-value-rules.sh")
 
 
+def _test_git_env() -> dict[str, str]:
+    """#15246: env for every git subprocess this suite spawns.
+
+    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    GIT_DIR pointing at the worktree it is pushing (every checkout here is
+    one), and an unscrubbed `git init`/`git add`/`git commit` here would
+    then operate on THAT repository instead of tmp_path's. See
+    autobot_shared/paths_test.py and #15246 for the reproduced incident.
+    """
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+
+
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True)
+    return subprocess.run(
+        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True, env=_test_git_env()
+    )
 
 
 SETTLED_REL = "autobot-backend/settled.py"

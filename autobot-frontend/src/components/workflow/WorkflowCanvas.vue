@@ -86,7 +86,7 @@
         <div v-if="hasOrgNodes" class="rule-mode" role="group" :aria-label="$t('llc.canvasRules.colourBy')">
           <span class="rule-mode-label">{{ $t('llc.canvasRules.colourBy') }}</span>
           <button
-            v-for="dimension in SELECTABLE_RULE_DIMENSIONS"
+            v-for="dimension in RULE_DIMENSIONS"
             :key="dimension"
             type="button"
             class="rule-mode-btn"
@@ -573,7 +573,7 @@ import {
 import { useFocusTrap, useFocusRestore, useInitialFocus } from '@autobot/ui';
 import type { CanvasNode, CanvasNodeType, CanvasTab } from './canvasNode';
 import {
-  SELECTABLE_RULE_DIMENSIONS,
+  RULE_DIMENSIONS,
   STATUS_RULES,
   OWNER_RULES,
   activeRules,

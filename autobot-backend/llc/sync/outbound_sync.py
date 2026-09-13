@@ -25,6 +25,7 @@ import socket
 import uuid
 from typing import Any, Dict, Optional
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
@@ -402,7 +403,7 @@ class LLCOutboundSyncService:
                 message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
                 if message is None:
                     continue
-                asyncio.create_task(self._handle_message(message))
+                fire_and_forget(self._handle_message(message), name="llc-outbound-sync-message")
         finally:
             await pubsub.punsubscribe(_LLC_WORK_ITEM_CHANNEL)
             await pubsub.close()

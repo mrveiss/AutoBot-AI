@@ -46,14 +46,27 @@ autobot:
   group: "autobot"
   home_dir: "/home/autobot"
 
-  # Service URLs - derived from infrastructure.yml SSOT (#808)
-  services:
-    frontend: "http://{{ frontend_host }}:{{ frontend_port }}"
-    backend: "http://{{ backend_host }}:{{ backend_port }}"
-    database: "redis://{{ redis_host }}:{{ redis_port }}"
-    ai_stack: "http://{{ ai_stack_host }}:{{ ai_stack_port }}"
-    npu_worker: "http://{{ npu_worker_host }}:{{ npu_worker_port }}"
-    browser: "http://{{ browser_host }}:{{ browser_port }}"
+# Service URLs - derived from infrastructure.yml SSOT (#808).
+#
+# #15731: these live OUTSIDE the `autobot` mapping, and must stay outside it.
+# Ansible resolves a variable whole, so while these sat under `autobot.services`
+# every read of `autobot.base_dir` -- a plain string -- forced them to render
+# too. `frontend_host` and its siblings are host vars defined only in
+# production.yml, so any play targeting localhost died with
+# "'frontend_host' is undefined" before its first task. That took out every
+# self-update on the fleet until it was found.
+#
+# Nothing consumed `autobot.services` in any spelling when this moved; it was
+# breaking controller plays for no reader at all. Kept rather than deleted
+# because the URLs are still the derived SSOT form the #808 note describes, and
+# a future consumer wants them here rather than reinvented.
+autobot_services:
+  frontend: "http://{{ frontend_host }}:{{ frontend_port }}"
+  backend: "http://{{ backend_host }}:{{ backend_port }}"
+  database: "redis://{{ redis_host }}:{{ redis_port }}"
+  ai_stack: "http://{{ ai_stack_host }}:{{ ai_stack_port }}"
+  npu_worker: "http://{{ npu_worker_host }}:{{ npu_worker_port }}"
+  browser: "http://{{ browser_host }}:{{ browser_port }}"
 
 # ==========================================
 # NETWORK CONFIGURATION
@@ -414,10 +427,14 @@ role_xrdp_active: >-
 # #14567: `ai_stack`/`llm_nodes` are declaration-gated deploy targets, so this
 # fact reads node_roles_declared (#14560).
 #
-# #14678: this file is now the ONLY tracked definition of the role-active facts.
-# It previously had two byte-identical siblings kept in step by a diff guard;
-# the guard worked but enforcing three copies was never the fix #7095 asked for.
-# The test inventory's copy is generated from this file at CI time.
+# #14678: this is the canonical, single tracked definition of the role-active
+# facts. It used to have two byte-identical siblings kept in step by a diff
+# guard; the guard worked but enforcing three copies was never the fix #7095
+# asked for. The test inventory's copy is now generated from this file at CI
+# time (never tracked). One tracked sibling remains --
+# playbooks/vars/role_active_facts.yml -- because deploy.yml's only two
+# callers invoke it with a bare host inventory that has no group_vars to
+# discover; see deploy.yml's own comment and check_role_facts_synced.py.
 # #14682: `ai_stack` is NOT an LLM signal. It is granted by `chromadb` and
 # `tts-worker` as well as by `ai-stack` and `autobot-llm-*`, so gating on it
 # meant declaring a vector database or a speech synthesiser ran roles/llm --
@@ -459,3 +476,20 @@ slm_manager_inventory_host: >-
 slm_manager_node_id: >-
   {{ hostvars[slm_manager_inventory_host]['slm_node_id']
      | default(slm_manager_inventory_host) }}
+
+# ==========================================
+# SLM FRONTEND RELEASE RETENTION (#15610)
+# ==========================================
+# How many built SLM-frontend bundle directories survive a publish, fleet-wide.
+# roles/_shared/tasks/build_publish_slm_frontend.yml publishes by flipping a
+# `current` symlink onto a per-build `dist-<id>` directory, so the directories
+# accumulate unless something bounds them — one per deploy, forever.
+#
+# Three: the bundle being served, the one `previous` points at (the rollback
+# target), and one older than that, so a rollback still has somewhere to go
+# after it has been used once. The Python half of the same publish
+# (services/slm_frontend_build.py) reads the same bound from
+# SLM_FRONTEND_RELEASE_KEEP — it runs inside the SLM backend's venv and cannot
+# read Ansible inventory, so the two halves carry the number separately and
+# must be changed together.
+slm_frontend_release_keep: 3

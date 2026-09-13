@@ -61,11 +61,14 @@ from __future__ import annotations
 
 import importlib.util
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
+
+REPO_ROOT = repo_root()
 BANDIT_CONFIG = REPO_ROOT / ".bandit"
 _CHECKER = REPO_ROOT / "tools" / "lint" / "check_bandit_exclude_anchoring.py"
 
@@ -107,14 +110,7 @@ def entries() -> list[str]:
 @pytest.fixture(scope="module")
 def tracked_py_files() -> list[str]:
     """Every tracked ``*.py`` path, enumerated by git rather than by bandit."""
-    completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    paths = [line for line in completed.stdout.splitlines() if line.strip()]
+    paths = tracked_paths(REPO_ROOT, "*.py")
     assert len(paths) >= _TRACKED_PY_FLOOR, (
         f"git ls-files returned only {len(paths)} Python files — the enumeration "
         "broke; these tests would otherwise pass having checked nothing"
@@ -317,7 +313,14 @@ def test_audit_entrypoint_fails_on_the_pre_fix_config(tmp_path):
     """
     (tmp_path / ".bandit").write_text(PRE_FIX_EXCLUDE_DIRS, encoding="utf-8")
     subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "init", "-q"], cwd=tmp_path, capture_output=True, text=True, check=True
+        # #15246: scrubbed -- an inherited GIT_DIR would init the real repo
+        # instead of tmp_path.
+        ["git", "init", "-q"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=scrubbed_git_env(),
     )
     reached, problems = checker.audit_excludes(tmp_path)
 

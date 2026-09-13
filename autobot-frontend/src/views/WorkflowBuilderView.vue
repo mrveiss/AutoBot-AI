@@ -2025,12 +2025,25 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--color-success);
 }
 
-.risk-badge.medium {
+/* #14993: a rule for every value the canonical RiskLevel can carry, not only the
+   four the approval flow produces today -- #14956 took the unstyled set from
+   three values to six. */
+.risk-badge.unknown,
+.risk-badge.info,
+.risk-badge.minimal {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.risk-badge.medium,
+.risk-badge.warning,
+.risk-badge.degraded {
   background: var(--color-warning-bg);
   color: var(--color-warning);
 }
 
 .risk-badge.high,
+.risk-badge.error,
 .risk-badge.critical {
   background: var(--color-error-bg);
   color: var(--color-error);

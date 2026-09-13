@@ -1,4 +1,6 @@
 # AutoBot Phase 5 - Distributed Multi-Modal Architecture
+
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
 **6-VM Distributed System with Multi-Modal AI Integration**
 
 Generated: `2025-09-10`  

@@ -1,0 +1,25 @@
+# Canonical path set for "could this change affect which pre-commit hooks run?"
+#
+# SINGLE SOURCE OF TRUTH — do not inline a copy back into the workflow.
+#
+# Loaded by .github/workflows/enforce-precommit.yml as a STEP-level filter
+# inside the `verify-precommit-config` job. The job itself is never gated: it
+# publishes a required status context and also carries the SPDX and symlink
+# checks, which must cover every pull request including docs-only ones
+# (enforce-precommit.yml:10-15). Only the repo-wide `pre-commit run --all-files`
+# sweep and the two steps that parse its output are gated on this.
+#
+# `code` is "everything that is not prose". The sweep exists to detect hooks
+# that cannot EXECUTE (#14181) rather than to lint the diff, so it is scoped by
+# whether the repository's executable surface moved at all — not by language.
+#
+# Negation order matters: dorny/paths-filter applies these as picomatch patterns
+# in sequence, so the broad `**` must come first and the exclusions after it.
+code:
+  - '**'
+  - '!docs/**'
+  - '!changelog/**'
+  - '!**/*.md'
+  - '!**/*.rst'
+  - '!**/*.txt'
+  - '!LICENSE'

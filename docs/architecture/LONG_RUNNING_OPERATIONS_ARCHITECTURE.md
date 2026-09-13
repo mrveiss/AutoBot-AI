@@ -1,5 +1,7 @@
 # Long-Running Operations Architecture for AutoBot
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 ## Overview
 
 This document describes the comprehensive timeout architecture implemented for AutoBot's long-running operations. The framework provides intelligent timeout management, checkpoint/resume capabilities, real-time progress tracking, and operation-specific handling to ensure that operations "either finish or fail" rather than timing out prematurely.

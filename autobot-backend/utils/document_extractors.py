@@ -38,6 +38,7 @@ import numpy as np
 
 from autobot_shared.logging_manager import get_logger
 from media.document.extraction import DocumentExtractionError, extract_docx, extract_pdf
+from media.document.provenance import TABLE_SECTION_MARKER, render_tables, render_text_and_tables
 
 logger = get_logger(__name__)
 
@@ -134,10 +135,11 @@ class DocumentExtractor:
 
             Delegates to the canonical extractor (#13893) rather than carrying a
             fourth copy of the pypdf loop; the ValueError contract is preserved
-            for existing callers.
+            for existing callers. Tables fold into the returned text via the
+            shared renderer (#14970) — used to be dropped outright here.
             """
             try:
-                return extract_pdf(file_path.read_bytes()).text
+                return render_text_and_tables(extract_pdf(file_path.read_bytes()))
             except DocumentExtractionError as e:
                 logger.error("Failed to read PDF %s: %s", file_path, e)
                 raise ValueError(f"Invalid or corrupted PDF file: {file_path}") from e
@@ -176,11 +178,20 @@ class DocumentExtractor:
             """Synchronous DOCX extraction wrapped for async execution.
 
             Delegates to the canonical extractor (#13893); the ValueError
-            contract is preserved for existing callers.
+            contract is preserved for existing callers, including the
+            double-newline paragraph separation this function has always
+            returned. Tables fold in via the shared renderer (#14970) — used
+            to be dropped outright here, unlike the DOCX path in
+            ``document_parser.py``.
             """
             try:
-                paragraphs = [line for line in extract_docx(file_path.read_bytes()).text.split("\n") if line.strip()]
-                return "\n\n".join(paragraphs)
+                extracted = extract_docx(file_path.read_bytes())
+                paragraphs = [line for line in extracted.text.split("\n") if line.strip()]
+                sections = ["\n\n".join(paragraphs)] if paragraphs else []
+                table_text = render_tables(extracted.tables)
+                if table_text:
+                    sections += [TABLE_SECTION_MARKER, table_text]
+                return "\n\n".join(sections)
             except DocumentExtractionError as e:
                 logger.error("Failed to read DOCX %s: %s", file_path, e)
                 raise ValueError(f"Invalid or corrupted DOCX file: {file_path}") from e

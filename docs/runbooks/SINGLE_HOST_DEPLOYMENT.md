@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../architecture/VM_ROLES.md) for role definitions.
+
 # Runbook: Single-Host AutoBot Deployment
 
 **Issue #2961** | Last updated: 2026-04-08
@@ -88,7 +90,7 @@ No manual `/etc/hosts` editing needed; Ansible handles all alias setup.
 cd ~/
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
-git checkout Dev_new_gui  # Always use Dev_new_gui for latest optimizations
+git checkout main  # Always use main for latest optimizations
 ```
 
 ---
@@ -429,7 +431,7 @@ ansible-playbook \
 To migrate from single-host to distributed deployment:
 
 1. Create separate VMs for each role
-2. Update `/etc/autobot/.env` with real IPs (e.g., `AUTOBOT_BACKEND_HOST=172.16.168.10`)
+2. Update `/etc/autobot/.env` with real IPs (e.g., `AUTOBOT_BACKEND_HOST=<backend-ip>`)
 3. Create `inventory/fleet.yml` with host groups
 4. Run provisioning against new inventory:
    ```bash

@@ -48,7 +48,28 @@ _TRANSFORMERS_FLOOR = (0, 22, 0)
 _REQUIREMENT_FILES = (
     "autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt",
     "autobot-infrastructure/autobot-npu-worker/docker/requirements-npu.txt",
+    # #14562: this one was excluded below as "an old, independent stack nothing
+    # deploys", which was true of the deploy roles and irrelevant to the risk.
+    # It pins `transformers>=4.36.0` with no cap, so pip resolves transformers
+    # to 5.x and inherits the same tokenizers<=0.23.0 cap the two above face —
+    # and the directory is now inside dependabot's reach, so a grouped bump can
+    # move the pin. Guarded rather than exempted.
+    "autobot-npu-worker/resources/windows-npu-worker/requirements.txt",
 )
+
+_SKIP_PARTS = {"venv", ".venv", "node_modules", ".worktrees", ".claude", "__pycache__"}
+
+
+def _outside_excluded_dirs(path: Path, root: Path = _REPO_ROOT) -> bool:
+    """True when no part of `path` RELATIVE to `root` is an excluded directory.
+
+    Relative, never a substring of the absolute path (#15121): this repo runs
+    from `.worktrees/<branch>/` checkouts, where an absolute match hits the repo
+    root itself, skips every requirements file, and leaves the assertion below
+    comparing an empty set against the expected one.
+    """
+    return not any(part in _SKIP_PARTS for part in path.relative_to(root).parts)
+
 
 _TOKENIZERS_LINE = re.compile(r"^tokenizers\s*(?P<spec>[^#\n]*)", re.M)
 _SPEC = re.compile(r"(?P<op>>=|<=|==|<|>)\s*(?P<version>\d+(?:\.\d+)*)")
@@ -141,16 +162,25 @@ def test_every_file_declaring_tokenizers_is_covered():
     unguarded, which is how the npu-worker copy went unnoticed while only the
     ai-stack one was being discussed.
     """
+    # Both manifest shapes, as in repo_tests/declared_distributions.py (#15518):
+    # a requirements file is not always *named* `requirements*` — every
+    # `requirements-ci/*.txt` is one, and a filename-only glob never sees them.
+    candidates = set(_REPO_ROOT.rglob("requirements*.txt")) | set(_REPO_ROOT.rglob("requirements*/*.txt"))
     declaring = {
         str(p.relative_to(_REPO_ROOT))
-        for p in _REPO_ROOT.rglob("requirements*.txt")
-        if not any(skip in str(p) for skip in ("venv/", "node_modules/", ".worktrees/", ".claude/"))
+        for p in sorted(candidates)
+        if _outside_excluded_dirs(p)
         and _TOKENIZERS_LINE.search(p.read_text(encoding="utf-8", errors="replace"))
     }
-    # The windows npu-worker resource file pins an old, independent stack
-    # (transformers>=4.36) and is not installed by any role this repo deploys.
-    declaring -= {"autobot-npu-worker/resources/windows-npu-worker/requirements.txt"}
-    assert declaring == set(_REQUIREMENT_FILES), f"unguarded tokenizers pins: {sorted(declaring - set(_REQUIREMENT_FILES))}"
+    # No subtraction any more (#14562). The windows npu-worker resource file was
+    # excluded here for being "an old, independent stack nothing deploys" — a
+    # statement about deploy roles, not about whether the pin can go
+    # unsatisfiable. It is in _REQUIREMENT_FILES now, so this set comparison is
+    # a plain equality with nothing carved out of it.
+    assert declaring, "the rglob matched no requirements file at all — FIX THE SWEEP, every rule above is vacuous"
+    assert declaring == set(
+        _REQUIREMENT_FILES
+    ), f"unguarded tokenizers pins: {sorted(declaring - set(_REQUIREMENT_FILES))}"
 
 
 @pytest.mark.parametrize(
@@ -184,3 +214,12 @@ def test_version_comparison_is_length_normalised(spec, version, expected):
     specs = [(m.group("op"), _version(m.group("version"))) for m in _SPEC.finditer(spec)]
 
     assert _admits(specs, version) is expected
+
+
+def test_a_checkout_under_worktrees_is_still_scanned(tmp_path):
+    """#15121: the sweep must see a tree rooted inside `.worktrees/`."""
+    root = tmp_path / ".worktrees" / "issue-9999"
+    (root / "venv").mkdir(parents=True)
+
+    assert _outside_excluded_dirs(root / "requirements.txt", root)
+    assert not _outside_excluded_dirs(root / "venv" / "requirements.txt", root)
