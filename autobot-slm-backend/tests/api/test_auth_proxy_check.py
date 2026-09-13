@@ -44,7 +44,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -139,6 +139,20 @@ def _credentials(token: str) -> HTTPAuthorizationCredentials:
 # /api/auth/proxy-check depends on (#16374 round 3) -- admin/non-admin/
 # superadmin/invalid/missing, real JWT round-trip.
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _stub_jti_denylist_check():
+    """services.auth is loaded for REAL here (see module docstring), so
+    decode_token_async's jti check reaches the real
+    token_denylist.is_jti_revoked, which needs Redis -- and #16387 made that
+    check fail CLOSED (raise) when Redis cannot answer, which CI's no-Redis
+    environment cannot. These tests are about the admin-permission gate, not
+    the denylist itself (#16413's own tests cover that), so every minted
+    token's jti is simply "not revoked" here.
+    """
+    with patch.object(_auth_mod, "is_jti_revoked", AsyncMock(return_value=False)):
+        yield
 
 
 class TestProxyCheckGate:

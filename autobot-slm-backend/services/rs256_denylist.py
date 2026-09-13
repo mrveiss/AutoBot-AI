@@ -21,12 +21,23 @@ client).  The namespace prefix ``auth:rs256:jti:denylist:`` is intentionally
 distinct from the SLM-only HS256 denylist (``slm:jwt:denylist:``) so both
 can coexist without collision.
 
-Fail-open policy
-----------------
-If Redis is unavailable ``is_rs256_jti_revoked`` returns ``False`` — the same
-fail-open contract used by the HS256 denylist in ``token_denylist.py``.  RS256
-authority tokens already have a bounded lifetime so a brief window during Redis
-downtime is acceptable.
+Fail-CLOSED policy (#16412)
+----------------------------
+If Redis is unavailable or errors, ``is_rs256_jti_revoked`` raises instead of
+returning ``False``.  A denylist check exists to catch an authority token that
+was logged out or explicitly revoked; if Redis cannot answer, "not revoked"
+and "unknown" are indistinguishable, and treating them the same would let
+such a token through for as long as the outage lasts.  This mirrors the
+owner's #16387 decision for the HS256 denylist (``token_denylist.py``):
+a Redis outage denies the RS256 authority-token path rather than honouring a
+possibly-revoked token.  ``verify_authority_token`` (``jwks_verifier.py``)
+catches the raise, at both the cache-hit and full-verify call sites, and
+denies the token (401).
+
+The write side, ``revoke_rs256_jti``, stays fail-open (best-effort, as in
+#16387): a revoke that cannot reach Redis has nothing else to deny closed
+against, and the read-side check above is what carries the fail-closed
+guarantee.
 
 TTL
 ---
@@ -59,6 +70,11 @@ async def revoke_rs256_jti(jti: str, ttl_seconds: int) -> None:
 
     Silently no-ops if Redis is unavailable (logs a warning).
 
+    Unlike ``is_rs256_jti_revoked``'s fail-CLOSED revocation *check* (#16412),
+    this write path stays fail-open: a revoke that cannot reach Redis has
+    nothing else to deny closed against, and the read-side check is what
+    carries the fail-closed guarantee.
+
     Args:
         jti: The JWT ID claim from the RS256 authority token.
         ttl_seconds: Remaining lifetime of the token in seconds (>= 1).
@@ -75,17 +91,24 @@ async def revoke_rs256_jti(jti: str, ttl_seconds: int) -> None:
 async def is_rs256_jti_revoked(jti: str) -> bool:
     """Return True if *jti* is in the cross-service RS256 denylist.
 
-    Fail-open: returns False when Redis is unavailable.
+    Fail-CLOSED (#16412): raises when Redis is unavailable or the check
+    itself errors, rather than returning ``False``.  The caller
+    (``verify_authority_token`` in ``jwks_verifier.py``) must deny the token
+    on this raise -- "could not check" is not the same answer as "not
+    revoked".
 
     Args:
         jti: The JWT ID claim to check.
 
     Returns:
         True if the jti has been explicitly revoked, False otherwise.
+
+    Raises:
+        ConnectionError | OSError | asyncio.TimeoutError | redis.exceptions.RedisError:
+            the denylist could not be checked.
     """
     redis = await get_async_redis_client()
     if redis is None:
-        logger.warning("rs256_denylist: Redis unavailable; treating jti=%r as NOT revoked (fail-open)", jti)
-        return False
+        raise ConnectionError("rs256 denylist check failed: no Redis client available")
     exists = await redis.exists(_rs256_denylist_key(jti))
     return bool(exists)

@@ -80,3 +80,29 @@ async def test_revoked_or_invalid_token_rejected_4001():
     async_decode.assert_awaited_once_with("revoked-jti-token")
     ws.close.assert_awaited_once()
     assert ws.close.call_args.kwargs.get("code") == 4001
+
+
+@pytest.mark.asyncio
+async def test_revocation_check_failure_rejected_4001():
+    """#16387: decode_token_async raising HTTPException (a revocation check
+    could not run; fail-closed) must still close 4001 cleanly, not propagate
+    an unhandled exception through the un-accepted socket."""
+    from fastapi import HTTPException, status
+
+    ws = _fake_ws()
+    async_decode = AsyncMock(
+        side_effect=HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    )
+    with (
+        patch("api.websocket._extract_ws_token", return_value="good-token"),
+        patch("api.websocket.auth_service.decode_token_async", async_decode),
+    ):
+        result = await _authenticate_websocket_token(ws)
+    assert result is None
+    async_decode.assert_awaited_once_with("good-token")
+    ws.close.assert_awaited_once()
+    assert ws.close.call_args.kwargs.get("code") == 4001

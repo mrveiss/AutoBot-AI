@@ -10,22 +10,25 @@ The sync ``decode_token`` path cannot check Redis and is documented
 accordingly — it is used only in contexts where a short token TTL is the
 primary guard.
 
-Fail-open policy for ``is_jti_revoked``: if Redis is unavailable the
-function returns ``False``.  This is acceptable because:
-- SLM HS256 tokens have a short configured TTL (default 30 min).
-- A revoked token will expire naturally before long.
-- Denying all auth on Redis downtime would be worse than a brief window
-  where a revoked token could be reused.
+Fail-CLOSED policy for ``is_jti_revoked`` (#16387): if Redis is unavailable
+the function raises instead of returning ``False``.  A denylist check exists
+to catch a token that was logged out or belongs to a leaked credential; if
+Redis cannot answer, "not revoked" and "unknown" are indistinguishable, and
+treating them the same would let such a token through for as long as the
+outage lasts.  The owner's decision on #16387 accepts the trade-off in the
+other direction instead: a Redis outage denies SLM login (including the
+backend admin path reached through the proxy, #16374) rather than honouring
+a possibly-revoked token.  ``decode_token_async`` (``services/auth.py``)
+catches the raise and returns 401.
 
 Bounded access (#11443): ``get_redis_client`` does NOT return ``None``
 quickly when Redis is down or misconfigured — the shared connection
 manager retries pool creation for ~60 s while holding a global lock, which
 serialized every authenticated request behind a one-minute wait and made
-the whole SLM GUI appear dead.  The documented fail-open therefore has to
-be enforced HERE: every Redis interaction is wrapped in
+the whole SLM GUI appear dead.  Every Redis interaction is still wrapped in
 ``asyncio.wait_for`` with a short deadline, and failures arm a short
-negative-cache so subsequent auths skip Redis entirely instead of paying
-the timeout each time.
+negative-cache so subsequent auths skip Redis entirely (raising immediately)
+instead of paying the timeout each time.
 """
 
 import asyncio
@@ -41,9 +44,10 @@ except ImportError:  # pragma: no cover - redis is a hard dep in deployments
 
 logger = logging.getLogger(__name__)
 
-# Failures that arm the fail-open window. asyncio.TimeoutError is not OSError
-# on py3.10, and redis.exceptions.ConnectionError is not builtin ConnectionError
-# — both must be listed explicitly (#11445 review).
+# Failures that arm the negative-cache window shared by revoke_jti (still
+# fail-open, #16387) and is_jti_revoked (fail-closed, #16387). asyncio.TimeoutError
+# is not OSError on py3.10, and redis.exceptions.ConnectionError is not builtin
+# ConnectionError — both must be listed explicitly (#11445 review).
 _REDIS_FAILURES = (asyncio.TimeoutError, ConnectionError, OSError, _RedisError)
 
 _DENYLIST_PREFIX = "slm:jwt:denylist:"
@@ -76,7 +80,7 @@ def _mark_redis_unavailable(op: str, jti: str, exc: Exception | None) -> None:
     _unavailable_until = time.monotonic() + _UNAVAILABLE_RETRY_SECONDS
     if not was_armed:
         logger.warning(
-            "%s: Redis unavailable (%s); denylist fail-open for %.0fs (jti=%r)",
+            "%s: Redis unavailable (%s); denylist checks degraded for %.0fs (jti=%r)",
             op,
             exc.__class__.__name__ if exc else "no client",
             _UNAVAILABLE_RETRY_SECONDS,
@@ -96,6 +100,11 @@ async def revoke_jti(jti: str, ttl_seconds: int) -> None:
     The key auto-expires when the original token would have expired anyway,
     so no background cleanup is needed.  Silently no-ops if Redis is
     unavailable (logs a warning) — bounded by the module deadline.
+
+    Unlike ``is_jti_revoked``'s fail-CLOSED revocation *check* (#16387), this
+    write path stays fail-open: a logout that cannot reach Redis has nothing
+    else to deny closed against, and decode-time verification is what now
+    carries the fail-closed guarantee.
     """
     ttl = max(1, ttl_seconds)
 
@@ -123,12 +132,17 @@ async def revoke_jti(jti: str, ttl_seconds: int) -> None:
 async def is_jti_revoked(jti: str) -> bool:
     """Return ``True`` if *jti* is in the denylist.
 
-    Fail-open: returns ``False`` when Redis is unavailable, misconfigured,
-    or slower than the module deadline (#11443).  The token's own TTL still
-    provides a time-bounded guard in that case.
+    Fail-CLOSED (#16387): raises when Redis is unavailable, misconfigured, or
+    slower than the module deadline (#11443), rather than returning ``False``.
+    The caller (``decode_token_async``) must deny the token on this raise --
+    "could not check" is not the same answer as "not revoked".
+
+    Raises:
+        ConnectionError | OSError | asyncio.TimeoutError | redis.exceptions.RedisError:
+            the denylist could not be checked.
     """
     if _redis_marked_unavailable():
-        return False
+        raise ConnectionError("jti denylist check skipped: Redis recently unavailable")
 
     async def _do() -> bool | None:
         redis = await get_async_redis_client()
@@ -140,9 +154,9 @@ async def is_jti_revoked(jti: str) -> bool:
         result = await asyncio.wait_for(_do(), timeout=_REDIS_DEADLINE_SECONDS)
     except _REDIS_FAILURES as exc:
         _mark_redis_unavailable("is_jti_revoked", jti, exc)
-        return False
+        raise
     if result is None:
         _mark_redis_unavailable("is_jti_revoked", jti, None)
-        return False
+        raise ConnectionError("jti denylist check failed: no Redis client available")
     _mark_redis_available()
     return result

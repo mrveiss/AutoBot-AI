@@ -14,6 +14,10 @@ Covers:
 - JWKS-unreachable returns None (no crash)
 - Expired authority token rejected
 - Claims normalization (username / sub / admin / authority_token)
+- RS256 jti-revocation check failure denies the token (401), on both the
+  cache-hit and full-verify call sites (#16412, fail-closed)
+- Control: a non-revoked RS256 token is still accepted when the check is
+  healthy (#16412)
 
 The tests are isolated from the real backend: a test RSA keypair signs tokens
 and a mocked httpx response serves the JWKS payload.
@@ -33,6 +37,7 @@ import pytest
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi import HTTPException, status
 
 # ---------------------------------------------------------------------------
 # Ensure autobot-slm-backend and autobot_shared are importable
@@ -116,6 +121,16 @@ _jwks_spec.loader.exec_module(jwks_verifier)  # type: ignore[union-attr]
 _oidc_cache_stub = _types.ModuleType("services.oidc_token_cache")
 _oidc_cache_stub.get_cached_claims = AsyncMock(return_value=None)
 _oidc_cache_stub.cache_claims = AsyncMock(return_value=None)
+
+
+def _stub_rs256_denylist(is_rs256_jti_revoked_mock: AsyncMock):
+    """``patch.dict`` installing a fake ``services.rs256_denylist`` module for the
+    deferred ``from services.rs256_denylist import is_rs256_jti_revoked`` import
+    inside ``verify_authority_token`` (#16412). No existing test needs this: only
+    a token carrying a ``jti`` claim reaches that import."""
+    stub = _types.ModuleType("services.rs256_denylist")
+    stub.is_rs256_jti_revoked = is_rs256_jti_revoked_mock
+    return patch.dict(sys.modules, {"services.rs256_denylist": stub})
 
 
 @pytest.fixture(autouse=True)
@@ -485,6 +500,65 @@ async def test_wrong_signing_key_rejected(rsa_keypair, rsa_keypair_b):
         result = await jwks_verifier.verify_authority_token(token)
 
     assert result is None, "Token signed by different key must be rejected"
+
+
+# ---------------------------------------------------------------------------
+# Test: RS256 jti-revocation check failure denies the token (#16412, fail-closed)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_full_verify_denylist_check_failure_denies_token(rsa_keypair):
+    """#16412: is_rs256_jti_revoked raising on the full-verify path (Redis down)
+    denies the token (401) instead of falling through and accepting it."""
+    pem_priv, pem_pub = rsa_keypair
+    token = _make_authority_token(
+        pem_priv, claims={"username": "alice", "user_id": "uid-1", "role": "admin", "jti": "jti-full-verify"}
+    )
+    jwks = _make_jwks(pem_pub)
+
+    with (
+        _mock_httpx_fetch(jwks),
+        _stub_rs256_denylist(AsyncMock(side_effect=ConnectionError("redis down"))),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        await jwks_verifier.verify_authority_token(token)
+
+    assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_cache_hit_denylist_check_failure_denies_token():
+    """#16412: a cache-hit must also deny the token when the revocation
+    check itself cannot run, not just when it returns True -- otherwise a
+    Redis outage would let every already-cached token sail through."""
+    cached_claims = {"sub": "alice", "username": "alice", "jti": "jti-cache-hit", "authority_token": True}
+
+    with (
+        patch.object(_oidc_cache_stub, "get_cached_claims", AsyncMock(return_value=cached_claims)),
+        _stub_rs256_denylist(AsyncMock(side_effect=TimeoutError("redis timed out"))),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        await jwks_verifier.verify_authority_token("irrelevant-token-cache-hit-path")
+
+    assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_full_verify_denylist_check_healthy_accepts_non_revoked_token(rsa_keypair):
+    """Control (#16412): with the revocation check healthy and returning
+    "not revoked", a valid RS256 token carrying a jti is still accepted."""
+    pem_priv, pem_pub = rsa_keypair
+    token = _make_authority_token(
+        pem_priv, claims={"username": "alice", "user_id": "uid-1", "role": "admin", "jti": "jti-healthy"}
+    )
+    jwks = _make_jwks(pem_pub)
+
+    with _mock_httpx_fetch(jwks), _stub_rs256_denylist(AsyncMock(return_value=False)):
+        result = await jwks_verifier.verify_authority_token(token)
+
+    assert result is not None
+    assert result["username"] == "alice"
 
 
 # ---------------------------------------------------------------------------
