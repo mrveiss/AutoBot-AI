@@ -14,10 +14,11 @@ import os
 import secrets
 import socket
 import stat
+from functools import cached_property
 from pathlib import Path
 from typing import Optional
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, computed_field
 from pydantic_settings import BaseSettings
 
 from autobot_shared.secret_redaction import RedactedReprMixin
@@ -421,7 +422,17 @@ class Settings(RedactedReprMixin, BaseSettings):
     # External URL - remote nodes use nginx reverse proxy.
     # Issue #2758: derive dynamically from local IP when SLM_EXTERNAL_URL is
     # not set, instead of defaulting to a hardcoded address.
-    external_url: str = os.getenv("SLM_EXTERNAL_URL", f"https://{_get_local_ip()}")
+    #
+    # #16262: a plain field default here calls _get_local_ip() (a real
+    # socket.connect) the moment this class body executes -- at import time,
+    # unconditionally, even when SLM_EXTERNAL_URL is set. A computed,
+    # cached property defers that call to the first actual access of
+    # `settings.external_url`, and caches it since the machine's outbound IP
+    # does not change during the process's lifetime.
+    @computed_field  # type: ignore[prop-decorator]
+    @cached_property
+    def external_url(self) -> str:
+        return os.getenv("SLM_EXTERNAL_URL") or f"https://{_get_local_ip()}"
 
     # TLS verification for outbound HTTPS calls to internal nodes.
     # Set SLM_VERIFY_SSL=false ONLY in dev/test environments that use
