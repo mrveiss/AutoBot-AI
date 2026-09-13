@@ -86,6 +86,34 @@ class _SyncTypeEnum:
 
 _models_db.SyncType = _SyncTypeEnum  # type: ignore[attr-defined]
 _models_db.Role = _MagicMock()  # type: ignore[attr-defined]
+# #16025: seed_default_roles() filters DEFAULT_ROLES through Role.__table__.columns.
+# __table__ is a dunder-shaped name MagicMock's __getattr__ refuses to auto-vivify
+# (see the identical fix and its reasoning in autobot-slm-backend/conftest.py) --
+# this module builds its OWN Role stub, separate from that conftest one, so it
+# needs the same real column names set directly.
+_models_db.Role.__table__ = _types.SimpleNamespace(  # type: ignore[attr-defined]
+    columns=frozenset(
+        {
+            "id",
+            "name",
+            "display_name",
+            "sync_type",
+            "source_paths",
+            "target_path",
+            "systemd_service",
+            "auto_restart",
+            "health_check_port",
+            "health_check_path",
+            "pre_sync_cmd",
+            "post_sync_cmd",
+            "required",
+            "degraded_without",
+            "ansible_playbook",
+            "created_at",
+            "updated_at",
+        }
+    )
+)
 sys.modules["models.database"] = _models_db
 setattr(_models_pkg, "database", _models_db)
 
