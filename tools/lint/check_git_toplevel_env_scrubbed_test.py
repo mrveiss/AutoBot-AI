@@ -24,6 +24,7 @@ from _scan_helpers import scan_python_files  # noqa: E402
 from check_git_toplevel_env_scrubbed import (  # noqa: E402
     ALLOWLIST,
     GIT_CALL_FLOOR,
+    is_production_path,
     main,
     scan,
     scan_shell,
@@ -346,6 +347,24 @@ def test_every_allowlist_entry_still_exists() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     missing = [entry for entry in ALLOWLIST if not (repo_root / entry).is_file()]
     assert not missing, f"allowlist entries no longer in the tree: {missing}"
+
+
+def test_a_real_tool_named_like_a_test_is_still_production(tmp_path: Path) -> None:
+    """`scripts/test_first_remediation.py` must not be exempted by its name alone (#16179).
+
+    Without the override, ``is_production_path`` reads the ``test_`` prefix
+    and treats a real, unreviewed automation tool as a test -- exactly the
+    misclassification #16179 found. This pins the override rather than the
+    general prefix rule, so a DIFFERENT genuinely-test ``test_*.py`` file
+    stays exempt (see the contrast test below).
+    """
+    assert is_production_path("scripts/test_first_remediation.py") is True
+
+
+def test_an_ordinary_test_prefixed_file_still_reads_as_a_test() -> None:
+    """The override is scoped to one named file, not a rule change."""
+    assert is_production_path("scripts/test_something_else.py") is False
+    assert is_production_path("autobot-backend/agents/npu_code_search_agent_test.py") is False
 
 
 def test_main_exits_nonzero_on_a_violation(tmp_path: Path) -> None:
