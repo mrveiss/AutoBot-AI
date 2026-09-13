@@ -134,6 +134,15 @@ def issue_filing_steps(doc: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def violation_filing_steps(doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """Issue-filing steps gated on the audit's exit code: the violation's reader.
+
+    Distinct from the ``failure()`` reader (#16237), which files a guard that did
+    not finish and carries no audit report.
+    """
+    return [step for step in issue_filing_steps(doc) if "rc != '0'" in str(step.get("if", ""))]
+
+
 # ---------------------------------------------------------------------------
 # Non-vacuity. These come first: every sweep below is a list comprehension over
 # `steps()`, and a comprehension over an empty list agrees with everything.
@@ -252,12 +261,13 @@ def test_a_violation_is_filed_as_an_issue():
     drift"). Its redness reached no reader, so the violation stood until
     someone ran the audit locally. A log line is not a report.
     """
-    filing = issue_filing_steps(load_workflow())
-    assert filing, "a failing audit files no issue — the failure would again reach nobody"
-    guards = {str(step.get("if", "")) for step in filing}
-    assert all(
-        "rc != '0'" in guard for guard in guards
-    ), f"the issue-filing step(s) are not gated on the audit's exit code: {sorted(guards)}"
+    doc = load_workflow()
+    assert violation_filing_steps(doc), "a failing audit files no issue — the failure would again reach nobody"
+    # The only other gate a filing step may carry is `failure()`: the reader for a
+    # guard that did not finish (#16237). A filing step on any third gate is neither.
+    guards = {str(step.get("if", "")).strip() for step in issue_filing_steps(doc)}
+    unexpected = sorted(guard for guard in guards if "rc != '0'" not in guard and guard != "failure()")
+    assert not unexpected, f"an issue-filing step is gated on neither the audit's exit code nor failure(): {unexpected}"
 
 
 def test_the_filing_step_is_granted_the_permission_it_needs():
@@ -280,15 +290,17 @@ def test_the_audit_output_is_passed_through_the_environment():
     ``script:`` body, so a path containing a backtick or ``${`` cannot break the
     step whose whole job is to report the failure.
     """
-    filing = issue_filing_steps(load_workflow())
-    assert filing
-    for step in filing:
+    doc = load_workflow()
+    assert violation_filing_steps(doc)
+    for step in issue_filing_steps(doc):
         script = str(step.get("with", {}).get("script", ""))
         assert "steps.audit.outputs.report" not in script, (
             "the audit report is interpolated straight into the github-script body; "
             "pass it through `env:` and read `process.env` instead"
         )
-        assert "process.env" in script
+    # Only the violation reader carries the report; the failure() reader has none to pass.
+    for step in violation_filing_steps(doc):
+        assert "process.env" in str(step.get("with", {}).get("script", ""))
 
 
 # ---------------------------------------------------------------------------

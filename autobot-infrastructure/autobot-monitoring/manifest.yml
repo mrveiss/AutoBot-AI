@@ -19,6 +19,7 @@ services:
     system_service: prometheus
     start_order: 1
     user: prometheus
+    slm_roles: [slm-monitoring]   # #16025: role_registry name differs from this dir
   - name: autobot-monitoring-grafana
     type: systemd
     system_service: grafana-server

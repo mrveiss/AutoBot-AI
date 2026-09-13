@@ -35,7 +35,7 @@ vi.mock('@/utils/ApiClient', () => ({
   default: { rawRequest: (...args: unknown[]) => mockRaw(...args) },
 }))
 
-import { useRoles } from './useRoles'
+import { useRoles, joinSystemdUnits, parseSystemdUnits } from './useRoles'
 
 type RawCall = [string, { method: string; body?: unknown }]
 
@@ -234,6 +234,52 @@ describe('useRoles — migrated onto slmApiClient (#12420 Phase 2 batch 7)', () 
       await r.fetchRoles()
 
       expect(r.error).toBe('HTTP 502')
+    })
+  })
+})
+
+describe('systemd_service sequence <-> comma-separated text field (#16025)', () => {
+  describe('joinSystemdUnits', () => {
+    it('joins multiple units with a comma and space', () => {
+      expect(joinSystemdUnits(['autobot-backend', 'autobot-celery'])).toBe(
+        'autobot-backend, autobot-celery'
+      )
+    })
+
+    it('renders a single-unit role the same as before the sequence change', () => {
+      expect(joinSystemdUnits(['tigervncserver'])).toBe('tigervncserver')
+    })
+
+    it('is empty for null, undefined, or an empty array', () => {
+      expect(joinSystemdUnits(null)).toBe('')
+      expect(joinSystemdUnits(undefined)).toBe('')
+      expect(joinSystemdUnits([])).toBe('')
+    })
+  })
+
+  describe('parseSystemdUnits', () => {
+    it('splits comma-separated input into a trimmed array', () => {
+      expect(parseSystemdUnits('autobot-backend, autobot-celery')).toEqual([
+        'autobot-backend',
+        'autobot-celery',
+      ])
+    })
+
+    it('tolerates ragged whitespace and trailing commas', () => {
+      expect(parseSystemdUnits('  autobot-backend ,,autobot-celery ,')).toEqual([
+        'autobot-backend',
+        'autobot-celery',
+      ])
+    })
+
+    it('returns null for blank input, matching the field being optional', () => {
+      expect(parseSystemdUnits('')).toBeNull()
+      expect(parseSystemdUnits('   ')).toBeNull()
+    })
+
+    it('round-trips with joinSystemdUnits', () => {
+      const units = ['autobot-backend', 'autobot-celery']
+      expect(parseSystemdUnits(joinSystemdUnits(units))).toEqual(units)
     })
   })
 })

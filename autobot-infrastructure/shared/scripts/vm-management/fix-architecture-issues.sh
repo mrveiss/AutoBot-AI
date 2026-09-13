@@ -49,10 +49,28 @@ log "Checking Redis architecture compliance..."
 if pgrep redis-server >/dev/null || docker ps | grep redis >/dev/null 2>&1; then
     warning "Redis is running locally on main instance - this violates architecture!"
     echo "Stopping local Redis instances..."
-    sudo systemctl stop redis-server 2>/dev/null || true
-    sudo systemctl stop redis-stack-server 2>/dev/null || true
+    # #16071 AC4: distinguish "unit not installed on this host" (nothing to do,
+    # e.g. redis-server on a node that only ever had redis-stack-server) from
+    # "unit exists but the stop failed" (a real problem) -- a blanket `|| true`
+    # discarded both alike. list-unit-files exits non-zero for an absent unit,
+    # the same existence check already used for autobot-redis/redis-stack-server
+    # elsewhere in this tree.
+    stop_failed=0
+    for unit in redis-server redis-stack-server; do
+        if ! systemctl list-unit-files "${unit}.service" &>/dev/null; then
+            continue
+        fi
+        if ! sudo systemctl stop "${unit}"; then
+            error "Failed to stop ${unit}"
+            stop_failed=1
+        fi
+    done
     docker stop $(docker ps -q -f name=redis) 2>/dev/null || true
-    success "Local Redis instances stopped"
+    if [ "${stop_failed}" -eq 0 ]; then
+        success "Local Redis instances stopped"
+    else
+        error "One or more local Redis units failed to stop -- see above"
+    fi
 else
     success "✅ No local Redis instances found (correct)"
 fi
