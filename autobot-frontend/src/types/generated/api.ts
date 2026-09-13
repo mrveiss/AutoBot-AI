@@ -10061,13 +10061,19 @@ export interface paths {
          *
          *     Returns metrics on grounding operations:
          *     - % of claims verified
-         *     - % from KB vs research vs causal inference
-         *     - Top unverifiable claims
-         *     - Conflict resolution time
+         *     - % by verification method (methods with no producer yet are absent, not zero)
+         *     - Conflicts created/resolved
          *     - Overall confidence trends
          *
+         *     #14981: every field below is a real counter written by GroundedAgent
+         *     (respond_with_grounding, resolve_conflict), read since the hash was last
+         *     created or its TTL last refreshed -- not yet windowed by `period`.
+         *     `avg_resolution_time_hours` and `top_unverifiable` were promised here but
+         *     never implemented or returned; dropped rather than left as more
+         *     undelivered promises (#16421 if wanted).
+         *
          *     Query params:
-         *     - period: 1h|24h|7d|30d (default: 24h)
+         *     - period: 1h|24h|7d|30d (default: 24h; accepted, not yet applied -- see above)
          *
          *     Response:
          *     ```json
@@ -10078,17 +10084,12 @@ export interface paths {
          *         "total_claims_extracted": 8204,
          *         "claims_verified": 0.87,
          *         "claim_sources": {
-         *             "kb_lookup": 0.65,
-         *             "external_research": 0.22,
-         *             "causal_inference": 0.13
+         *             "kb_lookup": 0.74,
+         *             "claim_verifier_rag": 0.26
          *         },
          *         "average_confidence": 0.89,
          *         "conflicts_created": 142,
-         *         "conflicts_resolved": 128,
-         *         "avg_resolution_time_hours": 2.3,
-         *         "top_unverifiable": [
-         *             {"claim": "...", "count": 12}
-         *         ]
+         *         "conflicts_resolved": 128
          *     }
          *     ```
          *

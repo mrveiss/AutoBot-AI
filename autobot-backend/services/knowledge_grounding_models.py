@@ -55,7 +55,7 @@ class KBStatus(str, Enum):
 class VerificationMethod(str, Enum):
     """
     How an extracted CLAIM was verified (#15005) — ``VerifiedClaim.verification_method``
-    in ``services/grounded_agent.py``, not the FACT-provenance field of the same name
+    in ``services/grounded_agent_models.py``, not the FACT-provenance field of the same name
     (see the boundary note below; do not add that vocabulary here).
 
     Lives here rather than beside ``VerificationStatus`` in
