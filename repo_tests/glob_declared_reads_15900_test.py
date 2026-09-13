@@ -235,6 +235,11 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         },
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
+    "libs/autobot-sdk-ts/src/resources/*.ts": (
+        {"repo_tests/sdk_ts_request_contract_test.py"},
+        "reads the TS SDK's own resource-method source to check it against the backend's routes (#15528, "
+        "#16495); `libs/` is outside the python filter's trees",
+    ),
     "scripts/lib/*.sh": (
         {"repo_tests/comment_line_number_citations_test.py"},
         "tree `scripts/` is outside the python filter; the per-tree trade #15900 declines to make wholesale",
