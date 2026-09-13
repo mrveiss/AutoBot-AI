@@ -91,7 +91,7 @@ BASELINE = {
     # Distinct class names declared anywhere in the frontend.
     "distinct_class_names": 5619,  # #16245: recounted at the rebased tree, combined with #16596's cuts
     # Total CSS rule declarations.
-    "css_rule_declarations": 9401,  # #16245: recounted at the rebased tree, combined with #16596's cuts
+    "css_rule_declarations": 9398,  # #16245: recounted at the rebased tree, combined with #16596's cuts
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
     "button_definition_files": 101,
