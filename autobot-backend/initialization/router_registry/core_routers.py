@@ -80,6 +80,7 @@ from api.live_events import router as live_events_router  # Issue #6229
 from api.llm import router as llm_router
 from api.llm_providers import router as llm_providers_router
 from api.manual_mcp import router as manual_mcp_router
+from api.mcp_external_servers import router as mcp_external_servers_router
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
 from api.mobile_devices import router as mobile_devices_router  # GH#4463
@@ -430,6 +431,7 @@ def _get_mcp_routers() -> list:
         (knowledge_mcp_router, "/knowledge", ["knowledge_mcp", "mcp"], "knowledge_mcp"),
         (vnc_mcp_router, "/vnc", ["vnc", "mcp"], "vnc_mcp"),
         (mcp_registry_router, "/mcp", ["mcp", "registry"], "mcp_registry"),
+        (mcp_external_servers_router, "/mcp", ["mcp", "mcp-external-servers"], "mcp_external_servers"),
         (
             sequential_thinking_mcp_router,
             "/sequential_thinking",

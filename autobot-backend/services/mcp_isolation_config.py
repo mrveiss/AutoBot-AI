@@ -116,3 +116,27 @@ def policy_for(bridge: str) -> BridgePolicy:
 def all_policies(bridges: List[str]) -> Dict[str, BridgePolicy]:
     """Return policies for a list of bridge names."""
     return {b: policy_for(b) for b in bridges}
+
+
+def apply_rlimits(cpu_seconds: int, memory_mb: int, nofile: int) -> None:
+    """Apply RLIMIT_CPU, RLIMIT_AS, RLIMIT_NOFILE, and a fork-bomb NPROC cap (#3229).
+
+    A limit <= 0 is left unset (unbounded). Call this in the process the
+    limits should bind: self-applied at worker startup
+    (services/mcp_bridge_workers/worker_entrypoint.py) or as a subprocess
+    preexec_fn before an admin-configured external command is exec'd
+    (skills/sync/mcp_transport.py's StdioTransport, #11542).
+    """
+    import resource
+
+    if cpu_seconds > 0:
+        resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
+    if memory_mb > 0:
+        mem_bytes = memory_mb * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+    if nofile > 0:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (nofile, nofile))
+    try:
+        resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
+    except (ValueError, OSError):
+        pass

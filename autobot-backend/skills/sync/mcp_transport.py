@@ -20,12 +20,30 @@ from typing import Any, AsyncIterator, Dict
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EgressBlockedError
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.url_safety import is_public_url_async
+from services.mcp_isolation_config import BridgePolicy
 
 logger = get_logger(__name__)
 
 # JSON-RPC version used by MCP
 _JSONRPC = "2.0"
+
+
+async def _check_egress(url: str, guard_egress: bool | None) -> None:
+    """Raise EgressBlockedError when *url* fails the outbound-address policy (#13625).
+
+    ``guard_egress=None`` (default) skips the check entirely — no behaviour
+    change for internal callers. Transports that route through
+    ``get_http_client().tracked_request(guard_egress=...)`` already get this
+    per-request; this helper is for :class:`SSETransport`, whose raw session
+    bypasses the pooled client.
+    """
+    if guard_egress is None:
+        return
+    if not await is_public_url_async(url, allow_private=guard_egress):
+        raise EgressBlockedError(f"Refusing outbound MCP request to a disallowed address: {url!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -82,10 +100,23 @@ class StdioTransport(MCPTransport):
     line-by-line.  This matches the reference MCP stdio framing spec.
     """
 
-    def __init__(self, command: str, timeout: float = 30.0) -> None:
-        """Initialise with a shell command string, e.g. ``"npx -y @modelcontextprotocol/server-filesystem /tmp"``."""
+    def __init__(
+        self,
+        command: str,
+        timeout: float = 30.0,
+        resource_policy: BridgePolicy | None = None,
+    ) -> None:
+        """Initialise with a shell command string, e.g. ``"npx -y @modelcontextprotocol/server-filesystem /tmp"``.
+
+        resource_policy (#3229, #11542): when given, the subprocess self-
+        applies its cpu/memory/nofile rlimits via preexec_fn before exec —
+        the same limits services/mcp_bridge_workers/worker_entrypoint.py
+        self-applies for the internal-bridge isolated runtime, reused here
+        for an admin-configured external stdio MCP server.
+        """
         self._command = command
         self._timeout = timeout
+        self._resource_policy = resource_policy
         self._proc: asyncio.subprocess.Process | None = None
         self._recv_lock = asyncio.Lock()
 
@@ -93,13 +124,28 @@ class StdioTransport(MCPTransport):
         """Spawn the subprocess."""
         parts = self._command.split()
         logger.info("StdioTransport: spawning %s", parts)
+        preexec_fn = self._make_preexec_fn()
         self._proc = await asyncio.create_subprocess_exec(
             *parts,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=preexec_fn,
         )
         logger.debug("StdioTransport: pid=%s", self._proc.pid)
+
+    def _make_preexec_fn(self):
+        """Return a preexec_fn applying this transport's resource_policy, or None."""
+        policy = self._resource_policy
+        if policy is None:
+            return None
+
+        def _preexec() -> None:
+            from services.mcp_isolation_config import apply_rlimits
+
+            apply_rlimits(cpu_seconds=policy.cpu_seconds, memory_mb=policy.memory_mb, nofile=policy.nofile)
+
+        return _preexec
 
     async def send(self, request: Dict[str, Any]) -> None:
         """Write one JSON line to the subprocess stdin."""
@@ -152,11 +198,19 @@ class SSETransport(MCPTransport):
     internally so ``receive()`` can yield them in order.
     """
 
-    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 30.0,
+        guard_egress: bool | None = None,
+        extra_headers: Dict[str, str] | None = None,
+    ) -> None:
         """Initialise with the base URL of the SSE-capable MCP server."""
         # Normalise sse:// → https://
         self._base_url = base_url.replace("sse://", "https://", 1)
         self._timeout = timeout
+        self._guard_egress = guard_egress
+        self._extra_headers = extra_headers or {}
         self._session: aiohttp.ClientSession | None = None
         self._queue: asyncio.Queue = asyncio.Queue()
         self._sse_task: asyncio.Task | None = None
@@ -171,7 +225,13 @@ class SSETransport(MCPTransport):
         session for every outgoing POST. It is explicitly torn down in
         ``close()``. Not a per-request construction, so not a pooling
         candidate.
+
+        This transport bypasses the pooled client (see the carve-out above),
+        so unlike HTTPTransport/StreamableHTTPTransport it checks the egress
+        policy itself (#13625, #11542) rather than getting it from
+        ``get_http_client().tracked_request()``.
         """
+        await _check_egress(f"{self._base_url}/sse", self._guard_egress)
         self._session = aiohttp.ClientSession()
         self._sse_task = asyncio.create_task(self._read_sse())
         logger.info("SSETransport: connected to %s", self._base_url)
@@ -180,7 +240,7 @@ class SSETransport(MCPTransport):
         """Background task: stream SSE events into the internal queue."""
         assert self._session is not None
         url = f"{self._base_url}/sse"
-        headers = {"Accept": "text/event-stream", "Cache-Control": "no-cache"}
+        headers = {"Accept": "text/event-stream", "Cache-Control": "no-cache", **self._extra_headers}
         try:
             async with self._session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=None)) as resp:
                 if resp.status != 200:
@@ -205,7 +265,13 @@ class SSETransport(MCPTransport):
         if self._session is None:
             raise RuntimeError("SSETransport not connected")
         url = f"{self._base_url}/message"
-        async with self._session.post(url, json=request, timeout=aiohttp.ClientTimeout(total=self._timeout)) as resp:
+        await _check_egress(url, self._guard_egress)
+        async with self._session.post(
+            url,
+            json=request,
+            headers=self._extra_headers or None,
+            timeout=aiohttp.ClientTimeout(total=self._timeout),
+        ) as resp:
             if resp.status not in (200, 202):
                 raise aiohttp.ClientResponseError(resp.request_info, resp.history, status=resp.status)
         logger.debug("SSETransport: sent method=%s", request.get("method"))
@@ -249,10 +315,18 @@ class HTTPTransport(MCPTransport):
     from multiple coroutines without shared session state.
     """
 
-    def __init__(self, base_url: str, timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 10.0,
+        guard_egress: bool | None = None,
+        extra_headers: Dict[str, str] | None = None,
+    ) -> None:
         """Initialise with the base URL of the MCP HTTP server."""
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._guard_egress = guard_egress
+        self._extra_headers = extra_headers
         # Pending response stored between send() and receive()
         self._pending: Dict[str, Any] | None = None
 
@@ -265,7 +339,9 @@ class HTTPTransport(MCPTransport):
             "POST",
             f"{self._base_url}/rpc",
             json=request,
+            headers=self._extra_headers,
             timeout=aiohttp.ClientTimeout(total=self._timeout),
+            guard_egress=self._guard_egress,
         ) as resp:
             if resp.status != 200:
                 raise aiohttp.ClientResponseError(resp.request_info, resp.history, status=resp.status)
@@ -283,23 +359,162 @@ class HTTPTransport(MCPTransport):
         """HTTP is connectionless — nothing to close."""
 
 
+class StreamableHTTPTransport(MCPTransport):
+    """MCP "Streamable HTTP" transport (spec 2025-03-26+) — the successor to the
+    two-endpoint SSE transport, and the transport most current third-party MCP
+    servers speak (#11542).
+
+    A single POST to the server's own endpoint URL carries each JSON-RPC
+    request. The response is either a plain JSON body or a ``text/event-stream``
+    body whose first ``data:`` frame is the JSON-RPC response — either way this
+    is a synchronous request/response exchange, matching how MCPClient uses it.
+    A server that returns an ``Mcp-Session-Id`` response header (typically on
+    the ``initialize`` response) gets that id echoed back on every later
+    request; ``close()`` best-effort DELETEs the session.
+
+    Server-initiated push (the transport's optional GET+SSE stream) is not
+    implemented — resource-update notifications continue to go through
+    :class:`SSETransport` for servers that need them.
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 30.0,
+        guard_egress: bool | None = None,
+        extra_headers: Dict[str, str] | None = None,
+    ) -> None:
+        """Initialise with the literal MCP endpoint URL (no path is appended)."""
+        self._base_url = base_url
+        self._timeout = timeout
+        self._guard_egress = guard_egress
+        self._extra_headers = extra_headers or {}
+        self._session_id: str | None = None
+        self._pending: Dict[str, Any] | None = None
+
+    async def connect(self) -> None:
+        """HTTP is connectionless — nothing to open."""
+
+    async def send(self, request: Dict[str, Any]) -> None:
+        """POST the JSON-RPC request; buffer its JSON or SSE-framed response for receive()."""
+        headers = {"Accept": "application/json, text/event-stream", **self._extra_headers}
+        if self._session_id:
+            headers["Mcp-Session-Id"] = self._session_id
+
+        async with get_http_client().tracked_request(
+            "POST",
+            self._base_url,
+            json=request,
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=self._timeout),
+            guard_egress=self._guard_egress,
+        ) as resp:
+            if resp.status == 202:
+                self._pending = None
+                return
+            if resp.status != 200:
+                raise aiohttp.ClientResponseError(resp.request_info, resp.history, status=resp.status)
+
+            session_id = resp.headers.get("Mcp-Session-Id")
+            if session_id:
+                self._session_id = session_id
+
+            content_type = resp.headers.get("Content-Type", "")
+            if "text/event-stream" in content_type:
+                self._pending = await self._first_sse_event(resp.content)
+            else:
+                self._pending = await resp.json()
+        logger.debug("StreamableHTTPTransport: sent method=%s", request.get("method"))
+
+    @staticmethod
+    async def _first_sse_event(stream: aiohttp.StreamReader) -> Dict[str, Any]:
+        """Return the first SSE ``data:`` frame from *stream*, parsed as JSON."""
+        async for line in _iter_sse_lines(stream):
+            if line.startswith("data:"):
+                payload = line[5:].strip()
+                if payload:
+                    return json.loads(payload)
+        raise EOFError("StreamableHTTPTransport: SSE response closed with no data frame")
+
+    async def receive(self) -> Dict[str, Any]:
+        """Return the buffered response from the last send() call."""
+        if self._pending is None:
+            raise RuntimeError("StreamableHTTPTransport: receive() called before send()")
+        result, self._pending = self._pending, None
+        return result
+
+    async def close(self) -> None:
+        """Best-effort DELETE to terminate the session, if the server issued one."""
+        if not self._session_id:
+            return
+        try:
+            async with get_http_client().tracked_request(
+                "DELETE",
+                self._base_url,
+                headers={**self._extra_headers, "Mcp-Session-Id": self._session_id},
+                timeout=aiohttp.ClientTimeout(total=self._timeout),
+                guard_egress=self._guard_egress,
+            ):
+                pass
+        except aiohttp.ClientError as exc:
+            # Session termination is a courtesy — a server that does not
+            # support it (405) or is already gone is not an error to us.
+            logger.debug("StreamableHTTPTransport: session termination DELETE failed: %s", exc)
+        self._session_id = None
+
+
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
 
-def create_transport(server_uri: str, timeout: float = 30.0) -> MCPTransport:
+def create_transport(
+    server_uri: str,
+    timeout: float = 30.0,
+    guard_egress: bool | None = None,
+    extra_headers: Dict[str, str] | None = None,
+    resource_policy: BridgePolicy | None = None,
+) -> MCPTransport:
     """Return the correct MCPTransport for *server_uri*.
 
     Scheme detection:
 
-    * ``stdio://`` → :class:`StdioTransport` — remainder is the shell command
-    * ``sse://``   → :class:`SSETransport`   — rewritten to ``https://``
-    * anything else (``http://``, ``https://``) → :class:`HTTPTransport`
+    * ``stdio://``            → :class:`StdioTransport`          — remainder is the shell command
+    * ``sse://``              → :class:`SSETransport`             — rewritten to ``https://``
+    * ``streamable-http://``  → :class:`StreamableHTTPTransport`  — rewritten to ``http://``
+    * ``streamable-https://`` → :class:`StreamableHTTPTransport`  — rewritten to ``https://``
+    * anything else (``http://``, ``https://``) → :class:`HTTPTransport` (legacy ``/rpc`` JSON-RPC)
+
+    ``guard_egress`` (#13625, #11542) applies only to the remote (SSE/HTTP/
+    streamable-HTTP) transports — ``None`` (default) means no egress
+    guarding, unchanged from every existing caller. A caller reaching a
+    user-configured remote server should pass an explicit ``True``/``False``.
+
+    ``extra_headers`` (#11542) are merged into every outbound request on the
+    remote transports — e.g. an ``Authorization`` header built from a stored
+    credential. ``StdioTransport`` ignores it; it has no HTTP headers.
+
+    ``resource_policy`` (#3229, #11542) applies only to ``StdioTransport`` —
+    cpu/memory/nofile rlimits the spawned subprocess self-applies before
+    exec. The remote transports ignore it; they have no subprocess.
     """
     if server_uri.startswith("stdio://"):
         command = server_uri[len("stdio://") :]
-        return StdioTransport(command, timeout=timeout)
+        return StdioTransport(command, timeout=timeout, resource_policy=resource_policy)
     if server_uri.startswith("sse://"):
-        return SSETransport(server_uri, timeout=timeout)
-    return HTTPTransport(server_uri, timeout=timeout)
+        return SSETransport(server_uri, timeout=timeout, guard_egress=guard_egress, extra_headers=extra_headers)
+    if server_uri.startswith("streamable-http://"):
+        return StreamableHTTPTransport(
+            "http://" + server_uri[len("streamable-http://") :],
+            timeout=timeout,
+            guard_egress=guard_egress,
+            extra_headers=extra_headers,
+        )
+    if server_uri.startswith("streamable-https://"):
+        return StreamableHTTPTransport(
+            "https://" + server_uri[len("streamable-https://") :],
+            timeout=timeout,
+            guard_egress=guard_egress,
+            extra_headers=extra_headers,
+        )
+    return HTTPTransport(server_uri, timeout=timeout, guard_egress=guard_egress, extra_headers=extra_headers)

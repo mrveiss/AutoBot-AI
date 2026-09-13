@@ -17,8 +17,12 @@ from skills.sync.mcp_transport import (
     MCPTransport,
     SSETransport,
     StdioTransport,
+    StreamableHTTPTransport,
     create_transport,
 )
+
+# StreamableHTTPTransport's own behavioural tests live in
+# mcp_transport_streamable_http_test.py (split out to stay under the 600-line cap).
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -62,6 +66,18 @@ def test_create_transport_http():
 def test_create_transport_https():
     t = create_transport("https://example.com/mcp")
     assert isinstance(t, HTTPTransport)
+
+
+def test_create_transport_streamable_http():
+    t = create_transport("streamable-http://example.com/mcp")
+    assert isinstance(t, StreamableHTTPTransport)
+    assert t._base_url == "http://example.com/mcp"
+
+
+def test_create_transport_streamable_https():
+    t = create_transport("streamable-https://example.com/mcp")
+    assert isinstance(t, StreamableHTTPTransport)
+    assert t._base_url == "https://example.com/mcp"
 
 
 # ---------------------------------------------------------------------------

@@ -113,6 +113,14 @@ Permissions follow the naming convention: `category.action` or `category.resourc
 | `batch` | `batch.view`, `batch.create`, `batch.execute` | Batch jobs |
 | `sandbox` | `sandbox.view`, `sandbox.execute`, `sandbox.manage` | Sandbox operations |
 
+#### `mcp.external` (#11542)
+
+Gates every tool an admin-configured external MCP server exposes to chat — one
+coarse grant, not one per server. Per-server granularity is
+`MCPServerConfig.allowed_roles`, checked by the external bridge itself on top
+of this gate, never instead of it. Admin-only by owner decision; not added to
+any other role's default grants.
+
 ## Usage Examples
 
 ### Basic Authentication

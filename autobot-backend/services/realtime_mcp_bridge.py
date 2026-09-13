@@ -27,14 +27,19 @@ pipeline (correlate on operation "voice.realtime.tool_call").
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from services.mcp_aggregation import discover_and_resolve, server_id_from_uri
 
 logger = get_logger(__name__)
+
+
+def _server_id_from_uri(uri: str) -> str:
+    """Re-export of services.mcp_aggregation.server_id_from_uri (characterised directly by tests)."""
+    return server_id_from_uri(uri)
 
 
 def _get_mcp_client_class():
@@ -184,22 +189,6 @@ def _translate_input_schema(input_schema: Any) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Server-ID helpers
-# ---------------------------------------------------------------------------
-
-_SLUG_RE = re.compile(r"[^a-z0-9]+")
-
-
-def _server_id_from_uri(uri: str) -> str:
-    """Return a stable, lowercase slug for *uri* suitable as a name prefix."""
-    # Strip scheme
-    slug = re.sub(r"^[a-z]+://", "", uri.lower())
-    # Strip path components beyond the host:port
-    slug = slug.split("/")[0]
-    return _SLUG_RE.sub("_", slug).strip("_") or "mcp"
-
-
-# ---------------------------------------------------------------------------
 # Main bridge
 # ---------------------------------------------------------------------------
 
@@ -341,18 +330,7 @@ class RealtimeMCPBridge:
                 resource=name,
                 details=audit_details,
             )
-            if session_id:
-                try:
-                    from services.voice_realtime_telemetry import get_voice_realtime_telemetry
-
-                    await get_voice_realtime_telemetry().record_tool_call(
-                        session_id=session_id,
-                        tool=name,
-                        latency_s=latency_s,
-                        outcome="success",
-                    )
-                except Exception as _te:
-                    logger.debug("voice_realtime telemetry emit failed: %s", _te)
+            await self._emit_telemetry(session_id, name, latency_s, "success")
             return RealtimeToolResult(content=content, is_error=False)
 
         except Exception as exc:  # noqa: BLE001
@@ -371,19 +349,25 @@ class RealtimeMCPBridge:
                 resource=name,
                 details={**audit_details, "error": str(exc)},
             )
-            if session_id:
-                try:
-                    from services.voice_realtime_telemetry import get_voice_realtime_telemetry
-
-                    await get_voice_realtime_telemetry().record_tool_call(
-                        session_id=session_id,
-                        tool=name,
-                        latency_s=latency_s,
-                        outcome="error",
-                    )
-                except Exception as _te:
-                    logger.debug("voice_realtime telemetry emit failed: %s", _te)
+            await self._emit_telemetry(session_id, name, latency_s, "error")
             return RealtimeToolResult(content=str(exc), is_error=True)
+
+    @staticmethod
+    async def _emit_telemetry(session_id: str | None, tool: str, latency_s: float, outcome: str) -> None:
+        """Best-effort per-session telemetry emit (GH#7421); never lets a telemetry failure surface."""
+        if not session_id:
+            return
+        try:
+            from services.voice_realtime_telemetry import get_voice_realtime_telemetry
+
+            await get_voice_realtime_telemetry().record_tool_call(
+                session_id=session_id,
+                tool=tool,
+                latency_s=latency_s,
+                outcome=outcome,
+            )
+        except Exception as _te:
+            logger.debug("voice_realtime telemetry emit failed: %s", _te)
 
     # ------------------------------------------------------------------
     # Discovery internals
@@ -400,20 +384,9 @@ class RealtimeMCPBridge:
         if not self._server_uris:
             return self._discover_inprocess()
 
-        # Multi-server: collect per-server tool lists
-        server_tool_lists: list[tuple[str, str, list[Any]]] = []
-        for uri in self._server_uris:
-            sid = _server_id_from_uri(uri)
-            try:
-                MCPClient = _get_mcp_client_class()
-                async with MCPClient(uri) as client:
-                    tools = await client.discover_tools()
-                server_tool_lists.append((sid, uri, tools))
-                logger.info("realtime_mcp_bridge discovered server=%s tools=%d", sid, len(tools))
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("realtime_mcp_bridge skipping unreachable server %s: %s", uri, exc)
-
-        return self._build_registry(server_tool_lists)
+        MCPClient = _get_mcp_client_class()
+        resolved = await discover_and_resolve(self._server_uris, MCPClient)
+        return self._build_registry(resolved)
 
     def _discover_inprocess(self) -> list[RealtimeTool]:
         """Discover tools from the in-process AutoBot MCP server dict (zero-dependency baseline)."""
@@ -435,39 +408,26 @@ class RealtimeMCPBridge:
         logger.info("realtime_mcp_bridge in-process tools=%d", len(result))
         return result
 
-    def _build_registry(self, server_tool_lists: list[tuple[str, str, list[Any]]]) -> list[RealtimeTool]:
-        """Resolve name collisions and build the routing registry.
+    def _build_registry(self, resolved: list[Any]) -> list[RealtimeTool]:
+        """Translate collision-resolved tools into RealtimeTool entries and the routing registry.
 
-        A tool name that appears on exactly one server keeps its bare name.
-        A tool name that appears on two or more servers is prefixed as
-        "{server_id}__{original_name}" on every server to ensure determinism.
+        Collision resolution itself (bare name vs. "{server_id}__{name}" prefix)
+        happens in services.mcp_aggregation.resolve_name_collisions — this only
+        builds the Realtime-shaped schema and the call-routing registry.
         """
-        # Count how many servers expose each original tool name
-        name_count: dict[str, int] = {}
-        for _sid, _uri, tools in server_tool_lists:
-            for tool in tools:
-                name_count[tool.name] = name_count.get(tool.name, 0) + 1
-
         result: list[RealtimeTool] = []
-        for sid, uri, tools in server_tool_lists:
-            for tool in tools:
-                original_name = tool.name
-                if name_count[original_name] > 1:
-                    public_name = f"{sid}__{original_name}"
-                else:
-                    public_name = original_name
-
-                rt = RealtimeTool(
-                    name=public_name,
-                    description=tool.description,
-                    parameters=_translate_input_schema(getattr(tool, "input_schema", None)),
-                )
-                result.append(rt)
-                self._registry[public_name] = _ToolEntry(
-                    server_id=sid,
-                    server_uri=uri,
-                    original_name=original_name,
-                )
+        for r in resolved:
+            rt = RealtimeTool(
+                name=r.public_name,
+                description=r.tool.description,
+                parameters=_translate_input_schema(getattr(r.tool, "input_schema", None)),
+            )
+            result.append(rt)
+            self._registry[r.public_name] = _ToolEntry(
+                server_id=r.server_id,
+                server_uri=r.server_uri,
+                original_name=r.original_name,
+            )
 
         return result
 
