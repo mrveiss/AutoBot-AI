@@ -173,23 +173,39 @@ def _mint_token(secret: str = _SECRET_KEY, **claims: object) -> str:
     return encode_jwt(data, secret=secret, expires_delta=timedelta(minutes=_EXPIRE_MINUTES))
 
 
+class _FakeDenylistRedis:
+    """A working (not unavailable) Redis stand-in for the jti denylist.
+
+    #16387 made ``is_jti_revoked`` fail CLOSED: a Redis client that is
+    unavailable (``None``) now raises rather than reporting "not revoked", so
+    this suite's valid-token test needs a Redis that actually answers, not one
+    that is absent. Nothing in these tests ever revokes a jti, so the real
+    denylist key is always empty here.
+    """
+
+    async def exists(self, _key: str) -> int:
+        return 0
+
+
 def _get_me(headers: dict | None = None):
-    """Dispatch GET /api/auth/me with Redis calls patched to fail open.
+    """Dispatch GET /api/auth/me with the jti denylist given a working fake
+    Redis, and the password-epoch check's Redis patched to fail open.
 
     For a valid HS256 token, get_current_user's decode path consults the jti
-    denylist (services.token_denylist.is_jti_revoked) and the password-epoch
+    denylist (services.token_denylist.is_jti_revoked, fail-CLOSED since
+    #16387 -- needs a real answer, not an absent client) and the password-epoch
     revocation check (autobot_shared...password_epoch.is_token_revoked_by_
-    password_change); both already fail open when Redis is unavailable
-    (#11443, #12924). Patching get_async_redis_client to return None exercises
-    exactly that fail-open path deterministically, without a real network call
-    racing or timing out.
+    password_change, which still fails open when Redis is unavailable --
+    #11443, #12924). Patching password-epoch's get_async_redis_client to
+    return None exercises that fail-open path deterministically, without a
+    real network call racing or timing out.
     """
     from fastapi.testclient import TestClient
 
     import autobot_shared.user_management.password_epoch as password_epoch_mod
 
     with (
-        patch.object(_dl_mod, "get_async_redis_client", AsyncMock(return_value=None)),
+        patch.object(_dl_mod, "get_async_redis_client", AsyncMock(return_value=_FakeDenylistRedis())),
         patch.object(password_epoch_mod, "get_async_redis_client", AsyncMock(return_value=None)),
         TestClient(app) as client,
     ):
