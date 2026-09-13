@@ -66,7 +66,7 @@ _LOCALES = _REPO_ROOT / "autobot-frontend" / "src" / "i18n" / "locales"
 # Lower these as translations land. Never raise one to admit a new untranslated
 # string: translate it, or leave the key out until it can be translated.
 BASELINE = {
-    "ar": 3741,
+    "ar": 3728,
     "de": 1618,
     "es": 1667,
     "fa": 3804,
