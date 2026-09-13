@@ -68,7 +68,7 @@ GITHUB_BASE_REF=main bash pipeline-scripts/check-hardcoded-values-pr.sh
 - Lines containing `config.`, `getenv`, `CONFIG[`, or `AUTOBOT_` (already routed through SSOT)
 - Comments (any line starting with `#` / `//` / ` *`)
 - File types other than `.py` / `.ts` / `.vue` / `.js` / `.sh` / `.yml` / `.yaml` (`HV_SCAN_EXTENSIONS` in `scripts/lib/hardcoded-value-rules.sh`) — JSON, for one, is not scanned. YAML *is* scanned, workflows included; an earlier version of this list said otherwise. Markdown is not scanned by *this* hook; since #15208 `docs/**/*.md` is gated by `tools/lint/check_docs_no_fleet_addressing.py`, which looks for fleet node addresses only and reads its pattern from the same `HV_VM_IP` rule this hook uses.
-- URLs in `.github/workflows/` (#16260) — a CI workflow's vendor downloads and dashboard links are not deployment config. Only the generic URL rule stands down there: the IP and port rules still run on workflow files, so an AutoBot address in a workflow is still reported. Outside `.github/workflows/` the same URL is still a finding.
+- URLs in `.github/workflows/` and `.github/actions/` (#16260) — a CI workflow's vendor downloads and dashboard links are not deployment config, and a composite action is a piece of a workflow (#15515). Only the generic URL rule stands down there: the IP and port rules still run on those files, so an AutoBot address in either is still reported. Outside those two directories the same URL is still a finding.
 - `192.168.x.x` and `127.0.0.x` literals (RFC 1918 example space and loopback — used in SSRF guards, network-tooling examples, test fixtures, i18n placeholders)
 
 <!-- fleet-addressing-exempt: quotes the exact call the hook's `getenv` filter lets through, which is the false negative being described -->

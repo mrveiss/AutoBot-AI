@@ -15,7 +15,7 @@ export function useMyData() {
   const error = ref<Error | null>()
   const loading = ref(false)
   const fetch = async () => { /* ... */ }
-  
+
   return {
     data,       // reactive state
     error,      // reactive error state
@@ -390,22 +390,14 @@ export function useDocumentList() {
 
 Banned patterns in composables:
 
+A deprecated composable gets a `no-restricted-imports` entry while callers migrate off it, and the
+entry is removed once the file itself is retired (#15025) — a ban on a path nothing imports guards
+nothing.
+
 ```javascript
 // .eslintrc or eslint.config.ts
 {
   rules: {
-    'no-restricted-imports': [
-      'error',
-      {
-        // Deprecated composables — migrate to replacements
-        paths: [
-          {
-            name: '@/composables/useApi',
-            message: 'Deprecated. Use useFetchEndpoint (data) or useApiClient (mutations)'
-          }
-        ]
-      }
-    ],
     'no-restricted-syntax': [
       'error',
       // Ban raw toLocaleString() — use formatHelpers instead

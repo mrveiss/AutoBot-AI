@@ -30,13 +30,13 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_constants import SecurityConstants
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, can_access, get_db
+from transcriber.deps import authenticate, caller_can_access, caller_id_of, get_db
 from transcriber.models import RecordingOut
 from transcriber.upload_security import MAX_FILE_SIZE
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["transcriber-recordings"])
+router = APIRouter(tags=["transcriber-recordings"], dependencies=[Depends(authenticate)])
 
 # Same canonical set the upload security boundary enforces (#13512) — this
 # route guard admitting a format the validator rejects would be a gap.
@@ -50,11 +50,6 @@ def _upload_dir(request: Request) -> Path:
     return Path(request.app.state.transcriber_upload_dir).resolve()
 
 
-def _user_id(request: Request) -> str:
-    user = getattr(request.state, "user", None)
-    return user.id if user else DEFAULT_USER
-
-
 @router.post("/projects/{project_id}/recordings", response_model=RecordingOut, status_code=202)
 async def upload_recording(
     project_id: int,
@@ -63,7 +58,7 @@ async def upload_recording(
     db: Database = Depends(get_db),
 ):
     project = await db.get_project(project_id)
-    if not project or not can_access(project, _user_id(request)):
+    if not project or not caller_can_access(project, request):
         raise HTTPException(404, "Project not found")
     ext = Path(file.filename or "").suffix.lower()
     if ext not in _ALLOWED_EXTENSIONS:
@@ -95,7 +90,9 @@ async def upload_recording(
     # The file is on disk before the DB row exists; unlink the partial upload
     # if the insert fails so a rejected recording never leaks an orphan (GH#12310).
     try:
-        rid = await db.create_recording(project_id, file.filename or safe_name, str(dest), user_id=_user_id(request))
+        rid = await db.create_recording(
+            project_id, file.filename or safe_name, str(dest), user_id=caller_id_of(request)
+        )
     except Exception:
         dest.unlink(missing_ok=True)
         raise
@@ -133,7 +130,7 @@ async def list_recordings(
     offset: int = Query(0, ge=0),
 ):
     project = await db.get_project(project_id)
-    if not project or not can_access(project, _user_id(request)):
+    if not project or not caller_can_access(project, request):
         raise HTTPException(404, "Project not found")
     rows = await db.list_recordings(project_id, limit=limit, offset=offset)
     return [RecordingOut(**r) for r in rows]
@@ -142,7 +139,7 @@ async def list_recordings(
 @router.get("/recordings/{recording_id}", response_model=RecordingOut)
 async def get_recording(recording_id: int, request: Request, db: Database = Depends(get_db)):
     rec = await db.get_recording(recording_id)
-    if not rec or not can_access(rec, _user_id(request)):
+    if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")
     return RecordingOut(**rec)
 
@@ -150,7 +147,7 @@ async def get_recording(recording_id: int, request: Request, db: Database = Depe
 @router.delete("/recordings/{recording_id}", status_code=204)
 async def delete_recording(recording_id: int, request: Request, db: Database = Depends(get_db)):
     rec = await db.get_recording(recording_id)
-    if not rec or not can_access(rec, _user_id(request)):
+    if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")
     filepath = Path(rec["filepath"])
     if filepath.exists():
@@ -255,7 +252,7 @@ async def _file_iterator(path: Path) -> AsyncIterator[bytes]:
 async def audio_chunks(recording_id: int, request: Request, db: Database = Depends(get_db)):
     """Stream audio file with HTTP Range support (RFC 7233)."""
     rec = await db.get_recording(recording_id)
-    if not rec or not can_access(rec, _user_id(request)):
+    if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")
 
     audio_path = _resolve_audio_path(rec["filepath"], _upload_dir(request))
@@ -319,7 +316,7 @@ async def audio_waveform(
 ):
     """Return waveform peak data and speaker segments for timeline visualization."""
     rec = await db.get_recording(recording_id)
-    if not rec or not can_access(rec, _user_id(request)):
+    if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")
 
     audio_path = _resolve_audio_path(rec["filepath"], _upload_dir(request))

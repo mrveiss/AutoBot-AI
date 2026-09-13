@@ -39,7 +39,7 @@ describe("AutoBot SDK -- live backend", () => {
   });
 
   test("sessions.list returns typed DataResponse<SessionList>", async () => {
-    const result: DataResponse<SessionList> = await bot.sessions.list(5);
+    const result: DataResponse<SessionList> = await bot.sessions.list();
     expect(result).toHaveProperty("success");
     expect(result.success).toBe(true);
     expect(Array.isArray(result.data?.sessions)).toBe(true);

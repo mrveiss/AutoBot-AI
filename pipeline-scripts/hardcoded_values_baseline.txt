@@ -510,7 +510,6 @@
 1|other|autobot-frontend/src/composables/collaboration/useCollaborationInvite.ts|offset=0
 1|other|autobot-frontend/src/composables/knowledge/useKnowledgeBrowser.ts|offset=0
 1|other|autobot-frontend/src/composables/useAIDocument.ts|50
-1|other|autobot-frontend/src/composables/useApi.ts|10
 1|other|autobot-frontend/src/composables/useCodeIntelligence.ts|50
 1|other|autobot-frontend/src/composables/useCollaborationInvites.ts|offset=0
 1|other|autobot-frontend/src/composables/usePlugins.ts|50
@@ -878,7 +877,6 @@
 1|other|autobot-slm-backend/migrations/consolidate_slm_users_to_uuid.py|"postgresql://"
 1|other|autobot-slm-backend/migrations/utils.py|"postgresql://"
 1|other|autobot-slm-backend/monitoring/performance_benchmark.py|"/tmp/autobot_disk_benchmark.tmp
-1|other|autobot-slm-backend/monitoring/performance_dashboard.py|https://cdn.plot.ly/plotly-latest.min.js
 1|other|autobot-slm-backend/scripts/autobot-admin.py|"/opt/autobot/autobot-slm-backend/.env
 1|other|autobot-slm-backend/services/agent_seeder.py|30
 1|other|autobot-slm-backend/services/backup.py|60
@@ -1135,7 +1133,6 @@
 2|other|autobot-backend/api/analytics_code_generation.py|"system"
 2|other|autobot-backend/api/analytics_conversation.py|"user"
 2|other|autobot-backend/api/anthropic_compat.py|"system"
-2|other|autobot-backend/api/auth.py|"user"
 2|other|autobot-backend/api/chat_embed.py|"user"
 2|other|autobot-backend/api/knowledge_audit.py|100
 2|other|autobot-backend/api/knowledge_mcp.py|"user"

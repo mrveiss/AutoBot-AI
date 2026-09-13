@@ -38,12 +38,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_jwt, hash_password
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
+from autobot_shared.auth.permissions import Permission
+from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.password_epoch import (
     is_token_revoked_by_password_change,
 )
 from config import settings
 from models.schemas import TokenResponse, UserCreate, UserResponse
+from services.api_key_authority import legacy_grace_deadline, permission_allowed, role_for_user
 from services.token_denylist import is_jti_revoked
 from user_management.models.user import User
 
@@ -182,7 +184,7 @@ class AuthService:
 
     async def create_token_response(self, user: User) -> TokenResponse:
         """Create a token response for a user."""
-        role = Role.ADMIN.value if user.is_platform_admin else Role.USER.value
+        role = role_for_user(user.is_platform_admin).value
         access_token = self.create_access_token(
             data={"sub": user.username, "admin": user.is_platform_admin, "role": role}
         )
@@ -239,20 +241,16 @@ def require_permission(permission: Permission) -> Callable:
     return _check
 
 
-def _resolve_role(current_user: dict) -> Role:
-    """Derive the caller's Role from the JWT 'role' field or legacy admin flag."""
-    role_str = current_user.get("role")
-    if role_str:
-        try:
-            return Role(role_str)
-        except ValueError:
-            return Role.USER
-    return Role.ADMIN if current_user.get("admin", False) else Role.USER
-
-
 def _require_permission_or_403(current_user: dict, permission: Permission) -> dict:
-    """Raise 403 unless *current_user*'s role grants *permission*; else return it."""
-    if permission not in ROLE_PERMISSIONS.get(_resolve_role(current_user), []):
+    """Raise 403 unless the caller may exercise *permission*; else return it.
+
+    The decision is ``services.api_key_authority.permission_allowed``. The
+    caller's role must grant *permission*, and an API-key caller's scopes must
+    also carry it (#16040 AC2). So a key never exceeds its owner's role, nor
+    its own scopes. It lives there, free of FastAPI, so it can be tested
+    directly.
+    """
+    if not permission_allowed(current_user, permission):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Permission denied: {permission.value} required",
@@ -400,12 +398,58 @@ async def get_api_key_user(
     # exceed its own scopes either. `APIKey.has_scope` already implements exact,
     # wildcard and global-admin matching, so the check belongs there rather than
     # in a second copy here.
+    #
+    # `role` is the owner's, by the same rule a session gets. So the role half
+    # of the #16040 AC2 intersection checks the owner, and the key half checks
+    # the scopes. A key made before scopes were enforced keeps its owner's full
+    # authority until its grace period ends (AC5), and must then be re-issued.
+    deadline = _legacy_grace_or_401(api_key)
     return {
         "sub": user.username,
+        "role": role_for_user(user.is_platform_admin).value,
         "admin": user.is_platform_admin and api_key.has_scope("admin:*"),
         "scopes": list(api_key.scopes or []),
         "api_key_id": str(api_key.id),
+        "legacy_full_scope": deadline is not None,
     }
+
+
+def _legacy_grace_or_401(api_key):
+    """Return a pre-enforcement key's grace deadline, or None for a scoped key (#16040 AC5).
+
+    A key inside its grace period is warned about on every use. A key whose
+    grace period has ended is refused with 401 until it is re-issued with
+    explicit scopes.
+    """
+    deadline = legacy_grace_deadline(api_key.created_at)
+    if deadline is None:
+        return None
+    if now_utc() >= deadline:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This API key predates scope enforcement and its grace period has ended; re-issue it",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    logger.warning(
+        "API key %s predates scope enforcement: it keeps its owner's full authority until %s; re-issue it",
+        api_key.key_prefix,
+        deadline.date().isoformat(),
+    )
+    return deadline
+
+
+def require_key_permission(permission: Permission) -> Callable:
+    """Like ``require_permission``, for a route that authenticates by API key (#16040 AC4).
+
+    The key's authority is its owner's role intersected with its scope bundle.
+    A key lacking the scope gets 403, not 401. No production route uses this
+    yet: which routes accept keys is #16294's decision.
+    """
+
+    async def _check(current_user: dict = Depends(get_api_key_user)) -> dict:
+        return _require_permission_or_403(current_user, permission)
+
+    return _check
 
 
 async def _get_user_for_api_key(db: AsyncSession, user_id):

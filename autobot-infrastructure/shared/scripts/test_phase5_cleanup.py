@@ -11,7 +11,7 @@ Validates that:
 1. Legacy in-memory buffers have been removed from metrics collectors
 2. Redis persistence has been removed
 3. Prometheus is the primary metrics store
-4. Deprecated methods/modules emit proper warnings
+4. Deprecated modules are gone and their successors are defined
 5. Grafana integration is functional
 
 Monitoring compatibility layer (#14870): ``backend/api/monitoring_compat.py`` was
@@ -24,32 +24,34 @@ file text rather than importing the backend app. The deprecation mechanism
 (``DEPRECATION_MSG`` + ``warnings.warn``) was deliberately not carried over, so it is
 no longer looked for. ``get_workflow_summary`` has no successor at all and is
 reported as a SKIPPED gap rather than silently dropped.
+
+ClaudeAPIMonitor (#16282): the SLM's ``monitoring/claude_api_monitor.py``, which
+Phase 5 marked DEPRECATED, was retired. Its callers record through the Prometheus
+metrics manager, so the check asserts the file is absent and that the manager still
+defines ``record_claude_api_request`` -- read from the file tree, like the compat
+check, rather than imported.
 """
 
 import ast
-import asyncio
 import sys
 import warnings
 from collections import Counter
 from pathlib import Path
-from typing import Callable, NamedTuple
+from typing import NamedTuple
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# #14518: the checks below import ``utils.*`` from autobot-backend and
-# ``monitoring.claude_api_monitor`` from autobot-slm-backend (reached through a
-# stale ``src.`` prefix). Neither tree was on sys.path, so the script raised
-# ModuleNotFoundError on its own import block. Add both the way the other
-# operator entry points in this tree do (#14129). Order matters: each insert(0)
-# moves the previous entry down, so autobot-slm-backend ends up ahead of
-# autobot-backend -- both ship a regular ``monitoring`` package and only the SLM
-# one contains claude_api_monitor, so the backend copy must not shadow it.
+# #14518: the checks below import ``utils.*`` from autobot-backend, which was not
+# on sys.path, so the script raised ModuleNotFoundError on its own import block.
+# Add it the way the other operator entry points in this tree do (#14129). The
+# SLM tree was added here too while the ClaudeAPIMonitor check imported
+# ``monitoring.claude_api_monitor``; that module is retired (#16282) and the check
+# reads files instead, so nothing here imports from the SLM.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-for _tree in ("autobot-backend", "autobot-slm-backend"):
-    _candidate = str(_REPO_ROOT / _tree)
-    if _candidate not in sys.path:
-        sys.path.insert(0, _candidate)
+_BACKEND = str(_REPO_ROOT / "autobot-backend")
+if _BACKEND not in sys.path:
+    sys.path.insert(0, _BACKEND)
 
 PASSED = "PASSED"
 FAILED = "FAILED"
@@ -76,6 +78,10 @@ REMOVED_ERROR_ATTRS = ("_persist_metric", "get_recent_errors")
 
 # The compat module #3354 deleted; its absence is what Phase 5 was meant to achieve.
 COMPAT_MODULE = "autobot-backend/api/monitoring_compat.py"
+
+# The SLM module Phase 5 deprecated and #16282 retired, and the recorder its callers use now.
+CLAUDE_API_MONITOR_MODULE = "autobot-slm-backend/monitoring/claude_api_monitor.py"
+CLAUDE_API_RECORDER = ("autobot_shared/monitoring/prometheus_metrics.py", "record_claude_api_request")
 
 # Old compat handler name -> (module it was re-homed into, name it is defined under).
 REHOMED_HANDLERS = {
@@ -126,14 +132,6 @@ def _report_prometheus(obj):
         print("  ⚠️  Prometheus integration not found (expected)")
 
 
-def _emits_deprecation(call: Callable[[], object]) -> bool:
-    """Return True when calling ``call`` emits a DeprecationWarning."""
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        call()
-        return any(issubclass(warning.category, DeprecationWarning) for warning in caught)
-
-
 def _defines_function(source_path: Path, func_name: str) -> bool:
     """AST-parse ``source_path`` and report whether it defines ``func_name``."""
     tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
@@ -180,34 +178,21 @@ def test_error_metrics_cleanup() -> CheckResult:
     return CheckResult(PASSED)
 
 
-def test_claude_api_monitor_deprecation() -> CheckResult:
-    """Test that ClaudeAPIMonitor is properly deprecated."""
-    print("\n✓ ClaudeAPIMonitor Deprecation:")
+def test_claude_api_monitor_removed() -> CheckResult:
+    """Assert the deprecated ClaudeAPIMonitor is gone (#16282) and its Prometheus successor is defined."""
+    print("\n✓ ClaudeAPIMonitor (retired by #16282):")
 
-    import monitoring.claude_api_monitor as cam_module
-    from monitoring.claude_api_monitor import get_api_monitor, record_api_call
+    if (_REPO_ROOT / CLAUDE_API_MONITOR_MODULE).exists():
+        print(f"  ❌ {CLAUDE_API_MONITOR_MODULE} still exists")
+        return CheckResult(FAILED, f"{CLAUDE_API_MONITOR_MODULE} still exists")
+    print(f"  ✅ {CLAUDE_API_MONITOR_MODULE} removed")
 
-    docstring = cam_module.__doc__ or ""
-    if "DEPRECATED" not in docstring:
-        print("  ❌ Module not marked as DEPRECATED")
-        return CheckResult(FAILED, "claude_api_monitor docstring is not marked DEPRECATED")
-    print("  ✅ Module marked as DEPRECATED in docstring")
-
-    if "Phase 5" in docstring and "#348" in docstring:
-        print("  ✅ Docstring references Phase 5 and Issue #348")
-    else:
-        print("  ⚠️  Docstring should reference Phase 5 and Issue #348")
-
-    entry_points = (
-        ("get_api_monitor()", get_api_monitor),
-        ("record_api_call()", lambda: asyncio.run(record_api_call(payload_size=100))),
-    )
-    for label, call in entry_points:
-        if not _emits_deprecation(call):
-            print(f"  ❌ {label} should emit DeprecationWarning")
-            return CheckResult(FAILED, f"{label} emits no DeprecationWarning")
-        print(f"  ✅ {label} emits DeprecationWarning")
-
+    rel_path, name = CLAUDE_API_RECORDER
+    target = _REPO_ROOT / rel_path
+    if not (target.is_file() and _defines_function(target, name)):
+        print(f"  ❌ {name} not defined in {rel_path}")
+        return CheckResult(FAILED, f"successor {rel_path}::{name} missing")
+    print(f"  ✅ successor {rel_path}::{name}")
     return CheckResult(PASSED)
 
 
@@ -291,7 +276,7 @@ def test_grafana_integration() -> CheckResult:
 CHECKS = (
     ("SystemMetricsCollector", test_system_metrics_cleanup, (ImportError, AttributeError, TypeError)),
     ("ErrorMetricsCollector", test_error_metrics_cleanup, (ImportError, AttributeError, TypeError)),
-    ("ClaudeAPIMonitor", test_claude_api_monitor_deprecation, (ImportError, AttributeError, TypeError, RuntimeError)),
+    ("ClaudeAPIMonitor", test_claude_api_monitor_removed, (OSError, SyntaxError, UnicodeDecodeError)),
     ("MonitoringCompat", test_monitoring_compat_deprecation, (OSError, SyntaxError, UnicodeDecodeError)),
     ("RedisCleanupScript", test_redis_cleanup_script, (OSError, UnicodeDecodeError)),
     ("GrafanaIntegration", test_grafana_integration, (OSError,)),

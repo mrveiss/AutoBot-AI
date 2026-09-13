@@ -34,7 +34,7 @@ redis[asyncio]>=8.1.0
 
 # Async utilities
 aiofiles>=25.1.0
-websockets>=17.1,<18       # Issue #3098: relaxed from >=16.0 (#10386): slm_client uses only API present in 15.x; <16 satisfies langgraph-sdk 0.4.2 on backend side
+websockets>=17.1,<18       # Issue #3098: SLM's own independent floor -- SLM's code never imports websockets directly (it arrives transitively through uvicorn[standard]>=0.52.4, which only requires >=13.0), but this is the version already running in SLM production, so it must not be lowered without cause. #16264 briefly lowered this to match autobot-backend/requirements.txt's <16 langgraph-sdk cap after ci.yml's python-shard job (#13300) installs SLM's tests into the SAME venv as the backend and surfaced a floor conflict there -- that is a CI-venv-sharing artifact, not a reason to downgrade SLM production. The mismatch is a named exemption in pipeline-scripts/check_dependency_floors.py, pending a genuinely separate SLM venv (#16394).
 
 # Ansible integration
 ansible-runner>=2.4.3

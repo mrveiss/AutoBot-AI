@@ -147,7 +147,6 @@ class ConfigUserMigrator:
             session.add(permission)
             permission_ids[perm_data["name"]] = perm_id
             self.stats["permissions_created"] += 1
-            logger.debug("Created permission: %s", perm_data["name"])
 
         await session.flush()
         logger.info("Created %d system permissions", self.stats["permissions_created"])

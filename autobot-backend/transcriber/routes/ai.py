@@ -14,18 +14,12 @@ from autobot_shared.logging_manager import get_logger
 from transcriber.ai.context import build_context
 from transcriber.ai.prompts import get_system_prompt
 from transcriber.database import Database
-from transcriber.deps import can_access, get_db
+from transcriber.deps import authenticate, caller_can_access, get_db
 from transcriber.export.segments import build_segment_list
 from transcriber.models import AiAskRequest
 
 logger = get_logger(__name__)
-router = APIRouter(tags=["transcriber-ai"])
-
-
-# Development fallback — auth middleware populates request.state.user in production
-def _user_id(request: Request) -> str:
-    user = getattr(request.state, "user", None)
-    return user.id if user else "default"
+router = APIRouter(tags=["transcriber-ai"], dependencies=[Depends(authenticate)])
 
 
 @router.post("/recordings/{recording_id}/ai/ask")
@@ -36,7 +30,7 @@ async def ai_ask(
     db: Database = Depends(get_db),
 ):
     rec = await db.get_recording(recording_id)
-    if not rec or not can_access(rec, _user_id(request)):
+    if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")
     segments = await build_segment_list(recording_id, db)
     context = build_context(segments)

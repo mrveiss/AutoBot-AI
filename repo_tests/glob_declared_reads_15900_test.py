@@ -117,7 +117,10 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "root-relative `*.conf.j2` sweep; the matching files live outside the python filter's trees",
     ),
     "*.j2": (
-        {"repo_tests/slm_frontend_publish_contract_test.py"},
+        {
+            "repo_tests/nginx_internal_api_key_auth_gate_test.py",
+            "repo_tests/slm_frontend_publish_contract_test.py",
+        },
         "root-relative `*.j2` sweep; the matching files live outside the python filter's trees",
     ),
     "*.md": (
@@ -157,6 +160,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.yaml": (
         {
+            "repo_tests/generate_service_keys_export_dir_16348_test.py",
             "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
             "repo_tests/hook_suites_run_in_ci_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
@@ -220,12 +224,24 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
     ".github/workflows/*.yaml": (
-        {"repo_tests/python_version_declaration_drift_test.py"},
+        {
+            "repo_tests/python_version_declaration_drift_test.py",
+            "repo_tests/workflow_rc_capture_test.py",
+        },
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
     ".github/workflows/*.yml": (
-        {"repo_tests/comment_line_number_citations_test.py", "repo_tests/python_version_declaration_drift_test.py"},
+        {
+            "repo_tests/comment_line_number_citations_test.py",
+            "repo_tests/python_version_declaration_drift_test.py",
+            "repo_tests/workflow_rc_capture_test.py",
+        },
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
+    ),
+    "libs/autobot-sdk-ts/src/resources/*.ts": (
+        {"repo_tests/sdk_ts_request_contract_test.py"},
+        "reads the TS SDK's own resource-method source to check it against the backend's routes (#15528, "
+        "#16495); `libs/` is outside the python filter's trees",
     ),
     "scripts/lib/*.sh": (
         {"repo_tests/comment_line_number_citations_test.py"},
