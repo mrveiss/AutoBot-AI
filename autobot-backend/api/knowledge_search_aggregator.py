@@ -21,7 +21,7 @@ Endpoints:
 import asyncio
 from typing import Any, Dict, List, Set
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_knowledge import (
     ContextRequest,
@@ -34,6 +34,7 @@ from api.schemas_knowledge import (
     KnowledgeMultiSourceStatsResponse,
     SearchRequest,
 )
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
@@ -195,7 +196,9 @@ def _process_documentation_context(
     return total_length
 
 
-router = APIRouter(prefix="/multi-source", tags=["knowledge-multi-source"])
+# #15745: no route here had any auth dependency; anonymous callers could
+# search across every knowledge source (facts, graph relations, docs).
+router = APIRouter(prefix="/multi-source", tags=["knowledge-multi-source"], dependencies=[Depends(get_current_user)])
 
 
 # ============================================================================
