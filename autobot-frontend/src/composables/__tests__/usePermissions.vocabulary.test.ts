@@ -46,11 +46,17 @@ describe('usePermissions vocabulary (#16243)', () => {
     }
   })
 
-  it('drops the categories the backend has no Permission for (chat/teams/settings/audit)', () => {
-    const all = [...ROLE_PERMISSIONS.admin, ...ROLE_PERMISSIONS.user, ...UNAUTHENTICATED_PERMISSIONS]
-    for (const dropped of ['chat.use', 'chat.history', 'teams.read', 'settings.read', 'audit.read']) {
+  it('carries no category the backend has no Permission for (settings/audit)', () => {
+    const all = [...Object.values(ROLE_PERMISSIONS).flat(), ...UNAUTHENTICATED_PERMISSIONS]
+    for (const dropped of ['settings.read', 'audit.read']) {
       expect(all).not.toContain(dropped as Permission)
     }
+  })
+
+  it('chat and teams are real backend permissions since #16270, granted as the backend grants them', () => {
+    expect(getPermissionsForRole('user')).toContain('chat.use')
+    expect(getPermissionsForRole('admin')).toContain('teams.read')
+    expect(getPermissionsForRole('user')).not.toContain('teams.read')
   })
 
   it('a real backend permission (admin.system) resolves for admin but not for user', () => {

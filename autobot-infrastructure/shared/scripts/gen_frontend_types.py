@@ -28,6 +28,13 @@ Initial: the canonical workflow shapes from `autobot_shared.workflow`:
 
 Future iterations can extend MANIFEST without changing the codegen logic.
 
+Const maps (#16491)
+-------------------
+MANIFEST emits types; a type union cannot carry runtime values. CONST_MANIFEST
+emits module-level *dicts* as typed TypeScript ``const`` maps -- the backend's
+role -> permission grants and role priorities -- so the frontend's permission
+sets and role ranking are generated from the backend instead of hand-copied.
+
 Output
 ------
 `autobot-frontend/src/types/_generated/workflow.ts` — committed to the
@@ -49,7 +56,7 @@ import types
 import typing
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple, Union, get_args, get_origin
+from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, Union, get_args, get_origin
 
 # PEP 604 `X | Y` unions have origin ``types.UnionType`` (py3.10+), which is a
 # distinct object from ``typing.Union``. ``get_type_hints`` may return either
@@ -132,6 +139,34 @@ ALIASES: Dict[str, List[str]] = {
 }
 
 
+class ConstMap(NamedTuple):
+    """A module-level dict emitted as a typed TypeScript ``const`` map (#16491).
+
+    A NamedTuple, not a dataclass: ``repo_tests/gen_frontend_types_test.py``
+    loads this file without registering it in ``sys.modules``, and a dataclass
+    under ``from __future__ import annotations`` resolves its field types
+    through ``sys.modules[cls.__module__]``.
+    """
+
+    source: str  # file path from the repo root
+    attr: str  # the dict's name in that module
+    ts_name: str  # the exported TS const
+    key_type: str  # TS type of the keys (a generated union's name)
+    value_type: str  # TS type of each value
+    field: Optional[str] = None  # when set, emit each value's ``[field]`` rather than the value
+
+
+# #16491: the runtime values a union cannot carry. usePermissions.ts and
+# constants/roles.ts used to hand-copy both maps; generated, a grant or a
+# priority changed on the backend reaches the frontend with the next run.
+CONST_MANIFEST: List[ConstMap] = [
+    ConstMap(
+        "autobot_shared/auth/permissions.py", "ROLE_PERMISSIONS", "ROLE_PERMISSIONS", "Role", "readonly Permission[]"
+    ),
+    ConstMap("autobot_shared/auth/permissions.py", "_ROLE_META", "ROLE_PRIORITY", "Role", "number", "priority"),
+]
+
+
 def _load_module_from_path(file_path: Path, module_name: str) -> Any:
     """Load a Python source file as a standalone module by file path.
 
@@ -167,6 +202,29 @@ def _ensure_autobot_shared_on_path() -> None:
     backend = REPO_ROOT / "autobot-backend"
     if backend.is_dir() and str(backend) not in sys.path:
         sys.path.insert(0, str(backend))
+
+
+def _load_source(rel_file_path: str, loaded_modules: Dict[str, Any]) -> Any:
+    """Load *rel_file_path* once per run, so every manifest entry naming it
+    shares one module load (and one execution of that module's side effects)."""
+    if rel_file_path not in loaded_modules:
+        abs_path = REPO_ROOT / rel_file_path
+        if not abs_path.is_file():
+            raise SystemExit(f"Source file not found: {rel_file_path}")
+        # Synthetic module name avoids colliding with anything sys.path
+        # might also surface as `autobot_shared.workflow.types` etc.
+        synth_name = "codegen_" + rel_file_path.replace("/", "_").replace(".", "_")
+        loaded_modules[rel_file_path] = _load_module_from_path(abs_path, synth_name)
+    return loaded_modules[rel_file_path]
+
+
+def _display_module(rel_file_path: str) -> str:
+    """The dotted module path a generated comment shows for *rel_file_path*.
+
+    autobot-backend/services/X/Y.py → services.X.Y;
+    autobot_shared/workflow/types.py → autobot_shared.workflow.types.
+    """
+    return rel_file_path.removeprefix("autobot-backend/").removesuffix(".py").replace("/", ".")
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +353,80 @@ def _render_dataclass(cls: type, known_names: Set[str], source: str) -> str:
     return "\n".join(lines)
 
 
+def _render_class(cls: type, known_names: Set[str], display_module: str) -> List[str]:
+    """The TS parts for one MANIFEST class: its union or interface, then any aliases."""
+    if isinstance(cls, type) and issubclass(cls, Enum):
+        parts = [_render_enum(cls, display_module)]
+    elif dataclasses.is_dataclass(cls):
+        parts = [_render_dataclass(cls, known_names, display_module)]
+    else:
+        raise SystemExit(f"Unsupported class kind: {cls!r}")
+    parts.extend(_render_alias(alias, cls.__name__, cls.__name__) for alias in ALIASES.get(cls.__name__, []))
+    return parts
+
+
+def _unescaped(text: str) -> str:
+    """*text*, unless it would need escaping inside a single-quoted TS string -- the renderer does not escape."""
+    if "'" in text or "\\" in text:
+        raise SystemExit(f"Const-map string needs escaping, which the renderer does not do: {text!r}")
+    return text
+
+
+def _ts_key(key: object) -> str:
+    """A TS object key: an Enum member's value or a str, bare when an identifier, else single-quoted."""
+    text = key.value if isinstance(key, Enum) else key
+    if not isinstance(text, str):
+        raise SystemExit(f"Unsupported const-map key: {key!r}")
+    return text if text.isidentifier() else f"'{_unescaped(text)}'"
+
+
+def _ts_literal(value: object) -> str:
+    """A TS literal for one const-map value: a string (or a str Enum's value), a number or a boolean."""
+    if isinstance(value, Enum):
+        value = value.value
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, str):
+        return f"'{_unescaped(value)}'"
+    raise SystemExit(f"Unsupported const-map value: {value!r}")
+
+
+def _project(value: object, spec: ConstMap) -> object:
+    """*value* itself, or its ``spec.field`` entry when the manifest asks for one."""
+    if spec.field is None:
+        return value
+    if not isinstance(value, dict) or spec.field not in value:
+        raise SystemExit(f"{spec.source}::{spec.attr} value has no field {spec.field!r}: {value!r}")
+    return value[spec.field]
+
+
+def _render_const_entry(key: object, value: object) -> List[str]:
+    """The lines for one ``key: value`` entry; a list renders one element per line, in its own order."""
+    ts_key = _ts_key(key)
+    if isinstance(value, (list, tuple)):
+        if not value:
+            return [f"  {ts_key}: [],"]
+        return [f"  {ts_key}: [", *(f"    {_ts_literal(v)}," for v in value), "  ],"]
+    return [f"  {ts_key}: {_ts_literal(value)},"]
+
+
+def _render_const_map(spec: ConstMap, mapping: object, display_module: str) -> str:
+    """Emit a typed TS ``const`` map for a module-level dict, entries in the dict's own order (#16491)."""
+    if not isinstance(mapping, dict):
+        raise SystemExit(f"{spec.source}::{spec.attr} is not a dict: {type(mapping).__name__}")
+    field_note = f" (field `{spec.field}`)" if spec.field else ""
+    lines = [
+        f"/** Generated from `{display_module}.{spec.attr}`{field_note} */",
+        f"export const {spec.ts_name}: Readonly<Record<{spec.key_type}, {spec.value_type}>> = {{",
+    ]
+    for key, value in mapping.items():
+        lines.extend(_render_const_entry(key, _project(value, spec)))
+    lines.append("};\n")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
@@ -316,54 +448,29 @@ HEADER = """// Copyright 2025-2026 mrveiss
 
 
 def generate() -> str:
-    """Run the manifest and produce the full TS output as a string."""
+    """Run both manifests and produce the full TS output as a string."""
     _ensure_autobot_shared_on_path()
-    # Cache loaded source files so multiple manifest entries pointing at
-    # the same file share one module load (and one execution of side
-    # effects in that module).
     loaded_modules: Dict[str, Any] = {}
     entries: List[Tuple[str, type]] = []
     for rel_file_path, attr in MANIFEST:
-        abs_path = REPO_ROOT / rel_file_path
-        if not abs_path.is_file():
-            raise SystemExit(f"Source file not found: {rel_file_path}")
-        if rel_file_path not in loaded_modules:
-            # Synthetic module name avoids colliding with anything sys.path
-            # might also surface as `autobot_shared.workflow.types` etc.
-            synth_name = "codegen_" + rel_file_path.replace("/", "_").replace(".", "_")
-            loaded_modules[rel_file_path] = _load_module_from_path(abs_path, synth_name)
-        module = loaded_modules[rel_file_path]
-        cls = getattr(module, attr, None)
+        cls = getattr(_load_source(rel_file_path, loaded_modules), attr, None)
         if cls is None:
             raise SystemExit(f"{rel_file_path}::{attr} not found")
         entries.append((rel_file_path, cls))
 
     known_names = {c.__name__ for _, c in entries}
     # Aliases are also valid known names so dataclasses referencing them resolve.
-    for source, alias_list in ALIASES.items():
+    for alias_list in ALIASES.values():
         known_names.update(alias_list)
 
     parts: List[str] = [HEADER]
     for rel_file_path, cls in entries:
-        # For the rendered TS comment, convert path back to a dotted module
-        # path for human readability. autobot-backend/services/X/Y.py →
-        # services.X.Y; autobot_shared/workflow/types.py → autobot_shared.workflow.types.
-        display_module = rel_file_path
-        for prefix in ("autobot-backend/", ""):
-            if display_module.startswith(prefix):
-                display_module = display_module[len(prefix) :]
-                break
-        display_module = display_module.removesuffix(".py").replace("/", ".")
-
-        if isinstance(cls, type) and issubclass(cls, Enum):
-            parts.append(_render_enum(cls, display_module))
-        elif dataclasses.is_dataclass(cls):
-            parts.append(_render_dataclass(cls, known_names, display_module))
-        else:
-            raise SystemExit(f"Unsupported class kind: {cls!r}")
-        # Emit any aliases declared for this class
-        for alias_name in ALIASES.get(cls.__name__, []):
-            parts.append(_render_alias(alias_name, cls.__name__, cls.__name__))
+        parts.extend(_render_class(cls, known_names, _display_module(rel_file_path)))
+    for spec in CONST_MANIFEST:
+        mapping = getattr(_load_source(spec.source, loaded_modules), spec.attr, None)
+        if mapping is None:
+            raise SystemExit(f"{spec.source}::{spec.attr} not found")
+        parts.append(_render_const_map(spec, mapping, _display_module(spec.source)))
     return "\n".join(parts)
 
 
