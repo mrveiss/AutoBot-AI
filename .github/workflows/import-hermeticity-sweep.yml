@@ -1,0 +1,308 @@
+name: import-hermeticity-sweep
+
+# One module per interpreter makes a full sweep slow: run 34564055823 took 19m03s,
+# 15m43s of it pytest, and a backend PR's slowest other checks take ~11m, so a full
+# sweep on every PR would add ~8m to each (#16198). How much a run examines is decided
+# by "Choose what to sweep", from repo_tests/_import_hermeticity_scope.py -- the same
+# module the test reads its population from:
+#
+#   push to main, schedule, dispatch          FULL    these read the base
+#   PR touching the sweep's own files         FULL    only a full run judges every
+#                                                     baseline entry
+#   PR changing swept modules                 SUBSET  those, plus every module that
+#                                                     imports one of them directly
+#   PR changing no swept module               NONE    no install and no pytest; the summary
+#                                                     says nothing was examined -- a run
+#                                                     that did not look, not a clean one
+#
+# A SUBSET does not reach a module that gets to the changed one only through an
+# intermediate's FUNCTION called at import time, a change confined to a module outside
+# the swept packages, a deleted module's former importers, or a dependency-only change.
+# The FULL run on the push that merges the PR covers each; the scope module lists them.
+#
+# Failures are compared with the frozen, shrink-only baseline of the 54 offenders the
+# first full run found (repo_tests/import_hermeticity_known_offenders.py; #16262 drains
+# it). A failure it does not list fails the run, and so does a listed entry the run
+# probed that now imports cleanly: the PR that fixes a listed module removes its entry,
+# or the FULL run after the merge would go red on the base. Entries a SUBSET did not
+# probe are judged by the next FULL run.
+#
+# A schedule runs the DEFAULT branch's copy of a workflow, and that branch does not
+# carry this one, so the schedule alone never fires (#16221); the push trigger is what
+# reads main after each merge that can change the answer. Only non-PR runs open,
+# update or close an issue: those describe the base, not a diff that may never merge.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'autobot-backend/**'
+      - 'autobot-slm-backend/**'
+      - 'autobot_shared/**'
+      - 'requirements-ci.txt'
+      - 'requirements-ci/**'
+      - 'repo_tests/_import_hermeticity_scope.py'
+      - 'repo_tests/import_hermeticity_known_offenders.py'
+      - 'repo_tests/import_hermeticity_test.py'
+      - '.github/workflows/import-hermeticity-sweep.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'autobot-backend/**'
+      - 'autobot-slm-backend/**'
+      - 'autobot_shared/**'
+      - 'requirements-ci.txt'
+      - 'requirements-ci/**'
+      - 'repo_tests/_import_hermeticity_scope.py'
+      - 'repo_tests/import_hermeticity_known_offenders.py'
+      - 'repo_tests/import_hermeticity_test.py'
+      - '.github/workflows/import-hermeticity-sweep.yml'
+  schedule:
+    - cron: "0 4 * * *"  # daily 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: import-hermeticity-sweep-${{ github.ref }}
+  # A superseded PR run can be dropped; a push, scheduled or dispatched run is the
+  # reading of the base and must finish. At most one waits behind it, and a newer
+  # push replaces the waiting one, so the latest base is always the one read.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # issues: write so a red sweep on the base reaches a reader. A push or scheduled
+    # run has no PR and no author to notify, so without it a regression goes red with
+    # nobody told (#16199 review). PR runs never use it: every issue step below is
+    # gated off pull_request.
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          # 2, not 1: on pull_request the checkout is the PR's merge commit, and depth 2
+          # brings both its parents -- HEAD^1 the base tip, HEAD^2 the PR head. That pair
+          # is all "Choose what to sweep" diffs, the same one enforce-precommit.yml reads;
+          # no history beyond it is fetched (#16207).
+          fetch-depth: 2
+
+      - uses: ./.github/actions/setup-python-ci
+        with:
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+
+      # FULL off pull_request: there is no diff to narrow to, and these runs read the
+      # base. On pull_request the files the PR changes against the base tip it merges
+      # into decide the mode (header table). The scope module needs only the standard
+      # library, so this runs before the dependency install, and NONE installs nothing.
+      - name: Choose what to sweep
+        id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "${EVENT_NAME}" != "pull_request" ]; then
+            echo "mode=full" >>"$GITHUB_OUTPUT"
+            printf '## Import-hermeticity sweep\n\nFull sweep: a %s run reads the base, not a diff.\n' \
+              "${EVENT_NAME}" >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Without a second parent, HEAD^1 would be the PR's previous commit and the
+          # diff would silently shrink to that one commit.
+          if ! git rev-parse --verify --quiet 'HEAD^2' >/dev/null; then
+            echo "::error::the checkout is not the pull request's merge commit, so its changed files cannot be read"
+            exit 1
+          fi
+          # --diff-filter=d: a deleted file has no module left to probe. quotepath=off: a
+          # non-ASCII path must match the population's spelling, not git's octal escape.
+          git -c core.quotepath=off diff --name-only --diff-filter=d 'HEAD^1' HEAD >changed-files.txt
+          python -m repo_tests._import_hermeticity_scope changed-files.txt
+
+      # The declared dependency set is the whole point of running here rather than
+      # locally: a module importing an unsatisfied requirement is indistinguishable
+      # from one with an import-time side effect, and a developer machine has dozens
+      # unsatisfied.
+      #
+      # requirements-ci.txt, not autobot-backend/requirements.txt -- the latter pulls
+      # torch>=2.11.0 plus transitive vllm 0.19.x (which requires torch==2.10.0), an
+      # unsatisfiable resolver state (#7018). Same install as startup-import-smoke,
+      # which asks the closest question to this one.
+      - name: Install declared dependencies
+        if: steps.mode.outputs.mode != 'none'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip >/dev/null
+          python -m pip install pytest >/dev/null
+          python -m pip install -r requirements-ci.txt --prefer-binary
+          python -m pip install -e autobot_shared
+
+      - name: Sweep the modules this run examines
+        id: sweep
+        if: steps.mode.outputs.mode != 'none'
+        env:
+          AUTOBOT_IMPORT_HERMETICITY_SWEEP: "1"
+          # Empty on a FULL run. On SUBSET, the changed swept files: the test requires
+          # every one to match a module, then adds each one's direct importers.
+          AUTOBOT_IMPORT_HERMETICITY_MODULES: ${{ steps.mode.outputs.modules }}
+        run: |
+          set -uo pipefail
+          # errexit is lifted around the pipeline: this step runs under bash -e, so a failing
+          # sweep would abort here before rc is captured, and a real offender would be filed
+          # as "could not run" (#16237). Not `|| true`: that resets PIPESTATUS.
+          set +e
+          python -m pytest repo_tests/import_hermeticity_test.py -p no:cacheprovider -q \
+            2>&1 | tee sweep-output.txt
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "rc=${rc}" >>"$GITHUB_OUTPUT"
+          {
+            echo 'report<<SWEEP_EOF'
+            tail -c 60000 sweep-output.txt
+            echo
+            echo SWEEP_EOF
+          } >>"$GITHUB_OUTPUT"
+
+      # Always, unless the run examined nothing on purpose, so a failing sweep still
+      # hands over what it found: new offenders, and baseline entries that no longer fail.
+      - name: Publish the offender list
+        if: always() && steps.mode.outputs.mode != 'none'
+        run: |
+          {
+            echo "### Sweep output"
+            echo
+            echo '```'
+            if [ -f sweep-output.txt ]; then
+              tail -60 sweep-output.txt
+            else
+              echo "(no output: an earlier step failed before the sweep ran)"
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the raw output
+        if: always() && steps.mode.outputs.mode != 'none'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: import-hermeticity-sweep
+          path: sweep-output.txt
+          retention-days: 14
+
+      - name: Open or update the sweep-failure issue
+        # `success() &&` is load-bearing: a custom `if:` REPLACES the implicit
+        # success(), so without it a failed install would leave rc unset, compare
+        # unequal to '0', and file an offender report for a sweep that never ran.
+        # Off pull_request: a PR run reports through its own red check (#16221). Every
+        # other event is a FULL run, so no mode term is needed here.
+        if: success() && github.event_name != 'pull_request' && steps.sweep.outputs.rc != '0'
+        uses: actions/github-script@v9
+        env:
+          # Through the environment, never interpolated into the script body: the
+          # sweep output would otherwise be parsed as JavaScript.
+          SWEEP_REPORT: ${{ steps.sweep.outputs.report }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'ci: the import-hermeticity sweep found modules that are not import-hermetic';
+            const body = [
+              'The full sweep (`repo_tests/import_hermeticity_test.py`) failed on a `' + context.eventName +
+                '` run at `' + context.sha + '`.',
+              'Run: ' + context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo +
+                '/actions/runs/' + context.runId,
+              '',
+              'It fails on a module the known-offender baseline does not list, and on a listed',
+              'entry that no longer fails (`repo_tests/import_hermeticity_known_offenders.py`).',
+              '',
+              '```',
+              process.env.SWEEP_REPORT || '(the sweep produced no output)',
+              '```',
+              '',
+              'Only push, scheduled and dispatched runs file this issue; a pull-request run',
+              'reports through its own red check instead (#16221). The next clean full run closes it.',
+              '',
+              'Filed automatically by `.github/workflows/import-hermeticity-sweep.yml` (#16198).',
+            ].join('\n');
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo, state: 'open', labels: 'automation', per_page: 100,
+            });
+            const open = existing.find((issue) => issue.title === title && !issue.pull_request);
+            if (open) {
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: open.number, body,
+              });
+              core.notice('Updated sweep-failure issue #' + open.number);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo, title, body,
+                labels: ['bug', 'testing', 'automation'],
+              });
+              core.notice('Opened sweep-failure issue #' + created.data.number);
+            }
+
+      - name: Close the sweep-failure issue once the sweep is clean again
+        # Off pull_request: a clean diff says nothing about whether the base is clean.
+        if: success() && github.event_name != 'pull_request' && steps.sweep.outputs.rc == '0'
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // A clean run answers both reports: the offender list, and a run the sweep could not finish.
+            const titles = [
+              'ci: the import-hermeticity sweep found modules that are not import-hermetic',
+              'ci: the import-hermeticity sweep could not run',
+            ];
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo, state: 'open', labels: 'automation', per_page: 100,
+            });
+            for (const open of existing.filter((issue) => titles.includes(issue.title) && !issue.pull_request)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: open.number,
+                body: 'The import-hermeticity sweep ran clean as of `' + context.sha + '`. Closing.',
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: open.number, state: 'closed',
+              });
+            }
+
+      - name: Open or update the could-not-run issue
+        # The sweep step never fails (it captures rc), so failure() here means an
+        # earlier step did -- checkout, setup, choosing the mode or the dependency
+        # install. That is a sweep that never looked, and it must not read as a clean
+        # run either. On a pull_request run the red check is the report; no issue.
+        if: failure() && github.event_name != 'pull_request'
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'ci: the import-hermeticity sweep could not run';
+            const body = 'The sweep failed before it examined anything, on a `' + context.eventName + '` run at `' +
+              context.sha + '`.\nRun: ' + context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo +
+              '/actions/runs/' + context.runId +
+              '\n\nFiled automatically by `.github/workflows/import-hermeticity-sweep.yml` (#16198).';
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo, state: 'open', labels: 'automation', per_page: 100,
+            });
+            const open = existing.find((issue) => issue.title === title && !issue.pull_request);
+            if (open) {
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: open.number, body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo, title, body,
+                labels: ['bug', 'infrastructure', 'automation'],
+              });
+            }
+
+      - name: Fail the run when the sweep found offenders
+        # mode != 'none': a skipped sweep writes no rc, and '' != '0' would fail a run
+        # that examined nothing on purpose.
+        if: success() && steps.mode.outputs.mode != 'none' && steps.sweep.outputs.rc != '0'
+        run: |
+          echo "::error::the import-hermeticity sweep failed: a module the baseline does not list, or a listed entry that no longer fails -- see this run's summary, and off pull_request the issue this run filed or updated"
+          exit 1
