@@ -83,6 +83,25 @@ describe('makeAxiosCompatClient — envelope + routing', () => {
       body: undefined,
     })
   })
+
+  it('passes a per-call get() timeout through to rawRequest (#16256)', async () => {
+    mockRaw.mockResolvedValue(makeResponse(200, {}))
+    const client = makeAxiosCompatClient()
+    await client.get('/nodes/n1/services/redis/logs', { timeout: 300_000 })
+    expect(mockRaw).toHaveBeenCalledWith('/nodes/n1/services/redis/logs', {
+      method: 'GET',
+      body: undefined,
+      timeout: 300_000,
+    })
+  })
+
+  it('leaves the timeout undefined, so rawRequest applies its own default, when the call omits it', async () => {
+    mockRaw.mockResolvedValue(makeResponse(200, {}))
+    const client = makeAxiosCompatClient()
+    await client.get('/nodes')
+    const [, opts] = mockRaw.mock.calls[0] as [string, { timeout?: number }]
+    expect(opts.timeout).toBeUndefined()
+  })
 })
 
 describe('makeAxiosCompatClient — textFallback for non-JSON 2xx', () => {
