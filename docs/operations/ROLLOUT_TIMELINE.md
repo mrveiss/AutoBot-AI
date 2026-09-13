@@ -4,6 +4,8 @@
 
 This document provides a detailed timeline for the gradual rollout of session ownership validation and access control enforcement across AutoBot's distributed infrastructure.
 
+> **Historical record:** this timeline targets the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic.
+
 ---
 
 ## 📅 Rollout Schedule Overview
@@ -34,7 +36,7 @@ This document provides a detailed timeline for the gradual rollout of session ow
 **Objective:** Prepare infrastructure and deploy feature flags
 
 **Activities:**
-- ✅ Verify all 6 VMs accessible
+- ✅ Verify all deployment machines accessible
 - ✅ Check Redis and backend health
 - ✅ Create Redis backup
 - ✅ Deploy feature flags system

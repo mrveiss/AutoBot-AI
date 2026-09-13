@@ -1,6 +1,6 @@
 # 🔧 Hardware Passthrough Setup for AutoBot Native Deployment
 
-## NPU and GPU Access for VM2 (NPU Worker - 172.16.168.22)
+## NPU and GPU Access for the NPU Worker Role
 
 The NPU Worker VM requires direct access to both NPU and GPU hardware for optimal AI inference performance. This requires configuring hardware passthrough in Hyper-V.
 
@@ -19,7 +19,7 @@ The NPU Worker VM requires direct access to both NPU and GPU hardware for optima
 
 #### **Option A: GPU-PV (Recommended for Intel Arc/Integrated Graphics)**
 ```powershell
-# Enable GPU-PV for VM2 (NPU Worker)
+# Enable GPU-PV for the NPU worker role
 Add-VMGpuPartitionAdapter -VMName "autobot-npu" -AdapterName "Intel(R) Arc(TM) Graphics"
 
 # Configure GPU resource allocation

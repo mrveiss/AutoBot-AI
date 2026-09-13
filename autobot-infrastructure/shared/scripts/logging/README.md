@@ -23,7 +23,7 @@ Your system is currently experiencing GPU performance regressions:
 
 The enhanced logging system provides:
 - **Real-time GPU regression detection**
-- **Cross-VM correlation** during performance drops
+- **Cross-role correlation** during performance drops
 - **Historical trend analysis**
 - **Intelligent alerting** for performance issues
 - **Web dashboards** for visualization
@@ -35,33 +35,36 @@ The enhanced logging system provides:
 | Component | Enhancement | Purpose |
 |-----------|-------------|---------|
 | **Loki + Grafana** | Modern log aggregation | Web-based log visualization and analysis |
-| **Promtail Agents** | Real-time log shipping | Live log streaming from all 5 VMs |
+| **Promtail Agents** | Real-time log shipping | Live log streaming from every deployment machine |
 | **AI Log Parser** | Intelligent categorization | Automatic performance issue detection |
 | **Real-Time Monitor** | Live alerting | Instant notifications for GPU regressions |
 | **Performance Aggregator** | Trend analysis | Historical GPU performance tracking |
 
 ### Infrastructure Layout
+
+Roles below may be co-located on one machine (Docker or a single VM) or split across
+however many machines a deployment scales to.
 ```
-Main Machine (172.16.168.20)    │ VM1 Frontend (172.16.168.21)
+Main / Control (<backend-ip>)   │ Frontend role (<frontend-ip>)
 ├── Loki (port 3100)            │ ├── Promtail agent
 ├── Grafana (port 3001)         │ ├── nginx logs
 ├── Real-time monitor           │ └── autobot-frontend logs
 ├── Performance aggregator      │
-└── Enhanced log parser         │ VM2 NPU Worker (172.16.168.22)
+└── Enhanced log parser         │ NPU Worker role (<npu-ip>)
                                 │ ├── Promtail agent
                                 │ ├── autobot-npu-worker logs
                                 │ └── docker logs
                                 │
-                                │ VM3 Redis (172.16.168.23)
+                                │ Database role - Redis (<database-ip>)
                                 │ ├── Promtail agent
                                 │ └── redis-stack-server logs
                                 │
-                                │ VM4 AI Stack (172.16.168.24)
+                                │ AI Stack role (<aiml-ip>)
                                 │ ├── Promtail agent
                                 │ ├── autobot-ai-stack logs
                                 │ └── autobot-backend logs
                                 │
-                                │ VM5 Browser (172.16.168.25)
+                                │ Browser role (<browser-ip>)
                                 │ ├── Promtail agent
                                 │ ├── autobot-playwright logs
                                 │ └── docker logs
@@ -115,18 +118,18 @@ python3 scripts/logging/enhanced-log-parser.py \
 
 ### Manual Log Collection
 ```bash
-# Collect from all VMs
+# Collect from all deployment machines
 bash scripts/logging/collect-service-logs.sh
 bash scripts/logging/collect-application-logs.sh
 
-# Collect from specific VM
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "journalctl -u autobot* --since '1 hour ago'"
+# Collect from a specific role's machine
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "journalctl -u autobot* --since '1 hour ago'"
 ```
 
 ## 🌐 Web Interfaces
 
 ### Loki API (Direct Access)
-- **URL**: http://172.16.168.20:3100
+- **URL**: http://<backend-ip>:3100
 - **Purpose**: Direct log querying and API access
 
 **Example LogQL queries:**
@@ -134,7 +137,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "journalctl -u autobot* --since 
 # Monitor GPU performance issues
 {job="autobot-performance"} |= "GPU" |= "regression"
 
-# Find all errors across VMs
+# Find all errors across roles
 {job="autobot-system"} |= "error" | line_format "{{.timestamp}} {{.vm}} {{.message}}"
 
 # Track API response times
@@ -142,7 +145,7 @@ rate({job="autobot-performance"} |= "API" [5m])
 ```
 
 ### Grafana Dashboard
-- **URL**: http://172.16.168.20:3001
+- **URL**: http://<backend-ip>:3001
 - **Credentials**: admin / autobot123
 - **Features**: Pre-configured AutoBot dashboards, GPU regression visualization
 
@@ -227,13 +230,13 @@ bash scripts/logging/real-time-monitor.sh
 
 ### Common Issues
 
-1. **VM Connectivity**
+1. **Deployment Machine Connectivity**
    ```bash
-   # Check VM status
+   # Check status of all deployment machines
    bash scripts/vm-management/status-all-vms.sh
 
-   # Test SSH connectivity
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "echo test"
+   # Test SSH connectivity to a role's machine
+   ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "echo test"
    ```
 
 2. **Missing Logs**
@@ -256,11 +259,11 @@ bash scripts/logging/real-time-monitor.sh
 
 4. **Promtail Agent Issues**
    ```bash
-   # Check agent status on VM
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "sudo systemctl status promtail"
+   # Check agent status on a role's machine
+   ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "sudo systemctl status promtail"
 
    # Restart agent
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "sudo systemctl restart promtail"
+   ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "sudo systemctl restart promtail"
    ```
 
 ### Performance Analysis Commands

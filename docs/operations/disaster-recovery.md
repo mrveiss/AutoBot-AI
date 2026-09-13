@@ -67,7 +67,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 **Symptoms**:
 - Cannot access `http://<frontend-ip>:5173`
-- SSH to VM1 fails or shows issues
+- SSH to the frontend role fails or shows issues
 
 **Recovery Steps**:
 
@@ -86,7 +86,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
    ```bash
    ssh -i ~/.ssh/autobot_key autobot@<frontend-ip>
 
-   # On VM1:
+   # On the frontend role's machine:
    cd /opt/autobot/autobot-slm-frontend
    npm run dev -- --host 0.0.0.0
    ```

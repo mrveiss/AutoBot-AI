@@ -2,7 +2,7 @@
 
 **Status**: MANDATORY - Local-only development with immediate sync
 
-This guide provides detailed instructions for AutoBot's distributed VM infrastructure and deployment workflows.
+This guide provides detailed instructions for AutoBot's distributed, role-based infrastructure and deployment workflows. AutoBot has no fixed machine count: it runs in Docker, on a single VM, or scaled out by role across however many machines an operator chooses.
 
 > **MANDATORY RULE**: NEVER edit code directly on remote VMs - Edit locally, sync immediately
 
@@ -264,7 +264,7 @@ uvicorn main:app --host 0.0.0.0 --port 8001
 # https://<backend-ip>:8443/api/chat
 ```
 
-**Frontend on VM1** (<frontend-ip>):
+**Frontend role** (<frontend-ip>):
 
 ```bash
 # Binds to all interfaces
@@ -274,7 +274,7 @@ npm run dev -- --host 0.0.0.0 --port 5173
 # http://<frontend-ip>:5173
 ```
 
-**Redis on VM3** (<database-ip>):
+**Redis (Database role)** (<database-ip>):
 
 ```bash
 # Configure Redis to bind to all interfaces
@@ -539,19 +539,21 @@ curl https://<frontend-ip>                 # Frontend
 
 ---
 
-## VM Infrastructure Overview
+## Infrastructure Overview (Role-Based, No Fixed Count)
 
 ### Service Layout
 
-| VM | IP:Port | Service | Purpose |
+This is one example layout; each role may be co-located or split onto its own machine.
+
+| Role | IP:Port | Service | Purpose |
 |----|---------|---------|---------|
-| **Main (WSL)** | <backend-ip>:8443 | Backend API | FastAPI backend, business logic |
-| **Main (WSL)** | <backend-ip>:6080 | VNC Desktop | noVNC web-based terminal |
-| **VM1 Frontend** | <frontend-ip>:5173 | Web UI | Vue.js frontend (SINGLE SERVER) |
-| **VM2 NPU Worker** | <npu-ip>:8081 | AI Acceleration | Hardware NPU for AI tasks |
-| **VM3 Redis** | <database-ip>:6379 | Data Layer | Redis database, cache, queues |
-| **VM4 AI Stack** | <aiml-ip>:8080 | AI Processing | LLM inference, AI services |
-| **VM5 Browser** | <browser-ip>:3000 | Web Automation | Playwright browser automation |
+| **Main / Control (WSL)** | <backend-ip>:8443 | Backend API | FastAPI backend, business logic |
+| **Main / Control (WSL)** | <backend-ip>:6080 | VNC Desktop | noVNC web-based terminal |
+| **Frontend** | <frontend-ip>:5173 | Web UI | Vue.js frontend (SINGLE SERVER) |
+| **NPU Worker** | <npu-ip>:8081 | AI Acceleration | Hardware NPU for AI tasks |
+| **Database** | <database-ip>:6379 | Data Layer | Redis database, cache, queues |
+| **AI Stack** | <aiml-ip>:8080 | AI Processing | LLM inference, AI services |
+| **Browser** | <browser-ip>:3000 | Web Automation | Playwright browser automation |
 
 ### Architecture Diagram
 
@@ -568,13 +570,13 @@ curl https://<frontend-ip>                 # Frontend
         ┌───────────────────┼───────────────────┐
         │                   │                   │
 ┌───────▼─────────┐ ┌──────▼──────────┐ ┌─────▼──────────┐
-│  VM1: Frontend  │ │  VM3: Redis     │ │  VM4: AI Stack │
+│  Frontend role  │ │  Database role  │ │  AI Stack role │
 │  <frontend-ip>  │ │  <database-ip>  │ │  <aiml-ip> │
 │  Port: 5173     │ │  Port: 6379     │ │  Port: 8080    │
 └─────────────────┘ └─────────────────┘ └────────────────┘
         │                   │                   │
 ┌───────▼─────────┐ ┌──────▼──────────┐
-│ VM2: NPU Worker │ │ VM5: Browser    │
+│ NPU Worker role │ │ Browser role    │
 │ <npu-ip>   │ │ <browser-ip>   │
 │ Port: 8081      │ │ Port: 3000      │
 └─────────────────┘ └─────────────────┘

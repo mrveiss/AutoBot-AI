@@ -4,6 +4,8 @@
 **Environment:** Production (dev)
 **Status:** ✅ **DEPLOYED AND OPERATIONAL**
 
+> **Historical record:** this document reflects the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; the counts below describe that one install.
+
 ---
 
 ## 🎯 Deployment Status

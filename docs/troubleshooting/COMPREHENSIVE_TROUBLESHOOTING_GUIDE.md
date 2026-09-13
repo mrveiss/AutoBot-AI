@@ -160,7 +160,7 @@ for host in <frontend-ip> <npu-ip> <database-ip> <aiml-ip> <browser-ip>; do
 done
 
 # Test SSH connectivity
-ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "echo 'VM1 accessible'"
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "echo 'frontend role accessible'"
 ```
 
 #### B. Network Configuration Issues

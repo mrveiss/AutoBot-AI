@@ -3,7 +3,7 @@
 
 ## Overview
 
-This directory contains scripts to fix the critical SSH man-in-the-middle vulnerability (CVE-AUTOBOT-2025-001) affecting the AutoBot distributed infrastructure. These scripts implement proper SSH host key verification across all 6 AutoBot hosts (172.16.168.20-25).
+This directory contains scripts to fix the critical SSH man-in-the-middle vulnerability (CVE-AUTOBOT-2025-001) affecting the AutoBot distributed infrastructure. These scripts implement proper SSH host key verification across every host in the deployment — AutoBot has no fixed machine count, so the blast radius scales with however many hosts the operator runs.
 
 ## Vulnerability Summary
 
@@ -38,7 +38,7 @@ This directory contains scripts to fix the critical SSH man-in-the-middle vulner
 **What it does**:
 - Detects SSH version (for accept-new vs yes mode)
 - Creates `~/.ssh/config` with proper host key checking
-- Configures all 6 AutoBot hosts with secure settings
+- Configures every AutoBot host in the deployment with secure settings
 - Enables MITM attack detection
 
 **Usage**:
@@ -60,7 +60,7 @@ This directory contains scripts to fix the critical SSH man-in-the-middle vulner
 **Purpose**: Securely populates known_hosts with AutoBot VM host keys
 
 **What it does**:
-- Tests connectivity to all 6 AutoBot hosts
+- Tests connectivity to every AutoBot host in the deployment
 - Fetches host keys using `ssh-keyscan` (secure method)
 - Displays host key fingerprints for verification
 - Adds keys to `~/.ssh/known_hosts`
@@ -76,13 +76,8 @@ This directory contains scripts to fix the critical SSH man-in-the-middle vulner
 - Backup of existing known_hosts if present
 - Host key fingerprints for manual verification
 
-**Hosts Populated**:
-- 172.16.168.20 - WSL Host (Backend)
-- 172.16.168.21 - Frontend VM
-- 172.16.168.22 - NPU Worker VM
-- 172.16.168.23 - Redis/Database VM
-- 172.16.168.24 - AI Stack VM
-- 172.16.168.25 - Browser VM
+**Hosts Populated**: every host in the deployment inventory, one per role (control/backend,
+frontend, NPU worker, database, AI stack, browser) — however many machines that deployment uses.
 
 ### 3. fix-all-scripts.sh
 **Purpose**: Automatically removes vulnerable SSH options from all scripts
@@ -124,7 +119,7 @@ This directory contains scripts to fix the critical SSH man-in-the-middle vulner
 **What it does**:
 - Verifies SSH config exists and is secure
 - Checks known_hosts is populated
-- Tests SSH connections to all 6 VMs with host key verification
+- Tests SSH connections to every deployment machine with host key verification
 - Scans for remaining vulnerable scripts
 - Displays host key fingerprints
 - Reports comprehensive security status
@@ -164,12 +159,12 @@ This directory contains scripts to fix the critical SSH man-in-the-middle vulner
    ./populate-known-hosts.sh
    ```
 
-   This safely adds all 6 AutoBot VM host keys to `~/.ssh/known_hosts`.
+   This safely adds every AutoBot host's key to `~/.ssh/known_hosts`.
 
 3. **Verify Configuration**:
    ```bash
-   # Test SSH connection to Frontend VM
-   ssh autobot@172.16.168.21 'echo "Connection OK"'
+   # Test SSH connection to the frontend role's host
+   ssh autobot@<frontend-ip> 'echo "Connection OK"'
 
    # Or using hostname alias
    ssh autobot-frontend 'echo "Connection OK"'
@@ -236,13 +231,13 @@ This directory contains scripts to fix the critical SSH man-in-the-middle vulner
     cp ~/.ssh/known_hosts ~/.ssh/known_hosts.backup
 
     # Remove one host's key
-    ssh-keygen -R 172.16.168.21
+    ssh-keygen -R <frontend-ip>
 
     # Add fake key (simulates MITM attack)
-    echo "172.16.168.21 ssh-rsa AAAAB3NzaC1yc2FAKE_KEY" >> ~/.ssh/known_hosts
+    echo "<frontend-ip> ssh-rsa AAAAB3NzaC1yc2FAKE_KEY" >> ~/.ssh/known_hosts
 
     # Try to connect - should FAIL (MITM detected)
-    ssh autobot@172.16.168.21 'echo "Should fail"'
+    ssh autobot@<frontend-ip> 'echo "Should fail"'
     # Expected: Host key verification failed
 
     # Restore backup
@@ -294,13 +289,13 @@ cp ~/.ssh/known_hosts.backup-<timestamp> ~/.ssh/known_hosts
 **Solution**:
 ```bash
 # Check if host key exists
-ssh-keygen -F 172.16.168.21
+ssh-keygen -F <frontend-ip>
 
 # If missing, re-run population script
 ./populate-known-hosts.sh
 
 # If changed (legitimate change), remove old key and re-add
-ssh-keygen -R 172.16.168.21
+ssh-keygen -R <frontend-ip>
 ./populate-known-hosts.sh
 ```
 

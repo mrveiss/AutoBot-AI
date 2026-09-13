@@ -38,7 +38,7 @@ This runbook provides operational procedures for managing the Redis service with
 
 **Service Details:**
 - **Service Name:** redis-stack-server
-- **Host:** VM3 (<database-ip>)
+- **Host:** database role (<database-ip>)
 - **Port:** 6379
 - **systemd Unit:** redis-stack-server.service
 - **User:** redis
@@ -51,7 +51,7 @@ This runbook provides operational procedures for managing the Redis service with
 - **On-Call Rotation:** See PagerDuty/on-call schedule
 
 **Dependencies:**
-- **Depends on:** Network connectivity, VM3 availability, SSH access
+- **Depends on:** Network connectivity, database role availability, SSH access
 - **Depended by:** Backend API, Session Management, Cache System, Knowledge Base, Real-Time Features
 
 **SLA Targets:**
@@ -83,7 +83,7 @@ This runbook provides operational procedures for managing the Redis service with
                  │
                  ▼
 ┌─────────────────────────────────────────────────────────┐
-│                 Redis VM (VM3)                           │
+│              Redis - Database role                      │
 │              <database-ip>:6379                         │
 │                                                         │
 │  ┌─────────────────────────────────────────────────┐  │
@@ -1051,11 +1051,11 @@ scp -i ~/.ssh/autobot_key \
 
 **Data Loss:** Up to 24 hours (last daily backup)
 
-#### Scenario 2: VM Failure
+#### Scenario 2: Host Failure
 
 **Symptoms:**
-- VM3 completely unavailable
-- Cannot SSH to Redis VM
+- The database role's machine completely unavailable
+- Cannot SSH to the Redis host
 - Network unreachable
 
 **Recovery Steps:**

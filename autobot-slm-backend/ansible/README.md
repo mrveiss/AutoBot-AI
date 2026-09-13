@@ -2,57 +2,60 @@
 
 ## Overview
 
-This Ansible deployment system migrates AutoBot from 8 Docker containers to 5 optimized Hyper-V VMs for enhanced performance, security, and scalability.
+This Ansible deployment system migrates AutoBot from Docker containers to native, role-based Hyper-V VMs for enhanced performance, security, and scalability. AutoBot has no fixed machine count: roles can be co-located in Docker, on one VM, or split across however many machines an operator chooses. The example below shows one reference layout with one machine per role.
 
 ## Architecture
 
-### VM Distribution
+### Example Role Distribution
 
 **From Docker Containers:**
 ```
-8 Containers → 5 VMs
-├── dns-cache          → VM1 (Frontend) - DNS cache service
-├── redis              → VM3 (Database) - Redis Stack
-├── browser-service    → VM5 (Browser) - Playwright automation
-├── frontend           → VM1 (Frontend) - Vue.js application
-├── ai-stack           → VM4 (AI/ML) - AI inference server
-├── npu-worker         → VM4 (AI/ML) - NPU acceleration
-├── models             → VM3 (Database) - Model storage
-└── autobot (backend)  → VM2 (Backend) - FastAPI server
+Containers → Roles (one worked example, machine count is a deployment choice)
+├── dns-cache          → Frontend role - DNS cache service
+├── redis              → Database role - Redis Stack
+├── browser-service    → Browser role - Playwright automation
+├── frontend           → Frontend role - Vue.js application
+├── ai-stack           → AI/ML role - AI inference server
+├── npu-worker         → AI/ML role - NPU acceleration
+├── models             → Database role - Model storage
+└── autobot (backend)  → Backend role - FastAPI server
 ```
 
-**To VM Architecture:**
+**To Role-Based Architecture:**
 ```
-VM1 (Frontend)    - Ubuntu Server 22.04 LTS
+Frontend role     - Ubuntu Server 22.04 LTS
 ├── nginx (reverse proxy & static files)
 ├── Node.js 20+ (Vue.js frontend)
 ├── DNS cache (unbound)
 └── Frontend assets & builds
 
-VM2 (Backend)     - Ubuntu Server 22.04 LTS
+Backend role      - Ubuntu Server 22.04 LTS
 ├── Python 3.14+ (FastAPI server)
 ├── Backend APIs & services
 ├── Log aggregation (rsyslog)
 └── Application state management
 
-VM3 (Database)    - Ubuntu Server 22.04 LTS
+Database role     - Ubuntu Server 22.04 LTS
 ├── Redis Stack 7.4+ (primary database)
 ├── Model storage & versioning
 ├── Data persistence & backups
 └── Database monitoring
 
-VM4 (AI/ML)       - Ubuntu Server 22.04 LTS
+AI/ML role        - Ubuntu Server 22.04 LTS
 ├── AI Stack (LLM inference)
 ├── NPU Worker (hardware acceleration)
 ├── Intel OpenVINO & drivers
 └── Model serving & optimization
 
-VM5 (Browser)     - Ubuntu Desktop 22.04 LTS
+Browser role      - Ubuntu Desktop 22.04 LTS
 ├── Playwright automation
 ├── Chrome/Firefox browsers
 ├── VNC server (remote access)
 └── Desktop automation services
 ```
+
+Each role above may run on its own machine, be co-located with others, or run more than one
+instance — there is no fixed count.
 
 ## Quick Start
 
@@ -68,7 +71,7 @@ VM5 (Browser)     - Ubuntu Desktop 22.04 LTS
 
 ### 2. Update Inventory
 
-Edit `inventory/production.yml` with your VM IP addresses:
+Edit `inventory/production.yml` with your machines' IP addresses, one group per role:
 
 ```yaml
 all:
@@ -79,12 +82,13 @@ all:
     frontend:
       hosts:
         autobot-frontend:
-          ansible_host: 172.16.168.21  # Update with your IP
+          ansible_host: <frontend-ip>  # Update with your IP
     backend:
       hosts:
         autobot-backend:
-          ansible_host: 172.16.168.20  # Update with your IP
-    # ... etc for all VMs
+          ansible_host: <backend-ip>  # Update with your IP
+    # ... etc for every role group; co-locate groups on one host or split
+    # them across as many machines as the deployment needs
 ```
 
 ### 3. Test Connectivity
@@ -195,23 +199,24 @@ ansible/
 
 ### Network Settings
 
-The system uses the internal network configuration:
-- **Network**: 172.16.168.0/24
-- **Gateway**: 172.16.168.1 (Windows host)
+The system uses your internal network configuration (subnet and gateway are set during
+install and are never hardcoded):
+- **Network**: your deployment's internal subnet
+- **Gateway**: your Hyper-V host
 - **DNS**: 8.8.8.8, 1.1.1.1
 
 ### Service Ports
 
-| Service | VM | Internal Port | External Port | Description |
+| Service | Role | Internal Port | External Port | Description |
 |---------|-------|---------------|---------------|-------------|
-| Vue.js Frontend | VM1 | 5173 | 80 (nginx) | Web interface |
-| FastAPI Backend | VM2 | 8001 | 8001 | API server |
-| Redis Stack | VM3 | 6379 | 6379 | Database |
-| Redis Insight | VM3 | 8001 | 8002 | DB management |
-| AI Stack | VM4 | 8080 | 8080 | AI inference |
-| NPU Worker | VM4 | 8081 | 8081 | NPU acceleration |
-| Playwright | VM5 | 3000 | 3000 | Browser automation |
-| VNC Server | VM5 | 5901 | 6080 | Remote desktop |
+| Vue.js Frontend | Frontend | 5173 | 80 (nginx) | Web interface |
+| FastAPI Backend | Backend | 8001 | 8001 | API server |
+| Redis Stack | Database | 6379 | 6379 | Database |
+| Redis Insight | Database | 8001 | 8002 | DB management |
+| AI Stack | AI/ML | 8080 | 8080 | AI inference |
+| NPU Worker | AI/ML | 8081 | 8081 | NPU acceleration |
+| Playwright | Browser | 3000 | 3000 | Browser automation |
+| VNC Server | Browser | 5901 | 6080 | Remote desktop |
 
 ## Data Migration
 
@@ -236,14 +241,14 @@ The system uses the internal network configuration:
    ansible-playbook -i inventory/production.yml playbooks/data-migration.yml
    ```
 
-3. **Import to VMs**:
+3. **Import to the role machines**:
    ```bash
    # Redis data import
-   scp backup/dump.rdb autobot@172.16.168.23:/var/lib/redis/
-   ssh autobot@172.16.168.23 sudo systemctl restart redis-stack-server
+   scp backup/dump.rdb autobot@<database-ip>:/var/lib/redis/
+   ssh autobot@<database-ip> sudo systemctl restart redis-stack-server
 
    # Model files sync
-   rsync -av backup/models/ autobot@172.16.168.24:/opt/autobot/models/
+   rsync -av backup/models/ autobot@<aiml-ip>:/opt/autobot/models/
    ```
 
 ## Service Management
@@ -268,9 +273,9 @@ journalctl -u autobot-frontend -f
 ### Service Dependencies
 
 ```
-Redis (VM3) → Backend (VM2) → AI/ML (VM4) → Frontend (VM1) → Browser (VM5)
-     ↑                                                               ↓
-     └─────────────── Model Storage ← ─────────────────────────────────┘
+Redis (Database) → Backend → AI/ML → Frontend → Browser
+     ↑                                                ↓
+     └─────────────── Model Storage ← ─────────────────┘
 ```
 
 ## Monitoring & Health Checks
@@ -282,16 +287,16 @@ Redis (VM3) → Backend (VM2) → AI/ML (VM4) → Frontend (VM1) → Browser (VM
 ./utils/health-check.sh
 
 # Individual service health
-curl http://172.16.168.21/health  # Frontend
-curl http://172.16.168.20:8001/api/health  # Backend
-curl http://172.16.168.24:8080/health  # AI Stack
-curl http://172.16.168.22:8081/health  # NPU Worker
-redis-cli -h 172.16.168.23 ping  # Redis
+curl http://<frontend-ip>/health  # Frontend
+curl http://<backend-ip>:8001/api/health  # Backend
+curl http://<aiml-ip>:8080/health  # AI Stack
+curl http://<npu-ip>:8081/health  # NPU Worker
+redis-cli -h <database-ip> ping  # Redis
 ```
 
 ### Log Aggregation
 
-All logs are centralized on the Backend VM (VM2):
+All logs are centralized on the backend role's machine:
 - **Location**: `/var/log/autobot/`
 - **Retention**: 30 days, 100MB max per service
 - **Format**: JSON structured logs
@@ -324,7 +329,7 @@ All logs are centralized on the Backend VM (VM2):
 
 ### Common Issues
 
-1. **VM Connectivity**:
+1. **Deployment Machine Connectivity**:
    ```bash
    # Test network connectivity
    ansible all -m ping
@@ -349,7 +354,7 @@ All logs are centralized on the Backend VM (VM2):
 ### Log Analysis
 
 ```bash
-# Search logs across all VMs
+# Search logs across all deployment machines
 ./utils/search-logs.sh "error" --last-24h
 
 # Performance monitoring
@@ -359,12 +364,12 @@ All logs are centralized on the Backend VM (VM2):
 ## Security
 
 ### Network Security
-- Internal network isolation (172.16.168.0/24)
+- Internal network isolation (your deployment's subnet)
 - Windows Firewall protection
 - No direct internet exposure
 
-### VM Security
-- UFW firewall on each VM
+### Machine Security
+- UFW firewall on each role's machine
 - SSH key-based authentication
 - Regular security updates via Ansible
 
@@ -399,7 +404,7 @@ ansible database -m command -a "redis-cli CONFIG SET save '60 1000'"
 
 ## Migration Timeline
 
-1. **Phase 1** (30 minutes): VM preparation and base system setup
+1. **Phase 1** (30 minutes): Machine preparation and base system setup
 2. **Phase 2** (45 minutes): Service installation and configuration
 3. **Phase 3** (20 minutes): Data migration from Docker
 4. **Phase 4** (15 minutes): Service startup and health checks

@@ -5,6 +5,8 @@
 **Total Time**: 3 hours 10 minutes (under 3-hour estimate)
 **System Impact**: ZERO (logging mode, no blocking)
 
+> **Historical record:** this deployment ran across the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; the counts below describe that one install.
+
 ---
 
 ## Executive Summary

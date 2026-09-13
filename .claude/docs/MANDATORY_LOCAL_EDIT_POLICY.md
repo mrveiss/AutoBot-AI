@@ -4,7 +4,7 @@
 
 **NEVER:**
 - SSH into remote machines to edit files
-- Use remote editors (vim/nano/emacs) on VMs
+- Use remote editors (vim/nano/emacs) on deployment machines
 - Modify configs directly on servers
 - Execute `ssh user@host "edit command"`
 - Modify Docker containers on remote machines
@@ -19,15 +19,19 @@ LOCAL EDIT → TEST → SYNC → DEPLOY → VERIFY
   AutoBot/           ansible
 ```
 
-## 🖥️ VM Infrastructure
+## 🖥️ Deployment Roles
 
-| VM | IP | Purpose |
-|----|-----|---------|
-| VM1 | 172.16.168.21 | Frontend |
-| VM2 | 172.16.168.22 | NPU Worker |
-| VM3 | 172.16.168.23 | Redis |
-| VM4 | 172.16.168.24 | AI Stack |
-| VM5 | 172.16.168.25 | Browser |
+AutoBot has no fixed machine count: it runs in Docker, on one VM, or scaled out across
+however many machines an operator chooses. Each role below can be co-located or split
+onto its own machine; hosts are resolved via `infrastructure.hosts.<role>`, never hardcoded.
+
+| Role | Purpose |
+|----|---------|
+| Frontend | Web UI (nginx / Vue.js) |
+| NPU Worker | Hardware AI acceleration |
+| Database | Redis |
+| AI Stack | LLM serving |
+| Browser | Playwright / VNC |
 
 **Local Base:** `` — ALL edits here. NO EXCEPTIONS.
 
@@ -38,12 +42,12 @@ LOCAL EDIT → TEST → SYNC → DEPLOY → VERIFY
 rsync -avz --delete \
   -e "ssh -i ~/.ssh/autobot_key" \
   backend/ \
-  autobot@172.16.168.21:/opt/autobot/backend/
+  autobot@<backend-host>:/opt/autobot/backend/
 ```
 
 ### 2. Sync Script
 ```bash
-./scripts/utilities/sync-to-vm.sh frontend 172.16.168.21
+./scripts/utilities/sync-to-vm.sh frontend <frontend-host>
 ```
 
 ### 3. Ansible
@@ -55,8 +59,8 @@ ansible-playbook -i inventory/production playbooks/deploy-frontend.yml
 
 ### ❌ WRONG
 ```bash
-ssh autobot@172.16.168.21 "vim /opt/autobot/config.yaml"
-ssh autobot@172.16.168.23 "redis-cli CONFIG SET maxmemory 2gb"
+ssh autobot@<frontend-host> "vim /opt/autobot/config.yaml"
+ssh autobot@<database-host> "redis-cli CONFIG SET maxmemory 2gb"
 ```
 
 ### ✅ CORRECT
@@ -65,7 +69,7 @@ ssh autobot@172.16.168.23 "redis-cli CONFIG SET maxmemory 2gb"
 vim config.yaml
 
 # Sync to remote
-rsync -avz config.yaml autobot@172.16.168.21:/opt/autobot/
+rsync -avz config.yaml autobot@<frontend-host>:/opt/autobot/
 
 # Or use Ansible for config changes
 ansible-playbook playbooks/update-redis-config.yml
