@@ -102,8 +102,8 @@ def test_exit_code_helper_returns_nonzero_on_any_failure_structurally():
 def test_migrations_list_reaches_the_last_entry_after_seed_agents():
     """Regression for the reachability half of #14326.
 
-    ``seed_agents`` sits mid-list; ``add_role_permission_audit_log_timestamps``
-    is last. ``run_all_migrations`` breaks on the first failure, so if
+    ``seed_agents`` sits mid-list; ``widen_systemd_service_to_sequence``
+    (#16025) is last. ``run_all_migrations`` breaks on the first failure, so if
     ``seed_agents`` cannot import (the ``autobot_shared`` gap) nothing after
     it, including the newest migration, was ever exercised by the gate.
     """
@@ -115,8 +115,8 @@ def test_migrations_list_reaches_the_last_entry_after_seed_agents():
     names = [elt.value for elt in migrations_assign.value.elts if isinstance(elt, ast.Constant)]
 
     assert "seed_agents" in names
-    assert names[-1] == "add_role_permission_audit_log_timestamps"
-    assert names.index("seed_agents") < names.index("add_role_permission_audit_log_timestamps")
+    assert names[-1] == "widen_systemd_service_to_sequence"
+    assert names.index("seed_agents") < names.index("widen_systemd_service_to_sequence")
 
 
 # ---------------------------------------------------------------------------

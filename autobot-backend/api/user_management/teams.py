@@ -6,6 +6,13 @@
 Teams API Endpoints
 
 REST API for team management operations.
+
+Every route but ``/my-teams`` is admin-only (#16276, owner ruling 2026-09-11),
+matching the SLM backend's ``ADMIN_USERS_WRITE`` gate on its equivalent
+``/api/autobot-teams`` routes. They used to check no role at all -- and
+``TeamService`` checks none either -- so any logged-in org member could
+create, rename and delete teams and change their membership.
+``/my-teams`` stays login-only: it returns only the caller's own teams.
 """
 
 import uuid
@@ -28,6 +35,7 @@ from api.schemas_agent import (
 from api.user_management.dependencies import (
     get_team_service,
     require_org_context,
+    require_platform_admin,
     user_management_route_marker,
 )
 from autobot_shared.logging_manager import get_logger
@@ -55,6 +63,7 @@ logger = get_logger(__name__)
     description="List teams in the current organization.",
     dependencies=[
         Depends(user_management_route_marker),
+        Depends(require_platform_admin),  # before org context: no session for a refusal (#15805)
         Depends(require_org_context),
     ],
 )
@@ -86,6 +95,7 @@ async def list_teams(
     description="Create a new team in the current organization.",
     dependencies=[
         Depends(user_management_route_marker),
+        Depends(require_platform_admin),  # before org context: no session for a refusal (#15805)
         Depends(require_org_context),
     ],
 )
@@ -114,12 +124,47 @@ async def create_team(
         )
 
 
+# -------------------------------------------------------------------------
+# User's Teams Endpoint
+# -------------------------------------------------------------------------
+# #16277: declared BEFORE ``/{team_id}``. Starlette routes to the first path
+# that matches, and ``{team_id}`` matches the segment ``my-teams`` too; it then
+# failed UUID parsing with a 422, so ``get_my_teams`` could never run.
+# ``teams_route_order_test.py`` pins the order.
+
+
+@router.get(
+    "/my-teams",
+    response_model=List[TeamResponse],
+    summary="Get my teams",
+    description="Get all teams the current user is a member of.",
+    # Login-only by design: it returns the caller's OWN memberships (#16276).
+    dependencies=[Depends(user_management_route_marker)],
+)
+async def get_my_teams(
+    context: TenantContext = Depends(require_org_context),
+    team_service: TeamService = Depends(get_team_service),
+):
+    """Get teams for current user."""
+    if not context.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User ID not found in context",
+        )
+
+    teams = await team_service.get_user_teams(context.user_id)
+    return [_team_to_response(team) for team in teams]
+
+
 @router.get(
     "/{team_id}",
     response_model=TeamResponse,
     summary="Get team",
     description="Get a specific team by ID.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def get_team(
     team_id: uuid.UUID,
@@ -141,7 +186,10 @@ async def get_team(
     response_model=TeamResponse,
     summary="Update team",
     description="Update a team's details.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def update_team(
     team_id: uuid.UUID,
@@ -176,7 +224,10 @@ async def update_team(
     response_model=TeamDeletedResponse,
     summary="Delete team",
     description="Delete a team (soft delete by default).",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def delete_team(
     team_id: uuid.UUID,
@@ -207,7 +258,10 @@ async def delete_team(
     response_model=List[MemberResponse],
     summary="List team members",
     description="List all members of a team.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def list_team_members(
     team_id: uuid.UUID,
@@ -225,7 +279,10 @@ async def list_team_members(
     status_code=status.HTTP_201_CREATED,
     summary="Add team member",
     description="Add a user to a team.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def add_team_member(
     team_id: uuid.UUID,
@@ -258,7 +315,10 @@ async def add_team_member(
     response_model=MemberRemovedResponse,
     summary="Remove team member",
     description="Remove a user from a team.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def remove_team_member(
     team_id: uuid.UUID,
@@ -284,7 +344,10 @@ async def remove_team_member(
     response_model=MemberResponse,
     summary="Update member role",
     description="Change a team member's role.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def update_member_role(
     team_id: uuid.UUID,
@@ -302,33 +365,6 @@ async def update_member_role(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Internal server error",
         )
-
-
-# -------------------------------------------------------------------------
-# User's Teams Endpoint
-# -------------------------------------------------------------------------
-
-
-@router.get(
-    "/my-teams",
-    response_model=List[TeamResponse],
-    summary="Get my teams",
-    description="Get all teams the current user is a member of.",
-    dependencies=[Depends(user_management_route_marker)],
-)
-async def get_my_teams(
-    context: TenantContext = Depends(require_org_context),
-    team_service: TeamService = Depends(get_team_service),
-):
-    """Get teams for current user."""
-    if not context.user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User ID not found in context",
-        )
-
-    teams = await team_service.get_user_teams(context.user_id)
-    return [_team_to_response(team) for team in teams]
 
 
 # -------------------------------------------------------------------------

@@ -258,6 +258,52 @@ async def release(scope: str | Scope, *, branch: str) -> bool:
     return bool(removed)
 
 
+def _prune_scope(live_branches: Iterable[str], kind: str | None, allow_empty: bool) -> tuple[set[str], list[str]]:
+    """Validate :func:`prune`'s arguments; return the live set and the kinds to sweep.
+
+    Runs before any Redis I/O, so a bad argument never costs a round trip.
+
+    An empty *live_branches* would drop every interest, and an empty set is also
+    what a failed fetch returns, so it must be **stated** rather than inferred:
+    without *allow_empty* this raises :class:`EmptyLiveSet`. That is not
+    defensiveness about a rare case -- ``except: return []`` is the most common
+    shape a failed GitHub call takes, and the log line would have read "pruned N
+    interest(s) whose branch is no longer open", which is false in precisely the
+    situation that produced it.
+    """
+    live = set(live_branches)
+    if not live and not allow_empty:
+        raise EmptyLiveSet(
+            "prune() received no live branches. If nothing is genuinely open, pass "
+            "allow_empty=True; if the branch listing failed, do not prune on its result."
+        )
+    from autobot_shared.coordination.work_claims import VALID_KINDS, _require_kind
+
+    if kind is not None:
+        # Same check as Scope.parse and list_claims. Unchecked, a reserved or
+        # misspelled kind read an index nothing writes to and returned [] (#15957).
+        _require_kind(kind)
+    return live, sorted(VALID_KINDS) if kind is None else [kind]
+
+
+async def _sweep_kind(client: Any, kind: str, live: set[str]) -> list[Interest]:
+    """Drop one kind's interests whose branch is not in *live*; return them."""
+    index = _INDEX_KEY.format(kind=kind)
+    dropped: list[Interest] = []
+    for member in await client.smembers(index):
+        member = member.decode() if isinstance(member, bytes) else member
+        path, _, branch = member.partition("|")
+        if branch in live:
+            continue
+        key = _INTEREST_KEY.format(kind=kind, path=path, branch=branch)
+        raw = await client.get(key)
+        if raw is not None:
+            dropped.append(_decode(raw))
+            await client.delete(key)
+        await client.srem(index, member)
+    return dropped
+
+
 async def prune(
     live_branches: Iterable[str],
     *,
@@ -268,50 +314,17 @@ async def prune(
 
     *live_branches* comes from the caller because this package has no GitHub
     client and must not grow one -- the branch's state is the authority, and only
-    something outside `autobot_shared` can read it.
-
-    An empty *live_branches* would drop every interest, and an empty set is also
-    what a failed fetch returns, so it must be **stated** rather than inferred:
-    without ``allow_empty=True`` this raises :class:`EmptyLiveSet` instead. That
-    is not defensiveness about a rare case -- ``except: return []`` is the most
-    common shape a failed GitHub call takes, and the log line would have read
-    "pruned N interest(s) whose branch is no longer open", which is false in
-    precisely the situation that produced it.
+    something outside `autobot_shared` can read it. An empty set must be stated
+    rather than inferred; :func:`_prune_scope` says why.
 
     Raises:
         EmptyLiveSet: *live_branches* is empty and *allow_empty* is not set.
     """
-    live = set(live_branches)
-    if not live and not allow_empty:
-        # An empty live set and a failed fetch are the same value. The most
-        # common shape of a failed GitHub call is `except: return []`, and
-        # accepting it here would delete every interest in the registry while
-        # logging "pruned N whose branch is no longer open" -- a false statement
-        # in exactly the case that matters. A caller that genuinely means "no
-        # branches are open" can say so; a caller handing over the wreckage of a
-        # failed query cannot say it by accident.
-        raise EmptyLiveSet(
-            "prune() received no live branches. If nothing is genuinely open, pass "
-            "allow_empty=True; if the branch listing failed, do not prune on its result."
-        )
-    from autobot_shared.coordination.work_claims import VALID_KINDS
-
-    kinds = sorted(VALID_KINDS) if kind is None else [kind]
+    live, kinds = _prune_scope(live_branches, kind, allow_empty)
     client = await _redis()
     dropped: list[Interest] = []
     for k in kinds:
-        index = _INDEX_KEY.format(kind=k)
-        for member in await client.smembers(index):
-            member = member.decode() if isinstance(member, bytes) else member
-            path, _, branch = member.partition("|")
-            if branch in live:
-                continue
-            key = _INTEREST_KEY.format(kind=k, path=path, branch=branch)
-            raw = await client.get(key)
-            if raw is not None:
-                dropped.append(_decode(raw))
-                await client.delete(key)
-            await client.srem(index, member)
+        dropped.extend(await _sweep_kind(client, k, live))
     if dropped:
         logger.info("branch_stewardship: pruned %d interest(s) whose branch is no longer open", len(dropped))
     return dropped

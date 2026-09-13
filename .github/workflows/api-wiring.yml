@@ -25,7 +25,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     # No YAML anchor here: #12934 removed the pull_request.paths filter that
     # used to alias it, so naming the anchor now fails actionlint's
     # syntax-check as "defined but not used".
@@ -54,7 +54,7 @@ on:
     # frontend-test.yml (#10019, #10527). The real audit is gated on the
     # `changes` job below; the `api-wiring-skip` shim (same `name:`) reports the
     # context green when no relevant path was touched.
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

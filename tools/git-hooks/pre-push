@@ -78,11 +78,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         warn "  $ gh issue view $issue_num --comments | head -50"
       fi
 
-      # Has Dev_new_gui already merged a commit citing this issue?
-      git fetch origin Dev_new_gui --quiet 2>/dev/null || true
-      if git log origin/Dev_new_gui --oneline -50 2>/dev/null | grep -qE "#${issue_num}\\b"; then
-        warn "origin/Dev_new_gui already has a commit citing #$issue_num:"
-        git log origin/Dev_new_gui --oneline -50 2>/dev/null \
+      # Has main already merged a commit citing this issue?
+      git fetch origin main --quiet 2>/dev/null || true
+      if git log origin/main --oneline -50 2>/dev/null | grep -qE "#${issue_num}\\b"; then
+        warn "origin/main already has a commit citing #$issue_num:"
+        git log origin/main --oneline -50 2>/dev/null \
           | grep -E "#${issue_num}\\b" \
           | head -3 \
           | sed 's/^/  /' >&2
@@ -98,10 +98,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # ------------------------------------------------------------------------
   # Find files changed in the commits we're pushing. For first push of a
   # branch, the remote sha is 0000...; in that case diff against the merge
-  # base with origin/Dev_new_gui.
+  # base with origin/main.
   if [ "$remote_sha" = "$ZERO" ]; then
-    base=$(git merge-base "$local_sha" origin/Dev_new_gui 2>/dev/null \
-        || git merge-base "$local_sha" main 2>/dev/null \
+    base=$(git merge-base "$local_sha" origin/main 2>/dev/null \
+        || git merge-base "$local_sha" release 2>/dev/null \
         || echo "")
     if [ -z "$base" ]; then
       warn "Cannot determine merge base — skipping Phase 0c verification"

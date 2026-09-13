@@ -47,12 +47,14 @@ from api.schemas_code import (
 )
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.git_probe import start_git
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
-from constants.ttl_constants import TTL_7_DAYS
 from utils.line_index import LineIndex  # #12884
+
+from .analytics_code_review_diff import collect_file_comments, persist_review
 
 logger = get_logger(__name__)
 
@@ -381,18 +383,21 @@ def generate_summary(comments: list[ReviewComment]) -> dict[str, Any]:
 async def get_git_diff(commit_range: str | None = None) -> str:
     """Get git diff for review."""
     try:
-        cmd = ["git", "diff"]
+        # #16179: route through the canonical helper so the git environment is
+        # scrubbed -- GIT_DIR outranks both -C and cwd, so an inherited value
+        # silently redirects this diff at another repository. The argv omits
+        # "git" deliberately: `start_git` prepends it, and a list carrying it
+        # would run `git git diff` if a later edit ever passed the whole list.
+        argv = ["diff"]
         if commit_range:
             if not _VALID_GIT_REF_RE.match(commit_range):
                 logger.warning("Rejected invalid git commit range: %s", commit_range)
                 return ""
-            cmd.append(commit_range)
+            argv.append(commit_range)
         else:
-            cmd.append("HEAD~1..HEAD")
+            argv.append("HEAD~1..HEAD")
 
-        process = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
+        process = await start_git(*argv)
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
             return stdout.decode("utf-8") if process.returncode == 0 else ""
@@ -450,27 +455,7 @@ async def analyze_diff(
     # Parse diff
     files = parse_diff(diff_content)
 
-    # Analyze each file
-    all_comments = []
-    for file_info in files:
-        # Get full file content for analysis
-        try:
-            file_path = Path(file_info["path"])
-            # Issue #3441: restrict to source_root when provided
-            if source_root is not None:
-                resolved = file_path.resolve()
-                try:
-                    resolved.relative_to(source_root.resolve())
-                except ValueError:
-                    logger.debug("Skipping file outside source_root: %s", file_info["path"])
-                    continue
-            # Issue #358 - avoid blocking
-            if await asyncio.to_thread(file_path.exists) and file_path.suffix in REVIEWABLE_EXTENSIONS:
-                content = await asyncio.to_thread(file_path.read_text, encoding="utf-8", errors="ignore")
-                comments = analyze_code(content, str(file_path))
-                all_comments.extend(comments)
-        except Exception as e:
-            logger.warning("Failed to analyze %s: %s", file_info["path"], e)
+    all_comments = await collect_file_comments(files, source_root)
 
     score = calculate_review_score(all_comments)
     summary = generate_summary(all_comments)
@@ -487,35 +472,7 @@ async def analyze_diff(
         "summary": summary,
     }
 
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(async_client=False, database="analytics")
-        if redis:
-            effective_source = source_id or "default"
-            redis_key = f"code_review:result:{effective_source}:{review_id}"
-            history_entry = {
-                "id": review_id,
-                "path": result_payload["path"],
-                "analyzed_at": analyzed_at,
-                "total_comments": len(all_comments),
-                "score": score,
-                "source_id": effective_source,
-            }
-            # redis.set writes to a different key than history ops — parallelize round-trips.
-            await asyncio.gather(
-                asyncio.to_thread(redis.set, redis_key, json.dumps(result_payload), "ex", TTL_7_DAYS),
-                asyncio.to_thread(redis.lpush, f"code_review:history:{effective_source}", json.dumps(history_entry)),
-            )
-            # ltrim and expire both require lpush to have created the key first;
-            # they are independent of each other so run them concurrently.
-            await asyncio.gather(
-                asyncio.to_thread(redis.ltrim, f"code_review:history:{effective_source}", 0, 99),
-                asyncio.to_thread(redis.expire, f"code_review:history:{effective_source}", TTL_7_DAYS),
-            )
-            logger.info("Stored code review result %s for source %s", review_id, effective_source)
-    except Exception as exc:
-        logger.warning("Failed to persist code review result: %s", exc)
+    await persist_review(result_payload, review_id, analyzed_at, len(all_comments), score, source_id)
 
     return {
         "status": "success",

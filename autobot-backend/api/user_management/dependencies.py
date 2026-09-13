@@ -379,6 +379,29 @@ async def require_platform_admin(
     return context
 
 
+async def require_self_or_admin(
+    user_id: uuid.UUID,
+    context: TenantContext = Depends(get_tenant_context),
+) -> bool:
+    """Admit the target user themself, or a platform admin; refuse anyone else (#15738).
+
+    Returns ``True`` when the caller is acting on their own account. Any other
+    target has to pass ``require_platform_admin``, the same gate
+    ``set_user_role`` uses, and then returns ``False``. ``user_id`` is the
+    route's path parameter; FastAPI passes it to this dependency by name.
+
+    #15743 established this shape for change-password, and
+    ``password_change.authorize_password_change`` now delegates here. #15738
+    applies it to reading and updating a user. It is declared as a route
+    dependency so that ``user_management_route_posture_test.py`` can see it
+    (#15737).
+    """
+    if context.user_id == user_id:
+        return True
+    await require_platform_admin(context)
+    return False
+
+
 async def require_reporting_line_write_grant(
     current_user: dict = Depends(get_current_user),
 ) -> dict:

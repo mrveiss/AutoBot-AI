@@ -78,7 +78,7 @@ class RootBudget(NamedTuple):
     min_reach_markers: int
 
 
-# Measured 2026-09 on Dev_new_gui: autobot-backend/ 2,375 non-test files and
+# Measured 2026-09 on main: autobot-backend/ 2,375 non-test files and
 # 198 reach markers; autobot-slm-backend/ 225 and 44. The large root's file
 # floor is an order of magnitude above the small root's entire tree, which is
 # what makes a re-narrowing to a single root fail rather than pass.

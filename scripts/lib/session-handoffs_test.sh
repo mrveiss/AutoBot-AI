@@ -84,7 +84,7 @@ echo "== reaper, against a throwaway repo =="
 # The deliberate-failure check the issue asks for: a handoff for a branch that
 # exists must survive; the same handoff must be reaped once the branch is gone.
 TMP_REPO="$(mktemp -d)"
-git -C "$TMP_REPO" init -q -b Dev_new_gui
+git -C "$TMP_REPO" init -q -b main
 git -C "$TMP_REPO" config user.email t@example.invalid
 git -C "$TMP_REPO" config user.name t
 echo seed > "${TMP_REPO}/seed.txt"
@@ -135,7 +135,7 @@ check "remote-only branch keeps its handoff" "keep-live" "$(handoff_disposition 
 # must not read as "branch gone" -- git refs are case-sensitive, the filesystem
 # convention is not.
 git checkout -q -b Issue-MixedCase
-git checkout -q Dev_new_gui
+git checkout -q main
 printf '# Handoff: x\nstatus: complete\n' > .session/HANDOFF-issue-mixedcase.md
 check "case-mismatched filename still sees a live branch" "keep-live" \
     "$(handoff_disposition .session/HANDOFF-issue-mixedcase.md)"

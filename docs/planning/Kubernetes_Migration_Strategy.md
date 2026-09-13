@@ -2,6 +2,16 @@
 
 > **Freshness:** current — 2026-08-30. Self-declared `Status: Future Planning`; no Kubernetes migration has shipped.
 
+> **Superseded premise (#16361):** the Agent Deployments example below assumes
+> an `autobot/chat-agent:latest` image built from a per-agent Dockerfile. No
+> such image was ever built — the source `.Dockerfile`s built nothing
+> reachable and were removed. The chat, RAG, research and knowledge agents run
+> in-process inside the backend container (`autobot-backend/agents/`), called
+> directly by `autobot-backend/agents/agent_orchestration/coordinator.py`. A
+> K8s migration that wants to scale these agents independently would need to
+> extract them into separate services first; that extraction is not part of
+> the current architecture.
+
 **GitHub Issue:** [#256](https://github.com/mrveiss/AutoBot-AI/issues/256)
 **Status:** Future Planning
 
@@ -99,7 +109,8 @@ spec:
 
 #### Agent Deployments
 ```yaml
-# Chat Agent Deployment
+# Chat Agent Deployment -- illustrative only (#16361): no autobot/chat-agent
+# image exists; the chat agent runs in-process in the backend container.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

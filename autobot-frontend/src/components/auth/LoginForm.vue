@@ -87,6 +87,8 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
+import type { Role } from '@/types/_generated/workflow'
+import { DEFAULT_ROLE } from '@/constants/roles'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { useRouter } from 'vue-router'
@@ -216,7 +218,7 @@ async function handleLogin() {
         displayName: u.username
           ? u.username.charAt(0).toUpperCase() + u.username.slice(1)
           : u.username,
-        role: (u.role as 'admin' | 'user' | 'viewer') || 'user',
+        role: (u.role as Role) || DEFAULT_ROLE,
         preferences: {
           theme: 'auto',
           language: 'en',

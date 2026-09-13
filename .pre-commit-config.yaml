@@ -511,10 +511,16 @@ repos:
       - id: no-local-schemas
         name: Block local BaseModel definitions in non-schema API files (#6056)
         entry: tools/lint/check_no_local_schemas.py
+        # --changed-lines-only (#16178): judge the models this commit ADDED, read
+        # from the staged diff. Whole-file, a one-line edit to a legacy module failed
+        # the commit for a model it never touched, and every original domain
+        # schemas_*.py is frozen at its size ceiling, so the fix it asked for was
+        # impossible. A direct run of the hook still reads whole files.
+        args: [--changed-lines-only]
         language: python
         files: ^autobot-backend/api/(?!schemas_).*\.py$
         stages: [pre-commit]
-        description: "Move BaseModel subclasses to domain schemas_*.py files (#6056)"
+        description: "New BaseModel subclasses go in a schemas_*.py module with headroom (#6056, #16178)"
 
   # AutoBot custom: regression-prevention for #6558 (decorator order) +
   # #6633 (stacked-duplicate). In Python ``@A @B def f`` ≡ ``f = A(B(f))``;
@@ -603,6 +609,26 @@ repos:
         exclude: (code_analysis/|_test\.py|\.e2e_test\.py|\.integration_test\.py|\.performance_test\.py|conftest\.py)$
         additional_dependencies: ["bandit[toml]"]
 
+  # Secret scanning over EVERY staged file, any extension, root and extensionless
+  # dotfiles included (#16275). There is deliberately no `files`, `types` or
+  # `exclude` here: upstream declares `files: .*`, and the only filter left is this
+  # config's top-level `exclude`, which matches no tracked file. Findings are
+  # compared with .secrets.baseline, whose every entry carries an audited verdict.
+  # detect-secrets does not see a bare key file (it reads quoted strings), so the
+  # Fernet/PEM shape is checked in CI by pipeline-scripts/tracked_key_material.py.
+  # repo_tests/no_tracked_key_material_test.py holds the rev equal to the CI
+  # install in security.yml and to the baseline's "version".
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        # #16343: one process at a time. Upstream's manifest sets no
+        # require_serial, so pre-commit ran this hook in parallel batches that each
+        # rewrote .secrets.baseline and raced. The last writer won, and a large
+        # commit (any base merge) failed on every attempt.
+        require_serial: true
+
   # Block commits when branch is shared with a worktree (Issue #1654)
   # Must run BEFORE the stash/restore cycle to prevent branch corruption.
   - repo: local
@@ -617,7 +643,7 @@ repos:
         description: "Blocks commits when current branch is also checked out in another worktree"
 
   # Enforce branching discipline: block direct commits on protected branches (Issue #4113)
-  # Prevents commits to main/master; all work flows through Dev_new_gui
+  # Prevents commits to release/master; all work flows through main
   - repo: local
     hooks:
       - id: target-branch-guard
@@ -627,7 +653,7 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
-        description: "Blocks direct commits on main/master (protected branches); all commits flow through Dev_new_gui"
+        description: "Blocks direct commits on release/master (protected branches); all commits flow through main"
 
   # Detect mass file deletions that indicate stash-handling bugs (Issue #4111)
   - repo: local
@@ -724,7 +750,9 @@ repos:
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-function-length
         language: script
         types: [python]
-        pass_filenames: false
+        # Files are passed so a `--from-ref` run, which stages nothing, still has a
+        # change to judge; the checker scopes to the functions it touched (#16191).
+        pass_filenames: true
         stages: [pre-commit]
         description: "Blocks commits with functions >65 lines, warns for 51-65 lines"
 

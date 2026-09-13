@@ -11,7 +11,7 @@
 - **3-command exploration limit:** If 3 commands haven't converged, write a hypothesis first
 - **Implementation first — clarify only on genuine ambiguity.** Default to a brief plan (max 10 lines) then implement. When the task *is* ambiguous, state the approach in 3 bullets and wait for confirmation (Rule 4 in [`CLAUDE_RULES.md`](CLAUDE_RULES.md)); inside a `/loop`, post the question with a recommendation and continue instead of blocking
 - **Acceptance criteria are ticked ONLY with code evidence — unbreakable.** A tick is a claim.
-  Verify the criterion against merged code from base (`git show origin/Dev_new_gui:<path>`) and quote
+  Verify the criterion against merged code from base (`git show origin/main:<path>`) and quote
   the file, symbol or count in the comment. Never tick to tidy a closed issue, to match a merged PR,
   or because the work "was obviously done". Unverifiable from the diff → leave unchecked and say why.
 - **Issue relationships are native, never prose.** Every child is attached to its umbrella with
@@ -60,7 +60,7 @@ paths here are for *reading and changing* the deployment, not for running it.
 - All nodes: deadsnakes PPA python3.14 venv at `/opt/autobot/<component>/venv`
 
 **Branch Strategy:**
-- Always target `Dev_new_gui` for PRs unless told otherwise
+- Always target `main` for PRs unless told otherwise
 - Delete remote feature branches after completing work
 
 **Worktree & Branch Cleanup (MANDATORY once the branch's work is merged):**
@@ -96,9 +96,9 @@ protocol lives in the `session-lifecycle` skill; the handoff schema is in
 
 **Start of session** (before any task work):
 1. `git fetch --prune`, then remove worktrees + local branches already merged
-   into `origin/Dev_new_gui` (inherited cleanup).
+   into `origin/main` (inherited cleanup).
 2. Create your **own** isolated worktree — never two sessions in one checkout:
-   `git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui`.
+   `git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/main`.
 3. Read predecessor handoffs in [`.session/`](../../.session/): if a branch is
    unmerged, decide to continue it (rebase onto base first) or start fresh —
    never duplicate its work blind. Step 1's sweep reaps handoffs whose branch is
@@ -143,8 +143,8 @@ Two batches appending to the **same** domain module still conflict — that is a
 with concurrent appends, not a code conflict. Serialize those, or resolve deterministically:
 
 ```bash
-# Step 1: take origin/Dev_new_gui as the authoritative base
-git show origin/Dev_new_gui:autobot-backend/api/<schema-module>.py > autobot-backend/api/<schema-module>.py
+# Step 1: take origin/main as the authoritative base
+git show origin/main:autobot-backend/api/<schema-module>.py > autobot-backend/api/<schema-module>.py
 
 # Step 2: append the new schema classes from our branch at the end
 # (extract them from git diff or the conflicting branch's version)
@@ -188,7 +188,7 @@ acting on it. No artifacts ⇒ the work did not happen; resume it yourself.
 **Worktree Isolation Warning:**
 Do NOT use `isolation: "worktree"` for agents that create PRs. Instead, create manual worktrees:
 ```bash
-git worktree add .worktrees/issue-XXXX -b <branch> origin/Dev_new_gui
+git worktree add .worktrees/issue-XXXX -b <branch> origin/main
 cd .worktrees/issue-XXXX && git branch --unset-upstream
 ```
 
@@ -243,7 +243,7 @@ attempted, and the base SHA), any decision taken under a `Decision` heading, and
 stopped in if the session dies. The issue is the only record that survives a lost worktree or
 a different machine.
 
-**Always close the issue after implementation.** PRs targeting `Dev_new_gui` will NOT auto-close issues — verify with `gh issue view`.
+**Always close the issue after implementation.** PRs targeting `main` will NOT auto-close issues — verify with `gh issue view`.
 
 **CI diagnosis** and **posting comments correctly**: see [`CLAUDE_REVIEW.md`](CLAUDE_REVIEW.md)
 — it owns both. In short: queued checks on the self-hosted runner are not failures, and a
@@ -302,13 +302,17 @@ comment body is literal markdown, never raw JSON or a file path.
 
 Run these gates before creating a PR or merging any branch. Gates are ordered by cost — cheapest first.
 
-**Shortcut — run the CI-facing gates in one command:**
+**Shortcut — the pre-push step: run before every push, not just once before opening the PR.** A push that turns out red costs the full 8.9-minute suite before you find out (#15932); this is the same confirmation, available locally in a fraction of that time, every time you push rather than only at the start.
 
 ```bash
 scripts/pr-preflight.sh --issue N [--body pr.md] [--message msg.txt]
+scripts/pr-preflight.sh --issue N --full   # also run the checks a path filter would otherwise skip
+scripts/pr-preflight.sh --issue N --only 'ERE'   # run only the required checks whose name matches; the rest are named as not selected
 ```
 
-It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs. The gates below remain the reference; this runs the mechanical ones early.
+It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs.
+
+It also runs (or explains why it did not) each of the ten required status checks the `Main` ruleset gates `Dev_new_gui` on. Every check is path-filtered by default, using the same `.github/filters/*.yml` set its own workflow uses, so a diff outside those paths gets the identical "nothing to check" verdict locally that it would in CI. `--full` bypasses that filter and forces every check to actually run, and is also what turns on `api-wiring` (it builds the whole backend app to dump its OpenAPI schema, so it stays behind `--full` even on a relevant diff). Two checks are out of reach either way: `migration-matrix` needs a live PostgreSQL (set `AUTOBOT_MIGRATION_TEST_ADMIN_URL` to enable it), and `smoke-test` needs a Docker daemon plus three image builds and a running compose stack — reported SKIPPED with that reason rather than approximated (#15933). The gates below remain the reference; this runs the mechanical ones early.
 
 **Match CI's interpreter first (#13573).** CI runs Python **3.14**. A box's default `python3` is often older, and every local gate silently uses it:
 
@@ -366,22 +370,22 @@ behaviour and the sweep that bounds its blast radius; do not re-derive it.
 
 ### Gate 0: Squash-Duplicate Detection
 
-Before running any other validation, check whether the branch contains commits that are already squash-merged to `Dev_new_gui`. A squash merge collapses N commits into one, so the individual commit SHAs differ even though the diff is identical. `git log --cherry-pick` detects this by comparing patch IDs rather than SHAs.
+Before running any other validation, check whether the branch contains commits that are already squash-merged to `main`. A squash merge collapses N commits into one, so the individual commit SHAs differ even though the diff is identical. `git log --cherry-pick` detects this by comparing patch IDs rather than SHAs.
 
 ```bash
 # Gate 0: Squash-Duplicate Detection
-DUPES=$(git log --cherry-pick --right-only origin/Dev_new_gui...$BRANCH --oneline 2>/dev/null | wc -l)
-TOTAL=$(git log origin/Dev_new_gui...$BRANCH --oneline 2>/dev/null | wc -l)
+DUPES=$(git log --cherry-pick --right-only origin/main...$BRANCH --oneline 2>/dev/null | wc -l)
+TOTAL=$(git log origin/main...$BRANCH --oneline 2>/dev/null | wc -l)
 NEW=$((TOTAL - DUPES))
 if [ "$DUPES" -gt 0 ]; then
-  echo "WARNING: $DUPES of $TOTAL commit(s) already squash-merged to Dev_new_gui — $NEW truly new"
-  git log --cherry-pick --right-only origin/Dev_new_gui...$BRANCH --format="  %H %s"
+  echo "WARNING: $DUPES of $TOTAL commit(s) already squash-merged to main — $NEW truly new"
+  git log --cherry-pick --right-only origin/main...$BRANCH --format="  %H %s"
 fi
 ```
 
-**If DUPES == TOTAL:** The entire branch is already in `Dev_new_gui`. Close the issue without creating a PR — the work is done.
+**If DUPES == TOTAL:** The entire branch is already in `main`. Close the issue without creating a PR — the work is done.
 
-**If DUPES > 0 but < TOTAL:** Some commits are new. Rebase the branch onto `origin/Dev_new_gui` to drop the duplicate patches before opening a PR. This prevents merge conflicts and duplicate hunks in the diff.
+**If DUPES > 0 but < TOTAL:** Some commits are new. Rebase the branch onto `origin/main` to drop the duplicate patches before opening a PR. This prevents merge conflicts and duplicate hunks in the diff.
 
 **If DUPES == 0:** No duplicates — proceed to Gate 1.
 

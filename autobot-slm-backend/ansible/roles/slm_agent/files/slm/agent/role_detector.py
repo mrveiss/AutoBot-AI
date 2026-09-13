@@ -29,7 +29,7 @@ class RoleDefinition:
 
     name: str
     target_path: str
-    systemd_service: str | None = None
+    systemd_service: List[str] | None = None  # #16025: a role can own >1 unit
     health_check_port: int | None = None
 
 
@@ -113,10 +113,10 @@ class RoleDetector:
         else:
             status.path_exists = True  # no path requirement
 
-        # Check service
+        # Check service. #16025: a role can own >1 unit; "running" means all of them are.
         if role.systemd_service:
-            status.service_name = role.systemd_service
-            status.service_running = self._check_service(role.systemd_service)
+            status.service_name = ", ".join(role.systemd_service)
+            status.service_running = all(self._check_service(unit) for unit in role.systemd_service)
 
         # Check port
         if role.health_check_port:

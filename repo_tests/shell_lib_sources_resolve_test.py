@@ -340,14 +340,19 @@ def test_no_lib_source_is_documentation_or_a_fixture() -> None:
     A comment-stripper or nested-string detector that over-matches would silently
     shrink this guard's reach, so both are asserted on the real files that
     motivated them rather than trusted.
+
+    `tests/test_ssot_config_lib.sh` was a third entry, excluded because every
+    mention in it sat inside a `bash -c` string. #15506 made that false: the file
+    now carries a real top-level `source` of `scripts/lib/git-root.sh`, so it is
+    a genuine call site and the detector is right to find it. The entry was
+    dropped rather than the detector widened — teaching the stripper to swallow a
+    real `source` is the reach-shrinking regression this test exists to catch.
     """
     excluded = {
         # the library's own header quotes the call-site shape it replaces
         "autobot-infrastructure/shared/scripts/lib/ssot-config.sh",
         # hooks/lib/_common.sh documents how to source itself
         "autobot-infrastructure/shared/scripts/hooks/lib/_common.sh",
-        # the ssot-config suite drives the shapes through `bash -c`
-        "autobot-infrastructure/shared/tests/test_ssot_config_lib.sh",
     }
     present = {site.rel for site in _SITES} & excluded
     assert not present, (

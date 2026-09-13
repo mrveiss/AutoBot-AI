@@ -397,6 +397,14 @@ _hv_rule_url() {
     local url="$HV_MATCH"
     case "$1" in
         *enterprise*|*sso_integration*|*injection_detector*|*domain_security*|*secure_llm*|*secure_web*) return 0 ;;
+        # #16260: a CI workflow's vendor downloads and dashboard links are not
+        # deployment config -- nothing a deployment varies. Only this generic URL
+        # rule stands down here: the IP and port rules still run on workflow
+        # files, so an AutoBot address in a workflow is still reported. A
+        # composite action under .github/actions/ is a piece of a workflow, so
+        # the same holds there (#15515: editing one tripped on its pip index).
+        .github/workflows/*|*/.github/workflows/*) return 0 ;;
+        .github/actions/*|*/.github/actions/*) return 0 ;;
     esac
     # Example domains, W3C/SVG namespaces, licence URLs and placeholders.
     [[ $3 =~ $_HV_URL_SKIP_RE ]] && return 0
@@ -710,15 +718,25 @@ hv_partition() {
     return 0
 }
 
-# Baseline keys that matched fewer findings than they claim.
+# Baseline keys that matched fewer findings than they claim, one per line as
+# `claimed|found|key`. The counts come first because the key itself contains `|`.
 #
 # An allowlist entry naming a moved file exempts nothing, and does it silently.
 # These are reported so a fixed violation cannot leave a stranded exemption that
 # quietly re-permits the same value when the file comes back.
+#
+# found 0 and 0 < found < claimed are different findings with different fixes
+# (#16334). The first matches nothing and should be deleted. The second still
+# exempts live findings and must be LOWERED to `found`, never deleted: #16298
+# deleted such an entry because the audit called it "no longer match anything",
+# which un-baselined the occurrence it still covered. Emitting both counts is
+# what lets the caller say which.
 hv_stale_baseline_entries() {
-    local key
+    local key claimed found
     for key in "${!HV_BASELINE[@]}"; do
-        [ "${HV_BASELINE_SEEN[$key]:-0}" -lt "${HV_BASELINE[$key]}" ] && printf '%s\n' "$key"
+        claimed="${HV_BASELINE[$key]}"
+        found="${HV_BASELINE_SEEN[$key]:-0}"
+        [ "$found" -lt "$claimed" ] && printf '%s|%s|%s\n' "$claimed" "$found" "$key"
     done
     return 0
 }

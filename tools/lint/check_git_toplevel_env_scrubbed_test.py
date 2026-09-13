@@ -24,8 +24,10 @@ from _scan_helpers import scan_python_files  # noqa: E402
 from check_git_toplevel_env_scrubbed import (  # noqa: E402
     ALLOWLIST,
     GIT_CALL_FLOOR,
+    is_production_path,
     main,
     scan,
+    scan_shell,
     scan_with_counts,
     subprocess_names,
 )
@@ -347,6 +349,24 @@ def test_every_allowlist_entry_still_exists() -> None:
     assert not missing, f"allowlist entries no longer in the tree: {missing}"
 
 
+def test_a_real_tool_named_like_a_test_is_still_production(tmp_path: Path) -> None:
+    """`scripts/test_first_remediation.py` must not be exempted by its name alone (#16179).
+
+    Without the override, ``is_production_path`` reads the ``test_`` prefix
+    and treats a real, unreviewed automation tool as a test -- exactly the
+    misclassification #16179 found. This pins the override rather than the
+    general prefix rule, so a DIFFERENT genuinely-test ``test_*.py`` file
+    stays exempt (see the contrast test below).
+    """
+    assert is_production_path("scripts/test_first_remediation.py") is True
+
+
+def test_an_ordinary_test_prefixed_file_still_reads_as_a_test() -> None:
+    """The override is scoped to one named file, not a rule change."""
+    assert is_production_path("scripts/test_something_else.py") is False
+    assert is_production_path("autobot-backend/agents/npu_code_search_agent_test.py") is False
+
+
 def test_main_exits_nonzero_on_a_violation(tmp_path: Path) -> None:
     assert main([str(_write(tmp_path, _UNSCRUBBED))]) == 1
 
@@ -518,3 +538,47 @@ def test_a_git_failure_still_propagates(tmp_path, monkeypatch):
     monkeypatch.setattr(checker, "tracked_paths", _broken)
     with pytest.raises(RuntimeError, match="failed"):
         list(checker.iter_shell_files([], tmp_path))
+
+
+# --------------------------------------------------------------------------
+# scan_shell: `git ls-files` in verb position (#15506)
+# --------------------------------------------------------------------------
+
+
+def _shell_findings(tmp_path: Path, body: str) -> list[str]:
+    path = tmp_path / "probe.sh"
+    path.write_text(body, encoding="utf-8")
+    return [message for _line, message in scan_shell(path, tmp_path)]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "files=$(git ls-files)\n",
+        # The `-C` form: a literal `git ls-files` match misses this, and it is
+        # the shape that was live in scripts/verify-done.sh.
+        'files=$(git -C "$d" ls-files -v)\n',
+        # THE ONE THAT MATTERED. The first version exempted any line containing
+        # the helper's NAME, so a raw call wearing an approving comment passed
+        # the guard while doing the exact thing it forbids. Caught in review of
+        # #16118, and the reason the match is anchored on the verb instead.
+        'x=$(git -C "$d" ls-files -v)  # git_tracked_files would be better\n',
+    ],
+)
+def test_scan_shell_reports_a_raw_ls_files_call(tmp_path: Path, body: str) -> None:
+    assert any("ls-files" in m for m in _shell_findings(tmp_path, body))
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # A comment discussing the call is documentation, not an invocation.
+        "# git ls-files is what this guard refuses\n",
+        # The helper itself: `\bgit\b` cannot match inside `git_tracked_files`,
+        # so this is clean on its own terms rather than by being exempted.
+        'files=$(git_tracked_files "$d" -- "*.sh")\n',
+    ],
+)
+def test_scan_shell_leaves_comments_and_helper_calls_alone(tmp_path: Path, body: str) -> None:
+    """A false positive here would refuse the remedy along with the defect."""
+    assert not [m for m in _shell_findings(tmp_path, body) if "ls-files" in m]

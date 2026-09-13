@@ -198,6 +198,47 @@ describe('ToolsView remote-exec transport', () => {
     }
   })
 
+  it('gives the service-log fetch the long budget too, now that it shares useNodeServices with FleetToolsTab (#16256)', async () => {
+    // The log fetch used to build its own raw request with the long budget
+    // inline. It now goes through useNodeServices -> useSlmApi.getServiceLogs,
+    // same as FleetToolsTab -- this proves that path still carries the budget,
+    // not the client's 30s default, for this view too.
+    vi.useFakeTimers()
+    try {
+      sessionStorage.setItem(TOKEN_KEY, 'tools-token')
+      const wrapper = mount(ToolsView, { global: { plugins: [i18n] } })
+      await flushPromises()
+      seedFleet()
+      await flushPromises()
+
+      let captured: AbortSignal | undefined
+      fetchMock.mockImplementation((_u: string, init: RequestInit) => {
+        captured = init.signal as AbortSignal
+        return new Promise(() => {}) // never settles — the timeout must abort it
+      })
+
+      const vm = wrapper.vm as unknown as {
+        selectedNode: string
+        selectedService: string
+        getServiceLogs: () => Promise<void>
+      }
+      vm.selectedNode = 'node-a'
+      vm.selectedService = 'redis'
+      vm.getServiceLogs()
+      await Promise.resolve()
+
+      expect(captured).toBeInstanceOf(AbortSignal)
+      // Still alive well past the 30s default the client would have applied.
+      vi.advanceTimersByTime(30_000 + 1_000)
+      expect(captured!.aborted).toBe(false)
+      // Aborted once the remote-exec budget is spent.
+      vi.advanceTimersByTime(REMOTE_EXEC_TIMEOUT_MS)
+      expect(captured!.aborted).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("still shows the backend's detail message when an exec is rejected", async () => {
     // `rawRequest` rather than `post()` exists for this: `post()` would have
     // flattened the body into `HTTP 502: ...` and the operator would never see

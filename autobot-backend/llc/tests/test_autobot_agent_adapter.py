@@ -69,6 +69,7 @@ if "agents.base_agent" not in sys.modules:
     sys.modules["agents.base_agent"] = _base_stub
 
 # Now the adapter's import resolves correctly.
+from autobot_shared.eventually import eventually  # noqa: E402
 from llc.adapters.autobot_agent_adapter import (  # noqa: E402
     AutoBotAgentAdapter,
     _build_agent_request,
@@ -366,7 +367,7 @@ async def test_error_response_redis_matches_local():
     ):
         adapter = AutoBotAgentAdapter({"agent_class": _FAILING_AGENT_PATH})
         run_id = await adapter.invoke({}, {"title": "T"})
-        await asyncio.sleep(0.05)
+        await eventually(adapter._tasks[run_id].done)
 
     # Local status
     local_st = await adapter.status({}, run_id)
@@ -415,7 +416,7 @@ async def test_log_store_write_called_when_agent_logs():
     test_log.setLevel(logging.DEBUG)
     try:
         run_id = await adapter.invoke({}, {"title": "Logging test"})
-        await asyncio.sleep(0.05)
+        await eventually(adapter._tasks[run_id].done)
     finally:
         test_log.setLevel(original_level)
 
@@ -464,7 +465,7 @@ async def test_concurrent_log_capture_is_isolated():
     # Let both tasks progress past their log call and reach the barrier
     await asyncio.sleep(0.02)
     barrier.set()
-    await asyncio.sleep(0.05)
+    await eventually(lambda: adapter_a._tasks[run_a].done() and adapter_b._tasks[run_b].done())
 
     log_a = adapter_a.get_log(run_a) or ""
     log_b = adapter_b.get_log(run_b) or ""
@@ -480,7 +481,7 @@ async def test_concurrent_log_capture_is_isolated():
 async def test_get_log_returns_captured_output():
     adapter = AutoBotAgentAdapter({"agent_class": _FAKE_AGENT_PATH})
     run_id = await adapter.invoke({}, {"title": "T"})
-    await asyncio.sleep(0.05)
+    await eventually(adapter._tasks[run_id].done)
     log = adapter.get_log(run_id)
     assert log is not None  # key present after completion
 
@@ -509,7 +510,7 @@ async def test_cost_forwarded_to_budget_service():
         )
         run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz", "company_id": "company-1"})
         assert isinstance(run_id, str) and run_id
-        await asyncio.sleep(0.05)
+        await eventually(adapter._tasks[run_id].done)
 
         MockBS.return_value.ingest_cost_event.assert_called_once()
         args = MockBS.return_value.ingest_cost_event.call_args.args
@@ -539,7 +540,7 @@ async def test_budget_exhausted_propagates_to_failed_status():
             budget_session_factory=session_factory,
         )
         run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz", "company_id": "company-1"})
-        await asyncio.sleep(0.05)
+        await eventually(adapter._tasks[run_id].done)
 
         status = await adapter.status({}, run_id)
         assert status.status == LLCRunStatus.FAILED
@@ -550,7 +551,7 @@ async def test_budget_exhausted_propagates_to_failed_status():
 async def test_cost_not_forwarded_when_no_factory():
     adapter = AutoBotAgentAdapter({"agent_class": _FAKE_AGENT_PATH})
     run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz", "company_id": "company-1"})
-    await asyncio.sleep(0.05)
+    await eventually(adapter._tasks[run_id].done)
     status = await adapter.status({}, run_id)
     assert status.status == LLCRunStatus.COMPLETED
 
@@ -564,7 +565,7 @@ async def test_cost_not_forwarded_when_no_factory():
 async def test_cleanup_completed_removes_done_tasks():
     adapter = AutoBotAgentAdapter({"agent_class": _FAKE_AGENT_PATH})
     run_id = await adapter.invoke({}, {"title": "T"})
-    await asyncio.sleep(0.05)
+    await eventually(adapter._tasks[run_id].done)
 
     assert run_id in adapter._tasks
     removed = adapter.cleanup_completed()
@@ -577,7 +578,7 @@ async def test_cleanup_completed_also_removes_logs():
     """cleanup_completed must evict _logs entries to prevent memory leak."""
     adapter = AutoBotAgentAdapter({"agent_class": _FAKE_AGENT_PATH})
     run_id = await adapter.invoke({}, {"title": "T"})
-    await asyncio.sleep(0.05)
+    await eventually(adapter._tasks[run_id].done)
 
     assert run_id in adapter._logs
     adapter.cleanup_completed()
@@ -656,10 +657,7 @@ async def test_integration_summarization_agent_reaches_completed():
     run_id = await adapter.invoke({}, context)
     assert run_id
 
-    for _ in range(60):
-        await asyncio.sleep(0.5)
-        st = await adapter.status({}, run_id)
-        if st.status != LLCRunStatus.RUNNING:
-            break
+    await eventually(adapter._tasks[run_id].done)
+    st = await adapter.status({}, run_id)
 
     assert st.status == LLCRunStatus.COMPLETED, f"Expected COMPLETED, got {st.status}: {st.error}"

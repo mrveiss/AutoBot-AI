@@ -26,7 +26,6 @@ There is one home for this manager — ``app.state`` — and one way in,
 """
 
 import asyncio
-import json
 import os
 import uuid
 from dataclasses import dataclass, field
@@ -35,6 +34,7 @@ from typing import Dict, List
 
 from fastapi import HTTPException, Request
 
+from api.chat_knowledge_prompt import build_summary_prompt
 from api.schemas_knowledge import FileAssociationType, KnowledgeDecision
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.async_compat import run_or_schedule
@@ -420,15 +420,9 @@ class ChatKnowledgeManager:
         if not include_system_messages:
             messages = [m for m in messages if m.get("role") != CategoryDefaults.ROLE_SYSTEM]
 
-        summary_prompt = f"""
-        Summarize this conversation into a comprehensive knowledge base entry.
-        Include key topics, solutions, code examples, and important information.
-
-        Conversation:
-        {json.dumps(messages, indent=2)}
-
-        Format the summary with clear sections and bullet points.
-        """
+        # #15700: framed as data. A refused transcript raises TranscriptRefused (a 422),
+        # so no entry is written.
+        summary_prompt = build_summary_prompt(messages)
 
         summary_response = await self.llm_interface.chat(
             messages=[{"role": CategoryDefaults.ROLE_USER, "content": summary_prompt}]

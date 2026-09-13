@@ -98,6 +98,13 @@ from ci_dispatch_watchdog import (  # noqa: E402
     WatchdogConfigError,
 )
 
+# The grouping rules live in one place (#16120). Reading `/check-runs` without
+# them reports a SUPERSEDED failure as current -- on one commit, three of five
+# reported failures had a later run, and each cost a full investigation.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "lib"))
+
+from check_run_status import latest_runs  # noqa: E402
+
 # Only the Actions app exposes a job with steps. A check run published by any
 # other app has no step list to reason about, so its cause is not knowable here.
 ACTIONS_APP_SLUG = "github-actions"
@@ -159,6 +166,12 @@ DEFAULT_PROVISIONING_MARKERS = (
 DEFAULT_TIMEOUT_SECONDS = 30
 DEFAULT_API_ROOT = "https://api.github.com"
 MAX_CHECKS_PER_PAGE = 100
+
+#: Bound on the page walk. 100 pages is 10,000 runs -- far past any real commit,
+#: and a bound is what keeps a paginating loop from hanging if the endpoint ever
+#: returns a full page indefinitely. A hang is worse than a short read because it
+#: reports nothing at all.
+MAX_CHECK_PAGES = 100
 
 
 class RedCause(NamedTuple):
@@ -371,12 +384,47 @@ def classify_check_run(api: GitHubApi, check_run: Dict[str, Any]) -> RedCause:
 
 
 def list_check_runs(api: GitHubApi, sha: str) -> Tuple[List[Dict[str, Any]], str]:
-    path = f"/repos/{api.repository}/commits/{sha}/check-runs?per_page={MAX_CHECKS_PER_PAGE}"
-    status, body = api.request("GET", path)
-    if status != 200 or not isinstance(body, dict):
-        return [], f"cannot list check runs for {sha} (HTTP {status})"
-    runs = body.get("check_runs")
-    return (list(runs) if isinstance(runs, list) else []), ""
+    """Every check run on ``sha``, across all pages (#16120).
+
+    ``per_page=100`` on its own truncates SILENTLY. Measured on one PR: 100 runs
+    on a single page against 111 paginated, and the eleven dropped were hiding a
+    genuinely not-green required context. A tool that answers "what is red" from
+    a truncated list reports a green it did not earn, which is the exact failure
+    this module exists to prevent.
+
+    ``total_count`` is the endpoint's own statement of the population, so it is
+    also the check on whether the walk reached all of it -- a short read is
+    reported rather than returned as if complete.
+    """
+    collected: List[Dict[str, Any]] = []
+    expected = None
+    page = 1
+    while True:
+        path = f"/repos/{api.repository}/commits/{sha}/check-runs" f"?per_page={MAX_CHECKS_PER_PAGE}&page={page}"
+        status, body = api.request("GET", path)
+        if status != 200 or not isinstance(body, dict):
+            return [], f"cannot list check runs for {sha} (HTTP {status})"
+        if expected is None:
+            expected = body.get("total_count")
+        runs = body.get("check_runs")
+        batch = list(runs) if isinstance(runs, list) else []
+        collected.extend(batch)
+        if len(batch) < MAX_CHECKS_PER_PAGE:
+            break
+        page += 1
+        if page > MAX_CHECK_PAGES:
+            return collected, (
+                f"check-run listing for {sha} exceeded {MAX_CHECK_PAGES} pages -- "
+                "refusing to walk further rather than loop, since a verdict from "
+                "an unbounded read is not one we can defend"
+            )
+    if isinstance(expected, int) and len(collected) < expected:
+        return collected, (
+            f"check-run listing for {sha} reached {len(collected)} of {expected} "
+            "runs -- the walk stopped short, so any 'no red checks' verdict from "
+            "this list is unearned"
+        )
+    return collected, ""
 
 
 def head_sha_for_pr(api: GitHubApi, number: int) -> str:
@@ -409,10 +457,14 @@ def classify_commit(api: GitHubApi, sha: str) -> Report:
             f"{sha} carries no check runs at all — nothing was classified, so "
             "this is NOT a clean bill of health (see #12823 for parked runs)",
         )
-    reds = [classify_check_run(api, check) for check in checks if is_red(check)]
+    # GROUP BEFORE CLASSIFYING (#16120). `checks` is every run on record, so a
+    # `failure` at 07:54 superseded by a `success` at 09:10 appears in both
+    # states. Classifying the raw list reports the dead one as a current red.
+    current = latest_runs(checks)
+    reds = [classify_check_run(api, check) for check in current if is_red(check)]
     if not reds:
-        return Report(sha, len(checks), [], False, f"{len(checks)} checks, none red")
-    return Report(sha, len(checks), reds, False, f"{len(reds)} of {len(checks)} checks are red")
+        return Report(sha, len(current), [], False, f"{len(current)} checks, none red")
+    return Report(sha, len(current), reds, False, f"{len(reds)} of {len(current)} checks are red")
 
 
 def _emit(text: str, *, err: bool = False) -> None:

@@ -25,7 +25,7 @@ from autobot_shared.coordination.branch_stewardship import (
     release,
     transfer,
 )
-from autobot_shared.coordination.work_claims import Claim, ClaimConflict, ClaimMode
+from autobot_shared.coordination.work_claims import Claim, ClaimConflict, ClaimMode, ScopeError
 
 try:
     import fakeredis.aioredis as fakeredis_async
@@ -266,3 +266,30 @@ async def test_declare_refuses_an_empty_branch_or_steward(redis):
     for branch, steward in (("", "s"), ("b", ""), ("  ", "s")):
         with pytest.raises(ValueError, match="must be non-empty"):
             await declare("path:a/b.py", branch=branch, steward=steward, intent="x")
+
+
+# ---------------------------------------------------------------------------
+# prune's kind goes through the same check as every other entry point (#15957)
+#
+# No Redis fixture on purpose: the check runs before any I/O, and a test that
+# depends on fakeredis would be skipped where it is missing -- hiding exactly
+# the path it exists to pin.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_prune_refuses_a_reserved_kind_instead_of_finding_nothing():
+    """`kind="task"` used to read an index nothing writes to and return [].
+
+    That reads as "nothing to prune" -- a clean answer to a question that was
+    never asked, since task identity is not a work scope at all.
+    """
+    with pytest.raises(ScopeError, match="reserved"):
+        await prune({"open-one"}, kind="task")
+
+
+@pytest.mark.asyncio
+async def test_prune_refuses_an_unknown_kind_instead_of_finding_nothing():
+    """The contrast, and the wider defect: a misspelling was an empty result too."""
+    with pytest.raises(ScopeError, match="unknown scope kind"):
+        await prune({"open-one"}, kind="pth")

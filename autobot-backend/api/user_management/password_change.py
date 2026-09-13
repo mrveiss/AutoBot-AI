@@ -23,13 +23,13 @@ from api.user_management.dependencies import (
     get_current_user,
     get_tenant_context,
     get_user_service,
-    require_platform_admin,
+    require_self_or_admin,
     user_management_route_marker,
 )
 from autobot_shared.logging_manager import get_logger
 from user_management.middleware.rate_limit import (
-    PasswordChangeRateLimiter,
     RateLimitExceeded,
+    TargetedPasswordChangeRateLimiter,
 )
 from user_management.schemas import PasswordChange
 from user_management.services import TenantContext, UserService
@@ -70,12 +70,11 @@ async def authorize_password_change(
     and a future reader would trace the same four layers #15737 documents
     and reach the same wrong conclusion. Being a dependency is what makes
     the gate legible and what makes the posture suite able to see it.
-    """
-    if context.user_id == user_id:
-        return True
 
-    await require_platform_admin(context)
-    return False
+    The decision itself is ``dependencies.require_self_or_admin`` (#15738),
+    which is shared with reading and updating a user.
+    """
+    return await require_self_or_admin(user_id, context)
 
 
 @router.post(
@@ -95,7 +94,7 @@ async def change_password(
 ):
     """Change a password: self-service with the current one, or an actual
     platform admin resetting another user's without it (#15743)."""
-    rate_limiter = PasswordChangeRateLimiter()
+    rate_limiter = TargetedPasswordChangeRateLimiter()
 
     # Check rate limit before attempting password change.
     # The limiter's message carries the caller-facing retry window ("Too many

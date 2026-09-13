@@ -115,7 +115,7 @@ def _empty_by_tree() -> dict[str, list[str]]:
 # nothing and can never fire. A guard against tests that execute nothing must not
 # itself pass by finding nothing: if test_modules() ever stops resolving, both the
 # population and the empty-body count collapse to zero together and every
-# assertion below reports clean. Measured 28708 across 13 trees on Dev_new_gui;
+# assertion below reports clean. Measured 28708 across 13 trees on main;
 # the floors sit under that with room for ordinary churn, and only ever rise.
 _TOTAL_FUNCTION_FLOOR = 25000
 _TREE_FLOOR = 10
@@ -156,10 +156,7 @@ def test_no_tree_outside_the_known_set_has_a_test_that_executes_nothing() -> Non
 
     empty = _empty_by_tree()
     surprises = {tree: sites for tree, sites in empty.items() if tree not in _EMPTY_BODIED}
-    detail = "\n".join(
-        f"  {tree}:\n    " + "\n    ".join(sorted(sites))
-        for tree, sites in sorted(surprises.items())
-    )
+    detail = "\n".join(f"  {tree}:\n    " + "\n    ".join(sorted(sites)) for tree, sites in sorted(surprises.items()))
     assert not surprises, (
         "these collected tests execute nothing at all — every statement in the "
         f"body is `pass`, `...`, a docstring or `print()` — in a tree that was "
@@ -222,9 +219,9 @@ def test_the_detector_finds_an_empty_body_and_spares_a_real_one() -> None:
     assert empty_bodies('def test_a():\n    """Checks the thing."""\n') == [("test_a", 1)]
     assert empty_bodies("def test_a():\n    ...\n") == [("test_a", 1)]
     assert empty_bodies('def test_a():\n    print("✅ imports fine")\n') == [("test_a", 1)]
-    assert empty_bodies(
-        'def test_a():\n    """Doc."""\n    pass\n    print("✅ six imports")\n'
-    ) == [("test_a", 1)], "the #15189 shape itself: docstring, pass, and prints"
+    assert empty_bodies('def test_a():\n    """Doc."""\n    pass\n    print("✅ six imports")\n') == [
+        ("test_a", 1)
+    ], "the #15189 shape itself: docstring, pass, and prints"
     assert empty_bodies("class TestX:\n    def test_a(self):\n        pass\n")
     assert empty_bodies("async def test_a():\n    pass\n") == [("test_a", 1)]
 
@@ -235,9 +232,7 @@ def test_the_detector_finds_an_empty_body_and_spares_a_real_one() -> None:
     assert not empty_bodies(
         "def test_a():\n    print(subject())\n"
     ), "print(subject()) evaluates subject() first — a real call, not print('literal') (#15263)"
-    assert not empty_bodies(
-        "def test_a():\n    assert subject()\n"
-    ), "an assertion is a body"
+    assert not empty_bodies("def test_a():\n    assert subject()\n"), "an assertion is a body"
     assert not empty_bodies(
         'def test_a():\n    """Doc."""\n    reporter.print("x")\n'
     ), "an attribute call is somebody's method, not the no-op builtin"
@@ -259,8 +254,7 @@ def test_the_detector_finds_an_empty_body_and_spares_a_real_one() -> None:
         ), f"`{marker}` declares the test does not run — that is honest, not misleading"
     for marker in ("skip", 'skipif(True, reason="x")', "xfail"):
         assert not empty_bodies(
-            "import pytest\n\n\n"
-            f"@pytest.mark.{marker}\nclass TestX:\n    def test_a(self):\n        pass\n"
+            "import pytest\n\n\n" f"@pytest.mark.{marker}\nclass TestX:\n    def test_a(self):\n        pass\n"
         ), (
             f"a class-level `{marker}` exempts its methods the same as a method-level "
             "one — the method never repeats a decorator it inherits (#15263)"

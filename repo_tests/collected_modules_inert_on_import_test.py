@@ -42,6 +42,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 _REPO_ROOT = repo_root()
 _PYTEST_INI = _REPO_ROOT / "pytest.ini"
@@ -73,16 +74,25 @@ _SKIP = {
 # five never-collected modules out of the walk.) A floor, not an equality — but
 # far enough below the real number that a sweep which has silently stopped
 # matching cannot pass by finding nothing.
-_MIN_MODULES_SCANNED = 1800
 _MIN_GUARDED_EXITS = 30
 
 _EXIT_NAMES = {"exit", "_exit", "quit"}
 
 
-def _python_file_patterns() -> list[str]:
-    """pytest's own ``python_files`` globs, read from the config it will use."""
+def _python_file_patterns(root: Path = _REPO_ROOT) -> list[str]:
+    """pytest's own ``python_files`` globs, read from the config it will use.
+
+    Returns ``[]`` when *root* has no ``pytest.ini`` at all -- the empty-tree
+    case `reach_declarations_test` drives this through (#15928) -- rather than
+    asserting, so `_collectable_modules` below reads it as an empty population
+    instead of a raise. A ``pytest.ini`` that EXISTS but declares no
+    ``python_files`` is still a real misconfiguration and still asserts.
+    """
+    ini = root / "pytest.ini"
+    if not ini.is_file():
+        return []
     parser = configparser.ConfigParser(inline_comment_prefixes=("#",))
-    parser.read(_PYTEST_INI, encoding="utf-8")
+    parser.read(ini, encoding="utf-8")
     patterns = parser.get("pytest", "python_files", fallback="").split()
     assert patterns, "pytest.ini declares no python_files — cannot derive the population"
     return patterns
@@ -153,24 +163,37 @@ def _exit_calls(tree: ast.Module, *, guarded: bool) -> list[tuple[str, int]]:
     return found
 
 
-def _collectable_modules() -> list[Path]:
-    patterns = _python_file_patterns()
+def _collectable_modules(root: Path = _REPO_ROOT) -> list[Path]:
+    patterns = _python_file_patterns(root)
+    if not patterns:
+        return []
     return sorted(
         path
-        for path in _REPO_ROOT.rglob("*.py")
-        if not _SKIP.intersection(path.relative_to(_REPO_ROOT).parts)
-        and _matches(path, patterns)
+        for path in root.rglob("*.py")
+        if not _SKIP.intersection(path.relative_to(root).parts) and _matches(path, patterns)
     )
+
+
+#: MEASURED 2026-09-11 against this tree: 2316 collectable modules. The
+#: previous 1800 was 29% below its own population; migrated to
+#: `_reach.declare` (#15928) rather than raised in place, so the empty-tree
+#: case above is proven by `reach_declarations_test` instead of asserted by
+#: hand. `growth=200` absorbs ordinary test-file growth; `skips=0` because
+#: nothing here is dropped as unreadable -- `_parse_module` fails loudly
+#: instead of skipping (see its own docstring).
+REACH = declare(
+    "collectable-modules-inert-on-import",
+    discover=_collectable_modules,
+    floor=2316,
+    growth=200,
+    skips=0,
+    what="modules matching pytest's python_files patterns",
+)
 
 
 def test_the_population_is_large_enough_for_this_to_mean_anything() -> None:
     """An empty sweep reports a clean tree. Assert the subject is present."""
-    modules = _collectable_modules()
-    assert len(modules) >= _MIN_MODULES_SCANNED, (
-        f"only {len(modules)} modules match pytest's python_files patterns "
-        f"({_python_file_patterns()}) — expected at least {_MIN_MODULES_SCANNED}. "
-        "The sweep has stopped matching and would report every tree clean."
-    )
+    REACH.examined(_REPO_ROOT)
 
 
 def test_the_exemption_branch_has_live_subjects() -> None:
@@ -180,11 +203,7 @@ def test_the_exemption_branch_has_live_subjects() -> None:
     ever reaches zero, the walk that skips `__main__` blocks could be doing
     anything at all and every test here would still pass.
     """
-    guarded = [
-        path
-        for path in _collectable_modules()
-        if _exit_calls(_parse_module(path), guarded=True)
-    ]
+    guarded = [path for path in _collectable_modules() if _exit_calls(_parse_module(path), guarded=True)]
     assert len(guarded) >= _MIN_GUARDED_EXITS, (
         f"only {len(guarded)} test-named modules exit from inside a __main__ guard "
         f"(expected at least {_MIN_GUARDED_EXITS}) — the exemption is now untested"
@@ -208,7 +227,7 @@ def test_no_test_named_module_exits_the_interpreter_at_import_time() -> None:
         "pytest imports these during collection, so this is not a failing test — it "
         "is INTERNALERROR: SystemExit, which kills the entire session and every "
         "other module in the shard. Move the body behind a main() function and an "
-        "`if __name__ == \"__main__\":` guard, or rename the file out of the "
+        '`if __name__ == "__main__":` guard, or rename the file out of the '
         "test_* namespace if it is not a test (#14917)."
     )
 
@@ -231,9 +250,9 @@ def test_the_detector_catches_a_planted_exit_and_spares_a_guarded_one() -> None:
     assert _exit_calls(inert, guarded=True), "the guarded-exit walk found nothing to exempt"
 
     nested = ast.parse("import sys\n\n\ndef teardown():\n    " + call + "\n")
-    assert not _exit_calls(nested, guarded=False), (
-        "an exit inside a function body was reported — pytest never runs it on import"
-    )
+    assert not _exit_calls(
+        nested, guarded=False
+    ), "an exit inside a function body was reported — pytest never runs it on import"
 
 
 def test_an_unparseable_swept_file_fails_loudly_instead_of_reading_as_clean() -> None:

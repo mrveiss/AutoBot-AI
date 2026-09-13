@@ -11,6 +11,7 @@ acting like a helpful librarian that finds relevant information before answering
 import asyncio
 from typing import Any, Dict, List
 
+from agents.scope_enforcement import scope_segment
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
@@ -119,6 +120,25 @@ class KBLibrarianAgent(StandardizedAgent):
         question = request.payload["question"]
         context_limit = request.payload.get("context_limit", 3)
         return await self.answer_question(question, context_limit=context_limit)
+
+    def declared_scopes(self, request) -> List[str]:
+        """The knowledge-base entry this run will write, if it writes one (#15950).
+
+        Only `add_knowledge` declares. Searching, answering and stats are reads
+        and must not claim anything -- a read that took an exclusive claim would
+        serialise the whole knowledge base behind one lookup.
+
+        The scope is the entry's title, normalised, so two agents adding
+        DIFFERENT entries never block each other while two adding the SAME title
+        do. Scoping the knowledge base as a whole would be a lock nobody could
+        share; scoping by title is the granularity at which the conflict is real.
+        """
+        if request.action != "add_knowledge":
+            return []
+        title = (request.payload or {}).get("title")
+        if not title:
+            return []
+        return [f"kb:{scope_segment(str(title))}"]
 
     async def _handle_add_knowledge(self, request) -> Dict[str, Any]:
         """Handle add_knowledge action via StandardizedAgent routing."""

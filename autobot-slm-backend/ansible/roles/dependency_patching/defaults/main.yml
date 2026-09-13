@@ -73,7 +73,7 @@ python_security_updates:
   pillow: "12.3.0"                 # OOB write loading PSD images
   protobuf: "7.36.1,<8.0.0"        # JSON recursion depth bypass
   # Medium (pypdf - 10 CVEs)
-  pypdf: "6.16.2"                  # Infinite loops, RAM exhaustion, malformed streams
+  pypdf: "6.17.0"                  # Infinite loops, RAM exhaustion, malformed streams
   # Carried forward from prior patches
   markdownify: "1.2.3"
   requests: "2.34.2"

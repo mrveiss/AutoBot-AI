@@ -25,6 +25,7 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 # `git_repo_root()` with no argument asks from the process working directory, so
 # this guard's root was whatever pytest happened to be invoked from. `repo_root()`
@@ -37,27 +38,44 @@ KNOWN_BLANKET_SKIPS = {
     "autobot-backend/api/api_endpoint_migrations_test.py": "15173",
 }
 
-# A sweep that matches nothing must fail by name rather than read as a clean tree
-# (#15018). This is the count of test modules the sweep parses, not of skips.
-_MIN_TEST_MODULES = 1800
-
 _ISSUE = re.compile(r"#(\d{3,6})")
 
 
-def _test_files() -> list[Path]:
+def _test_files(root: Path = REPO) -> list[Path]:
     """Tracked test modules, by the same two patterns pytest collects.
 
     #14484: the exclusion is checked on the path RELATIVE to the repo root. An
     absolute check neuters the sweep when the checkout is itself a worktree under
     ``.worktrees/``, because every path then contains that segment -- which is how
     this guard first scored 0 modules and was caught only by the population floor.
+
+    Takes a root so the declaration below can be driven against an empty
+    directory by `reach_declarations_test`; without that, nothing can prove the
+    floor fires (#15928).
     """
     out: list[Path] = []
     for pattern in ("*_test.py", "test_*.py"):
-        for path in REPO.rglob(pattern):
-            if ".worktrees" not in path.relative_to(REPO).parts:
+        for path in root.rglob(pattern):
+            if ".worktrees" not in path.relative_to(root).parts:
                 out.append(path)
     return out
+
+
+#: MEASURED 2026-09-11 against this tree: 2329 test modules by this walk's own
+#: two patterns. The previous 1800 was 23% below its own population; migrated
+#: to `_reach.declare` (#15928) rather than raised in place. `growth=200`
+#: absorbs ordinary churn -- test files are added constantly -- while staying
+#: far below the size of any collection-root loss this exists to catch.
+#: `skips=0`: every parsed module here IS the population `examined()` bounds,
+#: there is no narrower "completed" step.
+REACH = declare(
+    "blanket-skip-test-module-sweep",
+    discover=_test_files,
+    floor=2329,
+    growth=200,
+    skips=0,
+    what="test modules",
+)
 
 
 def _blanket_skip_reason(tree: ast.AST) -> str | None:
@@ -86,7 +104,7 @@ def _blanket_skip_reason(tree: ast.AST) -> str | None:
 def _scan() -> tuple[dict[str, str], int]:
     """(relative path -> reason) for every blanket skip, and the modules parsed."""
     found, parsed = {}, 0
-    for path in _test_files():
+    for path in REACH.examined(REPO):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError):
@@ -99,20 +117,19 @@ def _scan() -> tuple[dict[str, str], int]:
 
 
 def test_the_sweep_reaches_enough_modules_to_mean_anything() -> None:
-    """Defined before every other check: an empty sweep must not read as clean."""
+    """Defined before every other check: an empty sweep must not read as clean.
+
+    `REACH.examined` inside `_scan` already bounds the raw population on every
+    call; `completed` here bounds the narrower count that actually parsed,
+    which is the one the other tests in this module read conclusions from.
+    """
     _, parsed = _scan()
-    assert parsed >= _MIN_TEST_MODULES, (
-        f"the sweep parsed only {parsed} test modules, under the recorded floor of "
-        f"{_MIN_TEST_MODULES}. FIX THE SWEEP -- a guard that matches nothing passes "
-        f"everything, which is the defect this file exists to catch."
-    )
+    REACH.completed(parsed)
 
 
 def test_every_blanket_skip_names_the_issue_that_would_lift_it() -> None:
     found, _ = _scan()
-    undocumented = {
-        path: reason for path, reason in found.items() if not _ISSUE.search(reason or "")
-    }
+    undocumented = {path: reason for path, reason in found.items() if not _ISSUE.search(reason or "")}
     assert not undocumented, (
         "these files are skipped wholesale, which is indistinguishable from passing, "
         "and their skip reason names no issue that would lift it. State what coverage "
@@ -136,7 +153,4 @@ def test_known_entries_are_still_live() -> None:
     """A resolved entry must be deleted, so the map cannot rot into a wish list."""
     found, _ = _scan()
     stale = sorted(set(KNOWN_BLANKET_SKIPS) - set(found))
-    assert not stale, (
-        "these files no longer carry a blanket skip -- remove them from "
-        f"KNOWN_BLANKET_SKIPS: {stale}"
-    )
+    assert not stale, "these files no longer carry a blanket skip -- remove them from " f"KNOWN_BLANKET_SKIPS: {stale}"

@@ -20,6 +20,7 @@ from autobot_shared.async_compat import (
     pending_threadsafe_dispatches,
     run_or_schedule,
 )
+from autobot_shared.eventually import eventually
 
 # ---------------------------------------------------------------------------
 # Sync-entry path: no event loop running
@@ -159,7 +160,8 @@ class TestFireAndForget:
 
         fire_and_forget(records(), name="probe-collectable")
         gc.collect()
-        await asyncio.sleep(0.05)
+        # Wait on the outcome, not a fixed window a busy runner can miss (#16255)
+        await eventually(lambda: ran == ["executed"])
         assert ran == ["executed"], "the task was collected before it executed"
 
     async def test_a_launch_failure_is_logged_rather_than_swallowed(self, caplog) -> None:
@@ -211,10 +213,8 @@ class TestFireAndForgetThreadsafe:
         worker.join(timeout=5)
 
         assert raised == [], f"the hand-off raised on the foreign thread: {raised!r}"
-        for _ in range(200):
-            await asyncio.sleep(0.01)
-            if ran:
-                break
+        # Wait on the outcome, not a hand-rolled poll loop (#16255)
+        await eventually(lambda: ran == ["executed"])
         assert ran == ["executed"], "the coroutine handed over from another thread never ran"
 
     async def test_the_future_is_retained_while_pending_and_released_when_done(self) -> None:
@@ -230,10 +230,7 @@ class TestFireAndForgetThreadsafe:
         assert future in pending_threadsafe_dispatches(), "the future was not retained while pending"
 
         release.set()
-        for _ in range(200):
-            await asyncio.sleep(0.01)
-            if future.done():
-                break
+        await eventually(future.done)  # wait on the outcome, not a hand-rolled poll loop (#16255)
         assert future.result(timeout=5) == "done"
         assert future not in pending_threadsafe_dispatches(), "the done callback never released the reference"
 

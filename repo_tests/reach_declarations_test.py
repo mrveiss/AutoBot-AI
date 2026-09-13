@@ -18,14 +18,16 @@ not declared is invisible to this file, which is what `MIN_DECLARATIONS` is for.
 from __future__ import annotations
 
 import importlib
+import os
 import pkgutil
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
+from repo_tests._reach import REGISTRY, Reach, ReachFloorError, declare
 
 from autobot_shared.paths import scrubbed_git_env
-from repo_tests._reach import REGISTRY, Reach, ReachFloorError, declare
 
 _REPO_TESTS = Path(__file__).resolve().parent
 _REPO_ROOT = _REPO_TESTS.parent
@@ -35,7 +37,13 @@ _REPO_ROOT = _REPO_TESTS.parent
 #: since every other guard will hang off this mechanism, but it measures no
 #: coverage and must not be read as if it did. Ratchets **up** only, and should
 #: be raised as adoption grows or it becomes the thing it was built to prevent.
-MIN_DECLARATIONS = 2
+MIN_DECLARATIONS = 4
+
+
+def _scrubbed_env() -> dict[str, str]:
+    """`git grep` with the ambient git env removed (#15926 discipline)."""
+    return {k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "GIT_DIR"))}
+
 
 #: Guard modules that could not be imported, recorded rather than discarded.
 IMPORT_FAILURES: dict[str, str] = {}
@@ -240,24 +248,50 @@ def test_every_declared_floor_is_pinned_to_its_population(reach: Reach) -> None:
     its population; `completed()` remains the binding constraint. Giving the
     two populations separate floors is the fuller fix and is not this change.
     """
-    count = len(reach.discover(_REPO_ROOT))
-    slack = count - reach.floor
+    # The predicate lives on Reach now (#15928), so the rule belongs to declare()
+    # rather than to whoever remembers to enumerate declarations. This test's job
+    # is to DISCHARGE that obligation for every declaration -- see
+    # test_every_declaration_is_reached_by_this_sweep for the other half, which
+    # is what stops an unenumerated declaration from going unchecked.
+    reach.verify_floor(_REPO_ROOT)
 
-    assert slack >= 0, (
-        f"[{reach.name}] floor {reach.floor} exceeds the live population of "
-        f"{count} {reach.what}. The guard cannot pass; lower the floor to "
-        f"{count} only if the population genuinely shrank."
+
+def test_every_declaration_is_reached_by_this_sweep() -> None:
+    """A declaration this file cannot see has an unchecked floor (#15928).
+
+    `_import_every_guard` walks `pkgutil.iter_modules([_REPO_TESTS])`, which
+    reaches top-level `repo_tests` modules and nothing else. A `declare()` in a
+    subpackage -- or in `tools/`, or anywhere a future guard lands -- registers
+    nothing here, so its floor is never verified and its absence looks identical
+    to having no declarations to verify.
+
+    That is the defect this module exists to catch, applied to the module
+    itself: the sweep must know what it did not reach.
+    """
+    # `git grep`, not a Python walk over every file. The walk read ~100 modules
+    # per run and pushed the pre-push budget past its 132s ceiling -- and a guard
+    # that makes the verification too slow to run is a guard that gets bypassed.
+    found = subprocess.run(
+        ["git", "grep", "-hoE", r"declare\(\s*[\"']([^\"']+)", "--", "repo_tests/*.py"],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_ROOT,
+        env=_scrubbed_env(),
+        check=False,
     )
-    allowance = reach.skips + reach.growth
-    assert slack <= allowance, (
-        f"[{reach.name}] floor {reach.floor} sits {slack} below its live "
-        f"population of {count} {reach.what}, which exceeds the declared "
-        f"allowance of {allowance} (skips={reach.skips} + growth={reach.growth}).\n"
-        f"A floor this far below what the sweep finds passes while most of the "
-        f"tree stops being reached.\n"
-        f"Raise the one that is actually short:\n"
-        f"  skips=  items this guard cannot COMPLETE (unreadable, unparseable). "
-        f"Measure it from a `completed` failure; do not estimate it.\n"
-        f"  growth= ordinary growth tolerated before a deliberate ratchet.\n"
-        f"If neither is short, the floor is stale: ratchet it toward {count}."
+    declared_names = {
+        match.group(1)
+        for line in found.stdout.splitlines()
+        if (match := re.search(r"""declare\(\s*["']([^"']+)""", line))
+    }
+
+    swept = set(REGISTRY) | {name for name in declared_names if name.startswith("self-check::")}
+    unreached = sorted(declared_names - swept)
+
+    assert not unreached, (
+        "declare() call(s) this sweep never imported, so their floors are unverified:\n  "
+        + "\n  ".join(unreached)
+        + "\n\n`pkgutil.iter_modules` reaches top-level repo_tests modules only. Either move "
+        "the declaration to a top-level module, or widen the import walk -- do not leave it "
+        "registered somewhere nothing enumerates."
     )

@@ -598,7 +598,7 @@ export interface paths {
         };
         /**
          * Get Current User Info
-         * @description Get current authenticated user information.
+         * @description Get the current authenticated user, with their effective permissions (#16270).
          */
         get: operations["get_current_user_info_api_auth_me_get"];
         put?: never;
@@ -3144,7 +3144,7 @@ export interface paths {
         };
         /**
          * Search users for sharing
-         * @description Search users by name or username for use in sharing dialogs. Safe to call in all deployment modes — returns empty list with available=False when user management is not enabled. Issue #2072.
+         * @description Search users in the caller's own organisation by name or username, for sharing dialogs. Requires login and an organisation context (#16279). Returns an empty list with available=False if the search fails. Issue #2072.
          */
         get: operations["search_users_for_sharing_api_user_management_users_search_get"];
         put?: never;
@@ -3331,6 +3331,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/user-management/teams/my-teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my teams
+         * @description Get all teams the current user is a member of.
+         */
+        get: operations["get_my_teams_api_user_management_teams_my_teams_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/user-management/teams/{team_id}": {
         parameters: {
             query?: never;
@@ -3405,26 +3425,6 @@ export interface paths {
          * @description Change a team member's role.
          */
         patch: operations["update_member_role_api_user_management_teams__team_id__members__user_id__patch"];
-        trace?: never;
-    };
-    "/api/user-management/teams/my-teams": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get my teams
-         * @description Get all teams the current user is a member of.
-         */
-        get: operations["get_my_teams_api_user_management_teams_my_teams_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/user-management/organizations": {
@@ -10061,13 +10061,19 @@ export interface paths {
          *
          *     Returns metrics on grounding operations:
          *     - % of claims verified
-         *     - % from KB vs research vs causal inference
-         *     - Top unverifiable claims
-         *     - Conflict resolution time
+         *     - % by verification method (methods with no producer yet are absent, not zero)
+         *     - Conflicts created/resolved
          *     - Overall confidence trends
          *
+         *     #14981: every field below is a real counter written by GroundedAgent
+         *     (respond_with_grounding, resolve_conflict), read since the hash was last
+         *     created or its TTL last refreshed -- not yet windowed by `period`.
+         *     `avg_resolution_time_hours` and `top_unverifiable` were promised here but
+         *     never implemented or returned; dropped rather than left as more
+         *     undelivered promises (#16421 if wanted).
+         *
          *     Query params:
-         *     - period: 1h|24h|7d|30d (default: 24h)
+         *     - period: 1h|24h|7d|30d (default: 24h; accepted, not yet applied -- see above)
          *
          *     Response:
          *     ```json
@@ -10078,17 +10084,12 @@ export interface paths {
          *         "total_claims_extracted": 8204,
          *         "claims_verified": 0.87,
          *         "claim_sources": {
-         *             "kb_lookup": 0.65,
-         *             "external_research": 0.22,
-         *             "causal_inference": 0.13
+         *             "kb_lookup": 0.74,
+         *             "claim_verifier_rag": 0.26
          *         },
          *         "average_confidence": 0.89,
          *         "conflicts_created": 142,
-         *         "conflicts_resolved": 128,
-         *         "avg_resolution_time_hours": 2.3,
-         *         "top_unverifiable": [
-         *             {"claim": "...", "count": 12}
-         *         ]
+         *         "conflicts_resolved": 128
          *     }
          *     ```
          *
@@ -43696,6 +43697,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat-knowledge/context/{chat_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Chat Context
+         * @description Get complete knowledge context for a chat
+         */
+        get: operations["get_chat_context_api_chat_knowledge_context__chat_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Chat Context
+         * @description Delete a chat-knowledge context -- its owner or an admin only (#16490).
+         *
+         *     404 is checked before authorization, using ``peek_chat_knowledge_manager``
+         *     (never the constructing accessor -- a manager that was never built has
+         *     certainly never held a context for *chat_id*). Checking existence first
+         *     also matters for a reason beyond cost: ``validate_chat_ownership``
+         *     (``api/chat.py``) silently claims an unowned ``chat_id`` for the caller
+         *     on its legacy-migration path (sessions predating ownership tracking)
+         *     rather than 404ing, so calling it before this existence check would let a
+         *     probe against a chat_id nothing ever created come back authorized with
+         *     nothing to delete, instead of a clean 404.
+         */
+        delete: operations["delete_chat_context_api_chat_knowledge_context__chat_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat-knowledge/context-orphans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find Orphaned Chat Contexts
+         * @description List chat-knowledge contexts whose chat_id matches no chat (#16490).
+         *
+         *     Same list-then-cleanup, admin-only shape as
+         *     ``api/knowledge_maintenance.py``'s ``GET /session-orphans``.
+         */
+        get: operations["find_orphaned_chat_contexts_api_chat_knowledge_context_orphans_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Cleanup Orphaned Chat Contexts
+         * @description Delete orphaned chat-knowledge contexts (#16490); dry_run defaults True.
+         */
+        delete: operations["cleanup_orphaned_chat_contexts_api_chat_knowledge_context_orphans_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat-knowledge/context/create": {
         parameters: {
             query?: never;
@@ -43850,26 +43912,6 @@ export interface paths {
          * @description Search knowledge across chats or within specific chat
          */
         post: operations["search_chat_knowledge_api_chat_knowledge_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat-knowledge/context/{chat_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Chat Context
-         * @description Get complete knowledge context for a chat
-         */
-        get: operations["get_chat_context_api_chat_knowledge_context__chat_id__get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -58613,6 +58655,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AuthMeResponse
+         * @description Response for GET /auth/me: the identity fields, plus the caller's effective authority (#16270).
+         */
+        AuthMeResponse: {
+            /** Username */
+            username: string;
+            /** Role */
+            role: string;
+            /** Email */
+            email: string;
+            /** Auth Method */
+            auth_method: string;
+            /** Authenticated */
+            authenticated: boolean;
+            /** Deployment Mode */
+            deployment_mode: string;
+            /** Permissions */
+            permissions: string[];
+            /** Is Admin */
+            is_admin: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AuthPermissionResponse
          * @description Response for GET /auth/permissions/{operation}.
          */
@@ -58662,26 +58728,6 @@ export interface components {
             name: string;
             /** Permissions */
             permissions: string[];
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * AuthUserInfoResponse
-         * @description Response for GET /auth/me.
-         */
-        AuthUserInfoResponse: {
-            /** Username */
-            username: string;
-            /** Role */
-            role: string;
-            /** Email */
-            email: string;
-            /** Auth Method */
-            auth_method: string;
-            /** Authenticated */
-            authenticated: boolean;
-            /** Deployment Mode */
-            deployment_mode: string;
         } & {
             [key: string]: unknown;
         };
@@ -77281,6 +77327,25 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * InstallRequest
+         * @description Request body for installing a marketplace plugin.
+         */
+        InstallRequest: {
+            /**
+             * Plugin Name
+             * @description Name of the plugin to install from catalog
+             */
+            plugin_name: string;
+            /**
+             * Source Id
+             * @description Marketplace source id; 'builtin' or a user-added source UUID (#6481)
+             * @default builtin
+             */
+            source_id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** InstalledSkillOut */
         InstalledSkillOut: {
             /** Id */
@@ -88973,6 +89038,24 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * RS256RevokeRequest
+         * @description Request body for RS256 authority token revocation (#10278).
+         *
+         *     Moved out of api/auth.py by #15757. The no-local-schemas hook reads each
+         *     changed file whole, so this pre-existing violation surfaced on an unrelated
+         *     edit -- fixed rather than left for whoever touches auth.py next.
+         *
+         *     It lands here rather than in schemas_agent.py because that module is at its
+         *     grandfathered ceiling with zero headroom, as are every other frozen domain
+         *     module the hook names. See #15757 for the conflict that creates.
+         */
+        RS256RevokeRequest: {
+            /** Token */
+            token: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * RUMClearResponse
          * @description Response for POST /rum/clear.
          */
@@ -94513,6 +94596,16 @@ export interface components {
          *     Shape from SkillHealth.model_dump() — opaque; extra allowed.
          */
         SkillHealthResponse: {
+            [key: string]: unknown;
+        };
+        /** SkillHubInstallRequest */
+        SkillHubInstallRequest: {
+            /**
+             * Skill Id
+             * @description Registry id or name of the skill to install
+             */
+            skill_id: string;
+        } & {
             [key: string]: unknown;
         };
         /**
@@ -101053,33 +101146,16 @@ export interface components {
         };
         /**
          * WakeWordCheckResponse
-         * @description Response for wake word check
+         * @description Response for wake word check: whether the text matched, and the confidence only (#16247 ruling).
          */
         WakeWordCheckResponse: {
             /** Detected */
             detected: boolean;
             /**
-             * Wake Word
-             * @default
-             */
-            wake_word: string;
-            /**
              * Confidence
              * @default 0
              */
             confidence: number;
-            /**
-             * Timestamp
-             * @default 0
-             */
-            timestamp: number;
-            /**
-             * Metadata
-             * @default {}
-             */
-            metadata: {
-                [key: string]: unknown;
-            };
         } & {
             [key: string]: unknown;
         };
@@ -102696,16 +102772,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * _RS256RevokeRequest
-         * @description Request body for RS256 authority token revocation (#10278).
-         */
-        _RS256RevokeRequest: {
-            /** Token */
-            token: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** _RealtimeToolCallRequest */
         _RealtimeToolCallRequest: {
             /** Name */
@@ -103280,25 +103346,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * InstallRequest
-         * @description Request body for installing a marketplace plugin.
-         */
-        api__schemas_workflows__InstallRequest: {
-            /**
-             * Plugin Name
-             * @description Name of the plugin to install from catalog
-             */
-            plugin_name: string;
-            /**
-             * Source Id
-             * @description Marketplace source id; 'builtin' or a user-added source UUID (#6481)
-             * @default builtin
-             */
-            source_id: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * ProviderInfo
          * @description Information about a supported provider.
          */
@@ -103315,16 +103362,6 @@ export interface components {
             base_url_required: boolean;
             /** Documentation Url */
             documentation_url: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** InstallRequest */
-        api__skills_hub__InstallRequest: {
-            /**
-             * Skill Id
-             * @description Registry id or name of the skill to install
-             */
-            skill_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -104492,7 +104529,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["_RS256RevokeRequest"];
+                "application/json": components["schemas"]["RS256RevokeRequest"];
             };
         };
         responses: {
@@ -104533,7 +104570,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthUserInfoResponse"];
+                    "application/json": components["schemas"]["AuthMeResponse"];
                 };
             };
         };
@@ -108459,6 +108496,26 @@ export interface operations {
             };
         };
     };
+    get_my_teams_api_user_management_teams_my_teams_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamResponse"][];
+                };
+            };
+        };
+    };
     get_team_api_user_management_teams__team_id__get: {
         parameters: {
             query?: never;
@@ -108692,26 +108749,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_my_teams_api_user_management_teams_my_teams_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TeamResponse"][];
                 };
             };
         };
@@ -161104,6 +161141,120 @@ export interface operations {
             };
         };
     };
+    get_chat_context_api_chat_knowledge_context__chat_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_ChatKnowledgeContextData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_chat_context_api_chat_knowledge_context__chat_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    find_orphaned_chat_contexts_api_chat_knowledge_context_orphans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+        };
+    };
+    cleanup_orphaned_chat_contexts_api_chat_knowledge_context_orphans_delete: {
+        parameters: {
+            query?: {
+                /** @description If True, only report without deleting */
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_chat_context_api_chat_knowledge_context_create_post: {
         parameters: {
             query?: never;
@@ -161355,37 +161506,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_ChatKnowledgeSearchResultData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_chat_context_api_chat_knowledge_context__chat_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chat_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_ChatKnowledgeContextData_"];
                 };
             };
             /** @description Validation Error */
@@ -163786,7 +163906,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["api__skills_hub__InstallRequest"];
+                "application/json": components["schemas"]["SkillHubInstallRequest"];
             };
         };
         responses: {
@@ -167369,7 +167489,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["api__schemas_workflows__InstallRequest"];
+                "application/json": components["schemas"]["InstallRequest"];
             };
         };
         responses: {

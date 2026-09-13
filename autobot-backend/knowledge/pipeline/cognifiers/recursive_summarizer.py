@@ -12,6 +12,7 @@ re-generates with the critique as guidance, up to a configurable depth.
 Issue #1383: Follow-up from #1373.
 """
 
+import math
 from typing import Dict, List
 from uuid import UUID
 
@@ -38,8 +39,60 @@ logger = get_logger(__name__)
 # -----------------------------------------------------------------------
 
 _SUMMARY_EVAL_QUERY = (
-    "Summarize the following text accurately, preserving key facts " "and source attribution: {source_preview}"
+    "Summarize the following text accurately, preserving key facts " "and source attribution: {source_excerpt}"
 )
+
+#: Prefixed when the evaluator sees less than the whole source, so the model is
+#: not asked to judge fidelity against material it was never shown (#16110).
+_PARTIAL_SOURCE_NOTE = (
+    "NOTE: you are seeing approximately {percent}% of the source document, "
+    "sampled from its beginning, middle and end, with [...] marking omissions. "
+    "Judge only what is visible here; absence of a fact you cannot see is not "
+    "evidence the summary dropped it.\n\n"
+)
+
+#: How much source the evaluator may see. A BUDGET, not a head truncation: past
+#: it the excerpt samples head, middle and tail, so a fact outside the opening
+#: is still visible (#16110).
+_EVAL_SOURCE_BUDGET = 6000
+
+
+def build_eval_excerpt(text: str, budget: int = _EVAL_SOURCE_BUDGET) -> tuple[str, float]:
+    """Source shown to the evaluator, and the fraction of the document it covers.
+
+    Replaces ``text[:200]``, which scored a summary of up to ``document_max_words``
+    against the opening 200 characters. Anything dropped from past that point was
+    invisible to the check, and the refinement loop iterated against the same
+    blind score -- a confident number that could not measure the thing it named.
+    """
+    if len(text) <= budget:
+        return text, 1.0
+
+    span = budget // 3
+    if span < 1:
+        # A budget under 3 cannot be split three ways. Fall back to an honest
+        # head slice rather than sampling: `text[-0:]` is `text[0:]`, so a zero
+        # span would return the WHOLE document while reporting 0.0 coverage --
+        # more than the budget allows, described as almost none of it.
+        return text[:budget], budget / len(text)
+
+    middle = (len(text) - span) // 2
+    tail = text[len(text) - span :]  # not text[-span:], which is the whole string at span == 0
+    excerpt = f"{text[:span]}\n[...]\n{text[middle : middle + span]}\n[...]\n{tail}"
+    return excerpt, (span * 3) / len(text)
+
+
+def coverage_percent(coverage: float) -> int:
+    """Coverage as a whole number that never overstates it.
+
+    ``round`` reports **100** for 6000/6001, so the note would claim the
+    evaluator saw approximately all of a source whose excerpt still contains
+    ``[...]``. Floor instead, and hold anything short of whole at 99: a partial
+    view announcing itself as complete is the defect this module exists to fix.
+    """
+    if coverage >= 1.0:
+        return 100
+    return min(99, math.floor(coverage * 100))
 
 
 @TaskRegistry.register_cognifier("recursive_summarize")
@@ -201,7 +254,10 @@ class RecursiveSummarizer(BaseCognifier):
     ) -> Summary | None:
         """Generate a summary, evaluate quality, refine if needed."""
         prompt = SUMMARY_PROMPT.format(max_words=max_words, text=text)
-        source_preview = text[:200]
+        excerpt, coverage = build_eval_excerpt(text)
+        eval_query = _SUMMARY_EVAL_QUERY.format(source_excerpt=excerpt)
+        if coverage < 1.0:
+            eval_query = _PARTIAL_SOURCE_NOTE.format(percent=coverage_percent(coverage)) + eval_query
         best_summary: Summary | None = None
         best_score = 0.0
 
@@ -213,7 +269,7 @@ class RecursiveSummarizer(BaseCognifier):
                     continue
 
                 result = await self.evaluator.evaluate(
-                    query=_SUMMARY_EVAL_QUERY.format(source_preview=source_preview),
+                    query=eval_query,
                     response=summary_text,
                     iteration=attempt + 1,
                 )

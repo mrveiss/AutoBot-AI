@@ -54,7 +54,11 @@ EXEMPT_PATHS: List[str] = [
     # Terminal access for users
     "/api/terminal",
     "/api/agent_terminal",
-    # User settings and configuration
+    # Settings and frontend config. Exempt from SERVICE auth only: browser
+    # callers carry user auth, which each route checks itself. #16278 found
+    # nine /api/settings routes checking nothing -- they are admin-gated in
+    # api/settings_config.py now, and api/settings_route_posture_test.py pins
+    # every route's posture so an exemption here cannot hide an open one again.
     "/api/settings",
     "/api/frontend_config",
     # System health and monitoring (public endpoints)
