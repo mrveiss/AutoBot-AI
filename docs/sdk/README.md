@@ -168,25 +168,31 @@ listed has no SDK method — use raw HTTP.
 | sessions | `create` / `update` / `delete` | Yes | Yes |
 | agents | `health` | Yes | Yes |
 | agents | `get_config` | Yes | Yes (`getConfig`) |
-| agents | `set_model` / `set_enabled` | Yes | No |
-| agents | `send_command` | Yes (route defect, see below) | Yes (`sendCommand`) |
+| agents | `set_model` / `set_enabled` | Yes | Yes (`setModel` / `setEnabled`) |
+| agents | `send_command` | Yes | Yes (`sendCommand`) |
 | knowledge | `stats` / `add_text` / `search` | Yes | Yes |
 | knowledge | `get_entries` | Yes | Yes (`getEntries`) |
 | analytics | `usage` / `performance` | Yes | Yes |
 | chat send / stream | — | No | No |
 | collections, workflows, models, file upload, voice, multimodal | — | No | No |
 
-Two known defects, both filed rather than papered over:
+The TypeScript package's request-contract corrections landed in #15528: it
+now matches the routes exactly (`sessions.list` sends `scope`/`team_id`,
+`knowledge.search` is a POST with a JSON body, `analytics.usage`/
+`performance` take no arguments, several responses are flat documents
+rather than envelopes) and the `/api` root every request needs, which it
+was missing entirely (#16495) -- the same defect #15053 already found once
+in the Python package. `repo_tests/sdk_ts_request_contract_test.py` pins
+both packages' requests against the same backend-derived oracle
+`sdk_request_url_test.py` uses for Python.
 
-* `agents.send_command` (both packages) targets `POST /api/agent/execute_command`,
-  which declares a `dict` body parameter alongside a `Form` field. FastAPI
-  therefore publishes it as form-encoded while requiring a field that can only
-  arrive as JSON, so **no client can call it** — every candidate body answers
-  422. The SDK half waits on the route being fixed.
-* The TypeScript package has not had the request-contract corrections the Python
-  package received (`sessions.list` still sends `limit`/`offset`,
-  `analytics.usage` still sends `period`, several flat responses are still
-  modelled as envelopes). Prefer the Python SDK until that lands.
+One known defect remains, filed rather than papered over: both packages'
+`send_command` used to target `POST /api/agent/execute_command` while it
+declared a `dict` body parameter alongside a `Form` field, so FastAPI
+published it as form-encoded while requiring a field that could only
+arrive as JSON -- every candidate body answered 422. Fixed on the route
+side (#15527); both SDKs already sent the right shape and needed no
+further change.
 
 ---
 
