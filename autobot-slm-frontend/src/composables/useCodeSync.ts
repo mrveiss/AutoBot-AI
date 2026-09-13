@@ -162,6 +162,37 @@ export type ScheduleRunResponse = components['schemas']['ScheduleRunResponse']
 export type DriftedFile = components['schemas']['DriftedFile']
 export type FileDriftReport = components['schemas']['FileDriftReport']
 
+// #16310 owner requirement (11 Sep 2026): "We need to have drift check for
+// all the files." GET /code-sync/drift/full
+// (autobot-slm-backend/api/full_tree_drift.py) is additive to the Issue
+// #2834 endpoint above -- every component, every file, one run, classified
+// into one of four verdicts (services/full_tree_drift.py's VERDICT_*
+// constants). Hand-written rather than sourced from `components['schemas']`:
+// this route is not yet in the generated OpenAPI contract.
+export interface FullTreeFileVerdict {
+  path: string
+  verdict: string
+  detail: string | null
+}
+
+export interface FullTreeComponentDrift {
+  component: string
+  compared: number
+  drifted: FullTreeFileVerdict[]
+  exclusions: Record<string, number>
+  error: string | null
+  skipped: boolean
+}
+
+export interface FullTreeDriftReport {
+  components: FullTreeComponentDrift[]
+  total_compared: number
+  total_drift: number
+  exclusions: Record<string, number>
+  checked_at: string
+  errors: string[]
+}
+
 // Issue #7149: Drift resolution types.
 // POST /api/code-sync/drift/resolve (autobot-slm-backend/models/schemas.py:1681).
 // Derived: the hand-written copy omitted `deps_changed` and `post_steps`
@@ -336,6 +367,15 @@ export function useCodeSync() {
   const error = ref<string | null>(null)
   const lastRefresh = ref<Date | null>(null)
   const driftReport = ref<FileDriftReport | null>(null) // Issue #2834
+  const fullTreeDriftReport = ref<FullTreeDriftReport | null>(null) // #16310
+  // #16310 review round 6, item 4 (medium): a DEDICATED error ref, not the
+  // shared `error` above. That shared ref is written by every other method
+  // in this composable -- an unrelated fetchStatus()/refreshVersion()
+  // success elsewhere on the page would silently clear a genuine full-tree
+  // drift failure (the stale report would then read as "no drift" with no
+  // visible error), and the reverse (an unrelated page error showing up on
+  // this panel) was the original bug. FullTreeDriftPanel.vue reads this one.
+  const fullTreeDriftError = ref<string | null>(null) // #16310
 
   // =============================================================================
   // Computed Properties
@@ -762,6 +802,28 @@ export function useCodeSync() {
   }
 
   /**
+   * Fetch the full-tree drift report -- every deployed component, every
+   * file, one verdict each (#16310 owner requirement, additive to
+   * `fetchDrift()` above; the old single-component endpoint and its
+   * response shape are completely untouched).
+   */
+  async function fetchFullTreeDrift(): Promise<FullTreeDriftReport | null> {
+    loading.value = true
+    fullTreeDriftError.value = null
+
+    try {
+      const data: FullTreeDriftReport = await slmApiClient.get('/code-sync/drift/full')
+      fullTreeDriftReport.value = data
+      return data
+    } catch (e) {
+      fullTreeDriftError.value = e instanceof Error ? e.message : 'Failed to fetch full-tree drift report'
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
    * Resync a component from code_source/ to /opt/autobot/<component>/ (#7149).
    *
    * Drives the same local rsync used by SLM self-sync. Used by CodeSyncView's
@@ -868,6 +930,8 @@ export function useCodeSync() {
     error: readonly(error),
     lastRefresh: readonly(lastRefresh),
     driftReport: readonly(driftReport), // Issue #2834
+    fullTreeDriftReport: readonly(fullTreeDriftReport), // #16310
+    fullTreeDriftError: readonly(fullTreeDriftError), // #16310
 
     // Computed
     hasOutdatedNodes,
@@ -908,6 +972,7 @@ export function useCodeSync() {
 
     // Drift detection (Issue #2834) + resolution (#7149) + async job (#11303)
     fetchDrift,
+    fetchFullTreeDrift, // #16310
     resolveDrift,
     startResolveDriftAsync,
     getResolveDriftStatus,

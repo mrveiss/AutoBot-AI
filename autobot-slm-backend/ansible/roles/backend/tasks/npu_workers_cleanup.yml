@@ -1,0 +1,66 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #16310 AC4: the pre-fix cwd-relative NPUWorkerManager default (fixed in
+# NPUWorkerManager.__init__'s config_file default, covered by
+# tests/test_npu_config_path_not_cwd_relative.py) wrote the live worker
+# registry to a NESTED {{ backend_code_dir }}/autobot-backend/config/
+# npu_workers.yaml on any host that once started the service from the wrong
+# cwd. That nested copy is neither source (nothing under autobot-backend/ in
+# the repo ships a nested autobot-backend/, so the #16310 deletion plan never
+# sees it) nor the live registry -- the service always reads/writes the
+# canonical {{ backend_code_dir }}/config/npu_workers.yaml now. It is a
+# leftover duplicate. Removed ONLY while still byte-identical to the
+# canonical file, so a host where the two have since diverged is left alone
+# and reported, never silently overwritten or deleted.
+#
+# Split into its own task file (#16310 review, reachability): the codesync
+# update path (update-all-nodes.yml PLAY 2) never runs roles/backend's
+# main.yml -- it applies backend via targeted `include_role ... tasks_from`
+# includes only (the #12959 delivery contract, see
+# tests/test_update_all_applies_roles_12959.py). A task that lived only in
+# main.yml was provisioning-only and inert on every host updated through the
+# builtin updater. This file is included from BOTH main.yml (provisioning:
+# site.yml, provision-fleet-roles.yml Phase 4a) and PLAY 2 here
+# (`tasks_from: npu_workers_cleanup`, update path) -- one task file, two
+# callers, same #12871/#12777 pattern env_only.yml/unit_only.yml already use.
+---
+- name: "Backend | Stat nested legacy npu_workers.yaml duplicate (#16310)"
+  ansible.builtin.stat:
+    path: "{{ backend_code_dir }}/autobot-backend/config/npu_workers.yaml"
+    checksum_algorithm: sha256
+  register: _npu_legacy_nested_stat
+  tags: ['backend', 'deploy']
+
+- name: "Backend | Stat canonical npu_workers.yaml (#16310)"
+  ansible.builtin.stat:
+    path: "{{ backend_code_dir }}/config/npu_workers.yaml"
+    checksum_algorithm: sha256
+  register: _npu_legacy_canonical_stat
+  when: _npu_legacy_nested_stat.stat.exists
+  tags: ['backend', 'deploy']
+
+- name: "Backend | Remove nested npu_workers.yaml duplicate (byte-identical only) (#16310)"
+  ansible.builtin.file:
+    path: "{{ backend_code_dir }}/autobot-backend/config/npu_workers.yaml"
+    state: absent
+  when:
+    - _npu_legacy_nested_stat.stat.exists
+    - _npu_legacy_canonical_stat.stat.exists | default(false)
+    - _npu_legacy_nested_stat.stat.checksum == _npu_legacy_canonical_stat.stat.checksum
+  tags: ['backend', 'deploy']
+
+- name: "Backend | REFUSING to remove nested npu_workers.yaml — checksum mismatch (#16310)"
+  ansible.builtin.debug:
+    msg: >-
+      {{ backend_code_dir }}/autobot-backend/config/npu_workers.yaml is a
+      legacy nested duplicate but does not match the canonical
+      {{ backend_code_dir }}/config/npu_workers.yaml (or the canonical file
+      is missing). Left in place, not removed (#16310).
+  when:
+    - _npu_legacy_nested_stat.stat.exists
+    - not (_npu_legacy_canonical_stat.stat.exists | default(false)) or
+      (_npu_legacy_nested_stat.stat.checksum != _npu_legacy_canonical_stat.stat.checksum)
+  tags: ['backend', 'deploy']

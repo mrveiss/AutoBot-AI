@@ -1609,6 +1609,30 @@
     "stoppingRedisWillInterrupt": "Stopping Redis will interrupt all active connections and may cause data loss for\n            in-flight operations. AutoBot services will become unavailable until Redis is restarted.",
     "uptime": "Uptime"
   },
+  "fullTreeDriftPanel": {
+    "buildBundleCount": "{count} build bundle file(s) — expected, retained per SLM_FRONTEND_RELEASE_KEEP",
+    "checkAllFiles": "Check All Files",
+    "checkedAt": "Checked {value}",
+    "checking": "Checking…",
+    "description": "Every deployed file, every component, one run — what the updater will remove on the next sync vs. what it always leaves alone",
+    "filter": {
+      "all": "All",
+      "build_bundle": "Build bundle",
+      "host_state": "Host state",
+      "modified": "Modified",
+      "removed_from_source": "Removed from source"
+    },
+    "filterByVerdict": "Filter by verdict",
+    "filesCompared": "{count} file(s) compared",
+    "hostStateCategory": "{category}: {count} file(s)",
+    "noDrift": "No drift — nothing to remove or report",
+    "noReportYet": "No report yet — click \"Check All Files\" to run a full-tree drift check",
+    "removedAtCommit": "removed from source at {commit}",
+    "skipped": "Not deployed on this host",
+    "title": "Full-Tree Drift Check",
+    "totalCompared": "{count} compared",
+    "totalDrift": "{count} drifted"
+  },
   "replicationView": {
     "actions": "Actions",
     "active": "Active",

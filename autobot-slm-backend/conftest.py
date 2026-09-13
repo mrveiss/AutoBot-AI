@@ -226,6 +226,16 @@ _EXTRA_SERVICE_MODULES = (
     "services.service_restart",
     "services.tls_credentials",
     "services.vnc_credentials",
+    # #16310: api/full_tree_drift.py imports this at module scope, and
+    # api/code_sync.py imports api/full_tree_drift.py unconditionally at the
+    # bottom of the file to register its route -- so every test collecting
+    # api.code_sync needs services.full_tree_drift resolvable, even though the
+    # AST scan above (which only reads code_sync.py/setup_wizard.py directly)
+    # never sees it. Its own real coroutines are exercised by
+    # tests/services/full_tree_drift_test.py's self-contained real-load
+    # (#16310 review round 10: moved out of services/ itself, see that
+    # file's module docstring), not here.
+    "services.full_tree_drift",
 )
 
 # Parent package first so each child stub binds onto it (see _stub docstring).

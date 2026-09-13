@@ -447,7 +447,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 675,
     "autobot-slm-backend/api/code_source.py": 720,
-    "autobot-slm-backend/api/code_sync.py": 6094,  # #15881: stage-log restore and version gate moved to _resume_plan.py
+    "autobot-slm-backend/api/code_sync.py": 6084,  # #16310: deletion planning moved to services/sync_deletions.py
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
     "autobot-slm-backend/api/monitoring.py": 1087,
@@ -517,6 +517,7 @@ KNOWN_LARGE: dict[str, int] = {
     "pipeline-scripts/detect-hardcoded-values_test.py": 653,
     "repo_tests/ci_dispatch_watchdog_test.py": 1283,
     "repo_tests/enum_union_guard_test.py": 801,
+    "repo_tests/sync_deletions_ansible_wiring_16310_test.py": 674,  # #16310
     "repo_tests/sys_modules_leak_guard.py": 1164,
     "scripts/audit_api_wiring.py": 897,
 }

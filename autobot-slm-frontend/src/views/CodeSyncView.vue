@@ -32,6 +32,7 @@ import { formatDateTime } from '@/composables/useTimezone'
 import { getCommitHashDisplay, getCommitUrl } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import CodeSourceModal from '@/components/CodeSourceModal.vue'
+import FullTreeDriftPanel from '@/components/FullTreeDriftPanel.vue' // #16310
 import { useCodeSource } from '@/composables/useCodeSource'
 
 const logger = createLogger('CodeSyncView')
@@ -1578,6 +1579,12 @@ onUnmounted(() => {
       <div v-else class="text-sm text-gray-400">
         {{ $t('codeSyncView.clickCheckDriftTo') }}
       </div>
+    </div>
+
+    <!-- Full-Tree Drift Check (#16310 owner requirement) — additive to the
+         per-component card above; independent state, independent endpoint. -->
+    <div class="mb-6">
+      <FullTreeDriftPanel />
     </div>
 
     <!-- Error Display -->
