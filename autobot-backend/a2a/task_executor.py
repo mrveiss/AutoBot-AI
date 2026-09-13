@@ -28,6 +28,26 @@ from .types import TaskArtifact, TaskState
 logger = get_logger(__name__)
 
 
+async def _is_cancelled(task_id: str, manager) -> bool:
+    """True once `task_id` has moved to CANCELLED underneath a running executor.
+
+    Checked at defined points inside `_execute_claimed` (#16174) -- never
+    inside a single call into the orchestrator, which this cannot interrupt
+    once it has started. Cancelling stops the NEXT checkpoint from doing more
+    work; it does not abort work already in flight.
+    """
+    task = manager.get_task(task_id)
+    return task is not None and task.status.state == TaskState.CANCELLED
+
+
+async def _abort_if_cancelled(task_id: str, manager, where: str) -> bool:
+    """A checkpoint: log and return True once cancellation should stop more work."""
+    if await _is_cancelled(task_id, manager):
+        logger.info("A2A task %s cancelled %s; no further work performed", task_id, where)
+        return True
+    return False
+
+
 def _extract_response_text(result: Dict[str, Any]) -> str:
     """Pull the human-readable response from an orchestrator result dict.
 
@@ -361,12 +381,23 @@ async def _execute_claimed(
     peer_id: str | None,
     manager,
 ) -> None:
-    """The original execution body, unchanged, now inside the task's claims."""
+    """The original execution body, now with cooperative-cancellation checkpoints (#16174).
+
+    A cancelled task's executor cannot be interrupted mid-call -- `cancel_task`
+    only flips a state in Redis -- so each checkpoint below only ever stops
+    the NEXT step from starting. `hold_scopes`'s `finally` releases the claim
+    as soon as this function returns, at whichever checkpoint that is.
+    """
     try:
+        if await _abort_if_cancelled(task_id, manager, "before scrub"):
+            return
         scrubbed = _scrub_inbound(task_id, input_text, peer_id, manager)
         if scrubbed is None:
             return
         input_text = scrubbed
+
+        if await _abort_if_cancelled(task_id, manager, "before orchestration"):
+            return
 
         # Late import to avoid circular deps at module load time
         from agents.agent_orchestration import get_distributed_agent_coordinator
@@ -376,6 +407,9 @@ async def _execute_claimed(
             input_text,
             context=context,
         )
+
+        if await _abort_if_cancelled(task_id, manager, "after orchestration"):
+            return
 
         artifacts = _store_response_artifacts(task_id, result, peer_id, manager)
         if artifacts is None:

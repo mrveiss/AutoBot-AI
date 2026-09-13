@@ -84,10 +84,11 @@ async def _renew_forever(scopes: Sequence[str], *, agent_id: str, task_id: str, 
     TTL, which bounds a cancelled task's hold without ever unlocking a scope
     while work continues.
 
-    That is a bound, not a release, and #15950's cancellation criterion is left
-    unticked because of it. Cooperative cancellation in the executor is the real
-    fix (#16174); this path stays afterwards as the backstop for an executor
-    wedged before it reaches any checkpoint.
+    That is a bound, not a release -- which is why #16174 made `execute_a2a_task`
+    check for cancellation at defined checkpoints and stop there instead of
+    relying on this loop alone. This path remains as the backstop for an
+    executor wedged before it reaches any checkpoint: cooperative cancellation
+    covers the common case, this covers the one it structurally cannot.
     """
     from autobot_shared.coordination.work_claims import renew
 
