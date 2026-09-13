@@ -239,8 +239,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
+import { withTimeout } from '@/utils/withTimeout'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
@@ -262,6 +263,13 @@ interface WorkflowStep {
   explanation?: string
 }
 
+/**
+ * One of the parent's actions. It may return a value, return a promise, or
+ * throw. The modal reports success only once the action has settled
+ * successfully, and shows the failure otherwise (#16285).
+ */
+type ModalAction = () => unknown
+
 interface Props {
   showReconnectModal: boolean
   showCommandConfirmation: boolean
@@ -272,21 +280,21 @@ interface Props {
   pendingCommandReasons: string[]
   runningProcesses: ProcessInfo[]
   pendingWorkflowStep: WorkflowStep | null
+  reconnectAction: ModalAction
+  executeCommandAction: ModalAction
+  emergencyKillAction: ModalAction
+  confirmStepAction: ModalAction
+  skipStepAction: ModalAction
+  manualControlAction: ModalAction
 }
 
 interface Emits {
   (e: 'hide-reconnect-modal'): void
-  (e: 'reconnect'): void
   (e: 'cancel-command'): void
-  (e: 'execute-confirmed-command'): void
   (e: 'cancel-kill'): void
-  (e: 'confirm-emergency-kill'): void
-  (e: 'confirm-workflow-step'): void
-  (e: 'skip-workflow-step'): void
-  (e: 'take-manual-control'): void
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 // Loading states
@@ -324,11 +332,34 @@ const clearMessages = () => {
   workflowSuccess.value = ''
 }
 
+// Pending auto-hide timers, one per message slot (#16315). A new message in a
+// slot cancels that slot's pending timer, so an earlier timer can't blank a
+// later message; onBeforeUnmount clears whatever is still pending.
+const autoHideTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+const scheduleAutoHide = (slotKey: string, setter: (msg: string) => void, delayMs: number) => {
+  const pending = autoHideTimers.get(slotKey)
+  if (pending) clearTimeout(pending)
+
+  autoHideTimers.set(
+    slotKey,
+    setTimeout(() => {
+      setter('')
+      autoHideTimers.delete(slotKey)
+    }, delayMs),
+  )
+}
+
+onBeforeUnmount(() => {
+  for (const timer of autoHideTimers.values()) clearTimeout(timer)
+  autoHideTimers.clear()
+})
+
 // Standard error handler
-const handleError = (error: unknown, setter: (msg: string) => void) => {
+const handleError = (error: unknown, setter: (msg: string) => void, slot: string) => {
   logger.error('Terminal modal error:', error)
 
-  let errorMessage = 'An unexpected error occurred'
+  let errorMessage = t('terminal.modals.unexpectedError')
 
   const err = error as {
     message?: string
@@ -340,11 +371,11 @@ const handleError = (error: unknown, setter: (msg: string) => void) => {
   } else if (err?.response?.data?.detail) {
     errorMessage = err.response!.data!.detail!
   } else if (err?.response?.status === 408) {
-    errorMessage = 'Request timed out. Please try again.'
+    errorMessage = t('terminal.modals.requestTimedOut')
   } else if (err?.response?.status === 500) {
-    errorMessage = 'Server error. Please try again later.'
+    errorMessage = t('terminal.modals.serverError')
   } else if (err?.response?.status === 404) {
-    errorMessage = 'Service not found. Please check your connection.'
+    errorMessage = t('terminal.modals.serviceNotFound')
   } else if (typeof error === 'string') {
     errorMessage = error
   }
@@ -352,81 +383,72 @@ const handleError = (error: unknown, setter: (msg: string) => void) => {
   setter(errorMessage)
 
   // Auto-hide error after 10 seconds
-  setTimeout(() => {
-    setter('')
-  }, 10000)
+  scheduleAutoHide(`${slot}-error`, setter, 10000)
 }
 
 // Standard success handler
-const handleSuccess = (message: string, setter: (msg: string) => void) => {
+const handleSuccess = (message: string, setter: (msg: string) => void, slot: string) => {
   setter(message)
 
   // Auto-hide success after 5 seconds
-  setTimeout(() => {
-    setter('')
-  }, 5000)
+  scheduleAutoHide(`${slot}-success`, setter, 5000)
 }
 
-// Enhanced action handlers with error handling and loading states
-const handleReconnect = async () => {
-  if (isReconnecting.value) return
+interface ActionRun {
+  busy: Ref<boolean>
+  action: ModalAction
+  timeoutMs: number
+  timeoutKey: string
+  successKey: string
+  setError: (msg: string) => void
+  setSuccess: (msg: string) => void
+  // Auto-hide timer identity (#16315) — distinguishes this run's error/success
+  // message slots from the other three action families'.
+  slot: string
+}
+
+// Runs a parent action against its deadline. A rejection, or a synchronous
+// throw, is shown as the error; success is reported only after the action
+// settles. withTimeout clears the deadline's timer either way.
+const runAction = async (run: ActionRun) => {
+  if (run.busy.value) return
 
   clearMessages()
-  isReconnecting.value = true
+  run.busy.value = true
 
   try {
-    // Create timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Reconnection timed out')), RECONNECT_TIMEOUT)
-    })
-
-    // Create reconnection promise
-    const reconnectPromise = new Promise<void>((resolve) => {
-      emit('reconnect')
-      // Simulate async operation
-      setTimeout(resolve, 1000)
-    })
-
-    await Promise.race([reconnectPromise, timeoutPromise])
-
-    handleSuccess('Successfully reconnected to terminal', (msg) => connectionSuccess.value = msg)
-
+    await withTimeout(Promise.resolve().then(run.action), run.timeoutMs, t(run.timeoutKey))
+    handleSuccess(t(run.successKey), run.setSuccess, run.slot)
   } catch (error) {
-    handleError(error, (msg) => connectionError.value = msg)
+    handleError(error, run.setError, run.slot)
   } finally {
-    isReconnecting.value = false
+    run.busy.value = false
   }
 }
 
-const handleExecuteCommand = async () => {
-  if (isExecutingCommand.value) return
+const handleReconnect = () =>
+  runAction({
+    busy: isReconnecting,
+    action: props.reconnectAction,
+    timeoutMs: RECONNECT_TIMEOUT,
+    timeoutKey: 'terminal.modals.reconnectTimedOut',
+    successKey: 'terminal.modals.reconnectSucceeded',
+    setError: (msg) => (connectionError.value = msg),
+    setSuccess: (msg) => (connectionSuccess.value = msg),
+    slot: 'connection',
+  })
 
-  clearMessages()
-  isExecutingCommand.value = true
-
-  try {
-    // Create timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Command execution timed out')), COMMAND_TIMEOUT)
-    })
-
-    // Create execution promise
-    const executePromise = new Promise<void>((resolve) => {
-      emit('execute-confirmed-command')
-      // Simulate async operation
-      setTimeout(resolve, 1500)
-    })
-
-    await Promise.race([executePromise, timeoutPromise])
-
-    handleSuccess('Command executed successfully', (msg) => commandSuccess.value = msg)
-
-  } catch (error) {
-    handleError(error, (msg) => commandError.value = msg)
-  } finally {
-    isExecutingCommand.value = false
-  }
-}
+const handleExecuteCommand = () =>
+  runAction({
+    busy: isExecutingCommand,
+    action: props.executeCommandAction,
+    timeoutMs: COMMAND_TIMEOUT,
+    timeoutKey: 'terminal.modals.commandTimedOut',
+    successKey: 'terminal.modals.commandSent',
+    setError: (msg) => (commandError.value = msg),
+    setSuccess: (msg) => (commandSuccess.value = msg),
+    slot: 'command',
+  })
 
 const cancelCommand = () => {
   if (isExecutingCommand.value) return
@@ -434,35 +456,17 @@ const cancelCommand = () => {
   emit('cancel-command')
 }
 
-const handleEmergencyKill = async () => {
-  if (isKillingProcesses.value) return
-
-  clearMessages()
-  isKillingProcesses.value = true
-
-  try {
-    // Create timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Process termination timed out')), KILL_TIMEOUT)
-    })
-
-    // Create kill promise
-    const killPromise = new Promise<void>((resolve) => {
-      emit('confirm-emergency-kill')
-      // Simulate async operation
-      setTimeout(resolve, 2000)
-    })
-
-    await Promise.race([killPromise, timeoutPromise])
-
-    handleSuccess('All processes terminated successfully', (msg) => killSuccess.value = msg)
-
-  } catch (error) {
-    handleError(error, (msg) => killError.value = msg)
-  } finally {
-    isKillingProcesses.value = false
-  }
-}
+const handleEmergencyKill = () =>
+  runAction({
+    busy: isKillingProcesses,
+    action: props.emergencyKillAction,
+    timeoutMs: KILL_TIMEOUT,
+    timeoutKey: 'terminal.modals.killTimedOut',
+    successKey: 'terminal.modals.killSent',
+    setError: (msg) => (killError.value = msg),
+    setSuccess: (msg) => (killSuccess.value = msg),
+    slot: 'kill',
+  })
 
 const cancelKill = () => {
   if (isKillingProcesses.value) return
@@ -470,101 +474,43 @@ const cancelKill = () => {
   emit('cancel-kill')
 }
 
-const handleConfirmWorkflowStep = async () => {
+// The three workflow-step actions share one busy flag; lastWorkflowAction says
+// which button shows the spinner.
+const runWorkflowAction = async (
+  kind: 'execute' | 'skip' | 'manual',
+  action: ModalAction,
+  timeoutKey: string,
+  successKey: string,
+) => {
   if (isProcessingWorkflow.value) return
 
-  clearMessages()
-  isProcessingWorkflow.value = true
-  lastWorkflowAction.value = 'execute'
-
-  try {
-    // Create timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Workflow step execution timed out')), WORKFLOW_TIMEOUT)
-    })
-
-    // Create workflow promise
-    const workflowPromise = new Promise<void>((resolve) => {
-      emit('confirm-workflow-step')
-      // Simulate async operation
-      setTimeout(resolve, 1200)
-    })
-
-    await Promise.race([workflowPromise, timeoutPromise])
-
-    handleSuccess('Workflow step executed successfully', (msg) => workflowSuccess.value = msg)
-
-  } catch (error) {
-    handleError(error, (msg) => workflowError.value = msg)
-  } finally {
-    isProcessingWorkflow.value = false
-    lastWorkflowAction.value = null
-  }
+  lastWorkflowAction.value = kind
+  await runAction({
+    busy: isProcessingWorkflow,
+    action,
+    timeoutMs: WORKFLOW_TIMEOUT,
+    timeoutKey,
+    successKey,
+    setError: (msg) => (workflowError.value = msg),
+    setSuccess: (msg) => (workflowSuccess.value = msg),
+    slot: 'workflow',
+  })
+  lastWorkflowAction.value = null
 }
 
-const handleSkipWorkflowStep = async () => {
-  if (isProcessingWorkflow.value) return
+const handleConfirmWorkflowStep = () =>
+  runWorkflowAction('execute', props.confirmStepAction, 'terminal.modals.stepTimedOut', 'terminal.modals.stepSent')
 
-  clearMessages()
-  isProcessingWorkflow.value = true
-  lastWorkflowAction.value = 'skip'
+const handleSkipWorkflowStep = () =>
+  runWorkflowAction('skip', props.skipStepAction, 'terminal.modals.skipTimedOut', 'terminal.modals.stepSkipped')
 
-  try {
-    // Create timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Workflow step skip timed out')), WORKFLOW_TIMEOUT)
-    })
-
-    // Create skip promise
-    const skipPromise = new Promise<void>((resolve) => {
-      emit('skip-workflow-step')
-      // Simulate async operation
-      setTimeout(resolve, 800)
-    })
-
-    await Promise.race([skipPromise, timeoutPromise])
-
-    handleSuccess('Workflow step skipped successfully', (msg) => workflowSuccess.value = msg)
-
-  } catch (error) {
-    handleError(error, (msg) => workflowError.value = msg)
-  } finally {
-    isProcessingWorkflow.value = false
-    lastWorkflowAction.value = null
-  }
-}
-
-const handleTakeManualControl = async () => {
-  if (isProcessingWorkflow.value) return
-
-  clearMessages()
-  isProcessingWorkflow.value = true
-  lastWorkflowAction.value = 'manual'
-
-  try {
-    // Create timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Manual control transition timed out')), WORKFLOW_TIMEOUT)
-    })
-
-    // Create manual control promise
-    const manualPromise = new Promise<void>((resolve) => {
-      emit('take-manual-control')
-      // Simulate async operation
-      setTimeout(resolve, 1000)
-    })
-
-    await Promise.race([manualPromise, timeoutPromise])
-
-    handleSuccess('Manual control activated successfully', (msg) => workflowSuccess.value = msg)
-
-  } catch (error) {
-    handleError(error, (msg) => workflowError.value = msg)
-  } finally {
-    isProcessingWorkflow.value = false
-    lastWorkflowAction.value = null
-  }
-}
+const handleTakeManualControl = () =>
+  runWorkflowAction(
+    'manual',
+    props.manualControlAction,
+    'terminal.modals.manualControlTimedOut',
+    'terminal.modals.manualControlTaken',
+  )
 </script>
 
 <style scoped>
