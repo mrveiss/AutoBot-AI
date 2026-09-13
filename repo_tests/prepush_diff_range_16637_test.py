@@ -176,3 +176,28 @@ def test_no_merge_base_on_an_existing_branch_falls_back_to_the_old_range(tmp_pat
     # No merge base exists, remote_sha is not ZERO, so the last-resort fallback
     # (the old two-dot range) must still produce a result rather than skip.
     assert changed == {"orphan_b.txt"}, f"expected the last-resort remote_sha..local_sha fallback, got {changed}"
+
+
+def test_no_merge_base_on_a_first_push_still_warns_and_skips(tmp_path: Path) -> None:
+    """The one case Phase 0c must still skip entirely: a first push with no
+    merge base at all -- the original, unchanged first-push fallback chain."""
+    repo = _init_repo(tmp_path)
+    _set_origin_main(repo, _sha(repo, "HEAD"))
+
+    # Same orphan setup as the existing-branch case, but pushed as if for the
+    # first time (remote_sha is the all-zero sentinel).
+    _git(repo, "switch", "--quiet", "--orphan", "detached2")
+    local_sha = _commit(repo, "orphan_first_push.txt", "orphan branch, first push")
+
+    zero = "0" * 40
+    result = _run_phase_0c(repo, local_sha=local_sha, remote_sha=zero)
+    assert result.returncode == 0, f"harness failed:\n{result.stdout}\n{result.stderr}"
+
+    assert (
+        "DIFF_RANGE=<unset>" in result.stdout
+    ), f"expected Phase 0c to skip without ever setting diff_range, got:\n{result.stdout}"
+    assert (
+        "Cannot determine merge base" in result.stderr
+    ), f"expected the original warn-and-skip message, got:\n{result.stderr}"
+    changed = _changed_files(result)
+    assert changed == set(), f"expected no changed files reported when Phase 0c skips outright, got {changed}"
