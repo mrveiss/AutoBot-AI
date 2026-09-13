@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from autobot_shared.scoping import ScopeLevel
 from knowledge.claude_memory_importer import (
     MemoryParseError,
     MemoryWriteError,
@@ -23,7 +24,7 @@ from knowledge.claude_memory_importer import (
     iter_memory_files,
     parse_memory_file,
 )
-from knowledge.ownership import KnowledgeOwnership
+from knowledge.ownership import AccessLevel, KnowledgeOwnership
 
 _OWNER = "admin-test-user"
 
@@ -425,6 +426,30 @@ def test_fact_metadata_sets_owner_and_private_system_visibility():
     assert metadata["owner_id"] == _OWNER
     assert metadata["visibility"] == "private"
     assert metadata["access_level"] == "system"
+
+
+def test_fact_metadata_access_level_and_visibility_are_distinct_enums():
+    """#16642 security review, round 3: access_level and visibility both
+    have a member literally named SYSTEM, in two different enums with two
+    different meanings — knowledge.ownership.AccessLevel.SYSTEM ("scoped by
+    visibility", grants nothing on its own) vs.
+    autobot_shared.scoping.ScopeLevel.SYSTEM ("platform-wide, accessible to
+    all authenticated users"). Proves this importer sets the former for
+    access_level and ScopeLevel.PRIVATE — not ScopeLevel.SYSTEM — for
+    visibility, so the "accessible to all authenticated users" meaning is
+    never in play for imported facts.
+    """
+    metadata = _fact_metadata(_sample_memory(), _OWNER)
+
+    assert AccessLevel(metadata["access_level"]) is AccessLevel.SYSTEM
+    assert ScopeLevel(metadata["visibility"]) is ScopeLevel.PRIVATE
+    assert ScopeLevel(metadata["visibility"]) is not ScopeLevel.SYSTEM
+
+    # access_level=SYSTEM must NOT be one of the two values
+    # _check_access_level_grants auto-grants on (GENERAL, AUTOBOT) — those
+    # are the only two that skip the visibility check entirely.
+    assert metadata["access_level"] != AccessLevel.GENERAL
+    assert metadata["access_level"] != AccessLevel.AUTOBOT
 
 
 async def test_imported_fact_metadata_is_honoured_by_ownership_check_access():
