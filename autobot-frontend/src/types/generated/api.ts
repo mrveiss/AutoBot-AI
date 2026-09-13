@@ -9046,7 +9046,8 @@ export interface paths {
          * Import Claude Memory Endpoint
          * @description Queue import of Claude Code auto-memory files into knowledge_facts (#16642).
          *
-         *     Body (optional): ``memory_dir`` — override the configured memory directory.
+         *     Always imports from the configured memory directory (#16642 security
+         *     review: no caller-supplied path — nothing to confine or validate).
          *     Returns immediately with task_id. Use /import_claude_memory/status/{task_id} to poll.
          */
         post: operations["import_claude_memory_endpoint_api_knowledge_base_import_claude_memory_post"];
@@ -115730,13 +115731,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -115745,15 +115740,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskQueuedResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
