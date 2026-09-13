@@ -41,7 +41,7 @@ class SyncNodeContext:
         self.target_path: str = ""
         self.post_sync_cmd: str | None = None
         self.auto_restart: bool = False
-        self.systemd_service: str | None = None
+        self.systemd_service: list[str] | None = None  # #16025: a role can own >1 unit
 
 
 # Code cache directory
@@ -246,7 +246,7 @@ class SyncOrchestrator:
 
         try:
             ssh_cmd = build_ssh_base_cmd(ctx.node_ip, ctx.node_user, ctx.node_port, SSH_KEY_PATH)
-            ssh_cmd.append(f"sudo systemctl restart {ctx.systemd_service}")
+            ssh_cmd.append(f"sudo systemctl restart {' '.join(ctx.systemd_service)}")  # #16025: >1 unit, one call
 
             proc = await asyncio.create_subprocess_exec(
                 *ssh_cmd,
@@ -254,7 +254,7 @@ class SyncOrchestrator:
                 stderr=asyncio.subprocess.STDOUT,
             )
             await asyncio.wait_for(proc.communicate(), timeout=60)
-            logger.info("Restarted %s on %s", ctx.systemd_service, node_id)
+            logger.info("Restarted %s on %s", " ".join(ctx.systemd_service), node_id)
         except Exception as e:
             logger.warning("Service restart failed: %s", e)
 

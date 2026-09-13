@@ -21,16 +21,19 @@ services:
     system_service: redis-stack-server
     start_order: 1
     user: redis
+    slm_roles: [redis]   # #16025: role_registry's separately-assignable "redis" role
   - name: autobot-database-postgres
     type: systemd
     system_service: postgresql
     start_order: 2
     user: postgres
+    slm_roles: [postgres]   # #16025: role_registry's separately-assignable "postgres" role
   - name: autobot-chromadb
     type: systemd
     unit_file: autobot-chromadb.service
     start_order: 3
     user: autobot
+    slm_roles: [chromadb]   # #16025: role_registry's separately-assignable "chromadb" role
 
 ports:
   - port: 6379

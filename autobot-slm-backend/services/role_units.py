@@ -23,10 +23,16 @@ from services.role_registry import DEFAULT_ROLES
 
 
 def systemd_unit_for_role(role_name: str) -> str | None:
-    """The `systemd_service` a role declares, or None."""
+    """The `systemd_service` a role declares, or None.
+
+    #16025: systemd_service is now a sequence (a role can own more than one
+    unit). Every current caller (REDIS_UNIT, a single systemctl target) wants
+    exactly one, so this returns the first.
+    """
     for role in DEFAULT_ROLES:
         if role.get("name") == role_name:
-            return role.get("systemd_service") or None
+            units = role.get("systemd_service") or []
+            return units[0] if units else None
     return None
 
 

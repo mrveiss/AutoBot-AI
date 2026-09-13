@@ -1231,12 +1231,12 @@ async def mark_dependency_for_removal(
 
 
 async def _get_role_service_and_path(db: AsyncSession, role_name: str) -> tuple[str | None, str | None]:
-    """Look up the systemd service name and target path for a role."""
+    """Look up the systemd service name and target path for a role (first unit, #16025)."""
     result = await db.execute(select(Role.systemd_service, Role.target_path).where(Role.name == role_name))
     row = result.one_or_none()
     if row is None:
         return None, None
-    return row[0], row[1]
+    return (row[0][0] if row[0] else None), row[1]
 
 
 async def _run_role_removal(
