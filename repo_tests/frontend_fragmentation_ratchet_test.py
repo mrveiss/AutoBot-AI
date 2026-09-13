@@ -87,11 +87,14 @@ BASELINE = {
     # `.vue` components carrying their own <style> rules. Target is a small
     # number of shared stylesheets, not 381 components each with a private
     # copy of the design system.
-    "components_declaring_styles": 381,
+    # #16460: +1 for ChatCollaborationPanel.vue, a genuinely new component.
+    "components_declaring_styles": 382,
     # Distinct class names declared anywhere in the frontend.
-    "distinct_class_names": 5619,
+    # #16460: +1 from ChatCollaborationPanel.vue's own styles.
+    "distinct_class_names": 5620,
     # Total CSS rule declarations.
-    "css_rule_declarations": 9401,
+    # #16460: +2 from ChatCollaborationPanel.vue's own styles.
+    "css_rule_declarations": 9403,
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
     "button_definition_files": 101,
