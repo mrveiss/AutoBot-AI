@@ -35,12 +35,28 @@ _ORIG_GET_CURRENT_USER = execution_snapshots_module.get_current_user
 _ORIG_GET_DOCKER_BACKEND = execution_snapshots_module.get_docker_backend
 
 
+async def _current_user_delegate():
+    """Await the CURRENT module attribute (#13257).
+
+    ``get_current_user`` is a coroutine function on both the real module
+    (``auth_middleware.py:856``) and the conftest stub -- a bare
+    ``lambda: execution_snapshots_module.get_current_user()`` would hand
+    FastAPI an un-awaited coroutine as the "user" object instead of the
+    resolved dict, a silent wrong-type injection rather than a loud failure.
+    This stays ``async def`` so FastAPI awaits it, and still resolves the
+    module attribute at CALL time (not import time), so @patch on
+    ``api.execution_snapshots.get_current_user`` -- sync MagicMock or
+    AsyncMock alike -- is still effective (#11687).
+    """
+    return await execution_snapshots_module.get_current_user()
+
+
 @pytest.fixture
 def app():
     """Create FastAPI app with execution_snapshots router for testing."""
     app = FastAPI()
     app.include_router(execution_snapshots_router)
-    app.dependency_overrides[_ORIG_GET_CURRENT_USER] = lambda: execution_snapshots_module.get_current_user()
+    app.dependency_overrides[_ORIG_GET_CURRENT_USER] = _current_user_delegate
     app.dependency_overrides[_ORIG_GET_DOCKER_BACKEND] = lambda: execution_snapshots_module.get_docker_backend()
     return app
 

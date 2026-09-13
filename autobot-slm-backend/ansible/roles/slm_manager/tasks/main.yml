@@ -199,7 +199,7 @@
 # ==========================================================
 - name: "SLM | Sync SLM backend code from code_source"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-slm-backend/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend/"
     dest: "{{ slm_backend_dir }}/"
     rsync_opts:
       # Re-includes come first -- rsync applies the first matching rule, and
@@ -231,14 +231,16 @@
 # code-sync self-update skip-check (_get_slm_deployed_commit) reads what is
 # really deployed instead of code_source HEAD (which stage 2 of the update
 # pipeline already advances before this check runs).
-- name: "SLM | Record deployed commit marker (#12202)"
-  ansible.builtin.shell:
-    cmd: >-
-      git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}
-      -C {{ code_source_dir | default('/opt/autobot/code_source') }}
-      rev-parse HEAD
-      > {{ slm_backend_dir }}/.deployed_commit
-  changed_when: false
+#
+# #15557: the write is defined once, in
+# _shared/tasks/record_slm_deployed_commit.yml — four entry points install this
+# tree and only two of them recorded who did it.
+- name: "SLM | Record deployed commit marker (#12202, #15557)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/record_slm_deployed_commit.yml
+  vars:
+    deployed_commit_label: "SLM"
+    deployed_commit_dir: "{{ slm_backend_dir }}"
+    deployed_commit_owner: "{{ slm_user }}"
   tags: ['slm', 'backend', 'deploy']
 
 # ==========================================================
@@ -354,7 +356,12 @@
 # governed by slm_base_dir — no hardcoded /opt/autobot path (#10912).
 - name: "SLM | Symlink embedded autobot_shared to canonical SLM copy (#10912)"
   ansible.builtin.file:
-    src: "{{ slm_shared_dir }}"
+    # #13539/B4: was "{{ slm_shared_dir }}" (= {{ slm_base_dir }}/autobot_shared,
+    # absolute) -- escapes to the live tree under a relocated deploy root.
+    # slm_backend_dir and slm_shared_dir are always siblings under
+    # slm_base_dir (roles/slm_manager/defaults/main.yml), so the relative
+    # form resolves identically today and stays correct under a relocation.
+    src: ../autobot_shared
     dest: "{{ slm_backend_dir }}/autobot_shared"
     state: link
     force: true
@@ -420,11 +427,20 @@
     # consumer swallowed the failure — an absent store was indistinguishable
     # from "that secret does not exist". `load_root_key` base64-DECODES this and
     # requires exactly 32 bytes, so it is not interchangeable with the opaque
-    # 48-char secrets above: 32 chars b64-encoded decode back to 32 bytes.
+    # 48-char secrets above.
+    #
+    # #16405: the `lookup('password', ... chars=ascii_letters,digits')` this
+    # used to read only ever drew from 62 characters (~5.95 bits each), so the
+    # decoded key carried ~190 bits of entropy, not the 256 its length implied
+    # -- `load_root_key` cannot tell a weak key from a strong one, since both
+    # shapes decode to exactly 32 bytes. `openssl rand -base64 32` reads the 32
+    # bytes themselves from the OS CSPRNG, full byte range, then base64-encodes
+    # them; `replace` only maps the output alphabet to url-safe, same as every
+    # other generator here.
     autobot_secrets_root_key: >-
       {{ autobot_secrets_root_key
          if (autobot_secrets_root_key | default('') | trim | length > 0)
-         else (lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode) | replace('+', '-') | replace('/', '_') }}
+         else lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
@@ -525,7 +541,9 @@
   ansible.builtin.lineinfile:
     path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
     regexp: "^AUTOBOT_SECRETS_ROOT_KEY="
-    line: "AUTOBOT_SECRETS_ROOT_KEY={{ (lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode) | replace('+', '-') | replace('/', '_') }}"
+    # #16405: same fix as the set_fact generator above -- 32 random bytes from
+    # openssl rand, not 32 characters from a password lookup.
+    line: "AUTOBOT_SECRETS_ROOT_KEY={{ lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}"
     create: false
   when:
     - slm_secrets_stat.stat.exists
@@ -696,21 +714,12 @@
 # Must run BEFORE frontend builds so VITE_API_URL is correct.
 # Auto-detect: if the user frontend code exists on this host,
 # enable co-located mode (SLM at /slm, user frontend at /).
+# #15610: the detection itself lives in colocated_frontend_detect.yml, because
+# tasks/nginx_site.yml needs the same flag before rendering the site config.
 # ==========================================================
   become: true
-- name: "SLM | Detect co-located user frontend (#3013)"
-  ansible.builtin.stat:
-    path: "{{ frontend_dist_dir | dirname }}/package.json"
-  register: _colocated_frontend_check
-  tags: ['slm', 'frontend', 'nginx']
-
-- name: "SLM | Set co-located frontend flag (#3013)"
-  ansible.builtin.set_fact:
-    slm_colocated_frontend: >-
-      {{
-        (slm_colocated_frontend | default(false) | bool) or
-        (_colocated_frontend_check.stat.exists | default(false) | bool)
-      }}
+- name: "SLM | Detect co-located mode before the frontend build (#3013)"
+  ansible.builtin.include_tasks: colocated_frontend_detect.yml
   tags: ['slm', 'frontend', 'nginx']
 
 # ==========================================================
@@ -724,7 +733,7 @@
 # and Vite's rolldown bundler fails to resolve the import at build time.
 - name: "SLM | Sync autobot-plugins from code_source (MVA-893)"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-plugins/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-plugins/"
     dest: "{{ slm_base_dir }}/autobot-plugins/"
     rsync_opts:
       - "--exclude=node_modules"
@@ -752,7 +761,7 @@
 # bundler fails to resolve the import at build time (same failure mode as MVA-893).
 - name: "SLM | Sync libs (shared @autobot/ui kit) from code_source (#10750 C2c)"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/libs/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/libs/"
     dest: "{{ slm_base_dir }}/libs/"
     rsync_opts:
       - "--exclude=node_modules"
@@ -801,18 +810,19 @@
 
 # #10435: SLM UI is always served under /slm (nginx `location /slm/`) and
 # vite.config sets base /slm/. The API base must always be /slm; an unset/empty
-# VITE_API_URL trips the co-located build guard and bakes the wrong base. Use
-# build:slm which exports VITE_API_URL=/slm for every deploy (co-located + standalone).
-- name: "SLM | Build frontend for production (#10435)"
-  ansible.builtin.command:
-    cmd: npm run build:slm
-    chdir: "{{ slm_frontend_dir }}"
-  become_user: "{{ slm_user }}"
+# VITE_API_URL trips the co-located build guard and bakes the wrong base.
+#
+# #15557: this used to run `npm run build:slm` straight into the served dist/,
+# with no gate — a failed build emptied dist/ and every /slm/ path answered 403
+# while the play carried on green. The staged build-then-swap is defined once,
+# in _shared/tasks/build_publish_slm_frontend.yml.
+- name: "SLM | Build and publish frontend for production (#10435, #15557)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/build_publish_slm_frontend.yml
+  vars:
+    slm_frontend_publish_label: "SLM"
+    slm_frontend_publish_dir: "{{ slm_frontend_dir }}"
+    slm_frontend_publish_user: "{{ slm_user }}"
   when: slm_frontend_build and slm_package_json.stat.exists
-  register: slm_frontend_build_result
-  changed_when: slm_frontend_build_result.rc == 0
-  environment:
-    VITE_API_URL: "/slm"
   tags: ['slm', 'frontend']
 
 # ==========================================================
@@ -904,15 +914,11 @@
     - reload nginx
   tags: ['slm', 'nginx']
 
-- name: "SLM | Deploy nginx configuration"
-  ansible.builtin.template:
-    src: autobot-slm.conf.j2
-    dest: /etc/nginx/sites-available/{{ slm_nginx_config }}
-    mode: "0644"
-    backup: true
-  notify:
-    - test nginx config
-    - reload nginx
+# #15610: the render lives in nginx_site.yml so playbooks/update-all-nodes.yml
+# — which deploys the SLM backend by unarchive and never runs this role — can
+# re-render the site config from the same source after it publishes a bundle.
+- name: "SLM | Deploy nginx configuration (#15610)"
+  ansible.builtin.include_tasks: nginx_site.yml
   tags: ['slm', 'nginx']
 
 - name: "SLM | Stat sites-enabled file to detect non-symlink (#1122)"
@@ -1025,6 +1031,16 @@
   when: _slm_import_check.rc | default(0) != 0
   tags: ['slm', 'service']
 
+# #15823: the socket must be bound BEFORE the service it activates.
+#
+# systemd refuses ``start`` on a socket whose ``Service=`` is already running,
+# so this cannot simply be done earlier: it has to happen in the window where
+# the backend is down. Stopping first is what creates that window, and the
+# stop is not extra downtime -- the deploy restarts the backend here regardless.
+#
+# With the socket bound first, the backend inherits the fd through its
+# ``Sockets=`` line. Started after, the socket start is refused and the
+# self-update path has no listener even though the unit is enabled.
 - name: "SLM | Start backend service"
   ansible.builtin.systemd:
     name: "{{ slm_backend_service }}"
@@ -1140,7 +1156,7 @@
 # ==========================================================
 - name: "SLM | Install autobot-admin CLI"
   ansible.builtin.copy:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-slm-backend/scripts/autobot-admin.py"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend/scripts/autobot-admin.py"
     dest: /usr/local/bin/autobot-admin
     owner: root
     group: root
@@ -1153,7 +1169,7 @@
     msg:
       - "=== SLM Manager Deployment Complete ==="
       - "Backend: {{ slm_backend_host }}:{{ slm_backend_port }}"
-      - "Frontend: {{ slm_frontend_dir }}/dist"
+      - "Frontend: {{ slm_frontend_dir }}/current -> {{ slm_frontend_dir }}/dist-<build id>"
       - "Nginx: HTTPS on port 443"
       - "TLS cert: {{ slm_tls_cert }}"
       - "Logs: {{ slm_log_dir }}/"

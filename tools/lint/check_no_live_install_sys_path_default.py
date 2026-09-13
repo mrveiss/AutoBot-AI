@@ -45,7 +45,7 @@ from typing import List, Tuple
 # tools/lint/ is not a Python package; ensure sibling module is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import iter_python_files  # noqa: E402
+from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a
 # lint job, and `autobot_shared.logging_manager` would drag config loading into
@@ -90,11 +90,7 @@ def _is_env_lookup(func: ast.AST) -> bool:
     if isinstance(func, ast.Attribute) and func.attr == "getenv" and isinstance(func.value, ast.Name):
         return func.value.id == "os"
     if isinstance(func, ast.Attribute) and func.attr == "get" and isinstance(func.value, ast.Attribute):
-        return (
-            func.value.attr == "environ"
-            and isinstance(func.value.value, ast.Name)
-            and func.value.value.id == "os"
-        )
+        return func.value.attr == "environ" and isinstance(func.value.value, ast.Name) and func.value.value.id == "os"
     return False
 
 
@@ -103,11 +99,7 @@ def _default_names_live_install(call: ast.Call) -> bool:
     if len(call.args) < 2:
         return False
     default = call.args[1]
-    return (
-        isinstance(default, ast.Constant)
-        and isinstance(default.value, str)
-        and LIVE_INSTALL_ROOT in default.value
-    )
+    return isinstance(default, ast.Constant) and isinstance(default.value, str) and LIVE_INSTALL_ROOT in default.value
 
 
 def live_install_default_sites(path: Path) -> List[Tuple[int, str]]:
@@ -128,8 +120,13 @@ def live_install_default_sites(path: Path) -> List[Tuple[int, str]]:
 def main(argv: List[str]) -> int:
     _configure_logging()
     repo_root = Path(__file__).resolve().parents[2]
+    files, full_repo = scan_python_files(argv[1:], repo_root)
+    # Vacuity floor (#14896): full-repo mode only -- pre-commit legitimately
+    # hands this hook an argv with no Python in it.
+    if enforce_reach(len(files), PY_FLOOR, hook="no-live-install-sys-path-default", full_repo=full_repo):
+        return 1
     total = 0
-    for path in iter_python_files(argv[1:], repo_root):
+    for path in files:
         try:
             rel = str(path.resolve().relative_to(repo_root)).replace("\\", "/")
         except ValueError:

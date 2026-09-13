@@ -9,14 +9,27 @@ Adds workflow notifications and better user experience
 
 NOTE: Long methods (create_workflow_notification_component, create_workflow_progress_widget)
 are ACCEPTABLE EXCEPTIONS per Issue #490 - template generators with low cyclomatic complexity.
+
+#14563: both write targets were shell placeholders in plain string literals
+before #14517, so every run raised ``FileNotFoundError`` on ``open`` -- the
+generator has never once produced a component. Once it became reachable, it
+still wrote in place with no preview and no opt-out -- the same "was inert,
+now writes" shape #14546 named for ``optimize_agents.py``. Following that
+precedent: dry run is the default, the tool prints what it would write, and
+``--apply`` is required to write it.
 """
 
+import argparse
+import os
+import tempfile
+from pathlib import Path
+
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import project_root
 
+logger = get_logger(__name__)
+
 #: Where the generated single-file components land, relative to the project root.
-#: #14517: both write targets were shell placeholders in plain string literals, so
-#: every run raised FileNotFoundError on ``open`` -- the generator has never once
-#: produced a component.
 _COMPONENTS_REL = "autobot-vue/src/components"
 
 
@@ -765,44 +778,82 @@ onUnmounted(() => {
     return widget_content
 
 
-def main():
-    """Create enhanced UI components for workflow orchestration."""
+def write_atomically(file_path: Path, content: str) -> None:
+    """Replace ``file_path``'s contents with ``content`` via temp-then-rename.
 
-    print("🎨 Creating Enhanced Workflow UI Components")
-    print("=" * 60)
+    A write that fails or is interrupted partway through would otherwise
+    leave a truncated component on disk (#14563, following #14546). Writing
+    to a sibling temp file first and renaming it into place means
+    ``file_path`` is only ever replaced once the new content is fully
+    written -- the rename is atomic on the same filesystem, and a crash
+    before it leaves any pre-existing file untouched.
+    """
+    original_mode = file_path.stat().st_mode if file_path.exists() else 0o644
+    fd, tmp_name = tempfile.mkstemp(dir=file_path.parent, prefix=f".{file_path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+            tmp_file.write(content)
+        os.chmod(tmp_name, original_mode)
+        os.replace(tmp_name, file_path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
 
-    # Create notification component
-    notification_component = create_workflow_notification_component()
 
-    with open(
-        project_root() / _COMPONENTS_REL / "WorkflowNotifications.vue",
-        "w",
-        encoding="utf-8",
-    ) as f:
-        f.write(notification_component)
+def report_output(target: Path, content: str, apply_changes: bool) -> None:
+    """Print what generating ``target`` would change (or just changed)."""
+    verb = "Wrote" if apply_changes else "Would write"
+    if not target.exists():
+        print(f"  {verb} {target} ({len(content)} bytes, new file)")
+        return
 
-    print("✅ Created WorkflowNotifications.vue")
-    print("   - Real-time workflow notifications")
-    print("   - User approval prompts")
-    print("   - Progress updates")
-    print("   - Auto-dismiss for info notifications")
+    existing = target.read_text(encoding="utf-8")
+    if existing == content:
+        print(f"  (unchanged) {target}: content already up to date")
+        return
 
-    # Create progress widget
-    progress_widget = create_workflow_progress_widget()
+    print(f"  {verb} {target} ({len(existing)} -> {len(content)} bytes, existing file would be replaced)")
 
-    with open(
-        project_root() / _COMPONENTS_REL / "WorkflowProgressWidget.vue",
-        "w",
-        encoding="utf-8",
-    ) as f:
-        f.write(progress_widget)
 
-    print("✅ Created WorkflowProgressWidget.vue")
-    print("   - Compact floating progress widget")
-    print("   - Expandable workflow details")
-    print("   - Quick approval actions")
-    print("   - Cancel workflow capability")
+def _write_component(target: Path, content: str, apply_changes: bool) -> bool:
+    """Report and, iff ``apply_changes``, write one generated component.
 
+    Returns:
+        True on success (including a no-op dry run), False on write failure.
+    """
+    report_output(target, content, apply_changes)
+    if not apply_changes:
+        return True
+
+    try:
+        write_atomically(target, content)
+    except OSError as exc:
+        logger.error("Failed to write %s: %s", target, exc)
+        return False
+    return True
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser. Dry-run is the default; --apply opts into writing."""
+    parser = argparse.ArgumentParser(
+        description="Generate the workflow notification/progress components (safe by default: dry-run)."
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the generated content without writing anything (default; explicit for scripting clarity).",
+    )
+    mode.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write the generated components to disk. Without this flag nothing on disk is touched.",
+    )
+    return parser
+
+
+def _print_usage_instructions() -> None:
+    """Print the post-write usage instructions for the generated components."""
     print("\n📋 Usage Instructions:")
     print("1. Import components in your main App.vue:")
     print("   import WorkflowNotifications from './components/WorkflowNotifications.vue'")
@@ -821,5 +872,35 @@ def main():
     print("   AutoBot now has professional workflow orchestration UI!")
 
 
+def main() -> int:
+    """Create enhanced UI components for workflow orchestration, previewing by default."""
+    args = build_arg_parser().parse_args()
+    apply_changes = args.apply
+
+    print("🎨 Creating Enhanced Workflow UI Components")
+    print("=" * 60)
+
+    components_dir = project_root() / _COMPONENTS_REL
+    mode_label = "APPLY (files will be written)" if apply_changes else "DRY RUN (default; pass --apply to write)"
+    print(f"mode: {mode_label}\n")
+
+    targets = {
+        components_dir / "WorkflowNotifications.vue": create_workflow_notification_component(),
+        components_dir / "WorkflowProgressWidget.vue": create_workflow_progress_widget(),
+    }
+
+    ok = all(_write_component(target, content, apply_changes) for target, content in targets.items())
+
+    if not apply_changes:
+        print("\nThis was a dry run: no files were changed. Re-run with --apply to write them.")
+        return 0 if ok else 1
+
+    if not ok:
+        return 1
+
+    _print_usage_instructions()
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    exit(main())

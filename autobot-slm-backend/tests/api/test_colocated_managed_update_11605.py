@@ -470,7 +470,7 @@ def test_component_has_file_drift_false_when_not_deployed() -> None:
     """A component whose deployed dir is absent is treated as not co-located (no drift)."""
     with (
         patch("api.code_sync.get_default_source_dir", return_value="/opt/autobot/code_source/autobot-backend"),
-        patch("api.code_sync.get_default_deployed_dir", return_value="/nonexistent/path/autobot-backend"),
+        patch("api.code_sync.get_live_dir", return_value="/nonexistent/path/autobot-backend"),
     ):
         result = asyncio.run(_CS._component_has_file_drift("autobot-backend"))
     assert result is False

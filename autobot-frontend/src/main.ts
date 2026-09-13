@@ -60,6 +60,7 @@ import rumPlugin from './plugins/rum'
 import errorHandlerPlugin from './plugins/errorHandler'
 import ApiPlugin from './plugins/api'
 import { mountAllPlugins } from '@/plugins/registry'
+import { registerDirectives } from '@/directives'
 
 // Import global services
 import './services/GlobalWebSocketService'
@@ -102,6 +103,9 @@ app.use(router)
 app.use(rumPlugin, { router })
 app.use(errorHandlerPlugin)
 app.use(ApiPlugin)
+
+// v-permission (#683) was defined but never registered -- #16243 wires it in.
+registerDirectives(app)
 
 // Register plugin UI components from the plugin mount registry (#6972 / #7793)
 mountAllPlugins(app)

@@ -75,8 +75,24 @@ collect_violations() {
         }
         /^\+/ && !/^\+\+\+/ {
             line = substr($0, 2)
-            # Match @router.<verb>("/health" or "/system/health"
-            if (line ~ /@router\.(get|post|put|delete)[[:space:]]*\([[:space:]]*["'\''](\/system)?\/health["'\'']/) {
+            # ANCHORED to the start of the line (#16011). Matching anywhere
+            # reported this, which is a comment and not a route:
+            #
+            #     # Never add @router.get("/health") - use the shared router
+            #
+            # The sentence most likely to contain the pattern is one WARNING
+            # against it, so the guard punished documenting the rule it enforces.
+            #
+            # A Python decorator must begin its logical line, so the anchor is
+            # exact rather than a heuristic: it admits every real decorator and
+            # excludes every mention inside prose that follows a `#` or a quote.
+            #
+            # What it still cannot do is see that an anchored line sits INSIDE a
+            # docstring, because this hook reads a unified diff: the opening
+            # `"""` may be far above and outside the hunk. That is "cannot, by
+            # construction", not "not yet" -- a `tokenize` rewrite is unavailable
+            # here for the same reason.
+            if (line ~ /^[[:space:]]*@router\.(get|post|put|delete)[[:space:]]*\([[:space:]]*["'\''](\/system)?\/health["'\'']/) {
                 if (line !~ /#[[:space:]]*noqa:.*health-route/) {
                     printf "%s\t%d\t%s\n", file, new_lineno, line
                 }

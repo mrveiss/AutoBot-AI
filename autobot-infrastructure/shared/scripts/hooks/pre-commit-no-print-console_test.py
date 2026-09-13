@@ -16,12 +16,74 @@ genuine, newly-fixed defect here.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
 from autobot_shared.paths import scrubbed_git_env
 
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
+
+# #14115 AC2: violations the hook finds over every tracked production file.
+# Shrink-only -- see TestScanCostAndRepoWideResult for why a silent shrink is
+# the bug this pins. Measured, not estimated; the issue's "50" was a staged
+# subset, not the tree.
+# 502 since #15193: the repo-root main.py redirect shim carries two print()
+# calls whose text names a component path, so retargeting that path touched
+# them and the changed-lines gate flagged both. print IS the mechanism there
+# -- it is a deprecated stdout-only entry point -- so the two lines carry
+# `# noqa: print` and the whole-repo count drops by exactly two.
+# 499 since #14982: tools/lint/check_no_blocking_io_in_async.py was missing its
+# executable bit, which blocked every commit touching autobot-backend/*.py.
+# Restoring it surfaced three pre-existing print() calls in that file -- a lint
+# tool reporting findings to a terminal, which is what print is for -- so they
+# carry `# noqa: print` and the count drops by exactly three. The other ~22
+# files under tools/lint/ share the shape and were NOT exempt from the hook's
+# path allowlist; that gap was #15730.
+# 444 since #15730: tools/lint/ (the substring match also covers the nested
+# tools/lint/canonical/ package) joined the path allowlist next to
+# code_analysis/ and ansible/ in get_staged_python_files(), on the same
+# reasoning as code_analysis/ -- the directory's entire purpose is emitting
+# findings to a terminal, so bare print() there is the mechanism, not a
+# violation. The ~22 files #14982 identified carry 55 print() call sites
+# between them (several files call print() more than once) -- measured by
+# running this hook over tools/lint/ before the allowlist change, matching
+# the whole-repo delta: 499 - 55 = 444.
+# 443 since #15687 converted the sweep summary in
+# scripts/check_ansible_file_references.py from the builtin to a module logger.
+# Lowered in the same commit as the removal, per this test's own instruction:
+# a drop is either a fix recorded here, or the scan silently losing reach.
+# 359 since #16008: `scripts/` CLI ENTRY POINTS became exempt, so the drop is a
+# change of POPULATION, not of tree -- 84 call sites that were violations are now
+# outside the definition, and not one of them was fixed. Recording that distinction
+# is the whole point: this test's own message offers only "they were fixed" or "the
+# scan lost reach", and a third case read as either would be a bypass licensed by a
+# number nobody could audit.
+#
+# The delta was MEASURED, not inferred: the pre-#16008 hook and the current one were
+# each run over the same tracked `scripts/**/*.py` set, from the hooks directory so
+# `lib/_common.sh` resolves for both. Old 84, new 0, and 443 - 84 = 359 exactly, so
+# the whole drop is accounted for with no residue -- which is what rules out the
+# second case, the scan quietly losing reach somewhere else.
+#
+# An earlier ESTIMATE of this delta said ~96, from 107 `print(` occurrences minus 11
+# carrying noqa. It was wrong because a multi-line call reports as ONE violation
+# spanning a line range, and some occurrences sit inside strings. A count of a proxy
+# is not a count of the thing, and the ratchet is pinned to the thing.
+# 322 since #16263: `pipeline-scripts/ci_dispatch_watchdog.py` routed its print()
+# calls through its own `_emit` helper, the file's one stated exception to #1082,
+# whose single print carries `# noqa: print`. That's a FIX, not a population change.
+# MEASURED, not inferred: this test on #16263's own head (2eb2e1f715, job
+# 103223385562) reported 322 against base's 359. The diff touches neither this hook,
+# its lib, nor the pre-commit config; it deletes or renames no file; and every
+# removed print()/console.* line is in that one file. So the whole drop of 37 is those
+# call sites, with no residue for a lost-reach case to hide in. (The removed LINES
+# number 40, which is the proxy the note above warns about.)
+# 317 since #16540: `.claude/skills/claims-audit/generate_report.py` writes its CLI
+# summary through sys.stdout instead of print(). MEASURED, not inferred: this test on
+# #16558's head (python-suite shard 11/12, job 103601998828) reported 317 against 322,
+# and the diff removes exactly 5 print() lines and adds none. A FIX, not a population change.
+_KNOWN_REPO_VIOLATIONS = 317
 
 
 def _test_git_env() -> dict[str, str]:
@@ -56,6 +118,48 @@ def test_blocks_print_call(tmp_path: Path) -> None:
     assert "print(" in result.stdout
 
 
+class TestStringStrippingSemantics:
+    """#14115: the per-line `awk` strip is what stops a MENTION counting.
+
+    The loop now tests the raw line with bash's own matcher before paying for
+    that subprocess. Stripping only ever removes content, so a raw line with no
+    candidate cannot produce one once stripped — but nothing covered that
+    reasoning, so these pin the two behaviours the shortcut must preserve.
+    """
+
+    def test_a_print_inside_a_string_is_not_a_violation(self, tmp_path: Path) -> None:
+        repo = _init_repo(tmp_path)
+        (repo / "mention.py").write_text(
+            'msg = "call print( ) if you must"\n', encoding="utf-8"
+        )
+        _git(repo, "add", "mention.py")
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env()
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_a_noqa_comment_suppresses_a_real_call(self, tmp_path: Path) -> None:
+        repo = _init_repo(tmp_path)
+        (repo / "noqa.py").write_text('print("allowed")  # noqa\n', encoding="utf-8")
+        _git(repo, "add", "noqa.py")
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env()
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_a_real_call_beside_a_string_mention_still_fails(self, tmp_path: Path) -> None:
+        """The shortcut must not skip a line that has both."""
+        repo = _init_repo(tmp_path)
+        (repo / "both.py").write_text(
+            'msg = "mentions print( ) here"\nprint("real")\n', encoding="utf-8"
+        )
+        _git(repo, "add", "both.py")
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env()
+        )
+        assert result.returncode != 0, result.stdout + result.stderr
+
+
 def test_allows_clean_file(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     (repo / "ok.py").write_text("x = 1\n", encoding="utf-8")
@@ -78,3 +182,102 @@ class TestFailsClosedOnGitFailure:
 
         result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"
+
+
+class TestScanCostAndRepoWideResult:
+    """#14115 AC1/AC2: the two criteria the optimisation was measured against.
+
+    AC1 asked for a whole-repo scan "in well under a minute" and AC2 for the
+    violation set to come back unchanged. Neither is asserted by a crafted
+    single-line test, and neither is asserted here by a stopwatch: a wall-clock
+    threshold on a shared runner measures contention, not the property, and
+    fails the way that teaches people to re-run CI until green (#14157 was
+    exactly that defect, in a different suite).
+
+    So the cost claim is pinned structurally instead -- at the thing that made
+    it slow -- and the result claim is pinned as a count over the real tree.
+
+    The repo-wide case takes ~100s and deliberately carries no pytest selection
+    marker. ``repo_tests/hook_suites_run_in_ci_test.py`` derives which CI
+    invocations must run the hook suites by splitting on each invocation's own
+    ``-m`` expression, and marker-tests.yml selects a set of them; a hook test
+    carrying any marker in that set makes a marker-only invocation select it,
+    which breaks that guard's reasoning. It failed exactly that way when one
+    was added here -- and again when this note merely spelled the marker out,
+    because the guard scans the file as text. Cost is paid in the normal shard.
+    """
+
+    def test_no_subprocess_runs_before_the_raw_line_shortcut(self) -> None:
+        """The property that made the scan fast, stated so it cannot regress.
+
+        The old loop paid three subprocesses on EVERY line: an ``awk`` to strip
+        strings and two ``grep``s. The fix tests the raw line with bash's own
+        matcher first and bails before any of them, so the cost is now per
+        *candidate*, not per line -- and candidates are a tiny fraction of a
+        repository.
+
+        A command substitution still exists in the loop (``sig=$(...)``) and
+        should: stripping is genuinely needed once a line might match. What must
+        not come back is a subprocess reached before the shortcut. Asserting
+        "no subprocess in the loop" would be wrong and would fail today; the
+        real invariant is ordering.
+        """
+        hook = HOOK_PATH.read_text(encoding="utf-8")
+        start = hook.index("_scan_file_for_calls()")
+        body = hook[start : hook.index("\n}", start)]
+
+        shortcut = body.index('[[ "$line" =~ $match_regex ]] || continue')
+        before = body[:shortcut]
+
+        # `$((` is arithmetic expansion and spawns nothing -- the loop uses it
+        # for line_num. Only a real command substitution counts, so the lookahead
+        # is load-bearing rather than defensive.
+        spawns = re.findall(r"\$\((?!\()|`|\| *(?:grep|awk|sed)\b", before)
+        assert not spawns, (
+            "a subprocess is spawned before the raw-line shortcut in "
+            f"_scan_file_for_calls: {spawns}. That reinstates the per-line cost "
+            "#14115 removed -- the hook took minutes over the tree and could not "
+            "be used for a whole-repo scan at all."
+        )
+
+    def test_the_whole_repo_scan_completes_and_reports_a_known_set(self) -> None:
+        """AC2: the repo-wide violation set, pinned.
+
+        The crafted single-line tests prove the semantics on inputs chosen to
+        exercise them. They cannot show that the shortcut drops nothing across
+        real code, because a dropped detection looks exactly like a file with no
+        violations. This runs the hook over every production file in the tree
+        and pins the number it finds.
+
+        Shrink-only, in the repo's ratchet idiom: fixing a violation is expected
+        and must lower this number in the same commit. A *rise* is a new
+        violation; a shrink this constant did not authorise is the optimisation
+        silently losing a detection, which is the failure the AC exists to
+        catch.
+        """
+        repo_root = HOOK_PATH.resolve().parents[4]
+        tracked = subprocess.run(
+            ["git", "ls-files", "*.py", "*.ts", "*.vue"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=True,
+            env=_test_git_env(),
+        ).stdout.split()
+
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH), *tracked],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            env=_test_git_env(),
+        )
+
+        found = result.stdout.count("VIOLATION")
+        assert found == _KNOWN_REPO_VIOLATIONS, (
+            f"whole-repo scan reported {found} violations, expected "
+            f"{_KNOWN_REPO_VIOLATIONS}. Higher: new print()/console.* landed. "
+            "Lower: either they were fixed -- lower _KNOWN_REPO_VIOLATIONS in "
+            "the same commit -- or the scan stopped detecting something, which "
+            "is the regression this pins."
+        )

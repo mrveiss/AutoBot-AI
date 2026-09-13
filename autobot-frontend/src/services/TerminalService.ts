@@ -119,6 +119,8 @@ interface WsMessage {
   prefix?: string
   common_prefix?: string
   commands?: string[]
+  /** #14995: RiskLevel on the wire — LOW/MEDIUM/HIGH/CRITICAL, never a raw CommandRisk. */
+  risk_level?: string
   matches?: string[]
   query?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -591,6 +593,9 @@ class TerminalService {
       case 'history_search':
         this._handleHistorySearch(sessionId, message)
         break
+      case 'security_warning':
+        this._handleSecurityWarning(sessionId, message)
+        break
       default:
         logger.warn(`Unknown message type: ${message.type}`, message)
     }
@@ -620,6 +625,31 @@ class TerminalService {
   private _handleErrorMessage(sessionId: string, msg: WsMessage): void {
     this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
     this.triggerCallback(sessionId, 'onError', msg.error || msg.content || '')
+  }
+
+  /**
+   * Surface a blocked command to the user (#14995).
+   *
+   * The backend sends this when it refuses to run a command. It was reaching
+   * the browser and being discarded: there was no case for it, so it fell to
+   * `default:` and was logged as an unknown type. The user saw their command
+   * do nothing, with no reason given.
+   *
+   * The decision this issue asked for is *handle*, not remove. Dropping a
+   * security refusal is the worse of the two options — the block still
+   * happens, and the only thing removal changes is whether the person who
+   * typed the command finds out why.
+   *
+   * Severity follows the wire value, which is now `RiskLevel` rather than a
+   * raw `CommandRisk`: a blocked destructive command arrives as CRITICAL and
+   * renders through `line-error`, never neutral output the eye skips.
+   */
+  private _handleSecurityWarning(sessionId: string, msg: WsMessage): void {
+    const critical = msg.risk_level === 'CRITICAL' || msg.risk_level === 'HIGH'
+    this.triggerCallback(sessionId, 'onOutput', {
+      content: msg.content || '',
+      stream: critical ? 'error' : 'warning',
+    })
   }
 
   /** Handle process exit notification. */

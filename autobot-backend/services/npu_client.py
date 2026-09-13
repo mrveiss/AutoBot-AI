@@ -18,13 +18,13 @@ Usage:
 """
 
 import asyncio
-import os
 import threading
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 import aiohttp
 
+from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config, get_config
@@ -86,8 +86,8 @@ HEALTH_CHECK_CACHE_TTL = 30  # seconds
 # so a downed backend cannot stall a request; failures there are recorded to the
 # reconciler's pending set, which retries in the background. Env-tunable; never
 # hard-code per-caller (repo rule).
-EMBEDDING_MAX_ATTEMPTS = max(1, int(os.environ.get("EMBEDDING_MAX_ATTEMPTS", "3")))
-EMBEDDING_RETRY_BASE_DELAY = max(0.0, float(os.environ.get("EMBEDDING_RETRY_BASE_DELAY_SECONDS", "0.5")))
+EMBEDDING_MAX_ATTEMPTS = env_int_clamped("EMBEDDING_MAX_ATTEMPTS", 3, min_v=1)
+EMBEDDING_RETRY_BASE_DELAY = env_float_clamped("EMBEDDING_RETRY_BASE_DELAY_SECONDS", 0.5, min_v=0.0)
 
 
 @dataclass

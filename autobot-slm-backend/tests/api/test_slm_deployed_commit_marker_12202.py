@@ -13,7 +13,7 @@ control-plane install (/opt/autobot/autobot-slm-backend) was never
 redeployed.
 
 Fix: _get_slm_deployed_commit() now reads a ``.deployed_commit`` marker file
-written into the INSTALL directory (get_default_deployed_dir) by the
+written into the INSTALL directory (get_live_dir) by the
 slm_manager Ansible role right after its rsync task. Absent/unreadable marker
 returns None, which is fail-safe: _run_slm_stage does NOT skip when the
 deployed commit is unknown, so the self-update fires.
@@ -122,7 +122,7 @@ def _db_service_mock(slm_node: Any) -> Any:
 class TestGetSlmDeployedCommit:
     @pytest.mark.asyncio
     async def test_reads_install_dir_marker_not_code_source_head(self, tmp_path):
-        """Guard: the deployed commit comes from get_default_deployed_dir(), and
+        """Guard: the deployed commit comes from get_live_dir(), and
         get_git_tracker() (code_source HEAD, the #12202 bug) must not be consulted.
         """
         install_dir = tmp_path / "autobot-slm-backend"
@@ -130,7 +130,7 @@ class TestGetSlmDeployedCommit:
         (install_dir / ".deployed_commit").write_text("installedsha0000\n", encoding="utf-8")
 
         with (
-            patch("api.code_sync.get_default_deployed_dir", return_value=str(install_dir)) as get_dir_mock,
+            patch("api.code_sync.get_live_dir", return_value=str(install_dir)) as get_dir_mock,
             patch("api.code_sync.get_git_tracker", side_effect=AssertionError("must not read code_source HEAD")),
         ):
             result = await _get_slm_deployed_commit()
@@ -143,7 +143,7 @@ class TestGetSlmDeployedCommit:
         install_dir = tmp_path / "autobot-slm-backend"
         install_dir.mkdir()  # no .deployed_commit written
 
-        with patch("api.code_sync.get_default_deployed_dir", return_value=str(install_dir)):
+        with patch("api.code_sync.get_live_dir", return_value=str(install_dir)):
             result = await _get_slm_deployed_commit()
 
         assert result is None
@@ -154,7 +154,7 @@ class TestGetSlmDeployedCommit:
         install_dir.mkdir()
         (install_dir / ".deployed_commit").write_text("   \n", encoding="utf-8")
 
-        with patch("api.code_sync.get_default_deployed_dir", return_value=str(install_dir)):
+        with patch("api.code_sync.get_live_dir", return_value=str(install_dir)):
             result = await _get_slm_deployed_commit()
 
         assert result is None
@@ -164,7 +164,7 @@ class TestGetSlmDeployedCommit:
         """Install dir itself missing (unreadable path) -> None, not an exception."""
         install_dir = tmp_path / "does-not-exist"
 
-        with patch("api.code_sync.get_default_deployed_dir", return_value=str(install_dir)):
+        with patch("api.code_sync.get_live_dir", return_value=str(install_dir)):
             result = await _get_slm_deployed_commit()
 
         assert result is None

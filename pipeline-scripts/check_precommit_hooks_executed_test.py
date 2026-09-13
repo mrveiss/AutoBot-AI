@@ -63,8 +63,18 @@ def test_the_not_found_wording_is_also_detected(gate):
     assert gate.unrunnable_hooks(out) == ["tools/lint/gone.py"]
 
 
-def test_a_known_dormant_hook_is_tolerated(gate, tmp_path):
-    dormant = next(iter(gate._KNOWN_DORMANT))
+def test_a_known_dormant_hook_is_tolerated(gate, tmp_path, monkeypatch):
+    """A baselined hook that cannot run is tolerated rather than blocking.
+
+    The fixture is synthetic on purpose. This used to seed itself from the live
+    ``_KNOWN_DORMANT`` and broke with ``StopIteration`` when #15750 fixed the
+    last entry and the baseline emptied -- the suite failing because the guard
+    had SUCCEEDED, where the cheapest way back to green was to re-break an exec
+    bit. The tolerance behaviour is what this test is about, and it exists
+    whether or not the backlog currently has anyone in it. See #15762.
+    """
+    dormant = "tools/lint/a_dormant_hook_for_this_test.py"
+    monkeypatch.setattr(gate, "_KNOWN_DORMANT", frozenset({dormant}))
     log = tmp_path / "out.txt"
     log.write_text(f"x...Failed\nExecutable `{dormant}` is not executable\n", encoding="utf-8")
 

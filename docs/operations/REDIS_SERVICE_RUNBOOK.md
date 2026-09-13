@@ -37,10 +37,10 @@ This runbook provides operational procedures for managing the Redis service with
 ### Critical Information
 
 **Service Details:**
-- **Service Name:** redis-server
+- **Service Name:** redis-stack-server
 - **Host:** VM3 (<database-ip>)
 - **Port:** 6379
-- **systemd Unit:** redis-server.service
+- **systemd Unit:** redis-stack-server.service
 - **User:** redis
 - **SSH User:** autobot (for management operations)
 
@@ -87,7 +87,7 @@ This runbook provides operational procedures for managing the Redis service with
 │              <database-ip>:6379                         │
 │                                                         │
 │  ┌─────────────────────────────────────────────────┐  │
-│  │  systemd (redis-server.service)                 │  │
+│  │  systemd (redis-stack-server.service)           │  │
 │  │  • Process management                           │  │
 │  │  • Automatic restart on crash (disabled)        │  │
 │  │  • Resource limits                              │  │
@@ -163,7 +163,7 @@ redis-cli -h <database-ip> -p 6379 PING
 
 **Command:**
 ```bash
-ssh -i ~/.ssh/autobot_key autobot@<database-ip> "systemctl is-active redis-server"
+ssh -i ~/.ssh/autobot_key autobot@<database-ip> "systemctl is-active redis-stack-server"
 ```
 
 **Expected Response:** `active`
@@ -341,7 +341,7 @@ Operators can view health status in multiple places:
 ```bash
 # Send SIGHUP to reload configuration
 ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
-  "sudo systemctl reload redis-server"
+  "sudo systemctl reload redis-stack-server"
 ```
 
 **Expected Duration:** 5-10 seconds
@@ -369,7 +369,7 @@ ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
 ```bash
 # Start the service
 ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
-  "sudo systemctl start redis-server"
+  "sudo systemctl start redis-stack-server"
 ```
 
 **Expected Duration:** 10-20 seconds
@@ -399,7 +399,7 @@ ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
 ```bash
 # Force restart the service
 ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
-  "sudo systemctl restart redis-server"
+  "sudo systemctl restart redis-stack-server"
 ```
 
 **Expected Duration:** 20-30 seconds
@@ -493,24 +493,24 @@ Before performing manual operations:
 
 2. **Check service status:**
    ```bash
-   sudo systemctl status redis-server
+   sudo systemctl status redis-stack-server
    ```
 
 3. **Review logs for errors:**
    ```bash
-   sudo journalctl -u redis-server -n 50 --no-pager
+   sudo journalctl -u redis-stack-server -n 50 --no-pager
    ```
 
 4. **Identify and fix root cause** (see troubleshooting section)
 
 5. **Start service:**
    ```bash
-   sudo systemctl start redis-server
+   sudo systemctl start redis-stack-server
    ```
 
 6. **Verify service started:**
    ```bash
-   sudo systemctl status redis-server
+   sudo systemctl status redis-stack-server
    redis-cli PING
    ```
 
@@ -545,14 +545,14 @@ Before performing manual operations:
 3. **Graceful restart:**
    ```bash
    ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
-     "sudo systemctl restart redis-server"
+     "sudo systemctl restart redis-stack-server"
    ```
 
 4. **Monitor startup:**
    ```bash
    # Watch service come back online
    ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
-     "sudo journalctl -u redis-server -f"
+     "sudo journalctl -u redis-stack-server -f"
    ```
    - Wait for "Ready to accept connections" message
    - Verify no error messages
@@ -589,7 +589,7 @@ Before performing manual operations:
 
 3. **Validate configuration:**
    ```bash
-   redis-server /etc/redis/redis.conf --test-memory 1
+   redis-stack-server /etc/redis/redis.conf --test-memory 1
    ```
 
 4. **Apply changes** (choose one):
@@ -602,7 +602,7 @@ Before performing manual operations:
 
    **Option B: With restart (major changes):**
    ```bash
-   sudo systemctl restart redis-server
+   sudo systemctl restart redis-stack-server
    ```
 
 5. **Verify changes applied:**
@@ -649,12 +649,12 @@ Before performing manual operations:
 3. **Stop service:**
    ```bash
    ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
-     "sudo systemctl stop redis-server"
+     "sudo systemctl stop redis-stack-server"
    ```
 
 4. **Verify stopped:**
    ```bash
-   sudo systemctl status redis-server
+   sudo systemctl status redis-stack-server
    ps aux | grep redis
    ```
 
@@ -671,7 +671,7 @@ Before performing manual operations:
 
 7. **Restart when safe:**
    ```bash
-   sudo systemctl start redis-server
+   sudo systemctl start redis-stack-server
    ```
 
 8. **Full verification:**
@@ -693,7 +693,7 @@ logs/audit/redis_service_management.log
 
 **Systemd Journal:**
 ```bash
-sudo journalctl -u redis-server --since "1 hour ago"
+sudo journalctl -u redis-stack-server --since "1 hour ago"
 ```
 
 ### Audit Log Format
@@ -892,12 +892,12 @@ chmod 600 ~/.ssh/autobot_key
 **Content:**
 ```bash
 # Allow autobot user to manage Redis service
-autobot ALL=(ALL) NOPASSWD: /bin/systemctl start redis-server
-autobot ALL=(ALL) NOPASSWD: /bin/systemctl stop redis-server
-autobot ALL=(ALL) NOPASSWD: /bin/systemctl restart redis-server
-autobot ALL=(ALL) NOPASSWD: /bin/systemctl reload redis-server
-autobot ALL=(ALL) NOPASSWD: /bin/systemctl status redis-server
-autobot ALL=(ALL) NOPASSWD: /bin/journalctl -u redis-server *
+autobot ALL=(ALL) NOPASSWD: /bin/systemctl start redis-stack-server
+autobot ALL=(ALL) NOPASSWD: /bin/systemctl stop redis-stack-server
+autobot ALL=(ALL) NOPASSWD: /bin/systemctl restart redis-stack-server
+autobot ALL=(ALL) NOPASSWD: /bin/systemctl reload redis-stack-server
+autobot ALL=(ALL) NOPASSWD: /bin/systemctl status redis-stack-server
+autobot ALL=(ALL) NOPASSWD: /bin/journalctl -u redis-stack-server *
 ```
 
 **Verify Permissions:**
@@ -911,13 +911,13 @@ ssh autobot@<database-ip> "sudo -l"
 **Whitelist Enforcement:**
 
 Only these commands are allowed:
-- `sudo systemctl start redis-server`
-- `sudo systemctl stop redis-server`
-- `sudo systemctl restart redis-server`
-- `sudo systemctl reload redis-server`
-- `systemctl status redis-server`
-- `systemctl is-active redis-server`
-- `journalctl -u redis-server -n {lines}`
+- `sudo systemctl start redis-stack-server`
+- `sudo systemctl stop redis-stack-server`
+- `sudo systemctl restart redis-stack-server`
+- `sudo systemctl reload redis-stack-server`
+- `systemctl status redis-stack-server`
+- `systemctl is-active redis-stack-server`
+- `journalctl -u redis-stack-server -n {lines}`
 
 **No arbitrary commands permitted.**
 
@@ -1008,7 +1008,7 @@ scp -i ~/.ssh/autobot_key \
 1. **Stop Redis service:**
    ```bash
    ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
-     "sudo systemctl stop redis-server"
+     "sudo systemctl stop redis-stack-server"
    ```
 
 2. **Backup corrupted data:**
@@ -1035,7 +1035,7 @@ scp -i ~/.ssh/autobot_key \
 4. **Start Redis:**
    ```bash
    ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
-     "sudo systemctl start redis-server"
+     "sudo systemctl start redis-stack-server"
    ```
 
 5. **Verify data integrity:**
@@ -1199,17 +1199,17 @@ scp -i ~/.ssh/autobot_key \
    ```bash
    ssh autobot@<database-ip> << 'EOF'
      # Stop service
-     sudo systemctl stop redis-server
+     sudo systemctl stop redis-stack-server
 
      # Update package
      sudo apt update
-     sudo apt install --only-upgrade redis-server
+     sudo apt install --only-upgrade redis-stack-server
 
      # Verify installation
-     redis-server --version
+     redis-stack-server --version
 
      # Start service
-     sudo systemctl start redis-server
+     sudo systemctl start redis-stack-server
    EOF
    ```
 
@@ -1236,10 +1236,10 @@ scp -i ~/.ssh/autobot_key \
 ```bash
 ssh autobot@<database-ip> << 'EOF'
   # Stop current version
-  sudo systemctl stop redis-server
+  sudo systemctl stop redis-stack-server
 
   # Downgrade package
-  sudo apt install redis-server=<previous_version>
+  sudo apt install redis-stack-server=<previous_version>
 
   # Restore config
   sudo cp /etc/redis/redis.conf.pre-upgrade /etc/redis/redis.conf
@@ -1248,7 +1248,7 @@ ssh autobot@<database-ip> << 'EOF'
   sudo cp /var/lib/redis/dump.rdb.pre-upgrade /var/lib/redis/dump.rdb
 
   # Start service
-  sudo systemctl start redis-server
+  sudo systemctl start redis-stack-server
 EOF
 ```
 
@@ -1601,7 +1601,7 @@ Auto-recovery fails
 redis-cli -h <database-ip> PING
 
 # Service status
-ssh autobot@<database-ip> "systemctl status redis-server"
+ssh autobot@<database-ip> "systemctl status redis-stack-server"
 
 # Full health via API
 curl https://<backend-ip>:8443/api/services/redis/health
@@ -1617,29 +1617,29 @@ redis-cli -h <database-ip> INFO clients | grep connected_clients
 
 ```bash
 # Start
-ssh autobot@<database-ip> "sudo systemctl start redis-server"
+ssh autobot@<database-ip> "sudo systemctl start redis-stack-server"
 
 # Stop
-ssh autobot@<database-ip> "sudo systemctl stop redis-server"
+ssh autobot@<database-ip> "sudo systemctl stop redis-stack-server"
 
 # Restart
-ssh autobot@<database-ip> "sudo systemctl restart redis-server"
+ssh autobot@<database-ip> "sudo systemctl restart redis-stack-server"
 
 # Reload config
-ssh autobot@<database-ip> "sudo systemctl reload redis-server"
+ssh autobot@<database-ip> "sudo systemctl reload redis-stack-server"
 ```
 
 ### Logs
 
 ```bash
 # Recent logs
-ssh autobot@<database-ip> "sudo journalctl -u redis-server -n 50"
+ssh autobot@<database-ip> "sudo journalctl -u redis-stack-server -n 50"
 
 # Follow logs
-ssh autobot@<database-ip> "sudo journalctl -u redis-server -f"
+ssh autobot@<database-ip> "sudo journalctl -u redis-stack-server -f"
 
 # Errors only
-ssh autobot@<database-ip> "sudo journalctl -u redis-server -p err"
+ssh autobot@<database-ip> "sudo journalctl -u redis-stack-server -p err"
 ```
 
 ### Performance

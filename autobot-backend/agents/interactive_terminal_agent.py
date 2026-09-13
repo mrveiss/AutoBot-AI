@@ -17,6 +17,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.fd_poll import poll_readable
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
@@ -207,7 +208,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
             self.start_time = time.time()
 
             await self._notify_session_started(command)
-            asyncio.create_task(self._stream_output())
+            fire_and_forget(self._stream_output(), name="terminal-session-stream-output")
             logger.info("Started terminal session for chat %s: %s", self.chat_id, command)
 
         except Exception as e:

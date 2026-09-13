@@ -3,23 +3,64 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Shared helpers for tools/lint/*.py regression-prevention hooks.
+"""Shared helpers for this repository's regression-prevention hooks.
+
+Home is ``tools/lint/``, but the vacuity rule below is repository-wide, so
+``scripts/`` and ``pipeline-scripts/`` guards import it from here too rather
+than each restating the floor.
 
 Extracted per #5449 after #5394 + #5418 showed two hooks with byte-
 identical ``_iter_target_files`` implementations drifted independently
 (``.worktrees`` exclusion fixed in one, then the other). A single source
 of truth prevents a third such drift.
+
+VACUITY (#14896)
+----------------
+A sweep that reaches zero files reports "clean" and exits 0 — the same
+answer a genuinely clean tree gives, with none of the evidence. #14896
+found the floor guarding that already existed on the ``--audit`` path of
+two hooks and nowhere on the pre-commit path, so the eleven full-repo
+consumers of :func:`iter_python_files` could each have lost their reach
+silently.
+
+Two pieces close it, and the split between them is the whole design:
+
+* :func:`tracked_paths` **raises** rather than returning ``[]``. An
+  enumeration that failed and an empty repository are indistinguishable
+  downstream, so the distinction is made here, where the return code is
+  still visible.
+* :func:`enforce_reach` applies a floor **in full-repo mode only**.
+  pre-commit hands a hook the changed files and nothing else: a PR that
+  touched no Python legitimately gives that hook zero files, and a floor
+  applied there would redden every such PR in the repository. The
+  exemplar is ``check_git_toplevel_env_scrubbed.main``, which has taken
+  this shape since #15176.
 """
 
 from __future__ import annotations
 
+import logging
+import os
+import posixpath
+import re
+import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
+import sys
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Sequence, Tuple
 
-# Directories skipped during full-repo ``rglob('*.py')`` scans. Kept as a
-# frozenset so hooks can reference the same constant without risk of
-# per-hook mutation. Adding a new entry here covers all current + future
-# callers in one place.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+
+# Plain stdlib logging, deliberately (#1082): these helpers run inside bare
+# pre-commit hook scripts, and `autobot_shared.logging_manager` would drag
+# config loading onto every commit. Same trade as
+# `scripts/check_python_file_size.py`.
+logger = logging.getLogger(__name__)
+
+# Directories skipped during full-repo scans. Kept as a frozenset so hooks
+# can reference the same constant without risk of per-hook mutation. Adding
+# a new entry here covers all current + future callers in one place.
 EXCLUDED_DIR_NAMES: frozenset[str] = frozenset(
     {
         ".venv",
@@ -33,6 +74,162 @@ EXCLUDED_DIR_NAMES: frozenset[str] = frozenset(
     }
 )
 
+#: Floor for a full-repo ``*.py`` sweep. 5,319 files were tracked when this
+#: landed, so this sits ~25% below the real count: low enough that ordinary
+#: churn (or a subtree moving out) never trips it, high enough that a sweep
+#: which lost its reach — wrong root, wrong CWD, a filter inverted — cannot
+#: land under it and still look clean.
+PY_FLOOR = 4000
+
+
+def _looks_like_a_pattern(entry: str) -> bool:
+    """Whether *entry* is already a pathspec rather than a bare directory name."""
+    return any(ch in entry for ch in "*?[") or "/" in entry
+
+
+class EmptyEnumeration(RuntimeError):
+    """`git ls-files` succeeded and listed nothing.
+
+    A subclass so every existing `except RuntimeError` keeps working, while a
+    caller that has its OWN floor can tell this apart from a git failure. Those
+    are different conditions and want different answers: a broken git is an
+    error, an empty result is a finding the caller may be contracted to report
+    in its own words (#15962).
+    """
+
+
+#: Floor for a full `tracked_paths(root, "*.py")` sweep — the canonical one,
+#: because six places had their own copy of `3000` and none of them had been
+#: measured against the tree (#15928).
+#:
+#: Live population: **5,613** tracked `.py` files. The old 3,000 was 53% of it,
+#: which detects only the loss of `autobot-backend` — the one tree holding 70%
+#: of the files. Every other tree could vanish from the enumeration and all six
+#: guards would report a clean sweep.
+#:
+#: 5,400 leaves 213 files of headroom, so it catches the loss of any tree
+#: bigger than that: `autobot-slm-backend` (443), `autobot_shared`, `repo_tests`,
+#: `autobot-infrastructure`. **It does not catch losing the two smallest**
+#: (`autobot-npu-worker`, `tools`), which would need headroom under ~59 and a
+#: ratchet on every ordinary deletion. That trade is stated rather than implied:
+#: the floor exists for "the enumeration broke", and a break that costs fewer
+#: than 213 files is not the failure it was built for.
+#:
+#: Re-measure before lowering. `git ls-files "*.py" | wc -l`.
+TRACKED_PY_FLOOR = 5_400
+
+
+def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) -> List[str]:
+    """Git-tracked paths under *repo_root* matching *patterns*, repo-relative.
+
+    *exclude* entries become git ``:(exclude)`` pathspecs, so **git does the
+    matching** (#15926). Every caller before this filtered in Python after
+    enumerating, which is two matchers over one question — and #15510 is what
+    that costs: an exclusion tested against the ABSOLUTE path fired on every
+    file when the checkout itself lived under a directory of that name. Git
+    matches the same repo-relative path it returns, so the two cannot disagree.
+
+    Pass bare directory or glob fragments (``"node_modules"``, ``"*.min.js"``);
+    the ``:(exclude)`` prefix and the rooting are added here, so no caller
+    re-decides the pathspec syntax. A bare entry needs no trailing ``/*``: git
+    excludes a directory's contents from the bare name, measured identical for
+    files, directories and nested directories (#16013).
+
+    ``cwd=repo_root`` anchors the answer: run from a subdirectory,
+    ``git ls-files`` still succeeds and returns paths re-prefixed relative
+    to *that* directory, which is a confidently wrong result rather than an
+    empty one. ``env=scrubbed_git_env()`` removes the ``GIT_DIR`` a hook
+    exports, which would otherwise enumerate one checkout's index while
+    *repo_root* names another (#15176).
+
+    Raises:
+        RuntimeError: git failed, or listed nothing. Returning ``[]`` here
+            is how a broken enumeration reads as a clean tree downstream —
+            the caller cannot tell the two apart, so this refuses to make
+            them look alike.
+    """
+    # A directory name needs `/*` to exclude its contents; a pattern that already
+    # contains a glob or a slash is passed through as the caller wrote it.
+    # Two things have to be right here, and each was wrong on its own.
+    #
+    # 1. ROOTING. `git ls-files` derives a common prefix from the POSITIVE
+    #    pathspecs and anchors traversal to it, so an unrooted exclude under a
+    #    single prefixed positive matches every entry and empties the result:
+    #
+    #        scripts/*.py                 + :(exclude)*_test.py  ->  0 files
+    #        scripts/*.py + tools/*.py    + :(exclude)*_test.py  ->  correct
+    #
+    #    Adding a second positive under a different top-level directory empties
+    #    the common prefix and the identical exclude starts working. So an entry
+    #    with no `/` is emitted once per distinct positive prefix (#16013).
+    #
+    # 2. FILE vs DIRECTORY needs no special case once (1) is right. A bare
+    #    `:(exclude)scripts` already excludes everything under it, and
+    #    `:(exclude)a.py` excludes the file — measured identical to emitting a
+    #    `<entry>/*` companion for directories, files and nested directories.
+    #    An earlier draft emitted both; the mutation that deleted the companion
+    #    changed no result, which is what showed it was dead. `_looks_like_a_pattern`
+    #    is retained for the callers that ask whether an entry IS a pattern.
+    # `or [""]` because NO positive pattern means no prefix, not no exclusions.
+    # Without it an empty `patterns` produced an empty prefix set, the loop below
+    # emitted nothing, and `tracked_paths(root, exclude=["generated"])` returned
+    # `generated` — an exclusion that silently does nothing, which is worse than
+    # one that fails because the result comes back plausible and full-length.
+    # `EmptyEnumeration` cannot catch it: the list is non-empty, just wrong.
+    positive_prefixes = sorted({posixpath.dirname(p) for p in patterns}) or [""]
+    excludes = []
+    for entry in exclude:
+        if "/" in entry:
+            rooted = [entry]  # already rooted; re-prefixing would move it
+        else:
+            rooted = [posixpath.join(pre, entry) if pre else entry for pre in positive_prefixes]
+        excludes.extend(f":(exclude){spec}" for spec in rooted)
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "ls-files", *patterns, *excludes],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        env=scrubbed_git_env(),
+    )
+    described = " ".join(patterns) or "<all>"
+    if result.returncode != 0:
+        raise RuntimeError(f"git ls-files {described} failed in {repo_root}: {result.stderr.strip()}")
+    paths = [line.replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
+    if not paths:
+        raise EmptyEnumeration(
+            f"git ls-files {described} listed nothing in {repo_root} — refusing to "
+            "report an empty enumeration as a clean tree."
+        )
+    return paths
+
+
+def enforce_reach(reached: int, floor: int, *, hook: str, full_repo: bool) -> int:
+    """``1`` when a full-repo sweep landed under *floor*, else ``0``.
+
+    **Full-repo mode only.** pre-commit passes the changed files as argv, and
+    a PR touching nothing in a hook's scope legitimately gives it zero files;
+    a floor applied there would fail every such PR in the repository. That is
+    why *full_repo* is a keyword the caller must state rather than something
+    inferred here.
+    """
+    if not full_repo or reached >= floor:
+        return 0
+    logger.error("[%s] full-repo sweep reached only %d file(s); floor is %d.", hook, reached, floor)
+    logger.error("FIX THE SWEEP, not the tree — a clean result below this floor asserts nothing.")
+    return 1
+
+
+def scan_python_files(args: List[str], repo_root: Path) -> Tuple[List[Path], bool]:
+    """``(files, full_repo)`` — :func:`iter_python_files` with the mode exposed.
+
+    The mode is what :func:`enforce_reach` needs and what a bare generator
+    cannot tell its caller, so every hook that wants a floor calls this
+    instead of re-deriving ``not argv`` for itself.
+    """
+    return list(iter_python_files(args, repo_root)), not args
+
 
 def iter_python_files(args: List[str], repo_root: Path) -> Iterable[Path]:
     """Yield target ``.py`` files for a lint hook.
@@ -44,14 +241,22 @@ def iter_python_files(args: List[str], repo_root: Path) -> Iterable[Path]:
       repo-relative). Directory exclusions are NOT applied because
       explicit paths are trusted.
     * **Full-repo scan** — no argv (e.g. ``python3 tools/lint/hook.py``).
-      Walks ``repo_root.rglob('*.py')`` and skips any path whose parts
+      Enumerates via :func:`tracked_paths` and skips any path whose parts
       intersect :data:`EXCLUDED_DIR_NAMES`.
+
+    Full-repo enumeration is git-tracked rather than ``rglob``: a stray
+    local file (a scratch script, an accidental venv the exclusions miss)
+    cannot masquerade as a repo file, and an enumeration failure raises out
+    of :func:`tracked_paths` instead of yielding nothing. Exclusions are
+    matched against the **relative** path's parts — an absolute match would
+    fire on any checkout living under a directory named ``build`` or
+    ``.worktrees`` (#14484).
 
     Args:
         args: Positional argv tail (argv[1:]). When truthy, treated as
             explicit file list. When empty, triggers full-repo mode.
         repo_root: Repository root path, used to resolve relative argv
-            entries and to seed ``rglob``.
+            entries and to anchor ``git ls-files``.
 
     Yields:
         ``Path`` objects for each target file.
@@ -65,8 +270,155 @@ def iter_python_files(args: List[str], repo_root: Path) -> Iterable[Path]:
                 yield p
         return
 
-    for p in repo_root.rglob("*.py"):
-        parts = p.relative_to(repo_root).parts
+    for rel in tracked_paths(repo_root, "*.py"):
+        parts = Path(rel).parts
         if any(part in EXCLUDED_DIR_NAMES for part in parts):
             continue
-        yield p
+        yield repo_root / rel
+
+
+# A unified-diff hunk header. With -U0 each hunk is exactly the changed region,
+# so the new-side range ``+start[,count]`` lists the lines this change added. A
+# missing count means one line; a count of 0 is a pure deletion and adds none.
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+
+
+def _git_diff(repo_root: Path, args: Sequence[str]) -> str:
+    """Run ``git diff`` in a scrubbed environment; raise rather than return nothing."""
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "diff", "--no-color", "--no-ext-diff", *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=scrubbed_git_env(),
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"git diff {' '.join(args)} failed in {repo_root}: {result.stderr.strip()}")
+    return result.stdout
+
+
+def _rename_source(repo_root: Path, rel: str, span: Sequence[str]) -> str | None:
+    """The path *rel* was renamed from in this change, or None.
+
+    Reads the whole change, not just *rel*: a diff limited to one path cannot pair
+    a rename with its source, so a moved file reads as wholly new and everything
+    in it as added. ``-z`` keeps paths containing spaces or quotes intact.
+    """
+    tokens = _git_diff(repo_root, [*span, "-M", "--name-status", "-z"]).split("\0")
+    i = 0
+    while i < len(tokens) and tokens[i]:
+        if tokens[i].startswith("R"):
+            if tokens[i + 2] == rel:
+                return tokens[i + 1]
+            i += 3
+        else:
+            i += 2
+    return None
+
+
+def added_lines(repo_root: Path, rel: str, base: str | None = None) -> set[int]:
+    """Line numbers of *rel* that the change being checked ADDED.
+
+    ``base=None`` reads the staged diff (index against HEAD): the pre-commit
+    stage, where the change has no commit yet. ``base=<rev>`` reads ``rev..HEAD``:
+    the PR stage, with the base the caller resolved. A hook scoped this way judges
+    what the change introduced instead of the file's whole backlog (#16178, after
+    #13950 did the same for shell hooks in CI).
+
+    A renamed file is diffed against its source, so a ``git mv`` adds only the
+    lines it actually changed. Below git's rename-similarity threshold the file
+    reads as new, which at that point is what it is.
+
+    Raises:
+        RuntimeError: git failed. A scoped hook must not read that as "added
+            nothing", which would report a clean change it never examined.
+    """
+    span = ["--cached"] if base is None else [base, "HEAD"]
+    source = _rename_source(repo_root, rel, span)
+    paths = [source, rel] if source else [rel]
+    lines: set[int] = set()
+    for header in _git_diff(repo_root, ["-U0", "-M", *span, "--", *paths]).splitlines():
+        match = _HUNK.match(header)
+        if match:
+            start = int(match.group(1))
+            count = 1 if match.group(2) is None else int(match.group(2))
+            lines.update(range(start, start + count))
+    return lines
+
+
+def staged_paths(repo_root: Path) -> set[str]:
+    """Repo-relative paths with staged changes, rename destinations included.
+
+    A scoped hook asks this before trusting an empty staged diff. A file that is
+    not staged at all is not part of the change being committed -- the run is
+    ``pre-commit run --all-files`` or ``--files`` -- so there is no change to scope
+    it to, and "nothing added" would be a verdict nobody examined (#16178).
+    """
+    return {path for path in _git_diff(repo_root, ["--cached", "--name-only", "-z"]).split("\0") if path}
+
+
+def resolve_base(explicit: str | None = None) -> str | None:
+    """The range a scoped hook reads: an explicit base, else the one pre-commit ran with.
+
+    ``pre-commit run --from-ref A --to-ref B`` stages nothing, so the staged diff is
+    empty and everything would read as pre-existing. pre-commit exports the range
+    as PRE_COMMIT_FROM_REF (commands/run.py); FROM_REF..HEAD then describes the
+    checked-out tree the hook is actually reading (#16178). Shared, so every scoped
+    hook resolves it the same way (#16191).
+    """
+    if explicit:
+        return explicit
+    # Only trust the range when pre-commit itself exported it. pre-commit always
+    # sets PRE_COMMIT=1 for its hooks, so a PRE_COMMIT_FROM_REF left in a
+    # developer's shell cannot silently re-scope a plain run (#16241 review).
+    if os.environ.get("PRE_COMMIT") == "1":
+        return os.environ.get("PRE_COMMIT_FROM_REF") or None
+    return None
+
+
+def logical_lines(text: str) -> List[Tuple[int, str]]:
+    """`(first line number, joined line)` with shell `\\`-continuations folded in.
+
+    A matcher that reads physical lines misses the shape a persistent override
+    or a reintroduced flag most plausibly takes, because that is how a long
+    shell invocation actually gets written::
+
+        some-tool subcommand \\
+          --dangerous-flag /tmp/x
+
+    (A neutral example on purpose: the guards that call this scan tracked
+    files, this one included, so a real offending spelling here would trip
+    them.) Splitting on newlines puts the command on one physical line and its
+    argument on the next, so a matcher requiring both on one line inspects two
+    lines that each look innocent and reports nothing (#16128 review; the same
+    gap recurred in #15961). The line number reported is the FIRST physical
+    line, so a message still points at the invocation rather than at whichever
+    token happened to land on the joined line.
+
+    A whole-line comment never continues: bash ends a comment at the newline,
+    so a trailing backslash inside one is text, not a continuation. Folding it
+    would hand the next line to the caller glued behind a ``#``, and a caller
+    that skips comment lines would then skip a real command (#16414 review).
+
+    Extracted from the guard that found the pattern first (#15938) so the
+    guard that found it again (#15961) shares one fold instead of each
+    carrying its own copy to drift independently.
+    """
+    out: List[Tuple[int, str]] = []
+    buffer, start = "", 0
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not buffer:
+            start = number
+        stripped = line.rstrip()
+        if not buffer and stripped.lstrip().startswith("#"):
+            out.append((number, line))
+            continue
+        if stripped.endswith("\\"):
+            buffer += stripped[:-1] + " "
+            continue
+        out.append((start, buffer + line))
+        buffer = ""
+    if buffer:
+        out.append((start, buffer))
+    return out

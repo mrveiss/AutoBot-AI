@@ -1,6 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { ref, computed } from 'vue'
+import type { Role } from '@/types/_generated/workflow'
 import { defineStore } from 'pinia'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
@@ -16,7 +17,8 @@ export interface UserProfile {
   email?: string
   displayName: string
   avatar?: string
-  role: 'admin' | 'superadmin' | 'operator' | 'analyst' | 'editor' | 'user' | 'viewer' | 'readonly'
+  /** The canonical backend vocabulary, generated -- no phantom `viewer` (#14937). */
+  role: Role
   preferences: UserPreferences
   createdAt: Date
   lastLoginAt?: Date

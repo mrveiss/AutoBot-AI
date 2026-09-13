@@ -138,6 +138,13 @@ function getStatusClasses(status: ServiceStatus): { bg: string; text: string; do
       text: 'text-yellow-700',
       dot: 'bg-yellow-500',
     },
+    // #15401: the rest of the agent's run-state vocabulary. These fell through
+    // to the `unknown` styling, so a crash-looping service looked the same as
+    // one the probe could not read.
+    'crash-loop': { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
+    starting: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
+    stopping: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
+    completed: { bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-400' },
   }
   return classes[status] || classes.unknown
 }

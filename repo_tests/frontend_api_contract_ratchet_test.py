@@ -51,8 +51,9 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = repo_root()
 
 _MAIN_SRC = _REPO_ROOT / "autobot-frontend" / "src"
 _SLM_SRC = _REPO_ROOT / "autobot-slm-frontend" / "src"
@@ -76,7 +77,7 @@ _BASELINES = {
         "responses": 187,
         # #15455: raised for the four typed detail fetches #15429 added. Same
         # limitation — this counts assertions, and a correct new call is one.
-        "inline_generics": 577,
+        "inline_generics": 564,
     },
     "autobot-slm-frontend": {
         "clients": 1,
@@ -85,7 +86,12 @@ _BASELINES = {
         # transport client, so this one is a real bypass and should reach 0.
         # The main frontend is already there.
         "axios": 1,
-        "responses": 31,
+        # #13139: 31 -> 29. Giving `/mfa/verify-login` and `/auth/sso/ldap/login`
+        # a `response_model` retired `interface MFAVerifyResponse` (useMfaApi.ts)
+        # and `interface LDAPLoginResponse` (useSsoApi.ts); both are now derived
+        # from `components['schemas'][...]`. Lowered in the same commit as the
+        # work, per this module's docstring: an unrecorded shrink is a failure.
+        "responses": 29,
         "inline_generics": 87,
     },
 }
@@ -137,7 +143,7 @@ def _source_files(root: Path) -> list[Path]:
         for path in sorted(root.rglob("*"))
         if path.suffix in _SOURCE_SUFFIXES
         and path.is_file()
-        and "node_modules" not in path.parts
+        and "node_modules" not in path.relative_to(root).parts  # #15510
         and "generated" not in path.parts
         and not _is_test(path)
     ]
@@ -159,17 +165,13 @@ def _client_class_names(root: Path) -> set[str]:
 
 def _raw_fetch_files(root: Path) -> list[str]:
     return [
-        path.relative_to(_REPO_ROOT).as_posix()
-        for path in _source_files(root)
-        if _RAW_FETCH_RE.search(_read(path))
+        path.relative_to(_REPO_ROOT).as_posix() for path in _source_files(root) if _RAW_FETCH_RE.search(_read(path))
     ]
 
 
 def _axios_importers(root: Path) -> list[str]:
     return [
-        path.relative_to(_REPO_ROOT).as_posix()
-        for path in _source_files(root)
-        if _AXIOS_IMPORT_RE.search(_read(path))
+        path.relative_to(_REPO_ROOT).as_posix() for path in _source_files(root) if _AXIOS_IMPORT_RE.search(_read(path))
     ]
 
 

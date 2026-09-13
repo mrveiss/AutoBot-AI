@@ -126,9 +126,9 @@ def admin_client(app):
 
 @pytest.fixture
 def temp_allowed_dir(tmp_path):
-    """Create temporary directory within allowed paths for testing"""
-    # Use /tmp/autobot/ which is in ALLOWED_DIRECTORIES
-    test_dir = Path("/tmp/autobot/test_security")  # nosec B108  # test/controlled code uses tmpdir intentionally
+    """Per-test dir under an allowed root; a shared leaf let concurrent shards
+    rmtree each other's tree, inverting a security assertion (#15772)."""
+    test_dir = Path("/tmp/autobot") / f"test_security_{tmp_path.name}"  # nosec B108  # allowed root, unique leaf
     test_dir.mkdir(parents=True, exist_ok=True)
     yield test_dir
     # Cleanup

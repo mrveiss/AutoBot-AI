@@ -857,66 +857,66 @@ curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
 ## SDK Examples
 
 ### Python SDK Usage
+
+`autobot_sdk` ships in-tree at `libs/autobot-sdk-python`. It is async-only, the
+entry point is `AutoBot` (not `AutoBotClient`, which is the HTTP base class and
+carries no resources), it authenticates with a bearer `token`, and `base_url` is
+the backend **origin** — the client adds the `/api` root itself. It covers four
+resources: `sessions`, `agents`, `knowledge` and `analytics`. See
+[the SDK overview](../sdk/README.md) for what is and is not covered.
+
 ```python
-from autobot_sdk import AutoBotClient
+import asyncio
+import os
 
-client = AutoBotClient(
-    base_url="http://127.0.0.1:8443/api",
-    api_key="your_api_key_here"
-)
+from autobot_sdk import AutoBot
 
-# Multi-modal AI processing
-result = await client.multimodal.process({
-    "inputs": {
-        "text": "Automate this login form",
-        "image": open("screenshot.png", "rb").read()
-    },
-    "processing_options": {
-        "confidence_threshold": 0.8,
-        "enable_npu_acceleration": True
-    }
-})
 
-# Knowledge base search
-knowledge = await client.knowledge.search({
-    "query": "terminal automation best practices",
-    "limit": 10,
-    "search_mode": "semantic"
-})
+async def main():
+    async with AutoBot(
+        base_url="https://autobot.example.com:8443",
+        token=os.environ["AUTOBOT_API_TOKEN"],
+    ) as bot:
+        # Knowledge base search — `limit` is the field SearchRequest declares
+        results = await bot.knowledge.search("terminal automation best practices", limit=10)
 
-# Workflow execution
-workflow = await client.workflows.create({
-    "name": "Backup Workflow",
-    "trigger": {"type": "schedule", "schedule": "0 2 * * *"},
-    "steps": [/* workflow steps */]
-})
+        # Chat sessions
+        created = await bot.sessions.create(title="Automation")
+        history = await bot.sessions.get(created.data.id, page=1, per_page=50)
+
+        # Analytics — neither route takes a time window
+        usage = await bot.analytics.usage()
+
+        print(results, history, usage)
+
+
+asyncio.run(main())
 ```
+
+Multimodal processing and workflow creation have **no SDK method** — call
+`/api/multimodal/*` and `/api/workflow/*` over HTTP directly.
 
 ### JavaScript/Node.js SDK Usage
+
+`@autobot/sdk` ships in-tree at `libs/autobot-sdk-ts`. The entry point is
+`AutoBot`; `AutoBotHttpClient` is the base class. It takes `baseUrl` (the backend
+origin) and `token`.
+
 ```javascript
-import { AutoBotClient } from '@autobot/sdk';
+import { AutoBot } from '@autobot/sdk';
 
-const client = new AutoBotClient({
-  baseURL: 'http://127.0.0.1:8443/api',
-  apiKey: 'your_api_key_here'
+const bot = new AutoBot({
+  baseUrl: 'https://autobot.example.com:8443',
+  token: process.env.AUTOBOT_API_TOKEN,
 });
 
-// Real-time system monitoring
-const healthStream = client.system.subscribeToHealth();
-healthStream.on('update', (health) => {
-  console.log('System health:', health.overall_status);
-});
-
-// File upload with processing
-const uploadResult = await client.files.upload({
-  file: fileBuffer,
-  metadata: {
-    category: 'documentation',
-    auto_index: true,
-    extract_text: true
-  }
-});
+const health = await bot.agents.health();
+const sessions = await bot.sessions.list();
+const stats = await bot.knowledge.stats();
 ```
+
+Health subscriptions and file upload have **no SDK method** in either package —
+use the WebSocket and `/api/knowledge_base/upload` routes directly.
 
 ---
 

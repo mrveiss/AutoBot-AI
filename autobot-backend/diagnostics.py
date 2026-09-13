@@ -9,6 +9,7 @@ Provides system health monitoring, error reporting, and recovery suggestions
 
 import asyncio
 import gc
+import json
 import logging
 import platform
 import subprocess  # nosec B404  # controlled system diagnostics
@@ -534,15 +535,15 @@ if __name__ == "__main__":
 
     # Test system info gathering
     system_info = get_system_info()
-    logger.info("System Info: {json.dumps(system_info, indent=2)}")
+    logger.info(f"System Info: {json.dumps(system_info, indent=2)}")
 
     # Test memory cleanup
     cleanup_result = force_memory_cleanup()
-    logger.info("Memory Cleanup: {json.dumps(cleanup_result, indent=2)}")
+    logger.info(f"Memory Cleanup: {json.dumps(cleanup_result, indent=2)}")
 
     # Test performance metrics
     metrics = get_performance_metrics()
-    logger.info("Performance Metrics: {json.dumps(metrics, indent=2)}")
+    logger.info(f"Performance Metrics: {json.dumps(metrics, indent=2)}")
 
 
 # Backward compatibility alias

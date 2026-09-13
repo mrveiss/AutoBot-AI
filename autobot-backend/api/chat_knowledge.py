@@ -43,6 +43,7 @@ import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 from api.chat_knowledge_manager import get_chat_knowledge_manager_instance
+from api.chat_knowledge_prompt import TranscriptRefused
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     AddKnowledgeRequest,
@@ -73,6 +74,15 @@ from constants.threshold_constants import CategoryDefaults
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["chat_knowledge"])
+
+# #16490: DELETE /context/{chat_id} and the /context-orphans cleanup routes
+# live in a sibling module -- this file is a handful of lines from
+# scripts/check_python_file_size.py's MAX_LINES, the same reason
+# chat_knowledge_manager.py/chat_knowledge_prompt.py were split out of it
+# (#15160). Composed the same way api/chat.py composes api/chat_sessions.py.
+from api.chat_knowledge_delete import router as _delete_router
+
+router.include_router(_delete_router)
 
 
 # API Endpoints
@@ -298,6 +308,9 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
 
         return {"success": True, "data": {"success": True, "compiled": compiled}}
 
+    except TranscriptRefused as e:
+        # #15700: a refused transcript is the user's to fix, not a server fault.
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error("Failed to compile chat: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

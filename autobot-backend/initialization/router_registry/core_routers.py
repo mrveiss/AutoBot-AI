@@ -11,6 +11,7 @@ and are imported at module level to fail fast if missing.
 """
 
 import api.pricing_health  # noqa: F401 — registers KnownProbes.PRICING probe (GH#6480)
+import api.secrets_store_health  # noqa: F401 — registers KnownProbes.SECRETS_STORE probe (#14126)
 import content_reach.health  # noqa: F401 — registers KnownProbes.CONTENT_REACH probe (#10932)
 
 # Core router imports - these are required for basic functionality
@@ -34,6 +35,7 @@ from api.chat_embed import router as chat_embed_router  # GH#9047
 from api.chat_presets import router as chat_presets_router  # GH#8595
 from api.collaboration import router as collaboration_router
 from api.config_revisions import router as config_revisions_router  # #1404
+from api.coordination import router as coordination_router  # #15949
 from api.data_storage import router as data_storage_router
 from api.database_mcp import router as database_mcp_router
 from api.developer import router as developer_router
@@ -486,6 +488,7 @@ def _get_agent_routers() -> list:
         ),
         (overseer_router, "/overseer", ["overseer", "agent"], "overseer"),
         (agent_org_router, "/agents", ["agent-org"], "agent_org"),
+        (coordination_router, "/coordination", ["coordination", "agent"], "coordination"),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
         (memory_router, "/memory", ["memory"], "memory"),

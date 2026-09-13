@@ -14,6 +14,8 @@
 
 import { describe, it, expect } from 'vitest'
 
+import en from '@/i18n/locales/en.json'
+
 import {
   OWNER_RULES,
   RULE_DIMENSIONS,
@@ -196,5 +198,69 @@ describe('dimension lookup (#13941)', () => {
       'tool-claude',
       'tool-none',
     ])
+  })
+})
+
+
+/**
+ * #14123: every `labelKey` a rule declares must resolve in `en.json`.
+ *
+ * `STATUS_RULES` builds its keys with a template literal --
+ * `llc.canvasRules.status.${status}` -- so `check:i18n` cannot see them: its
+ * regex needs a quote straight after `t(`, and even the variable-key reporting
+ * added alongside this only makes the call site *visible*, it cannot resolve
+ * what the suffix will be. Every other gate is equally blind. Type-checking
+ * catches a widened `AgentDisplayStatus` union at the `Record` in
+ * `STATUS_SHAPES`, so a new member cannot be silently unknown -- but once its
+ * shape is added, type-check, `check:i18n` and the suite all go green while the
+ * chip and legend render the literal string `llc.canvasRules.status.on_leave`
+ * at the user, in all 11 locales.
+ *
+ * The existing coverage does not catch it: two of the six status labels are
+ * otherwise touched only by `expect(labels).not.toContain(undefined)`, which
+ * passes vacuously when a key is missing.
+ *
+ * vue-i18n falls back to `en`, so a key absent from another locale renders
+ * English -- undesirable, and ratcheted separately (#13958). A key absent from
+ * `en` is what renders the path itself, which is why this asserts against `en`.
+ */
+describe('#14123: declared label keys resolve', () => {
+  const resolve = (key: string): unknown =>
+    key.split('.').reduce<unknown>(
+      (node, segment) =>
+        node && typeof node === 'object' ? (node as Record<string, unknown>)[segment] : undefined,
+      en,
+    )
+
+  const declaredKeys = [...STATUS_RULES, ...OWNER_RULES]
+    .map((rule) => rule.labelKey)
+    .filter((key): key is string => key !== null)
+
+  it('finds keys to check', () => {
+    // Guard the guard: if the rules stop declaring keys -- or start declaring
+    // them somewhere this does not read -- every case below passes vacuously,
+    // which is the exact shape of the hole being closed.
+    expect(declaredKeys.length).toBeGreaterThanOrEqual(8)
+  })
+
+  it.each(declaredKeys)('%s resolves to a real string in en.json', (key) => {
+    const value = resolve(key)
+
+    expect(typeof value, `${key} is missing from en.json, so the UI renders the key path`).toBe(
+      'string',
+    )
+    expect(value, `${key} is present but empty`).not.toBe('')
+    expect(value, `${key} resolves to its own path -- that is the defect, not a translation`).not.toBe(
+      key,
+    )
+  })
+
+  it('covers every status the rule set declares, not just the ones a fixture happens to hit', () => {
+    // The point of deriving from STATUS_RULES rather than listing statuses: a
+    // sixth status added to the union arrives here automatically.
+    const statusKeys = STATUS_RULES.map((rule) => rule.labelKey)
+
+    expect(statusKeys).not.toContain(null)
+    expect(new Set(statusKeys).size).toBe(statusKeys.length)
   })
 })

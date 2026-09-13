@@ -605,5 +605,5 @@ def get_dangerous_patterns_as_tuples() -> List[Tuple[re.Pattern, str]]:
     return [(dp.pattern, dp.description) for dp in DANGEROUS_REGEX_PATTERNS]
 
 
-# Legacy alias for backward compatibility
+# Legacy alias. #14042: a derived view of the tuple above, not a second definition, so it cannot drift.
 DANGEROUS_PATTERNS = get_dangerous_patterns_as_tuples()

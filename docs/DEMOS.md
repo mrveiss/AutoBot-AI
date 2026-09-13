@@ -183,4 +183,4 @@ Have a demo or screenshot that showcases AutoBot well? Contributions welcome:
 
 1. Add your demo file to `docs/demos/` (GIF, MP4, or PNG)
 2. Add a description to this file under the appropriate section
-3. Open a PR targeting `Dev_new_gui`
+3. Open a PR targeting `main`

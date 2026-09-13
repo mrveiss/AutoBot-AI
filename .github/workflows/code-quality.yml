@@ -11,7 +11,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   push:
-    branches: [ main, Dev_new_gui, develop ]
+    branches: [ release, main, develop ]
     paths:
       - '**/*.py'
       - '**/requirements*.txt'
@@ -55,6 +55,11 @@ on:
       - 'docs/**'
       - 'scripts/lib/**'
       - '.github/workflows/code-quality.yml'
+      # #15608: the shared filter file and the complement shim publishing the
+      # same required context. Editing either must run the REAL gate, not the
+      # shim reporting green over its own change.
+      - '.github/filters/code-quality-paths.yml'
+      - '.github/workflows/code-quality-required-context.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
   # required-check context ("code-quality") always reports a conclusion. A
   # path-filtered required check that never triggers leaves the PR deadlocked on
@@ -63,7 +68,7 @@ on:
   # Branch-protection promotion to required is the separate owner-confirmed
   # follow-up (#10022).
   pull_request:
-    branches: [ main, Dev_new_gui, develop ]
+    branches: [ release, main, develop ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -90,40 +95,15 @@ jobs:
           # never reports and the queue deadlocks. Empty on push/PR, so
           # their existing behaviour is unchanged.
           base: ${{ github.event.merge_group.base_sha || '' }}
-          filters: |
-            backend:
-              - '**/*.py'
-              - '**/requirements*.txt'
-              - 'requirements-ci/**'
-              - 'repo_tests/**'
-              - 'pyproject.toml'
-              - '.flake8'
-              - '.bandit'
-              - '.pre-commit-config.yaml'
-              - 'pipeline-scripts/**'
-              - 'tools/lint/**'
-              - 'autobot-infrastructure/shared/scripts/**'
-              # #14584: was 'autobot-infrastructure/ansible/roles/slm_agent/files/**',
-              # a path that never existed (autobot-infrastructure/ has no ansible/
-              # tree at all) -- a stranded entry that matched nothing since it was
-              # added. Corrected to the real mirror path, and widened to the second
-              # canonical/mirror pair detect-agent-code-drift.sh now also checks.
-              - 'autobot-slm-backend/ansible/roles/slm_agent/files/**'
-              - 'autobot-slm-backend/ansible/roles/backend/files/**'
-              - 'autobot-backend/config/permission_rules.yaml'
-              - 'autobot-backend/static/error_messages.yaml'
-              - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
-              - '.github/actions/**'
-              # #15309: the watchdog inventory + systemd templates
-              # tools/lint/check_runner_watchdog_schedule.py --audit reads.
-              - 'scripts/runner-watchdog-inventory.yaml'
-              - 'scripts/systemd/runner-watchdog@.service'
-              - 'scripts/systemd/runner-watchdog@.timer'
-              # #15208: see the on.push.paths list above -- docs/ and the shared rule
-              # set are the documentation guard's inputs.
-              - 'docs/**'
-              - 'scripts/lib/**'
-              - '.github/workflows/code-quality.yml'
+          # #15608: the path set is defined ONCE in
+          # .github/filters/code-quality-paths.yml and read by reference from
+          # both halves of the required-context pair -- this gate and the
+          # complement shim in code-quality-required-context.yml. A second
+          # inline copy is how the two sides drift apart, and the drift
+          # direction is silent: a shim that believes nothing changed while
+          # this gate believes otherwise publishes `code-quality` green for an
+          # audit that never ran.
+          filters: .github/filters/code-quality-paths.yml
 
   code-quality:
     needs: changes
@@ -159,8 +139,8 @@ jobs:
     #
     # What the evidence actually shows is two populations, not one:
     #
-    #   push on Dev_new_gui, small diff    10m54s   success
-    #   pull_request into main, 2195 files >60m     cancelled (twice)
+    #   push on main, small diff    10m54s   success
+    #   pull_request into release, 2195 files >60m     cancelled (twice)
     #
     # This job's cost scales with the number of changed files, so normal work
     # finishes in ~11 minutes and only a release-sized promotion is pathological.
@@ -198,10 +178,13 @@ jobs:
     # PATH instead (see .github/actions/setup-python-ci/action.yml). Also
     # fixes this step's own name, which named 3.12 while requesting 3.14 --
     # harmless, but sent debugging here to the wrong version first (#15313 aside).
-    - name: Set up Python 3.14
+    - name: Set up Python
       uses: ./.github/actions/setup-python-ci
       with:
-        python-version: '3.14'
+        # python-version omitted on purpose: the composite reads .python-version
+        # when it is empty (#13842). Passing python-version-file here is not the
+        # same thing -- that input belongs to actions/setup-python, and this
+        # composite does not declare it, so actionlint rejects it.
         cache-dependency-path: |
           requirements*.txt
           autobot-backend/requirements*.txt
@@ -328,6 +311,17 @@ jobs:
       # this closes the class rather than one shape of it — the pre-commit
       # stage and a direct run of the hook still scan whole files.
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only pre-commit-no-print-console
+
+    - name: Block new local BaseModel definitions in API files (#6056, #16178)
+      # --changed-lines-only (#16178), and unlike the two scoped steps above, the
+      # pre-commit stage is scoped too: this hook had no baseline and no blocking
+      # CI step (enforce-precommit.yml runs every hook, but only as warnings), so
+      # its whole-file read blocked the commit itself, failing a change for a
+      # model it neither added nor could move (every original domain schemas_*.py
+      # is frozen at its size ceiling). With --python the wrapper cannot parse the
+      # validator's output, so it hands over the base it resolved and the hook
+      # scopes itself. A direct run of the hook still reads whole files.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only --python tools/lint/check_no_local_schemas.py --ext py
 
     - name: Check repo conventions — third-party names, doc cross-links (#13876)
       env:
@@ -512,6 +506,19 @@ jobs:
           exit 1
         }
 
+    - name: Sweep the whole tree for unregistered AUTOBOT_* env vars (#15807)
+      run: |
+        # The pre-commit hook only sees staged files, so a variable whose read
+        # landed in one commit and whose registration was dropped in another --
+        # the additive merge conflict in env_registry_backend.py produces exactly
+        # that -- was never inspected by anything. With no arguments this now
+        # sweeps every tracked .py file, and fails if the sweep itself reaches
+        # too few of them.
+        python3 pipeline-scripts/check_env_var_registry.py || {
+          echo "An AUTOBOT_* env var is read somewhere but not registered."
+          exit 1
+        }
+
     - name: Type-check autobot_shared (required)
       run: |
         # autobot_shared is the shared library and must be strictly typed.
@@ -566,17 +573,29 @@ jobs:
 
     - name: Audit undefined names under autobot-infrastructure/shared/scripts (#14405)
       run: |
-        # `autobot-infrastructure/` is excluded by the pre-commit flake8 hook and
-        # named by no CI flake8 invocation, so nothing ever linted this tree; 12
-        # operator scripts accumulated 103 undefined names -- live NameErrors, not
-        # style. #14405 fixed all 12 and scoped a second pre-commit hook to the tree
-        # for F821. This has to run in a REQUIRED check for the same directional
-        # reason as #14419 and #14489: re-widening the exclusion lints FEWER files, so
-        # every lint step reports fewer violations and goes greener. It re-proves both
-        # halves -- the tree is F821-clean AND a pre-commit hook still reaches it --
-        # and fails below a discovery floor, because a sweep handed an empty file list
-        # reports a comfortable zero. There is no exemption list, deliberately.
-        python3 tools/lint/check_infra_scripts_undefined_names.py --audit
+        # Three trees are excluded by the pre-commit flake8 hook, named by no CI
+        # flake8 invocation that can fail (security.yml runs `|| true`), and listed
+        # in .flake8's own exclude. Nothing linted them; 12 operator scripts
+        # accumulated 103 undefined names -- live NameErrors, not style. #14405 fixed
+        # all 12 and scoped a second pre-commit hook to ONE of the three trees.
+        #
+        # #15914 is what that scoping cost: five classes in a SECOND excluded tree
+        # (`autobot-backend/code_analysis/`) each kept a `self.config = config` whose
+        # import had been dropped, so every construction raised NameError for six to
+        # nine months and `CodeQualityDashboard` was never runnable. A guard bounded
+        # by the exclusion that caused the defect finds only the instance already
+        # known about, so the sweep is now every tracked *.py and the hook carries no
+        # scope at all.
+        #
+        # This has to run in a REQUIRED check for the same directional reason as
+        # #14419 and #14489: re-widening an exclusion lints FEWER files, so every
+        # lint step reports fewer violations and goes greener. It re-proves both
+        # halves -- the repo is F821-clean AND a pre-commit hook reaches every
+        # tracked file -- and fails below a discovery floor, because a sweep handed
+        # an empty file list reports a comfortable zero. The file list comes from
+        # `git ls-files`, not from the lint config, so the two can disagree.
+        # There is no exemption list, deliberately.
+        python3 tools/lint/check_undefined_names.py --audit
 
     - name: Audit unexpanded shell placeholders in Python string constants (#14517)
       run: |

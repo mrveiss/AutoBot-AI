@@ -31,10 +31,11 @@ import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 SCRIPT_DIR = "autobot-infrastructure/shared/scripts"
 RUNBOOK = "docs/runbooks/ROTATE_SSH_KEYS.md"
 

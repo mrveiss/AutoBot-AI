@@ -75,7 +75,7 @@ def _installed_key(source_id: str) -> str:
 def _plugin_source_url(slug: str) -> str:
     """Build a source URL for a core plugin from config, avoiding hardcoded paths."""
     repo = getattr(config, "GITHUB_REPO_URL", "https://github.com/mrveiss/AutoBot-AI")
-    branch = getattr(config, "GITHUB_DEFAULT_BRANCH", "Dev_new_gui")
+    branch = getattr(config, "GITHUB_DEFAULT_BRANCH", "main")
     return f"{repo}/tree/{branch}/plugins/core-plugins/{slug}"
 
 

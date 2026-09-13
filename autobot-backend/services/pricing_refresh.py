@@ -22,8 +22,8 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.model_pricing import MODEL_PRICING_PER_1M_TOKENS
 from celery_app import celery_app
-from constants.model_constants import MODEL_PRICING_PER_1M_TOKENS
 
 if TYPE_CHECKING:
     from llm_shared.pricing.sources import ModelPricing
@@ -107,7 +107,7 @@ def _detect_drift(provider: str, fetched: "dict[str, ModelPricing]") -> None:
                 logger.warning(
                     "pricing_drift provider=%s model=%s field=%s "
                     "hardcoded=%.4f fetched=%.4f drift_pct=%.1f%% "
-                    "— update MODEL_PRICING_PER_1M_TOKENS in ssot_constants.py (GH#6480)",
+                    "— update MODEL_PRICING_PER_1M_TOKENS in autobot_shared/model_pricing.py (GH#6480, #15860)",
                     provider,
                     model_id,
                     field_name,

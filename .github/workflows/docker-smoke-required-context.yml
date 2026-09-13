@@ -34,7 +34,7 @@ name: docker-smoke-required-context
 
 on:
   pull_request:
-    branches: [ Dev_new_gui ]
+    branches: [ main ]
 
 permissions:
   contents: read

@@ -20,10 +20,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from _scan_helpers import scan_python_files  # noqa: E402
 from check_git_toplevel_env_scrubbed import (  # noqa: E402
     ALLOWLIST,
+    GIT_CALL_FLOOR,
+    is_production_path,
     main,
     scan,
+    scan_shell,
+    scan_with_counts,
     subprocess_names,
 )
 
@@ -67,11 +72,43 @@ _PROSE_ONLY = '''
 TOPLEVEL_NOTE = "--show-toplevel answers with the CWD under an ambient GIT_DIR"
 '''
 
+# `git ls-files` used to live here: it was the example of a git call the guard
+# deliberately let through. #14896 gated it -- an inherited GIT_DIR outranks
+# `cwd=` and enumerates the wrong index -- so the un-gated example is now a
+# subcommand whose answer does not depend on which work tree git picks.
 _OTHER_GIT_CALL = """
+import subprocess
+
+def head(root):
+    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=root).stdout
+"""
+
+_UNSCRUBBED_LS_FILES = """
 import subprocess
 
 def tracked(root):
     return subprocess.run(["git", "ls-files"], cwd=root).stdout
+"""
+
+_SCRUBBED_LS_FILES = """
+import subprocess
+
+from autobot_shared.paths import scrubbed_git_env
+
+def tracked(root):
+    return subprocess.run(["git", "ls-files"], cwd=root, env=scrubbed_git_env()).stdout
+"""
+
+_LS_FILES_VIA_A_LOCAL_SCRUB_WRAPPER = """
+import subprocess
+
+from autobot_shared.paths import scrubbed_git_env
+
+def _test_git_env():
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null"}
+
+def tracked(root):
+    return subprocess.run(["git", "ls-files"], cwd=root, env=_test_git_env()).stdout
 """
 
 
@@ -180,8 +217,120 @@ def test_prose_mentioning_the_flag_is_not_a_finding(tmp_path: Path) -> None:
     assert scan(_write(tmp_path, _PROSE_ONLY), tmp_path) == []
 
 
-def test_other_git_subprocesses_are_left_alone(tmp_path: Path) -> None:
-    assert scan(_write(tmp_path, _OTHER_GIT_CALL), tmp_path) == []
+def test_other_git_subprocesses_are_reported_in_production_code(tmp_path: Path) -> None:
+    """#15783 widened the gate: in production, every git call must say env=."""
+    findings = scan(_write(tmp_path, _OTHER_GIT_CALL), tmp_path)
+    assert len(findings) == 1
+    assert "#15783" in findings[0][1]
+
+
+def test_other_git_subprocesses_are_left_alone_in_tests(tmp_path: Path) -> None:
+    """The contrast: a test reading the real repository on purpose is ordinary.
+
+    Without this half the widened gate would read as "gate everything", which
+    is the version that forces an allowlist entry onto every
+    ``repo_tests/*_anchoring_test.py`` and gets switched off a month later.
+    Test-side *writes* are covered instead by check_git_write_env_scrubbed.
+    """
+    assert scan(_write(tmp_path, _OTHER_GIT_CALL, name="sample_test.py"), tmp_path) == []
+    assert scan(_write(tmp_path, _OTHER_GIT_CALL, name="test_sample.py"), tmp_path) == []
+
+
+def test_the_wrapper_gap_is_closed_for_the_call_itself(tmp_path: Path) -> None:
+    """A ``def git(*args): subprocess.run(["git", *args])`` wrapper is caught.
+
+    It used to be a documented gap outright. The flag half is still invisible —
+    the guard cannot attribute ``--show-toplevel`` supplied by a caller — but
+    the wrapper's own unscrubbed git call is now a finding, which is the half
+    that carries the defect.
+    """
+    findings = scan(_write(tmp_path, _WRAPPER), tmp_path)
+    assert len(findings) == 1
+    assert "#15783" in findings[0][1]
+
+
+_ASYNC_UNSCRUBBED = """
+import asyncio
+
+async def status(path):
+    proc = await asyncio.create_subprocess_exec("git", "-C", path, "status", "--porcelain")
+    return await proc.communicate()
+"""
+
+_ASYNC_SCRUBBED = """
+import asyncio
+
+from autobot_shared.paths import scrubbed_git_env
+
+async def status(path):
+    proc = await asyncio.create_subprocess_exec(
+        "git", "-C", path, "status", "--porcelain", env=scrubbed_git_env()
+    )
+    return await proc.communicate()
+"""
+
+_ASYNC_ALIASED = """
+import asyncio as aio
+
+async def status(path):
+    return await aio.create_subprocess_exec("git", "-C", path, "status")
+"""
+
+
+def test_asyncio_git_call_is_a_finding(tmp_path: Path) -> None:
+    """The #15777 shape: the fourth recurrence was an async call site."""
+    findings = scan(_write(tmp_path, _ASYNC_UNSCRUBBED), tmp_path)
+    assert len(findings) == 1
+    assert "#15783" in findings[0][1]
+
+
+def test_scrubbed_asyncio_git_call_is_accepted(tmp_path: Path) -> None:
+    assert scan(_write(tmp_path, _ASYNC_SCRUBBED), tmp_path) == []
+
+
+def test_asyncio_alias_is_resolved(tmp_path: Path) -> None:
+    assert len(scan(_write(tmp_path, _ASYNC_ALIASED), tmp_path)) == 1
+
+
+def test_discovered_count_rises_with_git_call_sites(tmp_path: Path) -> None:
+    """The vacuity floor counts what was inspected, not what was wrong."""
+    _, none_found = scan_with_counts(_write(tmp_path, _PROSE_ONLY), tmp_path)
+    _, one_found = scan_with_counts(_write(tmp_path, _OTHER_GIT_CALL, name="a.py"), tmp_path)
+    _, scrubbed_still_counts = scan_with_counts(_write(tmp_path, _SCRUBBED, name="b.py"), tmp_path)
+
+    assert none_found == 0
+    assert one_found == 1
+    assert scrubbed_still_counts == 1, "a compliant call site is still a call site inspected"
+
+
+def test_the_repository_is_above_the_discovered_floor() -> None:
+    """A sweep that parses nothing reports clean; this is what catches that."""
+    repo_root = Path(__file__).resolve().parents[2]
+    py_files, _ = scan_python_files([], repo_root)
+    discovered = sum(scan_with_counts(path, repo_root)[1] for path in py_files)
+
+    assert discovered >= GIT_CALL_FLOOR, f"only {discovered} git call sites reached"
+
+
+def test_unscrubbed_ls_files_is_a_finding(tmp_path: Path) -> None:
+    """#14896: `cwd=` loses to an inherited GIT_DIR, so a correct cwd still
+    enumerates the other checkout's index -- and answers without erroring."""
+    findings = scan(_write(tmp_path, _UNSCRUBBED_LS_FILES), tmp_path)
+    assert len(findings) == 1
+    assert "ls-files" in findings[0][1]
+
+
+def test_scrubbed_ls_files_is_not_a_finding(tmp_path: Path) -> None:
+    """The green direction, so the test above cannot be met by flagging every
+    ls-files call and telling correct code to fix itself."""
+    assert scan(_write(tmp_path, _SCRUBBED_LS_FILES), tmp_path) == []
+
+
+def test_ls_files_through_a_local_scrub_wrapper_is_not_a_finding(tmp_path: Path) -> None:
+    """A suite that needs the scrub plus a pinned GIT_CONFIG_GLOBAL wraps the
+    helper. Rejecting the wrapper would push those callers back onto an inline
+    repeat of the scrub, which is the duplication this guard exists to stop."""
+    assert scan(_write(tmp_path, _LS_FILES_VIA_A_LOCAL_SCRUB_WRAPPER), tmp_path) == []
 
 
 def test_allowlisted_files_are_skipped(tmp_path: Path) -> None:
@@ -198,6 +347,24 @@ def test_every_allowlist_entry_still_exists() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     missing = [entry for entry in ALLOWLIST if not (repo_root / entry).is_file()]
     assert not missing, f"allowlist entries no longer in the tree: {missing}"
+
+
+def test_a_real_tool_named_like_a_test_is_still_production(tmp_path: Path) -> None:
+    """`scripts/test_first_remediation.py` must not be exempted by its name alone (#16179).
+
+    Without the override, ``is_production_path`` reads the ``test_`` prefix
+    and treats a real, unreviewed automation tool as a test -- exactly the
+    misclassification #16179 found. This pins the override rather than the
+    general prefix rule, so a DIFFERENT genuinely-test ``test_*.py`` file
+    stays exempt (see the contrast test below).
+    """
+    assert is_production_path("scripts/test_first_remediation.py") is True
+
+
+def test_an_ordinary_test_prefixed_file_still_reads_as_a_test() -> None:
+    """The override is scoped to one named file, not a rule change."""
+    assert is_production_path("scripts/test_something_else.py") is False
+    assert is_production_path("autobot-backend/agents/npu_code_search_agent_test.py") is False
 
 
 def test_main_exits_nonzero_on_a_violation(tmp_path: Path) -> None:
@@ -256,7 +423,6 @@ def test_the_bare_name_stays_covered_when_nothing_imports_it() -> None:
     ("gap", "source"),
     [
         ("argv built through a variable", _VARIABLE_ARGV),
-        ("flag supplied to a wrapper by its caller", _WRAPPER),
         ("a locally shadowed scrubbed_git_env", _SHADOWED_SCRUB_HELPER),
     ],
 )
@@ -281,3 +447,138 @@ def test_the_docstring_lists_every_pinned_gap() -> None:
     assert "KNOWN GAPS" in doc
     for phrase in ("through a variable", "Wrappers", "shadowed scrub helper"):
         assert phrase in doc, phrase
+
+
+_ARGS_KEYWORD = """
+import subprocess
+
+def status(path):
+    return subprocess.run(args=["git", "-C", path, "status"]).stdout
+"""
+
+_ARGS_KEYWORD_TOPLEVEL = """
+import subprocess
+
+def root():
+    return subprocess.run(args=["git", "rev-parse", "--show-toplevel"]).stdout
+"""
+
+_ABSOLUTE_GIT = """
+import subprocess
+
+def status(path):
+    return subprocess.run(["/usr/bin/git", "-C", path, "status"]).stdout
+"""
+
+
+def test_args_keyword_is_inspected(tmp_path: Path) -> None:
+    """`subprocess.run(args=[...])` is an ordinary spelling, not an evasion."""
+    findings = scan(_write(tmp_path, _ARGS_KEYWORD), tmp_path)
+
+    assert len(findings) == 1
+    assert "#15783" in findings[0][1]
+
+
+def test_args_keyword_reaches_the_token_gate_too(tmp_path: Path) -> None:
+    """A --show-toplevel behind args= gets the toplevel message, not the generic one."""
+    findings = scan(_write(tmp_path, _ARGS_KEYWORD_TOPLEVEL, name="sample_test.py"), tmp_path)
+
+    assert len(findings) == 1
+    assert "#15176" in findings[0][1]
+
+
+def test_an_absolute_git_path_is_not_skipped_by_the_pre_gate(tmp_path: Path) -> None:
+    """The cheap gate must admit every spelling `_names_git` accepts."""
+    findings = scan(_write(tmp_path, _ABSOLUTE_GIT), tmp_path)
+
+    assert len(findings) == 1
+
+
+def test_the_args_keyword_and_absolute_paths_count_toward_discovery(tmp_path: Path) -> None:
+    """A call the matcher cannot see is also missing from the vacuity floor."""
+    _, args_form = scan_with_counts(_write(tmp_path, _ARGS_KEYWORD, name="a.py"), tmp_path)
+    _, absolute_form = scan_with_counts(_write(tmp_path, _ABSOLUTE_GIT, name="b.py"), tmp_path)
+
+    assert args_form == 1
+    assert absolute_form == 1
+
+
+def test_an_empty_enumeration_is_absorbed_so_the_floor_can_speak(tmp_path, monkeypatch):
+    """`iter_shell_files` yields nothing on an empty index, letting `enforce_reach` refuse.
+
+    This checker is contracted to refuse AUDIBLY — `scan_helpers_vacuity_test`
+    requires the refusal on stderr, not merely a non-zero exit. `tracked_paths`
+    raises on empty, which satisfied the exit code and broke the contract
+    (#15962).
+    """
+    import _scan_helpers
+    import check_git_toplevel_env_scrubbed as checker
+
+    def _empty(*_a, **_k):
+        raise _scan_helpers.EmptyEnumeration("listed nothing")
+
+    monkeypatch.setattr(checker, "tracked_paths", _empty)
+    assert list(checker.iter_shell_files([], tmp_path)) == []
+
+
+def test_a_git_failure_still_propagates(tmp_path, monkeypatch):
+    """A broken git is an ERROR, not an empty population.
+
+    The absorption above must be narrow. Catching `RuntimeError` instead of
+    `EmptyEnumeration` swallows a git failure too, and the checker would then
+    scan zero shell files and report a clean tree — the report-clean shape this
+    whole file exists to prevent, reached through its own remedy.
+    """
+
+    import check_git_toplevel_env_scrubbed as checker
+
+    def _broken(*_a, **_k):
+        raise RuntimeError("git ls-files failed: not a git repository")
+
+    monkeypatch.setattr(checker, "tracked_paths", _broken)
+    with pytest.raises(RuntimeError, match="failed"):
+        list(checker.iter_shell_files([], tmp_path))
+
+
+# --------------------------------------------------------------------------
+# scan_shell: `git ls-files` in verb position (#15506)
+# --------------------------------------------------------------------------
+
+
+def _shell_findings(tmp_path: Path, body: str) -> list[str]:
+    path = tmp_path / "probe.sh"
+    path.write_text(body, encoding="utf-8")
+    return [message for _line, message in scan_shell(path, tmp_path)]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "files=$(git ls-files)\n",
+        # The `-C` form: a literal `git ls-files` match misses this, and it is
+        # the shape that was live in scripts/verify-done.sh.
+        'files=$(git -C "$d" ls-files -v)\n',
+        # THE ONE THAT MATTERED. The first version exempted any line containing
+        # the helper's NAME, so a raw call wearing an approving comment passed
+        # the guard while doing the exact thing it forbids. Caught in review of
+        # #16118, and the reason the match is anchored on the verb instead.
+        'x=$(git -C "$d" ls-files -v)  # git_tracked_files would be better\n',
+    ],
+)
+def test_scan_shell_reports_a_raw_ls_files_call(tmp_path: Path, body: str) -> None:
+    assert any("ls-files" in m for m in _shell_findings(tmp_path, body))
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # A comment discussing the call is documentation, not an invocation.
+        "# git ls-files is what this guard refuses\n",
+        # The helper itself: `\bgit\b` cannot match inside `git_tracked_files`,
+        # so this is clean on its own terms rather than by being exempted.
+        'files=$(git_tracked_files "$d" -- "*.sh")\n',
+    ],
+)
+def test_scan_shell_leaves_comments_and_helper_calls_alone(tmp_path: Path, body: str) -> None:
+    """A false positive here would refuse the remedy along with the defect."""
+    assert not [m for m in _shell_findings(tmp_path, body) if "ls-files" in m]

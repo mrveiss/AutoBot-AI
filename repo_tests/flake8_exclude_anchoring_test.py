@@ -44,13 +44,13 @@ from __future__ import annotations
 
 import importlib.util
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 FLAKE8_CONFIG = REPO_ROOT / ".flake8"
 _CHECKER = REPO_ROOT / "tools" / "lint" / "check_flake8_exclude_anchoring.py"
 
@@ -97,6 +97,7 @@ def tracked_py_files() -> list[str]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     )
     paths = [line for line in completed.stdout.splitlines() if line.strip()]
     assert len(paths) >= _TRACKED_PY_FLOOR, (
@@ -332,6 +333,11 @@ def test_the_checker_needs_no_third_party_import():
         if line.startswith(("import ", "from "))
         and not line.startswith("from __future__")
         and line.split()[1].split(".")[0]
-        not in {"argparse", "configparser", "logging", "pathlib", "re", "subprocess", "sys"}
+        # `_scan_helpers` is repo-local and itself stdlib-only (it imports
+        # `autobot_shared.paths`, which is stdlib-only by design). It is the
+        # SSOT for the git enumeration this checker needs (#14896), so
+        # excluding it would mean re-pasting the scrubbed `git ls-files` call
+        # here -- the duplication the helper exists to end.
+        not in {"argparse", "configparser", "logging", "pathlib", "re", "subprocess", "sys", "_scan_helpers"}
     ]
     assert third_party == [], f"the checker imports non-stdlib modules: {third_party}"

@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from monitoring.claude_api_monitor import ClaudeAPIMonitor
 from monitoring.prometheus_metrics import get_metrics_manager
 from utils.error_boundaries import ErrorCategory
 from utils.error_metrics import get_metrics_collector as get_error_collector
@@ -57,18 +56,12 @@ async def test_phase2_migration():
     )
     logger.error("  ✓ Error recorded and pushed to Prometheus")
 
-    # Test 3: ClaudeAPIMonitor dual-write
-    logger.info("\n✓ Testing ClaudeAPIMonitor dual-write...")
-    claude_monitor = ClaudeAPIMonitor()
-
-    # Record API call (should push to Prometheus)
-    await claude_monitor.record_api_call(
-        payload_size=1024,
-        response_size=512,
-        response_time=0.5,
-        success=True,
-        tool_name="test_tool",
-    )
+    # Test 3: Claude API calls recorded through the metrics manager. The
+    # ClaudeAPIMonitor that dual-wrote here was retired (#16282); its callers
+    # record through the manager directly.
+    logger.info("\n✓ Testing Claude API recording...")
+    metrics_manager.record_claude_api_request("test_tool", True)
+    metrics_manager.record_claude_api_payload(1024)
     logger.info("  ✓ Claude API call recorded and pushed to Prometheus")
 
     # Test 4: Verify metrics are in Prometheus output

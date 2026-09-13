@@ -136,7 +136,14 @@ describe('useSsoApi — migrated onto slmApiClient (#12420 Phase 2)', () => {
   })
 
   it('loginWithLDAP POSTs credentials to /auth/sso/ldap/login', async () => {
-    mockPost.mockResolvedValue({ access_token: 't', token_type: 'bearer', expires_in: 3600 })
+    // #13139: the handler now returns its TokenResponse whole, so `token`
+    // (the #12216 mirror of access_token) is on the wire too.
+    mockPost.mockResolvedValue({
+      access_token: 't',
+      token: 't',
+      token_type: 'bearer',
+      expires_in: 3600,
+    })
 
     await useSsoApi().loginWithLDAP('1', 'user', 'pw')
 

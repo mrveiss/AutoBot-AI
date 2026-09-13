@@ -1,0 +1,78 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# Shared: ensure the node's shared TLS keypair exists before a consumer needs it (#16020).
+#
+# /etc/autobot/certs/server-{cert,key}.pem is read by nginx, Redis, PostgreSQL,
+# the backend and websockify. Before this file the invariant "a node that
+# reaches a consumer has a cert" was maintained by each consumer separately
+# remembering to provision one -- FOUR roles carried their own openssl block and
+# TWO consumers carried none. `redis` referenced the keypair without creating
+# it; `nginx` started a daemon whose config references it without checking.
+#
+# The observed failure was a VNC node, six consecutive nginx restarts over ten
+# hours, each ending:
+#   [emerg] cannot load certificate "/etc/autobot/certs/server-cert.pem"
+# `nginx -t` runs in ExecStartPre, so a missing cert is not a degraded start --
+# the unit can never come up, and it fails the manage-service play every time.
+#
+# Generation delegates to generate_self_signed_cert.yml (#12181) rather than
+# re-implementing openssl: that extraction already happened for rotate-certs.yml
+# and had one consumer. This is the second.
+#
+# OWNERSHIP IS DELIBERATELY NOT SET BEYOND THE BASELINE. The key stays
+# root:root 0600 -- nginx, Redis and PostgreSQL read it as root, and #13060
+# ruled that VNC gets its own keypair rather than widening access to this one.
+# A role whose service needs different ownership (roles/backend chowns to
+# backend_user) sets that AFTER including this file. Consolidating EXISTENCE is
+# the fix here; consolidating ownership would reverse a recorded decision.
+#
+# Discoverable: grep -rn "ensure_node_tls_cert.yml" lists all consumers.
+
+- name: "TLS | Ensure the shared cert directory exists"
+  ansible.builtin.file:
+    path: /etc/autobot/certs
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  become: true
+
+- name: "TLS | Stat the shared node certificate"
+  ansible.builtin.stat:
+    path: /etc/autobot/certs/server-cert.pem
+  register: autobot_node_cert_stat
+  become: true
+
+- name: "TLS | Check the shared node certificate is not about to expire"
+  ansible.builtin.command:
+    cmd: openssl x509 -checkend 604800 -noout -in /etc/autobot/certs/server-cert.pem
+  register: autobot_node_cert_valid
+  changed_when: false
+  # (#2872) Intentional: openssl exits rc=1 when the cert expires inside the
+  # check window. That is a "needs renewal" signal, not an error.
+  failed_when: false
+  when: autobot_node_cert_stat.stat.exists
+  become: true
+
+- name: "TLS | Generate the shared node keypair when missing or expiring"
+  ansible.builtin.include_tasks: generate_self_signed_cert.yml
+  vars:
+    cert_label: node
+    _cert_days: 365
+    _key_file: /etc/autobot/certs/server-key.pem
+    _cert_file: /etc/autobot/certs/server-cert.pem
+    _cert_subject: "/C=US/ST=State/L=City/O=AutoBot/CN={{ inventory_hostname }}.autobot.internal"
+  when: >-
+    not autobot_node_cert_stat.stat.exists
+    or (autobot_node_cert_valid.rc | default(1)) != 0
+
+- name: "TLS | Ensure the certificate is world-readable"
+  ansible.builtin.file:
+    path: /etc/autobot/certs/server-cert.pem
+    mode: "0644"
+    owner: root
+    group: root
+  become: true

@@ -49,15 +49,16 @@
   tags: ['frontend']
 
 # Backend VMs
-# #10048: use the maintained roles (python314 + backend) — the old list
-# referenced nonexistent roles (python, fastapi_app) and the divergent
+# #10048: use the maintained roles (python_interpreter + backend) — the old
+# list referenced nonexistent roles (python, fastapi_app) and the divergent
 # backend_services role with a dangling backend.env.j2, making this play
 # unrunnable. roles/backend is the canonical path used by the wizard playbooks.
+# #13843: python_interpreter was renamed from python314.
 - name: Deploy Backend Services
   hosts: backend
   become: true
   roles:
-    - python314
+    - python_interpreter
     - backend
   tags: ['backend']
 

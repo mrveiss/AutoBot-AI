@@ -63,7 +63,9 @@ async def test_complex_request():
             },
             {
                 "role": "user",
-                "content": "Classify this request: 'hello'. Return JSON with complexity (simple/complex) and reasoning.",
+                "content": (
+                    "Classify this request: 'hello'. Return JSON with complexity (simple/complex) and reasoning."
+                ),
             },
         ],
         "stream": False,

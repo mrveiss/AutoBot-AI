@@ -35,7 +35,7 @@ CHROMADB_PORT=8100
 
 # Git source
 DEFAULT_GIT_REPO="https://github.com/mrveiss/AutoBot-AI.git"
-DEFAULT_BRANCH="Dev_new_gui"
+DEFAULT_BRANCH="main"
 
 # Python version
 PYTHON_VERSION="3.14"
@@ -84,7 +84,7 @@ Usage:
 
 Options:
   --unattended          Run with default values, no prompts
-  --branch BRANCH       Git branch to install (default: Dev_new_gui)
+  --branch BRANCH       Git branch to install (default: main)
   --repo URL            Git repository URL
   --no-ollama           Skip Ollama installation
   --skip-redis          Skip Redis installation (use existing)
@@ -96,7 +96,7 @@ Services installed:
   - autobot-slm         (port 8000) — SLM management backend
   - autobot-frontend    (port 5173) — Vue.js frontend (built to static)
   - nginx               (port 80/443) — reverse proxy
-  - redis-server        (port 6379) — data store
+  - redis-stack-server  (port 6379) — data store (Redis Stack: JSON/search/timeseries)
   - ollama              (port 11434) — local LLM (optional)
 
 Each Python service gets its own venv under /opt/autobot/<service>/venv
@@ -208,14 +208,34 @@ install_prerequisites() {
         apt-get install -y -qq nodejs
     fi
 
-    # Redis
+    # Redis is NOT installed here (#16071).
+    #
+    # This block used to `apt-get install redis-server`, which is plain Redis:
+    # no RediSearch, no RedisJSON, no RedisTimeSeries. It starts cleanly and
+    # then fails on the first module command, so the node looks provisioned and
+    # is not -- a worse failure than not installing at all, and exactly what
+    # autobot-database/README.md warns about.
+    #
+    # The fix is not to hand-roll the Redis Stack repo here. `roles/redis`
+    # already adds it, pins the suite (#7178: Redis publishes
+    # redis-stack-server for jammy/bullseye/focal only, and noble's dist ships
+    # plain Redis), and installs the package idempotently (#7218). A second
+    # copy in bash is the duplicated-guarantee problem this repo keeps paying
+    # for: it drifts, and the drift is invisible until a node is wrong.
+    #
+    # So this bootstrap refuses rather than guesses. Provisioning the database
+    # node is the role's job.
     if [[ "$SKIP_REDIS" == false ]]; then
-        if ! command -v redis-server &>/dev/null; then
-            log_info "Installing Redis"
-            apt-get install -y -qq redis-server
+        if ! command -v redis-stack-server &>/dev/null; then
+            log_error "Redis Stack is not installed on this host."
+            log_error "This bootstrap does not install it: roles/redis owns the"
+            log_error "repository, the suite pin and the package. Provision this"
+            log_error "node with that role, or re-run with --skip-redis if it is"
+            log_error "not the database node."
+            return 1
         fi
-        systemctl enable redis-server
-        systemctl start redis-server
+        systemctl enable redis-stack-server
+        systemctl start redis-stack-server
     fi
 }
 
@@ -382,7 +402,14 @@ Group=${AUTOBOT_GROUP}
 WorkingDirectory=${chromadb_dir}
 Environment="PYTHONUNBUFFERED=1"
 Environment="ANONYMIZED_TELEMETRY=FALSE"
-EnvironmentFile=-${INSTALL_DIR}/.env
+# #14100 / #12513: no \`-\` prefix, on purpose. The optional form is why a
+# missing credential file produced a running-but-unauthenticated chroma instead
+# of a unit that refuses to start. The installer writes this file itself
+# (generate_env, line 451, which main() runs before start_services), so a
+# missing one means the install did not complete and starting anyway is the
+# wrong answer. Both ansible templates are already mandatory; this was the last
+# optional writer of the same unit path.
+EnvironmentFile=${INSTALL_DIR}/.env
 ExecStart=${venv_dir}/bin/chroma run \\
     --host 127.0.0.1 \\
     --port ${CHROMADB_PORT} \\
@@ -589,8 +616,17 @@ create_systemd_service() {
     cat > "/etc/systemd/system/autobot-${service_name}.service" <<EOF
 [Unit]
 Description=AutoBot ${service_name}
-After=network.target redis-server.service
-Wants=redis-server.service
+After=network.target redis-stack-server.service
+Wants=redis-stack-server.service
+# #14100 / #4090: every unit this factory emits sets Restart=on-failure with
+# RestartSec=10 below, so without a start limit a unit whose ExecStart can never
+# succeed restarts forever, never reaches \`failed\`, and never appears in
+# \`systemctl --failed\` - the #4090 outage shape, invisible. systemd\'s defaults
+# cannot catch it: DefaultStartLimitIntervalSec=10s with burst 5 needs five
+# restarts inside ten seconds while RestartSec spaces them ten apart. The
+# window must exceed RestartSec * StartLimitBurst to be reachable at all.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple

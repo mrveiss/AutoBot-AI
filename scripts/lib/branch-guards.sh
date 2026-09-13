@@ -214,6 +214,36 @@ _branch_path_presence() {
 #   short-lines-only -- every added line is below the length threshold
 # Only `measured` carries information; the other three are absence of evidence,
 # and the caller reports all of them as unproven.
+# Print "<present> <total>" for the files this branch ADDS relative to the merge
+# base, counting how many of those paths exist in <base>.
+#
+# WHY A FILE-LEVEL SIGNAL EXISTS ALONGSIDE THE LINE COUNT (#15036). Line presence
+# under-reports a branch whose work landed and then kept evolving. The measured
+# case: `feat/gantt-timeline-view` landed as a35416aab2 "(#9020) (#10133)", and
+# the file it introduced -- GanttTimelineView.vue, 766 lines -- is in base today.
+# But base has changed it since, so only 74 of its 480 added lines still match
+# and the line score reads 15%: indistinguishable from work that never landed.
+#
+# A path a branch CREATED that now exists in base is a landing fact that does not
+# decay as the file evolves. Modified files are deliberately excluded: a branch
+# that edits an existing file proves nothing by that file continuing to exist.
+branch_added_files_present() {
+    local base="$1" ref="$2" mb path present=0 total=0
+    mb=$(git merge-base "$base" "$ref" 2>/dev/null) || mb=""
+    if [ -z "$mb" ]; then
+        printf '0 0\n'
+        return 0
+    fi
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        total=$((total + 1))
+        if git cat-file -e "$base:$path" 2>/dev/null; then
+            present=$((present + 1))
+        fi
+    done < <(git diff --diff-filter=A --name-only "$mb" "$ref" 2>/dev/null)
+    printf '%s %s\n' "$present" "$total"
+}
+
 branch_content_presence() {
     local base="$1" ref="$2" mb tmp path reason
     local raw=0 total=0 present=0 gone=0 p_raw p_n p_m p_gone
@@ -378,12 +408,23 @@ branch_landing_evidence() {
         printf 'landed|%s\n' "$detail"
         return 0
     fi
+    # #15036: a branch whose newly-created paths all exist in base has landed,
+    # whatever later edits did to its lines. Checked before the line count
+    # because the line count cannot distinguish "landed and evolved" from
+    # "never landed".
+    local af_present af_total
+    read -r af_present af_total <<< "$(branch_added_files_present "$base" "$ref")" || true
+    if [ "${af_total:-0}" -gt 0 ] && [ "${af_present:-0}" -eq "${af_total:-0}" ]; then
+        printf 'landed|all %s file(s) it added exist in %s\n' "$af_total" "$base"
+        return 0
+    fi
+
     present=0; total=0; gone=0; reason=no-added-lines
     read -r present total gone reason <<< "$(branch_content_presence "$base" "$ref")" || true
     if [ "$total" -eq 0 ]; then
         printf 'unproven|no content could be measured (%s)\n' "$reason"
         return 0
     fi
-    printf 'unproven|%s/%s added lines present in %s, %s path(s) gone\n' \
-        "$present" "$total" "$base" "$gone"
+    printf 'unproven|%s/%s added lines present in %s, %s path(s) gone, %s/%s new file(s) present\n' \
+        "$present" "$total" "$base" "$gone" "${af_present:-0}" "${af_total:-0}"
 }

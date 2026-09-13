@@ -470,7 +470,7 @@ groups:
             kb_connected=false. Redis is unreachable from the backend.
             Frontend shows \"Knowledge base is unreachable\" banner.
           recommendation: >-
-            1. sudo systemctl status autobot-redis
+            1. sudo systemctl status redis-stack-server
             2. redis-cli -h 127.0.0.7 ping
             3. journalctl -u autobot-backend | grep kb_connected=false
             See runbook: docs/runbooks/KB_REDIS_UNREACHABLE.md
@@ -538,7 +538,7 @@ groups:
           description: "Pairing failure rate is {{ $value | humanizePercentage }} (threshold: 30%)"
           recommendation: |
             IMMEDIATE ACTION REQUIRED:
-            1. Check Redis service: sudo systemctl status autobot-redis
+            1. Check Redis service: sudo systemctl status redis-stack-server
             2. Verify backend health: curl http://localhost:8000/health
             3. Check for network issues between mobile clients and backend
             4. Review recent code deployments to pairing endpoints

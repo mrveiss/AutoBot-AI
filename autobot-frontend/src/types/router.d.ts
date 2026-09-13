@@ -10,6 +10,7 @@
  */
 
 import 'vue-router'
+import type { Role } from '@/types/_generated/workflow'
 import type { Permission } from '@/composables/usePermissions'
 
 declare module 'vue-router' {
@@ -60,9 +61,10 @@ declare module 'vue-router' {
     allPermissions?: (Permission | string)[]
 
     /**
-     * Minimum role required (admin > user > readonly > guest)
+     * Minimum role required, in the canonical vocabulary (#14937). Declared but read
+     * by no guard yet -- #16244 tracks wiring it, so nothing may rely on it.
      */
-    minRole?: 'admin' | 'user' | 'readonly' | 'guest'
+    minRole?: Role
 
   }
 }

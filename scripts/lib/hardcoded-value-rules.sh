@@ -14,9 +14,13 @@
 #      the only one scanning .sh/.yml/.yaml and autobot-infrastructure/, the
 #      only one with the account-identity rules, and the only one whose VM-IP
 #      pattern covered every octet.
-#   2. autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh (dormant)
-#      the only one with per-value SSOT SUGGESTIONS, the generic model-name
-#      regex, the hardcoded-URL rule, and six context skips nothing else had.
+#   2. autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
+#      RETIRED by #14371 -- the file no longer exists. Its contributions (the
+#      per-value SSOT SUGGESTIONS, the generic model-name regex, the
+#      hardcoded-URL rule, and six context skips nothing else had) were folded
+#      into this library, which is why they are listed here at all. Kept as
+#      provenance, marked dead: the entry read as a live second source for as
+#      long as the path was merely stale rather than labelled (#15877).
 #   3. .../hooks/pre-commit-hardcoded-values                 (the enforcing hook)
 #      the only one with magic numbers, roles, categories, DSNs, timeouts,
 #      AutoBot paths, the `.get("field", default)` call-argument shape, and the
@@ -213,6 +217,15 @@ _HV_EXCLUDE_RE+='|(test_[^/]*\.(py|ts)$|[^/]*_test\.(py|ts)$|[^/]*\.(test|spec)\
 # a widened filename pattern, so it cannot reach into production code that
 # happens to share a name -- repo_tests/ carries nothing else (#15187/#15195).
 _HV_EXCLUDE_RE+='|(^|/)repo_tests/'
+# Frozen defect fixtures: a file preserved byte-identical to the defective
+# version it reproduces, so a guard can be proved to fail on it (#15824). Its
+# literals ARE the defect under test -- editing them to satisfy this detector
+# would destroy the only thing the fixture is for, and the guard that depends
+# on it would silently start passing. Scoped to the directory shape
+# `tests/fixtures/defect_<issue>/`, so it cannot reach production code or even
+# an ordinary fixture: the path must name the issue it froze for, which makes
+# every exempted file traceable to the reason it exists.
+_HV_EXCLUDE_RE+='|(^|/)tests/fixtures/defect_[0-9]+/'
 _HV_EXCLUDE_RE+='|(ssot_config\.py|ssot-config\.ts|ssot_mappings\.py|registry_defaults\.py|threshold_constants\.py)'
 _HV_EXCLUDE_RE+='|(path_constants\.py|network_constants\.py|security_constants\.py|constants/network\.ts)'
 _HV_EXCLUDE_RE+='|(/constants/|config\.py$|config\.yaml$|\.env|\.example$|\.lock$)'
@@ -241,6 +254,13 @@ _HV_NOQA_RE='(#[[:space:]]*noqa|//[[:space:]]*noqa)'
 # `role?: 'user' | 'assistant' | 'system'` — a type annotation enumerating the
 # accepted values, not a hardcoded default (detector 3, #14048).
 _HV_UNION_TYPE_RE="[\"'][[:space:]]*\|[[:space:]]*[\"']"
+
+# #14073: the pipe form above only covers TypeScript's `'a' | 'b'`. Zod spells
+# the same idea as `z.enum(['a', 'b'])` — still a declaration of the accepted
+# values, still not a hardcoded default — and the role rule flagged it. Matches
+# `z.enum([`, `z.union([` and a bare `enum([` so a re-export or alias is caught
+# too.
+_HV_ENUM_CALL_RE="(z\.)?(enum|union)\(\["
 
 # The call-argument shape `obj.get("field", value)` (detector 3, #14005/#14048).
 #
@@ -377,6 +397,14 @@ _hv_rule_url() {
     local url="$HV_MATCH"
     case "$1" in
         *enterprise*|*sso_integration*|*injection_detector*|*domain_security*|*secure_llm*|*secure_web*) return 0 ;;
+        # #16260: a CI workflow's vendor downloads and dashboard links are not
+        # deployment config -- nothing a deployment varies. Only this generic URL
+        # rule stands down here: the IP and port rules still run on workflow
+        # files, so an AutoBot address in a workflow is still reported. A
+        # composite action under .github/actions/ is a piece of a workflow, so
+        # the same holds there (#15515: editing one tripped on its pip index).
+        .github/workflows/*|*/.github/workflows/*) return 0 ;;
+        .github/actions/*|*/.github/actions/*) return 0 ;;
     esac
     # Example domains, W3C/SVG namespaces, licence URLs and placeholders.
     [[ $3 =~ $_HV_URL_SKIP_RE ]] && return 0
@@ -423,6 +451,7 @@ Trace the consumer before replacing it; do not apply a suggestion blind."
 _hv_rule_role() {
     [[ $3 =~ $_HV_ROLE_SKIP_RE ]] && return 0
     [[ $3 =~ $_HV_UNION_TYPE_RE ]] && return 0
+    [[ $3 =~ $_HV_ENUM_CALL_RE ]] && return 0
     [[ $3 =~ $_HV_ROLE_KEYWORD_RE ]] || _hv_get_call_argument "$3" 'role' "$_HV_ROLE_VALUE_RE" || return 0
     _hv_match "$3" "$_HV_ROLE_VALUE_RE" || return 0
     local _hv_role_suggestion="$_HV_ROLE_CHAT_SUGGESTION"
@@ -434,6 +463,7 @@ _hv_rule_role() {
 _hv_rule_category() {
     [[ $3 =~ $_HV_CATEGORY_SKIP_RE ]] && return 0
     [[ $3 =~ $_HV_UNION_TYPE_RE ]] && return 0
+    [[ $3 =~ $_HV_ENUM_CALL_RE ]] && return 0
     [[ $3 =~ $_HV_CATEGORY_KEYWORD_RE ]] || _hv_get_call_argument "$3" 'category|search_mode|mode' "$_HV_CATEGORY_VALUE_RE" || return 0
     _hv_match "$3" "$_HV_CATEGORY_VALUE_RE" || return 0
     _hv_emit VIOLATION other "$1" "$2" "$HV_MATCH" "CategoryDefaults.GENERAL/SEARCH_MODE_HYBRID/UNKNOWN"
@@ -688,15 +718,25 @@ hv_partition() {
     return 0
 }
 
-# Baseline keys that matched fewer findings than they claim.
+# Baseline keys that matched fewer findings than they claim, one per line as
+# `claimed|found|key`. The counts come first because the key itself contains `|`.
 #
 # An allowlist entry naming a moved file exempts nothing, and does it silently.
 # These are reported so a fixed violation cannot leave a stranded exemption that
 # quietly re-permits the same value when the file comes back.
+#
+# found 0 and 0 < found < claimed are different findings with different fixes
+# (#16334). The first matches nothing and should be deleted. The second still
+# exempts live findings and must be LOWERED to `found`, never deleted: #16298
+# deleted such an entry because the audit called it "no longer match anything",
+# which un-baselined the occurrence it still covered. Emitting both counts is
+# what lets the caller say which.
 hv_stale_baseline_entries() {
-    local key
+    local key claimed found
     for key in "${!HV_BASELINE[@]}"; do
-        [ "${HV_BASELINE_SEEN[$key]:-0}" -lt "${HV_BASELINE[$key]}" ] && printf '%s\n' "$key"
+        claimed="${HV_BASELINE[$key]}"
+        found="${HV_BASELINE_SEEN[$key]:-0}"
+        [ "$found" -lt "$claimed" ] && printf '%s|%s|%s\n' "$claimed" "$found" "$key"
     done
     return 0
 }

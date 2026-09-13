@@ -17,6 +17,14 @@ Usage::
 By default this is a NON-BLOCKING signal: it always exits 0 and prints the
 report, mirroring how other advisory CI checks are added.  Pass
 ``--fail-on-regression`` to gate.
+
+Exit codes are a taxonomy, not a severity scale:
+
+* ``0`` -- the corpus was examined and nothing regressed.
+* ``1`` -- the corpus was examined and something regressed. A claim.
+* ``2`` -- the corpus could not be examined or could not be judged, so no
+  claim is being made. A crash lands here too, because Python's default of 1
+  would otherwise report a regression nothing had measured.
 """
 
 from __future__ import annotations
@@ -29,7 +37,7 @@ from pathlib import Path
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
-from eval.candidates import baseline_candidate
+from eval.candidates import baseline_candidate, recorded_replay_candidate
 from eval.report import DEFAULT_SCORE_EPSILON, RegressionReport
 from eval.runner import CandidateRunner, TrajectoryReplayer
 from eval.store import load_golden_set
@@ -66,7 +74,47 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Exit 1 when any regression is found (gated mode). Default: non-blocking (exit 0).",
     )
+    parser.add_argument(
+        "--recorded-dir",
+        default="",
+        help="Directory of recorded runs to replay against (defaults to eval/recorded/).",
+    )
+    parser.add_argument(
+        "--require-real-candidate",
+        action="store_true",
+        help=(
+            "Exit 2 if the run fell through to the self-consistency baseline, so a "
+            "comparison of the goldens with themselves cannot be reported as a pass. "
+            "2, not 1: not having examined the corpus is a different answer from "
+            "having examined it and found a regression (#16157)."
+        ),
+    )
     return parser.parse_args()
+
+
+def resolve_candidate(recorded_dir: Path) -> tuple[CandidateRunner, bool]:
+    """Pick the candidate to replay against, and say whether it is a real one.
+
+    Returns ``(candidate, is_real)``. ``is_real`` is False only for the
+    self-consistency baseline, which compares each golden with itself and
+    therefore cannot fail. Callers use it to refuse to call that a pass.
+    """
+    if recorded_dir.is_dir() and any(recorded_dir.glob("*.json")):
+        return recorded_replay_candidate(recorded_dir), True
+    return baseline_candidate, False
+
+
+def _reportable_path(path: Path) -> str:
+    """Render *path* for a log line that ends up in a shared artifact.
+
+    Absolute paths carry the checkout root, which on a developer machine is a
+    home directory and on a runner is noise. Relative to the working directory
+    when possible, absolute only when it genuinely lies elsewhere.
+    """
+    try:
+        return str(path.resolve().relative_to(Path.cwd().resolve()))
+    except ValueError:
+        return str(path)
 
 
 def _resolve_output_path(json_path: str) -> Path | None:
@@ -96,18 +144,74 @@ def _emit(report: RegressionReport, json_path: str) -> None:
         logger.info("Wrote JSON report to %s", resolved)
 
 
-def main() -> int:
-    """CLI entrypoint. Returns the process exit code."""
-    args = _parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-
-    report = run_or_schedule(run_eval(epsilon=args.epsilon))
+def _run(args: argparse.Namespace) -> int:
+    """Resolve a candidate, replay, emit, and pick the exit code."""
+    recorded_dir = Path(args.recorded_dir) if args.recorded_dir else Path(__file__).parent / "recorded"
+    candidate, is_real = resolve_candidate(recorded_dir)
+    report = run_or_schedule(run_eval(candidate=candidate, epsilon=args.epsilon))
     _emit(report, args.json)
+
+    if not is_real:
+        # The baseline candidate replays each golden's own recorded outcome, so
+        # every comparison is a file against itself and no input can make it
+        # red. Saying so is the point: a green here otherwise reads as drift
+        # detection to anyone who did not open candidates.py (#16157).
+        logger.warning(
+            "UNMEASURED: no recorded runs in %s, so this replay compared each golden "
+            "with itself. It cannot detect drift and its result asserts nothing.",
+            _reportable_path(recorded_dir),
+        )
+        if args.require_real_candidate:
+            # Exit 2, like the unmeasured case below: falling through to the echo
+            # is "could not examine", not "a golden regressed". Returning 1 here
+            # would put a not-examined state under the code reserved for a claim
+            # about the corpus -- the conflation this module exists to remove,
+            # committed in the code removing it.
+            return 2
 
     if args.fail_on_regression and report.has_regressions:
         logger.error("Regressions detected — failing (gated mode).")
         return 1
+
+    if report.total_unmeasured and (args.fail_on_regression or args.require_real_candidate):
+        # Exit 2, not 1: "a golden regressed" and "the harness could not judge
+        # one" want opposite responses, and a single failure code makes an
+        # evaluator outage indistinguishable from quality drift. Same split as
+        # the SPDX gate (#15817) — 1 is a claim about the tree, 2 is being
+        # unable to examine it.
+        #
+        # Only in a gated mode. Advisory runs report the state and exit 0,
+        # because an unmeasured corpus is a property of this repository's eval
+        # setup, not of the pull request being tested — failing every PR for a
+        # standing gap misattributes it to whoever pushed, and teaches readers
+        # that this check's red means nothing. In gated mode the opposite holds:
+        # the gate is claiming to protect something, so "could not measure"
+        # must not pass.
+        logger.error(
+            "%d trajectory/ies could not be scored (evaluator returned no verdict). "
+            "This is not a pass and not a regression — the run could not judge them.",
+            report.total_unmeasured,
+        )
+        return 2
     return 0
+
+
+def main() -> int:
+    """CLI entrypoint. Returns the process exit code.
+
+    The try/except is the exit-code taxonomy, not defensive padding. An
+    uncaught exception leaves Python exiting 1, and 1 is reserved here for "a
+    golden regressed" — so any crash silently published a claim about the
+    corpus that nothing had measured. Being unable to run is exit 2, the same
+    code as being unable to judge, because they are the same answer.
+    """
+    args = _parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    try:
+        return _run(args)
+    except Exception:  # noqa: BLE001 - deliberate: see docstring
+        logger.exception("UNMEASURED: the eval run could not complete, so it judged nothing.")
+        return 2
 
 
 if __name__ == "__main__":

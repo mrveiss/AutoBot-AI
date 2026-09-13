@@ -26,10 +26,10 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared import env_utils, time_utils
 
 from .health_collector import HealthCollector
-from .port_scanner import get_listening_ports
+from .heartbeat_payload import build_heartbeat_payload
 from .role_detector import RoleDetector
 from .version import get_agent_version
 
@@ -70,7 +70,7 @@ def sd_notify(state: str) -> bool:
 logger = logging.getLogger(__name__)
 
 # Local notification server port (for git hooks)
-DEFAULT_NOTIFY_PORT = int(os.getenv("SLM_NOTIFY_PORT", "8000"))
+DEFAULT_NOTIFY_PORT = env_utils.env_int("SLM_NOTIFY_PORT", 8000)
 
 # Standalone agent defaults - agent runs on remote VMs, not AutoBot main host
 # These are configured via CLI args or environment variables at deployment
@@ -174,7 +174,7 @@ class SLMAgent:
         conn = sqlite3.connect(self.buffer_db)
         conn.execute(
             "INSERT INTO event_buffer (timestamp, event_type, data) VALUES (?, ?, ?)",
-            (utc_timestamp(), event_type, json.dumps(data)),
+            (time_utils.utc_timestamp(), event_type, json.dumps(data)),
         )
         conn.commit()
         conn.close()
@@ -218,72 +218,6 @@ class SLMAgent:
         except Exception as e:
             logger.debug("Failed to fetch role definitions: %s", e)
         return False
-
-    def _build_role_report(self) -> dict:
-        """
-        Build role detection report for heartbeat payload.
-
-        Returns a dictionary mapping role names to their status details.
-        Issue #620.
-        """
-        if not self._role_definitions_loaded:
-            return {}
-
-        role_statuses = self.role_detector.detect_all()
-        return {
-            name: {
-                "path_exists": status.path_exists,
-                "path": status.path,
-                "service_running": status.service_running,
-                "service_name": status.service_name,
-                "ports": status.ports,
-                "version": status.version,
-                "status": status.status,
-            }
-            for name, status in role_statuses.items()
-        }
-
-    def _build_listening_ports_list(self) -> list:
-        """
-        Build list of listening ports for heartbeat payload.
-
-        Returns a list of dictionaries with port, process, pid, and bind address.
-        Issue #620; ``address`` added for the security-posture audit (GH#11224).
-        """
-        return [
-            {"port": p.port, "process": p.process, "pid": p.pid, "address": p.address} for p in get_listening_ports()
-        ]
-
-    def _build_heartbeat_payload(self, health: dict, os_info: str, code_version: str | None) -> dict:
-        """
-        Build the complete heartbeat payload.
-
-        Args:
-            health: Health data from collector.
-            os_info: Operating system information string.
-            code_version: Current code version hash.
-
-        Returns:
-            Dictionary payload matching HeartbeatRequest schema.
-        Issue #620.
-        """
-        return {
-            "cpu_percent": health.get("cpu_percent", 0.0),
-            "memory_percent": health.get("memory_percent", 0.0),
-            "disk_percent": health.get("disk_percent", 0.0),
-            "agent_version": "1.0.0",
-            "os_info": os_info,
-            "code_version": code_version,  # Issue #741: Add code version
-            "role_report": self._build_role_report(),  # Issue #779: Add role detection
-            "listening_ports": self._build_listening_ports_list(),  # Issue #779
-            "extra_data": {
-                "services": health.get("services", {}),
-                "discovered_services": health.get("discovered_services", []),
-                "load_avg": health.get("load_avg", []),
-                "uptime_seconds": health.get("uptime_seconds", 0),
-                "hostname": health.get("hostname"),
-            },
-        }
 
     # Maximum registration-pending backoff in seconds (#9965).
     _REG_BACKOFF_CAP: float = 300
@@ -364,7 +298,9 @@ class SLMAgent:
         os_info = f"{platform.system()} {platform.release()}"
         code_version = self.version_manager.get_version()
 
-        payload = self._build_heartbeat_payload(health, os_info, code_version)
+        payload = build_heartbeat_payload(
+            health, os_info, code_version, self.role_detector, self._role_definitions_loaded
+        )
         return await self._send_heartbeat_request(payload)
 
     async def sync_buffered_events(self):
@@ -579,7 +515,7 @@ class SLMAgent:
                 "node_id": self.node_id,
                 "commit": commit,
                 "is_code_source": True,
-                "timestamp": utc_timestamp(),
+                "timestamp": time_utils.utc_timestamp(),
             }
             async with self._session.post(
                 url,

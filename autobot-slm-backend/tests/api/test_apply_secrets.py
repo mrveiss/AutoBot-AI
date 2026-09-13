@@ -245,8 +245,12 @@ def test_find_node_ids_for_roles_handles_null_roles():
 
 
 def test_get_dependent_roles_mapping_returns_mapping():
+    # #13139: the handler declares `response_model=DependentRolesResponse` and
+    # returns the model, not a bare dict. The wire shape is what this test is
+    # about, so serialise before comparing rather than weakening the assertion
+    # to attribute access -- `model_dump()` is exactly what FastAPI encodes.
     result = _run(_secrets_mod.get_dependent_roles_mapping(_FAKE_USER))
-    assert result == {"mapping": {"hf_token": ["tts-worker"]}}
+    assert result.model_dump() == {"mapping": {"hf_token": ["tts-worker"]}}
 
 
 # ---------------------------------------------------------------------------

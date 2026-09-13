@@ -232,13 +232,16 @@ class SeqLogForwarder:
         backend_log = self.logs_dir / "backend.log"
         with open(backend_log, "w", encoding="utf-8") as f:
             f.write(
-                f'{{"timestamp": "{datetime.now().isoformat()}", "level": "INFO", "message": "Backend service started", "module": "main"}}\n'
+                f'{{"timestamp": "{datetime.now().isoformat()}", "level": "INFO", '
+                f'"message": "Backend service started", "module": "main"}}\n'
             )
             f.write(
-                f'{{"timestamp": "{datetime.now().isoformat()}", "level": "INFO", "message": "Database connection established", "module": "database"}}\n'
+                f'{{"timestamp": "{datetime.now().isoformat()}", "level": "INFO", '
+                f'"message": "Database connection established", "module": "database"}}\n'
             )
             f.write(
-                f'{{"timestamp": "{datetime.now().isoformat()}", "level": "WARNING", "message": "High memory usage detected", "module": "monitoring"}}\n'
+                f'{{"timestamp": "{datetime.now().isoformat()}", "level": "WARNING", '
+                f'"message": "High memory usage detected", "module": "monitoring"}}\n'
             )
 
         # Frontend logs
@@ -256,10 +259,12 @@ class SeqLogForwarder:
         system_log = self.logs_dir / "system.log"
         with open(system_log, "w", encoding="utf-8") as f:
             f.write(
-                f'{{"timestamp": "{datetime.now().isoformat()}", "level": "INFO", "service": "system", "message": "AutoBot system initialized"}}\n'
+                f'{{"timestamp": "{datetime.now().isoformat()}", "level": "INFO", "service": "system", '
+                f'"message": "AutoBot system initialized"}}\n'
             )
             f.write(
-                f'{{"timestamp": "{datetime.now().isoformat()}", "level": "INFO", "service": "docker", "message": "All containers are running"}}\n'
+                f'{{"timestamp": "{datetime.now().isoformat()}", "level": "INFO", "service": "docker", '
+                f'"message": "All containers are running"}}\n'
             )
 
         logger.info("✅ Sample logs created")

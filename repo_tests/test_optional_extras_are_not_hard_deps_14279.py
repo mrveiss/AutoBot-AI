@@ -21,8 +21,9 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _NLP_EXTRA = _REPO_ROOT / "autobot-backend" / "requirements-nlp.txt"
 _AI_STACK = (
     _REPO_ROOT / "autobot-infrastructure" / "shared" / "docker" / "ai-stack" / "requirements-ai.txt"

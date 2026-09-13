@@ -11,6 +11,7 @@ acting like a helpful librarian that finds relevant information before answering
 import asyncio
 from typing import Any, Dict, List
 
+from agents.scope_enforcement import scope_segment
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
@@ -18,7 +19,13 @@ from autobot_shared.ssot_config import (
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
-from config import config
+
+# #15255: ``from config import config`` binds the SSOT
+# autobot_shared.ssot_config singleton, which has no ``.get()`` -- every
+# instantiation of this class raised AttributeError. The runtime,
+# GUI-editable settings this reads are ``config_manager``'s (ConfigManager),
+# reached via ``from config import config_manager``.
+from config import config_manager
 from constants.path_constants import PATH
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
@@ -47,13 +54,13 @@ class KBLibrarianAgent(StandardizedAgent):
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
         self.model_name = get_agent_model_explicit(self.AGENT_ID)
 
-        self.auto_learning_enabled = config.get("agents.kb_librarian.auto_learning_enabled", True)
+        self.auto_learning_enabled = config_manager.get("agents.kb_librarian.auto_learning_enabled", True)
 
         # Runtime-configurable parameters (used by api/kb_librarian.py overrides)
         self.enabled: bool = True
-        self.max_results: int = config.get("agents.kb_librarian.max_results", 5)
-        self.similarity_threshold: float = config.get("agents.kb_librarian.similarity_threshold", 0.6)
-        self.auto_summarize: bool = config.get("agents.kb_librarian.auto_summarize", False)
+        self.max_results: int = config_manager.get("agents.kb_librarian.max_results", 5)
+        self.similarity_threshold: float = config_manager.get("agents.kb_librarian.similarity_threshold", 0.6)
+        self.auto_summarize: bool = config_manager.get("agents.kb_librarian.auto_summarize", False)
 
         # Register action handlers for StandardizedAgent routing
         self.register_actions(
@@ -113,6 +120,25 @@ class KBLibrarianAgent(StandardizedAgent):
         question = request.payload["question"]
         context_limit = request.payload.get("context_limit", 3)
         return await self.answer_question(question, context_limit=context_limit)
+
+    def declared_scopes(self, request) -> List[str]:
+        """The knowledge-base entry this run will write, if it writes one (#15950).
+
+        Only `add_knowledge` declares. Searching, answering and stats are reads
+        and must not claim anything -- a read that took an exclusive claim would
+        serialise the whole knowledge base behind one lookup.
+
+        The scope is the entry's title, normalised, so two agents adding
+        DIFFERENT entries never block each other while two adding the SAME title
+        do. Scoping the knowledge base as a whole would be a lock nobody could
+        share; scoping by title is the granularity at which the conflict is real.
+        """
+        if request.action != "add_knowledge":
+            return []
+        title = (request.payload or {}).get("title")
+        if not title:
+            return []
+        return [f"kb:{scope_segment(str(title))}"]
 
     async def _handle_add_knowledge(self, request) -> Dict[str, Any]:
         """Handle add_knowledge action via StandardizedAgent routing."""

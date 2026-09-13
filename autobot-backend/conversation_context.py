@@ -19,11 +19,11 @@ Related Issue: #159 - Prevent Premature Conversation Endings
 Related Issue: #4338 - Autonomous skill extraction from conversations
 """
 
-import asyncio
 import re
 from dataclasses import dataclass
 from typing import Callable, Dict, List
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -274,7 +274,7 @@ class ConversationContextAnalyzer:
 
         try:
             # Fire-and-forget: schedule as background task
-            asyncio.create_task(self.on_conversation_complete(session_id, conversation_history))
+            fire_and_forget(self.on_conversation_complete(session_id, conversation_history), name="skill-extraction")
             logger.debug(
                 "Enqueued skill extraction for session %s (%d messages)",
                 session_id,

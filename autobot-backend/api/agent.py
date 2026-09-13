@@ -25,18 +25,21 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from api.schemas_agent import (
-    AgentAnalysisRequest,
     AgentAvailableData,
     AgentCommandApprovalResponse,
     AgentCommandExecuteResponse,
     AgentHealthResponse,
     AgentResearchData,
     AgentStatusData,
-    CommandApprovalPayload,
     DevelopmentAnalysisData,
     GoalData,
-    GoalPayload,
     MultiAgentCoordinationData,
+)
+from api.schemas_agent_requests import (
+    AgentAnalysisRequest,
+    CommandApprovalPayload,
+    CommandExecutePayload,
+    GoalPayload,
     MultiAgentTaskPayload,
     ResearchTaskRequest,
 )
@@ -840,21 +843,18 @@ async def command_approval(
     error_code_prefix="AGENT",
 )
 async def execute_command(
-    request: Request,
-    command_data: dict,
-    user_role: str = Form("user"),
-    admin_check: bool = Depends(check_admin_permission),
+    request: Request, payload: CommandExecutePayload, admin_check: bool = Depends(check_admin_permission)
 ):
     """
     Executes a shell command and returns its output.
 
     Issue #744: Requires admin authentication (CRITICAL: command execution).
-    Issue #281: Refactored from 151 lines to use extracted helper methods.
-    Issue #620: Further refactored to reduce function length below 50 lines.
+    Issue #15527: one JSON body model. A Form field beside a dict body made
+    FastAPI publish this as application/x-www-form-urlencoded, where every
+    field is a string, so no client could construct a body that validated.
 
     Args:
-        command_data (dict): A dictionary containing the command to execute.
-        user_role (str): The role of the user executing the command.
+        payload (CommandExecutePayload): Command to run and the caller's role.
 
     Returns:
         dict: A dictionary containing the result of the command execution.
@@ -865,7 +865,7 @@ async def execute_command(
                       or a 500 error if an internal error occurs.
     """
     security_layer = request.app.state.security_layer
-    command = command_data.get("command")
+    command, user_role = payload.command, payload.user_role
 
     # Validate command request (Issue #281: uses helper)
     validation_error = _validate_command_request(command, security_layer, user_role)

@@ -29,10 +29,11 @@ author reads it there instead of rediscovering it under time pressure.
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflows")
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 
 # The required-context shims publish a context branch protection demands, from a
@@ -50,6 +51,12 @@ DELIBERATELY_EXEMPT = {
     # never added here, so the guard failed on every pull request until #15302.
     "docker-smoke-required-context.yml": (
         "publishes the required 'docker-smoke-required-context' context; same deadlock (#15300)"
+    ),
+    "backend-required-context.yml": (
+        "publishes the required 'startup-import-smoke' context; same deadlock (#15606)"
+    ),
+    "code-quality-required-context.yml": (
+        "publishes the required 'code-quality' context; same deadlock (#15608)"
     ),
 }
 

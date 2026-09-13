@@ -259,10 +259,11 @@ class TestBacklogReorderRoute:
 
         Omitting the auth dependency override is not enough on its own: the test
         conftest stubs ``auth_middleware.get_auth_middleware`` as a MagicMock whose
-        ``get_user_from_request()`` returns a truthy mock, so the real
-        ``get_current_user`` would always see a "user" and never reject. Force the
-        (stubbed) middleware to yield no user so the route's real auth-rejection
-        path (``if not user_data: raise HTTPException``) actually runs. (#11142)
+        ``get_user_from_request()`` is pinned (#14977) to return a real user dict,
+        not a mock, so the real ``get_current_user`` would always see a "user" and
+        never reject. Force the (stubbed) middleware to yield no user so the
+        route's real auth-rejection path (``if not user_data: raise HTTPException``)
+        actually runs. (#11142)
         """
         from unittest.mock import patch  # noqa: PLC0415
 

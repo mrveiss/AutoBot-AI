@@ -19,11 +19,25 @@ still see the stale metadata and the fact would remain invisible even after
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from knowledge.facts import FactsMixin
+
+
+@pytest.fixture(autouse=True)
+def _durable_row_exists():
+    """Stand in for the ``knowledge_facts`` row every update now writes (#15663).
+
+    ``update_fact`` writes the durable row before the projections, and that write
+    is deliberately allowed to fail the call — an update that reached only Redis
+    is an update the next restart can undo. These tests are about the ChromaDB
+    metadata sync and construct no database, so without this the durable write
+    raises and every assertion below sees ``status == "error"``.
+    """
+    with patch("knowledge.fact_store.update_fact", new=AsyncMock(return_value=True)):
+        yield
 
 
 class _KB(FactsMixin):

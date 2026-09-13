@@ -1,0 +1,42 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - Reach receipt for the clean.yml loop guard (#15824)
+#
+# `ansible-playbook` exits 0 when a play matches no hosts, and exits 0 when a
+# play's task list is empty. Exit status alone therefore cannot tell "the
+# scenarios ran and found nothing wrong" apart from "no scenario ran". This
+# writes down what was actually reached; tests/check_clean_loop_reach.py asserts
+# the floor against it.
+#
+# The receipt records reach only -- host templated, role clean.yml files run,
+# whether the shared wrong-node gate executed. Never findings: a floor bound to
+# findings is satisfied by a guard that has stopped looking.
+#
+# Contract (set by the calling play):
+#   _scenario     (str)   Scenario id; becomes the receipt filename.
+#   _receipt_dir  (str)   Writable directory, from CLEAN_LOOP_RECEIPT_DIR.
+#   _role_cleans  (list)  The role clean.yml files this play looped over.
+---
+- name: "Reach receipt: write {{ _scenario }} (#15824)"
+  ansible.builtin.copy:
+    # `_wrong_node_fact` is the pre-#15827 fact name and `_wrong_node_gate` the
+    # one after it. Either proves roles/_shared/tasks/clean_wrong_node_dir.yml
+    # ran on this host. If both ever disappear this fails loudly, which is
+    # correct -- a renamed gate is a deliberate change, not a silent one.
+    content: |
+      {{
+        {
+          'scenario': _scenario,
+          'host': inventory_hostname,
+          'roles_exercised': _role_cleans,
+          'gate_fact_observed': (_wrong_node_fact is defined) or (_wrong_node_gate is defined),
+          'inventory_sourced': (node_roles is defined) or (node_roles_declared is defined),
+        } | to_nice_json
+      }}
+    dest: "{{ _receipt_dir }}/clean-loop-reach-{{ _scenario }}.json"
+    mode: "0644"
+  # The suite runs --check so it never touches a real /opt/autobot. The receipt
+  # is the one thing that must be written for real, or there is nothing to check.
+  check_mode: false
+  become: false
+  tags: ['clean']

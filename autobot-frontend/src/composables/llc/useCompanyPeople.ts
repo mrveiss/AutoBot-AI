@@ -63,7 +63,8 @@ export function useCompanyPeople(companyId: string) {
       const [org, members] = await Promise.all([
         api.get<{ nodes: OrgNode[] }>(`/api/llc/companies/${companyId}/org-chart`),
         api.get<
-          { user_id: string; display_name: string | null; role: string; is_active?: boolean }[]
+          // #14939: never null -- `list_members` resolves the whole ladder server-side.
+          { user_id: string; display_name: string; role: string; is_active?: boolean }[]
         >(
           `/api/llc/companies/${companyId}/members`,
         ),
@@ -79,12 +80,12 @@ export function useCompanyPeople(companyId: string) {
         .filter((m) => m.is_active !== false)
         .map((m) => ({
           user_id: m.user_id,
-          name: m.display_name || m.user_id,
+          name: m.display_name,
           role: m.role,
         }))
       inactiveHumans.value = rows
         .filter((m) => m.is_active === false)
-        .map((m) => ({ user_id: m.user_id, name: m.display_name || m.user_id }))
+        .map((m) => ({ user_id: m.user_id, name: m.display_name }))
     } catch (err) {
       logger.error('Failed to load company people', err)
       agents.value = []

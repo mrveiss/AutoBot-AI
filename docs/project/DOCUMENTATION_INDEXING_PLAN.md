@@ -65,7 +65,6 @@ docs/
 ├── agents/ (multiple subdirectories)
 ├── development/ (7 files)
 ├── guides/ (5 files)
-├── external_apps/ (4 files)
 └── [50+ additional documentation files]
 
 Root Level:

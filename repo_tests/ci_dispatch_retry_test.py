@@ -31,12 +31,12 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
+from repo_tests._paths import repo_root
 
-_PIPELINE_DIR = Path(__file__).resolve().parents[1] / "pipeline-scripts"
+_PIPELINE_DIR = repo_root() / "pipeline-scripts"
 REPO = "mrveiss/AutoBot-AI"
 
 

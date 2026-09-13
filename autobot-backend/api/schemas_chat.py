@@ -20,32 +20,6 @@ from constants.threshold_constants import CategoryDefaults
 from type_defs.common import Metadata
 
 
-class SessionMessagesData(BaseModel):
-    """data payload for GET /chat/sessions/{session_id}."""
-
-    messages: List[Any]
-    session_id: str
-    total_count: int
-    page: int
-    per_page: int
-
-
-class SessionListData(BaseModel):
-    """data payload for GET /chat/sessions (all scope variants).
-
-    The ``scope``, ``org_id``, and ``team_id`` fields are only present when
-    the request uses scope=org or scope=team query params.
-    ``intentional_empty`` is set when the authenticated user has zero sessions.
-    """
-
-    sessions: List[Any]
-    count: int
-    scope: str | None = None
-    org_id: str | None = None
-    team_id: str | None = None
-    intentional_empty: bool | None = None
-
-
 class SessionCreateData(BaseModel):
     """data payload for POST /chat/sessions."""
 

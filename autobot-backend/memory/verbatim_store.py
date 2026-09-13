@@ -26,6 +26,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -116,10 +117,8 @@ def _extract_terms(text: str) -> set:
 # similarity with an exponential recency decay so recent turns surface over
 # equally-similar stale ones. Tunable per deployment; weight 0.0 disables the
 # blend entirely (pure semantic order — prior behaviour).
-_RECENCY_WEIGHT: float = float(os.environ.get("AUTOBOT_VERBATIM_RECENCY_WEIGHT", "0.2"))
-_RECENCY_HALFLIFE_SECONDS: float = float(
-    os.environ.get("AUTOBOT_VERBATIM_RECENCY_HALFLIFE_SECONDS", str(7 * 24 * 3600))
-)
+_RECENCY_WEIGHT: float = env_float("AUTOBOT_VERBATIM_RECENCY_WEIGHT", 0.2)
+_RECENCY_HALFLIFE_SECONDS: float = env_float("AUTOBOT_VERBATIM_RECENCY_HALFLIFE_SECONDS", 7 * 24 * 3600)
 
 
 def _recency_factor(timestamp_iso: str | None, now: datetime) -> float | None:

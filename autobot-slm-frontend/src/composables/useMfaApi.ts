@@ -34,18 +34,17 @@ export type MFADisableRequest = components['schemas']['MFADisableRequest']
 export type BackupCodesResponse = components['schemas']['BackupCodesResponse']
 
 /**
- * `POST /mfa/verify-login` and `/mfa/verify-setup` declare no response_model on
- * the backend, so the generated response type is an untyped object and there is
- * no schema to derive from — these two shapes stay hand-declared until the
- * backend types the endpoints.
+ * #13139 typed both verification endpoints, so these are derived rather than
+ * hand-declared. They are two DIFFERENT shapes: `/mfa/verify-setup` returns
+ * `MFAVerifySetupResponse(success=..., message=...)` and `/mfa/verify-login`
+ * returns `await auth_service.create_token_response(user)` — a `TokenResponse`
+ * carrying no `success`/`message` at all. The single hand-declared shape they
+ * used to share flattened both into one all-optional blob, so `access_token` —
+ * the whole point of the login call — typed as possibly absent on the only
+ * path that always returns it.
  */
-export interface MFAVerifyResponse {
-  success: boolean
-  message: string
-  access_token?: string
-  token_type?: string
-  expires_in?: number
-}
+export type MFAVerifySetupResponse = components['schemas']['MFAVerifySetupResponse']
+export type TokenResponse = components['schemas']['TokenResponse']
 
 export function useMfaApi() {
   const authStore = useAuthStore()
@@ -59,15 +58,10 @@ export function useMfaApi() {
     return withAuthGuard(() => slmApiClient.post<MFASetupResponse>('/mfa/setup'))
   }
 
-  async function verifySetup(
-    code: string
-  ): Promise<{ success: boolean; message: string }> {
+  async function verifySetup(code: string): Promise<MFAVerifySetupResponse> {
     const body: MFAVerifyRequest = { code }
     return withAuthGuard(() =>
-      slmApiClient.post<{ success: boolean; message: string }>(
-        '/mfa/verify-setup',
-        body
-      )
+      slmApiClient.post<MFAVerifySetupResponse>('/mfa/verify-setup', body)
     )
   }
 
@@ -85,11 +79,11 @@ export function useMfaApi() {
   async function verifyLogin(
     code: string,
     tempToken: string
-  ): Promise<MFAVerifyResponse> {
+  ): Promise<TokenResponse> {
     const body: MFAVerifyRequest = { code }
     const query = new URLSearchParams({ temp_token: tempToken })
     return withAuthGuard(() =>
-      slmApiClient.post<MFAVerifyResponse>(
+      slmApiClient.post<TokenResponse>(
         `/mfa/verify-login?${query.toString()}`,
         body
       )

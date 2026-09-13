@@ -2,3 +2,16 @@
 
 # Browser automation
 playwright>=1.62.0
+# #15660: `roles/browser` installs this into the worker venv and no manifest
+# declared it, so `update-all-nodes.yml`'s `pip install -r` of this file built a
+# different venv from the one the role builds. Bare, which is the text the role
+# states.
+playwright-stealth
+
+# Web server (#15660). Both floors are the text `roles/browser` installs;
+# fastapi's is a security floor (it requires starlette >=0.52.1, the O(n^2)
+# Range-header DoS). Declared here so the floors have an anchor in the
+# component's own manifest rather than agreeing with the backend's by
+# coincidence, which is the blindness #15629 removed from the parity guard.
+fastapi>=0.141.1
+uvicorn>=0.52.4

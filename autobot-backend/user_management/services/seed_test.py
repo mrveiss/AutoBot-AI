@@ -175,7 +175,7 @@ async def test_seed_swallows_duplicate_user_error():
     with patch("user_management.services.seed.get_config", return_value=_make_config()):
         with patch("user_management.services.seed.UserService") as MockService:
             mock_svc = MockService.return_value
-            mock_svc.create_user = AsyncMock(side_effect=DuplicateUserError("already exists"))
+            mock_svc.create_user = AsyncMock(side_effect=DuplicateUserError("already exists", field="username"))
 
             # Must not raise
             await seed_default_admin(session)

@@ -17,14 +17,16 @@ from api.schemas_code import (
     SkillRepoItem,
     SkillRepoSyncResponse,
 )
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from skills.db import get_skills_engine
 from skills.models import RepoType, SkillRepo
 
 logger = get_logger(__name__)
-router = APIRouter()
+# #16368: every route needs an authenticated caller. Registering or syncing a
+# repository also needs admin, per route.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 async def _sync_packages(repo: SkillRepo) -> List[Dict[str, Any]]:

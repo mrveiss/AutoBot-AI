@@ -29,11 +29,11 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_HOOK = Path(__file__).resolve().parents[1] / ".claude" / "hooks" / "scan-secrets.sh"
+_HOOK = repo_root() / ".claude" / "hooks" / "scan-secrets.sh"
 
 _BLOCK = 2
 _ALLOW = 0

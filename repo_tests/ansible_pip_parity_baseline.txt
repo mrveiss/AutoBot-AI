@@ -1,0 +1,47 @@
+# Ansible <-> requirements version divergence baseline (#15568)
+#
+# One `<path-from-repo-root>::<pep503-package-name>` per line. Each entry is a
+# package that an ansible pip declaration site versions differently from the
+# manifest THAT SITE PROVISIONS -- not from every `requirements*.txt` in the tree.
+#
+# The distinction is #15629, and it is why this file did not grow when the
+# comparison was sharpened. Comparing against the union let a floor that matched
+# some OTHER component's manifest read as agreement: `roles/ai-stack` carried
+# `fastapi>=0.115.0` and `uvicorn[standard]>=0.35.0` against an ai-stack manifest
+# declaring `>=0.141.1` and `>=0.52.4`, `docs/guides/requirements-local.txt`
+# states the older pair verbatim, and the union found it. #15623 raised both by
+# reading; nothing would have caught the next one.
+# `repo_tests/ansible_manifest_resolution.py` now resolves each site to the
+# manifest(s) it actually provisions, and a site it cannot resolve is a failure
+# rather than a skipped comparison.
+#
+# THIS FILE IS NOW EMPTY, AND THAT IS THE POINT.
+#
+# It was seeded with the 55 divergences the #15568 audit measured, grouped by
+# the three issues that owned them. All 55 are fixed:
+#
+#   * #15597 — 12 `python_security_updates` floors that sat BELOW the shipped
+#     requirements, so the patching run they drive installed nothing while
+#     reporting success. Raised to the manifests' own specifier text.
+#   * #15598 — 16 live role pip tasks below their component's own floors
+#     (`roles/ai-stack`, `roles/npu-worker`, `roles/redis`, `roles/tts-worker`).
+#     Raised to the same.
+#   * #15596 — 27 entries in three dormant `packages.python` group_vars lists.
+#     Nothing reads them; they now restate no versions at all, and the
+#     wire-or-remove decision for the whole `packages` dict is #15621.
+#
+# `repo_tests/ansible_requirements_parity_test.py` enforces two things, and with
+# no entries left both now bite on the first offence:
+#
+#   1. any divergence NOT listed here fails — a new restatement, or a bump that
+#      moved a site's own manifest and not the site, which is the failure #15408
+#      hit seven times over on `openvino`;
+#   2. any entry listed here that no longer diverges — because it was fixed, or
+#      because the declaration was removed — ALSO fails. A stale entry exempts
+#      nothing while looking authoritative.
+#
+# THIS LIST ONLY SHRINKS, and it has nowhere left to shrink to. Nothing may be
+# added to it to make a red go away: a new divergence is either fixed at the
+# declaration, or the package moves onto `constraints/shared.txt`. Packages the
+# constraints file guards are never eligible for it in any case — a separate
+# assertion in the same test fails them outright.

@@ -14,7 +14,7 @@ version: 2
 updates:
   - package-ecosystem: "pip"
     directory: "/autobot-backend"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -52,12 +52,15 @@ updates:
         # #10474/#10615/#10616 hard-excluded >=7.0.0 because opentelemetry-proto
         # (otel 1.42) required protobuf<7.0 and a grouped bump kept re-proposing
         # 7.x. That is no longer the state of the tree: the manifest now pins
-        # `protobuf>=7.35.1,<8.0.0` and the Docker images build green, so 7.x is
+        # `protobuf>=7.36.0,<8.0.0` and the Docker images build green, so 7.x is
         # demonstrably installable here.
         # #14727: an exclusion at or below a manifest's own floor leaves
         # dependabot nothing it may propose — protobuf was FROZEN in this block,
         # not capped. The range now mirrors the manifest's real ceiling, <8.0.0.
-        # The stale <7.0 rationale is raised separately for confirmation.
+        # The stale <7.0 rationale was confirmed stale and corrected in #15622:
+        # the cap mirrors what opentelemetry-proto and googleapis-common-protos
+        # declare, and grpcio -- named there as a blocker -- does not depend on
+        # protobuf at all.
         versions: [">=8.0.0"]
       - dependency-name: "websockets"
         # #10474/#10386: cap <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16.
@@ -67,7 +70,7 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/autobot_shared"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -94,7 +97,7 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/autobot-slm-backend"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -118,7 +121,7 @@ updates:
 
   - package-ecosystem: "npm"
     directory: "/autobot-frontend"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -170,7 +173,7 @@ updates:
 
   - package-ecosystem: "npm"
     directory: "/autobot-slm-frontend"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -185,7 +188,7 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -206,7 +209,7 @@ updates:
   # bumped first. Same logic for node-major and ubuntu-major.
   - package-ecosystem: "docker"
     directory: "/docker/backend"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -227,7 +230,7 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/docker/slm"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -248,7 +251,7 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/docker/frontend"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -272,7 +275,7 @@ updates:
   # Self-review during #7157 implementation surfaced 2 missed Dockerfiles:
   - package-ecosystem: "docker"
     directory: "/autobot-backend/services/autoresearch"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -293,7 +296,7 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/autobot-infrastructure/shared/mcp/tools/context7"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -315,7 +318,7 @@ updates:
   # (#7170 self-review found this — surfaced after #7163 + #7170 merged)
   - package-ecosystem: "npm"
     directory: "/autobot-infrastructure/shared/mcp/tools/context7"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -334,7 +337,7 @@ updates:
   # (per autobot-infrastructure/README.md): browser→.25, npu→.22, ai-stack→.24.
   - package-ecosystem: "pip"
     directory: "/autobot-browser-worker"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -349,7 +352,7 @@ updates:
 
   - package-ecosystem: "npm"
     directory: "/autobot-browser-worker"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -364,7 +367,7 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/autobot-npu-worker"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -384,7 +387,7 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/autobot-tts-worker"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -406,7 +409,7 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/autobot-infrastructure/shared/docker/ai-stack"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -442,7 +445,7 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/autobot-infrastructure/autobot-npu-worker/docker"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -472,13 +475,98 @@ updates:
       - dependency-name: "fastapi"
         update-types: ["version-update:semver-major"]
 
+  # === #14562: manifests nested BELOW a configured directory ===
+  # dependabot's pip ecosystem resolves manifests relative to `directory:` and
+  # recurses only through `-r`/`-c` includes — never into subdirectories on its
+  # own. Measured on this repo: the root `/` block's grouped PR #14951 edited
+  # `autobot-backend/requirements.txt` and six `requirements-ci/*.txt` files,
+  # both sets reachable only via the `-r` lines in `requirements-dev.txt` and
+  # `requirements-ci.txt`. It touched nothing that lacked such a line.
+  #
+  # The three directories below hold pinned manifests with no include chain from
+  # any configured directory, so their pins received no update of any kind —
+  # security bumps included — while the tree above them looked covered.
+  # `repo_tests/dependabot_requirements_coverage_test.py` now fails when a new
+  # manifest appears outside this config's reach.
+  #
+  # Deliberately NOT on monday: every other block already runs then, and these
+  # three are low-churn. Spreading them keeps one day from producing the whole
+  # week's candidate set.
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-backend/code_analysis"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "backend"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    ignore:
+      # Kept in step with /autobot-backend: this block reaches
+      # constraints/shared.txt through the `-c` line in the code_analysis
+      # manifest, and numpy/pandas majors break the same consumers there.
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-infrastructure/shared/scripts"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "devops"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-npu-worker/resources/windows-npu-worker"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "backend"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    ignore:
+      - dependency-name: "tokenizers"
+        # #10331, and the SAME value the ai-stack and npu-worker-docker blocks
+        # carry: transformers caps tokenizers at <=0.23.0, so anything from
+        # 0.23.1 up is unresolvable against it. This block only became able to
+        # propose that bump when the directory was added above, which is why
+        # the manifest's own `<0.24` cap was added in the same change — a
+        # grouped all-dependencies bump ignores `update-types`, so the range is
+        # what holds (#14431).
+        versions: [">=0.23.1"]
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+
   # === #7182 P2: Root-level manifests ===
   # Catches root-level requirements*.txt (requirements.txt, requirements-ci.txt,
   # requirements-dev.txt) AND root pyproject.toml — used by ci.yml + security.yml.
   # Risk of stale CI tooling without this entry.
   - package-ecosystem: "pip"
     directory: "/"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -495,6 +583,23 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "ansible-core"
+        # #15983: `constraints/ansible-core.txt` is NOT an upstream dependency. It
+        # tracks a DEPLOYMENT FACT -- "the ansible-core the fleet's control node
+        # runs" (#15824) -- so it may only move after the hosts move. A PR changing
+        # it in isolation is wrong regardless of the version it names, which is why
+        # this is a total freeze rather than a major-version cap.
+        #
+        # #15822 is the cost of a mismatch: the fleet's 2.17.14 applies `set_fact`
+        # bool coercion and newer interpreters do not, so the guard read a decidable
+        # token where every host read a bool -- wrong-node cleanup stayed dead for
+        # ELEVEN DAYS behind a green check.
+        #
+        # Proposed twice on 2026-09-07 (#15975 closed, #15980 reverted by hand)
+        # because nothing here excluded it. `update-types` alone does NOT stop a
+        # grouped all-dependencies bump -- #14431 recorded that for openai, #14727
+        # for protobuf -- so the unbounded `versions` range is what holds.
+        versions: [">2.17.14"]
       - dependency-name: "fastapi"
         update-types: ["version-update:semver-major"]
       - dependency-name: "numpy"
@@ -509,7 +614,7 @@ updates:
         # #14727: the range mirrors the manifest's own cap, `<8.0.0`.
         # It previously read `>=7.0.0`, carried over from the #10474 note about
         # opentelemetry-proto needing protobuf<7.0 — but the pin has since moved
-        # to `protobuf>=7.35.1,<8.0.0`. An exclusion at or below a manifest's own
+        # to `protobuf>=7.36.0,<8.0.0`. An exclusion at or below a manifest's own
         # floor offers dependabot nothing it is allowed to propose, so protobuf
         # was frozen in this block rather than capped.
         # update-types alone does NOT stop a grouped all-dependencies bump
@@ -539,7 +644,7 @@ updates:
   # ecosystem entry dependabot cannot rebase/raise grouped lock updates for it.
   - package-ecosystem: "uv"
     directory: "/autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp"
-    target-branch: "Dev_new_gui"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"

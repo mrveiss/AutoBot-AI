@@ -1,3 +1,23 @@
+# GENERATED ARTIFACT (#15044) -- do not hand-edit `filename` below.
+#
+# `autobot-infrastructure/shared/scripts/log_aggregator.py --setup`
+# (`setup_centralized_logging`) opens this exact path in "w" mode and
+# `yaml.dump`s a config it just built, in which `filename` is already an
+# absolute, resolved `Path` (`self.logs_dir / "system.log"`) -- never a
+# `${VAR}` token, because no YAML loader anywhere in this codebase expands
+# one (`git grep expandvars -- '*.py'` finds no implementation). Nothing
+# calls `logging.config.dictConfig` on this file either, so it configures no
+# running service; the sole reader is
+# `repo_tests/logging_formatter_path_test.py`, which checks that the
+# `formatters.json.class` below still agrees with the class
+# `log_aggregator.py` declares.
+#
+# A previous hand-edit put a literal
+# "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/system.log" in
+# `filename`, which read as configurable and was not: no consumer expands
+# it, and the next `--setup` run silently overwrites it with a resolved
+# absolute path anyway. `filename` below is a relative placeholder instead,
+# so it cannot be mistaken for a live, environment-driven value.
 disable_existing_loggers: false
 formatters:
   json:
@@ -12,7 +32,7 @@ handlers:
   file:
     backupCount: 5
     class: logging.handlers.RotatingFileHandler
-    filename: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/system.log
+    filename: logs/system.log
     formatter: json
     maxBytes: 10485760
 root:

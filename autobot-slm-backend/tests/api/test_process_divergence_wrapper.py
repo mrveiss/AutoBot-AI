@@ -110,4 +110,4 @@ def test_wrapper_forwards_deployed_dir_per_component() -> None:
 
     import api.code_sync as cs
 
-    assert captured_dirs["autobot-backend"] == cs.get_default_deployed_dir("autobot-backend")
+    assert captured_dirs["autobot-backend"] == cs.get_live_dir("autobot-backend")

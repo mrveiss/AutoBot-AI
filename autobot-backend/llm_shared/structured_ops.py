@@ -62,11 +62,11 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Any, Union
 
 import pydantic
 
+from autobot_shared.env_utils import env_int
 from llm_shared.json_utils import extract_json_object
 from llm_shared.types import LLMType
 
@@ -77,10 +77,10 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 #: Maximum number of LLM call attempts before raising ExtractionError.
-EXTRACT_MAX_RETRIES: int = int(os.environ.get("AUTOBOT_EXTRACT_MAX_RETRIES", "3"))
+EXTRACT_MAX_RETRIES: int = env_int("AUTOBOT_EXTRACT_MAX_RETRIES", 3)
 
 #: Inputs larger than this many characters trigger auto-chunking.
-EXTRACT_CHUNK_THRESHOLD_CHARS: int = int(os.environ.get("AUTOBOT_EXTRACT_CHUNK_THRESHOLD", "8000"))
+EXTRACT_CHUNK_THRESHOLD_CHARS: int = env_int("AUTOBOT_EXTRACT_CHUNK_THRESHOLD", 8000)
 
 
 # ---------------------------------------------------------------------------

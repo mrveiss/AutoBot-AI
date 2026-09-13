@@ -11,7 +11,7 @@ on:
   # exists; this event cannot occur before then.
   merge_group:
   pull_request:
-    branches: [ main, Dev_new_gui, develop ]
+    branches: [ release, main, develop ]
   # #15358: the repo-wide sweep moves here. On a pull request the hooks run
   # against the diff only; whole-tree drift is still caught, nightly, off the
   # critical path. Without this trigger, diff-scoping would silently drop
@@ -238,8 +238,17 @@ jobs:
         run: |
           ids="$(python3 pipeline-scripts/check_gating_precommit_hooks.py --print-ids)"
           echo "gating hooks: ${ids}"
-          # shellcheck disable=SC2086  # deliberate word-splitting: one hook id per line
-          pre-commit run --all-files ${ids} > precommit-gating.txt 2>&1 || true
+          # #14895: `pre-commit run` takes at most ONE hook id -- passing two
+          # exits with a usage error and writes no result line, which the gate
+          # then correctly reports as "no hook ran". The previous form worked
+          # only because GATING_HOOK_IDS held exactly one entry; it was a latent
+          # break waiting for the second. Run them one at a time and append, so
+          # the captured output carries a result line per id.
+          : > precommit-gating.txt
+          while IFS= read -r id; do
+            [ -n "${id}" ] || continue
+            pre-commit run --all-files "${id}" >> precommit-gating.txt 2>&1 || true
+          done <<< "${ids}"
           cat precommit-gating.txt
 
       - name: Fail when a behavioural hook reported a finding (#14878)
@@ -293,10 +302,22 @@ jobs:
           # BLOCKING: every first-party .py/.ts/.tsx/.js/.mjs/.sh/.css file must
           # carry the Apache-2.0 SPDX header. Scan mode (no --fix) fails CI when
           # a header-less file lands, so coverage from the #9826 relicense sweep
-          # can no longer drift. Run check_spdx_header.py over all tracked files;
-          # in_scope()/EXCLUDE_RE in the script skip vendored/generated/.vue/
-          # workflow/infrastructure paths (same scope as the original sweep).
-          git ls-files -z | xargs -0 python3 tools/lint/check_spdx_header.py
+          # can no longer drift. in_scope()/EXCLUDE_RE in the script skip
+          # vendored/generated/.vue/workflow/infrastructure paths (same scope as
+          # the original sweep).
+          #
+          # --all, not `git ls-files -z | xargs -0 ...` (#15817). The old
+          # pipeline put the gate's entire reach outside the thing being gated:
+          # a shallow checkout, a wrong CWD, or an xargs that split zero times
+          # produced a run over NO files that still exited 0, and would have
+          # kept exiting 0 while headers rotted out of the tree. --all makes the
+          # script enumerate the tree itself and hold the SPDX_FLOOR reach floor
+          # (bound to files EXAMINED, not violations found), and it prints
+          # examined=N so the reach is visible in the log rather than assumed.
+          # The pre-commit `insert-license` hook deliberately does NOT pass
+          # --all: it receives staged files, and a floor there would redden
+          # every one-file commit in the repository.
+          python3 tools/lint/check_spdx_header.py --all
 
       - name: Block newly tracked symlinks into or out of the working tree (#14137)
         env:

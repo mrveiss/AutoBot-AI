@@ -38,7 +38,7 @@ PRs that follow this path are **much** more likely to be accepted, even when the
 
 ### Branch Target
 
-All PRs must target **`Dev_new_gui`**, not `main`. Direct commits to `main` are blocked by a pre-commit hook.
+All PRs must target **`main`**, not `release`. Direct commits to `release` are blocked by a pre-commit hook.
 
 ### Commit Format
 
@@ -159,7 +159,7 @@ cat .git/hooks/pre-commit        # which of the two is in place
 ls .git/hooks/pre-commit.legacy  # what pre-commit displaced, if anything
 ```
 
-The protected-branch rule is enforced on the server regardless, so a displaced branch guard costs you a rejected push rather than a bad commit on `main`.
+The protected-branch rule is enforced on the server regardless, so a displaced branch guard costs you a rejected push rather than a bad commit on `release`.
 
 Not every hook's verdict carries the same weight in CI, and the split is deliberate. Formatter and linter findings are reported as warnings by `enforce-precommit.yml`; a hook that could not *execute* fails the job (#14181); and a **behavioural** hook — one whose entry is a test suite asserting shipped behaviour, currently `ssot-config-lib-guard` — fails the job on a finding (#14878), because there the finding *is* the regression.
 

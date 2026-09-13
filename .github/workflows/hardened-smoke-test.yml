@@ -7,10 +7,10 @@ name: Hardened Smoke Test
 on:
   push:
     branches:
-      - Dev_new_gui
+      - main
   pull_request:
     branches:
-      - Dev_new_gui
+      - main
     # #13388: SAFE — this workflow publishes `hardened-smoke-test`, which is NOT
     # one of the ten required contexts (the required `smoke-test` comes from
     # docker-smoke-test.yml, which is deliberately left unfiltered).

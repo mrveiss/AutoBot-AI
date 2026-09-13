@@ -25,10 +25,10 @@ identical with the flag on and off.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from services.remote_approval import DeliveredApproval, RemoteApprovalStore, embed_token
@@ -38,7 +38,7 @@ logger = get_logger(__name__)
 _REMOTE_FLAG_KEY_PREFIX = "approval:remote:"
 
 #: How long a session stays flagged remote without being refreshed.
-REMOTE_FLAG_TTL_SECONDS = int(os.getenv("AUTOBOT_REMOTE_APPROVAL_FLAG_TTL_SECONDS", "604800"))
+REMOTE_FLAG_TTL_SECONDS = env_int("AUTOBOT_REMOTE_APPROVAL_FLAG_TTL_SECONDS", 604800)
 
 
 class ApprovalSender(Protocol):

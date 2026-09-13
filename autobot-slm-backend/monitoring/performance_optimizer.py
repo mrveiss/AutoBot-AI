@@ -493,7 +493,7 @@ class PerformanceOptimizer:
                     description="GPU acceleration can be optimized for AI workloads",
                     impact_estimate="20-50% AI processing speed improvement",
                     auto_applicable=True,
-                    command="python3 {PATH.PROJECT_ROOT}/monitoring/gpu_optimizer.py --optimize-ai-stack",
+                    command=f"python3 {PATH.PROJECT_ROOT}/monitoring/gpu_optimizer.py --optimize-ai-stack",
                     affected_services=["ai-stack", "npu-worker"],
                 )
             )
@@ -507,7 +507,7 @@ class PerformanceOptimizer:
                     description="Intel NPU can be better utilized for AI inference",
                     impact_estimate="15-30% AI inference speed improvement",
                     auto_applicable=True,
-                    command="python3 {PATH.PROJECT_ROOT}/monitoring/npu_optimizer.py --enable-optimization",
+                    command=f"python3 {PATH.PROJECT_ROOT}/monitoring/npu_optimizer.py --enable-optimization",
                     affected_services=["npu-worker"],
                 )
             )

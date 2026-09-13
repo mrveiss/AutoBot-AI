@@ -30,6 +30,22 @@
   failed_when: false
   become: true
 
+- name: restart slm self-update socket
+  ansible.builtin.systemd:
+    name: "{{ slm_self_update_socket_service }}.socket"
+    state: restarted
+  # #15728: a ListenStream=/SocketMode= change only takes effect on the next
+  # bind, so this must run whenever either changes.
+  #
+  # Deliberately NOT failed_when: false. This handler is notified only by the
+  # task that writes the unit file, and handlers run after it, so the unit
+  # always exists by the time this fires -- the "not deployed yet" case it
+  # would have covered cannot occur. Suppressing the failure would leave a
+  # host whose socket did not come back up looking like a clean deploy, and
+  # the socket's permissions ARE the authentication for a credential-free
+  # update trigger. A deploy that cannot bind it must fail loudly.
+  become: true
+
 - name: test nginx config
   ansible.builtin.command:
     cmd: nginx -t

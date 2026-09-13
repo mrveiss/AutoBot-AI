@@ -21,10 +21,10 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.model_pricing import MODEL_PRICING_PER_1M_TOKENS
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.ssot_constants import MODEL_PRICING_PER_1M_TOKENS
 from llc.config import DEFAULT_BUDGET_LIMIT
-from llc.exceptions import BudgetExhausted
+from llc.exceptions import BudgetExhausted, UnpricedModel
 from llc.models.budget import LLCAgentBudget
 
 from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
@@ -35,13 +35,29 @@ logger = logging.getLogger(__name__)
 _tracker = AgentBudgetTracker()  # noqa: SRB001 — canonical SharedRuntimeBag consumer
 
 
+def _for_agent(agent_id: str, company_id: str):
+    """Select one agent's budget row, scoped to its company.
+
+    Every lookup goes through this rather than filtering on ``agent_id`` alone.
+    The slug is unique per company, not globally (#15812), so a bare
+    ``WHERE agent_id = :slug`` returns *whichever* company's row the database
+    happens to hold — and reads, writes and spend enforcement would all cross
+    the tenant boundary silently, because the query still returns exactly one
+    row and nothing looks wrong.
+    """
+    return select(LLCAgentBudget).where(
+        LLCAgentBudget.agent_id == agent_id,
+        LLCAgentBudget.company_id == company_id,
+    )
+
+
 class BudgetService(LLCServiceBase):
     """Per-agent budget enforcement: cost ingest, hard stop, soft alert."""
 
     @staticmethod
-    async def invalidate_cache(agent_id: str) -> None:
+    async def invalidate_cache(agent_id: str, company_id: str) -> None:
         """Drop the tracker cache for an agent after its limits/mode change."""
-        await _tracker.invalidate(agent_id)
+        await _tracker.invalidate(company_id, agent_id)
 
     async def provision_budget(
         self,
@@ -55,9 +71,7 @@ class BudgetService(LLCServiceBase):
         Idempotent: if a row already exists, returns it with ``created=False``.
         Returns ``(row, created)`` where ``created`` is True only for new rows.
         """
-        existing = (
-            await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
-        ).scalar_one_or_none()
+        existing = (await session.execute(_for_agent(agent_id, company_id))).scalar_one_or_none()
         if existing is not None:
             logger.debug("Budget row already exists for agent %s — skipping provision", agent_id)
             return existing, False
@@ -79,9 +93,7 @@ class BudgetService(LLCServiceBase):
                 await session.flush()
         except IntegrityError:
             # Concurrent provision won the race — re-select and return existing row.
-            existing = (
-                await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
-            ).scalar_one_or_none()
+            existing = (await session.execute(_for_agent(agent_id, company_id))).scalar_one_or_none()
             logger.debug("Race on provision_budget for agent %s — returning existing row", agent_id)
             return existing, False
 
@@ -92,6 +104,7 @@ class BudgetService(LLCServiceBase):
         self,
         session: AsyncSession,
         agent_id: str,
+        company_id: str,
         tokens_in: int,
         tokens_out: int,
         model: str,
@@ -107,18 +120,20 @@ class BudgetService(LLCServiceBase):
         Uses atomic UPDATE to avoid read-modify-write races across 4 uvicorn workers.
 
         Returns the dollar cost added this call (always calculated for analytics).
-        Raises BudgetExhausted if spending exceeds the active budget mode limit.
+        Raises BudgetExhausted if spending exceeds the active budget mode limit,
+        and UnpricedModel if the model has no entry in the pricing table.
         """
         pricing = MODEL_PRICING_PER_1M_TOKENS.get(model)
         if pricing is None:
-            logger.warning(
-                "Unknown model %r in ingest_cost_event for agent %s — treating cost as 0",
-                model,
-                agent_id,
-            )
-            cost = Decimal("0")
-        else:
-            cost = Decimal(str((tokens_in * pricing["input"] + tokens_out * pricing["output"]) / 1_000_000))
+            # #15860: this used to log and charge zero. A cost of 0 and a cost
+            # that could not be computed are the same number, and only one of
+            # them is a fact -- so an unpriced model made dollar budgets
+            # silently inapplicable rather than visibly broken.
+            #
+            # Refusing is safe because the table distinguishes free from
+            # unknown: every local model carries an explicit zero entry.
+            raise UnpricedModel(model=model, agent_id=agent_id)
+        cost = Decimal(str((tokens_in * pricing["input"] + tokens_out * pricing["output"]) / 1_000_000))
 
         total_tokens = tokens_in + tokens_out
 
@@ -129,12 +144,38 @@ class BudgetService(LLCServiceBase):
                 "UPDATE llc_agent_budgets"
                 " SET budget_spent = budget_spent + :cost,"
                 "     tokens_spent = tokens_spent + :tokens"
-                " WHERE agent_id = :agent_id"
+                " WHERE agent_id = :agent_id AND company_id = :company_id"
             ),
-            {"cost": str(cost), "tokens": total_tokens, "agent_id": agent_id},
+            {
+                "cost": str(cost),
+                "tokens": total_tokens,
+                "agent_id": agent_id,
+                "company_id": company_id,
+            },
         )
 
-        result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
+        # `populate_existing`: this read is what enforcement is decided on, so it
+        # must reflect the UPDATE just issued rather than the caller's session
+        # state. Without it SQLAlchemy's identity map returns the object the
+        # caller already loaded, carrying its pre-UPDATE `budget_spent` -- a
+        # plain SELECT does not overwrite already-loaded attributes.
+        #
+        # Not hypothetical, and not symmetrical between the two callers.
+        # `POST /agent/cost-events` opens its own session and never pre-loads the
+        # row, so its first read was fresh and the hard stop worked.
+        # `POST /budgets/{agent_id}/ingest` calls `load_authorized` first -- which
+        # puts the row in the identity map by design, that being the IDOR guard --
+        # and then hands the SAME session here. Enforcement compared the
+        # PRE-UPDATE spend against the limit, so `BudgetExhausted` could not fire
+        # on that route at all. The hard stop #15859 exists for was inoperative on
+        # one of its two callers, and nothing looked wrong: both routes returned a
+        # correct cost, and only the enforcement that follows was reading a stale
+        # number.
+        #
+        # Fixed in the service, not in the route: a service whose correctness
+        # depends on whether its caller happened to load a row first breaks again
+        # the next time someone adds a caller. There are four.
+        result = await session.execute(_for_agent(agent_id, company_id).execution_options(populate_existing=True))
         row = result.scalar_one_or_none()
 
         if row is None:
@@ -155,6 +196,7 @@ class BudgetService(LLCServiceBase):
         await _tracker.record_state(
             AgentBudgetState(
                 agent_id=agent_id,
+                company_id=company_id,
                 budget_mode=budget_mode,
                 budget_spent=float(spent),
                 budget_limit=float(limit),
@@ -179,7 +221,7 @@ class BudgetService(LLCServiceBase):
 
         return cost
 
-    async def check_budget(self, session: AsyncSession, agent_id: str) -> Tuple[Decimal, bool, bool]:
+    async def check_budget(self, session: AsyncSession, agent_id: str, company_id: str) -> Tuple[Decimal, bool, bool]:
         """Return (remaining, is_over_limit, alert_triggered) for an agent (GH#6630, GH#8997).
 
         remaining can be negative when spent exceeds limit.
@@ -190,11 +232,11 @@ class BudgetService(LLCServiceBase):
         Reads from SharedRuntimeBag cache first (GH#6630); falls back to DB
         on cache miss so correctness is preserved.
         """
-        cached = await _tracker.get_state(agent_id)
+        cached = await _tracker.get_state(company_id, agent_id)
         if cached is not None:
             return cached.remaining, cached.is_over_limit, cached.alert_triggered
 
-        result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
+        result = await session.execute(_for_agent(agent_id, company_id))
         row = result.scalar_one_or_none()
 
         if row is None:

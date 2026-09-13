@@ -20,7 +20,6 @@ Config:
   AUTOBOT_SHARED_LINK_ACCESS_RPH     — max password attempts per hour per IP (default: 100)
 """
 
-import os
 import secrets
 import uuid
 from datetime import timedelta
@@ -41,6 +40,7 @@ from api.schemas_chat import (
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from auth_rbac import require_role
+from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.proxy_utils import get_client_ip
@@ -58,7 +58,7 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["chat-shared-links"])
 
 _DEFAULT_TTL_ENV = "AUTOBOT_SHARED_LINK_DEFAULT_TTL"
-_DEFAULT_TTL_SECONDS: int = int(os.environ.get(_DEFAULT_TTL_ENV, "0"))
+_DEFAULT_TTL_SECONDS: int = env_int(_DEFAULT_TTL_ENV, 0)
 if _DEFAULT_TTL_SECONDS > 0:
     logger.info("Shared link default TTL: %ds (from %s)", _DEFAULT_TTL_SECONDS, _DEFAULT_TTL_ENV)
 else:
@@ -66,8 +66,8 @@ else:
 
 # Rate limiter for the unauthenticated /access endpoint — brute-force guard (GH#9127).
 # Keyed per client IP, sliding-window via Redis.
-_ACCESS_RPM: int = int(os.environ.get("AUTOBOT_SHARED_LINK_ACCESS_RPM", "10"))
-_ACCESS_RPH: int = int(os.environ.get("AUTOBOT_SHARED_LINK_ACCESS_RPH", "100"))
+_ACCESS_RPM: int = env_int("AUTOBOT_SHARED_LINK_ACCESS_RPM", 10)
+_ACCESS_RPH: int = env_int("AUTOBOT_SHARED_LINK_ACCESS_RPH", 100)
 _access_limiter = RateLimiter(
     scope_prefix="shared_link_access",
     default_tier="anonymous",

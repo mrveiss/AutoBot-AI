@@ -18,6 +18,7 @@ import time
 import uuid
 from datetime import timedelta
 
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -33,8 +34,7 @@ logger = get_logger(__name__)
 # legacy id via the ``imported_from_sqlite`` marker) and fall back to SQLite. WRITE: every
 # write also best-effort mirrors into the vault store (SQLite stays canonical). The two are
 # independent so dual-write can be enabled first to populate the vault store, then read.
-VAULT_READ_ENV = "AUTOBOT_SECRETS_UNIFIED_READ"
-VAULT_WRITE_ENV = "AUTOBOT_SECRETS_UNIFIED_WRITE"
+VAULT_READ_ENV, VAULT_WRITE_ENV = "AUTOBOT_SECRETS_UNIFIED_READ", "AUTOBOT_SECRETS_UNIFIED_WRITE"
 
 
 def _vault_read_enabled() -> bool:
@@ -159,9 +159,9 @@ def _configured_lock_ttl_ms() -> int:
 
 _REFRESH_LOCK_TTL_MS = _configured_lock_ttl_ms()
 # A loser must outwait the lease, or it gives up on a refresh still in progress.
-_REFRESH_WAIT_S = max(float(os.getenv("AUTOBOT_OAUTH_REFRESH_WAIT_S", "0")), (_REFRESH_LOCK_TTL_MS / 1000.0) + 5.0)
+_REFRESH_WAIT_S = env_float_clamped("AUTOBOT_OAUTH_REFRESH_WAIT_S", 0.0, min_v=(_REFRESH_LOCK_TTL_MS / 1000.0) + 5.0)
 # Guarded against 0 from the environment, which would busy-loop the executor.
-_REFRESH_POLL_S = max(float(os.getenv("AUTOBOT_OAUTH_REFRESH_POLL_S", "0.2")), 0.05)
+_REFRESH_POLL_S = env_float_clamped("AUTOBOT_OAUTH_REFRESH_POLL_S", 0.2, min_v=0.05)
 
 
 async def _release_quietly(lease: LeaderLease) -> None:

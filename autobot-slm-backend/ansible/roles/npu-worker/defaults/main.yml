@@ -12,7 +12,9 @@ npu_log_dir: /var/log/autobot
 npu_models_dir: /var/lib/autobot-npu/models
 
 # OpenVINO
-npu_install_openvino: true
+# #15671: npu_install_openvino is gone with the `name:` list it gated -- the
+# venv is filled from autobot-npu-worker/requirements.txt, which declares
+# openvino unconditionally, and nothing in the tree ever set the toggle false.
 npu_device: "NPU"  # CPU, GPU, NPU
 
 # Server settings

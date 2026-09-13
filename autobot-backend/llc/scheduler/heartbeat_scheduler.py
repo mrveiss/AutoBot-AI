@@ -893,7 +893,8 @@ async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]
     # and triggers exponential-backoff recovery.  _run_adapter is already a
     # background task, so blocking here does not stall the poll loop.
     adapter = AutoBotAgentAdapter(agent_config=adapter_config)
-    await adapter.run_blocking(dict(context, agent_id=agent["agent_id"]))
+    scoped = dict(context, agent_id=agent["agent_id"], company_id=str(agent.get("company_id") or ""))
+    await adapter.run_blocking(scoped)
 
 
 async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], context: Dict[str, Any]) -> Optional[str]:
@@ -918,7 +919,7 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     company_id = str(agent.get("company_id") or "")
 
     key_record = None
-    enriched = dict(context, agent_id=agent_id, api_base=AGENT_API_BASE_URL)
+    enriched = dict(context, agent_id=agent_id, company_id=company_id, api_base=AGENT_API_BASE_URL)
     if company_id:
         key_record, raw_key = await _issue_run_key(agent_id, company_id)
         if raw_key:
@@ -947,7 +948,7 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
         raise
     finally:
         if key_record is not None:
-            await _revoke_run_key(agent_id, key_record.id)
+            await _revoke_run_key(agent_id, key_record.id, str(agent_config.get("company_id") or "") or None)
 
     # GH#9773: RATE_LIMITED is scheduler-internal — translate to ProviderRateLimited
     # so the GH#8204 backoff path applies uniformly for registry adapters.
@@ -989,12 +990,9 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
     try:
         factory = get_async_session_factory()
         async with factory() as session:
+            company = str(agent.get("company_id") or "")
             await BudgetService().ingest_cost_event(
-                session,
-                agent_id,
-                int(result.tokens_in or 0),
-                int(result.tokens_out or 0),
-                model,
+                session, agent_id, company, int(result.tokens_in or 0), int(result.tokens_out or 0), model
             )
             await session.commit()
     except BudgetExhausted:
@@ -1033,12 +1031,12 @@ async def _issue_run_key(agent_id: str, company_id: str) -> tuple[Any, Optional[
         return None, None
 
 
-async def _revoke_run_key(agent_id: str, key_id: uuid.UUID) -> None:
-    """Revoke an ephemeral run-scoped key (best-effort)."""
+async def _revoke_run_key(agent_id: str, key_id: uuid.UUID, company_id: Optional[str] = None) -> None:
+    """Revoke an ephemeral run-scoped key, company-scoped (#13771, #15930)."""
     factory = get_async_session_factory()
     try:
         async with factory() as session:
-            await ApiKeyService().revoke_key(session, agent_id=agent_id, key_id=key_id)
+            await ApiKeyService().revoke_key(session, agent_id=agent_id, key_id=key_id, company_id=company_id)
     except Exception:
         logger.exception("Failed to revoke ephemeral heartbeat key %s for agent %s", key_id, agent_id)
 

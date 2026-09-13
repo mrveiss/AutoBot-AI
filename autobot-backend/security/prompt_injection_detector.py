@@ -84,7 +84,7 @@ INJECTION_PATTERNS = (
     r"ignore\s+previous\s+instructions",
     r"ignore\s+above",
     r"disregard\s+previous",
-    r"forget\s+previous",
+    r"forget\s+(all\s+)?previous",
     r"forget\s+all",
     r"forget\s+your\s+system\s+prompt",
     r"new\s+instructions",
@@ -122,7 +122,7 @@ INJECTION_PATTERNS = (
     r"--force",
 )
 
-# Dangerous command patterns (regex patterns)
+# Dangerous command patterns. #14042: 0 of 17 shared with the canonical set; consolidation tracked in #15459.
 DANGEROUS_PATTERNS = (
     # File system destruction
     r"rm\s+-r",
@@ -427,7 +427,7 @@ class PromptInjectionDetector:
         # Sanitize and determine blocking
         sanitized_text = self.sanitize_input(text)
         # Issue #4345: Also strip invisible Unicode from sanitized output
-        sanitized_text = self._strip_invisible_unicode(sanitized_text)
+        sanitized_text = self.strip_invisible_unicode(sanitized_text)
         metadata["sanitized_length"] = len(sanitized_text)
         blocked = max_risk in {InjectionRisk.HIGH, InjectionRisk.CRITICAL}
 
@@ -599,7 +599,7 @@ class PromptInjectionDetector:
 
         return len(found_chars) > 0, found_chars
 
-    def _strip_invisible_unicode(self, text: str) -> str:
+    def strip_invisible_unicode(self, text: str) -> str:
         """
         Remove invisible Unicode characters from text.
 
@@ -728,9 +728,9 @@ if __name__ == "__main__":
         )
 
         logger.info("%s | Risk: %-8s | Blocked: %s", status, result.risk_level.value, result.blocked)
-        logger.info("Input: {test_input}")
+        logger.info(f"Input: {test_input}")
         if result.detected_patterns:
-            logger.info("Patterns: {result.detected_patterns}")
+            logger.info(f"Patterns: {result.detected_patterns}")
 
     # Test context validation
     logger.info("=== Context Poisoning Detection Test ===\n")
@@ -744,4 +744,4 @@ if __name__ == "__main__":
     ]
 
     is_safe = detector.validate_conversation_context(poisoned_context)
-    logger.info("Context validation: {'✅ SAFE' if is_safe else '🚨 POISONED'}")
+    logger.info(f"Context validation: {'✅ SAFE' if is_safe else '🚨 POISONED'}")

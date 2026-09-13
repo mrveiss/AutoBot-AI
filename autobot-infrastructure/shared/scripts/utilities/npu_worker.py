@@ -25,6 +25,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.redis_client import get_async_redis_client
 
 # Configure logging
@@ -167,7 +168,8 @@ class NPUWorker:
                 await self.load_model(model_name)
                 return {"status": "success", "model": model_name, "loaded": True}
             except Exception as e:
-                raise HTTPException(status_code=500, detail="Internal server error")
+                logger.error("Failed to load model %s: %s", model_name, e)
+                raise HTTPException(status_code=500, detail="Internal server error") from e
 
         @self.app.get("/models")
         async def list_models():
@@ -204,7 +206,7 @@ class NPUWorker:
 
         # Start task processing loop
         if self.redis_client:
-            asyncio.create_task(self.task_processing_loop())
+            fire_and_forget(self.task_processing_loop(), name="npu-worker-task-loop")
 
         logger.info("🎯 NPU Worker initialized - NPU Available: %s", self.npu_available)
 

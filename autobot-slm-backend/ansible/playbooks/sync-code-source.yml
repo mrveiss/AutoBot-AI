@@ -7,7 +7,8 @@
 #
 # When GitHub is unreachable FROM the SLM manager, the pre-flight git pull
 # in provision-fleet-roles.yml silently falls back to whatever is already
-# in /opt/autobot/code_source.  This playbook closes that gap: run it from
+# in the configured code_source directory.  This playbook closes that gap: run
+# it from
 # the dev machine BEFORE provisioning to push the current local checkout to
 # SLM, so roles, templates, and playbooks are always up-to-date regardless
 # of whether the SLM can reach GitHub.
@@ -28,7 +29,7 @@
   gather_facts: false
 
   vars:
-    _code_source_dest: "{{ code_source_dir | default('/opt/autobot/code_source') }}"
+    _code_source_dest: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
     _code_source_owner: "{{ code_source_owner | default('root') }}"
     _code_source_group: "{{ code_source_group | default('root') }}"
 
