@@ -63,6 +63,8 @@ fi
 REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
 REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
 REDIS_PASSWORD="${AUTOBOT_REDIS_PASSWORD:-}"
+# #16626: optional ACL username; empty keeps the password-only AUTH
+REDIS_USERNAME="${AUTOBOT_REDIS_USERNAME:-}"
 # DB numbers from env vars — defaults match redis-databases.yaml SSOT (#2670)
 CELERY_BROKER_DB="${AUTOBOT_REDIS_DB_CELERY_BROKER:-14}"
 CELERY_RESULTS_DB="${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}"
@@ -70,8 +72,12 @@ CELERY_RESULTS_DB="${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}"
 if [ -n "$REDIS_PASSWORD" ]; then
     # URL-encode the password (handle +, /, =, etc.)
     ENCODED_PASSWORD=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$REDIS_PASSWORD', safe=''))")
-    DEFAULT_BROKER="redis://:${ENCODED_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/${CELERY_BROKER_DB}"
-    DEFAULT_BACKEND="redis://:${ENCODED_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/${CELERY_RESULTS_DB}"
+    # Passed through the environment, not interpolated into the Python source
+    ENCODED_USERNAME=$(REDIS_USERNAME="$REDIS_USERNAME" python3 -c "import os, urllib.parse; print(urllib.parse.quote(os.environ['REDIS_USERNAME'], safe=''))")
+    # An empty username renders ":<password>", today's password-only form
+    USERINFO="${ENCODED_USERNAME}:${ENCODED_PASSWORD}"
+    DEFAULT_BROKER="redis://${USERINFO}@${REDIS_HOST}:${REDIS_PORT}/${CELERY_BROKER_DB}"
+    DEFAULT_BACKEND="redis://${USERINFO}@${REDIS_HOST}:${REDIS_PORT}/${CELERY_RESULTS_DB}"
 else
     DEFAULT_BROKER="redis://${REDIS_HOST}:${REDIS_PORT}/${CELERY_BROKER_DB}"
     DEFAULT_BACKEND="redis://${REDIS_HOST}:${REDIS_PORT}/${CELERY_RESULTS_DB}"

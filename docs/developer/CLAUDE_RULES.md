@@ -594,6 +594,7 @@ To add a new variable:
 | `AUTOBOT_REDIS_PORT` | redis | int | `6379` | Redis server TCP port (plain connection). Range: 1–65535. |
 | `AUTOBOT_REDIS_TLS_ENABLED` | redis | bool | false | Enable TLS for Redis connections when truthy. |
 | `AUTOBOT_REDIS_TLS_PORT` | redis | int | `6380` | Redis server TCP port for TLS connections. Range: 1–65535. |
+| `AUTOBOT_REDIS_USERNAME` | redis | str | *(none)* | Redis ACL username, sent with the password as AUTH user password (omit to keep the password-only AUTH, #16626). |
 | `AUTOBOT_REMEDIATION_HEARTBEAT_POLL_S` | backend | int | `5` | How often to re-read the node row while waiting for a post-restart heartbeat (services/reconciler.py, #14344). |
 | `AUTOBOT_REMEDIATION_HEARTBEAT_WAIT_S` | backend | int | `90` | Seconds to wait for a heartbeat after the reconciler restarts a node's agent before recording the remediation as failed. Remediation exists to restore the heartbeat, so the heartbeat is what success means — the restart exiting 0 only says the command ran (services/reconciler.py, #14344). |
 | `AUTOBOT_REMEDIATION_PLAYBOOK_TIMEOUT_S` | backend | int | `180` | Wall-clock ceiling on the ansible-playbook subprocess _restart_service_via_ansible launches. Previously unbounded — a hung SSH connection or stuck remote task blocked remediation for a node indefinitely. manage-service.yml (the only playbook this call path runs) is a single-host, single-service restart that normally completes in seconds; 180s stays comfortably below REMEDIATION_COOLDOWN (300s) while giving generous headroom (services/reconciler.py, services/playbook_executor.py, #14524). |
@@ -667,5 +668,5 @@ To add a new variable:
 | `AUTOBOT_WORK_CLAIM_WAIT_TTL_S` | orchestration | int | `900` | How long an agent keeps its place in a work-claim queue without renewing (#15948). Deliberately longer than AUTOBOT_WORK_CLAIM_TTL_S: a waiter that expired before the holder it is queued behind would never be promoted, and would look to an operator like a queue that silently drops people. The ceiling bounds how long a dead waiter occupies a position before it is pruned on the next read. Range: 30–7200. |
 | `AUTOBOT_WORK_CLAIM_YIELD_TIMEOUT_S` | orchestration | int | `30` | How long a requester waits for a claim holder to answer a yield request before treating the silence as a refusal (#15948). Short on purpose: the requester is blocked while it waits, and a holder that has not answered in this long is busy working, which is itself the answer. Raising it does not make a yield more likely, it only makes the requester wait longer to be told no. Range: 1–600. |
 
-*221 variables registered as of last generation.*
+*222 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->

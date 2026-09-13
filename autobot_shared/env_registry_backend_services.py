@@ -415,3 +415,18 @@ register_env_var(
         component="backend",
     )
 )
+
+# Registered here, not beside AUTOBOT_REDIS_PASSWORD in env_registry.py: that
+# module is closed to new entries at its file-size ceiling (see the docstring).
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REDIS_USERNAME",
+        type=str,
+        default=None,
+        description=(
+            "Redis ACL username, sent with the password as AUTH user password "
+            "(omit to keep the password-only AUTH, #16626)."
+        ),
+        component="redis",
+    )
+)
