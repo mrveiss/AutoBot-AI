@@ -491,7 +491,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/api/test_fleet_node_update_11511.py": 1051,
     "autobot-slm-backend/tests/api/test_prometheus_scrape_is_unauthenticated_14339.py": 973,
     "autobot-slm-backend/tests/api/test_sso_auth.py": 884,
-    "autobot-slm-backend/tests/services/test_role_registry.py": 874,
+    "autobot-slm-backend/tests/services/test_role_registry.py": 846,
     "autobot-slm-backend/tests/services/test_self_update_systemd_detach_11492.py": 691,
     "autobot-slm-backend/tests/services/test_sso_service.py": 1258,
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
