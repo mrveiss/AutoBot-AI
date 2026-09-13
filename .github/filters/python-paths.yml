@@ -149,3 +149,9 @@ python:
   # backend_gpu_faiss_gating_test.py both read this manifest; without an entry
   # here, a change confined to it skips both guards.
   - 'requirements-gpu-faiss.txt'
+  # #16427: `secretsmanager_template_names_match_vault_registry_16427_test.py`
+  # reads this component's `credentialTemplates` array by concrete literal, to
+  # assert its provider names still match the vault registry. Without an entry
+  # here, a change confined to this one file skips the guard that exists to
+  # catch exactly that drift.
+  - 'autobot-frontend/src/components/security/SecretsManager.vue'
