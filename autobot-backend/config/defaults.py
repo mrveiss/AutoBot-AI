@@ -75,6 +75,7 @@ def _get_memory_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
             "port": redis_port,
             "db": config.redis.db_knowledge,
             "password": config.redis.password,
+            "username": config.redis.username,
         },
         "chromadb": {
             "path": config.misc.chromadb_path or "data/chromadb",
@@ -302,6 +303,7 @@ def _get_redis_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
         "port": redis_port,
         "db": config.redis.db_main,
         "password": config.redis.password,
+        "username": config.redis.username,
     }
 
 
@@ -333,6 +335,7 @@ def _get_task_transport_config(redis_host: str, redis_port: int) -> Dict[str, An
             "host": redis_host,
             "port": redis_port,
             "password": config.redis.password,
+            "username": config.redis.username,
             "db": config.redis.db_tasks,
         },
     }
