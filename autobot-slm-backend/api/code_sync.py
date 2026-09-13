@@ -5186,10 +5186,8 @@ async def _run_slm_stage(
         _stage_log(stage, f"Firing Ansible self-update for {slm_node.node_id} (fire-and-forget)")
         stage.message = "Ansible SLM self-update queued; service will restart"
         # #16610: a run that fails before the restart ends this stage FAILED instead of leaving it RUNNING
-        fire_and_forget(
-            _ansible_self_update(slm_node.node_id, functools.partial(_fail_fleet_stage, job, stage)),
-            name=f"ansible-self-update:{slm_node.node_id}",
-        )
+        fail = functools.partial(_fail_fleet_stage, job, stage)
+        fire_and_forget(_ansible_self_update(slm_node.node_id, fail), name=f"ansible-self-update:{slm_node.node_id}")
         return True
 
     except Exception as exc:
