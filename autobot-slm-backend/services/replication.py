@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.ssot_config import config as ssot_config
 from config import settings
 from models.database import Node, Replication, ReplicationStatus
-from services.redis_cli_auth import redis_cli_auth
+from services.redis_cli_auth import RedisCliAuth, redis_cli_auth
 
 logger = logging.getLogger(__name__)
 
@@ -647,31 +647,12 @@ class ReplicationService:
     ) -> Dict:
         """Get replication info from Redis, authenticated as the canonical user (#16627)."""
         auth = redis_cli_auth(redis_password)
-        cmd = [
-            "/usr/bin/ssh",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=10",
-            "-p",
-            str(ssh_port),
-            f"{ssh_user}@{host}",
-            auth.remote("INFO replication"),
-        ]
+        cmd = self._build_redis_ssh_cmd(host, ssh_user, ssh_port, auth.remote("INFO replication"))
 
         try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(process.communicate(input=auth.stdin), timeout=15)
-
-            if process.returncode != 0:
+            output = await self._redis_cli_over_ssh(cmd, auth)
+            if output is None:
                 return {}
-
-            output = stdout.decode()
             info = {}
 
             for line in output.split("\n"):
@@ -694,16 +675,16 @@ class ReplicationService:
             logger.error("Failed to get replication info: %s", e)
             return {}
 
-    def _build_keyspace_ssh_cmd(
+    def _build_redis_ssh_cmd(
         self,
         host: str,
         ssh_user: str,
         ssh_port: int,
         remote_command: str,
     ) -> list:
-        """Build SSH command list for keyspace/dbsize/memory queries.
+        """Build the SSH command list that runs *remote_command* on a Redis node.
 
-        Helper for _get_keyspace_info. Ref: #1088.
+        Helper for _get_replication_info and _get_keyspace_info. Ref: #1088.
 
         Args:
             host: Redis host IP
@@ -725,6 +706,17 @@ class ReplicationService:
             f"{ssh_user}@{host}",
             remote_command,
         ]
+
+    async def _redis_cli_over_ssh(self, cmd: list, auth: RedisCliAuth) -> str | None:
+        """Run one redis-cli SSH command, its password on stdin; stdout, or None on failure (#16627)."""
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE if auth.stdin else None,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(process.communicate(input=auth.stdin), timeout=15)
+        return stdout.decode() if process.returncode == 0 else None
 
     def _parse_keyspace_output(self, output: str) -> Dict:
         """Parse combined keyspace/dbsize/memory output into an info dict.
@@ -779,21 +771,11 @@ class ReplicationService:
         """Get keyspace info from Redis, authenticated as the canonical user (#16627)."""
         auth = redis_cli_auth(redis_password)
         remote = auth.remote("INFO keyspace", "DBSIZE", "INFO memory")
-        cmd = self._build_keyspace_ssh_cmd(host, ssh_user, ssh_port, remote)
+        cmd = self._build_redis_ssh_cmd(host, ssh_user, ssh_port, remote)
 
         try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(process.communicate(input=auth.stdin), timeout=15)
-
-            if process.returncode != 0:
-                return {}
-
-            return self._parse_keyspace_output(stdout.decode())
+            output = await self._redis_cli_over_ssh(cmd, auth)
+            return {} if output is None else self._parse_keyspace_output(output)
 
         except Exception as e:
             logger.error("Failed to get keyspace info: %s", e)

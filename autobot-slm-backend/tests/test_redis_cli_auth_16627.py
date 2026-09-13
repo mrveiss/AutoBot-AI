@@ -20,6 +20,9 @@ sys.path.insert(0, str(_ROOT))
 
 _spec = importlib.util.spec_from_file_location("_redis_cli_auth_16627", _SLM / "services" / "redis_cli_auth.py")
 _mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
+# @dataclass resolves the class's module through sys.modules, so register it first
+# (same idiom as autobot-slm-backend/conftest.py).
+sys.modules[_spec.name] = _mod
 _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
 
 #: A stand-in value; the point is only that it never shows up in a command string.
