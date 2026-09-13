@@ -127,23 +127,36 @@ def _reject_non_string_mode(rel: str, task_name: object, path: str, mode: object
     rather than reinterpreted -- guessing here is exactly how the CRITICAL
     finding slipped through.
     """
-    if not isinstance(mode, str) or not mode.isdigit() or not (3 <= len(mode) <= 4):
+    if not isinstance(mode, str) or not (3 <= len(mode) <= 4) or not set(mode) <= set("01234567"):
         return f"{rel}: {task_name!r} sets {path!r} to mode {mode!r}, not a quoted octal-digit string"
     return None
+
+
+def _world_readable_offenses(rel: str, task: dict[str, Any]) -> list[str]:
+    """Offense strings for every key-shaped (path, mode) in *task* that is world-readable
+    or not a safely-parseable octal-digit string.
+
+    Shared by the real-tree sweep and the known-positive fixture test (#16522 review nit)
+    so the fixture proves the guard that actually runs, instead of a re-implementation of it
+    that could silently drift out of sync.
+    """
+    offenses: list[str] = []
+    for path, mode in _key_paths_and_mode(task):
+        rejected = _reject_non_string_mode(rel, task.get("name"), path, mode)
+        if rejected:
+            offenses.append(rejected)
+            continue
+        other_digit = mode[-1]
+        if other_digit not in ("0",):
+            offenses.append(f"{rel}: {task.get('name')!r} sets {path!r} to mode {mode!r}")
+    return offenses
 
 
 def test_no_key_task_is_world_readable():
     offenders: list[str] = []
     for rel in _SCOPED_TASK_FILES:
         for task in _tasks(REPO_ROOT / rel):
-            for path, mode in _key_paths_and_mode(task):
-                rejected = _reject_non_string_mode(rel, task.get("name"), path, mode)
-                if rejected:
-                    offenders.append(rejected)
-                    continue
-                other_digit = mode[-1]
-                if other_digit not in ("0",):
-                    offenders.append(f"{rel}: {task.get('name')!r} sets {path!r} to mode {mode!r}")
+            offenders.extend(_world_readable_offenses(rel, task))
     assert not offenders, f"world-readable (or unparseable) TLS key mode(s) found: {offenders}"
 
 
@@ -209,13 +222,12 @@ def test_a_world_readable_key_mode_is_caught_quoted_or_not(yaml_text: str) -> No
 
     Without this, the guard's own blind spot to an unquoted mode could
     regress silently again -- a detector proven only on the shape it
-    already handles says nothing about the shape that broke it.
+    already handles says nothing about the shape that broke it. Calls
+    `_world_readable_offenses()` -- the same function the real-tree test
+    uses -- rather than re-implementing its loop (#16522 review nit).
     """
     (task,) = yaml.safe_load(yaml_text)
-    pairs = _key_paths_and_mode(task)
-    assert pairs, "fixture did not produce a key-shaped (path, mode) pair -- fixture or markers drifted"
-    for path, mode in pairs:
-        rejected = _reject_non_string_mode("fixture", task.get("name"), path, mode)
-        if rejected:
-            continue  # a non-string mode is refused outright -- that IS catching it
-        assert mode[-1] != "0", f"fixture mode {mode!r} should have read as world-readable, and did not"
+    assert _key_paths_and_mode(
+        task
+    ), "fixture did not produce a key-shaped (path, mode) pair -- fixture or markers drifted"
+    assert _world_readable_offenses("fixture", task), "the shared guard did not flag this world-readable fixture"
