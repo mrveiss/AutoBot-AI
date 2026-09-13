@@ -24,9 +24,10 @@ Related Issues: #78 (Search Quality), #185 (Split), #209 (Knowledge split),
 import logging
 from typing import List
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from api.schemas_knowledge import SearchRequest
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
@@ -62,7 +63,9 @@ except ImportError:
 logger = get_logger(__name__)
 
 # Create router for search endpoints
-router = APIRouter(tags=["knowledge-search"])
+# #15745: no route here had any auth dependency; anonymous callers could
+# search, expand queries and record clicks against the knowledge base.
+router = APIRouter(tags=["knowledge-search"], dependencies=[Depends(get_current_user)])
 
 # Performance optimization: O(1) lookup for valid search modes (Issue #326)
 VALID_SEARCH_MODES = {"vector", "text", "auto"}

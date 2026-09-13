@@ -98,13 +98,11 @@ Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-back
 **Boundary:** plaintext lives only inside the store's own methods. Anything crossing out — a
 response, a log line, an issue, a PR comment — is already redacted.
 
-**Canonical enforcement:** [`encryption_service.py`](../../autobot-backend/encryption_service.py)
-AES-GCM + PBKDF2 for data at rest · [`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py)
-`encrypt_field`/`decrypt_field` for single columns ·
-[`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py)
-`ConnectorCredentialStore` (:178) for connector/OAuth creds, ownership via `_require_owner` (:604) ·
-[`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:954)
-for service-to-service · [`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:121) for SLM token revocation.
+**Canonical enforcement:** [`encryption_service.py`](../../autobot-backend/encryption_service.py) AES-GCM + PBKDF2 for data at rest ·
+[`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns ·
+[`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py) `ConnectorCredentialStore` (:178) for connector/OAuth creds, ownership via `_require_owner` (:604) ·
+[`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:954) for service-to-service ·
+[`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:121) for SLM token revocation.
 
 **Invariants**
 - No parallel crypto path. A diff introducing its own `Fernet(...)` or `AESGCM(...)` instead
@@ -120,19 +118,13 @@ for service-to-service · [`services/auth.py`](../../autobot-slm-backend/service
 - Keys come from SSOT config, never a literal. A default value for an encryption key is a
   finding even when production overrides it via env var.
 - SLM token revocation fails CLOSED (#16387, owner decision): when the HS256 jti-denylist check
-  (`is_jti_revoked` (:132) in [`token_denylist.py`](../../autobot-slm-backend/services/token_denylist.py))
-  or the password-epoch check can't run because Redis errored, `decode_token_async` denies the token (401)
-  instead of reading "could not check" as "not revoked" — a Redis outage takes SLM login down, including
-  the backend admin path reached through the proxy (#16374).
+  (`is_jti_revoked` (:132) in [`token_denylist.py`](../../autobot-slm-backend/services/token_denylist.py)) or the password-epoch check can't run because Redis errored,
+  `decode_token_async` denies the token (401) instead of reading "could not check" as "not revoked" — a Redis outage takes SLM login down, including the backend admin path reached through the proxy (#16374).
 - The RS256 authority-token path fails CLOSED the same way (#16412): [`rs256_denylist.py`](../../autobot-slm-backend/services/rs256_denylist.py)
   `is_rs256_jti_revoked` (:91) raises on a Redis error rather than reporting "not revoked"; its caller
   [`jwks_verifier.py`](../../autobot-slm-backend/services/jwks_verifier.py) `verify_authority_token` (:218) denies the token (401) at both call sites; the write side stays best-effort.
-- The password-epoch revocation check fails closed (#16411, #16422, owner decisions; the SLM's rule since
-  #16387): when Redis cannot answer, or the stored marker or the token's `iat` is not an integer, the check
-  raises `RevocationCheckUnavailable`, a `ConnectionError`, and
-  [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401. Rationale: a token that
-  may be revoked is never honoured, and a Redis outage taking login down with it is the accepted cost. An
-  `except` around it that returns "not revoked" is a fail-open.
+- The backend's password-epoch check fails CLOSED the same way (#16411, #16422, owner decisions): a Redis error, or a non-integer stored
+  marker or `iat`, raises `RevocationCheckUnavailable` (a `ConnectionError`) and [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401; an `except` reading it as "not revoked" is a fail-open.
 
 ## Cross-cutting
 

@@ -13,6 +13,9 @@ redis_replication_mode: "primary"
 redis_master_host: ""
 redis_master_port: 6379
 redis_master_auth: ""
+# #16626: ACL user the replica authenticates to the master as, with masterauth.
+# Read from the controller env like the replication credential; "" keeps it unset.
+redis_master_user: "{{ lookup('env', 'AUTOBOT_REDIS_USERNAME') }}"
 
 # Replica configuration
 redis_replica_read_only: true
@@ -30,4 +33,6 @@ redis_min_replicas_max_lag: 10
 # Connection settings
 redis_port: 6379
 redis_password: ""
+# #16626: ACL username for this role's redis-cli calls; "" keeps password-only AUTH
+redis_username: "{{ lookup('env', 'AUTOBOT_REDIS_USERNAME') }}"
 redis_config_file: "/etc/redis/redis.conf"
