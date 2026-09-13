@@ -184,9 +184,15 @@ class TestPidReuseSafety:
     """
 
     async def test_reused_pid_with_different_identity_is_never_signalled(self) -> None:
-        proc = await spawn_detached("true", stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
-        create_time = _create_time(proc.pid)
-        await proc.wait()  # the pid is free now -- something else could hold it next
+        # A long-lived child, not "true": under CI load, "true" can exit before
+        # this line's real psutil create_time() read, racing the pid's own exit
+        # (PR#16284 review). sleep survives long enough to read reliably, then
+        # is killed explicitly so the pid frees up on our schedule, not the OS's.
+        proc = await spawn_detached("sleep", "30", stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        try:
+            create_time = _create_time(proc.pid)
+        finally:
+            await _reap(proc)  # the pid is free now -- something else could hold it next
 
         with (
             patch(_PSUTIL_PROCESS) as mock_cls,
