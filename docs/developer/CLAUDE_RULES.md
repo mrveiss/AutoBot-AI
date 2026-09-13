@@ -669,5 +669,5 @@ To add a new variable:
 | `AUTOBOT_WORK_CLAIM_WAIT_TTL_S` | orchestration | int | `900` | How long an agent keeps its place in a work-claim queue without renewing (#15948). Deliberately longer than AUTOBOT_WORK_CLAIM_TTL_S: a waiter that expired before the holder it is queued behind would never be promoted, and would look to an operator like a queue that silently drops people. The ceiling bounds how long a dead waiter occupies a position before it is pruned on the next read. Range: 30–7200. |
 | `AUTOBOT_WORK_CLAIM_YIELD_TIMEOUT_S` | orchestration | int | `30` | How long a requester waits for a claim holder to answer a yield request before treating the silence as a refusal (#15948). Short on purpose: the requester is blocked while it waits, and a holder that has not answered in this long is busy working, which is itself the answer. Raising it does not make a yield more likely, it only makes the requester wait longer to be told no. Range: 1–600. |
 
-*221 variables registered as of last generation.*
+*223 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->
