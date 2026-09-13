@@ -115,6 +115,11 @@ MANIFEST: List[Tuple[str, str]] = [
     # #14937: the canonical role vocabulary, so the frontend role unions derive
     # from it instead of three hand-maintained copies drifting apart.
     ("autobot_shared/auth/permissions.py", "Role"),
+    # #16243: the canonical permission vocabulary. usePermissions.ts hand-rolled
+    # its own `users:read`-style strings that shared nothing with these
+    # `admin.users.read`-style ones -- a control could be shown to a role the
+    # backend refuses, or hidden from one it would allow.
+    ("autobot_shared/auth/permissions.py", "Permission"),
 ]
 
 
