@@ -9,21 +9,21 @@ The caller must present the current (not-yet-expired, not-revoked) JWT as a
 Bearer token.  The old token is atomically revoked and a fresh one returned.
 """
 
-from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from api.schemas_run_jwt import RunJwtRefreshResponse
+from auth_middleware import get_current_user
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
 from autobot_shared.logging_manager import get_logger
 from services.run_jwt import JWTRefreshConflictError, _ttl, refresh_run_jwt
 
 logger = get_logger(__name__)
 
-router = APIRouter()
-
-
-class RunJwtRefreshResponse(BaseModel):
-    token: str
-    expires_in: int
+# #16375: mounted with no auth dependency, the handler's own token check was the
+# only gate. get_current_user accepts a run-scoped JWT (SEC-2 #6473), so a run
+# refreshing its token still passes; the handler goes on to bind that token to
+# run_id and revoke it. Authenticated, not admin: runs are not admins.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _bearer_token(request: Request) -> str:
