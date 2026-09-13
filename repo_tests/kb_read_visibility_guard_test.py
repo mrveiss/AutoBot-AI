@@ -24,8 +24,11 @@ bound method and called later (``HybridSearcher`` keeps ``self.search``); polymo
 backend dispatch (``VectorSearchEngine`` backends); filters hidden in ``**kwargs``; the
 infra MCP server's HTTP hop; reads that bypass the primitives (direct ``fact:*`` Redis
 reads, raw ChromaDB collection reads such as ``api/knowledge_chroma.py``); receivers named
-outside :data:`KB_RECEIVERS`; and reads outside any function. Those are tracked on the
-#16654 sub-issues instead of detected here.
+outside :data:`KB_RECEIVERS` -- including a bare ``self`` (the KB's own mixins calling a
+sibling reader, e.g. ``FactsMixin.get_shared_facts``; ``self.advanced_search`` in the RAG
+optimizer) and a call-result receiver (``self._get_hybrid_searcher().search(...)``); and
+reads outside any function. Those are tracked on the #16654 sub-issues instead of detected
+here.
 """
 
 from __future__ import annotations
@@ -35,9 +38,10 @@ from functools import lru_cache
 from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 from repo_tests.kb_read_visibility_allowlist import ALLOWLIST, MAX_ALLOWLISTED
 
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
 SCAN_ROOTS = ("autobot-backend/", "autobot_shared/", "autobot-infrastructure/shared/mcp/")
@@ -92,9 +96,9 @@ FILTER_HELPERS = frozenset(
     }
 )
 
-#: Blindness floors, not a census: a scan that parses or finds less than this has lost
-#: its reach (a moved root, a renamed receiver), and would otherwise pass vacuously.
-MIN_FILES_SCANNED = 2000
+#: A floor on what the scan FOUND, not a census: fewer reads than this means a receiver or
+#: method was renamed, and the guard would otherwise pass vacuously. The floor on what it
+#: examined is :data:`REACH`.
 MIN_READS_FOUND = 40
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ")
@@ -111,6 +115,31 @@ def _is_production(rel: str) -> bool:
         and name != "conftest.py"
         and not any(skip in rel for skip in _SKIP_SUBSTRINGS)
     )
+
+
+def _production_files(root: Path) -> list[str]:
+    """Tracked production Python under :data:`SCAN_ROOTS` -- this guard's population."""
+    try:
+        tracked = tracked_paths(root, "*.py")
+    except EmptyEnumeration:
+        return []  # an empty tree: REACH's floor raises the typed refusal instead (_reach.declare)
+    return [rel for rel in tracked if _is_production(rel)]
+
+
+#: MEASURED 2026-09-14 against this tree: 2558 production files by this guard's own filter
+#: (2359 autobot-backend, 195 autobot_shared, 4 infra MCP); the hand-rolled 2000 it replaces
+#: sat 22% below. `growth=250` (~10%) absorbs ordinary additions, since most feature work
+#: adds production modules. That band cannot see a small root vanish, so
+#: `test_every_scan_root_is_reached` checks each root separately. `skips=0`: every
+#: discovered file is parsed, and an unparseable one fails the scan loudly.
+REACH = declare(
+    "kb-read-visibility-production-sweep",
+    discover=_production_files,
+    floor=2558,
+    growth=250,
+    skips=0,
+    what="production python files",
+)
 
 
 def _dotted(node: ast.AST) -> str | None:
@@ -169,31 +198,34 @@ def kb_reads(source: str) -> list[tuple[str, int, bool]]:
 
 
 @lru_cache(maxsize=1)
-def _scan() -> tuple[dict[tuple[str, str], list[int]], int, int]:
-    """``({(file, qualname): [line, ...]} for unfiltered reads, files scanned, reads found)``."""
+def _scan() -> tuple[dict[tuple[str, str], list[int]], int]:
+    """``({(file, qualname): [line, ...]} for unfiltered reads, reads found)``."""
     unfiltered: dict[tuple[str, str], list[int]] = {}
-    scanned = found = 0
-    for rel in tracked_paths(REPO_ROOT, "*.py"):
-        if not _is_production(rel):
-            continue
+    found = 0
+    for rel in REACH.examined(REPO_ROOT):
         reads = kb_reads((REPO_ROOT / rel).read_text(encoding="utf-8"))  # unparseable: fail loudly
-        scanned += 1
         found += len(reads)
         for qual, line, filtered in reads:
             if not filtered:
                 unfiltered.setdefault((rel, qual), []).append(line)
-    return unfiltered, scanned, found
+    return unfiltered, found
 
 
 def test_the_scan_is_not_blind():
-    _, scanned, found = _scan()
-    assert scanned >= MIN_FILES_SCANNED, f"only {scanned} production files scanned -- did a root move?"
+    _, found = _scan()
     assert found >= MIN_READS_FOUND, f"only {found} KB reads found -- did a receiver or method get renamed?"
+
+
+def test_every_scan_root_is_reached():
+    """REACH's band spans the whole population; a small root (4 infra MCP files) could vanish inside it."""
+    examined = REACH.examined(REPO_ROOT)
+    unreached = [root for root in SCAN_ROOTS if not any(rel.startswith(root) for rel in examined)]
+    assert not unreached, f"no production file examined under {unreached} -- did a root move?"
 
 
 def test_every_unfiltered_kb_read_is_allowlisted():
     """The regression guard: a new read that skips the ownership filter fails here."""
-    unfiltered, _, _ = _scan()
+    unfiltered, _ = _scan()
     unlisted = {key: lines for key, lines in unfiltered.items() if key not in ALLOWLIST}
     assert not unlisted, (
         "KB reads without the ownership filter (#16654) -- filter them through "
@@ -204,7 +236,7 @@ def test_every_unfiltered_kb_read_is_allowlisted():
 
 def test_every_allowlist_entry_is_still_an_unfiltered_read():
     """Shrink-only: a path that starts filtering (or goes away) must leave the allowlist."""
-    unfiltered, _, _ = _scan()
+    unfiltered, _ = _scan()
     stale = sorted(key for key in ALLOWLIST if key not in unfiltered)
     assert not stale, f"allowlist entries with no unfiltered read left -- delete them: {stale}"
 
