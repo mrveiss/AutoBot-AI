@@ -389,8 +389,8 @@ def test_nested_submodel_access_is_rejected() -> None:
 def test_get_config_import_and_chained_call_are_rejected() -> None:
     """A file that only imports ``get_config`` (never ``config``) is not skipped.
 
-    Reproduces ``initialization/lifespan.py:1353``'s unassigned chained-call shape
-    (``get_config().field``, no local variable at all) -- the other blind spot the
+    Reproduces the unassigned chained-call shape in ``initialization/lifespan.py``'s
+    ``_init_slm_client`` (``get_config().field``, no local variable at all) -- the other blind spot the
     original single-import-form gate missed.
     """
     fields = {"slm_auth_token": "SLM_AUTH_TOKEN"}
