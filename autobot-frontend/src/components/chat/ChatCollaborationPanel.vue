@@ -136,6 +136,8 @@ const handleRemoveParticipant = async (userId: string) => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
+
 .chat-collaboration-panel {
   width: 320px;
   max-width: 320px;
