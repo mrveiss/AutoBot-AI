@@ -53,14 +53,14 @@ is fixed, not listed.
 
 from __future__ import annotations
 
-#: 53 -- the SLM's whole ``api`` package (51, ``socket.connect``) and two backend
-#: modules that write outside the tree at import.
+#: 49 -- the SLM's ``api`` package (47, ``socket.connect``; #16262's fix in
+#: config.py's external_url cleared 4 of the original 51: the package's own
+#: __init__, ``_resume_plan``, ``code_sync``, ``venv_reconcile``) and two
+#: backend modules that write outside the tree at import.
 HAS_IMPORT_EFFECT: frozenset[tuple[str, str]] = frozenset(
     {
         ("autobot-backend", "api.multimodal"),
         ("autobot-backend", "api.vision"),
-        ("autobot-slm-backend", "api"),
-        ("autobot-slm-backend", "api._resume_plan"),
         ("autobot-slm-backend", "api.agents"),
         ("autobot-slm-backend", "api.api_keys"),
         ("autobot-slm-backend", "api.auth"),
@@ -69,7 +69,6 @@ HAS_IMPORT_EFFECT: frozenset[tuple[str, str]] = frozenset(
         ("autobot-slm-backend", "api.blue_green"),
         ("autobot-slm-backend", "api.browser"),
         ("autobot-slm-backend", "api.code_source"),
-        ("autobot-slm-backend", "api.code_sync"),
         ("autobot-slm-backend", "api.config"),
         ("autobot-slm-backend", "api.deployments"),
         ("autobot-slm-backend", "api.discovery"),
@@ -106,7 +105,6 @@ HAS_IMPORT_EFFECT: frozenset[tuple[str, str]] = frozenset(
         ("autobot-slm-backend", "api.stateful"),
         ("autobot-slm-backend", "api.tls"),
         ("autobot-slm-backend", "api.updates"),
-        ("autobot-slm-backend", "api.venv_reconcile"),
         ("autobot-slm-backend", "api.vnc"),
         ("autobot-slm-backend", "api.voice_proxy"),
         ("autobot-slm-backend", "api.websocket"),
