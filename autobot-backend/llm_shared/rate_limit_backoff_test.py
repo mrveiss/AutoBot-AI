@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from llm_shared.models import LLMResponse
 from llm_shared.optimization.rate_limiter import RateLimitError
@@ -118,7 +119,7 @@ class TestPersistHeadroomFrom429:
         store._local.clear()
 
         async def _raise():
-            raise RuntimeError("Redis unavailable")
+            raise RedisConnectionError("Redis unavailable")
 
         store._get_redis = _raise  # type: ignore[method-assign]
 
@@ -141,7 +142,7 @@ class TestPersistHeadroomFrom429:
         store._local.clear()
 
         async def _raise():
-            raise RuntimeError("Redis unavailable")
+            raise RedisConnectionError("Redis unavailable")
 
         store._get_redis = _raise  # type: ignore[method-assign]
 
@@ -163,7 +164,7 @@ class TestPersistHeadroomFrom429:
         store._local.clear()
 
         async def _raise():
-            raise RuntimeError("Redis unavailable")
+            raise RedisConnectionError("Redis unavailable")
 
         store._get_redis = _raise  # type: ignore[method-assign]
 
