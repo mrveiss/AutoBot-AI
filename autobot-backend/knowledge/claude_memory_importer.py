@@ -25,8 +25,11 @@ from typing import Any, Dict, Iterator
 
 import yaml
 
+from a2a.pii_pipeline import get_pii_pipeline
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import project_root
+from autobot_shared.scoping import ScopeLevel
+from knowledge.ownership import AccessLevel
 
 logger = get_logger(__name__)
 
@@ -85,6 +88,7 @@ class ImportResult:
     created: int = 0
     updated: int = 0
     duplicate: int = 0
+    blocked: int = 0
     failed: int = 0
     errors: Dict[str, str] = field(default_factory=dict)
 
@@ -142,29 +146,69 @@ def _fact_content(memory: ParsedMemory) -> str:
     return memory.body
 
 
-def _fact_metadata(memory: ParsedMemory) -> Dict[str, Any]:
+def _redact(content: str) -> tuple[str, bool, list[str]]:
+    """Scrub *content* through the canonical PII/secret pipeline (#16642 security review).
+
+    Memory files are free text written by a coding session, not vetted for
+    secrets before landing in ``knowledge_facts`` — which chat users can
+    query. Reuses ``a2a.pii_pipeline``, the same detector bank + policy the
+    rest of the codebase already applies to outbound agent payloads, rather
+    than inventing a second regex bank: lower-severity hits (IP/hostname/
+    email) are redacted in place per that pipeline's existing policy;
+    credential-shaped hits (API key/JWT/AWS key/bearer token) are BLOCK-tier
+    there, so this importer skips the file entirely rather than storing a
+    partially-redacted secret.
+
+    Returns (redacted_text, blocked, type_names) — type_names covers
+    whichever of blocked/redacted/hashed applied, for logging only; the
+    matched values themselves never leave this function.
+    """
+    result = get_pii_pipeline().scrub(content)
+    type_names = sorted({t.value for t in (result.blocked_types + result.redacted_types + result.hashed_types)})
+    return result.text, result.blocked, type_names
+
+
+def _fact_metadata(memory: ParsedMemory, owner_id: str) -> Dict[str, Any]:
     return {
         "category": CATEGORY,
         "memory_type": memory.memory_type,
         "source_name": memory.slug,
         "source_file": memory.source_file,
+        # #16642 security review: imported facts are admin-only by default —
+        # AccessLevel.SYSTEM (not USER) because this is session-derived
+        # project knowledge, not a specific end user's chat content; visibility
+        # PRIVATE restricts it to owner_id until an explicit share widens it.
+        # Metadata alone is inert without an enforced read path honouring it
+        # (tracked separately at #16507/#16508) — see
+        # claude_memory_importer_test.py for the KnowledgeOwnership.check_access
+        # proof this metadata shape is actually respected by that check.
+        "owner_id": owner_id,
+        "visibility": ScopeLevel.PRIVATE.value,
+        "access_level": AccessLevel.SYSTEM.value,
     }
 
 
-async def import_memory_file(kb: Any, path: Path) -> str:
+async def import_memory_file(kb: Any, path: Path, owner_id: str) -> str:
     """Upsert one memory file into knowledge_facts.
 
-    Returns "created", "updated", or "duplicate" (near-identical content
-    already tracked under a different fact — the shared KB dedup guard,
-    not specific to this importer).
+    Returns "created", "updated", "duplicate" (near-identical content
+    already tracked under a different fact — the shared KB dedup guard, not
+    specific to this importer), or "blocked" (the PII pipeline found a
+    credential-shaped secret; the file is skipped, not imported redacted).
 
     Raises MemoryParseError on a malformed file, MemoryWriteError if the
     knowledge_facts write path itself rejects the write.
     """
     memory = parse_memory_file(path)
     fact_id = fact_id_for(memory.slug)
-    content = _fact_content(memory)
-    metadata = _fact_metadata(memory)
+    raw_content = _fact_content(memory)
+    content, blocked, hit_types = _redact(raw_content)
+    if blocked:
+        logger.warning("Blocked Claude Code memory file %s: secret-shaped content (%s)", path.name, hit_types)
+        return "blocked"
+    if hit_types:
+        logger.info("Redacted Claude Code memory file %s: %s", path.name, hit_types)
+    metadata = _fact_metadata(memory, owner_id)
 
     if kb.get_fact(fact_id) is not None:
         result = await kb.update_fact(fact_id, content=content, metadata=metadata)
@@ -181,17 +225,18 @@ async def import_memory_file(kb: Any, path: Path) -> str:
     return "created"
 
 
-async def import_claude_memory(kb: Any, memory_dir: Path) -> ImportResult:
+async def import_claude_memory(kb: Any, memory_dir: Path, owner_id: str) -> ImportResult:
     """Import every memory file under *memory_dir* into knowledge_facts.
 
     Idempotent: re-running updates existing facts (keyed by the memory
     file's frontmatter ``name`` via :func:`fact_id_for`) instead of
-    duplicating them.
+    duplicating them. *owner_id* is the authenticated admin who triggered
+    the import — recorded on every imported fact (#16642 security review).
     """
     outcome = ImportResult()
     for path in iter_memory_files(memory_dir):
         try:
-            action = await import_memory_file(kb, path)
+            action = await import_memory_file(kb, path, owner_id)
         except (MemoryParseError, MemoryWriteError) as exc:
             outcome.failed += 1
             outcome.errors[path.name] = str(exc)
@@ -202,14 +247,17 @@ async def import_claude_memory(kb: Any, memory_dir: Path) -> ImportResult:
             outcome.created += 1
         elif action == "updated":
             outcome.updated += 1
+        elif action == "blocked":
+            outcome.blocked += 1
         else:
             outcome.duplicate += 1
 
     logger.info(
-        "Claude Code memory import: %d created, %d updated, %d duplicate, %d failed",
+        "Claude Code memory import: %d created, %d updated, %d duplicate, %d blocked, %d failed",
         outcome.created,
         outcome.updated,
         outcome.duplicate,
+        outcome.blocked,
         outcome.failed,
     )
     return outcome

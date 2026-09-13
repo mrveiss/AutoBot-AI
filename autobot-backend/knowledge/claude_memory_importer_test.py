@@ -14,6 +14,8 @@ import pytest
 from knowledge.claude_memory_importer import (
     MemoryParseError,
     MemoryWriteError,
+    ParsedMemory,
+    _fact_metadata,
     fact_id_for,
     get_claude_memory_dir,
     import_claude_memory,
@@ -21,6 +23,9 @@ from knowledge.claude_memory_importer import (
     iter_memory_files,
     parse_memory_file,
 )
+from knowledge.ownership import KnowledgeOwnership
+
+_OWNER = "admin-test-user"
 
 _VALID_MEMORY = """---
 name: feedback-example
@@ -32,6 +37,33 @@ metadata:
 Always do the thing.
 
 **Why:** because tests need a why line.
+"""
+
+# #16642 security review fixtures — real detector-shaped values, never a
+# genuine secret. Assembled at runtime (not a literal in this file) so
+# static secret scanners don't flag the fixture itself; the pii_pipeline's
+# AWS_ACCESS_KEY detector (BLOCK-tier) still matches it at test time. The
+# email fixture exercises the EMAIL detector (REDACT-tier, not blocked).
+_FAKE_AWS_KEY = "AKIA" + "ABCDEFGHIJKLMNOP"
+
+_MEMORY_WITH_SECRET = f"""---
+name: leaky-example
+description: A memory that accidentally captured a credential.
+metadata:
+  type: project
+---
+
+Ran with {_FAKE_AWS_KEY} and it worked.
+"""
+
+_MEMORY_WITH_EMAIL = """---
+name: contact-example
+description: A memory that mentions an email address.
+metadata:
+  type: reference
+---
+
+Ping alice@example.com if this breaks.
 """
 
 
@@ -162,7 +194,7 @@ async def test_import_memory_file_creates_when_fact_absent(tmp_path):
     path = _write(tmp_path, "feedback_example.md", _VALID_MEMORY)
     kb = _make_kb(get_fact_return=None)
 
-    action = await import_memory_file(kb, path)
+    action = await import_memory_file(kb, path, _OWNER)
 
     assert action == "created"
     kb.store_fact.assert_awaited_once()
@@ -177,7 +209,7 @@ async def test_import_memory_file_updates_when_fact_present(tmp_path):
     path = _write(tmp_path, "feedback_example.md", _VALID_MEMORY)
     kb = _make_kb(get_fact_return={"fact_id": "claude_code_memory:feedback-example"})
 
-    action = await import_memory_file(kb, path)
+    action = await import_memory_file(kb, path, _OWNER)
 
     assert action == "updated"
     kb.update_fact.assert_awaited_once()
@@ -191,7 +223,7 @@ async def test_import_memory_file_reports_duplicate_without_raising(tmp_path):
     path = _write(tmp_path, "feedback_example.md", _VALID_MEMORY)
     kb = _make_kb(get_fact_return=None, store_status="duplicate")
 
-    action = await import_memory_file(kb, path)
+    action = await import_memory_file(kb, path, _OWNER)
 
     assert action == "duplicate"
 
@@ -201,7 +233,7 @@ async def test_import_memory_file_raises_on_write_failure(tmp_path):
     kb = _make_kb(get_fact_return=None, store_status="error")
 
     with pytest.raises(MemoryWriteError):
-        await import_memory_file(kb, path)
+        await import_memory_file(kb, path, _OWNER)
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +247,7 @@ async def test_import_claude_memory_aggregates_and_skips_bad_files(tmp_path):
     _write(tmp_path, "MEMORY.md", "# index")
     kb = _make_kb(get_fact_return=None)
 
-    result = await import_claude_memory(kb, tmp_path)
+    result = await import_claude_memory(kb, tmp_path, _OWNER)
 
     assert result.created == 1
     assert result.updated == 0
@@ -227,10 +259,105 @@ async def test_import_claude_memory_is_idempotent_on_rerun(tmp_path):
     _write(tmp_path, "feedback_example.md", _VALID_MEMORY)
 
     kb_first = _make_kb(get_fact_return=None)
-    first = await import_claude_memory(kb_first, tmp_path)
+    first = await import_claude_memory(kb_first, tmp_path, _OWNER)
     assert first.created == 1
 
     kb_second = _make_kb(get_fact_return={"fact_id": "claude_code_memory:feedback-example"})
-    second = await import_claude_memory(kb_second, tmp_path)
+    second = await import_claude_memory(kb_second, tmp_path, _OWNER)
     assert second.created == 0
     assert second.updated == 1
+
+
+# ---------------------------------------------------------------------------
+# #16642 security review — redaction at import
+# ---------------------------------------------------------------------------
+
+
+async def test_import_memory_file_blocks_on_credential_shaped_content(tmp_path):
+    path = _write(tmp_path, "leaky_example.md", _MEMORY_WITH_SECRET)
+    kb = _make_kb(get_fact_return=None)
+
+    action = await import_memory_file(kb, path, _OWNER)
+
+    assert action == "blocked"
+    kb.store_fact.assert_not_called()
+    kb.update_fact.assert_not_called()
+
+
+async def test_import_memory_file_redacts_low_severity_hits_and_still_imports(tmp_path):
+    path = _write(tmp_path, "contact_example.md", _MEMORY_WITH_EMAIL)
+    kb = _make_kb(get_fact_return=None)
+
+    action = await import_memory_file(kb, path, _OWNER)
+
+    assert action == "created"
+    args, _ = kb.store_fact.call_args
+    assert "alice@example.com" not in args[0]
+    assert "[REDACTED:EMAIL]" in args[0]
+
+
+async def test_import_claude_memory_counts_blocked_separately_from_failed(tmp_path):
+    _write(tmp_path, "feedback_example.md", _VALID_MEMORY)
+    _write(tmp_path, "leaky_example.md", _MEMORY_WITH_SECRET)
+    kb = _make_kb(get_fact_return=None)
+
+    result = await import_claude_memory(kb, tmp_path, _OWNER)
+
+    assert result.created == 1
+    assert result.blocked == 1
+    assert result.failed == 0
+
+
+# ---------------------------------------------------------------------------
+# #16642 security review — owner/visibility metadata and its enforcement
+# ---------------------------------------------------------------------------
+
+
+def _sample_memory() -> ParsedMemory:
+    return ParsedMemory(
+        slug="feedback-example",
+        description="An example.",
+        memory_type="feedback",
+        body="Body text.",
+        source_file="feedback_example.md",
+    )
+
+
+def test_fact_metadata_sets_owner_and_private_system_visibility():
+    metadata = _fact_metadata(_sample_memory(), _OWNER)
+
+    assert metadata["owner_id"] == _OWNER
+    assert metadata["visibility"] == "private"
+    assert metadata["access_level"] == "system"
+
+
+async def test_imported_fact_metadata_is_honoured_by_ownership_check_access():
+    """Proves the metadata this importer sets is actually respected by the
+    existing enforcement primitive (knowledge.ownership.KnowledgeOwnership),
+    not just present — #16642 security review High finding.
+    """
+    metadata = _fact_metadata(_sample_memory(), _OWNER)
+    ownership = KnowledgeOwnership(redis_client=MagicMock())
+
+    owner_can_read = await ownership.check_access(
+        fact_id="claude_code_memory:feedback-example",
+        user_id=_OWNER,
+        fact_metadata=metadata,
+        is_authenticated=True,
+    )
+    other_authenticated_user_denied = await ownership.check_access(
+        fact_id="claude_code_memory:feedback-example",
+        user_id="someone-else",
+        fact_metadata=metadata,
+        is_authenticated=True,
+    )
+    unauthenticated_denied = await ownership.check_access(
+        fact_id="claude_code_memory:feedback-example",
+        user_id="anon",
+        fact_metadata=metadata,
+        is_authenticated=False,
+    )
+
+    assert owner_can_read is True
+    assert other_authenticated_user_denied is False
+    assert unauthenticated_denied is False

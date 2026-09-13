@@ -18,11 +18,10 @@ Endpoints:
 """
 
 import uuid
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -43,17 +42,19 @@ router = APIRouter(
     operation="import_claude_memory",
     error_code_prefix="KNOWLEDGE_POPULATION",
 )
-async def import_claude_memory_endpoint(request: dict, req: Request):
+async def import_claude_memory_endpoint(req: Request):
     """
     Queue import of Claude Code auto-memory files into knowledge_facts (#16642).
 
-    Body (optional): ``memory_dir`` — override the configured memory directory.
+    Always imports from the configured memory directory (#16642 security
+    review: no caller-supplied path — nothing to confine or validate).
     Returns immediately with task_id. Use /import_claude_memory/status/{task_id} to poll.
     """
     from services.knowledge.task_status_manager import TaskStatusManager
 
     task_id = str(uuid.uuid4())
-    memory_dir_override = (request or {}).get("memory_dir")
+    caller = await get_current_user(req)
+    owner_id = str(caller.get("user_id") or caller.get("sub") or caller.get("username") or "")
 
     await TaskStatusManager.create_task(
         task_id=task_id,
@@ -62,7 +63,7 @@ async def import_claude_memory_endpoint(request: dict, req: Request):
     )
 
     fire_and_forget(
-        _import_claude_memory_background(task_id, req.app, memory_dir_override),
+        _import_claude_memory_background(task_id, req.app, owner_id),
         name=f"import_claude_memory:{task_id}",
     )
 
@@ -76,7 +77,7 @@ async def import_claude_memory_endpoint(request: dict, req: Request):
     }
 
 
-async def _import_claude_memory_background(task_id: str, app, memory_dir_override: str | None) -> None:
+async def _import_claude_memory_background(task_id: str, app, owner_id: str) -> None:
     """Background task: import Claude Code auto-memory files into knowledge_facts."""
     import time
 
@@ -84,7 +85,7 @@ async def _import_claude_memory_background(task_id: str, app, memory_dir_overrid
     from services.knowledge.task_status_manager import TaskStatusManager
 
     start_time = time.time()
-    memory_dir = Path(memory_dir_override) if memory_dir_override else get_claude_memory_dir()
+    memory_dir = get_claude_memory_dir()
 
     try:
         await TaskStatusManager.update_task(
@@ -95,24 +96,26 @@ async def _import_claude_memory_background(task_id: str, app, memory_dir_overrid
         )
 
         kb_to_use = await get_or_create_knowledge_base(app, force_refresh=False)
-        result = await import_claude_memory(kb_to_use, memory_dir)
+        result = await import_claude_memory(kb_to_use, memory_dir, owner_id)
 
         elapsed = time.time() - start_time
         await TaskStatusManager.complete_task(
             task_id=task_id,
             message=(
                 f"Imported {result.created} created, {result.updated} updated, "
-                f"{result.duplicate} duplicate, {result.failed} failed"
+                f"{result.duplicate} duplicate, {result.blocked} blocked, {result.failed} failed"
             ),
             items_processed=result.created + result.updated,
             elapsed_seconds=elapsed,
         )
         logger.info(
-            "[%s] Claude Code memory import completed: %d created, %d updated, " "%d duplicate, %d failed (%.1fs)",
+            "[%s] Claude Code memory import completed: %d created, %d updated, "
+            "%d duplicate, %d blocked, %d failed (%.1fs)",
             task_id,
             result.created,
             result.updated,
             result.duplicate,
+            result.blocked,
             result.failed,
             elapsed,
         )
