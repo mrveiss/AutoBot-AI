@@ -163,60 +163,65 @@
       </EmptyState>
 
       <!-- Credentials Grid/List -->
-      <div v-else :class="['credentials-container', viewMode]">
+      <div v-else ref="containerRef" class="credentials-viewport">
         <div
-          v-for="secret in filteredSecrets"
-          :key="secret.id"
-          class="credential-card"
-          :class="{ expired: isExpired(secret), selected: selectedSecretId === secret.id }"
-          @click="selectSecret(secret)"
+          :class="['credentials-container', viewMode]"
+          :style="viewMode === 'list' ? { height: totalHeight + 'px', position: 'relative' } : undefined"
         >
+          <div
+            v-for="item in displayedSecrets"
+            :key="item.data.id"
+            class="credential-card"
+            :class="{ expired: isExpired(item.data), selected: selectedSecretId === item.data.id }"
+            :style="item.offset !== null ? { position: 'absolute', width: '100%', transform: `translateY(${item.offset}px)` } : undefined"
+            @click="selectSecret(item.data)"
+          >
           <!-- Card Icon -->
-          <div class="card-icon" :style="{ backgroundColor: getTypeColor(secret.type) }">
-            <Icon :name="getTypeIcon(secret.type)" />
+          <div class="card-icon" :style="{ backgroundColor: getTypeColor(item.data.type) }">
+            <Icon :name="getTypeIcon(item.data.type)" />
           </div>
 
           <!-- Card Content -->
           <div class="card-content">
             <div class="card-header">
-              <h4>{{ secret.name }}</h4>
+              <h4>{{ item.data.name }}</h4>
               <div class="card-badges">
-                <span class="badge" :class="secret.scope">{{ secret.scope }}</span>
+                <span class="badge" :class="item.data.scope">{{ item.data.scope }}</span>
                 <!-- Issue #685: Visibility badge -->
-                <span v-if="getVisibility(secret)" class="badge visibility" :class="`visibility-${getVisibility(secret)}`">
-                  <Icon :name="getVisibilityIcon(secret)" />
-                  {{ formatVisibility(secret) }}
+                <span v-if="getVisibility(item.data)" class="badge visibility" :class="`visibility-${getVisibility(item.data)}`">
+                  <Icon :name="getVisibilityIcon(item.data)" />
+                  {{ formatVisibility(item.data) }}
                 </span>
-                <span v-if="isExpired(secret)" class="badge expired">
+                <span v-if="isExpired(item.data)" class="badge expired">
                   <Icon name="exclamation-triangle" /> {{ $t('security.secretsManager.expired') }}
                 </span>
               </div>
             </div>
 
-            <p class="card-description" v-if="secret.description">
-              {{ truncate(secret.description, 80) }}
+            <p class="card-description" v-if="item.data.description">
+              {{ truncate(item.data.description, 80) }}
             </p>
 
             <div class="card-meta">
               <span class="meta-item">
                 <Icon name="clock" />
-                {{ formatRelativeTime(secret.created_at) }}
+                {{ formatRelativeTime(item.data.created_at) }}
               </span>
-              <span v-if="secret.expires_at" class="meta-item" :class="{ 'text-warning': isExpiringSoon(secret) }">
+              <span v-if="item.data.expires_at" class="meta-item" :class="{ 'text-warning': isExpiringSoon(item.data) }">
                 <Icon name="clock" />
-                {{ t('security.secretsManager.expiresIn', { time: formatRelativeTime(secret.expires_at) }) }}
+                {{ t('security.secretsManager.expiresIn', { time: formatRelativeTime(item.data.expires_at) }) }}
               </span>
             </div>
 
-            <div class="card-tags" v-if="secret.tags?.length">
-              <span v-for="tag in secret.tags.slice(0, 3)" :key="tag" class="tag">{{ tag }}</span>
-              <span v-if="secret.tags.length > 3" class="tag more">+{{ secret.tags.length - 3 }}</span>
+            <div class="card-tags" v-if="item.data.tags?.length">
+              <span v-for="tag in item.data.tags.slice(0, 3)" :key="tag" class="tag">{{ tag }}</span>
+              <span v-if="item.data.tags.length > 3" class="tag more">+{{ item.data.tags.length - 3 }}</span>
             </div>
 
             <!-- Workflow usage (#1415) -->
-            <div class="card-workflow-usage" v-if="getWorkflowUsage(secret).length">
+            <div class="card-workflow-usage" v-if="getWorkflowUsage(item.data).length">
               <span class="usage-label"><Icon name="project-diagram" /> Used by:</span>
-              <span v-for="usage in getWorkflowUsage(secret)" :key="usage.template_id" class="usage-tag">
+              <span v-for="usage in getWorkflowUsage(item.data)" :key="usage.template_id" class="usage-tag">
                 {{ usage.template_name }}
               </span>
             </div>
@@ -224,24 +229,25 @@
 
           <!-- Card Actions -->
           <div class="card-actions">
-            <button @click.stop="viewSecret(secret)" class="action-btn" :title="t('security.secretsManager.view')">
+            <button @click.stop="viewSecret(item.data)" class="action-btn" :title="t('security.secretsManager.view')">
               <Icon name="eye" />
             </button>
-            <button @click.stop="editSecret(secret)" class="action-btn" :title="t('security.secretsManager.edit')">
+            <button @click.stop="editSecret(item.data)" class="action-btn" :title="t('security.secretsManager.edit')">
               <Icon name="edit" />
             </button>
             <button
-              v-if="secret.scope === 'chat'"
-              @click.stop="transferSecret(secret)"
+              v-if="item.data.scope === 'chat'"
+              @click.stop="transferSecret(item.data)"
               class="action-btn"
               :title="t('security.secretsManager.makeGeneral')"
             >
               <Icon name="share-alt" />
             </button>
-            <button @click.stop="confirmDelete(secret)" class="action-btn delete" :title="t('security.secretsManager.delete')">
+            <button @click.stop="confirmDelete(item.data)" class="action-btn delete" :title="t('security.secretsManager.delete')">
               <Icon name="trash" />
             </button>
           </div>
+        </div>
         </div>
       </div>
 
@@ -328,12 +334,12 @@
           <div class="form-row two-col">
             <div class="form-group">
               <label for="secret-scope">{{ $t('security.secretsManager.scope') }} <span class="required">*</span></label>
+              <!-- #16429: api/schemas_system.py's SecretCreateRequest.scope is
+                   typed ChatSecretScope (general/chat only) -- user/session/shared
+                   used to be offered here but would 422 on submit. -->
               <select id="secret-scope" v-model="secretForm.scope" class="form-input">
                 <option value="general">{{ $t('security.secretsManager.scopeGeneral') }}</option>
                 <option value="chat">{{ $t('security.secretsManager.scopeChat') }}</option>
-                <option value="user">{{ t('security.secretsManager.scopeUser') }}</option>
-                <option value="session">{{ t('security.secretsManager.scopeSession') }}</option>
-                <option value="shared">{{ $t('security.secretsManager.visibilityShared') }}</option>
               </select>
               <small class="input-hint">{{ t('security.secretsManager.scopeHint') }}</small>
             </div>
@@ -796,6 +802,7 @@ import { useChatStore } from '@/stores/useChatStore';
 import { createLogger } from '@/utils/debugUtils';
 import { formatDateTime } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';
+import { useVirtualList } from '@/composables/useVirtualList';
 import { useSecretsInfraApi } from '@/composables/security/useSecretsInfraApi';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
@@ -1030,6 +1037,30 @@ const filteredSecrets = computed(() => {
 
   return result;
 });
+
+// #16429: ported from SecretVault.vue (#4037) -- virtual scrolling for
+// large lists. Only meaningfully applied in 'list' view: 'grid' mode's
+// CSS `repeat(auto-fill, ...)` column count depends on runtime container
+// width, which useVirtualList's fixed-row model doesn't represent, and
+// SecretVault itself never had a grid mode to port a solution from.
+// 240px is an approximation (fixed height covering the tallest realistic
+// card: description + tags + workflow-usage rows all present) -- the same
+// tradeoff SecretVault.vue made with its own fixed 280px, so cards with
+// less optional content leave a little blank space rather than being
+// measured individually.
+const { containerRef, visibleItems, totalHeight } = useVirtualList<Secret>(filteredSecrets, 240, 2)
+
+interface DisplayedCredential {
+  data: Secret
+  offset: number | null
+}
+
+const displayedSecrets = computed<DisplayedCredential[]>(() => {
+  if (viewMode.value === 'list') {
+    return visibleItems.value.map(item => ({ data: item.data, offset: item.offset }))
+  }
+  return filteredSecrets.value.map(secret => ({ data: secret, offset: null }))
+})
 
 const currentCategoryLabel = computed(() => {
   if (showExpiredOnly.value) return t('security.secretsManager.expiredCredentials');
@@ -1957,7 +1988,15 @@ watch(selectedScope, () => {
 }
 
 /* Credentials Container */
-.credentials-container {
+/* #16429: the scrollable viewport is now a separate element from the
+   grid/list layout wrapper -- 'list' mode needs a fixed-height, position:
+   relative spacer (totalHeight) for its absolutely-positioned virtualized
+   cards, which must not itself be the overflow:auto element (that would
+   make the spacer's own height the scroll boundary, leaving nothing to
+   scroll). 'grid' mode's CSS grid still needs its items as DIRECT children
+   of the grid element, so both modes share this same two-level structure
+   rather than diverging templates. */
+.credentials-viewport {
   flex: 1;
   overflow-y: auto;
   padding: var(--spacing-6);
@@ -1970,10 +2009,14 @@ watch(selectedScope, () => {
   align-content: start;
 }
 
+/* #16429: cards are position:absolute (virtualized, see the template's
+   :style binding for height/position:relative on this element), each
+   independently placed via translateY(offset) -- CSS gap/margin on
+   siblings has no effect since they're out of normal flow; the visual
+   gap between rows is baked into useVirtualList's fixed itemHeight
+   instead (see the `useVirtualList<Secret>(filteredSecrets, 240, 2)` call). */
 .credentials-container.list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2);
+  min-height: 100%;
 }
 
 /* Credential Card */

@@ -160,7 +160,7 @@ beforeEach(() => {
 
 ## ApiClient Return Shape
 
-`useApi().get()` returns parsed JSON (`Promise<T>`), **not** a `Response` object. Never do `response.data.X` or `response.json()` in tests — that's the wrong shape.
+`useApiClient().get()` returns parsed JSON (`Promise<T>`), **not** a `Response` object. Never do `response.data.X` or `response.json()` in tests — that's the wrong shape.
 
 ---
 
