@@ -102,7 +102,7 @@ torchvision
 # binding, had to be explicit).
 tree-sitter-javascript
 
-# --- LangChain / LlamaIndex / MCP extras ----------------------------------
+# --- LangChain / LlamaIndex extras ----------------------------------------
 # The pinned core packages (langchain, langchain-core, llama-index-core, ...)
 # are in requirements-ci/langchain.txt and requirements-ci/llama-index.txt;
 # these are transitive extras of that same ecosystem with no CI-scoped test
@@ -111,7 +111,6 @@ langchain-ollama
 langgraph
 langgraph-checkpoint-redis
 llama-index
-mcp
 
 # --- Document / knowledge-base optional format libraries ------------------
 # requirements.txt marks several of these "Optional (install separately for
