@@ -53,61 +53,18 @@ is fixed, not listed.
 
 from __future__ import annotations
 
-#: 49 -- the SLM's ``api`` package (47, ``socket.connect``; #16262's fix in
-#: config.py's external_url cleared 4 of the original 51: the package's own
-#: __init__, ``_resume_plan``, ``code_sync``, ``venv_reconcile``) and two
-#: backend modules that write outside the tree at import.
+#: 2 -- two backend modules that write outside the tree at import.
+#: #16262's fix in config.py's external_url (the socket.connect every SLM
+#: api.* module inherited via api/__init__.py's cascading import) cleared
+#: all 51 of the SLM's own entries: 4 on the PR-scoped sweep that first
+#: reached them (the package's own __init__, _resume_plan, code_sync,
+#: venv_reconcile), the remaining 47 confirmed by a full-population sweep
+#: (run 34760508167) dispatched specifically to check every listed module,
+#: not just the ones one PR's diff happened to touch.
 HAS_IMPORT_EFFECT: frozenset[tuple[str, str]] = frozenset(
     {
         ("autobot-backend", "api.multimodal"),
         ("autobot-backend", "api.vision"),
-        ("autobot-slm-backend", "api.agents"),
-        ("autobot-slm-backend", "api.api_keys"),
-        ("autobot-slm-backend", "api.auth"),
-        ("autobot-slm-backend", "api.autobot_teams"),
-        ("autobot-slm-backend", "api.autobot_users"),
-        ("autobot-slm-backend", "api.blue_green"),
-        ("autobot-slm-backend", "api.browser"),
-        ("autobot-slm-backend", "api.code_source"),
-        ("autobot-slm-backend", "api.config"),
-        ("autobot-slm-backend", "api.deployments"),
-        ("autobot-slm-backend", "api.discovery"),
-        ("autobot-slm-backend", "api.errors"),
-        ("autobot-slm-backend", "api.events"),
-        ("autobot-slm-backend", "api.external_agents"),
-        ("autobot-slm-backend", "api.health"),
-        ("autobot-slm-backend", "api.infrastructure"),
-        ("autobot-slm-backend", "api.llm_config"),
-        ("autobot-slm-backend", "api.maintenance"),
-        ("autobot-slm-backend", "api.memory_lifecycle_proxy"),
-        ("autobot-slm-backend", "api.mfa"),
-        ("autobot-slm-backend", "api.monitoring"),
-        ("autobot-slm-backend", "api.node_ssh_helpers"),
-        ("autobot-slm-backend", "api.nodes"),
-        ("autobot-slm-backend", "api.nodes_execution"),
-        ("autobot-slm-backend", "api.npu"),
-        ("autobot-slm-backend", "api.orchestration"),
-        ("autobot-slm-backend", "api.performance"),
-        ("autobot-slm-backend", "api.personality_proxy"),
-        ("autobot-slm-backend", "api.rdp"),
-        ("autobot-slm-backend", "api.redis_service"),
-        ("autobot-slm-backend", "api.roles"),
-        ("autobot-slm-backend", "api.scim"),
-        ("autobot-slm-backend", "api.secrets"),
-        ("autobot-slm-backend", "api.security"),
-        ("autobot-slm-backend", "api.service_ports"),
-        ("autobot-slm-backend", "api.services"),
-        ("autobot-slm-backend", "api.settings"),
-        ("autobot-slm-backend", "api.setup_wizard"),
-        ("autobot-slm-backend", "api.slm_users"),
-        ("autobot-slm-backend", "api.sso"),
-        ("autobot-slm-backend", "api.sso_auth"),
-        ("autobot-slm-backend", "api.stateful"),
-        ("autobot-slm-backend", "api.tls"),
-        ("autobot-slm-backend", "api.updates"),
-        ("autobot-slm-backend", "api.vnc"),
-        ("autobot-slm-backend", "api.voice_proxy"),
-        ("autobot-slm-backend", "api.websocket"),
     }
 )
 
