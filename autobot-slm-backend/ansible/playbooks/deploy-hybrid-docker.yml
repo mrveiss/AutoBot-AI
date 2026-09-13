@@ -140,7 +140,7 @@
                 - REDIS_ARGS=--appendonly yes --save 60 1 --requirepass {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}
                 - REDISINSIGHT_PORT=8001
               healthcheck:
-                test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "{{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}", "ping"]
+                test: ["CMD", "redis-cli", "--no-auth-warning",{% if autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) %} "--user", "{{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }}",{% endif %} "-a", "{{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}", "ping"]
                 interval: 30s
                 timeout: 10s
                 retries: 3
@@ -175,7 +175,7 @@
 
     - name: Test Redis connectivity
       shell: |
-        docker exec {{ container_name }} redis-cli --no-auth-warning -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }} ping
+        docker exec {{ container_name }} redis-cli --no-auth-warning {% if autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) %}--user {{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }} {% endif %}-a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }} ping
       register: redis_test
 
     - name: Display Redis status
