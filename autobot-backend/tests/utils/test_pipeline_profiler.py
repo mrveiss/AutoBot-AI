@@ -18,8 +18,10 @@ class TestPipelineProfiler:
     async def test_profile_records_stage_timing(self):
         profiler = PipelineProfiler("test-pipeline")
         async with profiler.stage("embedding"):
+            # fixed sleep on purpose (#16255): duration_ms below is the value under test
             await asyncio.sleep(0.01)
         async with profiler.stage("retrieval"):
+            # fixed sleep on purpose (#16255): paired with the "embedding" stage above
             await asyncio.sleep(0.01)
         report = profiler.report()
         assert "embedding" in report["stages"]
@@ -30,8 +32,10 @@ class TestPipelineProfiler:
     async def test_total_duration(self):
         profiler = PipelineProfiler("test")
         async with profiler.stage("a"):
+            # fixed sleep on purpose (#16255): total_ms below is the value under test
             await asyncio.sleep(0.01)
         async with profiler.stage("b"):
+            # fixed sleep on purpose (#16255): paired with the "a" stage above
             await asyncio.sleep(0.01)
         report = profiler.report()
         assert report["total_ms"] >= 18.0

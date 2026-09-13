@@ -1524,7 +1524,7 @@ Create a systemd unit file to run the service monitor as a persistent daemon:
 [Unit]
 Description=AutoBot Service Failure Monitor
 Documentation=https://github.com/mrveiss/AutoBot-AI
-After=network.target redis-server.service
+After=network.target redis-stack-server.service
 Wants=network-online.target
 
 [Service]

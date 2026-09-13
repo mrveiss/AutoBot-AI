@@ -21,15 +21,8 @@ export interface SystemAlert {
   timestamp: number;
 }
 
-export interface ServiceHealth {
-  name: string;
-  status: 'online' | 'warning' | 'error' | 'offline';
-  statusText: string;
-  version?: string;
-  responseTime?: number;
-  lastCheck?: number;
-  consecutiveFailures?: number;
-  error?: string;
-  timestamp?: number;
-  details?: Record<string, unknown>;
-}
+// #15401: this was a drifted copy of `types/api.ts`'s service-health row -- a
+// narrower status union, number-only timestamps -- under a name that also
+// collided with the SLM's `ServiceHealth`. It had no importers. The canonical row
+// is `ServiceHealthEntry`, whose fields are a superset of this one's.
+export type { ServiceHealthEntry } from './api'

@@ -32,10 +32,11 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml")
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _ANSIBLE_DIR = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 _ROLE_REGISTRY = _REPO_ROOT / "autobot-slm-backend" / "services" / "role_registry.py"
 _PROVISION_FLEET_ROLES = _ANSIBLE_DIR / "playbooks" / "provision-fleet-roles.yml"

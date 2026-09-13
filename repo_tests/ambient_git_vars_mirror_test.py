@@ -26,9 +26,10 @@ from __future__ import annotations
 
 import ast
 import re
-from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+_ROOT = repo_root()
 _SHELL = _ROOT / "scripts" / "lib" / "git-root.sh"
 _PYTHON = _ROOT / "autobot_shared" / "paths.py"
 

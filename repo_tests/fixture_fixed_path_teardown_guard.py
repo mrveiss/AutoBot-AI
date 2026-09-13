@@ -33,6 +33,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Iterator, List, Set, Tuple
 
+from repo_tests._paths import repo_root
 from repo_tests.fixture_fixed_path_teardown_flow import (
     _CREATE_CALL_NAMES,
     _REMOVE_CALL_NAMES,
@@ -47,7 +48,7 @@ from repo_tests.fixture_fixed_path_teardown_flow import (
 
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = repo_root()
 
 # pytest's own per-test-unique path sources. A fixture that actually uses one
 # of these to build its path cannot collide across concurrent tests, whatever

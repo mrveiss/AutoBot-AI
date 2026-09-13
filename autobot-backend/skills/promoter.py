@@ -15,6 +15,7 @@ import re
 from typing import List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
@@ -73,12 +74,12 @@ class SkillPromoter:
             await _run_cmd(["ruff", "check", "--fix", skill_py_path])
         ref = f" (#{issue_ref})" if issue_ref else ""
         msg = f"feat(skills): promote {name} skill to builtin{ref}"
-        await _run_cmd(["git", "add", dest], must_succeed=True)
-        await _run_cmd(["git", "commit", "-m", msg], must_succeed=True)
+        await _run_cmd(["git", "add", dest], must_succeed=True, env=scrubbed_git_env())
+        await _run_cmd(["git", "commit", "-m", msg], must_succeed=True, env=scrubbed_git_env())
         logger.info("Committed promoted skill: %s", name)
 
 
-async def _run_cmd(cmd: List[str], must_succeed: bool = False) -> None:
+async def _run_cmd(cmd: List[str], must_succeed: bool = False, env: dict[str, str] | None = None) -> None:
     """Run a subprocess command; log stderr on failure.
 
     Raises RuntimeError if must_succeed is True and command fails.
@@ -87,6 +88,7 @@ async def _run_cmd(cmd: List[str], must_succeed: bool = False) -> None:
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=env,
     )
     _, stderr = await proc.communicate()
     if proc.returncode != 0:

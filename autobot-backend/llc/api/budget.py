@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
 from autobot_shared.logging_manager import get_logger
 from llc.deps import assert_company_access, load_authorized
-from llc.exceptions import BudgetExhausted
+from llc.exceptions import BudgetExhausted, UnpricedModel
 from llc.models.budget import LLCAgentBudget
 from llc.services.budget import BudgetService
 from models.agent_org import AgentOrgNode
@@ -267,8 +267,18 @@ async def ingest_cost(
             session, agent_id, row.company_id, body.tokens_in, body.tokens_out, body.model
         )
     except BudgetExhausted as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=402, detail="Internal server error") from exc
+        # 402 is right; the detail was not. It said "Internal server error" for a
+        # budget the caller had exhausted, which is a client-actionable condition
+        # reported as a server fault.
+        logger.warning("Budget exhausted for agent %s: %s", agent_id, exc)
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
+    except UnpricedModel as exc:
+        # #15860 gave `ingest_cost_event` a second failure mode, and this route
+        # is its other caller. Without this the same condition that returns 422
+        # from POST /agent/cost-events returns 500 here -- two routes disagreeing
+        # about one service call from the day the condition was introduced.
+        logger.warning("Unpriced model in cost ingest for agent %s: %s", agent_id, exc)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return IngestResponse(cost=cost)
 
 

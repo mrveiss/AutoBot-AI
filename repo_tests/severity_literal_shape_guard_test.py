@@ -56,11 +56,13 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.status_enums import Severity
+from tools.lint._scan_helpers import TRACKED_PY_FLOOR
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 # The same two roots the dict-entry ratchet scans, so the three populations are
 # comparable and a literal cannot escape by moving between guards.
@@ -75,7 +77,7 @@ _SEVERITY_COMPARISON = re.compile(r"""severity["']?\]?\s*==\s*["'][A-Za-z_]+["']
 # Trailing quoted word of a match — the literal value itself.
 _MATCHED_VALUE = re.compile(r"""["']([A-Za-z_]+)["']\s*$""")
 
-# Measured on Dev_new_gui at 2363ad3aa9. Ceilings may only fall.
+# Measured on main at 2363ad3aa9. Ceilings may only fall.
 KWARG_LITERAL_CEILING = 73
 COMPARISON_LITERAL_CEILING = 121
 LITERAL_FILE_CEILING = 53
@@ -97,7 +99,7 @@ OUT_OF_VOCABULARY_FLOOR = 15
 KNOWN_OUT_OF_VOCABULARY = frozenset({"none", "moderate", "missing", "forbidden"})
 
 # Floor for the file enumeration itself. An empty walk agrees with everything.
-_TRACKED_PY_FLOOR = 3000
+_TRACKED_PY_FLOOR = TRACKED_PY_FLOOR  # canonical: one measured floor, was a local 3000 (#15928)
 
 # A file that certainly carries each shape, so a matcher that has silently
 # stopped matching the tree fails by name instead of reporting a clean sweep.

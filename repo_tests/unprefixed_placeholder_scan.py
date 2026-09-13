@@ -27,9 +27,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Dict, FrozenSet, List, Optional, Set, Tuple
 
+from repo_tests._paths import repo_root
+
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 #: Directory names that are never repository source under a full-tree sweep.
 EXCLUDED_DIR_NAMES = frozenset({".worktrees", "node_modules", "__pycache__", ".venv", "venv"})

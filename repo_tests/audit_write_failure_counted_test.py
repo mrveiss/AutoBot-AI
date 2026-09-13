@@ -31,8 +31,9 @@ from functools import lru_cache
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 # The production Python surface. Deliberately not the whole tree: node_modules,
 # worktrees and vendored copies would make the sweep unbounded and its floors

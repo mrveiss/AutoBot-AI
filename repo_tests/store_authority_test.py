@@ -37,10 +37,12 @@ import ast
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
+from repo_tests._paths import repo_root
+
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.store_authority import STORE_AUTHORITY, Store, system_of_record
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 #: The table itself, which is the one module allowed to name every store.
 _CANONICAL = Path("autobot_shared/store_authority.py")

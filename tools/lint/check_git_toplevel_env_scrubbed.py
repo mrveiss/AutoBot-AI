@@ -70,20 +70,17 @@ SCOPE, AND WHAT IS DELIBERATELY NOT SCOPED
   needs no allowlist entry. The name ``subprocess`` is bound to is resolved
   from the file's own imports, so ``import subprocess as sp`` and
   ``from subprocess import run`` are both caught.
-* **``git ls-files`` IS gated too, since #14896.** It was left out when this
-  hook landed on the reasoning that every call site passed ``cwd=<root>`` from
-  a root the hook already protected. That reasoning was wrong: ``cwd=`` loses
-  to an inherited ``GIT_DIR``, which names a git directory outright, so a
-  correct ``cwd`` enumerates the *other* checkout's index and answers without
-  erroring. #14896 found unscrubbed ``ls-files`` call sites still standing on
-  that argument, so the subcommand joins :data:`TOPLEVEL_FLAG` in
-  :data:`GATED_TOKENS`.
-* **Shell ``git ls-files`` is NOT gated.** :func:`scan_shell` matches
-  ``rev-parse`` + ``--show-toplevel`` as a pair; ``ls-files`` has no such
-  second token, and shell has no scrub helper for it the way
-  ``scripts/lib/git-root.sh`` provides one for the root. Three ``.sh`` call
-  sites carry the defect and are tracked separately rather than half-fixed
-  behind a text match here.
+* **``git ls-files`` IS gated too, since #14896.** It was left out on the
+  reasoning that every call site passed ``cwd=<root>``. That was wrong: ``cwd=``
+  loses to an inherited ``GIT_DIR``, so a correct ``cwd`` enumerates the *other*
+  checkout's index and answers without erroring. The subcommand therefore joins
+  :data:`TOPLEVEL_FLAG` in :data:`GATED_TOKENS`.
+* **Shell ``git ls-files`` IS gated, since #15506.** It waited on a remedy to
+  name — ``git_tracked_files`` in ``scripts/lib/git-root.sh`` — because a guard
+  landing before its remedy only teaches people to silence it.
+  :data:`SHELL_LS_FILES_CALL` anchors on ``git`` in verb position, catching
+  ``git -C "$d" ls-files`` but not a helper call. Known cost: the same text in a
+  quoted string reads as a call, hence the reworded ``die``s.
 
 KNOWN GAPS — WHAT THIS DOES **NOT** CATCH
 -----------------------------------------
@@ -115,7 +112,7 @@ by tests rather than half-implemented.
   ``FLAG=--show-toplevel; git rev-parse "$FLAG"`` or a local ``toplevel()``
   wrapper is invisible to it — the same class of gap as the Python argv-
   through-a-variable case above, for the same reason (no evaluation of shell
-  is attempted here).
+  is attempted here). ``sync_orchestrator.py:392`` runs git over ssh (by design; #16179).
 
 The behavioural half of the guard (``repo_tests/git_repo_root_scrub_test.py``
 for Python, ``scripts/lib/git-root_test.sh`` for shell) covers what static
@@ -130,6 +127,7 @@ Exit code:
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 from typing import Iterable, List, Set, Tuple
@@ -138,7 +136,13 @@ from typing import Iterable, List, Set, Tuple
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import EXCLUDED_DIR_NAMES, enforce_reach, scan_python_files  # noqa: E402
+from _scan_helpers import (  # noqa: E402
+    EXCLUDED_DIR_NAMES,
+    EmptyEnumeration,
+    enforce_reach,
+    scan_python_files,
+    tracked_paths,
+)
 
 #: The canonical scrubbing helper, ``autobot_shared.paths.scrubbed_git_env``.
 SCRUB_HELPER = "scrubbed_git_env"
@@ -157,6 +161,11 @@ SCRUB_HELPERS = frozenset({SCRUB_HELPER, STRICT_SCRUB_HELPER})
 #: though ``scan_shell`` cannot verify the source line was actually reached —
 #: same trust boundary as ``_scrubs`` below for the shadowed-helper gap.
 SHELL_HELPER = "git_repo_root"
+
+#: `git … ls-files`, anchored on `git` in VERB position: `\bgit\b` cannot match
+#: inside `git_tracked_files`, so no exemption is needed and an approving comment
+#: can no longer excuse a raw call, which the old substring test allowed (#15506).
+SHELL_LS_FILES_CALL = re.compile(r"\bgit\b[^\n;|&]*\bls-files\b")
 
 #: Name this guard reports under.
 HOOK_ID = "git-toplevel-env-scrubbed"
@@ -215,36 +224,7 @@ INHERITED_ENV_MESSAGE = (
     "this gate existed: #13882/#13983, #15176, #15245/#15303, #15777 (#15783)."
 )
 
-#: Files allowed to call ``--show-toplevel`` with an environment that is NOT
-#: scrubbed, POSIX-relative to the repository root. Each entry is a call that
-#: needs the hook environment *intact* to mean anything.
-ALLOWLIST = {
-    # The #15176 reproduction. It runs git with GIT_DIR deliberately exported
-    # to confirm the defect still reproduces on this git version before
-    # asserting that the six sites survive it; scrubbing there would make the
-    # suite assert nothing and pass.
-    "repo_tests/git_repo_root_scrub_test.py",
-    # scripts/lib/git-root.sh IS the scrub -- its one raw call is the
-    # implementation `git_repo_root` wraps, run inside a subshell with
-    # GIT_ROOT_AMBIENT_VARS unset (#15245).
-    "scripts/lib/git-root.sh",
-    # #15246 already scrubbed this file's entire process environment
-    # (`unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE` up front,
-    # ahead of every git call the script makes, not only this one) and that
-    # fix is covered by repo_tests/git_hooks_installer_test.py. Converging it
-    # onto scripts/lib/git-root.sh would need that test's throwaway fixture
-    # -- which copies only this file's bytes, not scripts/lib/ -- to seed the
-    # helper too; correct today, tracked as follow-up rather than risked here.
-    "scripts/install-git-hooks.sh",
-    # The #15245 shell reproduction, same reasoning as the Python one above:
-    # it deliberately calls git with GIT_DIR exported, unscrubbed, to prove
-    # the defect still reproduces before asserting git_repo_root survives it.
-    "scripts/lib/git-root_test.sh",
-    # A literal command STRING passed as a test case to the branch-switch
-    # guard (#15296) -- not a call this test script itself makes. The guard
-    # under test is required to ALLOW exactly this shape.
-    ".claude/hooks/block-dangerous-commands_test.sh",
-}
+from _git_scrub_allowlist import ALLOWLIST  # noqa: E402
 
 
 def subprocess_names(tree: ast.AST) -> Tuple[Set[str], Set[str]]:
@@ -351,7 +331,7 @@ def is_production_path(rel: str) -> bool:
     """
     name = rel.rsplit("/", 1)[-1]
     if name.endswith("_test.py") or name.startswith("test_"):
-        return False
+        return rel == "scripts/test_first_remediation.py"  # real tool, no fixture (#16179)
     return "/tests/" not in f"/{rel}"
 
 
@@ -502,11 +482,19 @@ def iter_shell_files(args: List[str], repo_root: Path) -> Iterable[Path]:
             if candidate.is_file() and candidate.suffix == ".sh":
                 yield candidate
         return
-    for candidate in repo_root.rglob("*.sh"):
-        parts = candidate.relative_to(repo_root).parts
-        if any(part in EXCLUDED_DIR_NAMES for part in parts):
+    # Git-tracked like `iter_python_files`: `rglob` read 215 files from other checkouts (#15926).
+    try:
+        names = tracked_paths(repo_root, "*.sh")
+    except EmptyEnumeration:
+        # This checker has its OWN floor and is contracted to refuse AUDIBLY --
+        # `enforce_reach` prints why. Letting the raise through satisfied the
+        # exit code and broke the contract (#15962). A git FAILURE still
+        # propagates: that is an error, not a finding this checker reports.
+        return
+    for rel in names:
+        if any(part in EXCLUDED_DIR_NAMES for part in rel.split("/")):
             continue
-        yield candidate
+        yield repo_root / rel
 
 
 def scan_shell(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
@@ -531,6 +519,18 @@ def scan_shell(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
     findings: List[Tuple[int, str]] = []
     for line_no, line in enumerate(lines, start=1):
         if line.strip().startswith("#"):
+            continue
+        if SHELL_LS_FILES_CALL.search(line):
+            findings.append(
+                (
+                    line_no,
+                    f"`git {LS_FILES_VERB}` without a scrubbed git environment. An "
+                    "inherited GIT_DIR outranks the directory passed, so this "
+                    "enumerates the other checkout's index and answers without "
+                    "erroring. Source scripts/lib/git-root.sh and call "
+                    "git_tracked_files() (#15506).",
+                )
+            )
             continue
         if "rev-parse" not in line or TOPLEVEL_FLAG not in line:
             continue

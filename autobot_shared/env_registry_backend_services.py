@@ -9,7 +9,8 @@ that needs registering goes in its own per-component module instead of
 raising that ceiling. ``env_registry_agent_runtime.py`` holds the sibling
 population sized in the same sweep for the agent-loop/orchestration side;
 this one holds the rest -- chat, sessions, workspaces, memory, notifications,
-auth, tooling, and knowledge indexing.
+auth, tooling, and knowledge indexing. #15151 later added three ``network``
+vars found the same way, from a different reader shape (see below).
 
 These were read through a bare ``int(os.environ.get(...))`` /
 ``float(os.environ.get(...))`` cast until #15710 converted each to
@@ -358,5 +359,97 @@ register_env_var(
             "retry (autobot_shared/paperclip_client.py)."
         ),
         component="paperclip",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PASSWORD_CHANGE_SESSION_MAX_ATTEMPTS",
+        type=int,
+        default=5,
+        description=(
+            "Password-change attempts allowed per CLIENT on the session auth surface before a 429 "
+            "(autobot-backend/api/auth.py). Deliberately looser than the targeted limiter below: this "
+            "one keys on the caller's client id and guards a self-service form, where a legitimate "
+            "user mistyping their current password is the common case (#15757)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PASSWORD_CHANGE_SESSION_WINDOW_SECONDS",
+        type=int,
+        default=300,
+        description=("Sliding window for AUTOBOT_PASSWORD_CHANGE_SESSION_MAX_ATTEMPTS, in seconds (#15757)."),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PASSWORD_CHANGE_TARGETED_MAX_ATTEMPTS",
+        type=int,
+        default=3,
+        description=(
+            "Password-change attempts allowed per TARGET USER, and per calling actor when the actor "
+            "differs from the target, on the user-management surface "
+            "(autobot-backend/user_management/middleware/rate_limit.py). Stricter than the session "
+            "limiter because this path includes admin reset of another user's password, where "
+            "repeated attempts against one victim -- or one caller walking many target ids -- is the "
+            "threat rather than a typo (#15743, #15757)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PASSWORD_CHANGE_TARGETED_WINDOW_SECONDS",
+        type=int,
+        default=1800,
+        description=(
+            "Sliding window for AUTOBOT_PASSWORD_CHANGE_TARGETED_MAX_ATTEMPTS, in seconds. Six times "
+            "the session window: a slower, stricter limit for the higher-value surface (#15757)."
+        ),
+        component="backend",
+    )
+)
+
+# #15151: read via autobot_shared.ssot_config's pydantic Field(alias=...), not
+# os.environ.get/env_utils, so check_env_var_registry.py never saw these three
+# either -- the same visibility gap #15710 (the module docstring above) closed
+# for a different reader shape. docs/guides/CONFIGURATION_GUIDE.md had
+# documented three wrong/dead names for these (AUTOBOT_PLAYWRIGHT_HOST,
+# AUTOBOT_PLAYWRIGHT_API_PORT, AUTOBOT_PLAYWRIGHT_VNC_PORT); the guide is
+# fixed in the same change that adds this registration.
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_SERVICE_HOST",
+        type=str,
+        default="127.0.0.1",
+        description="Hostname or IP of the Playwright/browser automation service (services/playwright_service.py).",
+        component="network",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_SERVICE_PORT",
+        type=int,
+        default=9001,
+        description="Port of the Playwright/browser automation service. 9001, not 3000 -- that's Grafana's (#4052).",
+        component="network",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_VNC_PORT",
+        type=int,
+        default=6080,
+        description="Port of the VNC web interface (novnc), used by the desktop-control/VNC proxy surface.",
+        component="network",
     )
 )

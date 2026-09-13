@@ -22,6 +22,15 @@ writer to land would have turned every field into a permanent silent 0.
 ``_populate`` below therefore writes through the canonical HINCRBY/HINCRBYFLOAT
 value shape a real writer would use (decimal strings under ``str`` field names),
 so that writer/reader key drift breaks this suite instead of the endpoint.
+
+#14981: ``claims_verified`` and ``average_confidence`` are now DERIVED at read
+time from raw counters (``claims_verified_count``/``total_claims_extracted``,
+``confidence_sum``/``total_responses_grounded``) written by
+``GroundedAgent._record_grounding_stats`` — they are no longer direct-read
+fields, because a running ratio isn't incrementable and this endpoint's own
+"surrounding fields" are counters (its own AC1). ``claim_sources`` is derived
+the same way from ``claim_source_<method>`` counters, for the two
+``VerificationMethod`` members anything actually produces.
 """
 
 import pytest
@@ -34,10 +43,12 @@ from services.knowledge_grounding_models import VerificationMethod
 LIVE_STATS = {
     "total_responses_grounded": "1543",
     "total_claims_extracted": "8204",
-    "claims_verified": "0.87",
-    "average_confidence": "0.89",
+    "claims_verified_count": "7137",  # 8204 * 0.87, rounded
+    "confidence_sum": "1373.27",  # 1543 * 0.89
     "conflicts_created": "142",
     "conflicts_resolved": "128",
+    "claim_source_kb_lookup": "740",
+    "claim_source_claim_verifier_rag": "260",
 }
 
 
@@ -91,8 +102,8 @@ async def test_populated_hash_reports_its_real_figures(monkeypatch):
     assert result["status"] == "success"
     assert result["total_responses_grounded"] == 1543, "str field names were probed with bytes literals"
     assert result["total_claims_extracted"] == 8204
-    assert result["claims_verified"] == pytest.approx(0.87)
-    assert result["average_confidence"] == pytest.approx(0.89)
+    assert result["claims_verified"] == pytest.approx(7137 / 8204)
+    assert result["average_confidence"] == pytest.approx(1373.27 / 1543)
     assert result["conflicts_created"] == 142
     assert result["conflicts_resolved"] == 128
 
@@ -104,13 +115,15 @@ async def test_incrementing_writer_shape_round_trips(monkeypatch):
     fake._populate("total_responses_grounded", 1)
     fake._populate("total_responses_grounded", 1)
     fake._populate("total_claims_extracted", 7)
-    fake._populate("average_confidence", 0.5)
+    fake._populate("claims_verified_count", 5)
+    fake._populate("confidence_sum", 0.5)
 
     result = await _call()
 
     assert result["total_responses_grounded"] == 2
     assert result["total_claims_extracted"] == 7
-    assert result["average_confidence"] == pytest.approx(0.5)
+    assert result["claims_verified"] == pytest.approx(5 / 7)
+    assert result["average_confidence"] == pytest.approx(0.5 / 2)
 
 
 @pytest.mark.asyncio
@@ -121,7 +134,7 @@ async def test_bytes_values_still_work(monkeypatch):
     result = await _call()
 
     assert result["total_responses_grounded"] == 1543
-    assert result["claims_verified"] == pytest.approx(0.87)
+    assert result["claims_verified"] == pytest.approx(7137 / 8204)
     assert result["conflicts_resolved"] == 128
 
 
@@ -139,18 +152,38 @@ async def test_empty_hash_reports_zeros(monkeypatch):
     assert result["average_confidence"] == 0.0
     assert result["conflicts_created"] == 0
     assert result["conflicts_resolved"] == 0
+    assert result["claim_sources"] == {}, "an empty KB must report no split, never a fabricated one"
 
 
 @pytest.mark.asyncio
-async def test_static_claim_source_breakdown_is_unchanged(monkeypatch):
-    """The hard-coded claim_sources block is out of scope for this fix."""
+async def test_claim_sources_derives_real_ratios_from_per_method_counts(monkeypatch):
+    """#14981: replaces test_static_claim_source_breakdown_is_unchanged.
+
+    The three-way hardcoded split is gone. Only the two VerificationMethod
+    members anything produces today get a key, and their ratios are computed
+    from real counts, summing to 1.0.
+    """
     _install(monkeypatch, LIVE_STATS)
 
     result = await _call()
 
     assert result["claim_sources"] == {
-        VerificationMethod.KB_LOOKUP.value: 0.65,
-        VerificationMethod.EXTERNAL_RESEARCH.value: 0.22,
-        VerificationMethod.CAUSAL_INFERENCE.value: 0.13,
+        VerificationMethod.KB_LOOKUP.value: pytest.approx(740 / 1000),
+        VerificationMethod.CLAIM_VERIFIER_RAG.value: pytest.approx(260 / 1000),
     }
+    assert sum(result["claim_sources"].values()) == pytest.approx(1.0)
+    assert VerificationMethod.EXTERNAL_RESEARCH.value not in result["claim_sources"]
+    assert VerificationMethod.CAUSAL_INFERENCE.value not in result["claim_sources"]
     assert result["period"] == "24h"
+
+
+@pytest.mark.asyncio
+async def test_claim_sources_omits_a_method_with_zero_count(monkeypatch):
+    """A produced method that simply hasn't fired yet is absent, not 0.0."""
+    fake = _install(monkeypatch, {})
+    fake._populate("claim_source_kb_lookup", 12)
+    # claim_source_claim_verifier_rag never populated.
+
+    result = await _call()
+
+    assert result["claim_sources"] == {VerificationMethod.KB_LOOKUP.value: 1.0}

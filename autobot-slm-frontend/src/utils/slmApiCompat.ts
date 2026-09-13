@@ -49,6 +49,13 @@ export interface AdapterRequestOptions {
    * cert downloads). When false/omitted the adapter returns `{}` for non-JSON 2xx.
    */
   textFallback?: boolean
+  /**
+   * Overrides `slmApiClient`'s default request timeout for this one call.
+   * Omitted/undefined falls through to `rawRequest`'s own default (#16256 —
+   * a call whose real budget is longer than a CRUD read, e.g. a journal fetch
+   * running over SSH, needs this; most callers never pass it).
+   */
+  timeout?: number
 }
 
 /**
@@ -61,7 +68,7 @@ export async function adapterRequest<T>(
   body?: unknown,
   opts?: AdapterRequestOptions
 ): Promise<AxiosLikeResponse<T>> {
-  const response = await slmApiClient.rawRequest(endpoint, { method, body })
+  const response = await slmApiClient.rawRequest(endpoint, { method, body, timeout: opts?.timeout })
 
   if (!response.ok) {
     let data: unknown = null
@@ -128,9 +135,10 @@ export function withParams(
 
 export interface AxiosCompatClientOptions extends AdapterRequestOptions, WithParamsOptions {}
 
-/** Optional per-call config carrying an axios-style `params` object. */
+/** Optional per-call config carrying an axios-style `params` object and/or a timeout override. */
 export interface AxiosCompatConfig {
   params?: Record<string, unknown>
+  timeout?: number
 }
 
 /** The axios-compatible facade over slmApiClient consumed by the composables. */
@@ -157,11 +165,16 @@ export interface AxiosCompatClient {
 export function makeAxiosCompatClient(opts: AxiosCompatClientOptions = {}): AxiosCompatClient {
   const wp = (endpoint: string, params?: Record<string, unknown>): string =>
     withParams(endpoint, params, { arrays: opts.arrays })
-  const req = <T>(method: string, endpoint: string, body?: unknown): Promise<AxiosLikeResponse<T>> =>
-    adapterRequest<T>(method, endpoint, body, { textFallback: opts.textFallback })
+  const req = <T>(
+    method: string,
+    endpoint: string,
+    body?: unknown,
+    timeout?: number
+  ): Promise<AxiosLikeResponse<T>> =>
+    adapterRequest<T>(method, endpoint, body, { textFallback: opts.textFallback, timeout })
   return {
     get: <T = unknown>(endpoint: string, config?: AxiosCompatConfig) =>
-      req<T>('GET', wp(endpoint, config?.params)),
+      req<T>('GET', wp(endpoint, config?.params), undefined, config?.timeout),
     post: <T = unknown>(endpoint: string, body?: unknown, config?: AxiosCompatConfig) =>
       req<T>('POST', wp(endpoint, config?.params), body ?? undefined),
     put: <T = unknown>(endpoint: string, body?: unknown) => req<T>('PUT', endpoint, body),

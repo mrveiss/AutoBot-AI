@@ -11,7 +11,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   push:
-    branches: [ main, Dev_new_gui, develop ]
+    branches: [ release, main, develop ]
     paths:
       - '**/*.py'
       - '**/requirements*.txt'
@@ -68,7 +68,7 @@ on:
   # Branch-protection promotion to required is the separate owner-confirmed
   # follow-up (#10022).
   pull_request:
-    branches: [ main, Dev_new_gui, develop ]
+    branches: [ release, main, develop ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -139,8 +139,8 @@ jobs:
     #
     # What the evidence actually shows is two populations, not one:
     #
-    #   push on Dev_new_gui, small diff    10m54s   success
-    #   pull_request into main, 2195 files >60m     cancelled (twice)
+    #   push on main, small diff    10m54s   success
+    #   pull_request into release, 2195 files >60m     cancelled (twice)
     #
     # This job's cost scales with the number of changed files, so normal work
     # finishes in ~11 minutes and only a release-sized promotion is pathological.
@@ -311,6 +311,17 @@ jobs:
       # this closes the class rather than one shape of it — the pre-commit
       # stage and a direct run of the hook still scan whole files.
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only pre-commit-no-print-console
+
+    - name: Block new local BaseModel definitions in API files (#6056, #16178)
+      # --changed-lines-only (#16178), and unlike the two scoped steps above, the
+      # pre-commit stage is scoped too: this hook had no baseline and no blocking
+      # CI step (enforce-precommit.yml runs every hook, but only as warnings), so
+      # its whole-file read blocked the commit itself, failing a change for a
+      # model it neither added nor could move (every original domain schemas_*.py
+      # is frozen at its size ceiling). With --python the wrapper cannot parse the
+      # validator's output, so it hands over the base it resolved and the hook
+      # scopes itself. A direct run of the hook still reads whole files.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only --python tools/lint/check_no_local_schemas.py --ext py
 
     - name: Check repo conventions — third-party names, doc cross-links (#13876)
       env:
@@ -562,17 +573,29 @@ jobs:
 
     - name: Audit undefined names under autobot-infrastructure/shared/scripts (#14405)
       run: |
-        # `autobot-infrastructure/` is excluded by the pre-commit flake8 hook and
-        # named by no CI flake8 invocation, so nothing ever linted this tree; 12
-        # operator scripts accumulated 103 undefined names -- live NameErrors, not
-        # style. #14405 fixed all 12 and scoped a second pre-commit hook to the tree
-        # for F821. This has to run in a REQUIRED check for the same directional
-        # reason as #14419 and #14489: re-widening the exclusion lints FEWER files, so
-        # every lint step reports fewer violations and goes greener. It re-proves both
-        # halves -- the tree is F821-clean AND a pre-commit hook still reaches it --
-        # and fails below a discovery floor, because a sweep handed an empty file list
-        # reports a comfortable zero. There is no exemption list, deliberately.
-        python3 tools/lint/check_infra_scripts_undefined_names.py --audit
+        # Three trees are excluded by the pre-commit flake8 hook, named by no CI
+        # flake8 invocation that can fail (security.yml runs `|| true`), and listed
+        # in .flake8's own exclude. Nothing linted them; 12 operator scripts
+        # accumulated 103 undefined names -- live NameErrors, not style. #14405 fixed
+        # all 12 and scoped a second pre-commit hook to ONE of the three trees.
+        #
+        # #15914 is what that scoping cost: five classes in a SECOND excluded tree
+        # (`autobot-backend/code_analysis/`) each kept a `self.config = config` whose
+        # import had been dropped, so every construction raised NameError for six to
+        # nine months and `CodeQualityDashboard` was never runnable. A guard bounded
+        # by the exclusion that caused the defect finds only the instance already
+        # known about, so the sweep is now every tracked *.py and the hook carries no
+        # scope at all.
+        #
+        # This has to run in a REQUIRED check for the same directional reason as
+        # #14419 and #14489: re-widening an exclusion lints FEWER files, so every
+        # lint step reports fewer violations and goes greener. It re-proves both
+        # halves -- the repo is F821-clean AND a pre-commit hook reaches every
+        # tracked file -- and fails below a discovery floor, because a sweep handed
+        # an empty file list reports a comfortable zero. The file list comes from
+        # `git ls-files`, not from the lint config, so the two can disagree.
+        # There is no exemption list, deliberately.
+        python3 tools/lint/check_undefined_names.py --audit
 
     - name: Audit unexpanded shell placeholders in Python string constants (#14517)
       run: |

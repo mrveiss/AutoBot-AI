@@ -61,13 +61,14 @@ from __future__ import annotations
 
 import importlib.util
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 BANDIT_CONFIG = REPO_ROOT / ".bandit"
 _CHECKER = REPO_ROOT / "tools" / "lint" / "check_bandit_exclude_anchoring.py"
 
@@ -109,15 +110,7 @@ def entries() -> list[str]:
 @pytest.fixture(scope="module")
 def tracked_py_files() -> list[str]:
     """Every tracked ``*.py`` path, enumerated by git rather than by bandit."""
-    completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    )
-    paths = [line for line in completed.stdout.splitlines() if line.strip()]
+    paths = tracked_paths(REPO_ROOT, "*.py")
     assert len(paths) >= _TRACKED_PY_FLOOR, (
         f"git ls-files returned only {len(paths)} Python files — the enumeration "
         "broke; these tests would otherwise pass having checked nothing"

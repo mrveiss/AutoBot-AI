@@ -102,109 +102,28 @@
       </div>
     </div>
 
-    <!-- Connection Lost Modal -->
-    <div v-if="showReconnectModal" class="modal-overlay" @click="hideReconnectModal" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-      <div class="modal-content" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-        <h3>{{ t('terminal.window.connectionLost') }}</h3>
-        <p>{{ t('terminal.window.connectionLostMessage') }}</p>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" @click="hideReconnectModal" :aria-label="t('terminal.window.cancel')">
-            {{ t('terminal.window.cancel') }}
-          </button>
-          <button class="btn btn-primary" @click="reconnect" :aria-label="t('terminal.window.reconnect')">
-            {{ t('terminal.window.reconnect') }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Command Confirmation Modal -->
-    <div v-if="showCommandConfirmation" class="confirmation-modal-overlay" @click="cancelCommand" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-      <div class="confirmation-modal" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-        <div class="modal-header">
-          <h3 class="modal-title">⚠️ {{ t('terminal.window.destructiveCommand') }}</h3>
-        </div>
-        <div class="modal-content">
-          <div class="command-preview">
-            <div class="command-label">{{ t('terminal.window.commandToExecute') }}</div>
-            <div class="command-text">{{ pendingCommand }}</div>
-          </div>
-
-          <div class="risk-assessment">
-            <div class="risk-level" :class="pendingCommandRisk">
-              {{ t('terminal.window.riskLevel') }} <strong>{{ pendingCommandRisk.toUpperCase() }}</strong>
-            </div>
-            <div class="risk-reasons">
-              <div v-for="reason in pendingCommandReasons" :key="reason" class="risk-reason">
-                • {{ reason }}
-              </div>
-            </div>
-          </div>
-
-          <div class="confirmation-message">
-            <p><strong>{{ t('terminal.window.commandMay') }}</strong></p>
-            <ul>
-              <li>{{ t('terminal.window.riskDeleteFiles') }}</li>
-              <li>{{ t('terminal.window.riskModifyConfig') }}</li>
-              <li>{{ t('terminal.window.riskChangePermissions') }}</li>
-              <li>{{ t('terminal.window.riskInstallRemove') }}</li>
-            </ul>
-            <p><strong>{{ t('terminal.window.confirmProceed') }}</strong></p>
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button
-            class="btn btn-danger"
-            @click="executeConfirmedCommand"
-           aria-label="⚡ execute command">
-            ⚡ Execute Command
-          </button>
-          <button
-            class="btn btn-secondary"
-            @click="cancelCommand"
-           aria-label="❌ cancel">
-            ❌ Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Emergency Kill Confirmation Modal -->
-    <div v-if="showKillConfirmation" class="confirmation-modal-overlay" @click="showKillConfirmation = false" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-      <div class="confirmation-modal emergency" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-        <div class="modal-header">
-          <h3 class="modal-title">🛑 {{ t('terminal.window.emergencyKillAllProcesses') }}</h3>
-        </div>
-        <div class="modal-content">
-          <div class="emergency-warning">
-            <p><strong>⚠️ {{ t('terminal.window.emergencyKillWarning') }}</strong></p>
-            <p>{{ t('terminal.window.runningProcesses') }}</p>
-            <ul>
-              <li v-for="process in runningProcesses" :key="process.pid" class="process-item">
-                PID {{ process.pid }}: {{ process.command }}
-              </li>
-            </ul>
-            <p><strong>{{ t('terminal.window.cannotBeUndone') }}</strong></p>
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button
-            class="btn btn-danger"
-            @click="confirmEmergencyKill"
-           aria-label="🛑 kill all processes">
-            🛑 KILL ALL PROCESSES
-          </button>
-          <button
-            class="btn btn-secondary"
-            @click="showKillConfirmation = false"
-           aria-label="❌ cancel">
-            ❌ Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Reconnect, destructive-command, emergency-kill and legacy workflow-step
+         modals. Each action reports the parent's real outcome (#16285). -->
+    <TerminalModals
+      :show-reconnect-modal="showReconnectModal"
+      :show-command-confirmation="showCommandConfirmation"
+      :show-kill-confirmation="showKillConfirmation"
+      :show-legacy-modal="showLegacyModal"
+      :pending-command="pendingCommand"
+      :pending-command-risk="pendingCommandRisk"
+      :pending-command-reasons="pendingCommandReasons"
+      :running-processes="runningProcesses"
+      :pending-workflow-step="pendingWorkflowStep"
+      :reconnect-action="reconnectFromModal"
+      :execute-command-action="executeConfirmedCommand"
+      :emergency-kill-action="confirmEmergencyKill"
+      :confirm-step-action="confirmWorkflowStep"
+      :skip-step-action="skipWorkflowStep"
+      :manual-control-action="takeManualControl"
+      @hide-reconnect-modal="hideReconnectModal"
+      @cancel-command="cancelCommand"
+      @cancel-kill="showKillConfirmation = false"
+    />
 
     <!-- Advanced Step Confirmation Modal -->
     <AdvancedStepConfirmationModal
@@ -219,64 +138,6 @@
       @execute-all="executeAllRemainingSteps"
       @close="closeAdvancedModal"
     />
-
-    <!-- Legacy Manual Step Confirmation Modal (fallback) -->
-    <div v-if="showLegacyModal" class="confirmation-modal-overlay" @click="takeManualControl" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-      <div class="confirmation-modal workflow-step" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-        <div class="modal-header">
-          <h3 class="modal-title">🤖 {{ t('terminal.window.workflowStepConfirmation') }}</h3>
-        </div>
-        <div class="modal-content">
-          <div class="workflow-step-info" v-if="pendingWorkflowStep">
-            <div class="step-counter">
-              Step {{ pendingWorkflowStep.stepNumber }} of {{ pendingWorkflowStep.totalSteps }}
-            </div>
-
-            <div class="step-description">
-              <h4>{{ pendingWorkflowStep.description }}</h4>
-              <p>{{ pendingWorkflowStep.explanation || t('terminal.window.aiWantsToExecute') }}</p>
-            </div>
-
-            <div class="command-preview">
-              <div class="command-label">{{ t('terminal.window.commandToExecute') }}</div>
-              <div class="command-text">{{ pendingWorkflowStep.command }}</div>
-            </div>
-
-            <div class="workflow-options">
-              <div class="option-info">
-                <p><strong>{{ t('terminal.window.chooseAction') }}</strong></p>
-                <ul>
-                  <li><strong>{{ t('terminal.window.executeLabel') }}</strong> {{ t('terminal.window.executeDesc') }}</li>
-                  <li><strong>{{ t('terminal.window.skipLabel') }}</strong> {{ t('terminal.window.skipDesc') }}</li>
-                  <li><strong>{{ t('terminal.window.takeControlLabel') }}</strong> {{ t('terminal.window.takeControlDesc') }}</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-actions workflow-actions">
-          <button
-            class="btn btn-success"
-            @click="confirmWorkflowStep"
-           aria-label="✅ execute & continue">
-            ✅ Execute & Continue
-          </button>
-          <button
-            class="btn btn-warning"
-            @click="skipWorkflowStep"
-           aria-label="⏭️ skip this step">
-            ⏭️ Skip This Step
-          </button>
-          <button
-            class="btn btn-primary"
-            @click="takeManualControl"
-           aria-label="👤 take manual control">
-            👤 Take Manual Control
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -287,6 +148,7 @@ import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import { useTerminalService } from '@/services/TerminalService';
 import { useRoute } from 'vue-router';
 import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
+import TerminalModals from './TerminalModals.vue';
 import CompletionSuggestions from './CompletionSuggestions.vue';
 import TerminalHeader from './TerminalHeader.vue';
 import { createLogger } from '@/utils/debugUtils';
@@ -300,7 +162,8 @@ export default {
   components: {
     AdvancedStepConfirmationModal,
     CompletionSuggestions,
-    TerminalHeader
+    TerminalHeader,
+    TerminalModals
   },
   setup() {
     const { t } = useI18n();
@@ -406,9 +269,12 @@ export default {
     });
 
     // Methods
-    const connect = async () => {
+    // `rethrow` is for the reconnect modal, which shows the failure itself
+    // (#16285). Every other caller is done once handleError has reported it.
+    const connect = async ({ rethrow = false } = {}) => {
       if (!sessionId.value) {
         logger.error('No session ID provided');
+        if (rethrow) throw new Error(t('terminal.modals.noSession'));
         return;
       }
 
@@ -426,14 +292,13 @@ export default {
       } catch (error) {
         logger.error('Failed to connect:', error);
         handleError(error.message);
+        if (rethrow) throw error;
       } finally {
         connecting.value = false;
       }
     };
 
-    const reconnect = async () => {
-      hideReconnectModal();
-
+    const resetAndConnect = async (options) => {
       // Disconnect first if connected
       if (isConnected(sessionId.value)) {
         disconnect(sessionId.value);
@@ -444,7 +309,20 @@ export default {
       currentPrompt.value = '$ ';
 
       // Attempt to reconnect
-      await connect();
+      await connect(options);
+    };
+
+    // The header's reconnect button: a failure is reported in the terminal output.
+    const reconnect = async () => {
+      hideReconnectModal();
+      await resetAndConnect();
+    };
+
+    // The reconnect modal's action. It closes the modal only once connected, and
+    // rejects with the connection error so the modal can show it (#16285).
+    const reconnectFromModal = async () => {
+      await resetAndConnect({ rethrow: true });
+      hideReconnectModal();
     };
 
     // Enhanced sendCommand with safety checks
@@ -487,8 +365,8 @@ export default {
         addRunningProcess(command);
       }
 
-      // Send to terminal
-      sendInput(sessionId.value, command);
+      // Send to terminal. The caller that needs the outcome awaits it (#16285).
+      const sent = sendInput(sessionId.value, command);
 
       // Clear input
       currentInput.value = '';
@@ -500,6 +378,7 @@ export default {
         timestamp: new Date(),
         risk: pendingCommandRisk.value || 'low'
       });
+      return sent;
     };
 
     // Command risk assessment
@@ -587,8 +466,10 @@ export default {
     };
 
     // Safety control methods
-    const executeConfirmedCommand = () => {
-      executeCommand(pendingCommand.value);
+    // Resolves once the command is sent and rejects if sending fails, so the
+    // confirmation modal reports the real outcome (#16285).
+    const executeConfirmedCommand = async () => {
+      await executeCommand(pendingCommand.value);
       showCommandConfirmation.value = false;
       pendingCommand.value = '';
       pendingCommandRisk.value = 'low';
@@ -644,6 +525,8 @@ export default {
           type: 'error',
           timestamp: new Date()
         });
+        // The kill modal shows the failure as well (#16285).
+        throw error;
       }
     };
 
@@ -751,13 +634,14 @@ export default {
       });
     };
 
-    const confirmWorkflowStep = () => {
+    const confirmWorkflowStep = async () => {
       if (pendingWorkflowStep.value) {
-        // Execute the pending step
-        executeAutomatedCommand(pendingWorkflowStep.value.command);
+        // Execute the pending step. A failed send rejects, and the modal shows it (#16285).
+        await executeAutomatedCommand(pendingWorkflowStep.value.command);
 
         // Close modal and continue
         showManualStepModal.value = false;
+        showLegacyModal.value = false;
         waitingForUserConfirmation.value = false;
         pendingWorkflowStep.value = null;
 
@@ -776,6 +660,7 @@ export default {
 
         // Close modal
         showManualStepModal.value = false;
+        showLegacyModal.value = false;
         waitingForUserConfirmation.value = false;
         pendingWorkflowStep.value = null;
 
@@ -788,6 +673,7 @@ export default {
       // User wants to do manual steps before continuing
       automationPaused.value = true;
       showManualStepModal.value = false;
+      showLegacyModal.value = false;
       waitingForUserConfirmation.value = false;
 
       addOutputLine({
@@ -811,12 +697,13 @@ export default {
         timestamp: new Date()
       });
 
-      // Execute the command
-      sendInput(sessionId.value, command);
+      // Execute the command. confirmWorkflowStep awaits the send (#16285).
+      const sent = sendInput(sessionId.value, command);
 
       // Track the automated process
       hasActiveProcess.value = true;
       addRunningProcess(`[AUTO] ${command}`);
+      return sent;
     };
 
     const processNextAutomationStep = () => {
@@ -1388,6 +1275,7 @@ export default {
       // Methods
       connect,
       reconnect,
+      reconnectFromModal,
       sendCommand,
       executeCommand,
       executeConfirmedCommand,
@@ -1724,78 +1612,6 @@ export default {
   background-color: var(--color-info-hover);
 }
 
-/* Modal styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--terminal-overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background-color: var(--terminal-chrome-bg);
-  color: var(--terminal-text);
-  padding: var(--spacing-6);
-  border-radius: var(--radius-lg);
-  max-width: 400px;
-  width: 90%;
-  text-align: center;
-}
-
-.modal-content h3 {
-  margin-top: var(--spacing-0);
-  color: var(--color-warning);
-}
-
-.modal-actions {
-  display: flex;
-  gap: var(--spacing-3);
-  justify-content: center;
-  margin-top: var(--spacing-5);
-}
-
-.btn {
-  padding: var(--spacing-2) var(--spacing-4);
-  border: none;
-  border-radius: var(--radius-default);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: background-color var(--duration-200);
-}
-
-.btn-primary {
-  background-color: var(--color-primary);
-  color: var(--text-on-primary);
-}
-
-.btn-primary:hover {
-  background-color: var(--color-primary-hover);
-}
-
-.btn-secondary {
-  background-color: var(--color-secondary);
-  color: var(--text-on-primary);
-}
-
-.btn-secondary:hover {
-  background-color: var(--color-secondary-hover);
-}
-
-.btn-danger {
-  background-color: var(--color-error);
-  color: var(--text-on-error);
-}
-
-.btn-danger:hover {
-  background-color: var(--color-danger-hover);
-}
-
 /* Emergency control button styles */
 .control-button.emergency-kill {
   background-color: var(--color-error);
@@ -1844,193 +1660,6 @@ export default {
   background-color: var(--color-success-hover);
 }
 
-/* Command confirmation modal styles */
-.confirmation-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--overlay-backdrop);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-popover);
-  backdrop-filter: blur(2px);
-}
-
-.confirmation-modal {
-  background-color: var(--terminal-chrome-bg);
-  color: var(--terminal-text);
-  padding: var(--spacing-0);
-  border-radius: var(--radius-xl);
-  max-width: 600px;
-  width: 90%;
-  box-shadow: var(--shadow-lg);
-  border: 1px solid var(--terminal-border);
-}
-
-.confirmation-modal.emergency {
-  border-color: var(--color-error);
-  box-shadow: 0 10px 30px var(--color-danger-bg);
-}
-
-.modal-header {
-  padding: var(--spacing-5) var(--spacing-6) var(--spacing-4) var(--spacing-6);
-  border-bottom: 1px solid var(--terminal-border);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-}
-
-.modal-title {
-  margin: var(--spacing-0);
-  color: var(--color-warning);
-  font-size: var(--text-lg);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.confirmation-modal.emergency .modal-title {
-  color: var(--terminal-ansi-red);
-}
-
-.modal-content {
-  padding: var(--spacing-6);
-}
-
-.command-preview {
-  background-color: var(--terminal-chrome-bg-alt);
-  border: 1px solid var(--terminal-border);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-4);
-  margin-bottom: var(--spacing-5);
-}
-
-.command-label {
-  font-size: var(--text-xs);
-  color: var(--terminal-text-muted);
-  margin-bottom: var(--spacing-2);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.command-text {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: var(--text-sm);
-  color: var(--terminal-ansi-cyan);
-  background-color: var(--bg-dark);
-  padding: var(--spacing-3);
-  border-radius: var(--radius-md);
-  border-left: 4px solid var(--color-warning);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.risk-assessment {
-  margin-bottom: var(--spacing-5);
-}
-
-.risk-level {
-  padding: var(--spacing-2) var(--spacing-3);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  margin-bottom: var(--spacing-3);
-}
-
-.risk-level.low {
-  background-color: var(--color-success-bg);
-  color: var(--color-success);
-  border: 1px solid var(--color-success);
-}
-
-.risk-level.moderate {
-  background-color: var(--color-warning-bg);
-  color: var(--color-warning);
-  border: 1px solid var(--color-warning);
-}
-
-.risk-level.high {
-  background-color: var(--terminal-ansi-red-bg);
-  color: var(--terminal-ansi-red);
-  border: 1px solid var(--terminal-ansi-red);
-}
-
-.risk-level.critical {
-  background-color: var(--color-danger-bg);
-  color: var(--color-error-light);
-  border: 1px solid var(--color-error);
-  animation: pulse-danger 2s infinite;
-}
-
-.risk-reasons {
-  color: var(--terminal-text-dim);
-}
-
-.risk-reason {
-  margin-bottom: var(--spacing-1);
-  font-size: var(--text-sm);
-}
-
-.confirmation-message {
-  color: var(--terminal-text-dim-strong);
-}
-
-.confirmation-message p {
-  margin-bottom: var(--spacing-3);
-}
-
-.confirmation-message ul {
-  margin: var(--spacing-3) var(--spacing-0);
-  padding-left: var(--spacing-5);
-}
-
-.confirmation-message li {
-  margin-bottom: var(--spacing-1-5);
-  color: var(--terminal-text-dim);
-}
-
-.emergency-warning {
-  color: var(--terminal-ansi-red);
-}
-
-.emergency-warning p {
-  margin-bottom: var(--spacing-3);
-  font-weight: 500;
-}
-
-.process-item {
-  background-color: var(--terminal-chrome-bg-alt);
-  padding: var(--spacing-2) var(--spacing-3);
-  border-radius: var(--radius-default);
-  margin-bottom: var(--spacing-1);
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: var(--text-sm);
-  color: var(--terminal-ansi-cyan);
-}
-
-.modal-actions {
-  display: flex;
-  gap: var(--spacing-3);
-  justify-content: flex-end;
-  padding: var(--spacing-5) var(--spacing-6);
-  border-top: 1px solid var(--terminal-border);
-  background-color: var(--terminal-chrome-bg-actions);
-  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-}
-
-/* Enhanced animations */
-@keyframes pulse-danger {
-  0%, 100% {
-    box-shadow: 0 0 0 0 var(--terminal-shadow-danger);
-  }
-  50% {
-    box-shadow: 0 0 0 8px var(--terminal-shadow-danger-fade);
-  }
-}
-
 /* Process status indicators */
 .line-system_message {
   color: var(--terminal-ansi-purple);
@@ -2049,101 +1678,6 @@ export default {
 .line-command.critical {
   border-left: 3px solid var(--color-error);
   background-color: var(--color-danger-bg);
-}
-
-/* Workflow Step Modal Styles */
-.confirmation-modal.workflow-step {
-  max-width: 700px;
-  border-color: var(--color-info);
-  box-shadow: 0 10px 30px var(--color-info-bg);
-}
-
-.workflow-step-info {
-  text-align: left;
-}
-
-.step-counter {
-  background-color: var(--color-info);
-  color: var(--text-on-primary);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-2xl);
-  display: inline-block;
-  font-size: var(--text-xs);
-  font-weight: 600;
-  margin-bottom: var(--spacing-4);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.step-description h4 {
-  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2) var(--spacing-0);
-  color: var(--color-info);
-  font-size: var(--text-base);
-  font-weight: 600;
-}
-
-.step-description p {
-  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4) var(--spacing-0);
-  color: var(--terminal-text-dim);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-}
-
-.workflow-options {
-  background-color: var(--terminal-chrome-bg-alt);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-4);
-  margin-top: var(--spacing-5);
-  border-left: 4px solid var(--color-info);
-}
-
-.option-info p {
-  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3) var(--spacing-0);
-  color: var(--color-info);
-  font-weight: 600;
-}
-
-.option-info ul {
-  margin: var(--spacing-0);
-  padding-left: var(--spacing-5);
-  color: var(--terminal-text-dim);
-}
-
-.option-info li {
-  margin-bottom: var(--spacing-2);
-  font-size: var(--text-sm);
-  line-height: 1.4;
-}
-
-.option-info li strong {
-  color: var(--terminal-text);
-}
-
-.workflow-actions {
-  justify-content: space-between;
-  padding: var(--spacing-5) var(--spacing-6);
-}
-
-.btn-success {
-  background-color: var(--color-success);
-  color: var(--text-on-success);
-  border: 1px solid var(--color-success-hover);
-}
-
-.btn-success:hover {
-  background-color: var(--color-success-hover);
-  border-color: var(--color-success-dark);
-}
-
-.btn-warning {
-  background-color: var(--color-warning);
-  color: var(--text-on-warning);
-  border: 1px solid var(--color-warning-hover);
-}
-
-.btn-warning:hover {
-  background-color: var(--color-warning-hover);
-  border-color: var(--color-warning-dark);
 }
 
 /* Animation for active automation state */

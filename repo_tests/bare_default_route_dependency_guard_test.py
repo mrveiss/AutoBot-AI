@@ -64,10 +64,11 @@ from pathlib import Path
 from typing import Iterator, List, Tuple
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = repo_root()
 
 _ROUTE_METHODS = frozenset({"get", "post", "put", "delete", "patch", "websocket", "options", "head"})
 

@@ -14,6 +14,9 @@ FROM python:${PYTHON_VERSION}-slim-bookworm AS deps
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
+# apt retries, and an index failure is fatal at `apt-get update` (#16291)
+COPY docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
+
 # Install build deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl \
@@ -37,6 +40,9 @@ FROM python:${PYTHON_VERSION}-slim-bookworm AS production
 ARG PYTHON_VERSION=3.14
 
 ENV DEBIAN_FRONTEND=noninteractive
+
+# apt retries, and an index failure is fatal at `apt-get update` (#16291)
+COPY docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
 
 # Install runtime deps (ansible for node provisioning)
 RUN apt-get update && apt-get install -y --no-install-recommends \

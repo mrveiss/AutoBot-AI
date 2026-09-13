@@ -37,8 +37,9 @@ from pathlib import Path
 import jinja2
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 
 _BACKEND_TEMPLATE = _ANSIBLE_ROOT / "roles" / "backend" / "templates" / "autobot-backend.service.j2"

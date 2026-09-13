@@ -22,8 +22,7 @@ from __future__ import annotations
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
-
+from repo_tests._paths import repo_root
 from repo_tests.declared_distributions import (
     MANIFEST_PATTERNS,
     SKIP_PARTS,
@@ -32,7 +31,9 @@ from repo_tests.declared_distributions import (
     declared_distributions,
 )
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from autobot_shared.paths import scrubbed_git_env
+
+_REPO_ROOT = repo_root()
 
 
 def _tracked_manifests() -> set[str]:

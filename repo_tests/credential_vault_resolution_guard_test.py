@@ -74,15 +74,15 @@ same PR) and ``initialization/lifespan.py`` (an existing, allowlisted gap).
 from __future__ import annotations
 
 import re
-import subprocess  # nosec B404  # fixed argv (git ls-files), no shell, no caller input
 from pathlib import Path
 
+from repo_tests._paths import repo_root
 from repo_tests.credential_vault_prose_strip import UnparseableSourceError, strip_prose
 from repo_tests.credential_vault_resolution_allowlist import ALLOWLIST
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 SSOT_CONFIG = REPO_ROOT / "autobot_shared" / "ssot_config.py"
 
 #: Alias suffixes that mark a ssot_config field as credential-shaped. ``_PASS`` is
@@ -236,14 +236,7 @@ def find_direct_reads(text: str, fields: dict[str, str]) -> list[tuple[str, int,
 
 
 def _tracked_python_files() -> list[str]:
-    out = subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "ls-files", "*.py"],
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    ).stdout
-    return [line for line in out.splitlines() if line]
+    return tracked_paths(REPO_ROOT, "*.py")
 
 
 def _is_production_file(rel_path: str) -> bool:
@@ -396,8 +389,8 @@ def test_nested_submodel_access_is_rejected() -> None:
 def test_get_config_import_and_chained_call_are_rejected() -> None:
     """A file that only imports ``get_config`` (never ``config``) is not skipped.
 
-    Reproduces ``initialization/lifespan.py:1353``'s unassigned chained-call shape
-    (``get_config().field``, no local variable at all) -- the other blind spot the
+    Reproduces the unassigned chained-call shape in ``initialization/lifespan.py``'s
+    ``_init_slm_client`` (``get_config().field``, no local variable at all) -- the other blind spot the
     original single-import-form gate missed.
     """
     fields = {"slm_auth_token": "SLM_AUTH_TOKEN"}

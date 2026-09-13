@@ -502,7 +502,10 @@ export type SystemHealth = DiagnosticsReport['system_health']
 export type IssueSeverity = DiagnosticIssue['severity']
 
 // Centralized common types
-export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+// #14993: re-exported from the generated canonical union. This was a hand-written
+// upper-case copy -- the enum member NAME where the VALUE belongs -- so the compiler
+// rejected a correctly-cased value. It had no importers; the re-export keeps the name.
+export type { RiskLevel } from './_generated/workflow'
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
 
 // ============================================================================

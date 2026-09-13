@@ -6,19 +6,28 @@
 /**
  * Locale Parity Tests
  *
- * Asserts that every non-English locale file has exactly the same set of
- * leaf translation keys as `en.json` — no missing keys, no extra (stale)
- * keys.
+ * Asserts that no non-English locale file carries a leaf key `en.json` does
+ * not define. A locale may lag `en.json`; it may never drift ahead of it.
  *
  * `en.json` is the source of truth: every translation key the application
- * uses MUST be defined in en.json first. Other locales are translations
- * of those keys and should drift neither ahead (stale keys removed from
- * en.json but lingering in translations) nor behind (untranslated keys).
+ * uses MUST be defined in en.json first.
  *
- * Issue #6498: Locale files have drifted from en.json — fa/he/ur each
- * carry 12 stale `nav.*` keys; ar/de/es/fr/lv/pl/pt each carry 1 stale
- * `knowledge.search` key. This test prevents future drift by failing CI
- * whenever a locale's leaf-key set differs from en.json's.
+ * Issue #6498: Locale files had drifted ahead of en.json — fa/he/ur each
+ * carried 12 stale `nav.*` keys; ar/de/es/fr/lv/pl/pt each carried 1 stale
+ * `knowledge.search` key. A stale key is dead weight nothing can render, and
+ * that is what this test still prevents.
+ *
+ * Issue #16063: the mirror assertion — no MISSING keys — used to live here
+ * too, and it made every UI change a ten-locale translation change. It was
+ * stricter than the application: `i18n/index.ts` sets `fallbackLocale: 'en'`,
+ * so a key absent from `de.json` already renders the English string. English
+ * ships first; translation follows on its own cadence.
+ *
+ * Lagging is therefore allowed but NOT unmeasured. A key missing from a
+ * locale counts as untranslated in `repo_tests/i18n_untranslated_ratchet_test.py`,
+ * which owns the per-locale debt figure and fails when it grows. Do not
+ * re-derive that count here — two definitions of the same debt would
+ * eventually disagree about what "translated" means.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -79,15 +88,7 @@ describe('locale parity with en.json', () => {
 
   describe.each(NON_EN_LOCALES)('%s.json', (code, tree) => {
     const localeKeys = flattenLeafKeys(tree)
-    const missing = [...enKeys].filter((k) => !localeKeys.has(k)).sort()
     const extra = [...localeKeys].filter((k) => !enKeys.has(k)).sort()
-
-    it(`has no missing keys (keys present in en.json but absent in ${code}.json)`, () => {
-      expect(
-        missing,
-        `${code}.json is missing ${missing.length} key(s) defined in en.json:\n  ${missing.join('\n  ')}`,
-      ).toEqual([])
-    })
 
     it(`has no extra keys (keys absent from en.json but present in ${code}.json)`, () => {
       expect(

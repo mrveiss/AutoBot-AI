@@ -26,4 +26,12 @@
 #
 # tests/check_ansible_core_pinned.py fails the suite when the interpreter CI
 # actually invokes disagrees with this file, so the pin cannot go stale unread.
+# Dependabot is FROZEN on this pin (#15983): `.github/dependabot.yml`'s "/" pip
+# block carries `ansible-core` with `versions: [">2.17.14"]`, an unbounded range
+# rather than a semver-major cap, because no automated bump of this line is ever
+# correct -- it tracks what the control node runs, so the hosts move first. It was
+# proposed twice on 2026-09-07 (#15975, #15980) before that entry existed.
+#
+# Moving it deliberately means: move the fleet, then this line, then the ignore's
+# lower bound in dependabot.yml -- all three, or the freeze silently stops matching.
 ansible-core==2.17.14

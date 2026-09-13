@@ -948,7 +948,7 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
         raise
     finally:
         if key_record is not None:
-            await _revoke_run_key(agent_id, key_record.id)
+            await _revoke_run_key(agent_id, key_record.id, str(agent_config.get("company_id") or "") or None)
 
     # GH#9773: RATE_LIMITED is scheduler-internal — translate to ProviderRateLimited
     # so the GH#8204 backoff path applies uniformly for registry adapters.
@@ -1031,12 +1031,12 @@ async def _issue_run_key(agent_id: str, company_id: str) -> tuple[Any, Optional[
         return None, None
 
 
-async def _revoke_run_key(agent_id: str, key_id: uuid.UUID) -> None:
-    """Revoke an ephemeral run-scoped key (best-effort)."""
+async def _revoke_run_key(agent_id: str, key_id: uuid.UUID, company_id: Optional[str] = None) -> None:
+    """Revoke an ephemeral run-scoped key, company-scoped (#13771, #15930)."""
     factory = get_async_session_factory()
     try:
         async with factory() as session:
-            await ApiKeyService().revoke_key(session, agent_id=agent_id, key_id=key_id)
+            await ApiKeyService().revoke_key(session, agent_id=agent_id, key_id=key_id, company_id=company_id)
     except Exception:
         logger.exception("Failed to revoke ephemeral heartbeat key %s for agent %s", key_id, agent_id)
 

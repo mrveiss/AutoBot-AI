@@ -43,10 +43,11 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflows")
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 
 # Matches a line that actually RUNS the compiler against a tsconfig project —

@@ -103,10 +103,11 @@ from pathlib import Path
 from typing import Dict, FrozenSet, List, Set, Tuple
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
 
 _TARGET_NAME = "with_error_handling"

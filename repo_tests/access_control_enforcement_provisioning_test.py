@@ -39,10 +39,11 @@ from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
 from services.feature_flags import PROVISIONED_ENFORCEMENT_MODE_DEFAULT, EnforcementMode
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _SLM_ROOT = _REPO_ROOT / "autobot-slm-backend"
 _ANSIBLE = _SLM_ROOT / "ansible"
 _ROLE = _ANSIBLE / "roles" / "access_control"

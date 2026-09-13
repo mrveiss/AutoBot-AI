@@ -100,7 +100,7 @@ def _patched_limiter(mock_rate_limiter):
     """Patch the endpoint module's rate limiter constructor (#15743: moved
     to ``password_change.py``)."""
     return patch(
-        "api.user_management.password_change.PasswordChangeRateLimiter",
+        "api.user_management.password_change.TargetedPasswordChangeRateLimiter",
         return_value=mock_rate_limiter,
     )
 
@@ -470,7 +470,7 @@ class TestRequireCurrentCannotArriveFromTheWire:
             seen.update(kwargs)
 
         with patch(
-            "api.user_management.password_change.PasswordChangeRateLimiter",
+            "api.user_management.password_change.TargetedPasswordChangeRateLimiter",
             return_value=AsyncMock(check_rate_limit=AsyncMock(), record_attempt=AsyncMock()),
         ):
             client, caller = self._client(_record)

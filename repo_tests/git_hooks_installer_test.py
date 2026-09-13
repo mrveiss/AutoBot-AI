@@ -28,10 +28,11 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _INSTALLER = _REPO_ROOT / "scripts" / "install-git-hooks.sh"
 _TEMPLATES = _REPO_ROOT / "tools" / "git-hooks"
 _MANAGED = ("pre-commit", "pre-push")

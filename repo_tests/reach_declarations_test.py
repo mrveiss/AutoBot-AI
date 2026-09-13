@@ -18,23 +18,32 @@ not declared is invisible to this file, which is what `MIN_DECLARATIONS` is for.
 from __future__ import annotations
 
 import importlib
+import os
 import pkgutil
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
-
-from autobot_shared.paths import scrubbed_git_env
 from repo_tests._reach import REGISTRY, Reach, ReachFloorError, declare
 
+from autobot_shared.paths import scrubbed_git_env
+
 _REPO_TESTS = Path(__file__).resolve().parent
+_REPO_ROOT = _REPO_TESTS.parent
 
 #: A **shrink-guard, not a reach floor.** At the current adoption count this
 #: cannot fail until someone *removes* a declaration — which is worth having,
 #: since every other guard will hang off this mechanism, but it measures no
 #: coverage and must not be read as if it did. Ratchets **up** only, and should
 #: be raised as adoption grows or it becomes the thing it was built to prevent.
-MIN_DECLARATIONS = 2
+MIN_DECLARATIONS = 4
+
+
+def _scrubbed_env() -> dict[str, str]:
+    """`git grep` with the ambient git env removed (#15926 discipline)."""
+    return {k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "GIT_DIR"))}
+
 
 #: Guard modules that could not be imported, recorded rather than discarded.
 IMPORT_FAILURES: dict[str, str] = {}
@@ -201,4 +210,88 @@ def test_no_guard_failed_to_import() -> None:
     assert not IMPORT_FAILURES, (
         "these guard modules could not be imported, so their declarations (if any) are missing "
         f"from the registry: {IMPORT_FAILURES}"
+    )
+
+
+@pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
+def test_every_declared_floor_is_pinned_to_its_population(reach: Reach) -> None:
+    """A floor far below its population catches only total collapse (#15928).
+
+    `test_no_guard_can_succeed_against_an_empty_tree` proves a floor *fires*.
+    It cannot prove the floor is **tight**, and every floor examined in review
+    during #15896, #15901 and #15913 fired correctly against an empty tree
+    while tolerating the loss of most of a real one.
+
+    Total collapse is not the failure that happens. Partial loss is: a glob
+    narrowed, a directory moved, a change propagated to some call sites and not
+    others. A floor of 3,000 against 5,241 files detects only the loss of the
+    one tree holding 75% of them; the other five can vanish silently. That is
+    the shape this asserts against.
+
+    The rule is equality by default -- `growth=0` -- because a floor that sits
+    at its population turns any shrinkage into a failure, and shrinking a
+    guarded population is exactly the event worth a deliberate line in a diff.
+    A population that ordinary work grows declares `growth=N` and says so where
+    a reviewer sees it, rather than being pinned low and quietly meaning
+    nothing.
+
+    **This measures `discover`, and one floor serves two populations.**
+    `examined()` bounds what discovery returned; `completed()` bounds what the
+    guard finished, which is lower whenever files are skipped as unreadable or
+    unparseable -- 262 of 5,599 for `audio-extension-allowlist`. A floor that
+    satisfies this test can still fail the guard's own `completed()` check, and
+    the first version of this ratchet did exactly that: the pre-push hook
+    rejected it. `skips` now carries that gap under its own name, so `growth`
+    means only what it says and each number can be chosen against one quantity.
+
+    So this check is necessary and not sufficient. It catches a floor far below
+    its population; `completed()` remains the binding constraint. Giving the
+    two populations separate floors is the fuller fix and is not this change.
+    """
+    # The predicate lives on Reach now (#15928), so the rule belongs to declare()
+    # rather than to whoever remembers to enumerate declarations. This test's job
+    # is to DISCHARGE that obligation for every declaration -- see
+    # test_every_declaration_is_reached_by_this_sweep for the other half, which
+    # is what stops an unenumerated declaration from going unchecked.
+    reach.verify_floor(_REPO_ROOT)
+
+
+def test_every_declaration_is_reached_by_this_sweep() -> None:
+    """A declaration this file cannot see has an unchecked floor (#15928).
+
+    `_import_every_guard` walks `pkgutil.iter_modules([_REPO_TESTS])`, which
+    reaches top-level `repo_tests` modules and nothing else. A `declare()` in a
+    subpackage -- or in `tools/`, or anywhere a future guard lands -- registers
+    nothing here, so its floor is never verified and its absence looks identical
+    to having no declarations to verify.
+
+    That is the defect this module exists to catch, applied to the module
+    itself: the sweep must know what it did not reach.
+    """
+    # `git grep`, not a Python walk over every file. The walk read ~100 modules
+    # per run and pushed the pre-push budget past its 132s ceiling -- and a guard
+    # that makes the verification too slow to run is a guard that gets bypassed.
+    found = subprocess.run(
+        ["git", "grep", "-hoE", r"declare\(\s*[\"']([^\"']+)", "--", "repo_tests/*.py"],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_ROOT,
+        env=_scrubbed_env(),
+        check=False,
+    )
+    declared_names = {
+        match.group(1)
+        for line in found.stdout.splitlines()
+        if (match := re.search(r"""declare\(\s*["']([^"']+)""", line))
+    }
+
+    swept = set(REGISTRY) | {name for name in declared_names if name.startswith("self-check::")}
+    unreached = sorted(declared_names - swept)
+
+    assert not unreached, (
+        "declare() call(s) this sweep never imported, so their floors are unverified:\n  "
+        + "\n  ".join(unreached)
+        + "\n\n`pkgutil.iter_modules` reaches top-level repo_tests modules only. Either move "
+        "the declaration to a top-level module, or widen the import walk -- do not leave it "
+        "registered somewhere nothing enumerates."
     )

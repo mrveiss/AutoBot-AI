@@ -24,13 +24,13 @@ other, which is why nothing caught the mismatch.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml")
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _ANSIBLE = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 
 #: A requirements line pip resolves against the cwd rather than the file.

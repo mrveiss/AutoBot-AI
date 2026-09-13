@@ -28,8 +28,9 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 BACKEND = REPO_ROOT / "autobot-backend"
 REGISTRY_DIR = BACKEND / "initialization" / "router_registry"
 

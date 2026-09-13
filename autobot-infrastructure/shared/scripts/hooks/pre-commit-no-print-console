@@ -59,6 +59,13 @@ source "$SCRIPT_DIR/lib/_common.sh" || {
 
 VIOLATIONS=0
 
+# #16008: the exemption list is built inside get_staged_python_files, whose
+# output main() captures with command substitution -- a SUBSHELL. A plain
+# variable would be set in the child and lost, exactly as this file already
+# documents for _strip_significant's `exit`. A file crosses the boundary.
+EXEMPTED_CLI_FILE="$(mktemp)"
+trap 'rm -f "$EXEMPTED_CLI_FILE"' EXIT
+
 # Normalize a line via lib/strip-significant.awk — see that file for the
 # per-language rules and the keep_comment contract. `sq` is passed in rather
 # than embedded so this invocation never has to quote a literal single quote.
@@ -182,17 +189,67 @@ report_violation() {
 # identical. Captured separately so get_staged_files' non-zero return
 # propagates (set -e turns that into a hard stop); the later filter chain's
 # `|| true` still only ever tolerates an empty *result*, not a git error.
+# Roots whose Python files may be standalone command-line tools, where stdout IS
+# the interface and a logger would make the tool unusable (#15730).
+#
+# #16008: membership here is NOT enough. A root is only the *eligible* set; a
+# file inside one is exempt only if it is actually a CLI entry point, which
+# `is_cli_entry_point` decides by looking. The distinction matters because the
+# previous rule -- a bare path prefix -- had a population nobody could read:
+# `scripts/` was not listed at all, yet 15 of its files carried 107 `print(`
+# calls and passed CI regardless, because the CI wrapper runs
+# --changed-lines-only and an untouched line is never examined. That is an
+# exemption with no allowlist, no baseline and no comment: it existed only as
+# the intersection of the scan's scope and nobody having edited those lines,
+# so it could not go stale, be audited, or be argued with. Worse, it treated a
+# NEW CLI script as a violation while fifteen identical old ones sat in the
+# tree.
+CLI_OUTPUT_ROOTS='^scripts/'
+
+# Whether a Python file is a standalone entry point rather than an imported
+# module. Deliberately a property the hook can TEST, not a list it has to be
+# told: a path list is exactly what let the previous exemption go unrecorded.
+#
+# PARSED, not grepped. `grep -qE '^if __name__ == .__main__.:'` matches raw
+# text, so a library module whose DOCSTRING contains that line at column 0
+# became exempt and its real print() calls went unscanned -- #16011's finding
+# (a line-oriented scanner cannot see that a line is inside a string) landing
+# inside the fix that cited it. The AST answers the question actually being
+# asked: is there a top-level `if __name__ == "__main__"` NODE.
+#
+# Verified against the tree before being trusted (#16008): of 48 tracked
+# scripts/*.py, all 15 that call print() have this block, and the two non-test
+# library modules that do not -- child_ref.py and python_file_size_known_large.py
+# -- call print() zero times. The property separates the population exactly,
+# which is why it can replace the prefix rather than merely widen it.
+is_cli_entry_point() {
+    python3 "$SCRIPT_DIR/lib/is_cli_entry_point.py" "$1" 2>/dev/null
+}
+
 get_staged_python_files() {
     local staged
     staged="$(get_staged_files '\.py$' "$@")" || return 1
-    printf '%s\n' "$staged" | \
+    local candidates
+    candidates="$(printf '%s\n' "$staged" | \
         grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
         grep -v -E '(_test\.py$|\.e2e_test\.py$|\.integration_test\.py$|\.performance_test\.py$)' | \
         grep -v -E '(conftest\.py$|test_.*\.py$)' | \
         grep -v -E '(autobot-infrastructure/)' | \
         grep -v -E '(code_analysis/)' | \
         grep -v -E '(ansible/)' | \
-        grep -v -E '(tools/lint/)' || true  # code_analysis, tools/lint: CLI output (#15730); ansible: doctest examples
+        grep -v -E '(tools/lint/)' || true)"  # code_analysis, tools/lint: CLI output (#15730); ansible: doctest examples
+    # Drop CLI entry points under a declared CLI root, and RECORD each drop.
+    # An exemption a reader cannot see is the defect this replaces, so the
+    # hook says which files it declined to scan and why, every run.
+    local file
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        if [[ "$file" =~ $CLI_OUTPUT_ROOTS ]] && is_cli_entry_point "$file"; then
+            printf '%s\n' "$file" >> "$EXEMPTED_CLI_FILE"
+            continue
+        fi
+        printf '%s\n' "$file"
+    done <<< "$candidates"
 }
 
 # Get TypeScript/Vue files to scan (production code only).
@@ -283,6 +340,16 @@ main() {
     local py_files ts_files
     py_files=$(get_staged_python_files "$@")
     ts_files=$(get_staged_ts_files "$@")
+
+    # #16008: say what was NOT scanned. The exemption this replaced was invisible
+    # -- it lived in the gap between the scan's scope and nobody editing those
+    # lines -- and an exemption a reader never meets cannot be argued with. A
+    # reviewer seeing this list can disagree with it; that is the whole change.
+    if [[ -s "$EXEMPTED_CLI_FILE" ]]; then
+        echo -e "${CYAN}Not scanned — CLI entry points under a declared CLI root (#16008):${NC}"
+        sed 's/^/  /' "$EXEMPTED_CLI_FILE"
+        echo ""
+    fi
 
     if [[ -z "$py_files" ]] && [[ -z "$ts_files" ]]; then
         echo -e "${GREEN}No production files staged for commit.${NC}"

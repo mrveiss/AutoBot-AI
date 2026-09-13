@@ -72,6 +72,7 @@ from llc.services.membership_service import (
     MembershipService,
 )
 from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
+from llc.services.org_chart_rows import assigned_counts_by_agent, latest_runs_by_agent
 from llc.services.portability import PortabilityService
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
@@ -606,7 +607,7 @@ async def list_members(
     return [
         {
             **_to_member_read(m),
-            "display_name": names.get(m.user_id),
+            "display_name": resolve_display_name(names.get(m.user_id), None, str(m.user_id)),
             # A membership whose user row is missing entirely resolves to
             # False: nothing is known about them, and unknown must not read as
             # available.
@@ -1151,11 +1152,9 @@ async def get_org_chart(
     from the self-referencing ``reports_to`` edges. Tenant access is enforced
     via :func:`require_org_context`.
     """
-    from sqlalchemy import func, select
+    from sqlalchemy import select
 
     from llc.models.budget import LLCAgentBudget
-    from llc.models.heartbeat_run import LLCHeartbeatRun
-    from llc.models.work_item import LLCWorkItem
     from models.agent_org import AgentOrgNode
 
     cid = str(company_id)
@@ -1173,56 +1172,9 @@ async def get_org_chart(
     )
     budgets = {b.agent_id: b for b in budget_rows}
 
-    # 3. Latest heartbeat run per agent (status + liveness).
-    subq = (
-        select(
-            LLCHeartbeatRun.agent_id,
-            func.max(LLCHeartbeatRun.created_at).label("latest_at"),
-        )
-        .where(LLCHeartbeatRun.company_id == company_id)
-        .group_by(LLCHeartbeatRun.agent_id)
-        .subquery()
-    )
-    latest_runs = (
-        (
-            await session.execute(
-                select(LLCHeartbeatRun).join(
-                    subq,
-                    (LLCHeartbeatRun.agent_id == subq.c.agent_id) & (LLCHeartbeatRun.created_at == subq.c.latest_at),
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    runs = {r.agent_id: r for r in latest_runs}
-
-    # 4. Assigned work-item counts per agent — single grouped query, no N+1.
-    #    "Assigned" means the item has an assignee_agent_id matching the
-    #    AgentOrgNode.id (UUID PK) AND the item is not yet in a terminal state.
-    #    We join through AgentOrgNode so the result is keyed by AgentOrgNode.agent_id
-    #    (the logical string slug used everywhere else), not the UUID PK.  This
-    #    correctly handles hire-generated slug agent_ids that differ from the PK.
-    #    GH#9980: Use enum members directly so PG serialises to lowercase values
-    #    (sa.cast to String was a workaround for the test harness's _rebind_enums
-    #    helper — fixing production code to use enum members and letting the
-    #    harness handle the rebind is the correct approach; see #9980).
-    assign_q = (
-        select(
-            AgentOrgNode.agent_id,
-            func.count(LLCWorkItem.id).label("cnt"),
-        )
-        .join(AgentOrgNode, AgentOrgNode.id == LLCWorkItem.assignee_agent_id)
-        .where(
-            LLCWorkItem.company_id == company_id,
-            LLCWorkItem.assignee_agent_id.isnot(None),
-            LLCWorkItem.status.notin_(
-                [WorkItemStatus.DONE, WorkItemStatus.CANCELLED]
-            ),  # noqa: E501 — see GH#9980 (enum NAME-vs-value drift)
-        )
-        .group_by(AgentOrgNode.agent_id)
-    )
-    assigned_counts: Dict[str, int] = {row.agent_id: row.cnt for row in (await session.execute(assign_q)).all()}
+    # 3-4. Latest heartbeat and unfinished work per agent (see org_chart_rows).
+    runs = await latest_runs_by_agent(session, company_id)
+    assigned_counts = await assigned_counts_by_agent(session, company_id)
 
     # Compose flat nodes — per-row composition lives in `_compose_agent_node`
     # (#14184's extraction), mirroring the human branch's `_compose_human_nodes`.

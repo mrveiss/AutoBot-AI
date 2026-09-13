@@ -20,7 +20,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -3438,7 +3438,7 @@ async def _colocated_node_ids(slm_node_id: str) -> List[str]:
     return sorted(node_ids)
 
 
-async def _ansible_self_update(node_id: str) -> None:
+async def _ansible_self_update(node_id: str, on_failure: Optional[Callable[[str], None]] = None) -> None:
     """Run update-all-nodes.yml against this machine to update all deployed roles (#9073).
 
     Covers every role Ansible knows about (backend, frontend, shared, agent,
@@ -3455,25 +3455,26 @@ async def _ansible_self_update(node_id: str) -> None:
     Issue #15475: ``--limit`` includes every Node row co-located on this same
     physical machine, not just the SLM's own node_id, so a co-located
     frontend (or any other co-located role) is refreshed by the same run.
+    Issue #16610: ``on_failure`` gets the reason when the run fails before the
+    restart, so the update-all stage that fired it ends FAILED, not RUNNING.
     """
     executor = get_playbook_executor()
     limit = ["localhost", *await _colocated_node_ids(node_id)]
     try:
-        result = await executor.execute_playbook(
-            playbook_name="update-all-nodes.yml",
-            limit=limit,
-            detach=True,
-        )
-        if not result["success"]:
-            logger.error(
-                "Ansible full-machine update failed for %s: %s", node_id, summarize_playbook_failure(result["output"])
-            )
-            # C2-a: playbook failed before restart — clear plan so it never auto-fires
-            await _clear_resume_plan()
-        else:
-            logger.info("Ansible full-machine update complete for %s", node_id)
-            # Update node version in DB (Issue #9224)
-            await _update_fleet_node_version(node_id)
+        result = await executor.execute_playbook(playbook_name="update-all-nodes.yml", limit=limit, detach=True)
+        failure = None if result["success"] else summarize_playbook_failure(result["output"])
+    except Exception as exc:
+        failure = f"Ansible full-machine update error: {exc}"
+    if failure is not None:
+        logger.error("Ansible full-machine update failed for %s: %s", node_id, failure)
+        # C2-a: failed before the restart — clear the plan so it never auto-fires
+        await _clear_resume_plan()
+        if on_failure is not None:
+            on_failure(failure)
+        return
+    logger.info("Ansible full-machine update complete for %s", node_id)
+    try:
+        await _update_fleet_node_version(node_id)  # Issue #9224
     except Exception as exc:
         logger.error("Ansible full-machine update error for %s: %s", node_id, exc)
         await _clear_resume_plan()
@@ -5184,7 +5185,9 @@ async def _run_slm_stage(
 
         _stage_log(stage, f"Firing Ansible self-update for {slm_node.node_id} (fire-and-forget)")
         stage.message = "Ansible SLM self-update queued; service will restart"
-        fire_and_forget(_ansible_self_update(slm_node.node_id), name=f"ansible-self-update:{slm_node.node_id}")
+        # #16610: a run that fails before the restart ends this stage FAILED instead of leaving it RUNNING
+        fail = functools.partial(_fail_fleet_stage, job, stage)
+        fire_and_forget(_ansible_self_update(slm_node.node_id, fail), name=f"ansible-self-update:{slm_node.node_id}")
         return True
 
     except Exception as exc:
@@ -5203,7 +5206,7 @@ def _fail_fleet_stage(
     stage: UpdateAllStage,
     reason: str,
 ) -> None:
-    """Mark fleet stage and job as failed with a common reason string."""
+    """Mark *stage* and its job failed with one reason string (any update-all stage)."""
     stage.status = _StageStatus.FAILED
     stage.message = reason[:300]
     stage.completed_at = utc_timestamp()
@@ -5588,6 +5591,8 @@ async def _await_self_update_completion(job: "UpdateAllJob", since: Optional[str
     deadline = time.monotonic() + _SELF_UPDATE_WATCH_TIMEOUT_SECONDS
     while True:
         await asyncio.sleep(_SELF_UPDATE_WATCH_POLL_SECONDS)
+        if job.status == "failed":  # #16610: the fired run failed before the restart; nothing will complete
+            return None
         activity = await read_deploy_activity()
         # #14703 interaction: waiting IS progress. This loop runs up to
         # _SELF_UPDATE_WATCH_TIMEOUT_SECONDS (3600s default) and the staleness
@@ -5641,17 +5646,14 @@ async def _reconcile_self_update_stage(
     completed_at = await _await_self_update_completion(job, stage.started_at)
 
     if completed_at is None:
+        if job.status == "failed":  # #16610: the fired run already failed it -- keep that reason
+            return
         reason = (
             f"self-update play reported no completion within {_SELF_UPDATE_WATCH_TIMEOUT_SECONDS}s — "
             "not continuing to the fleet stage"
         )
         logger.error("update-all: %s", reason)
-        stage.status = _StageStatus.FAILED
-        stage.message = reason[:300]
-        stage.completed_at = utc_timestamp()
-        job.status = "failed"
-        job.failure_reason = reason[:300]
-        job.completed_at = utc_timestamp()
+        _fail_fleet_stage(job, stage, reason)
         await _clear_resume_plan()
         return
 
@@ -5670,12 +5672,7 @@ async def _reconcile_self_update_stage(
             f"{verdict.unreachable_hosts} unreachable host(s)"
         )
         logger.error("update-all: %s", reason)
-        stage.status = _StageStatus.FAILED
-        stage.message = reason[:300]
-        stage.completed_at = utc_timestamp()
-        job.status = "failed"
-        job.failure_reason = reason[:300]
-        job.completed_at = utc_timestamp()
+        _fail_fleet_stage(job, stage, reason)
         await _clear_resume_plan()
         return
 

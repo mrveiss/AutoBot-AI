@@ -165,7 +165,7 @@ def test_research_doc_with_issue_link_passes(repo: Path) -> None:
         ("no type here (#1234)", 1),
         ("feat(api): missing the issue ref", 1),
         # #14076: slashed scopes. The repo writes them for nested areas and 14
-        # of the last 400 commits on Dev_new_gui carry one, so the linter that
+        # of the last 400 commits on main carry one, so the linter that
         # rejected them was wrong and the commits were right. Both forms are
         # pinned -- widening a character class is easy to undo by accident, and
         # nothing covered either direction before.
@@ -179,7 +179,7 @@ def test_research_doc_with_issue_link_passes(repo: Path) -> None:
         ("fix(/llc): leading slash is not a scope (#1234)", 1),
         # #14076, same defect one step out: found by running the rule over real
         # history instead of its own fixtures. All three forms appear on
-        # Dev_new_gui and all three were rejected.
+        # main and all three were rejected.
         ("a11y(frontend): honour prefers-reduced-motion (#1234)", 0),
         ("test-guard(repo_tests): count tests that run nothing (#1234)", 0),
         ("docs(architecture,design): move the docs (#1234)", 0),

@@ -16,8 +16,39 @@ Claim lifecycle:
   2. renew_claim()   -- Lua EXPIRE guard; keeps TTL alive while agent works.
   3. release_claim() -- Lua DEL-if-owner; prevents stealing the delete.
 
+All three fail open: when Redis is unreachable or errors they return True, the
+value success returns, so a caller cannot tell a real grant, renewal or release
+from an assumed one. That is the intended trade -- dropping in-flight work on a
+Redis blip is the worse failure -- and for renewal and release it costs nothing
+today, because no production caller of either acts on the value. What does tell
+them apart is audit: every fail-open branch emits ``redis_unavailable`` or
+``redis_error`` (#16217).
+
 The in-memory dicts in DistributedAgentManager remain as an observability
 cache, not the source of truth for claim ownership.
+
+Not to be merged into ``autobot_shared.coordination.work_claims`` (#15957,
+owner ruling 2026-09-10). The two look like duplication and are not:
+
+* **This module claims the task itself.** ``work_claims`` claims the *work a
+  task touches* -- paths, kb, devices. Two agents can hold claims on different
+  scopes while working the same task, and one agent can hold a task while
+  touching scopes it never claimed. ``task`` is therefore a reserved kind in
+  that module rather than a valid one, and asking it for a ``task:`` scope
+  raises with a pointer back here.
+* **This module emits audit; that one cannot.** ``claim_task``,
+  ``renew_claim`` and ``release_claim`` reach ``services.audit.audit`` on every
+  outcome, including the fail-open ``redis_unavailable`` and ``redis_error``
+  (#16217). ``autobot_shared`` must not import from ``autobot-backend``, so an
+  adapter could not move emission down; it would leave a backend-side wrapper
+  still owning audit, signatures and tests. The same constraint already put
+  ``services/claim_yield.py`` (#15948) in this package rather than beside the
+  primitive it extends.
+
+The Lua an adapter could actually unify is only the release and renew scripts,
+a few lines each. ``work_claims``' acquire script has no counterpart here,
+because ``claim_task`` uses a plain ``SET NX EX``. That is not worth a migration
+across a live double-pickup guard.
 """
 
 from __future__ import annotations
@@ -64,11 +95,7 @@ async def claim_task(task_id: str, agent_id: str, ttl: int = _DEFAULT_TTL) -> bo
     """
     redis = await get_async_redis_client()
     if redis is None:
-        logger.warning(
-            "task_claim: Redis unavailable — allowing claim task=%s agent=%s (fail-open)",
-            task_id,
-            agent_id,
-        )
+        logger.warning("task_claim: Redis unavailable — allowing claim task=%s agent=%s (fail-open)", task_id, agent_id)
         _emit_audit("task.claim", agent_id, task_id, outcome="redis_unavailable")
         return True
     try:
@@ -93,10 +120,13 @@ async def renew_claim(task_id: str, agent_id: str, ttl: int = _DEFAULT_TTL) -> b
     """Extend TTL on an existing claim owned by agent_id.
 
     Returns True when the renewal succeeded, False when the key is gone or
-    owned by a different agent (claim was stolen or expired).
+    owned by a different agent (claim was stolen or expired). Also True when
+    Redis is unreachable or errors -- fail-open and audited, see the module
+    docstring.
     """
     redis = await get_async_redis_client()
     if redis is None:
+        _emit_audit("task.renew", agent_id, task_id, outcome="redis_unavailable")
         return True  # fail-open
     try:
         script = redis.register_script(_RENEW_LUA)
@@ -111,12 +141,8 @@ async def renew_claim(task_id: str, agent_id: str, ttl: int = _DEFAULT_TTL) -> b
         _emit_audit("task.renew", agent_id, task_id, outcome="ok" if renewed else "lost")
         return renewed
     except Exception:
-        logger.warning(
-            "task_claim: Redis error during renew task=%s agent=%s",
-            task_id,
-            agent_id,
-            exc_info=True,
-        )
+        logger.warning("task_claim: Redis error during renew task=%s agent=%s", task_id, agent_id, exc_info=True)
+        _emit_audit("task.renew", agent_id, task_id, outcome="redis_error")
         return True  # fail-open
 
 
@@ -124,10 +150,12 @@ async def release_claim(task_id: str, agent_id: str) -> bool:
     """Release the claim on task_id if still owned by agent_id.
 
     Returns True when the key was deleted, False when not owned (already
-    expired or stolen).
+    expired or stolen). Also True when Redis is unreachable or errors --
+    fail-open and audited, see the module docstring.
     """
     redis = await get_async_redis_client()
     if redis is None:
+        _emit_audit("task.release", agent_id, task_id, outcome="redis_unavailable")
         return True  # fail-open
     try:
         script = redis.register_script(_RELEASE_LUA)
@@ -142,12 +170,8 @@ async def release_claim(task_id: str, agent_id: str) -> bool:
         _emit_audit("task.release", agent_id, task_id, outcome="released" if released else "not_owned")
         return released
     except Exception:
-        logger.warning(
-            "task_claim: Redis error during release task=%s agent=%s",
-            task_id,
-            agent_id,
-            exc_info=True,
-        )
+        logger.warning("task_claim: Redis error during release task=%s agent=%s", task_id, agent_id, exc_info=True)
+        _emit_audit("task.release", agent_id, task_id, outcome="redis_error")
         return True  # fail-open
 
 

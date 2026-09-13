@@ -18,12 +18,13 @@ import json
 import time
 from typing import Any, Dict, List
 
-from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import TTL_1_HOUR
-
-# Issue #394: Import from architectural_analysis package
-from .architectural_analysis import (
+# Issue #394: Import from architectural_analysis package.
+# #15914: bare, not relative. Every one of the 14 other sibling imports in
+# this package is bare and every consumer imports this module as a top-level
+# name, so the relative form made it unimportable by its own callers -- and
+# `code_quality_dashboard`, which imports it, unimportable with it. No
+# sys.path made both forms work at once.
+from architectural_analysis import (
     ArchitecturalComponent,
     ArchitecturalIssue,
     ArchitecturalMetrics,
@@ -32,6 +33,10 @@ from .architectural_analysis import (
     IssueDetector,
     PatternDetector,
 )
+
+from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)
 
@@ -58,7 +63,13 @@ class ArchitecturalPatternAnalyzer:
             redis_client: Optional Redis client for caching
         """
         self.redis_client = redis_client  # Lazy init if None (#2725)
-        self.config = config
+        # #15914: `self.config = config` stood here. The class carried
+        # `from src.config import config` when it was written; #142 (2025-11-18)
+        # dropped the import and left the assignment, so every
+        # ArchitecturalPatternAnalyzer() raised NameError from that day on.
+        # Removed rather than re-imported: nothing in the repo reads
+        # `.config` off this object, so restoring the import would
+        # reinstate dead weight. Same call as #6733 and #14634.
 
         # Caching keys
         self.ARCHITECTURE_KEY = "architecture_analysis:components"
@@ -156,7 +167,10 @@ class ArchitecturalPatternAnalyzer:
         """
         return {
             "total_components": len(components),
-            "architectural_issues": len(issues),
+            # #15908: was also "architectural_issues", shadowed by the list
+            # below. Last-wins meant this count never reached a caller, and
+            # analyze_architecture.py printed the list where it wanted a number.
+            "architectural_issues_count": len(issues),
             "design_patterns_found": len(detected_patterns),
             "architecture_score": metrics.architecture_score,
             "analysis_time_seconds": analysis_time,
@@ -217,7 +231,7 @@ async def main():
     # Print summary
     print("\n=== Architectural Pattern Analysis Results ===")  # noqa: print
     print(f"Total components: {results['total_components']}")  # noqa: print
-    print(f"Architectural issues: {results['architectural_issues']}")  # noqa: print
+    print(f"Architectural issues: {results['architectural_issues_count']}")  # noqa: print
     print(f"Design patterns found: {results['design_patterns_found']}")  # noqa: print
     print(f"Architecture score: {results['architecture_score']}/100")  # noqa: print
     print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print

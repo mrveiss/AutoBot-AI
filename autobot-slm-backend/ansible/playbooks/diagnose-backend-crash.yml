@@ -20,7 +20,7 @@
     # explicitly so grepping backend_install_dir never turns up a second
     # meaning again.
     backend_deployed_root: /opt/autobot
-    backend_code_dir: /opt/autobot/autobot-user-backend
+    backend_code_dir: /opt/autobot/autobot-backend
     backend_log_dir: /var/log/autobot
     diagnostic_output_dir: /tmp/backend-diagnostics
 

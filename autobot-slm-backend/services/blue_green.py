@@ -32,6 +32,10 @@ from config import settings
 from models.database import BlueGreenDeployment, BlueGreenStatus, Node, NodeStatus
 from models.schemas import BlueGreenCreate, BlueGreenResponse, EligibleNodeResponse
 
+# The purge playbook lives in its own module because this file is at its
+# grandfathered size ceiling (#14236) and may not grow (#16071).
+from services.purge_playbook import PURGE_PLAYBOOK_TEMPLATE as _PURGE_PLAYBOOK_TEMPLATE
+
 logger = logging.getLogger(__name__)
 
 # Minimum resource headroom required for role borrowing (percent)
@@ -68,106 +72,6 @@ VALID_ROLES = frozenset(
 
 # Security: Valid service name pattern (alphanumeric, hyphen, underscore only)
 VALID_SERVICE_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
-
-# Purge playbook template for clean role removal
-_PURGE_PLAYBOOK_TEMPLATE = """# AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
-#
-# Role Purge Playbook - Clean slate for role release
----
-- name: Purge Roles from Node
-  hosts: all
-  become: true
-  gather_facts: false
-
-  vars:
-    purge_roles: ""
-    role_service_map:
-      slm-agent:
-        - slm-agent
-        - autobot-agent
-      redis:
-        - redis-server
-        - redis
-      backend:
-        - autobot-backend
-        - autobot
-      frontend:
-        - autobot-frontend
-      npu-worker:
-        - autobot-npu-worker
-      browser-automation:
-        - playwright-server
-        - browser-automation
-      monitoring:
-        - prometheus
-        - grafana-server
-        - node_exporter
-      ai-stack:
-        - autobot-ai-stack
-      llm:
-        - ollama
-
-    role_data_dirs:
-      redis:
-        - /var/lib/redis
-        - /etc/redis
-      backend:
-        - /opt/autobot/backend
-        - /var/log/autobot
-      frontend:
-        - /opt/autobot/frontend
-      monitoring:
-        - /var/lib/prometheus
-        - /var/lib/grafana
-        - /etc/prometheus
-        - /etc/grafana
-
-  tasks:
-    - name: Parse purge roles
-      ansible.builtin.set_fact:
-        role_list: "{{ purge_roles.split(',') | map('trim') | list }}"
-
-    - name: Stop and disable services for each role
-      ansible.builtin.systemd:
-        name: "{{ item.1 }}"
-        state: stopped
-        enabled: false
-      loop: "{{ role_list | product(role_service_map[item] | default([])) | list }}"
-      when: item.0 in role_service_map
-      ignore_errors: true
-      loop_control:
-        label: "{{ item.1 | default(item) }}"
-
-    - name: Remove service files
-      ansible.builtin.file:
-        path: "/etc/systemd/system/{{ item.1 }}.service"
-        state: absent
-      loop: "{{ role_list | product(role_service_map[item] | default([])) | list }}"
-      when: item.0 in role_service_map
-      ignore_errors: true
-      loop_control:
-        label: "{{ item.1 | default(item) }}"
-
-    - name: Remove role data directories
-      ansible.builtin.file:
-        path: "{{ item.1 }}"
-        state: absent
-      loop: "{{ role_list | product(role_data_dirs[item] | default([])) | list }}"
-      when: item.0 in role_data_dirs
-      ignore_errors: true
-      loop_control:
-        label: "{{ item.1 | default(item) }}"
-
-    - name: Reload systemd daemon
-      ansible.builtin.systemd:
-        daemon_reload: true
-
-    - name: Display purge summary
-      ansible.builtin.debug:
-        msg: "Purged roles: {{ role_list | join(', ') }}"
-"""
 
 
 def _validate_role(role: str) -> bool:

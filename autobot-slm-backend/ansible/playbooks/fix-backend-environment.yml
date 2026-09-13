@@ -20,7 +20,7 @@
     # dir), not the deploy root. backend_deployed_root holds the root under
     # its own name for every task below that genuinely wants it.
     backend_deployed_root: /opt/autobot
-    backend_code_dir: "{{ backend_deployed_root }}/autobot-user-backend"
+    backend_code_dir: "{{ backend_deployed_root }}/autobot-backend"
     backend_install_dir: "{{ backend_code_dir }}"
     backend_log_dir: /var/log/autobot
     backend_user: autobot

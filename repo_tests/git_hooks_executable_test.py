@@ -53,10 +53,11 @@ import subprocess
 from pathlib import Path
 
 import yaml
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 
 # Directories whose contents git or a developer executes directly, plus the
 # canonical installer that copies them into place.

@@ -27,13 +27,13 @@ would pass the moment someone adds a host template to a different key.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml")
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _GROUP_VARS = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "inventory" / "group_vars"
 
 #: A Jinja reference to something other than a sibling of the same mapping.

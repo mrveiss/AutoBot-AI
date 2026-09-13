@@ -36,9 +36,10 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 _GUARD_MODULE = "repo_tests.sys_modules_leak_guard"
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _TIMEOUT = 120
 
 _ROOT_CONFTEST = f"""

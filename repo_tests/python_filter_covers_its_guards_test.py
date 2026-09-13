@@ -14,7 +14,7 @@ and the guard written to catch that change never runs.
 This has now happened three times. #14544 added five deployment sources after
 one slipped; #14891 added the hook and infrastructure trees after sixteen hooks
 sat outside their guard; #15704 changed ansible role defaults only, took the
-shim's green, merged, and left ``Dev_new_gui`` red on all twelve shards.
+shim's green, merged, and left ``main`` red on all twelve shards.
 
 Each fix added the specific paths that had just broken. This asserts the
 general property instead: every top-level tree a guard reads is covered.
@@ -22,17 +22,18 @@ general property instead: every top-level tree a guard reads is covered.
 
 from __future__ import annotations
 
+import ast
 import fnmatch
 import re
 from pathlib import Path
 
 import pytest
-
+from repo_tests._paths import repo_root
 from repo_tests.python_filter_uncovered_reads import MAX_UNCOVERED_READS, UNCOVERED_READS
 
 yaml = pytest.importorskip("yaml")
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _FILTER = _REPO_ROOT / ".github" / "filters" / "python-paths.yml"
 _GUARD_DIR = _REPO_ROOT / "repo_tests"
 
@@ -54,17 +55,78 @@ _QUOTED_PATH = re.compile(r"""["']([a-z0-9_.-]+/[A-Za-z0-9_./*-]+)["']""")
 #: contains a slash -- so a detector keyed on the quoted form alone reports a
 #: tree as unread while a guard reads it every run, which is the reach failure
 #: this whole guard exists to prevent, committed by the guard itself.
-_COMPOSED_PATH = re.compile(r"""_REPO_ROOT\s*((?:/\s*["'][A-Za-z0-9_.*-]+["']\s*)+)""")
+#: #15900: this began keyed to the literal identifier `_REPO_ROOT` -- 87 of 133
+#: guards name their root something else. Binding per module fixed that and
+#: replaced a NAME key with a SHAPE key, recognising only
+#: `Path(__file__).resolve().parents[N]` while 19 modules write the identical
+#: `.parent.parent`. Anchoring on `__file__` fixed *that* and still missed 15
+#: modules whose root comes from a helper call (`project_root()`), where no
+#: `__file__` appears in the assignment at all.
+#:
+#: Three keys, three populations, each an enumeration of the spellings someone
+#: had thought of. So the detector no longer asks how a root is BOUND. It asks
+#: how one is USED: a composed path is `X / "literal"`, whatever produced `X`.
+#: Over-collecting candidates is safe -- a name that is not a root yields a path
+#: that does not exist, and `_record` already drops those.
 _SEGMENT = re.compile(r"""["']([A-Za-z0-9_.*-]+)["']""")
 
 #: Trees whose contents no guard reads directly, so the filter need not name
 #: them even when a path string mentions one.
-_NOT_A_READ = frozenset({"repo_tests", "pipeline-scripts", "scripts", "tools", "libs"})
+#: `.git` joined this when the detector started keying on composition rather
+#: than on how a root is bound: a guard composing `ROOT / ".git" / "config"` is
+#: reading git's own directory, not a repository source the filter should cover.
+_NOT_A_READ = frozenset({"repo_tests", "pipeline-scripts", "scripts", "tools", "libs", ".git"})
 
 #: Floor on the sweep's REACH. Bound to guards parsed, never to findings: a
 #: floor on findings passes when the walk reads nothing, and then fixing a real
 #: gap trips it. Both directions are wrong and one of them is silent.
 _MIN_GUARDS_READ = 60
+
+
+def _composed_reads(source: str) -> set[str]:
+    """Every `X / "a" / "b"` composition in *source*, as a slash-joined path.
+
+    Keyed on the composition, never on how `X` was produced. `X` may come from
+    `parents[N]`, `.parent.parent`, `project_root()`, a walrus or a class
+    attribute -- all of them compose the same way, and the next idiom nobody has
+    written yet composes that way too.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+
+    def segments(node):
+        """Right-to-left string segments of a `/` chain, or None if not one."""
+        if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Div):
+            return None
+        if not (isinstance(node.right, ast.Constant) and isinstance(node.right.value, str)):
+            return None
+        inner = segments(node.left)
+        if inner is not None:
+            return inner + [node.right.value]
+        # `node.left` is the base of the chain. Do NOT key on its node type:
+        # `Name` alone missed 122 compositions across this population -- 47
+        # `Subscript` (`parents[1] / ...`), 44 `Attribute` (`.parent / ...`)
+        # and 31 `Call` (`project_root() / ...`). The `Call` form is the one
+        # #15925 is migrating every guard onto, so a `Name`-only key would
+        # lose coverage as that lands, and would report the loss as the
+        # uncovered count *falling* -- which reads as improvement.
+        return [node.right.value]
+
+    # Only the outermost composition counts. `ast.walk` also visits the inner
+    # `X / "docker"` of `X / "docker" / "with-secrets.sh"`, and recording that
+    # prefix would let a guard that reads a single file claim coverage of the
+    # whole tree above it -- the coverage inflation this module exists to catch.
+    nested = {node.left for node in ast.walk(tree) if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)}
+    out: set[str] = set()
+    for node in ast.walk(tree):
+        if node in nested:
+            continue
+        parts = segments(node)
+        if parts:
+            out.add("/".join(parts))
+    return out
 
 
 def _filter_patterns() -> list[str]:
@@ -107,7 +169,12 @@ def _record(candidate: str, guard: str, patterns: list[str], reads: dict[str, se
     if "/" in candidate and not (_REPO_ROOT / tree).is_dir():
         return
     if not (_REPO_ROOT / candidate).is_file():
-        return  # a prefix or a glob, not a file this guard reads
+        # A prefix or a glob, not a concrete file. This is the boundary of what a
+        # green here means, and it is deliberate: expanding globs would turn 27
+        # uncovered entries into ~86 and force a cap raise or a twelve-shard
+        # filter widening. `glob_declared_reads_15900_test.py` records the
+        # declarations instead, at no CI cost (#15900).
+        return
     if _is_covered(candidate, patterns):
         return
     reads.setdefault(candidate, set()).add(guard)
@@ -125,10 +192,7 @@ def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
             continue
         source = path.read_text(encoding="utf-8")
         parsed += 1
-        composed = (
-            "/".join(_SEGMENT.findall(match.group(1)))
-            for match in _COMPOSED_PATH.finditer(source)
-        )
+        composed = (composed for composed in _composed_reads(source))
         for candidate in (m.group(1) for m in _QUOTED_PATH.finditer(source)):
             _record(candidate, path.name, patterns, reads)
         for candidate in composed:
@@ -146,20 +210,29 @@ def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
 def test_the_sweep_reaches_the_guards_it_claims_to() -> None:
     """Reach before findings -- an empty walk must fail, not pass silently."""
     _, parsed = _uncovered_reads(_filter_patterns())
-    assert parsed >= _MIN_GUARDS_READ, (
-        f"the walk parsed only {parsed} guards (floor {_MIN_GUARDS_READ}) — it has stopped reading"
-    )
+    assert (
+        parsed >= _MIN_GUARDS_READ
+    ), f"the walk parsed only {parsed} guards (floor {_MIN_GUARDS_READ}) — it has stopped reading"
 
 
 def test_python_filter_covers_every_tree_a_guard_reads() -> None:
-    """The property the three prior one-off fixes each approximated."""
+    """The property the three prior one-off fixes each approximated.
+
+    **Scope, stated because a checker whose name over-claims is the defect it
+    exists to prevent:** this verifies reads declared as CONCRETE LITERALS. A
+    guard globbing `".github/workflows/*.yml"` contributes nothing here — its
+    dependency is real and its detection is not. Those are recorded by
+    `glob_declared_reads_15900_test.py`, which is where a reader should look
+    before concluding a tree has no guard depending on it (#15900).
+    """
     uncovered, _ = _uncovered_reads(_filter_patterns())
     new = {path: guards for path, guards in uncovered.items() if path not in UNCOVERED_READS}
 
     assert not new, (
-        "these trees are read by repo_tests guards but the python-suite filter does not "
-        "cover them, so a change confined to one takes the required-context shim's green "
-        "while the guard never runs:\n  "
+        "these trees are read by repo_tests guards BY CONCRETE LITERAL but the python-suite "
+        "filter does not cover them, so a change confined to one takes the required-context "
+        "shim's green while the guard never runs. Glob-declared reads are outside this "
+        "check — see glob_declared_reads_15900_test.py (#15900):\n  "
         + "\n  ".join(f"{path} — read by {sorted(guards)[0]}" for path, guards in sorted(new.items()))
     )
 
@@ -219,20 +292,35 @@ def test_composed_paths_are_detected_not_only_quoted_ones(tmp_path: Path) -> Non
     """
     guard = tmp_path / "sample_test.py"
     guard.write_text(
-        'A = _REPO_ROOT / "docker" / "with-secrets.sh"\n'
-        'B = "docker/secrets-init.sh"\n',
+        'A = _REPO_ROOT / "docker" / "with-secrets.sh"\n' 'B = "docker/secrets-init.sh"\n',
         encoding="utf-8",
     )
-    composed = ["/".join(_SEGMENT.findall(m.group(1))) for m in _COMPOSED_PATH.finditer(guard.read_text(encoding="utf-8"))]
+    composed = sorted(_composed_reads(guard.read_text(encoding="utf-8")))
     quoted = [m.group(1) for m in _QUOTED_PATH.finditer(guard.read_text(encoding="utf-8"))]
 
     assert composed == ["docker/with-secrets.sh"], composed
     assert "docker/secrets-init.sh" in quoted
 
 
-def test_a_composed_path_with_no_repo_root_base_is_ignored() -> None:
-    """The contrast: only a `_REPO_ROOT`-anchored chain is a repository read."""
-    assert not _COMPOSED_PATH.findall('X = somewhere / "docker" / "with-secrets.sh"')
+def test_a_composition_off_an_unknown_base_is_collected_then_dropped() -> None:
+    """The contrast, restated for a detector keyed on composition (#15900).
+
+    The old version asserted that a chain off an unrecognised base is never
+    collected -- true of a detector keyed on how a root is *bound*, and the
+    reason it missed 87 of 133 guards. Keying on how a root is *used* collects
+    `somewhere / "docker" / ...` too, deliberately.
+
+    Over-collection is safe because it is filtered by the filesystem rather than
+    by a name: a candidate that is not a real path is dropped by `_record`. This
+    pins the two halves together, because collecting without the drop would
+    report phantom uncovered reads and make the pin meaningless.
+    """
+    collected = _composed_reads('X = somewhere / "docker" / "with-secrets.sh"')
+    assert "docker/with-secrets.sh" in collected, "composition off any base must be collected"
+
+    reads: dict[str, set[str]] = {}
+    _record("nonexistent-tree-xyz/made-up.sh", "fixture.py", reads, _filter_patterns())
+    assert not reads, "a candidate that is not a real path must be dropped, not reported"
 
 
 def test_a_repository_root_file_is_recorded_not_skipped() -> None:

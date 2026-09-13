@@ -925,6 +925,35 @@
     timeout: 1800  # CUDA-built torch is large
     when: backend_gpu_available | default(false) | bool
 
+  # Install GPU-built faiss whenever a GPU is present, the same gate as CUDA
+  # torch above and independent of vLLM (#15163: gpu_vector_search.py's
+  # GPU-accelerated search has been unreachable since #387, because every
+  # automated install path only ever provided faiss-cpu).
+  #
+  # Unlike torch (one package name, CPU vs CUDA build selected by index-url --
+  # see the Dockerfile's --index-url .../whl/cpu), faiss-cpu and faiss-gpu are
+  # two DIFFERENT package names that both provide the top-level `faiss`
+  # module. Installing faiss-gpu on top of an existing faiss-cpu without
+  # removing the latter first risks two packages' files fighting over the
+  # same import -- so faiss-cpu is explicitly uninstalled first.
+  - name: "Backend | Remove CPU-only faiss before installing the GPU build (#15163)"
+    ansible.builtin.pip:
+      name: faiss-cpu
+      state: absent
+      virtualenv: "{{ backend_code_dir }}/venv"
+    become_user: "{{ backend_user }}"
+    when: backend_gpu_available | default(false) | bool
+
+  - name: "Backend | Install GPU faiss requirements (requirements-gpu-faiss.txt) (#15163)"
+    ansible.builtin.pip:
+      requirements: "{{ code_source_dir }}/requirements-gpu-faiss.txt"
+      virtualenv: "{{ backend_code_dir }}/venv"
+    become_user: "{{ backend_user }}"
+    environment:
+      PIP_DEFAULT_TIMEOUT: "120"
+    timeout: 1800  # GPU-built faiss is large
+    when: backend_gpu_available | default(false) | bool
+
   # Install vLLM only when vLLM is enabled AND a GPU is present. vLLM remains
   # genuinely opt-in (#10251/#10287); it pins the same torch build the task
   # above already installs whenever backend_gpu_available is true, so no
@@ -947,6 +976,7 @@
   - name: "Backend | Resolve GPU/CUDA-torch deploy decision (#15162)"
     ansible.builtin.set_fact:
       backend_cuda_torch_installed: "{{ backend_gpu_available | default(false) | bool }}"
+      backend_faiss_gpu_installed: "{{ backend_gpu_available | default(false) | bool }}"
       backend_vllm_installed: >-
         {{ (backend_vllm_enabled | bool) and
            (backend_gpu_available | default(false) | bool) }}
@@ -964,6 +994,8 @@
         GPU deploy decision: gpu_available={{ backend_gpu_available | default(false) }}
         (backend_has_gpu={{ backend_has_gpu }}) ->
         cuda_torch={{ 'installed' if backend_cuda_torch_installed
+          else 'skipped (' ~ backend_gpu_skip_reason ~ ')' }};
+        faiss_gpu={{ 'installed' if backend_faiss_gpu_installed
           else 'skipped (' ~ backend_gpu_skip_reason ~ ')' }};
         vllm_enabled={{ backend_vllm_enabled | bool }} ->
         vllm={{ 'installed' if backend_vllm_installed

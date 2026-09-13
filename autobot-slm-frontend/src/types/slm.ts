@@ -86,10 +86,14 @@ export interface NodeHealth {
   services: ServiceHealth[]
 }
 
+/**
+ * One service in a node's health report (#15401). `GET /nodes/{id}/health`
+ * returns `{ name, status }` per service, and `status` is the agent's systemd
+ * run-state -- not a health verdict -- so it is `ServiceStatus`, not `HealthStatus`.
+ */
 export interface ServiceHealth {
   name: string
-  status: HealthStatus
-  details: Record<string, unknown>
+  status: ServiceStatus
 }
 
 export interface A2ASkill {
@@ -457,7 +461,20 @@ export interface FleetUpdateSummary {
 // Service Types (Issue #728)
 // =============================================================================
 
-export type ServiceStatus = 'running' | 'stopped' | 'failed' | 'unknown'
+/**
+ * A service's run-state, as the SLM agent maps systemd states
+ * (`_map_status_from_states` in `slm/agent/health_collector.py`). Until #15401
+ * this union carried four of the eight values the agent sends.
+ */
+export type ServiceStatus =
+  | 'running'
+  | 'starting'
+  | 'stopping'
+  | 'stopped'
+  | 'completed'
+  | 'failed'
+  | 'crash-loop'
+  | 'unknown'
 
 export type ServiceCategory = 'autobot' | 'system'
 

@@ -126,6 +126,32 @@ STORE_AUTHORITY: dict[str, Concept] = {
         write_sites=("autobot-backend/api/mobile_devices.py",),
         rebuilt_by="desktop_mobile_devices rows are the credential; nothing else stores one.",
     ),
+    "session_collaboration": Concept(
+        name="session_collaboration",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=("autobot-backend/api/collaboration.py",),
+        rebuilt_by="session_collaborations rows (owner/collaborators/invitations) are the "
+        "record; nothing else stores a copy. #16464 ported the table into the canonical "
+        "Alembic chain -- it existed only in an orphaned, never-applied migration before.",
+    ),
+    "activity_audit_trail": Concept(
+        name="activity_audit_trail",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=(
+            "autobot-backend/utils/activity_tracker.py",
+            "autobot-backend/integrations/terminal_tracking.py",
+            "autobot-backend/integrations/file_tracking.py",
+            "autobot-backend/integrations/browser_tracking.py",
+            "autobot-backend/integrations/desktop_tracking.py",
+            "autobot-backend/knowledge/activity_types.py",
+        ),
+        rebuilt_by="terminal_activities/file_activities/browser_activities/"
+        "desktop_activities/secret_usage rows are the audit record; nothing else stores a "
+        "copy. #16464 ported all five tables into the canonical Alembic chain -- same "
+        "orphaned-migration gap as session_collaboration, above.",
+    ),
     "verbatim_memory": Concept(
         name="verbatim_memory",
         system_of_record=Store.CHROMADB,
@@ -200,6 +226,18 @@ STORE_AUTHORITY: dict[str, Concept] = {
         rebuilt_by="Losing a challenge means the user rescans the QR code.",
         note="Deliberate exception. The challenge is single-use and TTL'd; the credential it "
         "issues is device_credentials, which is durable in Postgres.",
+    ),
+    "agent_work_claims": Concept(
+        name="agent_work_claims",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot_shared/coordination/work_claims.py",),
+        rebuilt_by="The holding agent re-acquires the scope on its next work step.",
+        note="Deliberate exception, and the ephemerality is the feature (#15947). A claim says "
+        "which agent is holding which scope right now; a claim that outlived its holder would turn "
+        "one crashed agent into a permanently blocked project, which is worse than the collision "
+        "claims exist to prevent. Every claim carries a TTL and is renewed by its holder, so the "
+        "durable record of the work is the a2a Task, never the claim.",
     ),
     "autoresearch_proposal": Concept(
         name="autoresearch_proposal",

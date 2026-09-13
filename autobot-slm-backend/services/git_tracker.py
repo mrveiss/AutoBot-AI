@@ -17,6 +17,7 @@ from typing import Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.paths import scrubbed_git_env
 from models.database import CodeSource, Setting
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ except ImportError:
 # Configuration
 VERSION_CHECK_INTERVAL = 300  # 5 minutes
 DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot/code_source")
-DEFAULT_BRANCH = os.environ.get("SLM_REPO_BRANCH", "Dev_new_gui")
+DEFAULT_BRANCH = os.environ.get("SLM_REPO_BRANCH", "main")
 
 # Log the "no local code source" condition once, not every interval (#9716).
 _missing_repo_warned = False
@@ -96,6 +97,7 @@ class GitTracker:
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=scrubbed_git_env(),  # #16179
             )
             stdout, stderr = await proc.communicate()
 
@@ -153,7 +155,8 @@ class GitTracker:
         Returns:
             True if fetch succeeded, False otherwise
         """
-        _, returncode = await self._run_git_command("fetch", self.remote)
+        # --prune (#16610): a stale origin/release/* ref blocks fetching a new origin/release branch.
+        _, returncode = await self._run_git_command("fetch", "--prune", self.remote)
 
         if returncode == 0:
             self.last_fetch = datetime.now(timezone.utc)
@@ -243,7 +246,7 @@ def get_git_tracker(
 
     Args:
         repo_path: Path to the git repository
-        branch: Branch to track (default: Dev_new_gui)
+        branch: Branch to track (default: main)
 
     Returns:
         GitTracker instance

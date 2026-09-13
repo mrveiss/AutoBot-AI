@@ -646,7 +646,7 @@ class PlaybookExecutor:
             logger.debug("_update_code_source: no .git at %s — skipping", code_source_dir)
             return True
 
-        branch = os.getenv("AUTOBOT_GIT_BRANCH", "Dev_new_gui")
+        branch = os.getenv("AUTOBOT_GIT_BRANCH", "main")
         synced = True
 
         try:
@@ -654,8 +654,8 @@ class PlaybookExecutor:
                 logger.warning("_update_code_source: git checkout -- . failed; continuing")
                 synced = False
 
-            if await self._run_git(code_source_dir, "fetch", "origin") != 0:
-                logger.warning("_update_code_source: git fetch origin failed; continuing")
+            if await self._run_git(code_source_dir, "fetch", "--prune", "origin") != 0:
+                logger.warning("_update_code_source: git fetch --prune origin failed; continuing")
                 return False
 
             if await self._run_git(code_source_dir, "reset", "--hard", f"origin/{branch}") != 0:

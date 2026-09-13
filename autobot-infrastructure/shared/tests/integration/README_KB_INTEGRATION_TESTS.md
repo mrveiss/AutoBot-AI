@@ -231,10 +231,10 @@ tests/integration/test_knowledge_base_integration.py::TestKnowledgeBaseRedisInte
 
 ```bash
 # Check Redis is running
-sudo systemctl status redis
+sudo systemctl status redis-stack-server
 
 # Start Redis if needed
-sudo systemctl start redis
+sudo systemctl start redis-stack-server
 
 # Check Redis is listening on correct port
 netstat -ln | grep 6379

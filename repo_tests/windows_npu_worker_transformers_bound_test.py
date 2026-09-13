@@ -19,9 +19,10 @@ a bare, unbounded `>=`.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+_REPO_ROOT = repo_root()
 _REQUIREMENTS = (
     _REPO_ROOT / "autobot-npu-worker" / "resources" / "windows-npu-worker" / "requirements.txt"
 )

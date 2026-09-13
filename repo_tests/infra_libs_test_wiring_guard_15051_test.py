@@ -37,10 +37,11 @@ import sys
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 WATCHED_ROOTS = ("autobot-infrastructure/shared/tests", "libs")
 
 # A pytest invocation in any of this repository's spellings, plus everything on

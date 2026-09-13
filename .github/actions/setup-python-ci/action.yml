@@ -18,7 +18,7 @@
 # Current callers (keep this list honest — it is the only thing standing between
 # this file and being orphaned again):
 #   api-wiring.yml            enforce-precommit.yml   migration-gate.yml
-#   auto-fix-formatting.yml   marker-tests.yml        startup-import-smoke.yml
+#   marker-tests.yml          startup-import-smoke.yml
 #   canonical-audit.yml       constraint-drift.yml    coverage.yml
 #
 # 12 workflows still call actions/setup-python directly. Converting them is

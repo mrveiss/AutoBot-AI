@@ -34,8 +34,9 @@ from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _CONFIG = _REPO_ROOT / ".github" / "dependabot.yml"
 
 # `openai>=2.53.0`, `openai==2.53.0  # note`, `pkg[extra]>=1 ; marker`

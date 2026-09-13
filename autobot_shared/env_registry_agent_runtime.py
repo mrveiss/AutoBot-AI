@@ -248,3 +248,104 @@ register_env_var(
         component="llm",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WORK_CLAIM_TTL_S",
+        type=int,
+        default=300,
+        description=(
+            "How long an agent's work claim survives without a renew (#15947). This is a "
+            "coordination policy, not a tuning knob: the value is how long a crashed agent's "
+            "scope stays blocked to every other agent, so the floor stops a claim expiring "
+            "mid-write and the ceiling bounds a stale hold at one hour. A running task renews "
+            "for its own lifetime, so raising this does not make long tasks safer -- it only "
+            "makes a dead holder's scope take longer to free."
+        ),
+        component="orchestration",
+        range=(10, 3600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WORK_CLAIM_WAIT_TTL_S",
+        type=int,
+        default=900,
+        description=(
+            "How long an agent keeps its place in a work-claim queue without renewing (#15948). "
+            "Deliberately longer than AUTOBOT_WORK_CLAIM_TTL_S: a waiter that expired before the "
+            "holder it is queued behind would never be promoted, and would look to an operator "
+            "like a queue that silently drops people. The ceiling bounds how long a dead waiter "
+            "occupies a position before it is pruned on the next read."
+        ),
+        component="orchestration",
+        range=(30, 7200),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WORK_CLAIM_YIELD_TIMEOUT_S",
+        type=int,
+        default=30,
+        description=(
+            "How long a requester waits for a claim holder to answer a yield request before "
+            "treating the silence as a refusal (#15948). Short on purpose: the requester is "
+            "blocked while it waits, and a holder that has not answered in this long is busy "
+            "working, which is itself the answer. Raising it does not make a yield more likely, "
+            "it only makes the requester wait longer to be told no."
+        ),
+        component="orchestration",
+        range=(1, 600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BRANCH_INTEREST_TTL_S",
+        type=int,
+        default=1209600,
+        description=(
+            "Backstop lifetime for a branch's recorded interest in a scope (#15987). This is NOT "
+            "how long the interest is meant to last: an interest ends when its branch merges or "
+            "closes, which is a fact someone looks up, not a timer. The TTL exists only so a "
+            "record nobody pruned cannot outlive the repository, and a record reaching it means "
+            "prune() was never called rather than that the work was abandoned. Two weeks by "
+            "default, which no healthy branch should reach."
+        ),
+        component="orchestration",
+        range=(3600, 7776000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_STEWARDSHIP_MAX_HANDOFFS",
+        type=int,
+        default=3,
+        description=(
+            "How many times one branch may change stewards before it must land (#15987). An "
+            "unbounded chain recreates, inside a single branch, the pile of unlanded work the "
+            "worktree ceiling exists to prevent — and it is less visible there, because one "
+            "growing branch looks like progress while four stalled ones look like a queue. "
+            "Raising it buys more accretion, not more throughput."
+        ),
+        component="orchestration",
+        range=(1, 20),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WORKSPACE_BASE_REF",
+        type=str,
+        default="origin/main",
+        description=(
+            "Ref that new task workspaces branch from (#15938). Distinct from "
+            "AUTOBOT_GIT_BRANCH, which records the branch the running instance was "
+            "built from: one describes this deployment, the other where new work starts."
+        ),
+        component="orchestration",
+    )
+)

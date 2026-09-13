@@ -12,7 +12,7 @@ without anything going red. This is a second file, not more tests appended
 to ``enum_union_guard_test.py``: that file is grandfathered at its current
 line count in ``python_file_size_known_large.py`` and may not grow.
 
-Measured on `Dev_new_gui` after #14988 landed: 167 hits across 48 files (the
+Measured on `main` after #14988 landed: 167 hits across 48 files (the
 issue's own count of 219/55 was taken before other work already converted
 some — re-measure, do not trust the issue body). Four values found in that
 167 — ``none``, ``moderate``, ``missing``, ``forbidden`` — are NOT canonical
@@ -32,9 +32,12 @@ import re
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import TRACKED_PY_FLOOR
+
+REPO_ROOT = repo_root()
 
 # Same shapes #14988 measured. No word boundary before ``severity`` is
 # deliberate: it is the shape the issue specified and ground-truthed against.
@@ -126,7 +129,7 @@ SEVERITY_SHAPE_LITERAL_FLOOR = 160
 
 # Floor for the tracked-file enumeration itself — an empty walk must not
 # read as "nothing to convert".
-_TRACKED_PY_FLOOR = 3000
+_TRACKED_PY_FLOOR = TRACKED_PY_FLOOR  # canonical: one measured floor, was a local 3000 (#15928)
 
 
 @functools.lru_cache(maxsize=1)

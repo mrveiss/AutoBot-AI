@@ -198,6 +198,7 @@ class TestEmbeddingCache:
         assert result == embedding
 
         # Wait for TTL to expire (2 seconds) - Issue #479: Use async sleep
+        # fixed sleep on purpose (#16255): TTL expiry via time.time() is the subject; no injectable clock
         await asyncio.sleep(2.1)
 
         # Should be expired now

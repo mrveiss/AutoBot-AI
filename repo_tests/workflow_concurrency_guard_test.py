@@ -29,10 +29,11 @@ author reads it there instead of rediscovering it under time pressure.
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflows")
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 
 # The required-context shims publish a context branch protection demands, from a

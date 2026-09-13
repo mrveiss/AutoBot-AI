@@ -55,12 +55,13 @@ from __future__ import annotations
 import ast
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from functools import lru_cache
-from pathlib import Path
 from typing import NamedTuple
+
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 
 class RootBudget(NamedTuple):
@@ -77,7 +78,7 @@ class RootBudget(NamedTuple):
     min_reach_markers: int
 
 
-# Measured 2026-09 on Dev_new_gui: autobot-backend/ 2,375 non-test files and
+# Measured 2026-09 on main: autobot-backend/ 2,375 non-test files and
 # 198 reach markers; autobot-slm-backend/ 225 and 44. The large root's file
 # floor is an order of magnitude above the small root's entire tree, which is
 # what makes a re-narrowing to a single root fail rather than pass.

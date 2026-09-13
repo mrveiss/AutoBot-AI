@@ -368,7 +368,7 @@ class TestRegistryAdapterKeyLifecycle:
         assert "api_base" in captured
         assert captured["agent_id"] == agent["agent_id"]
         # Key revoked after completion.
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_key_revoked_even_when_invoke_raises(self):
         agent = _make_agent(adapter_type="claude_code")
@@ -385,7 +385,7 @@ class TestRegistryAdapterKeyLifecycle:
             with pytest.raises(RuntimeError, match="boom"):
                 await _dispatch_registry_adapter(fake_adapter, agent, {})
 
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_no_company_id_dispatches_without_key(self):
         agent = _make_agent(adapter_type="claude_code", company_id=None)
@@ -458,7 +458,7 @@ class TestRegistryAdapterTerminalStatus:
             with pytest.raises(AdapterRunFailed):
                 await _dispatch_registry_adapter(fake_adapter, agent, {})
 
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_completed_terminal_status_does_not_raise(self):
         agent = _make_agent(adapter_type="claude_code")
@@ -493,7 +493,7 @@ class TestRegistryAdapterTerminalStatus:
                 await _dispatch_registry_adapter(fake_adapter, agent, {})
 
         fake_adapter.cancel.assert_awaited_once()
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
 
 @pytest.mark.asyncio
@@ -1000,7 +1000,7 @@ class TestQuotaExhausted:
         ):
             await _dispatch_registry_adapter(fake_adapter, agent, {})
         # Key still revoked even on the quota path.
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_handle_quota_exhausted_records_and_pauses(self):
         scheduler = HeartbeatScheduler()

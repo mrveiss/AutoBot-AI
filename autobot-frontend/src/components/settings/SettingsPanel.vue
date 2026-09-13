@@ -103,7 +103,7 @@ import type {
   PromptsSettings as PromptsSettingsType,
   DeveloperSettings as DeveloperSettingsType,
   BackendSettings as BackendSettingsType,
-  HealthStatus,
+  DetailedHealthReport,
   CacheActivityItem,
   CacheStats,
   CacheConfig,
@@ -120,7 +120,7 @@ const isSettingsLoaded = ref<boolean>(false)
 const settingsLoadingStatus = ref<'loading' | 'loaded' | 'offline'>('loading')
 const isSaving = ref<boolean>(false)
 const isClearing = ref<boolean>(false)
-const healthStatus = ref<HealthStatus | null>(null)
+const healthStatus = ref<DetailedHealthReport | null>(null)
 const cacheApiAvailable = ref<boolean>(false)
 
 const activeBackendSubTab = ref('agents')
@@ -787,7 +787,7 @@ const revertPromptToDefault = async (promptId: string) => {
 const loadHealthStatus = async () => {
   // Try detailed health endpoint first
   const { execute: getDetailedHealth } = useAsyncHandler(
-    async () => apiClient.get<HealthStatus>(`${getApiBase()}/system/health/detailed`, GET_OPTS),
+    async () => apiClient.get<DetailedHealthReport>(`${getApiBase()}/system/health/detailed`, GET_OPTS),
     {
       logErrors: true,
       errorPrefix: '[SettingsPanel]',
@@ -805,13 +805,13 @@ const loadHealthStatus = async () => {
               healthStatus.value = {
                 basic_health: fallbackResponse,
                 detailed_available: false
-              } as HealthStatus
+              } as DetailedHealthReport
             },
             onError: () => {
               healthStatus.value = {
                 status: 'unavailable',
                 message: 'Health endpoints not available'
-              } as HealthStatus
+              } as DetailedHealthReport
             }
           }
         )

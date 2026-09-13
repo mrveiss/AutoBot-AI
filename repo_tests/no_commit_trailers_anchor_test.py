@@ -28,11 +28,11 @@ import re
 
 # Fixed argv, no user input.
 import subprocess  # nosec B404
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "no-commit-trailers.yml"
+WORKFLOW = repo_root() / ".github" / "workflows" / "no-commit-trailers.yml"
 
 #: Trailers a tool emits. Every one must be rejected.
 REJECTED = [

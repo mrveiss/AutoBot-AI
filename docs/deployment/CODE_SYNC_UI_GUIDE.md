@@ -26,7 +26,7 @@ The Code Sync page consists of 6 main sections arranged vertically:
 │  ┌─── Code Source Card ───────────────────────────────────────┐   │
 │  │ Code Source                                   [Edit Button]  │   │
 │  │ 01-Backend (Main Server)                                    │   │
-│  │ /opt/autobot (Dev_new_gui)                    │   │
+│  │ /opt/autobot (main)                          │   │
 │  │ Last commit: 745e45ee                      [Remove Button]  │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -160,7 +160,7 @@ Banner is not visible when no sync is running.
 │  Code Source                                       [Edit Button] │
 │  ───────────────────────────────────────────────────────────────│
 │  01-Backend (Main Server)                                        │
-│  /opt/autobot (Dev_new_gui)                        │
+│  /opt/autobot (main)                              │
 │  Last commit: 745e45ee (hover for full hash)                    │
 │                                                 [Remove Button]  │
 └─────────────────────────────────────────────────────────────────┘
@@ -212,9 +212,9 @@ Banner is not visible when no sync is running.
 │                                                                  │
 │  Branch *                                                        │
 │  ┌────────────────────────────────────────┐                     │
-│  │ Dev_new_gui                              │                     │
+│  │ main                                    │                     │
 │  └────────────────────────────────────────┘                     │
-│  Git branch to track (main, Dev_new_gui, develop, etc.)         │
+│  Git branch to track (release, main, develop, etc.)             │
 │                                                                  │
 │  ───────────────────────────────────────────────────────────────│
 │                                      [Cancel]  [Save]            │
