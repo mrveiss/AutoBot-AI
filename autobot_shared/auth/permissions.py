@@ -125,11 +125,8 @@ class Permission(str, Enum):
     MCP_DESKTOP_READ = "mcp.desktop.read"
     MCP_DESKTOP_CONTROL = "mcp.desktop.control"
 
-    # #11542: gates every tool an admin-configured external MCP server
-    # exposes to chat — one coarse grant, not one per server. Per-server
-    # granularity is MCPServerConfig.allowed_roles, checked by the external
-    # bridge itself on top of this gate, never instead of it. Admin-only by
-    # owner decision; not added to any other role's default grants below.
+    # #11542: gates every tool an admin-configured external MCP server exposes
+    # to chat. Rationale: docs/developer/AUTHENTICATION_RBAC.md.
     MCP_EXTERNAL = "mcp.external"
 
     # === Batch Jobs ===
