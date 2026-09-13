@@ -439,6 +439,7 @@ class RedisConnectionManager:
             "host": host,
             "port": redis_config.get("port", NetworkConstants.REDIS_PORT),
             "password": redis_config.get("password"),
+            "username": redis_config.get("username"),
             "enabled": redis_config.get("enabled", True),
         }
 
@@ -561,6 +562,7 @@ class RedisConnectionManager:
             "port": config.port,
             "db": config.db,
             "password": config.password,
+            "username": config.username,
             "decode_responses": config.decode_responses,
             "max_connections": config.max_connections,
             "socket_timeout": config.socket_timeout,
@@ -679,6 +681,7 @@ class RedisConnectionManager:
             "port": config.port,
             "db": config.db,
             "password": config.password,
+            "username": config.username,
             "decode_responses": config.decode_responses,
             "max_connections": config.max_connections,
             "socket_timeout": config.socket_timeout,
@@ -905,6 +908,7 @@ class RedisConnectionManager:
                 host=self._config["host"],
                 port=self._config["port"],
                 password=self._config.get("password"),
+                username=self._config.get("username"),
                 max_connections=self._pool_config.max_connections,
                 socket_timeout=self._pool_config.socket_timeout,
                 socket_connect_timeout=self._pool_config.socket_connect_timeout,
@@ -952,12 +956,7 @@ class RedisConnectionManager:
         This pool is created ONCE per database and stored in self._async_pools.
         All subsequent get_async_client() calls for this database reuse this pool.
 
-        Pool Configuration:
-        - max_connections: 20 (from REDIS_CONFIG.MAX_CONNECTIONS_POOL)
-        - socket_timeout: 5.0 seconds
-        - TCP keepalive enabled
-        - Manual retry with exponential backoff
-        - Loading dataset handling
+        Sizing, timeouts, keepalive and retry come from PoolConfig / RedisConfig.
         """
         if database_name in self._configs:
             config = self._configs[database_name]
@@ -969,6 +968,7 @@ class RedisConnectionManager:
                 host=self._config["host"],
                 port=self._config["port"],
                 password=self._config.get("password"),
+                username=self._config.get("username"),
                 max_connections=self._pool_config.max_connections,
                 socket_timeout=self._pool_config.socket_timeout,
                 socket_connect_timeout=self._pool_config.socket_connect_timeout,

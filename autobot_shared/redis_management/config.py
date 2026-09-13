@@ -58,6 +58,9 @@ class RedisConfig:
     host: str = NetworkConstants.REDIS_VM_IP
     port: int = NetworkConstants.REDIS_PORT
     password: str | None = None
+    # #16626: ACL username sent with the password as `AUTH <username> <password>`.
+    # None keeps today's password-only AUTH.
+    username: str | None = None
     decode_responses: bool = True
     max_connections: int = _MAX_CONNECTIONS_POOL
     socket_timeout: float = float(_SOCKET_TIMEOUT)
@@ -76,10 +79,13 @@ class RedisConfig:
     ssl_cert_reqs: str = "required"
 
     def __post_init__(self) -> None:
-        """Auto-load password and TLS settings from environment if not provided."""
+        """Auto-load password, username and TLS settings from environment if not provided."""
         if self.password is None:
             # Try REDIS_PASSWORD first, then AUTOBOT_REDIS_PASSWORD
             self.password = os.getenv("REDIS_PASSWORD") or os.getenv("AUTOBOT_REDIS_PASSWORD")
+        if self.username is None:
+            # Same precedence as the password (#16626)
+            self.username = os.getenv("REDIS_USERNAME") or os.getenv("AUTOBOT_REDIS_USERNAME")
         # Auto-load TLS settings from SSOT config - Issue #164
         if os.getenv("AUTOBOT_REDIS_TLS_ENABLED", "").lower() == "true":
             self.ssl = True
@@ -150,6 +156,7 @@ class RedisConfigLoader:
             host=db_config.get("host", NetworkConstants.REDIS_VM_IP),
             port=db_config.get("port", NetworkConstants.REDIS_PORT),
             password=db_config.get("password"),
+            username=db_config.get("username"),
             decode_responses=db_config.get("decode_responses", True),
             max_connections=db_config.get("max_connections", 100),
             socket_timeout=db_config.get("socket_timeout", 5.0),
@@ -229,6 +236,7 @@ class RedisConfigLoader:
                         host=redis_config.host,
                         port=redis_config.port,
                         password=(redis_config.password if hasattr(redis_config, "password") else None),
+                        username=getattr(redis_config, "username", None),
                     )
                 }
         except (ImportError, Exception) as e:

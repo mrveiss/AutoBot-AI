@@ -11,7 +11,6 @@ with real-time event streaming and task routing.
 Issue #725: Added mTLS support for Redis connections.
 """
 
-import urllib.parse
 from pathlib import Path
 
 from celery import Celery
@@ -30,15 +29,11 @@ logger = _get_logger(__name__)
 
 # Build Redis URLs from SSOT configuration (loads directly from .env)
 # DB numbers come from redis-databases.yaml via DATABASE_MAPPING (#2670)
-_redis_host = ssot_config.vm.redis
-_redis_password = ssot_config.redis.password
 _celery_broker_db = DATABASE_MAPPING["celery_broker"]
 _celery_results_db = DATABASE_MAPPING["celery_results"]
 
 # Issue #725: Check if TLS is enabled for Redis connections
 _redis_tls_enabled = ssot_config.tls.redis_tls_enabled
-_redis_port = ssot_config.tls.redis_tls_port if _redis_tls_enabled else ssot_config.port.redis
-_redis_scheme = "rediss" if _redis_tls_enabled else "redis"
 
 # Build SSL context for TLS connections - Issue #725, #164
 _broker_ssl_options = None
@@ -64,15 +59,10 @@ if _redis_tls_enabled:
     _broker_ssl_options = {"ssl": _ssl_context}
     _backend_ssl_options = {"ssl": _ssl_context}
 
-# Construct URLs with password authentication if available
-if _redis_password:
-    # URL-encode the password to handle special characters (+, /, =, etc.)
-    _encoded_password = urllib.parse.quote(_redis_password, safe="")
-    _default_broker_url = f"{_redis_scheme}://:{_encoded_password}@{_redis_host}:{_redis_port}/{_celery_broker_db}"
-    _default_backend_url = f"{_redis_scheme}://:{_encoded_password}@{_redis_host}:{_redis_port}/{_celery_results_db}"
-else:
-    _default_broker_url = f"{_redis_scheme}://{_redis_host}:{_redis_port}/{_celery_broker_db}"
-    _default_backend_url = f"{_redis_scheme}://{_redis_host}:{_redis_port}/{_celery_results_db}"
+# Scheme, TLS port and URL-encoded credentials (including the optional ACL
+# username, #16626) come from the one SSOT builder every Redis URL uses.
+_default_broker_url = ssot_config.get_redis_url_for_db(_celery_broker_db)
+_default_backend_url = ssot_config.get_redis_url_for_db(_celery_results_db)
 
 # Get Celery-specific configuration
 _celery_config = config.get("celery", {})

@@ -45,6 +45,7 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import ClassVar, Dict, FrozenSet, List
+from urllib.parse import quote
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -759,6 +760,7 @@ class RedisConfig(RedactedSettings):
 
     # Security
     password: str | None = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
+    username: str | None = Field(default=None, alias="AUTOBOT_REDIS_USERNAME")  # ACL user (#16626)
 
 
 class CacheCoordinatorConfig(RedactedSettings):
@@ -2547,15 +2549,13 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def redis_url_with_auth(self) -> str:
-        """Get the full Redis URL with password if configured."""
-        if self.tls.redis_tls_enabled:
-            scheme = "rediss"
-            port = self.tls.redis_tls_port
-        else:
-            scheme = "redis"
-            port = self.port.redis
+        """Get the full Redis URL with credentials if configured (URL-encoded)."""
+        tls = self.tls.redis_tls_enabled
+        scheme, port = ("rediss", self.tls.redis_tls_port) if tls else ("redis", self.port.redis)
         if self.redis.password:
-            return f"{scheme}://:{self.redis.password}@{self.vm.redis}:{port}"
+            # #16626: userinfo carries the ACL username when set; unset keeps ":<password>"
+            userinfo = f"{quote(self.redis.username or '', safe='')}:{quote(self.redis.password, safe='')}"
+            return f"{scheme}://{userinfo}@{self.vm.redis}:{port}"
         return f"{scheme}://{self.vm.redis}:{port}"
 
     @property

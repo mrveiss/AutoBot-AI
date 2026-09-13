@@ -96,19 +96,26 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # ------------------------------------------------------------------------
   # Phase 0c (#5142): verification mandate (type-check + test-run)
   # ------------------------------------------------------------------------
-  # Find files changed in the commits we're pushing. For first push of a
-  # branch, the remote sha is 0000...; in that case diff against the merge
-  # base with origin/main.
-  if [ "$remote_sha" = "$ZERO" ]; then
-    base=$(git merge-base "$local_sha" origin/main 2>/dev/null \
-        || git merge-base "$local_sha" release 2>/dev/null \
-        || echo "")
-    if [ -z "$base" ]; then
-      warn "Cannot determine merge base — skipping Phase 0c verification"
-      continue
-    fi
+  # Find files changed in the commits we're pushing. Always prefer the merge
+  # base with origin/main (or release): this is the PR's own diff regardless
+  # of whether the remote already has a prior push. A raw ${remote_sha}..
+  # ${local_sha} two-dot range -- correct only for a first push, where
+  # remote_sha is 0000... -- silently included every file that changed on
+  # origin/main between the branch's last push and now once used after a
+  # `git rebase origin/main` + force-push, inflating the verified changeset
+  # with unrelated files (#16637).
+  base=$(git merge-base "$local_sha" origin/main 2>/dev/null \
+      || git merge-base "$local_sha" release 2>/dev/null \
+      || echo "")
+  if [ -n "$base" ]; then
     diff_range="${base}..${local_sha}"
+  elif [ "$remote_sha" = "$ZERO" ]; then
+    warn "Cannot determine merge base — skipping Phase 0c verification"
+    continue
   else
+    # Last-resort fallback, only when no merge base could be found at all
+    # (e.g. a shallow clone): the old two-dot range beats skipping Phase 0c
+    # outright on an ordinary push.
     diff_range="${remote_sha}..${local_sha}"
   fi
 
