@@ -36,6 +36,7 @@ _SCOPED_TASK_FILES = (
     "autobot-slm-backend/ansible/roles/frontend/tasks/main.yml",
     "autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml",
     "autobot-slm-backend/ansible/_shared/tasks/ensure_node_tls_cert.yml",
+    "autobot-slm-backend/ansible/_shared/tasks/generate_self_signed_cert.yml",
     "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml",
 )
 
@@ -79,12 +80,26 @@ def _tasks(path: Path) -> list[dict[str, Any]]:
     return out
 
 
-def _key_paths_and_mode(task: dict[str, Any]) -> list[tuple[str, str]]:
-    """[(path, mode), ...] for every key-shaped path a `file` task sets a mode on."""
+def _key_paths_and_mode(task: dict[str, Any]) -> list[tuple[str, object]]:
+    """[(path, mode), ...] for every key-shaped path a `file` task sets a mode on.
+
+    `mode` is returned AS PARSED, not coerced to ``str`` -- an unquoted
+    ``mode: 0644`` is octal-literal syntax to a human but YAML 1.1 reads it as
+    the plain integer 420, and ``str(420)`` is ``"420"``, whose last two
+    characters describe a different number entirely, not permission bits
+    (#16522 review: this let a world-readable mode read as safe). Callers
+    must reject anything that isn't already the octal-digit string this repo
+    writes ("0644"), rather than silently reinterpreting some other shape.
+
+    Only inspects a `file`/`ansible.builtin.file` task's own `mode:` --
+    `copy`, `template` and `openssl_privatekey` can also set permissions, but
+    no in-scope task uses them today (#16522 review, LOW). A key task moving
+    to one of those modules would silently exit this guard's coverage.
+    """
     file_args = task.get("file") or task.get("ansible.builtin.file")
     if not isinstance(file_args, dict) or "mode" not in file_args:
         return []
-    mode = str(file_args["mode"])
+    mode = file_args["mode"]
 
     paths: list[str] = []
     single = file_args.get("path") or file_args.get("dest")
@@ -103,15 +118,33 @@ def test_scoped_task_files_exist():
         assert (REPO_ROOT / rel).is_file(), f"{rel} missing"
 
 
+def _reject_non_string_mode(rel: str, task_name: object, path: str, mode: object) -> str | None:
+    """None if *mode* is a safely-parseable octal-digit string; else the offense text.
+
+    A quoted ansible mode ("0644") is the only shape this guard trusts. An
+    int (YAML's own reading of an unquoted 0644, #16522 review), a bool, or
+    anything else that is not a 3-4 digit octal string is refused outright
+    rather than reinterpreted -- guessing here is exactly how the CRITICAL
+    finding slipped through.
+    """
+    if not isinstance(mode, str) or not mode.isdigit() or not (3 <= len(mode) <= 4):
+        return f"{rel}: {task_name!r} sets {path!r} to mode {mode!r}, not a quoted octal-digit string"
+    return None
+
+
 def test_no_key_task_is_world_readable():
     offenders: list[str] = []
     for rel in _SCOPED_TASK_FILES:
         for task in _tasks(REPO_ROOT / rel):
             for path, mode in _key_paths_and_mode(task):
+                rejected = _reject_non_string_mode(rel, task.get("name"), path, mode)
+                if rejected:
+                    offenders.append(rejected)
+                    continue
                 other_digit = mode[-1]
                 if other_digit not in ("0",):
                     offenders.append(f"{rel}: {task.get('name')!r} sets {path!r} to mode {mode!r}")
-    assert not offenders, f"world-readable TLS key mode(s) found: {offenders}"
+    assert not offenders, f"world-readable (or unparseable) TLS key mode(s) found: {offenders}"
 
 
 def test_group_readable_key_tasks_are_on_the_allowlist():
@@ -119,6 +152,8 @@ def test_group_readable_key_tasks_are_on_the_allowlist():
     for rel in _SCOPED_TASK_FILES:
         for task in _tasks(REPO_ROOT / rel):
             for path, mode in _key_paths_and_mode(task):
+                rejected = _reject_non_string_mode(rel, task.get("name"), path, mode)
+                assert not rejected, rejected
                 group_digit = mode[-2]
                 if group_digit == "0":
                     continue
@@ -145,3 +180,42 @@ def test_backend_and_frontend_still_set_the_key_mode_explicitly():
         paths = [p for task in _tasks(REPO_ROOT / rel) for p, _mode in _key_paths_and_mode(task)]
         seen[rel] = paths
         assert paths, f"{rel} no longer sets a mode on any key-shaped path -- did the task get removed?"
+
+
+@pytest.mark.parametrize(
+    "yaml_text",
+    [
+        # Quoted, world-readable -- the shape this guard always caught.
+        """
+        - name: quoted offender
+          file:
+            path: /etc/autobot/certs/server-key.pem
+            mode: "0644"
+        """,
+        # Unquoted -- YAML 1.1 reads a leading-zero scalar as OCTAL, so this
+        # parses to the int 420, not the string "0644". This is the exact
+        # CRITICAL finding from the #16522 review: str(420)[-1] == "0" read
+        # as "not world-readable", when 420 in octal notation IS 0644.
+        """
+        - name: unquoted offender
+          file:
+            path: /etc/autobot/certs/server-key.pem
+            mode: 0644
+        """,
+    ],
+)
+def test_a_world_readable_key_mode_is_caught_quoted_or_not(yaml_text: str) -> None:
+    """Known positive (#16522 review): the MEDIUM finding this guard test file lacked.
+
+    Without this, the guard's own blind spot to an unquoted mode could
+    regress silently again -- a detector proven only on the shape it
+    already handles says nothing about the shape that broke it.
+    """
+    (task,) = yaml.safe_load(yaml_text)
+    pairs = _key_paths_and_mode(task)
+    assert pairs, "fixture did not produce a key-shaped (path, mode) pair -- fixture or markers drifted"
+    for path, mode in pairs:
+        rejected = _reject_non_string_mode("fixture", task.get("name"), path, mode)
+        if rejected:
+            continue  # a non-string mode is refused outright -- that IS catching it
+        assert mode[-1] != "0", f"fixture mode {mode!r} should have read as world-readable, and did not"
