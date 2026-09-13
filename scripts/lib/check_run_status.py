@@ -30,6 +30,9 @@ repo, each silent and each in a different direction:
 comparing against a second reading, which is why this is one helper rather than
 advice.
 
+A fifth question this now answers: **for how long**. "Pending" alone does not
+say whether a context is fresh or stuck (#16126) -- see :func:`pending_ages`.
+
 Use :func:`check_run_status` unless you specifically need the raw runs.
 """
 
@@ -37,6 +40,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from datetime import datetime, timezone
 from typing import Iterable
 
 #: A conclusion that does not block. `skipped` and `neutral` are here because
@@ -187,6 +191,50 @@ def check_run_status(repository: str, sha: str) -> dict[str, str]:
     not green -- see :func:`split_by_state`.
     """
     return latest_per_name(check_runs_for(repository, sha))
+
+
+def _age_seconds(timestamp: str) -> float | None:
+    """Seconds since an ISO-8601 UTC timestamp (GitHub's format), or ``None`` if unparseable."""
+    try:
+        started = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (datetime.now(timezone.utc) - started).total_seconds()
+
+
+def pending_ages(observations: Iterable[dict]) -> dict[str, float]:
+    """Seconds since each currently-RUNNING context started (#16126).
+
+    ``reported`` and ``not green`` collapse two situations a reader needs told
+    apart: nine minutes pending while the repo is actively scheduling is fresh,
+    thirty minutes pending while nothing else changed is stuck -- and the two
+    look identical without an age. Silent until a context's age is read, same
+    as the floor headroom this mirrors (#16183).
+
+    Only the winning (newest, per :func:`latest_runs`) observation for each
+    name is measured, and only for names currently ranked ``running`` --
+    a name that finished carries a stale ``started_at`` that means nothing here.
+    """
+    ages: dict[str, float] = {}
+    for run in latest_runs(observations):
+        name = run.get("name") or run.get("context")
+        if not name:
+            continue
+        state = run.get("conclusion") or run.get("state") or "pending"
+        if rank(state) != "running":
+            continue
+        started = run.get("started_at") or run.get("created_at")
+        if not started:
+            continue
+        age = _age_seconds(started)
+        if age is not None:
+            ages[name] = age
+    return ages
+
+
+def pending_check_ages(repository: str, sha: str) -> dict[str, float]:
+    """Live counterpart to :func:`pending_ages`, fetching ``sha``'s check runs."""
+    return pending_ages(check_runs_for(repository, sha))
 
 
 def split_by_state(observed: dict[str, str], expected: Iterable[str]) -> dict[str, list[str]]:
