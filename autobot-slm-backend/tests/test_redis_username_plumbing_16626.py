@@ -106,6 +106,18 @@ def test_backend_env_sends_default_with_a_password_and_no_username():
     assert _url_userinfo(out) == f"default:{_PW}"
 
 
+def test_backend_env_keeps_a_configured_username():
+    out = _render(
+        _backend_redis_block(),
+        backend_redis_host="h",
+        backend_redis_port=6379,
+        backend_redis_password=_PW,
+        backend_redis_username="svc",
+    )
+    assert "AUTOBOT_REDIS_USERNAME=svc" in out
+    assert _url_userinfo(out) == f"svc:{_PW}"
+
+
 def test_backend_env_without_a_password_sends_no_credential():
     out = _render(
         _backend_redis_block(),
