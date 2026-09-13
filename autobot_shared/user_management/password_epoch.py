@@ -136,7 +136,7 @@ async def set_password_epoch(subject: str, *, now: int | None = None) -> int | N
         )
         return None
 
-    logger.info("Password epoch recorded for subject=%s: tokens issued before %s are revoked", subject, epoch)
+    logger.info("Password epoch recorded for subject=%s: its earlier tokens are revoked", subject)
     return epoch
 
 
