@@ -3,14 +3,23 @@
 # autobot-backend/transcriber/tests/test_projects_api.py
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
+from types import SimpleNamespace
+
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 
 from transcriber.database import Database
-from transcriber.deps import get_db
+from transcriber.deps import authenticate, get_db
 from transcriber.routes.projects import router
+
+TEST_CALLER = "test-user"
+
+
+def _as_test_user(request: Request) -> None:
+    """Stand in for authenticate: these tests exercise ownership, not login (#15758)."""
+    request.state.user = SimpleNamespace(id=TEST_CALLER, is_admin=False)
 
 
 @pytest_asyncio.fixture
@@ -24,6 +33,7 @@ async def client(tmp_path):
         return db
 
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[authenticate] = _as_test_user
     app.include_router(router, prefix="/api/transcriber")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
