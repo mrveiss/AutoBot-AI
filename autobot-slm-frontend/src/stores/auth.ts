@@ -79,21 +79,6 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!token.value)
   const isAdmin = computed(() => user.value?.isAdmin ?? false)
 
-  /**
-   * Host origin the SLM admin app is pointed at, for DISPLAY only
-   * (`APISettings.vue`, `BackendSettings.vue`). It is deliberately NOT a
-   * transport base: it hard-returns `''` under `import.meta.env.DEV`, so it
-   * ignores `VITE_API_URL` where `getSlmApiBase()` honours it. Every request
-   * in this store now goes through `slmApiClient`, which resolves
-   * `getSlmApiBase()` (#13140).
-   */
-  function getApiUrl(): string {
-    if (import.meta.env.DEV) {
-      return ''
-    }
-    return import.meta.env.VITE_API_URL || ''
-  }
-
   async function login(username: string, password: string): Promise<boolean> {
     loading.value = true
     error.value = null
@@ -302,6 +287,5 @@ export const useAuthStore = defineStore('auth', () => {
     fetchCurrentUser,
     getAuthHeaders,
     checkAuth,
-    getApiUrl,
   }
 })
