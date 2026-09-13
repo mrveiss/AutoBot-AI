@@ -234,7 +234,7 @@ def test_every_baseline_entry_carries_a_not_a_secret_verdict() -> None:
     results = json.loads(_BASELINE.read_text(encoding="utf-8"))["results"]
     assert results, "the baseline holds no results -- an empty baseline audits nothing"
     unaudited = [
-        f"{path}:{entry['line_number']}: {entry['type']} (is_secret={entry.get('is_secret', 'unaudited')})"
+        f"{path}:{entry.get('line_number', '?')}: {entry['type']} (is_secret={entry.get('is_secret', 'unaudited')})"
         for path, entries in results.items()
         for entry in entries
         if entry.get("is_secret") is not False

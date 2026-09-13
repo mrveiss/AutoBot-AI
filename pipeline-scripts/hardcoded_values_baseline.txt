@@ -510,7 +510,6 @@
 1|other|autobot-frontend/src/composables/collaboration/useCollaborationInvite.ts|offset=0
 1|other|autobot-frontend/src/composables/knowledge/useKnowledgeBrowser.ts|offset=0
 1|other|autobot-frontend/src/composables/useAIDocument.ts|50
-1|other|autobot-frontend/src/composables/useApi.ts|10
 1|other|autobot-frontend/src/composables/useCodeIntelligence.ts|50
 1|other|autobot-frontend/src/composables/useCollaborationInvites.ts|offset=0
 1|other|autobot-frontend/src/composables/usePlugins.ts|50

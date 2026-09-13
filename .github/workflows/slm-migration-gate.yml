@@ -20,14 +20,14 @@ name: SLM Migration Gate
 
 on:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     paths: &paths
       - 'autobot-slm-backend/migrations/**'
       - 'autobot-slm-backend/models/database.py'
       - 'autobot-slm-backend/user_management/models/**'
       - '.github/workflows/slm-migration-gate.yml'
   pull_request:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     paths: *paths
 
 concurrency:
@@ -133,7 +133,7 @@ jobs:
         # first-party import paths against a fixed root list that does not
         # include autobot-slm-backend, so it cannot tell the two apart.
         env:
-          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/slm
         working-directory: autobot-slm-backend
         run: |
           python3 - <<'PY'
@@ -184,7 +184,7 @@ jobs:
         # own cwd on sys.path regardless.
         env:
           SLM_POSTGRES_HOST: 127.0.0.1
-          SLM_POSTGRES_PORT: "5432"
+          SLM_POSTGRES_PORT: ${{ job.services.postgres.ports['5432'] }}
           SLM_POSTGRES_DB: slm_users
           SLM_POSTGRES_USER: slmtest
           SLM_POSTGRES_PASSWORD: slmtest
@@ -211,7 +211,7 @@ jobs:
 
       - name: (a) Apply all migrations on a fresh DB
         env:
-          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/slm
           # #14300: role_permissions/audit_logs live in the separate
           # slm_users database. migrations.runner.get_user_management_db_url()
           # resolves it via user_management.config.get_slm_db_config(), which
@@ -219,7 +219,7 @@ jobs:
           # discrete SLM_POSTGRES_* components (its documented fallback,
           # same mechanism the schema-bootstrap step above uses).
           SLM_POSTGRES_HOST: 127.0.0.1
-          SLM_POSTGRES_PORT: "5432"
+          SLM_POSTGRES_PORT: ${{ job.services.postgres.ports['5432'] }}
           SLM_POSTGRES_DB: slm_users
           SLM_POSTGRES_USER: slmtest
           SLM_POSTGRES_PASSWORD: slmtest
@@ -243,9 +243,9 @@ jobs:
         # The runner tracks applied migrations in migrations_applied.
         # A second run must succeed with 'No migrations to run' (no failures).
         env:
-          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/slm
           SLM_POSTGRES_HOST: 127.0.0.1
-          SLM_POSTGRES_PORT: "5432"
+          SLM_POSTGRES_PORT: ${{ job.services.postgres.ports['5432'] }}
           SLM_POSTGRES_DB: slm_users
           SLM_POSTGRES_USER: slmtest
           SLM_POSTGRES_PASSWORD: slmtest
@@ -270,7 +270,7 @@ jobs:
         # raising.
         env:
           PGHOST: 127.0.0.1
-          PGPORT: "5432"
+          PGPORT: ${{ job.services.postgres.ports['5432'] }}
           PGDATABASE: slm_users
           PGUSER: slmtest
           PGPASSWORD: slmtest
@@ -329,7 +329,7 @@ jobs:
         # ...` here reads as "autobot-backend/migrations/runner.py", which
         # does not exist, and fails that guard.
         env:
-          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/slm
           PYTHONPATH: ${{ github.workspace }}
         working-directory: autobot-slm-backend
         run: |
@@ -409,7 +409,7 @@ jobs:
         # this step's own credential-free style.
         env:
           PGHOST: 127.0.0.1
-          PGPORT: "5432"
+          PGPORT: ${{ job.services.postgres.ports['5432'] }}
           PGDATABASE: slm
           PGUSER: slmtest
           PGPASSWORD: slmtest

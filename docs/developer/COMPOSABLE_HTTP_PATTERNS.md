@@ -1,10 +1,10 @@
 # Frontend Composable HTTP Patterns
 
-Five patterns coexist in the composable layer. All are intentional. This doc explains when to use each and how they differ.
+Four patterns coexist in the composable layer. All are intentional. This doc explains when to use each and how they differ.
 
 ---
 
-## The Five Patterns
+## The Four Patterns
 
 ### Pattern A1 — Direct `ApiClient` + `useLoadingState`
 
@@ -25,47 +25,6 @@ async function launch(url: string) {
 ```
 
 `ApiClient` manages auth, retries, and a built-in timeout internally. The composable does not need to know about those details. `wrap()` handles the `isLoading` flag and propagates errors unchanged.
-
----
-
-### Pattern A2 — Injected `useApi()` / `useApiWithState()`
-
-**Used for:** the same mutation use-cases as A1, but the component receives the `ApiClient` instance via Vue injection rather than importing it directly. Under the hood, `useApi()` returns the same `ApiClient` instance that was registered with `app.use(ApiPlugin)`.
-
-**When to choose A2 over A1:** when the component or composable is instantiated inside a Vue component tree that provides the API plugin, and you want testability via injection override. Both patterns talk to the same `ApiClient`.
-
-**Important — loading state:** `withErrorHandling()` from `useApiWithState()` does **not** manage a loading flag. You still need `useLoadingState()` if the UI must show a spinner.
-
-```typescript
-import { useApiWithState } from '@/composables/useApi'
-import { useLoadingState } from '@/composables/useLoadingState'
-import { getApiBase } from '@/config/ssot-config'
-
-export function useOperationsApi() {
-  const { api, withErrorHandling } = useApiWithState()
-  const { isLoading, wrap } = useLoadingState()
-
-  async function listOperations(filter?: OperationsFilter) {
-    return wrap(() =>
-      withErrorHandling(async () => {
-        const params = new URLSearchParams()
-        if (filter?.status) params.append('status', filter.status)
-        const response = await api.get(`${getApiBase()}/long-running/?${params}`)
-        return response.json()
-      })
-    )
-  }
-
-  return { isLoading, listOperations }
-}
-```
-
-`useApi()` variant — inject only, no error wrapper:
-
-```typescript
-const api = useApi()
-const data = await api.get<ResponseType>(`${getApiBase()}/some/endpoint`)
-```
 
 ---
 
@@ -159,24 +118,24 @@ async function slmFetch(path: string, options: RequestInit = {}): Promise<Respon
 
 **Appropriate for:** Prometheus metrics, SLM endpoints with a separate token, network health checks, endpoints that do not require the main auth token.
 
-**Inappropriate for:** any regular backend endpoint that requires the standard auth Bearer token — use `fetchWithAuth` (B2) or `ApiClient` (A1/A2) instead. Raw `fetch()` does **not** add auth headers automatically.
+**Inappropriate for:** any regular backend endpoint that requires the standard auth Bearer token — use `fetchWithAuth` (B2) or `ApiClient` (A1) instead. Raw `fetch()` does **not** add auth headers automatically.
 
 ---
 
 ## Decision Table
 
-| Question | A1 (direct `ApiClient`) | A2 (`useApi()`/`useApiWithState()`) | B1 (`useFetchEndpoint`) | B2 (raw `fetchWithAuth`) | C (raw `fetch()`) |
-|---|---|---|---|---|---|
-| HTTP method | POST / DELETE / PUT | POST / DELETE / PUT / GET | GET (occasional POST) | Any | Any |
-| Auth handled by | `ApiClient` internal | `ApiClient` internal | `fetchWithAuth` internal | `fetchWithAuth` internal | manual headers |
-| Trigger | User action | User action | `onMounted`, `watch`, timer | User action (legacy) | User action or timer |
-| Result goes into | Inline variable / callback | Inline variable / callback | `data.value` reactive ref | Inline variable / manual ref | Inline variable / manual ref |
-| Abort on unmount | No | No | Yes (via `useApiResource`) | No | No |
-| Race guard | No | No | Yes (monotonic call IDs) | No | No |
-| Loading state | `useLoadingState()` | `useLoadingState()` (manual — `withErrorHandling` doesn't manage it) | built-in `loading` ref | manual `loading` ref | manual or `useLoadingState()` |
-| New code? | Yes | Yes | Yes | **No — legacy only** | When no auth helper fits |
+| Question | A1 (direct `ApiClient`) | B1 (`useFetchEndpoint`) | B2 (raw `fetchWithAuth`) | C (raw `fetch()`) |
+|---|---|---|---|---|
+| HTTP method | POST / DELETE / PUT | GET (occasional POST) | Any | Any |
+| Auth handled by | `ApiClient` internal | `fetchWithAuth` internal | `fetchWithAuth` internal | manual headers |
+| Trigger | User action | `onMounted`, `watch`, timer | User action (legacy) | User action or timer |
+| Result goes into | Inline variable / callback | `data.value` reactive ref | Inline variable / manual ref | Inline variable / manual ref |
+| Abort on unmount | No | Yes (via `useApiResource`) | No | No |
+| Race guard | No | Yes (monotonic call IDs) | No | No |
+| Loading state | `useLoadingState()` | built-in `loading` ref | manual `loading` ref | manual or `useLoadingState()` |
+| New code? | Yes | Yes | **No — legacy only** | When no auth helper fits |
 
-If you need `data.value` to drive a template, use Pattern B1. If the result is consumed imperatively in the same function, use Pattern A1 or A2. If neither `ApiClient` nor `fetchWithAuth` cover the endpoint's auth needs, use Pattern C.
+If you need `data.value` to drive a template, use Pattern B1. If the result is consumed imperatively in the same function, use Pattern A1. If neither `ApiClient` nor `fetchWithAuth` cover the endpoint's auth needs, use Pattern C.
 
 ---
 
@@ -232,19 +191,6 @@ The split is deliberate and low-risk today. `ApiClient` is well-tested for mutat
 | `useWorkflowBuilder` | Workflow builder mutations |
 | `useCodeIntelligence` | Counter-based `loadingCount` — not migrated; see #5880 |
 
-### Pattern A2 — Injected `useApi()` / `useApiWithState()`
-
-| Composable | Notes |
-|---|---|
-| `useConversationFiles` | `useApi()` for file management; `useLoadingState` for loading flag |
-| `useAuditApi` | `useApiWithState()` + `withErrorHandling` |
-| `useServiceMessages` | `useApiWithState()` + `withErrorHandling` |
-| `useSecretsAuditApi` | `useApiWithState()` + `withErrorHandling` |
-| `useOperationsApi` | `useApiWithState()` + `withErrorHandling`; `useLoadingState` for UI spinner |
-| `useAutoResearch` | `useApiWithState()` for research submission |
-| `useBatchProcessing` | `useApiWithState()` for batch job submission |
-| `usePrometheusMetrics` | `useApi()` for monitoring reads; `useLoadingState` for loading flag |
-
 ### Pattern B1 — `useFetchEndpoint` / `useApiResource`
 
 | Composable | Notes |
@@ -274,7 +220,7 @@ The split is deliberate and low-risk today. `ApiClient` is well-tested for mutat
 
 ## Writing a new composable
 
-1. **Mutation (user-triggered POST/DELETE)?** → `ApiClient` (A1) + `useLoadingState`. One `const { isLoading, wrap } = useLoadingState()` per independent loading state. Use A2 (`useApi()`) if the composable is deeply inside a component tree and injection testability matters.
+1. **Mutation (user-triggered POST/DELETE)?** → `ApiClient` (A1) + `useLoadingState`. One `const { isLoading, wrap } = useLoadingState()` per independent loading state.
 
 2. **Read that populates a template?** → `useFetchEndpoint` (B1). Provide `path`, `pickData`, and call `load()` in `onMounted` or a `watch`.
 
