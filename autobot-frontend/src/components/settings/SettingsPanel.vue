@@ -66,6 +66,15 @@
 </template>
 
 <script setup lang="ts">
+// #16465: this component is not mounted anywhere in the app today -- only
+// its own test and story reach it, and its GET/POST /settings/ calls hit
+// the now admin-gated backend route (#16240). Left in place rather than
+// retired: #16245 owns its actual disposition (relocating the detailed
+// system-health and Redis-service-management parts into the SLM before
+// removing this component's entry points), and that migration hasn't
+// happened yet. Its plain settings get/save is already superseded
+// elsewhere (utils/ApiClient.ts, live via AgentSettingsPanel.vue and
+// BatchApiService.ts) -- see #16465 for the parity evidence.
 import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, onMounted, provide } from 'vue'
 import { useI18n } from 'vue-i18n'

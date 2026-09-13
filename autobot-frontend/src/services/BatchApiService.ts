@@ -3,6 +3,15 @@
 /**
  * Batch API Service - Optimized service for batching multiple API calls
  * Updated to use correct ApiClient singleton with proper error handling
+ *
+ * #16465: fallbackChatInitialization() used to also fetch ApiClient.getSettings()
+ * (the global admin config endpoint, admin-gated since #16240) on every chat load
+ * for every user -- but its result was never read anywhere by the only real
+ * caller (ChatInterface.vue's initializeChatInterface), so it was fetched only to
+ * be discarded, and always failed for non-admins post-#16240. Removed rather than
+ * routed elsewhere: nothing consumed it, so there was no capability to preserve.
+ * loadChatInitData() (a separate, unrelated method with the same admin-gated
+ * call) was removed outright -- zero real callers, only its own test's mock.
  */
 
 import apiClient from '@/utils/ApiClient';
@@ -15,19 +24,6 @@ import { getApiBase } from '@/config/ssot-config';
 const logger = createLogger('BatchApiService');
 
 // Type definitions
-interface ChatMessage {
-  id: string;
-  content: string;
-  sender: string;
-  timestamp: string;
-}
-
-interface ChatInitData {
-  messages: ChatMessage[];
-  session_info: Record<string, unknown>;
-  user_preferences: Record<string, unknown>;
-}
-
 interface ApiResponse<T = unknown> {
   // data is null when the API call failed (distinguishes from data:[] which means
   // the backend returned 0 items successfully). See issue #4353.
@@ -42,7 +38,6 @@ interface ApiResponse<T = unknown> {
 interface FallbackResults {
   chat_sessions: ApiResponse<Record<string, unknown>[]>;
   system_health: ApiResponse<Record<string, unknown>>;
-  settings: ApiResponse<Record<string, unknown>>;
 }
 
 interface BatchRequest {
@@ -73,37 +68,6 @@ export class BatchApiService {
   async initializeChatInterface(): Promise<FallbackResults> {
     logger.debug('Using individual API calls for chat initialization');
     return await this.fallbackChatInitialization();
-  }
-
-  async loadChatInitData(sessionId: string): Promise<ChatInitData> {
-    logger.debug('Loading chat init data for session:', sessionId);
-
-    try {
-      const messages = await this.apiClient.getChatMessages(sessionId);
-
-      const session_info = { id: sessionId };
-
-      let user_preferences: Record<string, unknown> = {};
-      try {
-        const settings = await this.apiClient.getSettings();
-        user_preferences = (settings as Record<string, unknown>).user_preferences as Record<string, unknown> || {};
-      } catch (error) {
-        logger.warn('Could not load user preferences:', error);
-      }
-
-      return {
-        messages: (messages as Record<string, unknown>).messages as ChatMessage[] || [],
-        session_info,
-        user_preferences
-      };
-    } catch (error) {
-      logger.error('Failed to load chat init data:', error);
-      return {
-        messages: [],
-        session_info: { id: sessionId },
-        user_preferences: {}
-      };
-    }
   }
 
   private extractSessionsList(response: unknown): unknown[] | null {
@@ -157,12 +121,10 @@ export class BatchApiService {
 
     const [
       chatSessionsResult,
-      systemHealthResult,
-      settingsResult
+      systemHealthResult
     ] = await Promise.allSettled([
       this.apiClient.getChatList(),
-      this.apiClient.getSystemHealth(),
-      this.apiClient.getSettings()
+      this.apiClient.getSystemHealth()
     ]);
 
     const chatSessionsApiResult = this.buildChatSessionsResult(chatSessionsResult);
@@ -172,11 +134,7 @@ export class BatchApiService {
 
       system_health: systemHealthResult.status === 'fulfilled'
         ? { data: systemHealthResult.value as Record<string, unknown> }
-        : { error: (systemHealthResult as PromiseRejectedResult).reason?.message || 'Failed to load' },
-
-      settings: settingsResult.status === 'fulfilled'
-        ? { data: settingsResult.value as Record<string, unknown> }
-        : { error: (settingsResult as PromiseRejectedResult).reason?.message || 'Failed to load' }
+        : { error: (systemHealthResult as PromiseRejectedResult).reason?.message || 'Failed to load' }
     };
 
     // BUG4/BUG5: these are returned as `error` fields above and surfaced by the
@@ -187,9 +145,6 @@ export class BatchApiService {
     }
     if (systemHealthResult.status === 'rejected') {
       logger.debug('System health unavailable:', (systemHealthResult as PromiseRejectedResult).reason?.message);
-    }
-    if (settingsResult.status === 'rejected') {
-      logger.debug('Settings unavailable:', (settingsResult as PromiseRejectedResult).reason?.message);
     }
 
     logger.info('Parallel chat initialization completed');
