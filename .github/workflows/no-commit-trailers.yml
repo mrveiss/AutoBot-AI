@@ -25,7 +25,7 @@ on:
 # #13432 found that cancelling base-branch runs meant each merge cancelled the
 # previous merge's verification, and merges arrive faster than a suite completes -
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
-# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -43,7 +43,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           # NOT fetch-depth: 0 (#16207). This gate reads one regex over the PR's own
-          # commits, and a full clone is 12,874 commits on Dev_new_gui -- measured at
+          # commits, and a full clone is 12,874 commits on main -- measured at
           # 13s of git for 1s of work, 93% of the job, paid on every PR. Deepest PR in
           # the last 40 merged was 30 commits, so 100 is >3x the observed maximum.
           #
@@ -124,7 +124,7 @@ jobs:
           owner_re='martins\.veiss@gmail\.com|Martins Veiss'
           # GitHub's squash merge stamps "Co-authored-by: github-actions[bot]" onto
           # the owner's own commit whenever the auto-fix workflow pushed to the
-          # branch. 22 of the last 60 commits on Dev_new_gui carry exactly that, so
+          # branch. 22 of the last 60 commits on main carry exactly that, so
           # a rule without this arm would reject a third of normal work.
           bot_ident_re='\[bot\]@users\.noreply\.github\.com|\[bot\]>'
           coauthor_re='^[[:space:]]*Co-authored-by:'

@@ -427,11 +427,20 @@
     # consumer swallowed the failure — an absent store was indistinguishable
     # from "that secret does not exist". `load_root_key` base64-DECODES this and
     # requires exactly 32 bytes, so it is not interchangeable with the opaque
-    # 48-char secrets above: 32 chars b64-encoded decode back to 32 bytes.
+    # 48-char secrets above.
+    #
+    # #16405: the `lookup('password', ... chars=ascii_letters,digits')` this
+    # used to read only ever drew from 62 characters (~5.95 bits each), so the
+    # decoded key carried ~190 bits of entropy, not the 256 its length implied
+    # -- `load_root_key` cannot tell a weak key from a strong one, since both
+    # shapes decode to exactly 32 bytes. `openssl rand -base64 32` reads the 32
+    # bytes themselves from the OS CSPRNG, full byte range, then base64-encodes
+    # them; `replace` only maps the output alphabet to url-safe, same as every
+    # other generator here.
     autobot_secrets_root_key: >-
       {{ autobot_secrets_root_key
          if (autobot_secrets_root_key | default('') | trim | length > 0)
-         else (lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode) | replace('+', '-') | replace('/', '_') }}
+         else lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
@@ -532,7 +541,9 @@
   ansible.builtin.lineinfile:
     path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
     regexp: "^AUTOBOT_SECRETS_ROOT_KEY="
-    line: "AUTOBOT_SECRETS_ROOT_KEY={{ (lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode) | replace('+', '-') | replace('/', '_') }}"
+    # #16405: same fix as the set_fact generator above -- 32 random bytes from
+    # openssl rand, not 32 characters from a password lookup.
+    line: "AUTOBOT_SECRETS_ROOT_KEY={{ lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}"
     create: false
   when:
     - slm_secrets_stat.stat.exists

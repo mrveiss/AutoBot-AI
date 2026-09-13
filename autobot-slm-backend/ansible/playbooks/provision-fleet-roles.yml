@@ -41,7 +41,7 @@
     # messages below already call it code_source -- so an explicit
     # `code_source_dir` override steers it too.
     git_repo_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
-    deploy_ref: "Dev_new_gui"
+    deploy_ref: "main"
 
   tasks:
     - name: "[PRE-FLIGHT] Verify code_source exists"

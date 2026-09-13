@@ -244,7 +244,7 @@ class TestRepoTestsSupportModuleExemption:
 
 @pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestWorkflowUrlExemption:
-    """#16260: the URL rule stands down in ``.github/workflows/`` -- and nowhere else.
+    """#16260: the URL rule stands down in ``.github/workflows/`` and ``.github/actions/`` -- and nowhere else.
 
     A vendor download or a dashboard link in CI is not deployment config, but the
     exemption is deliberately narrow: the same URL anywhere else is still a finding,
@@ -257,6 +257,14 @@ class TestWorkflowUrlExemption:
         result = _run_hook_with_staged(
             tmp_path,
             {".github/workflows/ci.yml": f'      - run: curl -fsSL "{self._VENDOR}" -o p.tgz\n'},
+        )
+        assert result.returncode == 0, result.stdout
+
+    def test_allows_a_vendor_url_in_a_composite_action(self, tmp_path: Path) -> None:
+        """#15515: a composite action is a piece of a workflow; its pip index is not deployment config."""
+        result = _run_hook_with_staged(
+            tmp_path,
+            {".github/actions/setup/action.yml": "          --extra-index-url https://download.pytorch.org/whl/cpu\n"},
         )
         assert result.returncode == 0, result.stdout
 

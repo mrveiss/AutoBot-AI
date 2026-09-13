@@ -253,6 +253,38 @@ def test_no_venv_is_provisioned_from_more_than_one_source_shape() -> None:
     )
 
 
+def test_a_state_absent_pip_task_is_not_an_inline_source() -> None:
+    """A removal names a package to take OUT, not a second source of contents (#15163).
+
+    roles/backend removes faiss-cpu (`state: absent`) before installing
+    faiss-gpu into the same venv, since the two are different package names
+    that both provide the `faiss` import. Before this fixed, `name:
+    faiss-cpu` alone was enough to record an INLINE_SOURCE edge, which made
+    that venv read as #15671's multi-source shape even though the manifest
+    still fully determines what ends up installed.
+    """
+    edges = resolution._Edges({}, {}, [], [])
+    resolution._record_task(
+        "ansible.builtin.pip",
+        {"name": "faiss-cpu", "state": "absent", "virtualenv": "/venv"},
+        "roles/backend/tasks/main.yml",
+        edges,
+    )
+    assert edges.sources == [], f"a state: absent task recorded a source edge: {edges.sources}"
+
+    # The other direction: an install (no state:, or state: present) with the
+    # same name: shape must still be caught, or this guard could pass by
+    # never recording INLINE_SOURCE at all.
+    edges = resolution._Edges({}, {}, [], [])
+    resolution._record_task(
+        "ansible.builtin.pip",
+        {"name": "faiss-cpu", "virtualenv": "/venv"},
+        "roles/backend/tasks/main.yml",
+        edges,
+    )
+    assert edges.sources == [("roles/backend/tasks/main.yml", "/venv", resolution.INLINE_SOURCE)]
+
+
 def test_the_npu_worker_venv_is_filled_only_from_its_manifest() -> None:
     """The #15671 regression case, pinned at the venv the two paths collided on.
 

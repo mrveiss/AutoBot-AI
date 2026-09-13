@@ -31,7 +31,7 @@
 
 After agents complete:
 
-0. **Gate 0 — Squash-duplicate check:** Verify no commits are already in `Dev_new_gui` (see `docs/developer/CLAUDE_WORKFLOW.md` "Gate 0"). If all commits are duplicates, close without merging.
+0. **Gate 0 — Squash-duplicate check:** Verify no commits are already in `main` (see `docs/developer/CLAUDE_WORKFLOW.md` "Gate 0"). If all commits are duplicates, close without merging.
 1. **Enumerate ALL open PRs:** `gh pr list --state open` before starting review
 2. **Track in checklist:** One line per PR — nothing skipped
 3. **Review each PR:**
@@ -39,7 +39,7 @@ After agents complete:
    - Syntax: `npm run lint` / `python -m black --check`
    - Imports: `python -c 'import <module>'` for each modified file
    - Call sites: grep for removed/renamed functions
-4. **Merge:** each PR to `Dev_new_gui` — only with every required check green (see "Red CI Never Merges")
+4. **Merge:** each PR to `main` — only with every required check green (see "Red CI Never Merges")
 5. **Verify count:** PR count should be 0 after all merges
 
 ---
@@ -62,7 +62,7 @@ root causes and both are yours to fix:
    so a stale FAILURE can sit next to the real SUCCESS).
 2. **Absence is not success.** A PR reporting "19 success, 0 failures" is still
    blocked if a required context never reported at all. Count reported contexts
-   against `gh api repos/{owner}/{repo}/branches/Dev_new_gui/protection --jq
+   against `gh api repos/{owner}/{repo}/branches/main/protection --jq
    '.required_status_checks.contexts[]'`.
 3. **Name the cause before you debug the diff (#15139).** Five conditions render as
    the same red tile, and `gh pr checks` buckets every one of them under `fail` —
@@ -131,11 +131,11 @@ anyway (the #9968 / PR #9955 timeline — issue filed 3h before the PR merged).
 **To unblock:** close/resolve the issue, or remove the `blocks-merge` label, then
 re-run the check (or push/sync the PR to re-trigger it).
 
-Setup (owner) — **configured on `Dev_new_gui` and `main`** (2026-06-23):
+Setup (owner) — **configured on `main` and `release`** (2026-06-23):
 - The `blocks-merge` label exists (`gh label create blocks-merge --color B60205 --description "Open issue blocks merging the PR it references"`).
 - The required status-check **context is the job name** `No open blocks-merge issues reference this PR` — *not* the workflow name. GitHub matches required checks by the reported check-run name (the Actions job's `name:`), so requiring `PR Blocking Findings` would never match and would block every PR. Both branches now require the job-name context so the merge button actually blocks (the workflow only reports status; branch protection enforces it).
 
-**`required_conversation_resolution` — ENABLED** on `Dev_new_gui` and `main`
+**`required_conversation_resolution` — ENABLED** on `main` and `release`
 (2026-06-23). This zero-code branch-protection toggle blocks merge until every
 review conversation is resolved. It covers the *review-comment* half of the race;
 the `blocks-merge` gate above covers the *filed-issue* half that actually occurred.

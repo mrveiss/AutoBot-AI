@@ -28,7 +28,7 @@ markdownify==1.2.3
 # reaches a test runner: pytesseract was declared in #13885 and still absent
 # here months later, which is why every OCR test skipped.
 # pytesseract is the binding; the tesseract binary is installed by the
-# "Install OCR system packages" step in .github/actions/setup-python-suite.
+# "Install CI system packages" step in .github/actions/setup-python-suite.
 pytesseract>=0.3.13
 pypdfium2>=5.13.0          # renders PDF pages for OCR; Apache-2.0/BSD, bundles pdfium
 pdfplumber>=0.11.10         # PDF table extraction (#14232); see the note above on why both files need it

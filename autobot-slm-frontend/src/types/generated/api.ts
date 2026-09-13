@@ -149,7 +149,13 @@ export interface paths {
         };
         /**
          * Get Api Scopes
-         * @description Get available API key scopes (no authentication required).
+         * @description Get the catalogue of available API key scopes. Unauthenticated by design (#16040 AC7).
+         *
+         *     The owner ruled on 2026-09-11 to keep this route open. It returns only the
+         *     static scope names and their descriptions (``API_KEY_SCOPES``): no keys,
+         *     no users, no tenant data. The key-creation form needs that catalogue before
+         *     it can offer a choice. ``middleware/security_headers.py`` allowlists this
+         *     path for the same reason.
          */
         get: operations["get_api_scopes_api_api_keys_scopes_get"];
         put?: never;
@@ -247,6 +253,43 @@ export interface paths {
          * @description Get current user information.
          */
         get: operations["get_current_user_info_api_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/proxy-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Check
+         * @description nginx auth_request target for the /autobot-api/ internal-key gate (#16374).
+         *
+         *     A side-effect-free membership check, deliberately separate from ``/me``:
+         *     ``/me`` answers "is this a live SLM session?", which any backend login
+         *     token satisfies by design (epic #10193) -- every read-only or non-admin
+         *     user therefore passed the old gate too, and nginx then attached the
+         *     trusted internal key that ``autobot-backend/auth_middleware.py`` treats
+         *     as full admin. This answers "does this session hold the role the key
+         *     actually confers?": 204 for a session whose role grants
+         *     ``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it
+         *     -- including SUPERADMIN, which holds no granular permissions (#13854)
+         *     and is refused here as on every other permission-gated SLM admin route
+         *     -- and an unknown role resolves to USER, so it also fails closed. 401
+         *     covers a missing Authorization header (the upstream ``HTTPBearer``'s
+         *     ``auto_error=True`` raises it before this dependency runs) or an
+         *     invalid/expired token (``get_current_user`` raises it). Returns no body
+         *     either way -- an ``auth_request`` subrequest's body is discarded, only
+         *     the status code is read.
+         */
+        get: operations["proxy_check_api_auth_proxy_check_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11208,7 +11251,7 @@ export interface components {
              */
             sync_type: string;
             /** Systemd Service */
-            systemd_service?: string | null;
+            systemd_service?: string[] | null;
             /** Target Path */
             target_path: string;
         } & {
@@ -11352,7 +11395,7 @@ export interface components {
             /** Sync Type */
             sync_type?: string | null;
             /** Systemd Service */
-            systemd_service?: string | null;
+            systemd_service?: string[] | null;
             /** Target Path */
             target_path?: string | null;
         } & {
@@ -13931,7 +13974,7 @@ export interface components {
             /** Sync Type */
             sync_type?: string | null;
             /** Systemd Service */
-            systemd_service?: string | null;
+            systemd_service?: string[] | null;
             /** Target Path */
             target_path: string;
         } & {
@@ -14647,6 +14690,24 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
+            };
+        };
+    };
+    proxy_check_api_auth_proxy_check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

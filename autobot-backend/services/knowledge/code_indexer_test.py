@@ -4,6 +4,7 @@
 # Author: mrveiss
 """Unit tests for CodeIndexer (#4820)."""
 
+import asyncio
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -32,6 +33,15 @@ class Greeter:
     def run(self) -> None:
         greet("world")
 """
+
+
+def _write_sources(root: Path, files: dict[str, bytes]) -> None:
+    """Write a fixture tree under root. Sync on purpose: async tests run it
+    through asyncio.to_thread, so the writes stay off the event loop."""
+    for relative, content in files.items():
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
 
 
 def _all_upserted(indexer: CodeIndexer) -> list[tuple[str, dict]]:
@@ -99,7 +109,7 @@ def _make_indexer(tmp_path: Path):
 @requires_tree_sitter
 async def test_index_python_file_upserts_nodes(tmp_path) -> None:
     src = tmp_path / "module.py"
-    src.write_bytes(SIMPLE_PYTHON)
+    await asyncio.to_thread(src.write_bytes, SIMPLE_PYTHON)
     indexer = _make_indexer(tmp_path)
     result = await indexer.index_file(str(src), root_dir=str(tmp_path))
     assert result.success > 0
@@ -109,7 +119,7 @@ async def test_index_python_file_upserts_nodes(tmp_path) -> None:
 @requires_tree_sitter
 async def test_index_unchanged_file_skips(tmp_path) -> None:
     src = tmp_path / "module.py"
-    src.write_bytes(SIMPLE_PYTHON)
+    await asyncio.to_thread(src.write_bytes, SIMPLE_PYTHON)
     indexer = _make_indexer(tmp_path)
     await indexer.index_file(str(src), root_dir=str(tmp_path))
     call_count_first = indexer._collection.upsert.call_count
@@ -122,7 +132,7 @@ async def test_index_unchanged_file_skips(tmp_path) -> None:
 @requires_tree_sitter
 async def test_force_reindex_bypasses_cache(tmp_path) -> None:
     src = tmp_path / "module.py"
-    src.write_bytes(SIMPLE_PYTHON)
+    await asyncio.to_thread(src.write_bytes, SIMPLE_PYTHON)
     indexer = _make_indexer(tmp_path)
     await indexer.index_file(str(src), root_dir=str(tmp_path))
     call_count_first = indexer._collection.upsert.call_count
@@ -141,9 +151,9 @@ async def test_force_reindex_bypasses_cache(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_index_directory_indexes_all_py_files(tmp_path) -> None:
     """index_directory walks a tree and indexes every .py file."""
-    (tmp_path / "a.py").write_bytes(SIMPLE_PYTHON)
-    (tmp_path / "b.py").write_bytes(b"def foo(): pass\n")
-    (tmp_path / "README.md").write_bytes(b"# readme")  # should be skipped
+    # README.md should be skipped
+    files = {"a.py": SIMPLE_PYTHON, "b.py": b"def foo(): pass\n", "README.md": b"# readme"}
+    await asyncio.to_thread(_write_sources, tmp_path, files)
     indexer = _make_indexer(tmp_path)
     result = await indexer.index_directory(str(tmp_path))
     # At least the nodes from a.py and b.py must be indexed
@@ -155,10 +165,8 @@ async def test_index_directory_indexes_all_py_files(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_index_directory_skips_hidden_dirs(tmp_path) -> None:
     """index_directory skips files inside .git and similar hidden directories."""
-    hidden = tmp_path / ".git"
-    hidden.mkdir()
-    (hidden / "hook.py").write_bytes(b"def x(): pass\n")
-    (tmp_path / "real.py").write_bytes(SIMPLE_PYTHON)
+    files = {".git/hook.py": b"def x(): pass\n", "real.py": SIMPLE_PYTHON}
+    await asyncio.to_thread(_write_sources, tmp_path, files)
     indexer = _make_indexer(tmp_path)
     result = await indexer.index_directory(str(tmp_path))
     # Only real.py nodes should be indexed; hidden dir is skipped
@@ -172,10 +180,8 @@ async def test_index_directory_skips_hidden_dirs(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_index_directory_skips_node_modules(tmp_path) -> None:
     """index_directory skips node_modules entirely."""
-    nm = tmp_path / "node_modules" / "pkg"
-    nm.mkdir(parents=True)
-    (nm / "index.js").write_bytes(b"function x(){}")
-    (tmp_path / "app.py").write_bytes(SIMPLE_PYTHON)
+    files = {"node_modules/pkg/index.js": b"function x(){}", "app.py": SIMPLE_PYTHON}
+    await asyncio.to_thread(_write_sources, tmp_path, files)
     indexer = _make_indexer(tmp_path)
     result = await indexer.index_directory(str(tmp_path))
     assert result.success > 0
@@ -186,7 +192,7 @@ async def test_index_directory_skips_node_modules(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_index_directory_unsupported_extension_skipped(tmp_path) -> None:
     """index_directory skips files with unsupported extensions."""
-    (tmp_path / "config.yaml").write_bytes(b"key: value\n")
+    await asyncio.to_thread(_write_sources, tmp_path, {"config.yaml": b"key: value\n"})
     indexer = _make_indexer(tmp_path)
     result = await indexer.index_directory(str(tmp_path))
     assert result.success == 0
@@ -215,16 +221,13 @@ async def test_index_directory_unsupported_extension_skipped(tmp_path) -> None:
 async def test_concurrent_index_directory_preserves_all_cache_entries(tmp_path) -> None:
     """Two concurrent index_directory() calls on disjoint file sets must both
     have their cache entries persisted — neither must overwrite the other."""
-    import asyncio
     import json as _json
 
     # Two source directories, each with one .py file
     dir_a = tmp_path / "dir_a"
     dir_b = tmp_path / "dir_b"
-    dir_a.mkdir()
-    dir_b.mkdir()
-    (dir_a / "alpha.py").write_bytes(b"def alpha(): pass\n")
-    (dir_b / "beta.py").write_bytes(b"def beta(): pass\n")
+    files = {"dir_a/alpha.py": b"def alpha(): pass\n", "dir_b/beta.py": b"def beta(): pass\n"}
+    await asyncio.to_thread(_write_sources, tmp_path, files)
 
     # Both indexers share the same cache file (mirrors production behaviour).
     cache_file = tmp_path / ".code_index_hashes.json"
@@ -251,7 +254,7 @@ async def test_concurrent_index_directory_preserves_all_cache_entries(tmp_path) 
         indexer_b.index_directory(str(dir_b)),
     )
 
-    cache = _json.loads(cache_file.read_text(encoding="utf-8"))
+    cache = _json.loads(await asyncio.to_thread(cache_file.read_text, encoding="utf-8"))
     # Both files must appear in the final cache.
     assert any("alpha" in k for k in cache), f"alpha.py missing from cache: {cache}"
     assert any("beta" in k for k in cache), f"beta.py missing from cache: {cache}"
@@ -308,7 +311,7 @@ async def test_index_code_accepts_project_root_itself(tmp_path) -> None:
     from api.knowledge_population import index_code
 
     project = tmp_path / "project"
-    project.mkdir()
+    await asyncio.to_thread(project.mkdir)
 
     mock_result = MagicMock(success=0, failed=0, skipped=0, errors=[])
     mock_indexer = MagicMock()
@@ -342,17 +345,18 @@ async def test_class_method_call_graph(tmp_path) -> None:
     the resolver rework: the call-graph pass never tracked class scope, so a
     method's structural-pass id and its own call-graph scope disagreed and
     its calls never attached to it at all — this test failed on
-    origin/Dev_new_gui before this PR (`run`'s calls metadata was `''`, see
+    origin/main before this PR (`run`'s calls metadata was `''`, see
     the PR description for the captured before/after run)."""
-    src = tmp_path / "mymod.py"
-    src.write_bytes(b"""
+    source = b"""
 class MyClass:
     def helper(self) -> None:
         pass
 
     def run(self) -> None:
         self.helper()
-""")
+"""
+    src = tmp_path / "mymod.py"
+    await asyncio.to_thread(src.write_bytes, source)
     indexer = _make_indexer(tmp_path)
     result = await indexer.index_file(str(src), root_dir=str(tmp_path))
     assert result.success > 0
@@ -377,7 +381,7 @@ async def test_index_code_accepts_subdir_of_project_root(tmp_path) -> None:
 
     project = tmp_path / "project"
     subdir = project / "autobot-backend" / "services"
-    subdir.mkdir(parents=True)
+    await asyncio.to_thread(subdir.mkdir, parents=True)
 
     mock_result = MagicMock(success=0, failed=0, skipped=0, errors=[])
     mock_indexer = MagicMock()
@@ -412,7 +416,7 @@ async def test_index_file_dep_error_counts_as_failed(tmp_path) -> None:
     import services.knowledge.code_indexer as _ci_mod
 
     src = tmp_path / "module.py"
-    src.write_bytes(SIMPLE_PYTHON)
+    await asyncio.to_thread(src.write_bytes, SIMPLE_PYTHON)
     indexer = _make_indexer(tmp_path)
 
     dep_error_result = {"nodes": [], "edges": [], "dep_error": "tree-sitter-python not installed"}
@@ -441,9 +445,12 @@ async def test_ambiguous_and_unresolved_calls_recorded_honestly(tmp_path) -> Non
     """A callee matching two candidates is "ambiguous", not silently dropped
     or mislabelled "extracted"; a callee matching none is "inferred" with
     target_id="" and resolved=False, never invented."""
-    (tmp_path / "a_one.py").write_bytes(b"def process() -> None:\n    pass\n")
-    (tmp_path / "a_two.py").write_bytes(b"def process() -> None:\n    pass\n")
-    (tmp_path / "b_caller.py").write_bytes(b"def caller() -> None:\n    process()\n    totally_unknown_function()\n")
+    files = {
+        "a_one.py": b"def process() -> None:\n    pass\n",
+        "a_two.py": b"def process() -> None:\n    pass\n",
+        "b_caller.py": b"def caller() -> None:\n    process()\n    totally_unknown_function()\n",
+    }
+    await asyncio.to_thread(_write_sources, tmp_path, files)
     indexer = _make_indexer(tmp_path)
     result = await indexer.index_directory(str(tmp_path))
     assert result.failed == 0
@@ -514,10 +521,13 @@ async def test_find_callers_traversal(tmp_path) -> None:
     embed_model.get_text_embedding = MagicMock(side_effect=lambda text: [float(len(text) % 7)] * 4)
     indexer = CodeIndexer(collection=collection, embed_model=embed_model, cache_file=tmp_path / ".cache.json")
 
-    (tmp_path / "helpers.py").write_bytes(b"def helper() -> None:\n    pass\n")
-    (tmp_path / "service_a.py").write_bytes(b"def run_a() -> None:\n    helper()\n")
-    (tmp_path / "service_b.py").write_bytes(b"def run_b() -> None:\n    helper()\n")
-    (tmp_path / "service_c.py").write_bytes(b"def run_c() -> None:\n    pass\n")
+    files = {
+        "helpers.py": b"def helper() -> None:\n    pass\n",
+        "service_a.py": b"def run_a() -> None:\n    helper()\n",
+        "service_b.py": b"def run_b() -> None:\n    helper()\n",
+        "service_c.py": b"def run_c() -> None:\n    pass\n",
+    }
+    await asyncio.to_thread(_write_sources, tmp_path, files)
 
     result = await indexer.index_directory(str(tmp_path))
     assert result.failed == 0
@@ -540,15 +550,18 @@ async def test_known_ids_seeded_across_reindex_runs(tmp_path) -> None:
     embed_model = MagicMock()
     embed_model.get_text_embedding = MagicMock(side_effect=lambda text: [float(len(text) % 7)] * 4)
 
-    (tmp_path / "helpers.py").write_bytes(b"def helper() -> None:\n    pass\n")
-    (tmp_path / "service_a.py").write_bytes(b"def run_a() -> None:\n    helper()\n")
+    files = {
+        "helpers.py": b"def helper() -> None:\n    pass\n",
+        "service_a.py": b"def run_a() -> None:\n    helper()\n",
+    }
+    await asyncio.to_thread(_write_sources, tmp_path, files)
 
     first_indexer = CodeIndexer(collection=collection, embed_model=embed_model, cache_file=tmp_path / ".cache.json")
     await first_indexer.index_directory(str(tmp_path))
 
     # New file added; helpers.py/service_a.py are unchanged and will be
     # skipped by the hash cache on this second, independent CodeIndexer run.
-    (tmp_path / "service_c.py").write_bytes(b"def run_c() -> None:\n    helper()\n")
+    await asyncio.to_thread(_write_sources, tmp_path, {"service_c.py": b"def run_c() -> None:\n    helper()\n"})
     second_indexer = CodeIndexer(collection=collection, embed_model=embed_model, cache_file=tmp_path / ".cache.json")
     result = await second_indexer.index_directory(str(tmp_path))
     assert result.failed == 0

@@ -22,6 +22,7 @@ that satisfies the declared set without touching anything outside its venv;
 from __future__ import annotations
 
 import argparse
+import os
 import platform
 import re
 import sys
@@ -40,6 +41,17 @@ DECLARATION_ROOTS: tuple[str, ...] = (
     "autobot-backend/requirements.txt",
     "autobot-slm-backend/requirements.txt",
 )
+
+#: (package, declaring requirements file) pairs known to sit below their own
+#: declared floor for a *documented* cross-venv reason -- never a blanket
+#: license to ignore a shortfall, only an exact (name, source file) match.
+#: ``--strict`` treats a listed pair as satisfied; everything else it still
+#: fails on. Each value is the reason a human can act on, not just a marker.
+KNOWN_CROSS_VENV_EXEMPTIONS: Mapping[tuple[str, str], str] = {
+    ("websockets", "autobot-slm-backend/requirements.txt"): (
+        "SLM tests share the backend venv (langgraph-sdk caps websockets<16); " "separate SLM venv is #16394"
+    ),
+}
 
 MAX_REPORTED = 10
 
@@ -86,6 +98,18 @@ class Shortfall:
         return (
             f"{self.declaration.name}: installed {self.installed}, " f"declared {declared} ({self.declaration.source})"
         )
+
+
+def is_exempt(shortfall: Shortfall, exemptions: Mapping[tuple[str, str], str] = KNOWN_CROSS_VENV_EXEMPTIONS) -> bool:
+    """True when *shortfall* is a documented cross-venv mismatch, not real drift.
+
+    Matches by (package, declaring file) only -- never by line number, which
+    shifts on an unrelated edit -- and never partially: a package exempted
+    for one requirements file still fails for every other file that declares
+    it below floor.
+    """
+    source_file = shortfall.declaration.source.rsplit(":", 1)[0]
+    return (shortfall.declaration.name, source_file) in exemptions
 
 
 def canonical(name: str) -> str:
@@ -237,15 +261,31 @@ def audit(root: Path, roots: Sequence[str] | None = None, require_present: bool 
     return shortfalls(declarations, installed, require_present), len(declarations)
 
 
-def render(found: Sequence[Shortfall], examined: int, limit: int = MAX_REPORTED) -> list[str]:
-    """The report, one line per element; *limit* caps the per-package detail."""
+def render(found: Sequence[Shortfall], examined: int, limit: int = MAX_REPORTED, *, in_ci: bool = False) -> list[str]:
+    """The report, one line per element; *limit* caps the per-package detail.
+
+    *in_ci* names the reference correctly for where this prints (#16264). Off a
+    developer's box, the interpreter making the report is some OTHER
+    environment than the one CI installs, so the second line points there. A
+    caller that IS CI -- the ``python-shard`` ``--strict`` step, or this
+    plugin's own ``pytest_terminal_summary`` when ``CI`` is set -- passes
+    ``in_ci=True`` instead, because the interpreter making the report there
+    already IS the declared set: saying a pass "carries no information about
+    CI" would be false when the box printing it is CI's own.
+    """
     if not found:
         return [f"dependency floors: {examined} declarations checked, all satisfied"]
     lines = [
         f"{len(found)} of {examined} declared versions are NOT satisfied by the "
-        f"interpreter running this check (python {platform.python_version()}).",
-        "A pass here therefore carries no information about CI, which installs " "the declared set.",
+        f"interpreter running this check (python {platform.python_version()})."
     ]
+    if in_ci:
+        lines.append(
+            "This IS the CI job's own environment -- these are the packages CI itself "
+            "installed, below the floor it declares, not a stand-in for it."
+        )
+    else:
+        lines.append("A pass here therefore carries no information about CI, which installs " "the declared set.")
     lines.extend(f"  {shortfall.describe()}" for shortfall in found[:limit])
     if len(found) > limit:
         remaining = len(found) - limit
@@ -286,9 +326,17 @@ def main(argv: list[str] | None = None) -> int:
     except EmptyEnumerationError as exc:
         print(f"FATAL: {exc}", file=sys.stderr)  # noqa: print
         return 2
-    for line in render(found, examined, len(found) if args.all else MAX_REPORTED):
+    # #16264: GitHub Actions (and every other major CI system) sets CI=true --
+    # the same signal autobot-backend/tests/test_ocr_fallback_13896.py already
+    # keys on for the same distinction.
+    in_ci = bool(os.environ.get("CI"))
+    for line in render(found, examined, len(found) if args.all else MAX_REPORTED, in_ci=in_ci):
         print(line)  # noqa: print
-    return 1 if found and args.strict else 0
+    # #16264: a shortfall matching KNOWN_CROSS_VENV_EXEMPTIONS is still printed
+    # above (it is real, in this interpreter) but never fails --strict -- it is
+    # a documented cross-venv mismatch, not drift this run should gate on.
+    gating = [shortfall for shortfall in found if not is_exempt(shortfall)]
+    return 1 if gating and args.strict else 0
 
 
 if __name__ == "__main__":

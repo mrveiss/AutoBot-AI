@@ -80,6 +80,7 @@ ALLOWED_ROOT_FILES: frozenset[str] = frozenset(
         "requirements-dev.txt",
         "requirements-gpu.txt",
         "requirements-gpu-torch.txt",  # CUDA torch/torchvision extra, split from requirements-gpu.txt (#15162)
+        "requirements-gpu-faiss.txt",  # GPU-built faiss extra, same shape as requirements-gpu-torch.txt (#15163)
     }
 )
 

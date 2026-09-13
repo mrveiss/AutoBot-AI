@@ -43,7 +43,7 @@ if _fake_prom_metrics_mod is None:
     sys.modules["monitoring.prometheus_metrics"] = _fake_prom_metrics_mod
 # The parent stub is a hollow package with the REAL __path__, never a bare
 # (pathless) ModuleType: a pathless squat shadows the real package for every
-# later sweep file that imports monitoring.claude_api_monitor (#11798).
+# later sweep file that imports a real ``monitoring`` submodule (#11798).
 _monitoring_pkg = sys.modules.setdefault("monitoring", types.ModuleType("monitoring"))
 if not hasattr(_monitoring_pkg, "__path__"):
     _monitoring_pkg.__path__ = [str(_slm_root / "monitoring")]

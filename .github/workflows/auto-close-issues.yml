@@ -2,7 +2,7 @@
 #
 # GitHub's built-in auto-close keywords (Closes #NNN, Fixes #NNN) only
 # trigger when merging to the default branch (main). Since AutoBot PRs
-# target Dev_new_gui, this workflow posts a notification comment on
+# target main, this workflow posts a notification comment on
 # referenced issues instead of auto-closing them — preventing premature
 # closure of partially-resolved or multi-phase issues.
 #
@@ -14,7 +14,7 @@ name: Notify referenced issues on merge
 on:
   pull_request:
     types: [closed]
-    branches: [Dev_new_gui]
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -71,7 +71,7 @@ jobs:
                   repo: context.repo.repo,
                   issue_number: issueNumber,
                   body: [
-                    `PR #${prNumber} (merged to \`Dev_new_gui\`) references this issue with a close keyword.`,
+                    `PR #${prNumber} (merged to \`main\`) references this issue with a close keyword.`,
                     '',
                     `> **${prTitle}**`,
                     '',

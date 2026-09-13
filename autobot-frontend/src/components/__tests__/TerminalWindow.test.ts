@@ -471,4 +471,83 @@ describe('TerminalWindow', () => {
       expect(closeButton?.classList.contains('danger')).toBe(true)
     })
   })
+
+  describe('TerminalModals wiring (#16285)', () => {
+    const ACTIONS = [
+      'reconnectAction',
+      'executeCommandAction',
+      'emergencyKillAction',
+      'confirmStepAction',
+      'skipStepAction',
+      'manualControlAction',
+    ]
+
+    // Captures the actions TerminalWindow hands its modals, so each one can be driven directly.
+    const captured: { props: Record<string, unknown> } = { props: {} }
+    const TerminalModalsStub = {
+      name: 'TerminalModals',
+      props: ACTIONS,
+      setup(props: Record<string, unknown>) {
+        captured.props = props
+        return {}
+      },
+      template: '<div data-testid="terminal-modals-stub" />',
+    }
+
+    const renderReady = async () => {
+      renderComponent(TerminalWindow, {
+        router: true,
+        global: {
+          stubs: {
+            AdvancedStepConfirmationModal: { template: '<div data-testid="step-modal-stub" />' },
+            CompletionSuggestions: { template: '<div data-testid="completion-stub" />' },
+            TerminalModals: TerminalModalsStub,
+          },
+        },
+      })
+      // Let the mount-time connect settle before a test queues its own outcome.
+      await waitFor(() => {
+        expect(mockConnect).toHaveBeenCalled()
+      })
+    }
+
+    const action = (name: string) => captured.props[name] as () => Promise<unknown>
+
+    it('renders TerminalModals and hands it every action', async () => {
+      await renderReady()
+
+      expect(screen.getByTestId('terminal-modals-stub')).toBeInTheDocument()
+      for (const name of ACTIONS) {
+        expect(typeof captured.props[name], name).toBe('function')
+      }
+    })
+
+    it('rejects the command action when sending fails, so the modal can show it', async () => {
+      await renderReady()
+      mockSendInput.mockRejectedValueOnce(new Error('socket closed'))
+
+      await expect(action('executeCommandAction')()).rejects.toThrow('socket closed')
+    })
+
+    it('resolves the command action once the command is sent', async () => {
+      await renderReady()
+      mockSendInput.mockResolvedValueOnce(undefined)
+
+      await expect(action('executeCommandAction')()).resolves.toBeUndefined()
+    })
+
+    it('rejects the kill action when the kill fails', async () => {
+      await renderReady()
+      mockSendInput.mockRejectedValueOnce(new Error('kill failed'))
+
+      await expect(action('emergencyKillAction')()).rejects.toThrow('kill failed')
+    })
+
+    it('rejects the reconnect action when the connection fails', async () => {
+      await renderReady()
+      mockConnect.mockRejectedValueOnce(new Error('connection refused'))
+
+      await expect(action('reconnectAction')()).rejects.toThrow('connection refused')
+    })
+  })
 })

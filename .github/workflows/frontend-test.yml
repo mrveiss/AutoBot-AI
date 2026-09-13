@@ -13,7 +13,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   push:
-    branches: [main, develop, 'Dev_*']
+    branches: [release, main, develop]
     # Mirror of .github/filters/frontend-paths.yml. GitHub requires event path
     # filters to be inline, so this copy cannot be shared — but it only decides
     # whether a POST-merge run happens here, never which job publishes the
@@ -30,9 +30,9 @@ on:
       # #16337: the Security Scan job's audit gate.
       - 'pipeline-scripts/npm_audit_gate.py'
   pull_request:
-    # 'Dev_*' covers the Dev_new_gui integration branch — every frontend PR
-    # merges here, so the suite must run pre-merge, not only post-merge on the
-    # push trigger (#10019). main/develop kept for promotion PRs.
+    # main is the integration branch every frontend PR merges into, so the
+    # suite must run pre-merge, not only post-merge on the push trigger
+    # (#10019). release/develop kept for promotion PRs.
     #
     # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so
     # its required-check context ("Unit & Integration Tests") always reports a
@@ -45,7 +45,7 @@ on:
     # SEPARATE workflow, so it shares no concurrency group and no runner with
     # the self-hosted jobs here (#10527, #13405). Branch-protection promotion to
     # required is the separate owner-confirmed follow-up (#10022).
-    branches: [main, develop, 'Dev_*']
+    branches: [release, main, develop]
 
 # Only the heavy half of the frontend CI lives in this workflow, so
 # superseding a predecessor is the right default: the runner is a singleton and

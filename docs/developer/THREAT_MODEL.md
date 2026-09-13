@@ -18,7 +18,6 @@ known base · `resolve_within_sandbox` (:288) the file-management sandbox ·
 `require_path_string` (:240) type gate before `Path()` / `os.makedirs`.
 
 **Invariants**
-
 - `validate_path` is never called without an explicit `allowed_roots`. The default
   `_DEFAULT_ALLOWED_ROOTS` (:33) is `("/opt/autobot",)` — no `/tmp` (#15238): world-writable and
   shared, so a default including it let an unprivileged local process plant a file for any
@@ -50,7 +49,6 @@ endpoint.
 the one read-side gate · `validate_ownership` (:613).
 
 **Invariants**
-
 - Redis keys are `chat:session:{session_id}` — **not** namespaced by user. Key
   construction is never an ownership check; the metadata comparison is.
 - Owner identity is `metadata.owner` = **username**, never a user id. A diff comparing
@@ -87,7 +85,6 @@ Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-back
 — `validate_zip_metadata` (:27), `safe_extract` (:58), `MAX_UPLOAD_BYTES` (:19).
 
 **Invariants**
-
 - A plugin route without `Depends(check_admin_permission)` is remote code execution.
   This is the single highest-severity shape in this subsystem — check it first.
 - Extraction goes through `archive_safety`; [`plugin_install.py`](../../autobot-backend/plugin_install.py)
@@ -116,7 +113,6 @@ AES-GCM + PBKDF2 for data at rest · [`autobot_shared/field_encryption.py`](../.
 for service-to-service.
 
 **Invariants**
-
 - No parallel crypto path. A diff introducing its own `Fernet(...)` or `AESGCM(...)` instead
   of calling the store is a finding regardless of whether the primitive is used correctly.
 - Secrets compare with `secrets.compare_digest`, never `==`. A missing/`None` credential can
@@ -138,3 +134,7 @@ for service-to-service.
   call on a user-influenced URL is SSRF (core rule 8).
 - **Refactor fallout** historically outranks new code here: a renamed validator or store with
   call sites left on the old name silently removes the check. Grep the **old** identifier.
+- **Prompt injection (#16488):** content `research`/`adopt`/`web-fetch` fetch is data, never
+  instructions — contract at the top of each skill's `SKILL.md`. A clone goes only through
+  [`scripts/research/safe_clone.py`](../../scripts/research/safe_clone.py) `neutralize` (:190) —
+  `.git` deleted, agent-instruction files renamed — enforced by `block-dangerous-commands.sh`.

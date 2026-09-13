@@ -112,7 +112,6 @@ GRANDFATHERED = frozenset(
         "autobot-slm-backend/tests/services/test_sso_vault_client.py",
         "autobot-slm-backend/tests/services/test_step_up_auth.py",
         "autobot-slm-backend/tests/test_api_request_counter.py",
-        "autobot-slm-backend/tests/test_claude_api_monitor.py",
         "autobot-slm-backend/tests/test_prometheus_registry_endpoint.py",
         "plugins/core-plugins/video-generation-plugin/tools/providers_test.py",
         "tools/lint/check_no_llm_response_dict_access_test.py",

@@ -22,7 +22,7 @@ on:
   push:
     # Post-merge on the integration branch, so the figure tracks what actually
     # landed rather than only what a nightly happened to catch.
-    branches: [ Dev_new_gui ]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:

@@ -26,13 +26,24 @@ AutoBot has implemented a comprehensive Docker deduplication and Redis database 
 
 ### 2. Agent-Specific Dockerfiles
 
+**Superseded (#16361):** the chat, RAG, research and knowledge agents never had a
+separate container in this environment — their `.Dockerfile`s
+(`autobot-infrastructure/autobot-backend/docker/{chat-agent,rag-agent,research-agent,knowledge-base}.Dockerfile`)
+built nothing that was reachable, and were removed. Those four agents run
+in-process inside the backend (`autobot-backend/agents/chat_agent.py`,
+`rag_agent.py`, `web_researcher.py`, `knowledge_manager.py` /
+`knowledge_retrieval_agent.py`), invoked directly by
+`autobot-backend/agents/agent_orchestration/coordinator.py`. The table below is
+retained for the NPU row only, which is a real separate worker; the other rows
+are historical.
+
 | Agent | Dockerfile | Purpose | Key Dependencies |
 |-------|------------|---------|------------------|
-| Chat | `docker/agents/Dockerfile.chat-agent` | Lightweight conversations | tiktoken, transformers |
-| RAG | `docker/agents/Dockerfile.rag-agent` | Document processing | chromadb, sentence-transformers |
+| Chat | ~~`docker/agents/Dockerfile.chat-agent`~~ retired, in-process | Lightweight conversations | tiktoken, transformers |
+| RAG | ~~`docker/agents/Dockerfile.rag-agent`~~ retired, in-process | Document processing | chromadb, sentence-transformers |
 | NPU | `docker/agents/Dockerfile.npu-agent` | High-performance code search | openvino, torch |
-| Research | `docker/agents/Dockerfile.research-agent` | Web research | beautifulsoup4, selenium |
-| Knowledge | `docker/agents/Dockerfile.knowledge-agent` | Knowledge base management | sqlalchemy, whoosh |
+| Research | ~~`docker/agents/Dockerfile.research-agent`~~ retired, in-process | Web research | beautifulsoup4, selenium |
+| Knowledge | ~~`docker/agents/Dockerfile.knowledge-agent`~~ retired, in-process | Knowledge base management | sqlalchemy, whoosh |
 
 ### 3. Modular Docker Compose Architecture
 
@@ -225,8 +236,9 @@ knowledge_redis = redis_db_manager.get_knowledge_base_connection()
 # Check container health
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-# View agent logs
-docker logs autobot-chat-agent
+# View agent logs (chat, RAG, research and knowledge agents run in-process in
+# the backend container since #16361 — use its logs, not a per-agent container)
+docker logs autobot-backend
 
 # Test Redis connections
 docker exec autobot-redis redis-cli ping

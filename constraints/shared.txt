@@ -12,7 +12,7 @@
 # skew corrupts .npy / pickled embeddings written by one role and read by another.
 
 # numpy unified at 2.x across all roles after graspologic (numpy<2) was removed (#10524).
-numpy>=2.5.2,<3.0.0
+numpy>=2.5.3,<3.0.0
 
 # openvino floor -- was restated as a literal in 7 independent files (requirements
 # files, ansible roles/playbook, a group_var, a setup.py extra and install.sh), so

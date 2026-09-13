@@ -23,7 +23,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     paths:
       - 'autobot-backend/migrations/**'
       - 'autobot-backend/tests/migrations/**'
@@ -42,7 +42,7 @@ on:
   # below; #13862 made the required context a separate reporting job so that
   # "nothing to verify" is stated rather than inferred from a skip.
   pull_request:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

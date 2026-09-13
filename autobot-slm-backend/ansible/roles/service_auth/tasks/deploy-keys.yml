@@ -51,8 +51,13 @@
   delegate_to: localhost
 
 - name: "ServiceAuth | Select most recent keys file"
+  # #16348: sort by path (the %Y%m%d-%H%M%S filename timestamp), never
+  # mtime -- a restored/copied export or a clock step can leave mtime
+  # disagreeing with generation order, and the generator's own prune
+  # (generate_service_keys.py::_prune_old_backups) keeps by path too, so
+  # both sides of a rotation must agree on the same selector.
   ansible.builtin.set_fact:
-    _latest_keys_file: "{{ (_service_keys_files.files | sort(attribute='mtime') | last).path }}"
+    _latest_keys_file: "{{ (_service_keys_files.files | sort(attribute='path') | last).path }}"
   run_once: true
   delegate_to: localhost
 

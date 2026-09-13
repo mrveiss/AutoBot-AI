@@ -147,11 +147,21 @@ class Database:
         row = await cur.fetchone()
         return dict(row) if row else None
 
-    async def list_projects(self, user_id: str, *, limit: int = 200, offset: int = 0) -> list[dict]:
-        cur = await self._db().execute(
-            "SELECT * FROM projects WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
-            (user_id, limit, offset),
-        )
+    async def list_projects(
+        self, user_id: str, *, also_owner: str | None = None, limit: int = 200, offset: int = 0
+    ) -> list[dict]:
+        """Projects owned by *user_id*, plus those owned by *also_owner* when given.
+
+        *also_owner* exists so an admin can list the rows stamped DEFAULT_USER before
+        #15758 -- without it they could reach such a row by id but never find one.
+        """
+        if also_owner is None:
+            sql = "SELECT * FROM projects WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            params: tuple = (user_id, limit, offset)
+        else:
+            sql = "SELECT * FROM projects WHERE user_id IN (?, ?) ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            params = (user_id, also_owner, limit, offset)
+        cur = await self._db().execute(sql, params)
         return [dict(r) for r in await cur.fetchall()]
 
     async def update_project(self, project_id: int, name: str, description: str) -> None:

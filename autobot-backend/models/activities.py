@@ -26,8 +26,13 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
+from autobot_shared.store_authority import system_of_record
 from autobot_shared.time_utils import now_utc
 from user_management.models.base import Base
+
+# #16464: declares Postgres as the durable, sole home of this concept --
+# see autobot_shared/store_authority.py.
+SYSTEM_OF_RECORD = system_of_record("activity_audit_trail")
 
 if TYPE_CHECKING:
     from user_management.models.user import User

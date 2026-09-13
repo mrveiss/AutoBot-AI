@@ -25,7 +25,7 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._release_sync_fakes import BASE, HEAD, REFUSAL, REPO, SCRIPT, SOURCE, _api, _pull, _run, load_script
 
-_WORKFLOW = repo_root() / ".github/workflows/sync-main-to-dev.yml"
+_WORKFLOW = repo_root() / ".github/workflows/sync-main-to-release.yml"
 CLOSED = {"state": "closed", "state_reason": "completed"}
 FORBIDDEN = (403, {"message": "Resource not accessible by integration"})
 

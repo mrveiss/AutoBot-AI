@@ -129,7 +129,7 @@ ALLOWLIST: frozenset[str] = frozenset(
     {
         # An operational CLI tool (argparse, `if __name__ == "__main__":`, no
         # `def test_*` anywhere in it) that deliberately creates real worktrees
-        # off `origin/Dev_new_gui` and pushes real branches -- the opposite of
+        # off `origin/main` and pushes real branches -- the opposite of
         # a throwaway fixture. Named `test_first_remediation.py` for pytest's
         # own `test_*.py` collection glob, which is exactly why it also
         # matches this guard's naming heuristic; scrubbing it would break the

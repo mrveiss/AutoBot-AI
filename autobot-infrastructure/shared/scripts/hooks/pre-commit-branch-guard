@@ -76,7 +76,7 @@ if [ "$EXPECTED_BRANCH" != "$ACTUAL_BRANCH" ]; then
     echo ""
     echo -e "  ${BOLD}To prevent this:${NC}"
     echo "    Use worktrees for parallel branch work:"
-    echo "    git worktree add .worktrees/feat-XXXX -b feat/XXXX origin/Dev_new_gui"
+    echo "    git worktree add .worktrees/feat-XXXX -b feat/XXXX origin/main"
     echo -e "${CYAN}──────────────────────────────────────────────────────${NC}"
     echo ""
     exit 1

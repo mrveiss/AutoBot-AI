@@ -49,8 +49,8 @@ tools:
         command: "gh issue create --title 'Bug: X fails' --body 'Steps...' --label bug --label 'priority: high'"
         expected_output: "URL of the newly created issue"
       - description: List open pull requests
-        command: "gh pr list --state open --base Dev_new_gui"
-        expected_output: "Table of open PRs targeting Dev_new_gui"
+        command: "gh pr list --state open --base main"
+        expected_output: "Table of open PRs targeting main"
       - description: Get file contents via API
         command: "gh api repos/mrveiss/AutoBot-AI/contents/autobot-backend/api/usage.py --jq '.content' | base64 -d"
         expected_output: "Raw file content decoded from base64"

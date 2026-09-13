@@ -183,12 +183,24 @@ async def stream_process_logs(
 
     Tails the log file and pushes new lines to the client every 500ms.
     Closes when the process completes or the client disconnects.
+
+    #16374: nginx's dedicated stream location has already gated this
+    handshake on a live SLM session (auth_request, keyed off the client's
+    ``bearer`` Sec-WebSocket-Protocol subprotocol) before it ever reaches
+    here, and strips the token before proxying — this endpoint sees only the
+    literal ``bearer`` offer, never the credential. It still must echo that
+    subprotocol back on ``accept()``: RFC 6455 4.2.2 requires the server to
+    choose one of the client's offered subprotocols, and a browser fails the
+    handshake if none is echoed (matches the convention in
+    ``autobot-slm-backend/api/websocket.py``'s ``ConnectionManager.connect``).
     """
     if not await enforce_ws_origin(websocket):
         return
     import asyncio
 
-    await websocket.accept()
+    protocols = websocket.headers.get("sec-websocket-protocol", "")
+    subprotocol = "bearer" if protocols.startswith("bearer") else None
+    await websocket.accept(subprotocol=subprotocol)
     svc = _get_service()
     offset = 0
     try:
