@@ -194,12 +194,8 @@ async def is_token_revoked_by_password_change(claims: dict) -> bool:
         return False
 
     if issued_at < epoch:
-        logger.warning(
-            "Token for subject=%s rejected: issued at %s, before password change at %s",
-            subject,
-            issued_at,
-            epoch,
-        )
+        # The stored epoch and the token's iat stay out of logs (#16422); the subject alone says which account.
+        logger.warning("Token for subject=%s rejected: issued before its last password change", subject)
         return True
 
     return False

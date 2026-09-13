@@ -300,7 +300,11 @@ class TestDecodeTokenAsyncRevocation:
         service = AuthService()
         token = service.create_access_token(data={"sub": "carol", "admin": True, "role": "admin"})
 
-        with patch.object(_auth_mod, "is_jti_revoked", new=AsyncMock(return_value=False)):
+        # The epoch check fails closed without Redis (#16411), so it is stubbed too.
+        with (
+            patch.object(_auth_mod, "is_jti_revoked", new=AsyncMock(return_value=False)),
+            patch.object(_auth_mod, "is_token_revoked_by_password_change", new=AsyncMock(return_value=False)),
+        ):
             result = await service.decode_token_async(token)
 
         assert result is not None
