@@ -11,16 +11,16 @@
  * Usage:
  * ```vue
  * <!-- Hide element if no permission -->
- * <button v-permission="'admin:access'">Admin Panel</button>
+ * <button v-permission="'admin.system'">Admin Panel</button>
  *
  * <!-- Check any of multiple permissions -->
- * <div v-permission:any="['files:upload', 'files:delete']">File Actions</div>
+ * <div v-permission:any="['files.upload', 'files.delete']">File Actions</div>
  *
  * <!-- Check all permissions required -->
- * <div v-permission:all="['users:read', 'users:update']">Edit User</div>
+ * <div v-permission:all="['admin.users.read', 'admin.users.write']">Edit User</div>
  *
  * <!-- Disable instead of hide -->
- * <button v-permission.disable="'settings:write'">Save Settings</button>
+ * <button v-permission.disable="'admin.config.write'">Save Settings</button>
  * ```
  */
 

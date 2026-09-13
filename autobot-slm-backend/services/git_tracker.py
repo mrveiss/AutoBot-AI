@@ -155,7 +155,8 @@ class GitTracker:
         Returns:
             True if fetch succeeded, False otherwise
         """
-        _, returncode = await self._run_git_command("fetch", self.remote)
+        # --prune (#16610): a stale origin/release/* ref blocks fetching a new origin/release branch.
+        _, returncode = await self._run_git_command("fetch", "--prune", self.remote)
 
         if returncode == 0:
             self.last_fetch = datetime.now(timezone.utc)
