@@ -100,19 +100,12 @@ def _write_capable_agents():
     return out
 
 
-#: The one write-capable agent that cannot declare yet, and precisely why.
-#: `npu_code_search_agent.py` sits at exactly its grandfathered size ceiling
-#: (1455 lines), so ANY addition to it fails the file-size ratchet -- including
-#: the ~10 lines a `declared_scopes` override needs. Getting it under the ceiling
-#: means extracting from a 1455-line file, which is its own change with its own
-#: review. Tracked in #16173; this entry goes away when that lands.
-#:
-#: An entry here is a STATED gap, which is a finding. Removing the guard, or
-#: quietly widening the detector until this class stopped matching, would be the
-#: unstated kind.
-_CEILING_BLOCKED = {
-    "npu_code_search_agent.py:NPUCodeSearchAgent": "file at its size ceiling; see #16173",
-}
+#: No write-capable agent is ceiling-blocked any more (#16173 extracted
+#: `npu_code_search_agent.py`'s pattern-matching helpers, freeing room for its
+#: `declared_scopes` override). Kept as an empty dict, not deleted, so a future
+#: ceiling-blocked agent has a named place to record itself rather than
+#: reinventing the exemption shape.
+_CEILING_BLOCKED: dict[str, str] = {}
 
 
 def test_every_write_capable_agent_declares_its_scopes():
