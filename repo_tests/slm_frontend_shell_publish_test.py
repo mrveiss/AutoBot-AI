@@ -146,6 +146,17 @@ def _logical_lines(text: str) -> list[str]:
     `bootstrap-slm.sh`'s historical build-failure downgrade split `|| warn`
     onto the line after the build command; scanning physical lines alone
     would never see the `||` and the word on the same line.
+
+    Not `tools.lint._scan_helpers.logical_lines` (#15961 consolidation):
+    that helper returns `(first line number, line)` for a caller that reports
+    a location, while every caller here (`_builds_slm_frontend_wrong` and
+    siblings) returns bare display strings with no line number at all. It
+    also strips each continued line before rejoining, so the folded text
+    matches what a reader would type on one line; the shared helper preserves
+    a continuation line's leading indentation verbatim, which is right for
+    reporting the exact source but is not what these detectors, or their
+    displayed output, want. Forcing this copy onto the shared return shape
+    would ripple into every caller here for a semantics change, not a fix.
     """
     logical: list[str] = []
     buf = ""

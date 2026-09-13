@@ -375,3 +375,50 @@ def resolve_base(explicit: str | None = None) -> str | None:
     if os.environ.get("PRE_COMMIT") == "1":
         return os.environ.get("PRE_COMMIT_FROM_REF") or None
     return None
+
+
+def logical_lines(text: str) -> List[Tuple[int, str]]:
+    """`(first line number, joined line)` with shell `\\`-continuations folded in.
+
+    A matcher that reads physical lines misses the shape a persistent override
+    or a reintroduced flag most plausibly takes, because that is how a long
+    shell invocation actually gets written::
+
+        some-tool subcommand \\
+          --dangerous-flag /tmp/x
+
+    (A neutral example on purpose: the guards that call this scan tracked
+    files, this one included, so a real offending spelling here would trip
+    them.) Splitting on newlines puts the command on one physical line and its
+    argument on the next, so a matcher requiring both on one line inspects two
+    lines that each look innocent and reports nothing (#16128 review; the same
+    gap recurred in #15961). The line number reported is the FIRST physical
+    line, so a message still points at the invocation rather than at whichever
+    token happened to land on the joined line.
+
+    A whole-line comment never continues: bash ends a comment at the newline,
+    so a trailing backslash inside one is text, not a continuation. Folding it
+    would hand the next line to the caller glued behind a ``#``, and a caller
+    that skips comment lines would then skip a real command (#16414 review).
+
+    Extracted from the guard that found the pattern first (#15938) so the
+    guard that found it again (#15961) shares one fold instead of each
+    carrying its own copy to drift independently.
+    """
+    out: List[Tuple[int, str]] = []
+    buffer, start = "", 0
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not buffer:
+            start = number
+        stripped = line.rstrip()
+        if not buffer and stripped.lstrip().startswith("#"):
+            out.append((number, line))
+            continue
+        if stripped.endswith("\\"):
+            buffer += stripped[:-1] + " "
+            continue
+        out.append((start, buffer + line))
+        buffer = ""
+    if buffer:
+        out.append((start, buffer))
+    return out

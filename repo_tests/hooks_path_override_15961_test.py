@@ -62,7 +62,7 @@ from pathlib import Path
 import pytest
 
 from autobot_shared.paths import scrubbed_git_env
-from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, logical_lines, tracked_paths
 
 from ._paths import repo_root
 from ._reach import declare
@@ -186,9 +186,14 @@ def _offending_lines(text: str) -> list[tuple[int, str]]:
     A comment explaining the footgun is documentation, not an invocation. The
     distinction is the point of #15756: a guard that matches the *text* of a
     command refuses commit messages and docs that merely discuss it.
+
+    Lines are folded through `tools.lint._scan_helpers.logical_lines` before
+    matching, not read physically: a shell continuation puts `git config` on
+    one physical line and `core.hooksPath <value>` on the next, and a matcher
+    that never joins them inspects two lines that each look innocent.
     """
     out = []
-    for number, line in enumerate(text.splitlines(), start=1):
+    for number, line in logical_lines(text):
         if line.lstrip().startswith("#"):
             continue
         if OVERRIDE_RE.search(line):
@@ -249,6 +254,15 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
         # every later git command in the repository.
         "git config core.hooksPath /tmp/nowhere",
         "git config --local core.hooksPath .git/hooks",
+        # A shell continuation must not hide either spelling: physical-line
+        # matching would see `git config \` with no key on one line and
+        # `core.hooksPath ...` with no `git config` on the next.
+        "git config \\\n  core.hooksPath /tmp/nowhere",
+        "git -c \\\n  core.hooksPath=/tmp/nowhere commit",
+        # A comment's trailing backslash is not a continuation in bash, so the
+        # command after it is live and must not be skipped as part of the
+        # comment (#16414 review).
+        "# see the note above \\\ngit config core.hooksPath /tmp/nowhere",
     ],
 )
 def test_the_matcher_catches_an_override_invocation(line: str) -> None:
@@ -265,6 +279,8 @@ def test_the_matcher_catches_an_override_invocation(line: str) -> None:
         "core.hooksPath is set by install-git-hooks.sh",
         "git config --get-all core.hooksPath",
         "git config --unset-all core.hooksPath",
+        # Folding a continuation must not turn a legal read into a match.
+        "git config \\\n  --get core.hooksPath",
     ],
 )
 def test_the_matcher_ignores_repair_and_prose(line: str) -> None:
