@@ -12,7 +12,6 @@ Handles application startup and shutdown with 2-phase initialization:
 
 import asyncio
 import functools
-import json
 import logging
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
@@ -24,7 +23,6 @@ from fastapi import FastAPI
 from autobot_shared.env_utils import env_raw, truthy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
-from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.tracing import (
     instrument_aiohttp,
     instrument_redis,
@@ -33,6 +31,9 @@ from autobot_shared.tracing import (
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
 from config.manager import get_config_manager
+from initialization import lifespan_shutdown as shutdown_steps
+from initialization.neural_mesh_wiring import wire_neural_mesh_components
+from initialization.startup_error_file import persist_startup_error
 from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
 from services.slm_client import init_slm_client, shutdown_slm_client
@@ -697,18 +698,10 @@ async def initialize_critical_services(app: FastAPI):
         # unreachable. The file survives process exit and lets /api/health report
         # the failure when the next (probe) process reads it.
         try:
-            STARTUP_ERROR_FILE.parent.mkdir(parents=True, exist_ok=True)
-            STARTUP_ERROR_FILE.write_text(
-                json.dumps(
-                    {
-                        "error_type": error_type,
-                        "timestamp": utc_timestamp(),
-                    }
-                ),
-                encoding="utf-8",
-            )
-        except Exception:
-            pass  # File write failure must not mask the original startup error
+            await asyncio.to_thread(persist_startup_error, error_type)
+        except Exception as write_error:
+            # Must not mask the original startup error, re-raised below (#16250).
+            logger.warning("Startup error file not written: %s", write_error)
         raise  # Re-raise to prevent app from starting
 
 
@@ -1192,66 +1185,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
             # Build mesh brain components and register them so every RAGService.initialize()
             # can construct its OWN NeuralMeshRetriever with closures bound to its own
             # optimizer — eliminating the shared-singleton coupling (#4765).
-            try:
-                from autobot_shared.redis_client import get_async_redis_client
-                from knowledge.search_components.query_classifier import QueryClassifier
-                from knowledge.search_components.reranking import ResultReranker
-                from services.mesh_brain.edge_learner import EdgeLearner
-                from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
-                from services.mesh_brain.ppr import PersonalizedPageRank
-                from user_management.database import get_async_engine
-
-                _mesh_db = create_mesh_db_adapter(get_async_engine())
-                _redis = get_async_redis_client()
-                _ppr = PersonalizedPageRank(db=_mesh_db)
-                _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
-
-                _mesh_components = {
-                    "mesh_db": _mesh_db,
-                    "ppr": _ppr,
-                    "edge_learner": _edge_learner,
-                    "reranker": ResultReranker(),
-                    "classifier": QueryClassifier(),
-                    "llm": None,
-                }
-
-                # Store on app.state for introspection / health checks.
-                app.state.mesh_components = _mesh_components
-
-                # Expose mesh_db on app.state so _start_community_clustering_loop can use it (#4834).
-                app.state.mesh_db = _mesh_db
-
-                # Register components; each future RAGService.initialize() builds its own
-                # retriever from these, binding closures to its own optimizer (#4765).
-                register_shared_mesh_components(_mesh_components)
-
-                # Trigger re-initialization for already-created RAGService instances so they
-                # also build per-instance retrievers (covers chat_workflow_manager and the
-                # get_rag_service() singleton that were created before this point).
-                import services.rag_service as _rag_mod
-
-                for _existing in [
-                    _rag_mod._rag_service_instance,
-                    getattr(
-                        getattr(
-                            getattr(app.state, "chat_workflow_manager", None),
-                            "knowledge_service",
-                            None,
-                        ),
-                        "rag_service",
-                        None,
-                    ),
-                ]:
-                    if _existing is not None and _existing._mesh_retriever is None:
-                        _existing._initialized = False  # force re-init on next call
-                        logger.info("Queued per-instance NeuralMeshRetriever build for existing RAGService (#4765)")
-
-                logger.info(
-                    "✅ [ 87%] Neural Mesh RAG: mesh components registered; "
-                    "per-instance NeuralMeshRetriever will build on next initialize() (#4765)"
-                )
-            except Exception as _mesh_wire_err:
-                logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
+            wire_neural_mesh_components(app, register_shared_mesh_components)
 
             graph_rag_service = GraphRAGService(
                 rag_service=rag_service,
@@ -2248,6 +2182,66 @@ def _report_shutdown_outcome(report: "_ShutdownReport") -> None:
         logger.info("✅ Cleanup completed successfully")
 
 
+async def _stop_request_and_scheduled_work(app: FastAPI, report: _ShutdownReport) -> None:
+    """Shutdown stage 1: stop what serves requests or runs on a schedule (#16250)."""
+    await shutdown_steps.stop_state_services(app, report)
+    await shutdown_steps.stop_connector_and_skill_schedulers(app, report)
+    await shutdown_steps.stop_vector_store_workers(app, report)
+    await shutdown_steps.stop_documentation_watchers(report)
+    await shutdown_steps.stop_doc_sync_queue_worker(app, report)
+
+    # Issue #760: Shutdown SLM client
+    try:
+        await shutdown_slm_client()
+        logger.info("✅ SLM client shutdown")
+    except Exception as slm_error:
+        report.failed("SLM client shutdown", slm_error)
+
+    await shutdown_steps.stop_gateway(app, report)
+
+    # Issue #726: Stop SLM reconciler
+    # REMOVED as part of Issue #729 - SLM moved to slm-server
+    # SLM server manages its own reconciler lifecycle
+
+
+async def _drain_background_work(app: FastAPI, report: _ShutdownReport) -> None:
+    """Shutdown stage 2: drain LLC, scheduler and background-loop work (#16250)."""
+    await shutdown_steps.drain_llc_monitors_and_mesh_scheduler(app, report)
+    await shutdown_steps.stop_llc_services(app, report)
+    await shutdown_steps.stop_periodic_schedulers(app, report)
+    await shutdown_steps.stop_background_loops(app, report)
+    await shutdown_steps.shutdown_agent_runtime(app, report)
+    await shutdown_steps.dispose_skills_engine(report)
+    await shutdown_steps.stop_log_forwarder(report)
+    await shutdown_steps.stop_redis_dependent_loops(report)
+
+
+async def _release_shared_resources(app: FastAPI, report: _ShutdownReport) -> None:
+    """Shutdown stage 3: release pools, engines and connections -- Redis last (#16250)."""
+    # Issue #1233: Shutdown dedicated I/O thread pools
+    with report.step("I/O thread pools shutdown"):
+        shutdown_io_executors()
+
+    # Issue #697: Flush and shutdown OpenTelemetry tracing
+    await report.run("OpenTelemetry tracing flush", shutdown_tracing())
+
+    await shutdown_steps.shutdown_extensions(app, report)
+    await shutdown_steps.flush_llm_observers(report)
+    await shutdown_steps.dispose_database_engine(report)
+
+    # Issue #11679: Drain the bounded thread-pool executor BEFORE closing
+    # Redis pools. Ordering decision: queued default-executor jobs (e.g.
+    # chat_history/cache.py offloading a sync redis_client.setex call)
+    # must finish before Redis pools close — otherwise redis-py sync
+    # pools would reopen lazily post-close, leaking connections at exit.
+    # shutdown() blocks, so _drain_worker_executor runs it on a one-thread
+    # drainer outside the pool (#13585), keeping it off the event loop.
+    if _executor is not None and await report.run("Thread pool executor drain", _drain_worker_executor(_executor)):
+        logger.info("🧵 Thread pool executor drained")
+
+    await shutdown_steps.close_redis_connections(report)
+
+
 async def cleanup_services(app: FastAPI) -> list[str]:
     """
     Cleanup services on shutdown
@@ -2262,415 +2256,16 @@ async def cleanup_services(app: FastAPI) -> list[str]:
     logger.info("🛑 AutoBot Backend shutting down...")
     report = _ShutdownReport()
 
-    # Issue #11679: Cancel + await the phase-2 background-init task FIRST,
-    # before any other cleanup step. Without this, a fast shutdown can race
-    # initialize_background_services() while it is still creating resources
-    # (Redis subscriptions, background loops, etc.), voiding the "Redis
-    # closed LAST" ordering guarantee below for those late-created resources.
-    bg_init_task = getattr(app.state, "background_init_task", None)
-    if bg_init_task is not None and not bg_init_task.done():
-        bg_init_task.cancel()
-        try:
-            await bg_init_task
-        except asyncio.CancelledError:
-            pass
-        except Exception as _bg_init_err:
-            report.failed("Background init task raised during cancellation", _bg_init_err)
-        logger.info("✅ Phase-2 background init task cancelled before shutdown")
-
-    # #12866: the code-analysis process pool holds spawned children. They are not
-    # daemons, so leaving them behind keeps the unit in "deactivating" until
-    # systemd's timeout expires and SIGKILLs it. Torn down here, before the
-    # thread pool drains, because the shutdown call itself runs in a thread.
-    try:
-        from code_intelligence.shared.process_offload import shutdown_scan_pool
-
-        await shutdown_scan_pool()
-    except Exception as _pool_err:  # noqa: BLE001
-        report.failed("Code-analysis process pool shutdown", _pool_err)
+    # Issue #11679: cancelled FIRST, before any other step (see the step).
+    await shutdown_steps.cancel_background_init_task(app, report)
+    # #12866: before the thread pool drains (see the step).
+    await shutdown_steps.shutdown_code_analysis_pool(report)
 
     try:
-        # GH#9044: Close transcriber DB connection
-        transcriber_db = getattr(app.state, "transcriber_db", None)
-        if transcriber_db is not None and await report.run("Transcriber DB close", transcriber_db.close()):
-            logger.info("Transcriber DB closed")
-
-        if hasattr(app.state, "background_llm_sync") and app.state.background_llm_sync:
-            await report.run("Background LLM sync stop", app.state.background_llm_sync.stop())
-        if hasattr(app.state, "memory_graph") and app.state.memory_graph:
-            await report.run("Memory graph close", app.state.memory_graph.close())
-
-        # Issue #3100: Stop trigger service background loops
-        if hasattr(app.state, "trigger_service") and app.state.trigger_service:
-            if await report.run("Trigger service stop", app.state.trigger_service.stop()):
-                logger.info("Trigger service stopped")
-
-        # Issue #6556: Stop connector scheduler local tasks
-        try:
-            from knowledge.connectors.scheduler import get_connector_scheduler
-
-            await get_connector_scheduler().stop_all()
-            logger.info("Connector scheduler stopped")
-        except Exception as _cs_err:
-            report.failed("Connector scheduler shutdown", _cs_err)
-
-        # Issue #12810: Stop the skill health loop and cancel the task carrying it.
-        try:
-            health = getattr(app.state, "skill_health_scheduler", None)
-            if health is not None:
-                await health.stop()
-            health_task = getattr(app.state, "skill_health_task", None)
-            if health_task is not None and not health_task.done():
-                # stop() only clears the loop flag; the task may be parked in its
-                # interval sleep, so cancel rather than wait out the interval.
-                health_task.cancel()
-            logger.info("Skill health scheduler stopped")
-        except Exception as _sh_err:
-            report.failed("Skill health scheduler shutdown", _sh_err)
-
-        # Issue #12809: Stop the skill distillation pass and release its leader lease
-        # so another worker can claim it without waiting out the TTL.
-        try:
-            distiller = getattr(app.state, "skill_distillation_scheduler", None)
-            if distiller is not None:
-                await distiller.stop()
-                logger.info("Skill distillation scheduler stopped")
-        except Exception as _sd_err:
-            report.failed("Skill distillation scheduler shutdown", _sd_err)
-
-        # Issue #8391: Stop VectorWriteBuffer (flushes pending writes).
-        kb = getattr(app.state, "knowledge_base", None)
-        if kb is not None:
-            write_buffer = getattr(kb, "_write_buffer", None)
-            if write_buffer is not None:
-                await report.run("Vector write buffer stop", write_buffer.stop())
-
-        # Issue #8392: Stop CollectionTierManager reaper.
-        tier_manager = getattr(app.state, "tier_manager", None)
-        if tier_manager is not None:
-            await report.run("Collection tier manager stop", tier_manager.stop())
-
-        # Issue #165: Stop documentation watcher
-        try:
-            from services.documentation_watcher import stop_documentation_watcher
-
-            await stop_documentation_watcher()
-        except ImportError:
-            pass  # Watcher not available
-        except Exception as _dw_err:
-            report.failed("Documentation watcher shutdown", _dw_err)
-
-        # Issue #9000: Stop KB folder watcher
-        try:
-            from services.kb_folder_watcher import stop_kb_folder_watcher
-
-            await stop_kb_folder_watcher()
-            logger.info("✅ KB folder watcher stopped")
-        except ImportError:
-            pass  # Watcher not available
-        except Exception as kb_watcher_error:
-            report.failed("KB folder watcher shutdown", kb_watcher_error)
-
-        # Issue #4453: Stop doc sync queue worker
-        worker = getattr(app.state, "doc_sync_queue_worker", None)
-        task = getattr(app.state, "doc_sync_queue_worker_task", None)
-        if worker is not None:
-            with report.step("Doc sync queue worker stop"):
-                worker.stop()
-        if task is not None and not task.done():
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-            except Exception as _dsq_err:
-                report.failed("Doc sync queue worker task drain", _dsq_err)
-
-        # Issue #760: Shutdown SLM client
-        try:
-            await shutdown_slm_client()
-            logger.info("✅ SLM client shutdown")
-        except Exception as slm_error:
-            report.failed("SLM client shutdown", slm_error)
-
-        # Issue #732: Shutdown Gateway
-        try:
-            if hasattr(app.state, "gateway") and app.state.gateway:
-                await app.state.gateway.stop()
-                logger.info("✅ Gateway shutdown")
-        except Exception as gateway_error:
-            report.failed("Gateway shutdown", gateway_error)
-
-        # Issue #726: Stop SLM reconciler
-        # REMOVED as part of Issue #729 - SLM moved to slm-server
-        # SLM server manages its own reconciler lifecycle
-        pass  # SLM reconciler now in slm-server
-
-        # GH#9028: Stop LLC liveness monitor
-        # #13085: aclose() — stop() only *requests* cancellation and returns, so
-        # the poll task could still be mid-tick (holding an AsyncSession) when
-        # close_database() disposes the engine further down, and its interval
-        # wait was left for whoever tore the event loop down. aclose() drains it
-        # here, where shutdown can observe it.
-        #
-        # #13203: each drain is guarded individually, for the same reason the
-        # MeshBrainScheduler stop below is — see the comment there. stop() was
-        # synchronous and could neither raise nor suspend; await …aclose() can
-        # do both, so an unguarded drain would abort the rest of the teardown.
-        if hasattr(app.state, "llc_liveness_monitor") and app.state.llc_liveness_monitor:
-            try:
-                await app.state.llc_liveness_monitor.aclose()
-                logger.info("✅ LLC liveness monitor stopped")
-            except Exception as liveness_stop_error:
-                report.failed("LLC liveness monitor stop", liveness_stop_error)
-        # GH#9029: Stop LLC budget watchdog
-        if hasattr(app.state, "llc_budget_watchdog") and app.state.llc_budget_watchdog:
-            try:
-                await app.state.llc_budget_watchdog.aclose()
-                logger.info("✅ LLC budget watchdog stopped")
-            except Exception as budget_stop_error:
-                report.failed("LLC budget watchdog stop", budget_stop_error)
-        # #12816: Stop MeshBrainScheduler — stop() cancels every per-job task
-        # start() spawned, so none survive shutdown.
-        #
-        # Guarded independently: this whole shutdown block sits inside one broad
-        # `except Exception`, so an error raised here would jump straight to that
-        # handler and SKIP every remaining shutdown step below. Startup is
-        # already treated as non-fatal; shutdown gets the same treatment so one
-        # scheduler cannot abort the rest of the teardown.
-        if hasattr(app.state, "mesh_brain_scheduler") and app.state.mesh_brain_scheduler:
-            try:
-                await app.state.mesh_brain_scheduler.stop()
-                logger.info("✅ MeshBrainScheduler stopped")
-            except Exception as mesh_stop_error:
-                report.failed("MeshBrainScheduler stop", mesh_stop_error)
-        # GH#9026: Stop LLC session checkpointer (#13085: drained, see above)
-        if hasattr(app.state, "llc_session_checkpointer") and app.state.llc_session_checkpointer:
-            try:
-                await app.state.llc_session_checkpointer.aclose()
-                logger.info("✅ LLC session checkpointer stopped")
-            except Exception as checkpointer_stop_error:
-                report.failed("LLC session checkpointer stop", checkpointer_stop_error)
-
-        # GH#8257: Stop LLC outbound sync service
-        if hasattr(app.state, "llc_outbound_sync") and app.state.llc_outbound_sync:
-            if await report.run("LLC outbound sync stop", app.state.llc_outbound_sync.stop()):
-                logger.info("✅ LLC outbound sync service stopped")
-        # GH#8255: Stop LLC notification router
-        if hasattr(app.state, "llc_notification_router") and app.state.llc_notification_router:
-            if await report.run("LLC notification router stop", app.state.llc_notification_router.stop()):
-                logger.info("✅ LLC notification router stopped")
-
-        # GH#8651: Drain HandoffService background brief-generation tasks
-        try:
-            from llc.api.work_items import _get_handoff_service
-
-            handoff_svc = _get_handoff_service()
-            await handoff_svc.shutdown()
-            logger.info("✅ LLC HandoffService background tasks drained")
-        except Exception as _hs_err:
-            report.failed("HandoffService drain", _hs_err)
-
-        # GH#8229: Stop LLC routine scheduler
-        if hasattr(app.state, "llc_routine_scheduler") and app.state.llc_routine_scheduler:
-            if await report.run("LLC routine scheduler shutdown", app.state.llc_routine_scheduler.shutdown()):
-                logger.info("✅ LLC routine scheduler stopped")
-
-        # GH#8225: Stop LLC heartbeat scheduler before other schedulers
-        if hasattr(app.state, "heartbeat_scheduler") and app.state.heartbeat_scheduler:
-            if await report.run("LLC heartbeat scheduler stop", app.state.heartbeat_scheduler.stop()):
-                logger.info("✅ LLC heartbeat scheduler stopped")
-
-        # Issue #3294: Stop backup scheduler
-        if hasattr(app.state, "backup_scheduler") and app.state.backup_scheduler:
-            if await report.run("Backup scheduler stop", app.state.backup_scheduler.stop()):
-                logger.info("✅ Backup scheduler stopped")
-
-        # Issue #6590: Stop LLM key rotation scheduler
-        if hasattr(app.state, "llm_key_rotation_scheduler") and app.state.llm_key_rotation_scheduler:
-            if await report.run("LLM key rotation scheduler stop", app.state.llm_key_rotation_scheduler.stop()):
-                logger.info("✅ LLM key rotation scheduler stopped")
-
-        # Issue #4946: Drain community clustering background task (#13210:
-        # bounded + shielded via aclose(), guarded individually like its
-        # sibling schedulers above — see the comment on those for why.
-        scheduler = getattr(app.state, "community_cluster_scheduler", None)
-        if scheduler:
-            try:
-                await scheduler.aclose()
-                logger.info("✅ Community cluster task cancelled")
-            except Exception as cluster_stop_error:
-                report.failed("Community cluster task drain", cluster_stop_error)
-
-        # Issue #1748: Stop process adapter dispatcher
-        if hasattr(app.state, "process_adapter_service") and app.state.process_adapter_service:
-            if await report.run("Process adapter stop", app.state.process_adapter_service.stop()):
-                logger.info("✅ Process adapter stopped")
-
-        # Issue #11638: Stop autonomous improvement loop background task
-        try:
-            from workflow_scheduler import stop_autonomous_loop
-
-            await stop_autonomous_loop()
-        except Exception as _al_err:
-            report.failed("Autonomous loop shutdown", _al_err)
-
-        # Issue #11638: Stop metrics collection loop and cancel its task
-        try:
-            from api.analytics import analytics_controller
-
-            await analytics_controller.metrics_collector.stop_collection()
-            logger.info("✅ Metrics collection stopped")
-        except Exception as _mc_err:
-            report.failed("Metrics collection stop", _mc_err)
-        try:
-            metrics_task = getattr(app.state, "metrics_collection_task", None)
-            if metrics_task is not None and not metrics_task.done():
-                metrics_task.cancel()
-                await asyncio.gather(metrics_task, return_exceptions=True)
-        except Exception as _mt_err:
-            report.failed("Metrics task cancel", _mt_err)
-
-        # Issue #11638: Shutdown orchestrator singleton (agent pools, memory)
-        try:
-            from orchestrator import shutdown_orchestrator
-
-            await shutdown_orchestrator()
-            logger.info("✅ Orchestrator shutdown")
-        except Exception as _orch_err:
-            report.failed("Orchestrator shutdown", _orch_err)
-
-        # Issue #11638: Close WebResearcher browser resources
-        try:
-            web_researcher = getattr(app.state, "web_researcher", None)
-            if web_researcher is not None:
-                await web_researcher.close()
-                logger.info("✅ WebResearcher closed")
-        except Exception as _wr_err:
-            report.failed("WebResearcher shutdown", _wr_err)
-
-        # Issue #11638: Cancel AI Stack client retry loop (its HTTP session
-        # is the shared HTTPClientManager and is intentionally not closed)
-        try:
-            from services.ai_stack_client import close_ai_stack_client
-
-            await close_ai_stack_client()
-            logger.info("✅ AI Stack client closed")
-        except Exception as _as_err:
-            report.failed("AI Stack client shutdown", _as_err)
-
-        # Issue #11638: Dispose skills DB engine
-        try:
-            from skills.db import close_skills_engine
-
-            await close_skills_engine()
-            logger.info("✅ Skills DB engine closed")
-        except Exception as _sk_err:
-            report.failed("Skills DB engine dispose", _sk_err)
-
-        # Issue #11638: Stop log forwarder threads if one was created
-        # (off-loop: LogForwarder.stop() drains its queue synchronously)
-        try:
-            from api.log_forwarding import stop_forwarder_if_running
-
-            if await stop_forwarder_if_running():
-                logger.info("✅ Log forwarder stopped")
-        except Exception as _lf_err:
-            report.failed("Log forwarder shutdown", _lf_err)
-
-        # Issue #11638: Stop NPU worker manager health/failover/pulse tasks
-        # (started by get_worker_manager() during _wire_npu_task_queue; these
-        # loops touch Redis, so stop them BEFORE closing Redis pools)
-        try:
-            import services.npu_worker_manager as _npu_wm
-
-            if _npu_wm._worker_manager is not None:
-                await _npu_wm._worker_manager.stop_health_monitoring()
-                logger.info("✅ NPU worker manager monitoring stopped")
-        except Exception as _npu_err:
-            report.failed("NPU worker manager shutdown", _npu_err)
-
-        # Issue #11639: Stop desktop streaming pub/sub relay (Redis
-        # subscription — stop BEFORE closing Redis pools). No-op if no
-        # streaming session ever started the relay.
-        try:
-            from desktop_streaming_manager import stop_desktop_relay
-
-            await stop_desktop_relay()
-        except Exception as _dsm_err:
-            report.failed("Desktop streaming relay shutdown", _dsm_err)
-
-        # Issue #1233: Shutdown dedicated I/O thread pools
-        with report.step("I/O thread pools shutdown"):
-            shutdown_io_executors()
-
-        # Issue #697: Flush and shutdown OpenTelemetry tracing
-        await report.run("OpenTelemetry tracing flush", shutdown_tracing())
-
-        # Issue #3278: Shutdown plugin manager
-        try:
-            if hasattr(app.state, "plugin_manager") and app.state.plugin_manager:
-                await app.state.plugin_manager.shutdown()
-                logger.info("✅ Plugin manager shutdown")
-        except Exception as pm_err:
-            report.failed("Plugin manager shutdown", pm_err)
-
-        # Issue #4107: Stop isolated MCP bridge worker processes
-        try:
-            from services.mcp_isolated_runtime import get_isolated_registry
-
-            await get_isolated_registry().shutdown_all()
-            logger.info("✅ Isolated MCP bridge workers shutdown")
-        except Exception as mcp_err:
-            report.failed("Isolated MCP bridge shutdown", mcp_err)
-
-        # #10796: Shutdown Claude API integration adapter
-        try:
-            claude_adapter = getattr(app.state, "claude_api_adapter", None)
-            if claude_adapter is not None:
-                await claude_adapter.shutdown()
-                logger.info("Claude API integration adapter shutdown")
-        except Exception as _ca_err:
-            report.failed("Claude API adapter shutdown", _ca_err)
-
-        # GH#9012: Flush LangFuse / LangSmith observer buffers before exit
-        try:
-            from llm_shared.observability.registry import _registry
-
-            for _obs in _registry:
-                if callable(getattr(_obs, "flush", None)):
-                    _obs.flush()
-            logger.info("✅ LLM observer buffers flushed")
-        except Exception as obs_err:
-            report.failed("LLM observer flush", obs_err)
-
-        # Issue #11638: Dispose PostgreSQL async engine (was never disposed)
-        try:
-            from user_management.database import close_database
-
-            await close_database()
-        except Exception as _db_err:
-            report.failed("Database engine dispose", _db_err)
-
-        # Issue #11679: Drain the bounded thread-pool executor BEFORE closing
-        # Redis pools. Ordering decision: queued default-executor jobs (e.g.
-        # chat_history/cache.py offloading a sync redis_client.setex call)
-        # must finish before Redis pools close — otherwise redis-py sync
-        # pools would reopen lazily post-close, leaking connections at exit.
-        # shutdown() is a blocking call, so it runs via asyncio.to_thread to
-        # avoid blocking the event loop while queued jobs finish.
-        if _executor is not None and await report.run("Thread pool executor drain", _drain_worker_executor(_executor)):
-            logger.info("🧵 Thread pool executor drained")
-
-        # Issue #11638: Close all Redis pools LAST — earlier shutdown steps
-        # above may still publish events or flush state through Redis.
-        try:
-            from autobot_shared.redis_client import close_all_redis_connections
-
-            await close_all_redis_connections()
-            logger.info("✅ Redis connections closed")
-        except Exception as _redis_err:
-            report.failed("Redis connection close", _redis_err)
+        # The stages run in this order, and every step inside them guards itself (#16250).
+        await _stop_request_and_scheduled_work(app, report)
+        await _drain_background_work(app, report)
+        await _release_shared_resources(app, report)
 
         # Issue #11638: Intentional no-ops (documented triage):
         # - ChatHistoryManager / ConversationFileManager / ChatWorkflowManager
