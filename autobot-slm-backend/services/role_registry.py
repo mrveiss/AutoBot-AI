@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import Role, SyncType
+from services.role_manifest_shape import default_roles_for
 
 _BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
 _SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", "/opt/autobot/autobot-slm-agent")
@@ -286,8 +287,8 @@ _AI_STACK_ROLES = [
         "target_path": "",
         "systemd_service": "autobot-chromadb",
         "auto_restart": True,
-        "health_check_port": 8000,
-        "health_check_path": "/api/v1/heartbeat",
+        "health_check_port": 8100,  # #16025: was 8000/v1 -- ssot_config (#3094) + ai-stack ansible use 8100/v2
+        "health_check_path": "/api/v2/heartbeat",
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "setup-ai-stack.yml",
@@ -366,8 +367,8 @@ _OPTIONAL_ROLES = [
         "target_path": f"{_BASE_DIR}/autobot-browser-worker",
         "systemd_service": "autobot-playwright",
         "auto_restart": True,
-        "health_check_port": 3000,
-        "health_check_path": "/status",
+        "health_check_port": 9001,  # #16025: was 3000/status -- browser ansible role defaults declare 9001 (#4662)
+        "health_check_path": "/health",
         "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-browser-worker && npm install"),
         "required": False,
         "degraded_without": ["Browser automation tasks — features degrade gracefully"],
@@ -475,10 +476,9 @@ _INFRA_ROLES = [
     },
 ]
 
-DEFAULT_ROLES = (
+DEFAULT_ROLES: List[Dict] = default_roles_for(  # #16025: manifest-augmented, see role_manifest_shape.py
     _SLM_ROLES + _BACKEND_ROLES + _FRONTEND_ROLES + _DATABASE_ROLES + _AI_STACK_ROLES + _OPTIONAL_ROLES + _INFRA_ROLES
 )
-
 # ---------------------------------------------------------------------------
 # Role → Ansible inventory group mapping  (#1346)
 #
@@ -607,7 +607,7 @@ async def seed_default_roles(db: AsyncSession) -> int:
     """
     created = 0
     updated = 0
-    for role_data in DEFAULT_ROLES:
+    for role_data in ({k: v for k, v in r.items() if k in Role.__table__.columns} for r in DEFAULT_ROLES):  # #16025
         result = await db.execute(select(Role).where(Role.name == role_data["name"]))
         role = result.scalar_one_or_none()
         if role is None:
@@ -699,7 +699,7 @@ async def get_role_owners(db: AsyncSession) -> Dict[str, str]:
 async def get_role_definitions() -> List[Dict]:
     """Get lightweight role definitions for agents.
 
-    Includes roles with either a target_path or a systemd_service so
+    Includes roles with either a target_path or a systemd_service (a ``List[str]``, #16025 AC4) so
     service-only roles (redis, chromadb, postgresql) are also detected.
     """
     return [
