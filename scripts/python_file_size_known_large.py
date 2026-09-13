@@ -98,7 +98,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/development_speedup.py": 668,
     "autobot-backend/api/enterprise_features.py": 700,
     "autobot-backend/api/envelope_secrets.py": 615,
-    "autobot-backend/api/files.py": 1370,
+    "autobot-backend/api/files.py": 1368,
     "autobot-backend/api/filesystem_mcp.py": 1968,
     "autobot-backend/api/git_mcp.py": 1357,
     "autobot-backend/api/http_client_mcp.py": 963,
