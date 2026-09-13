@@ -24,11 +24,25 @@ can squat the key with a bare (non-package) ``ModuleType`` stub — that squat
 broke every later ``autobot_shared.*`` import in the directory sweep.
 """
 
+import os
 import sys
 import types
 from pathlib import Path
 
+from repo_tests._paths import repo_root
+
 _SLM_ROOT = Path(__file__).parent.parent.parent
+
+# #16025: role_registry.DEFAULT_ROLES is now derived from the manifests under
+# autobot-infrastructure/ (services/manifest_loader.py). Point the loader at
+# this checkout's own manifests rather than the production default
+# (/opt/autobot/autobot-infrastructure, absent on a dev/CI host) -- before any
+# test module in this directory gets a chance to import role_registry, since
+# DEFAULT_ROLES resolves lazily on first access, not at role_registry's own
+# import time. A dedicated var (not AUTOBOT_BASE_DIR): role_registry's own
+# `_BASE_DIR` reads that same name for the unrelated deploy *target* dir, and
+# tests in this file already pin values built from it.
+os.environ.setdefault("SLM_INFRA_BASE_DIR", str(repo_root() / "autobot-infrastructure"))
 
 
 def _ensure_real_pkg(name: str, directory: Path) -> None:

@@ -13,10 +13,12 @@ Covers:
 - get_index_status exposes NPU utilisation fields
 """
 
+import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from agents.base_agent_types import AgentRequest
 from agents.npu_code_search_agent import CodeSearchResult, NPUCodeSearchAgent, SearchStats
 
 # ---------------------------------------------------------------------------
@@ -188,3 +190,63 @@ async def test_get_index_status_last_device_cpu_when_not_npu():
         status = await agent.get_index_status()
 
     assert status["last_search_device"] == "cpu"
+
+
+# ---------------------------------------------------------------------------
+# Tests: declared_scopes (#16173, #15950)
+# ---------------------------------------------------------------------------
+
+
+def _request(action: str, payload: dict | None = None) -> AgentRequest:
+    return AgentRequest(
+        request_id="req-1",
+        agent_type="npu_code_search",
+        action=action,
+        payload=payload or {},
+    )
+
+
+def test_index_directory_declares_a_scope():
+    agent = _make_agent()
+    scopes = agent.declared_scopes(_request("index_directory", {"directory": "/repo/src"}))
+    assert len(scopes) == 1
+    assert re.fullmatch(r"project:code-index-[0-9a-f]{16}", scopes[0])
+
+
+def test_index_directory_without_a_directory_declares_nothing():
+    agent = _make_agent()
+    assert agent.declared_scopes(_request("index_directory", {})) == []
+
+
+def test_search_code_declares_nothing():
+    agent = _make_agent()
+    assert agent.declared_scopes(_request("search_code", {"query": "foo"})) == []
+
+
+def test_get_capabilities_declares_nothing():
+    agent = _make_agent()
+    assert agent.declared_scopes(_request("get_capabilities", {})) == []
+
+
+def test_declared_scope_leaks_neither_a_path_separator_nor_the_directory():
+    """The leak this design avoids: a raw path in the claim table (#15949)."""
+    agent = _make_agent()
+    directory = "/repo/internal/secret-project-name"
+    (scope,) = agent.declared_scopes(_request("index_directory", {"directory": directory}))
+
+    assert "/" not in scope
+    assert "\\" not in scope
+    assert directory not in scope
+    assert "secret-project-name" not in scope
+
+
+def test_two_runs_on_the_same_directory_declare_the_same_scope():
+    """The one collision that matters -- must agree with `_get_index_key`."""
+    agent = _make_agent()
+    directory = "/repo/src"
+
+    first = agent.declared_scopes(_request("index_directory", {"directory": directory}))
+    second = agent.declared_scopes(_request("index_directory", {"directory": directory}))
+
+    assert first == second
+    assert first[0].removeprefix("project:code-index-") in agent._get_index_key(directory)

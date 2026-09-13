@@ -9,7 +9,8 @@ that needs registering goes in its own per-component module instead of
 raising that ceiling. ``env_registry_agent_runtime.py`` holds the sibling
 population sized in the same sweep for the agent-loop/orchestration side;
 this one holds the rest -- chat, sessions, workspaces, memory, notifications,
-auth, tooling, and knowledge indexing.
+auth, tooling, and knowledge indexing. #15151 later added three ``network``
+vars found the same way, from a different reader shape (see below).
 
 These were read through a bare ``int(os.environ.get(...))`` /
 ``float(os.environ.get(...))`` cast until #15710 converted each to
@@ -413,5 +414,42 @@ register_env_var(
             "the session window: a slower, stricter limit for the higher-value surface (#15757)."
         ),
         component="backend",
+    )
+)
+
+# #15151: read via autobot_shared.ssot_config's pydantic Field(alias=...), not
+# os.environ.get/env_utils, so check_env_var_registry.py never saw these three
+# either -- the same visibility gap #15710 (the module docstring above) closed
+# for a different reader shape. docs/guides/CONFIGURATION_GUIDE.md had
+# documented three wrong/dead names for these (AUTOBOT_PLAYWRIGHT_HOST,
+# AUTOBOT_PLAYWRIGHT_API_PORT, AUTOBOT_PLAYWRIGHT_VNC_PORT); the guide is
+# fixed in the same change that adds this registration.
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_SERVICE_HOST",
+        type=str,
+        default="127.0.0.1",
+        description="Hostname or IP of the Playwright/browser automation service (services/playwright_service.py).",
+        component="network",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_SERVICE_PORT",
+        type=int,
+        default=9001,
+        description="Port of the Playwright/browser automation service. 9001, not 3000 -- that's Grafana's (#4052).",
+        component="network",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_VNC_PORT",
+        type=int,
+        default=6080,
+        description="Port of the VNC web interface (novnc), used by the desktop-control/VNC proxy surface.",
+        component="network",
     )
 )

@@ -521,7 +521,7 @@ jobs:
         # shellcheck disable=SC2016
         unaudited="$(jq -r '.results | to_entries[] | .key as $f | .value[]
           | select(.is_secret != false)
-          | "\($f):\(.line_number): \(.type) (is_secret: \(.is_secret // "unaudited"))"' "${committed}")"
+          | "\($f):\(.line_number // "?"): \(.type) (is_secret: \(.is_secret // "unaudited"))"' "${committed}")"
         # Rescan every git-tracked file with the baseline's own plugin and filter
         # settings. This rewrites .secrets.baseline in this disposable checkout
         # only; the verdicts compared below come from the committed copy.
@@ -537,7 +537,7 @@ jobs:
             | {key: "\($f)|\(.type)|\(.hashed_secret)", value: true}] | from_entries) as $audited
           | .results | to_entries[] | .key as $f | .value[]
           | select($audited["\($f)|\(.type)|\(.hashed_secret)"] | not)
-          | "\($f):\(.line_number): \(.type)"' .secrets.baseline)"
+          | "\($f):\(.line_number // "?"): \(.type)"' .secrets.baseline)"
         # A rescan that read nothing reports no new finding, so the comparison
         # above would pass on a scan that never looked. Its count is asserted
         # against the committed baseline and the floor declared in the script,

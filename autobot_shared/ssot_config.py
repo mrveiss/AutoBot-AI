@@ -1981,6 +1981,7 @@ class MiscConfig(RedactedSettings):
     github_actions: str = Field(default="", alias="GITHUB_ACTIONS")
     google_api_key: str = Field(default="", alias="GOOGLE_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
+    grounding_stats_ttl: str = Field(default="", alias="AUTOBOT_GROUNDING_STATS_TTL")
     hf_hub_cache: str = Field(default="", alias="HF_HUB_CACHE")
     hf_hub_disable_progress_bars: bool = Field(default=False, alias="HF_HUB_DISABLE_PROGRESS_BARS")
     hf_token: str = Field(default="", alias="HF_TOKEN")

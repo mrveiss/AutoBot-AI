@@ -27,6 +27,12 @@ services:
     type: systemd
     start_order: 2
     user: autobot-backend
+    slm_roles: [celery]   # #16025: role_registry's separately-assignable "celery" role
+  - name: autobot-celery-beat
+    type: systemd
+    start_order: 3
+    user: autobot-backend
+    slm_roles: [scheduler]   # #16025: role_registry's separately-assignable "scheduler" role
 
 ports:
   - port: 8443
