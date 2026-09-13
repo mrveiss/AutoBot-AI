@@ -248,8 +248,10 @@ async def update_fact_visibility(
     metadata = fact.get("metadata", {})
     metadata["visibility"] = request_body.visibility
 
-    # Save updated metadata
-    await kb.update_fact(fact_id=fact_id, metadata=metadata)
+    # Save updated metadata; update_fact also moves the fact between the ownership indexes (#16663)
+    result = await kb.update_fact(fact_id=fact_id, metadata=metadata)
+    if result.get("status") != "success":
+        raise HTTPException(status_code=500, detail="Failed to update visibility")
 
     return {
         "success": True,
