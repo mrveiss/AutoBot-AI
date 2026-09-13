@@ -150,9 +150,7 @@ class MTLSMigration:
                 # Create admin user with ACL - escape password for shell safety
                 # +@all = all commands, ~* = all keys, &* = all channels
                 escaped_pass = shlex.quote(current_password)
-                # #16626: authenticate as the configured ACL user when one is set
-                username = self._get_redis_username()
-                user_flag = f" --user {shlex.quote(username)}" if username else ""
+                user_flag = self._redis_cli_user_flag()
                 acl_cmd = (
                     f"redis-cli --no-auth-warning{user_flag} -a {escaped_pass} "
                     f"ACL SETUSER {admin_user} on \\>{admin_password} ~* \\&* +@all"
@@ -206,6 +204,11 @@ class MTLSMigration:
     def _get_redis_username(self) -> Optional[str]:
         """Get the optional Redis ACL username (#16626); None keeps password-only AUTH."""
         return self._get_redis_setting("AUTOBOT_REDIS_USERNAME")
+
+    def _redis_cli_user_flag(self) -> str:
+        """`` --user <name>`` for redis-cli when an ACL username is set (#16626), else ""."""
+        username = self._get_redis_username()
+        return f" --user {shlex.quote(username)}" if username else ""
 
     def check_certificates(self) -> bool:
         """Verify all certificates exist and are valid."""
@@ -599,6 +602,7 @@ class MTLSMigration:
             host=redis_ip,
             port=6380,
             password=password,
+            username=self._get_redis_username(),
             ssl=True,
             ssl_ca_certs=str(self.config.ca_cert_path),
             ssl_certfile=str(cert_dir / "server-cert.pem"),
