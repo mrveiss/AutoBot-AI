@@ -231,7 +231,10 @@ class SystemMonitor:
                 {
                     "type": "high_cpu_usage",
                     "severity": "warning",
-                    "message": f"CPU usage is {metrics['cpu_percent']:.1f}% (threshold: {self.config['alert_thresholds']['cpu_usage']}%)",
+                    "message": (
+                        f"CPU usage is {metrics['cpu_percent']:.1f}% "
+                        f"(threshold: {self.config['alert_thresholds']['cpu_usage']}%)"
+                    ),
                 }
             )
 
@@ -241,7 +244,10 @@ class SystemMonitor:
                 {
                     "type": "high_memory_usage",
                     "severity": "warning",
-                    "message": f"Memory usage is {metrics['memory_percent']:.1f}% (threshold: {self.config['alert_thresholds']['memory_usage']}%)",
+                    "message": (
+                        f"Memory usage is {metrics['memory_percent']:.1f}% "
+                        f"(threshold: {self.config['alert_thresholds']['memory_usage']}%)"
+                    ),
                 }
             )
 
@@ -251,7 +257,10 @@ class SystemMonitor:
                 {
                     "type": "high_disk_usage",
                     "severity": "critical",
-                    "message": f"Disk usage is {metrics['disk_percent']:.1f}% (threshold: {self.config['alert_thresholds']['disk_usage']}%)",
+                    "message": (
+                        f"Disk usage is {metrics['disk_percent']:.1f}% "
+                        f"(threshold: {self.config['alert_thresholds']['disk_usage']}%)"
+                    ),
                 }
             )
 
@@ -814,7 +823,8 @@ class SystemMonitor:
             # Collect system metrics
             system_metrics = self.collect_system_metrics()
             logger.info(
-                f"📊 System: CPU {system_metrics.get('cpu_percent', 0):.1f}%, Memory {system_metrics.get('memory_percent', 0):.1f}%"
+                f"📊 System: CPU {system_metrics.get('cpu_percent', 0):.1f}%, "
+                f"Memory {system_metrics.get('memory_percent', 0):.1f}%"
             )
 
             # Collect application metrics

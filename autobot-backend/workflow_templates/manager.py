@@ -115,7 +115,7 @@ class WorkflowTemplateManager:
                 "description": self._substitute_variables(step.description, variables),
                 "requires_approval": step.requires_approval,
                 "dependencies": step.dependencies.copy(),
-                "inputs": step.inputs.copy() if step.inputs else {},
+                "inputs": self._substitute_in(step.inputs, variables) if step.inputs else {},
                 "expected_duration_ms": int(step.estimated_duration_seconds * 1000),
                 "status": "pending",
             }
@@ -140,6 +140,29 @@ class WorkflowTemplateManager:
             placeholder = f"{{{var_name}}}"
             text = text.replace(placeholder, var_value)
         return text
+
+    def _substitute_in(self, value: Any, variables: Dict[str, str]) -> Any:
+        """Substitute template variables anywhere inside *value* (#15682).
+
+        ``step.inputs`` was copied verbatim while ``action`` and ``description``
+        beside it were substituted, so every placeholder an input carried
+        reached the handler as the literal ``{var}``. ``WorkflowTask.inputs`` is
+        ``Dict[str, Any]`` and templates nest lists in it, so a top-level pass
+        over string values would still have missed the community templates'
+        ``keywords`` and ``subreddits``. Recursion is what makes the fix cover
+        the declared type rather than the shapes that happened to be checked.
+
+        Non-string leaves (ints, bools, ``None``) pass through untouched: a
+        placeholder can only exist in a string, and coercing anything else would
+        change a template's declared types behind its back.
+        """
+        if isinstance(value, dict):
+            return {key: self._substitute_in(item, variables) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._substitute_in(item, variables) for item in value]
+        if isinstance(value, str):
+            return self._substitute_variables(value, variables)
+        return value
 
     def get_template_variables(self, template_id: str) -> Dict[str, str]:
         """Get the variables defined for a template."""

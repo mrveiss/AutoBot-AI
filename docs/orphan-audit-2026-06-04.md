@@ -178,9 +178,13 @@ Mix of accessibility completion reports, theming audits, and composable example 
 - [[docs/api/MARKETPLACE_API]]
 - [[docs/api/health]]
 - [[docs/connectors/onedrive-sharepoint]]
-- [[docs/external_apps/RAG_OPTIMIZATION_ASSESSMENT]]
-- [[docs/external_apps/Rag_optimization_methods]]
-- [[docs/external_apps/ollama_api]]
+- `docs/external_apps/RAG_OPTIMIZATION_ASSESSMENT`
+- `docs/external_apps/Rag_optimization_methods`
+- `docs/external_apps/ollama_api`
+
+  These three were moved out of the repository entirely (#15223); the paths
+  above are left as the record of what this audit found on its date, with the
+  wiki links removed so they no longer resolve to nothing.
 - [[docs/frontend/RESPONSIVE_DESIGN_GUIDE]]
 - [[docs/llc/budget-token-mode]]
 - [[docs/operations/doctor]]

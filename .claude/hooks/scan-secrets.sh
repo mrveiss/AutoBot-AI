@@ -125,9 +125,31 @@ if echo "$CONTENT" | grep -qE '172\.16\.168\.[0-9]{1,3}' && \
 fi
 
 if [ -n "$MATCHES" ]; then
-  REASON="Possible secret detected in content:$MATCHES Review carefully before allowing."
-  echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"$REASON\"}}"
+  # A secret DENIES, and the reason goes to stderr (#15956, honouring #12513).
+  #
+  # Three facts have to hold at once here, and the previous two attempts each
+  # satisfied two of them:
+  #
+  #   1. It must block. `repo_tests/scan_secrets_hook_test.py` pins exit 2 under
+  #      #12513 -- "a secret scanner that fails open, silently, is worse than
+  #      none: it is trusted". That is a ruling, not a test artefact.
+  #   2. The operator must be told why. That is what #15956 is about: a reason
+  #      nobody sees is the defect, not a nicety.
+  #   3. The declared payload must match the behaviour, or the next reader
+  #      inherits the same trap -- an `ask` that denies.
+  #
+  # PreToolUse reads the JSON below from STDOUT only on exit 0, and takes an
+  # exit-2 reason from STDERR. So `ask`+exit 0 stopped blocking (broke 1);
+  # `deny`+exit 2 with the reason only on stdout blocks silently (breaks 2, the
+  # original bug restored). Writing the reason to STDERR satisfies all three.
+  #
+  # The two rulings were never in conflict -- the conflict was in the CHANNEL,
+  # which is this bug's own shape: a payload written to a stream nobody reads.
+  REASON="Possible secret detected in content:$MATCHES Use SSOT config or a secrets reference instead."
+  printf '%s\n' "$REASON" >&2
+  echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"$REASON\"}}"
   exit 2
 fi
+
 
 exit 0

@@ -21,6 +21,7 @@ services:
     type: systemd
     start_order: 1
     user: autobot-browser-worker
+    slm_roles: [browser-service]   # #16025: role_registry name differs from this dir
 
 ports:
   # (#4662) Port 9001 is canonical — port 3000 was legacy and caused EADDRINUSE

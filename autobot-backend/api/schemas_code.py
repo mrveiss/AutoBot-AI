@@ -13,6 +13,13 @@ from typing import Any, Dict, List
 from pydantic import BaseModel, Field, field_validator
 
 from api.schemas_common import SuccessMessageResponse
+from api.schemas_playwright import (  # noqa: F401 - re-exported for existing importers
+    PlaywrightInteractRequest,
+    PlaywrightNavigateRequest,
+    PlaywrightReloadRequest,
+    PlaywrightScreenshotRequest,
+    PlaywrightSessionRequest,
+)
 from autobot_shared.ssot_config import PROJECT_ROOT
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.threshold_constants import QueryDefaults
@@ -2248,6 +2255,12 @@ class CodeSearchRefactorSuggestionsResultResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # playwright request schemas (#6042)
 # ---------------------------------------------------------------------------
+# PlaywrightSearchRequest stays HERE deliberately. It declares no `session_id`,
+# so it is untouched by #15802 -- and its default result count carries a
+# hardcoded-value baseline entry keyed by THIS path. Moving it would strand
+# that entry and raise the same value as a fresh violation at the new path,
+# which the no-growth guard blocks. The models that had to move are the ones
+# the documentation change touches.
 
 
 class PlaywrightSearchRequest(BaseModel):
@@ -2256,44 +2269,11 @@ class PlaywrightSearchRequest(BaseModel):
     max_results: int = 5
 
 
-class PlaywrightScreenshotRequest(BaseModel):
-    url: str
-    full_page: bool = True
-    wait_timeout: int = 5000
-    session_id: str | None = None
-
-
-class PlaywrightNavigateRequest(BaseModel):
-    url: str
-    wait_until: str = "networkidle"
-    timeout: int = 30000
-    session_id: str | None = Field(
-        None,
-        description="Session id for isolated browser-context routing (#11539); omitted uses shared default",
-    )
-
-
-class PlaywrightReloadRequest(BaseModel):
-    wait_until: str = "networkidle"
-    session_id: str | None = None
-
-
-class PlaywrightInteractRequest(BaseModel):
-    action: str
-    x: float | None = None
-    y: float | None = None
-    deltaX: float = 0
-    deltaY: float = 0
-    text: str | None = None
-    session_id: str | None = None
-
-
-class PlaywrightSessionRequest(BaseModel):
-    """Optional body for worker proxy calls with no other payload (#11539):
-    /back, /forward, /worker-screenshot. GET /status takes the same id as a
-    query param instead (no request body on GET)."""
-
-    session_id: str | None = None
+# ---------------------------------------------------------------------------
+# the remaining playwright request schemas moved to api/schemas_playwright.py
+# (#15802). Imported at the top of this file and re-exported, so
+# `from api.schemas_code import PlaywrightNavigateRequest` still resolves.
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------

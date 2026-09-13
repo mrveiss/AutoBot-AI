@@ -288,9 +288,9 @@ Same seeding rule, keyed on `package-lock.json`'s hash:
 - lock unchanged → hardlink-copy `node_modules` from the previous release, run no npm command.
 - lock changed → `npm ci` in the staged release. `npm ci` removes `node_modules` before extracting,
   so it never writes through a hardlink; the seed is simply discarded.
-- `vite build` writes `dist/` inside the staged release. `dist.staging` and `dist.previous` retire:
-  the staged release *is* the staging directory, and the publish is one `rename(2)` instead of
-  #15430's two `mv`s.
+- `vite build` writes `dist/` inside the staged release. The frontend's own `current`/`previous`
+  pointers (#15610) retire: the staged release *is* the staging directory and `<ROOT>/current` is
+  already the one pointer, so the component-scoped flip collapses into the node-scoped one.
 
 **What this fixes for free.** #15462's outage was `node_modules/@autobot/ui -> ../../../libs/autobot-ui`
 resolving into the **live** tree, so the build read a `libs/` that had not been deployed since July.
@@ -300,8 +300,9 @@ enumerating archive entries becomes structural.
 
 **One new user-visible edge, and its fix.** nginx re-resolves `root` per request, so a client that
 loaded `index.html` from release A and then requests `assets/index-<hash>.js` after a flip would 404 —
-the hashed asset lives in A's `dist/`, and `root` now names B's. Today's `dist.previous` does not help
-because `root` only ever names `dist`. The release scheme can fix it in one location block:
+the hashed asset lives in A's `dist/`, and `root` now names B's. This is not new with the release
+scheme: it is equally true of #15610's per-component flip and of #15430's two `mv`s before it, and it
+is tracked on its own (#15653). The release scheme can fix it in one location block:
 
 ```
 location /assets/ { try_files $uri @previous_assets; }
@@ -321,10 +322,13 @@ Revision 1 kept the two schemes side by side. Revision 2 subsumes it: the fronte
 release (§1.10), so there is one staging concept, one publish, one previous. The two differences that
 motivated the upgrade remain the justification for the shape:
 
-1. **The publish is atomic.** #15430 publishes with two `mv`s (`update-all-nodes.yml:562, 570`);
-   between them `dist` does not exist. Tolerable for nginx (a request 403s and the user retries),
-   intolerable for an interpreter, where a failed import is cached and a name that exists reads as
-   missing. This scheme uses a **single `rename(2)` on a symlink** (§2).
+1. **The publish is atomic.** #15430 published with two `mv`s; between them `dist` did not exist.
+   Tolerable for nginx (a request 403s and the user retries), intolerable for an interpreter, where
+   a failed import is cached and a name that exists reads as missing. #15610 has since removed that
+   window for the SLM frontend specifically — the served path is a `current` symlink replaced by a
+   single `rename(2)` in `roles/_shared/tasks/build_publish_slm_frontend.yml` — which is this
+   scheme's mechanism (§2) applied to one component. What remains for this design is the *scope*:
+   the Python import surface and the venv, which a per-component frontend flip does not touch.
 2. **Verification is semantic, not existential.** `index.html exists` is right for a bundle;
    `main.py exists` would not have caught #13539 at all — every file involved existed and was
    byte-identical across three copies. §8.
@@ -530,7 +534,7 @@ root.
 - Play 0 computes `release_id` once from `deploy_commit_full` and passes it to every play.
 - Every `unarchive: dest: <ROOT>/` becomes `dest: <ROOT>/releases/<id>.incomplete/`.
 - The npm/vite tasks (`:494-573`, `roles/slm_manager/tasks/main.yml:820-856`) run with `chdir` inside
-  the staged release; `dist.staging`/`dist.previous` tasks are deleted (§1.10).
+  the staged release; the frontend's own `current`/`previous` flip tasks are deleted (§1.10).
 - New tasks: seed/build venv, seed/build node_modules, link host state, migrate, verify, rename,
   stop, `release_flip publish`, start, gate.
 - The existing explicit restarts (`:1080` backend, `:1114` celery, and `:1209/:1266/:1348/:1468/:1512`)
@@ -1119,7 +1123,7 @@ Every function stays under 30 lines; `release_publisher` splits further if it pa
 | `api/code_sync.py` | six writers re-pointed at the publisher; **must be net-negative** (B1) — retiring the snapshot trio funds it |
 | `services/process_divergence.py` | release-id comparison path; ~+60 |
 | `api/health.py` (both backends) | the release probe field; ~+20 each |
-| `ansible/playbooks/update-all-nodes.yml` | release fact, `dest:` changes, venv/bundle/link/migrate/verify/rename/stop/flip/start/gate tasks, deletion of the `dist.staging` block and the recursive `chown`s; ~+180 / -90 |
+| `ansible/playbooks/update-all-nodes.yml` | release fact, `dest:` changes, venv/bundle/link/migrate/verify/rename/stop/flip/start/gate tasks, deletion of the per-component frontend flip block and the recursive `chown`s; ~+180 / -90 |
 | `ansible/roles/*/templates/*.service.j2` x8 | launcher ExecStart, resolved PYTHONPATH, `AUTOBOT_BASE_DIR` |
 | `roles/frontend/templates/nginx-frontend.conf.j2` | root via `current`, `previous` asset fallback; ~+12 |
 | `_shared/tasks/migrate_backend_db.yml` | `migration_code_dir` from the staged release |
@@ -1169,7 +1173,7 @@ true of one half of the system and silently false of the other is worse than not
 | B5 | **The venv lives inside the deployed component dir** and `_COMPONENT_PIP_PATHS` hardcodes two absolute literals per component | `roles/backend/tasks/main.yml:812-818`; `api/code_sync.py:1595-1604` | §1.9 moves the venv into the release; those literals must become derived. They violate the no-hardcode rule today. |
 | B6 | **Hardcoded deploy destinations outside the resolve chokepoint** | `code_sync.py:1822` (`/opt/autobot/constraints/`), `:1858` (`_get_deploy_base()`) | Writers not covered by a guard on `_rsync_local_cmd`. §1.5 resolves them, in the same change. |
 | B7 | **Self-restart never returns** | `code_sync.py:2477`, `:1732` | The flip must be complete, `fsync`ed and self-checked before the self-restart is issued (§3.3); ordering is not stylistic. |
-| B8 | **PR #15556 is open** and touches `api/code_sync.py`, `api/health.py`, the ratchet baselines and `ARCHITECTURE_EXCEPTIONS.md` | not yet in `Dev_new_gui` | It lands the staged-build extraction this design subsumes and moves the same baselines B1 constrains. Sequence behind it. |
+| B8 | **PR #15556 is open** and touches `api/code_sync.py`, `api/health.py`, the ratchet baselines and `ARCHITECTURE_EXCEPTIONS.md` | not yet in `main` | It lands the staged-build extraction this design subsumes and moves the same baselines B1 constrains. Sequence behind it. |
 | B9 | **(NEW) Recursive `chown`/`chmod` over what will be hardlink-seeded content** | `update-all-nodes.yml:772`, `:786`; `roles/*/tasks` ownership fixes | Metadata operations act on the **inode**, so they propagate to every release sharing it (§4.4 rule 3). The publisher must build as the service user and these tasks must be deleted, not reordered. |
 | B10 | **(NEW) `-e ../autobot_shared` writes an absolute path into `site-packages`** | `autobot-backend/requirements.txt:1` | §1.8. With a shared venv it defeats pinning for the exact module #13539 named. It is why per-release venvs are mandatory, and V7/T15 exist to keep it honest. |
 | B11 | **(NEW) `AUTOBOT_BASE_DIR` is a second, independent path root** | `autobot_shared/ssot_config.py:1330`, consumed by `config.path.resolve()` and `services/frontend_bundle_health.py` | A process pinned by `PYTHONPATH` but not by `AUTOBOT_BASE_DIR` resolves SSOT paths into the live tree. The launcher must set it (§3.2 step 3) and T9 must assert it. |

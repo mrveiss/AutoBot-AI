@@ -32,8 +32,8 @@ navigates away or closes the tab does not permanently mute the agent.
 """
 
 import json
-import os
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp
@@ -48,7 +48,7 @@ DEFAULT_DESKTOP_SESSION_ID = "default"
 # Env-driven idle-TTL (seconds): if the lock is not refreshed (re-acquired)
 # within this window, it auto-expires and the agent resumes. Never hardcode
 # -- override via AUTOBOT_DESKTOP_CONTROL_LOCK_TTL_SECONDS.
-DESKTOP_CONTROL_LOCK_TTL_SECONDS: int = int(os.environ.get("AUTOBOT_DESKTOP_CONTROL_LOCK_TTL_SECONDS", "120"))
+DESKTOP_CONTROL_LOCK_TTL_SECONDS: int = env_int("AUTOBOT_DESKTOP_CONTROL_LOCK_TTL_SECONDS", 120)
 
 _LOCK_KEY_PREFIX = "autobot:desktop:control_lock:"
 

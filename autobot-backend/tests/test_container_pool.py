@@ -9,11 +9,11 @@ Validates pool start/stop, acquire/release, cold-start fallback, replenishment,
 and DockerBackend integration with pool enabled.
 """
 
-import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autobot_shared.eventually import eventually
 from services.execution.base_backend import (
     ExecutionStatus,
     ExecutionTask,
@@ -175,8 +175,7 @@ class TestWarmContainerPool:
 
         assert pool.available == 1
         await pool.acquire()  # drains pool, triggers background replenish
-        # Give the background task a chance to run
-        await asyncio.sleep(0.05)
+        await eventually(lambda: pool.available == 1)  # the background replenish, not the clock
         assert pool.available == 1  # replenished
 
     async def test_replenish_noop_when_pool_full(self):

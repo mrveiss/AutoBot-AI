@@ -16,6 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
+import { joinSystemdUnits, parseSystemdUnits } from '@/composables/useRoles'
 
 const logger = createLogger('RolesView')
 const { t } = useI18n()
@@ -27,7 +28,7 @@ interface RoleDefinition {
   sync_type: string | null
   source_paths: string[]
   target_path: string
-  systemd_service: string | null
+  systemd_service: string[] | null // #16025: a role can own >1 systemd unit
   auto_restart: boolean
   health_check_port: number | null
   health_check_path: string | null
@@ -202,7 +203,7 @@ function openEditForm(role: RoleDefinition): void {
     sync_type: role.sync_type || 'component',
     source_paths: (role.source_paths || []).join(', '),
     target_path: role.target_path,
-    systemd_service: role.systemd_service || '',
+    systemd_service: joinSystemdUnits(role.systemd_service),
     auto_restart: role.auto_restart,
     health_check_port: role.health_check_port?.toString() || '',
     health_check_path: role.health_check_path || '',
@@ -222,7 +223,7 @@ function buildPayload(): Record<string, unknown> {
     sync_type: f.sync_type,
     source_paths: f.source_paths ? f.source_paths.split(',').map(s => s.trim()).filter(Boolean) : [],
     target_path: f.target_path,
-    systemd_service: f.systemd_service || null,
+    systemd_service: parseSystemdUnits(f.systemd_service),
     auto_restart: f.auto_restart,
     health_check_port: f.health_check_port ? parseInt(f.health_check_port) : null,
     health_check_path: f.health_check_path || null,
@@ -514,7 +515,7 @@ onMounted(() => {
               <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">{{ role.sync_type || $t('rolesView.component2') }}</span>
             </td>
             <td class="px-4 py-3 text-sm text-gray-600 font-mono">{{ role.target_path }}</td>
-            <td class="px-4 py-3 text-sm text-gray-600">{{ role.systemd_service || '-' }}</td>
+            <td class="px-4 py-3 text-sm text-gray-600">{{ joinSystemdUnits(role.systemd_service) || '-' }}</td>
             <td class="px-4 py-3 text-sm text-gray-600">
               <span v-if="role.health_check_port">:{{ role.health_check_port }}{{ role.health_check_path || '' }}</span>
               <span v-else class="text-gray-400">-</span>

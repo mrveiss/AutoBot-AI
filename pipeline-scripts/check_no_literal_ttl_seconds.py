@@ -30,10 +30,15 @@ import sys
 from pathlib import Path
 
 # Files that are allowed to contain literal TTL values (the constants themselves).
+#
+# `autobot_shared/ssot_constants/ttl.py` was removed here (#15566): it named a
+# package split of `ssot_constants` that never landed, so the entry could never
+# match a real path -- and because the check below matches by substring, a dead
+# entry is also a live widening of the allowlist for any path that contains it.
+# The module it anticipated is `autobot_shared/ssot_constants.py`, already here.
 ALLOWLISTED_PATHS = {
     "autobot-backend/constants/ttl_constants.py",
     "autobot_shared/ssot_constants.py",
-    "autobot_shared/ssot_constants/ttl.py",
 }
 
 # Redis client method names whose second positional argument (index 1) is a TTL.

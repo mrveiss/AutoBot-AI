@@ -32,18 +32,24 @@ onnxruntime-openvino>=1.17.0
 
 # OpenVINO toolkit for device enumeration and advanced features
 # Required for Core().available_devices to detect NPU/GPU/CPU
-# #14476: floor raised to match the SSOT (autobot-npu-worker/requirements.txt).
-openvino>=2026.3.1
+# #15408: floor no longer restated here -- constraints/shared.txt (below) is
+# the single source of truth, so a dependabot bump there needs no edit here.
+openvino  # version from constraints/shared.txt
 
 # HuggingFace for model downloading and tokenizers
-transformers>=4.36.0
-tokenizers>=0.15.0,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor at or
-                          # above 0.23.1 is unsatisfiable — the shape #10416 shipped by way of
-                          # a grouped bump. The cap matches the ai-stack and npu-worker-docker
-                          # siblings; the FLOOR stays at 0.15.0 because this file pins its own
-                          # older stack (transformers>=4.36.0 above) and raising it would only
-                          # narrow that range for no gain. #14562 put this directory inside
-                          # dependabot's reach, which is what makes the cap load-bearing here.
+# #15298: was an unbounded transformers>=4.36.0 -- a fresh resolve could land on any
+# 5.x release, including the one that dropped `resume_download` (#15054). Exact-pinned
+# to 5.16.1 to match requirements-ci/ai-ml.txt's `transformers==5.16.1`, which is this
+# tree's convention for a reproducible, already-vetted version rather than an open floor.
+# The three `from_pretrained` calls in app/npu_worker.py (AutoTokenizer x2, AutoModel)
+# pass only `trust_remote_code`, which 5.16.1 still accepts (verified against PyPI
+# metadata, no execution) -- the same read-only method #15054 used.
+transformers==5.16.1
+tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above
+                          # that is unsatisfiable. Matches the ai-stack and npu-worker-docker
+                          # siblings now that #15298 aligned this file's transformers pin with
+                          # theirs -- the old 0.15.0 floor existed only to avoid narrowing the
+                          # range for this file's formerly older, independent transformers>=4.36.0.
 sentencepiece>=0.1.99
 sentence-transformers>=2.2.0
 einops>=0.7.0

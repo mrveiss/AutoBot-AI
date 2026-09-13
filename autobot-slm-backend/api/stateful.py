@@ -35,6 +35,7 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.replication import replication_service
+from services.replication_jobs import setup_replication
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stateful", tags=["stateful"])
@@ -256,8 +257,8 @@ async def get_replication(
     return ReplicationResponse.model_validate(replication)
 
 
-async def _fetch_replication_nodes(db, request: ReplicationCreate):
-    """Helper for start_replication. Ref: #1088."""
+async def _require_replication_nodes(db, request: ReplicationCreate) -> None:
+    """Helper for start_replication: the 404 contract. Ref: #1088, #15549."""
     source_result = await db.execute(select(Node).where(Node.node_id == request.source_node_id))
     source_node = source_result.scalar_one_or_none()
     if not source_node:
@@ -272,7 +273,6 @@ async def _fetch_replication_nodes(db, request: ReplicationCreate):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Target node not found",
         )
-    return source_node, target_node
 
 
 async def _check_existing_replication(db, request: ReplicationCreate):
@@ -309,7 +309,7 @@ async def start_replication(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> ReplicationResponse:
     """Start a new replication between nodes."""
-    source_node, target_node = await _fetch_replication_nodes(db, request)
+    await _require_replication_nodes(db, request)
     await _check_existing_replication(db, request)
 
     replication_id = str(uuid.uuid4())[:16]
@@ -324,8 +324,8 @@ async def start_replication(
     await db.commit()
     await db.refresh(replication)
 
-    # Uses the ReplicationService (Issue #726 Phase 4).
-    coro = replication_service.setup_replication(db, replication_id, source_node, target_node, request.service_type)
+    # Plain ids only: ``db`` is closed in dependency teardown before this runs (#15549).
+    coro = setup_replication(replication_id, request.source_node_id, request.target_node_id, request.service_type)
     fire_and_forget(coro, name=f"replication:{replication_id}")
 
     logger.info(
@@ -598,7 +598,7 @@ async def _run_restore(job_id: str, backup_id: str, node_id: str) -> None:
 
 
 # NOTE: Replication is now handled by services/replication.py using Ansible
-# The old _run_replication function has been replaced by replication_service.setup_replication
+# The old _run_replication function has been replaced by services.replication_jobs.setup_replication
 # Issue #726 Phase 4
 
 

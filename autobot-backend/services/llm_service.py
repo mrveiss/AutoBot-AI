@@ -38,11 +38,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import time
 import uuid
 from typing import Any, AsyncIterator, Dict, List
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
@@ -73,7 +73,7 @@ logger = get_logger(__name__)
 
 # Cap on honoring a provider-suggested Retry-After before a same-provider retry,
 # so a hostile/huge value can't stall the request indefinitely (#10601).
-_MAX_RETRY_AFTER_SECONDS = float(os.getenv("AUTOBOT_LLM_MAX_RETRY_AFTER_SECONDS", "30"))
+_MAX_RETRY_AFTER_SECONDS = env_float("AUTOBOT_LLM_MAX_RETRY_AFTER_SECONDS", 30)
 
 # Default parameters per task type.  These are applied when the caller does
 # not supply explicit temperature / max_tokens values.

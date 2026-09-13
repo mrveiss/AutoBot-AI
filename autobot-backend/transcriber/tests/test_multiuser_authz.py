@@ -21,9 +21,8 @@ import pytest_asyncio
 from fastapi import FastAPI, HTTPException, Request
 from httpx import ASGITransport, AsyncClient
 
-from api.transcripts import _resolve_user_id
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, can_access, get_db
+from transcriber.deps import DEFAULT_USER, authenticate, caller_id_of, can_access, get_db, resolve_user_id
 from transcriber.routes.projects import router as projects_router
 from transcriber.routes.recordings import router as recordings_router
 
@@ -31,10 +30,26 @@ USER_HEADER = "x-test-user"
 
 
 @pytest_asyncio.fixture
-async def client(tmp_path):
+async def db(tmp_path):
+    """Transcriber database shared by `client` and by tests that seed rows directly."""
+    _db = Database(str(tmp_path / "test.db"))
+    await _db.connect()
+    try:
+        yield _db
+    finally:
+        # #13861: `connect()` had no matching `close()`, and aiosqlite runs its
+        # connection on a NON-daemon worker thread. Every one of the 8 tests
+        # created a fixture, so 8 threads outlived the run and the interpreter
+        # could never exit — the suite passed, printed `........ [100%]`, and
+        # then hung until CI cancelled the job at 15 minutes. 20 of 20 runs
+        # across seven branches ended `cancelled`, never once pass or fail.
+        await _db.close()
+
+
+@pytest_asyncio.fixture
+async def client(tmp_path, db):
     """App with both routers and header-driven request.state.user identity."""
     app = FastAPI()
-    db = Database(str(tmp_path / "test.db"))
     upload_dir = tmp_path / "uploads"
     upload_dir.mkdir()
 
@@ -48,23 +63,14 @@ async def client(tmp_path):
             request.state.user = SimpleNamespace(id=uid)
         return await call_next(request)
 
-    await db.connect()
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[authenticate] = lambda: None
     app.state.transcriber_upload_dir = str(upload_dir)
     app.include_router(projects_router, prefix="/api/transcriber")
     app.include_router(recordings_router, prefix="/api/transcriber")
 
-    try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            yield c
-    finally:
-        # #13861: `connect()` had no matching `close()`, and aiosqlite runs its
-        # connection on a NON-daemon worker thread. Every one of the 8 tests
-        # created a fixture, so 8 threads outlived the run and the interpreter
-        # could never exit — the suite passed, printed `........ [100%]`, and
-        # then hung until CI cancelled the job at 15 minutes. 20 of 20 runs
-        # across seven branches ended `cancelled`, never once pass or fail.
-        await db.close()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        yield c
 
 
 async def _create_project(client, user: str) -> int:
@@ -111,26 +117,26 @@ def test_can_access_policy_unit():
     assert can_access({"user_id": ""}, "bob") is False
 
 
-def test_resolve_user_id_returns_real_identity():
-    """_resolve_user_id: returns user_id or username when present."""
-    assert _resolve_user_id({"user_id": "alice"}) == "alice"
-    assert _resolve_user_id({"username": "bob"}) == "bob"
+def testresolve_user_id_returns_real_identity():
+    """resolve_user_id: returns user_id or username when present."""
+    assert resolve_user_id({"user_id": "alice"}) == "alice"
+    assert resolve_user_id({"username": "bob"}) == "bob"
     # user_id takes precedence over username
-    assert _resolve_user_id({"user_id": "alice", "username": "other"}) == "alice"
+    assert resolve_user_id({"user_id": "alice", "username": "other"}) == "alice"
 
 
-def test_resolve_user_id_raises_when_no_identity():
-    """_resolve_user_id: raises 403 — never silently returns DEFAULT_USER (#9968)."""
+def testresolve_user_id_raises_when_no_identity():
+    """resolve_user_id: raises 403 — never silently returns DEFAULT_USER (#9968)."""
     with pytest.raises(HTTPException) as exc_info:
-        _resolve_user_id({})
+        resolve_user_id({})
     assert exc_info.value.status_code == 403
 
     with pytest.raises(HTTPException) as exc_info:
-        _resolve_user_id({"user_id": None, "username": None})
+        resolve_user_id({"user_id": None, "username": None})
     assert exc_info.value.status_code == 403
 
     with pytest.raises(HTTPException) as exc_info:
-        _resolve_user_id({"user_id": "", "username": ""})
+        resolve_user_id({"user_id": "", "username": ""})
     assert exc_info.value.status_code == 403
 
 
@@ -189,18 +195,18 @@ async def test_second_user_cannot_access_recordings(client):
 
 
 @pytest.mark.asyncio
-async def test_legacy_default_rows_not_accessible_to_other_users(client):
+async def test_legacy_default_rows_not_accessible_to_other_users(client, db):
     """DEFAULT_USER rows are NOT shared across real users (#9968 IDOR fix).
 
-    Pre-auth rows (stamped DEFAULT_USER) are accessible only by the
-    DEFAULT_USER caller.  Real authenticated users are denied — the old
-    "any caller can read default rows" behaviour was the IDOR.  Cross-user
-    reassignment of legacy rows is tracked separately.
+    Pre-auth rows (stamped DEFAULT_USER) are accessible to the DEFAULT_USER
+    caller and, since #15758, to admins.  Real authenticated users are denied —
+    the old "any caller can read default rows" behaviour was the IDOR.
+    Cross-user reassignment of legacy rows is tracked separately.
+
+    The row is seeded directly: since #15758 every route authenticates, so no
+    request can create a DEFAULT_USER row any more.
     """
-    r = await client.post(
-        "/api/transcriber/projects", json={"name": "legacy", "description": ""}
-    )  # no user header -> DEFAULT_USER
-    pid = r.json()["id"]
+    pid = await db.create_project("legacy", "", DEFAULT_USER)
     # Real user bob is DENIED access to a DEFAULT_USER-owned row
     r = await client.get(f"/api/transcriber/projects/{pid}", headers={USER_HEADER: "bob"})
     assert r.status_code == 404, "IDOR (#9968): real user should not access DEFAULT_USER rows"
@@ -333,3 +339,39 @@ class TestTheFixtureDoesNotLeakConnections:
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "connect":
                     found += 1
         assert found >= 8, f"expected the directory's Database.connect() calls, found {found}"
+
+
+def test_can_access_admin_reaches_only_default_rows():
+    """#15758: an admin may reach DEFAULT_USER rows, and no other row it does not own."""
+    assert can_access({"user_id": DEFAULT_USER}, "admin-1", is_admin=True) is True
+    assert can_access({"user_id": "alice"}, "admin-1", is_admin=True) is False
+    assert can_access({"user_id": DEFAULT_USER}, "bob", is_admin=False) is False
+    assert can_access({"user_id": "admin-1"}, "admin-1", is_admin=True) is True
+
+
+def test_caller_id_of_fails_closed_without_identity():
+    """#15758: no recorded identity is a 401, never a fallback to DEFAULT_USER."""
+    request = SimpleNamespace(state=SimpleNamespace())
+    with pytest.raises(HTTPException) as exc_info:
+        caller_id_of(request)
+    assert exc_info.value.status_code == 401
+
+
+def test_authenticate_records_identity_and_admin_flag():
+    """#15758: the router dependency resolves the caller and whether it is an admin."""
+    request = SimpleNamespace(state=SimpleNamespace())
+    authenticate(request, {"user_id": "alice", "role": "admin"})
+    assert request.state.user.id == "alice"
+    assert request.state.user.is_admin is True
+    authenticate(request, {"user_id": "bob", "role": "user"})
+    assert request.state.user.id == "bob"
+    assert request.state.user.is_admin is False
+
+
+def test_every_transcriber_router_requires_authentication():
+    """#15758: each mounted sub-router carries the authenticate dependency."""
+    from transcriber.routes import ai, export, kb, projects, providers, recordings, transcripts
+
+    for module in (ai, export, kb, projects, providers, recordings, transcripts):
+        deps = [d.dependency for d in module.router.dependencies]
+        assert authenticate in deps, f"{module.__name__} is mounted without authentication"

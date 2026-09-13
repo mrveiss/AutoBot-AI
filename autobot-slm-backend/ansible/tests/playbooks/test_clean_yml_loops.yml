@@ -2,69 +2,98 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - Test playbook: clean.yml include_tasks loops fire correctly (#7058)
 #
-# Each role's clean.yml was refactored from inline tasks into include_tasks
-# loops over a shared parameterized task at roles/_shared/tasks/. This test
-# runs every clean.yml in --check mode and asserts:
+# Each role's clean.yml is a thin include_tasks loop over a shared parameterized
+# task at roles/_shared/tasks/. This runs every clean.yml in --check mode and
+# asserts:
 #   - The loop unrolls (loop_var, vars passing all wired correctly)
 #   - The shared task name renders ("{{ caller_role }} | Clean: ...")
 #   - The role_*_active gate via lookup('vars', role_check_fact) resolves
 #
-# Without this test, a typo in any role's loop_control or vars block goes
-# undetected until somebody runs the full provision-fleet-roles playbook.
+# #15824: this used to run with `-i 'localhost,'` and substitute literal
+# `role_*_active: true` play vars. Measurement showed that literal takes the same
+# path as the real fact -- both arrive at the gate as a Python bool -- so the
+# literal was not what blinded the guard. It was still wrong: a fixture that
+# rebuilds its inputs by hand tests the fixture, not group_vars/all.yml. The
+# plays now name hosts from tests/inventory/test_role_facts.yml, so every
+# role_*_active comes out of the canonical folded-Jinja definition.
+#
+# The scenarios are the two shapes cleanup has actually got wrong in production:
+#   1. Co-located SLM + backend (#7031): backend and SLM dirs must NOT be wiped
+#      just because this host also runs the SLM stack.
+#   2. Dedicated SLM manager: every non-SLM dir IS wrong-node here.
+#
+# Each play writes a reach receipt, because `ansible-playbook` exits 0 when a
+# host pattern matches nothing. tests/check_clean_loop_reach.py asserts a floor
+# against those receipts, so a run that exercised nothing cannot report success
+# (#15824). Set CLEAN_LOOP_RECEIPT_DIR to a writable directory.
 #
 # Usage:
 #   cd autobot-slm-backend/ansible
-#   ansible-playbook --check --connection=local -i 'localhost,' \
-#                    tests/playbooks/test_clean_yml_loops.yml
+#   CLEAN_LOOP_RECEIPT_DIR="$(mktemp -d)" ansible-playbook --check \
+#       --connection=local -i tests/inventory/test_role_facts.yml \
+#       tests/playbooks/test_clean_yml_loops.yml
 ---
-- name: "Test: every clean.yml include_tasks loop fires (#7058) — single-host (skip wrong-node)"
-  hosts: localhost
+- name: "Test: clean.yml loops on a co-located SLM + backend host (#7058, #7031)"
+  hosts: test-single-host-slm-and-backend
   gather_facts: false
   any_errors_fatal: true
   vars:
-    # Single-host: every role active. NO wrong-node deletes should fire.
-    role_backend_active: true
-    role_frontend_active: true
-    role_slm_active: true
-    role_ai_stack_active: true
-    role_npu_worker_active: true
-    role_browser_active: true
+    _scenario: colocated-slm-backend
+    _receipt_dir: "{{ lookup('env', 'CLEAN_LOOP_RECEIPT_DIR') }}"
+    _role_cleans:
+      - backend
+      - frontend
+      - ai-stack
+      - browser
+      - npu-worker
+      - slm_manager
 
   tasks:
-    - name: "Run backend clean.yml"
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/backend/tasks/clean.yml"
+    - name: "Reach receipt: a receipt directory is required (#15824)"
+      ansible.builtin.assert:
+        that:
+          - _receipt_dir | length > 0
+        fail_msg: >-
+          Set CLEAN_LOOP_RECEIPT_DIR to a writable directory. Without a receipt
+          the reach floor cannot be checked, and a run that matched no hosts
+          exits 0 exactly like a run that exercised every scenario (#15824).
+        success_msg: "Reach receipts will be written to {{ _receipt_dir }}."
 
-    - name: "Run frontend clean.yml"
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/frontend/tasks/clean.yml"
+    - name: "Run every role clean.yml"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/{{ _role_clean }}/tasks/clean.yml"
+      loop: "{{ _role_cleans }}"
+      loop_control:
+        loop_var: _role_clean
 
-    - name: "Run ai-stack clean.yml"
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/ai-stack/tasks/clean.yml"
+    - name: "Reach receipt: record what this scenario exercised (#15824)"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/write_clean_loop_receipt.yml"
 
-    - name: "Run browser clean.yml"
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/browser/tasks/clean.yml"
-
-    - name: "Run npu-worker clean.yml"
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/npu-worker/tasks/clean.yml"
-
-    - name: "Run slm_manager clean.yml"
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/slm_manager/tasks/clean.yml"
-
-
-- name: "Test: clean.yml SLM-only host wipes co-located non-SLM dirs"
-  hosts: localhost
+- name: "Test: clean.yml on a dedicated SLM manager wipes co-located non-SLM dirs"
+  hosts: test-dedicated-slm-manager
   gather_facts: false
   any_errors_fatal: true
   vars:
-    # SLM-only host: ONLY slm role active. Wrong-node deletes SHOULD fire
-    # for every dir gated on a non-slm role_*_active fact (i.e. all of them
-    # in slm_manager/clean.yml).
-    role_backend_active: false
-    role_frontend_active: false
-    role_slm_active: true
-    role_ai_stack_active: false
-    role_npu_worker_active: false
-    role_browser_active: false
+    _scenario: dedicated-slm-manager
+    _receipt_dir: "{{ lookup('env', 'CLEAN_LOOP_RECEIPT_DIR') }}"
+    # Only the SLM role is active here, so slm_manager/clean.yml is the file
+    # whose every wrong-node gate should read decidably false.
+    _role_cleans:
+      - slm_manager
 
   tasks:
+    - name: "Reach receipt: a receipt directory is required (#15824)"
+      ansible.builtin.assert:
+        that:
+          - _receipt_dir | length > 0
+        fail_msg: >-
+          Set CLEAN_LOOP_RECEIPT_DIR to a writable directory (#15824).
+        success_msg: "Reach receipts will be written to {{ _receipt_dir }}."
+
     - name: "Run slm_manager clean.yml — SLM-only host"
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/slm_manager/tasks/clean.yml"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/{{ _role_clean }}/tasks/clean.yml"
+      loop: "{{ _role_cleans }}"
+      loop_control:
+        loop_var: _role_clean
+
+    - name: "Reach receipt: record what this scenario exercised (#15824)"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/write_clean_loop_receipt.yml"

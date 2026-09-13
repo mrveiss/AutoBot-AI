@@ -49,6 +49,7 @@ from ..models.label import LLCWorkItemLabel
 from ..models.membership import LLCCompanyMembership
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from .base import LLCServiceBase
+from .work_item_relations import WorkItemRelationService
 
 logger = logging.getLogger(__name__)
 
@@ -510,10 +511,10 @@ class WorkItemService(LLCServiceBase):
         item.checkout_run_id = run_id or str(uuid.uuid4())
         item.checkout_locked_at = datetime.now(timezone.utc)
         item.assignee_agent_id = uuid.UUID(agent_id)
+        # Single-assignee invariant (#10532): `update()` enforced it, `checkout` did not (#15964).
+        item.assignee_user_id = None
         item.assignee_type = AssigneeType.AGENT.value
-        # GH#9532 — persist intent for audit trail.  Clearing prior intent when
-        # work_intent is absent is deliberate: stale intent must not survive a
-        # new checkout.
+        # GH#9532 — persist intent for audit; clearing it when work_intent is absent is deliberate.
         item.checkout_intent = work_intent
         item.version += 1
         if item.status in (WorkItemStatus.BACKLOG, WorkItemStatus.READY):
@@ -847,7 +848,8 @@ class WorkItemService(LLCServiceBase):
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
         item = result.scalar_one_or_none()
-        if item is None:
+        # #15952: loaded by id alone; same message as missing, to disclose nothing.
+        if item is None or (company_id is not None and str(item.company_id) != str(company_id)):
             raise ValueError(f"Work item {work_item_id} not found")
 
         current = WorkItemStatus(item.status)
@@ -858,15 +860,13 @@ class WorkItemService(LLCServiceBase):
                 f"Allowed: {[s.value for s in allowed]}"
             )
 
-        # GH#8252: block BLOCKED→IN_PROGRESS while unresolved blockers remain
-        if (
-            current == WorkItemStatus.BLOCKED
-            and new_status == WorkItemStatus.IN_PROGRESS
-            and relation_svc is not None
-            and company_id is not None
-        ):
-            cid = company_id or str(item.company_id)
-            if await relation_svc.has_unresolved_blockers(session, work_item_id, cid):
+        # GH#8252: block BLOCKED→IN_PROGRESS while blockers remain. #15931 ungated
+        # this — it required `relation_svc`, which nothing outside its own tests
+        # passed, so it had never fired. See test_blocked_by_rule_fires_15931.py.
+        if current == WorkItemStatus.BLOCKED and new_status == WorkItemStatus.IN_PROGRESS:
+            svc = relation_svc if relation_svc is not None else WorkItemRelationService()
+            cid = str(item.company_id)  # the ITEM's, not the caller's (#15952)
+            if await svc.has_unresolved_blockers(session, work_item_id, cid):
                 raise InvalidTransition("Cannot move to in_progress: item has unresolved blocked_by relations")
 
         item.status = new_status

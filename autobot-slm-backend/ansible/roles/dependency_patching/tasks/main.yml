@@ -31,6 +31,6 @@
     msg: |
       DRY RUN - Would update the following packages on {{ inventory_hostname }}:
       {% for pkg, version in python_security_updates.items() %}
-      - {{ pkg }} >= {{ version }}
+      - {{ pkg }}>={{ version }}
       {% endfor %}
   when: dry_run

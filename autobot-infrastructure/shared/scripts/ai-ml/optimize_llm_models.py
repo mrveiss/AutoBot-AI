@@ -254,13 +254,15 @@ class LLMModelOptimizer:
             ],
             "src/config.py": [
                 {
-                    "find": f'"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:1b")',
+                    "find": '"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:1b")',
                     "replace": f'"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "{_ROUTING_MODEL}")',
                     "line_context": "models configuration — orchestrator",
                 },
                 {
-                    "find": f'"classification": os.getenv("AUTOBOT_CLASSIFICATION_MODEL", "gemma2:2b")',
-                    "replace": f'"classification": os.getenv("AUTOBOT_CLASSIFICATION_MODEL", "{_CLASSIFICATION_MODEL}")',
+                    "find": '"classification": os.getenv("AUTOBOT_CLASSIFICATION_MODEL", "gemma2:2b")',
+                    "replace": (
+                        f'"classification": os.getenv("AUTOBOT_CLASSIFICATION_MODEL", "{_CLASSIFICATION_MODEL}")'
+                    ),
                     "line_context": "models configuration — classification",
                 },
             ],

@@ -103,10 +103,11 @@ from pathlib import Path
 from typing import Dict, FrozenSet, List, Set, Tuple
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
 
 _TARGET_NAME = "with_error_handling"
@@ -116,8 +117,10 @@ _TARGET_NAME = "with_error_handling"
 # whole workflow runs from `<main-tree>/.worktrees/<branch>/` checkouts, so
 # `"/.worktrees/" in path.as_posix()` is true of the repo root itself and skips
 # every file in the tree; the guard then inspects nothing and fails its own
-# non-vacuity assertion. Same form as `first_party_imports_resolve_test.py:33`
-# and `shell_lib_sources_resolve_test.py:58`.
+# non-vacuity assertion. Same form as the `_SKIP_PARTS` sets in
+# `first_party_imports_resolve_test.py` and `shell_lib_sources_resolve_test.py`
+# (named, not line-numbered: the second citation had already drifted 3 lines,
+# and a line number fails silently INTO whatever now occupies it -- #15877).
 #
 # #15202 item 2: `.worktrees` was an unreachable entry while the scan root was
 # `autobot-backend/` -- no path relative to that root can carry it. Scanning

@@ -47,10 +47,16 @@ if [ "$DOC_COUNT" -gt 5 ]; then
 fi
 echo ""
 
-# Check if the indexing script exists
+# Check if the indexing script exists.
+# GH#15845: this branch was reached on every documentation commit for as long
+# as the hook existed, because nothing was ever created at this path. The
+# message named no path, so the banner above looked like a successful sync and
+# the skip below read as "nothing to do". Name the path that was missing —
+# the next time this fires, the reason should be readable without a bisect.
 INDEX_SCRIPT="$PROJECT_ROOT/tools/index_documentation.py"
 if [ ! -f "$INDEX_SCRIPT" ]; then
-    echo -e "${YELLOW}⚠️ Documentation indexer not found, skipping sync${NC}"
+    echo -e "${YELLOW}⚠️ Documentation indexer not found at: $INDEX_SCRIPT${NC}" >&2
+    echo -e "${YELLOW}   Documentation index is now STALE for this commit.${NC}" >&2
     exit 0
 fi
 

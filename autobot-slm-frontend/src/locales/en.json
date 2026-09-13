@@ -2796,7 +2796,9 @@
     "welcomeToAutoBot": "Welcome to AutoBot",
     "whatYouLlNeed": "What you'll need:",
     "yourAutoBotFleetIs": "Your AutoBot fleet is configured and ready to use.",
-    "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes."
+    "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
+    "provisioningFailed": "Provisioning failed",
+    "retryProvisioning": "Retry provisioning"
   },
   "skills": {
     "approvalsTab": {

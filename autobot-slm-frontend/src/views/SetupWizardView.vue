@@ -382,13 +382,13 @@
         </p>
 
         <!-- Phase & status bar -->
-        <div v-if="provisioning || provisionComplete" class="provision-status-bar">
+        <div v-if="provisioning || provisionComplete || provisionFailed" class="provision-status-bar">
           <span class="provision-stage">{{ provisionStage }}</span>
           <span class="provision-elapsed">{{ formatElapsed(provisionElapsed) }}</span>
         </div>
 
         <!-- Phase progress chips -->
-        <div v-if="provisioning || provisionComplete" class="provision-phases">
+        <div v-if="provisioning || provisionComplete || provisionFailed" class="provision-phases">
           <span
             v-for="phase in knownPhases"
             :key="phase.id"
@@ -438,6 +438,24 @@
         >
           {{ $t('setupWizardView.continue') }}
         </button>
+
+        <!--
+          #15825: a failed provision used to render NO control at all — the
+          Continue button was gated on `provisionComplete`, the status bar and
+          phase chips on `provisioning || provisionComplete`, and failure is
+          neither. The wizard simply stopped, which is why the underlying
+          provisioning bug (#15822) was experienced as "cannot get past step 7"
+          rather than "provisioning failed, here is why".
+        -->
+        <div v-if="provisionFailed" class="provision-failure" role="alert">
+          <p class="provision-failure-title">
+            {{ $t('setupWizardView.provisioningFailed') }}
+          </p>
+          <p v-if="provisionError" class="provision-failure-detail">{{ provisionError }}</p>
+          <button class="btn-primary" :disabled="provisioning" @click="provisionFleet">
+            {{ $t('setupWizardView.retryProvisioning') }}
+          </button>
+        </div>
       </div>
 
       <!-- Verify Health -->
@@ -760,6 +778,11 @@ async function saveSecrets() {
 // useProvisionStore() and persist across navigation.
 const provisioning = computed(() => provisionStore.isRunning)
 const provisionComplete = computed(() => provisionStore.isComplete)
+// #15825: failure was unrepresented in this view. The store has carried both
+// `isFailed` and `error` all along; nothing read them, so the panel rendered
+// nothing at all on the one path a user most needs to be told about.
+const provisionFailed = computed(() => provisionStore.isFailed)
+const provisionError = computed(() => provisionStore.error)
 const provisionLogs = computed(() => provisionStore.logs)
 const provisionStage = computed(() => formatStage(provisionStore.stage))
 const provisionElapsed = computed(() => provisionStore.elapsedSeconds)
@@ -1646,6 +1669,28 @@ input.full-width {
 
 .provision-elapsed {
   color: var(--text-secondary);
+}
+
+/* #15825: a failed provision must look like a failure, not like an empty step. */
+.provision-failure {
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-color);
+  border-radius: var(--radius-md);
+}
+
+.provision-failure-title {
+  margin: 0 0 0.25rem;
+  color: var(--danger-color);
+  font-weight: 600;
+}
+
+.provision-failure-detail {
+  margin: 0 0 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 
 .provision-phases {

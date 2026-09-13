@@ -16,12 +16,21 @@ from llm_shared.pricing.sources import BaselinePricingSource
 
 _PROVIDER = "deepseek"
 
-# Hardcoded baseline — kept in sync with ssot_constants.MODEL_PRICING_PER_1M_TOKENS.
+# Hardcoded baseline. The canonical table is `autobot_shared.model_pricing.
+# MODEL_PRICING_PER_1M_TOKENS` (it moved out of `ssot_constants` in #15910, and
+# this pointer named the old home until #15912). Agreement is enforced by
+# `repo_tests/model_pricing_tables_agree_15912_test.py`, not by remembering:
+# this table's `deepseek-r1` had been charging API rates against the local
+# model's id, and `PER_1K` had two prices years out of date.
 # Keys use the same model IDs as DEEPSEEK_* constants (GH#6480).
 _BASELINE: list[tuple[str, float, float]] = [
     # (model_id, input_per_1m, output_per_1m)
     ("deepseek-v3", 0.27, 1.10),
-    ("deepseek-r1", 0.55, 2.19),
+    # #15912: was keyed "deepseek-r1". That is `LOCAL_DEEPSEEK_R1`, priced 0.0/0.0
+    # as a locally-hosted model; the paid one is `DEEPSEEK_R1_API`. This table
+    # charged API rates against the local model's id, so the same string meant
+    # "free" or "$0.55/1M" depending on which table a consumer read.
+    ("deepseek-r1-api", 0.55, 2.19),
 ]
 
 

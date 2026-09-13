@@ -159,29 +159,51 @@ packages:
     - netcat
     - redis-tools
 
+  # DECISION (#15596): the group's role and the component requirements file are
+  # the source of versions -- NOT this list. Nothing reads `packages.python`
+  # (nor `packages.system`): every reader-shaped hit across ansible `*.yml` and
+  # `*.j2` is a different variable (`system_packages`,
+  # `python_interpreter_packages`, `required_packages`,
+  # `role_configs[node_role].packages`, or a registered result). `roles/backend` installs the backend venv from the filtered copy of
+  # `requirements.txt` it builds through `scripts/build-filtered-requirements.sh`,
+  # which `backend.python.packages_file` above already names as the source.
+  #
+  # So the list installs nothing today, and every floor it carried had drifted
+  # below that manifest -- `structlog>=22.0.0` against its `>=26.1.0`. It is kept as a names-only inventory of
+  # what a node in this group needs, and now restates NO versions, which is the
+  # defect: an uninstalled list cannot be caught by anything except the drift.
+  #
+  # Wiring it to a pip task was considered and rejected: that would be a SECOND
+  # install path for libraries `roles/backend` already installs, which is the
+  # co-located-roles hazard `constraints/shared.txt` documents in its own
+  # header. If it is ever wired, install with `-r` against the manifest and
+  # `-c constraints/shared.txt` -- never with floors typed here.
+  #
+  # The wire-or-remove decision for the whole `packages` dict -- both halves,
+  # all three groups -- is #15621, together with `gunicorn`, the one name here that no shipped manifest declares.
   python:
     # Core framework dependencies
-    - fastapi>=0.115.0
-    - uvicorn>=0.30.0
-    - gunicorn>=20.1.0
-    - aiohttp>=3.12.15
-    - aiofiles>=23.0.0
-    - websockets>=11.0.0
-    - pydantic>=2.8.0
-    - python-multipart>=0.0.9
+    - fastapi
+    - uvicorn
+    - gunicorn
+    - aiohttp
+    - aiofiles
+    - websockets
+    - pydantic
+    - python-multipart
 
     # Database and caching
-    - redis>=5.0.0
-    - aiosqlite>=0.17.0
+    - redis
+    - aiosqlite
 
     # AI/ML dependencies
-    - torch>=2.0.0
-    - transformers>=4.55.2
-    - sentence-transformers>=2.2.0
+    - torch
+    - transformers
+    - sentence-transformers
 
     # Monitoring and logging
-    - prometheus-client>=0.16.0
-    - structlog>=22.0.0
+    - prometheus-client
+    - structlog
 
 # ==========================================
 # SYSTEMD SERVICE CONFIGURATION

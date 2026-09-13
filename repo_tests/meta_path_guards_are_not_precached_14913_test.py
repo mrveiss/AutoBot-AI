@@ -34,10 +34,11 @@ from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 _SKIP_PARTS = {"node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
 
 #: A prefix installed into sys.modules, e.g. `sys.modules["llm_shared"] = stub`.

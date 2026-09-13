@@ -43,6 +43,12 @@ function respond(): void {
     if (url.includes('/holders')) return Promise.resolve([HOLDER])
     if (url.includes('/permissions')) return Promise.resolve(['knowledge.read'])
     if (url.includes('/workflows')) return Promise.resolve(['wf-1'])
+    // #14852: the company tool catalogue shares the '/tools' substring with
+    // the role's own tool list, so it must be matched FIRST or it would be
+    // served the role list and the picker would render from strings. Empty
+    // here on purpose: with no catalogue the panel keeps its text box, which
+    // is the control these tests were written against.
+    if (url.startsWith('/api/llc/tools/')) return Promise.resolve([])
     if (url.includes('/tools')) return Promise.resolve(['llc.create_work_item'])
     if (url.includes('/credentials')) return Promise.resolve(['sec-1'])
     return Promise.resolve([ROLE])

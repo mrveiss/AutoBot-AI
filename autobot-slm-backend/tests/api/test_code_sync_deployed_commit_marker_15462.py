@@ -38,11 +38,11 @@ def _run(coro):
 
 
 def test_marker_is_written_under_the_ssot_deployed_root(tmp_path) -> None:
-    """Uses ``get_default_deployed_dir`` (SSOT — never a literal path)."""
+    """Uses ``get_release_component_dir`` (SSOT — never a literal path)."""
     deployed_dir = tmp_path / "autobot-slm-backend"
     deployed_dir.mkdir()
 
-    with patch("services.slm_frontend_build.get_default_deployed_dir", return_value=str(deployed_dir)) as resolver:
+    with patch("services.slm_frontend_build.get_release_component_dir", return_value=str(deployed_dir)) as resolver:
         _run(write_slm_deployed_commit_marker("abc123def456"))
 
     resolver.assert_called_once_with("autobot-slm-backend")
@@ -58,7 +58,7 @@ def test_marker_write_failure_is_logged_not_raised(tmp_path, caplog) -> None:
     # (this runs right before a service-restarting phase).
     caplog.set_level(logging.WARNING, logger="services.slm_frontend_build")
 
-    with patch("services.slm_frontend_build.get_default_deployed_dir", return_value=str(tmp_path / "does-not-exist")):
+    with patch("services.slm_frontend_build.get_release_component_dir", return_value=str(tmp_path / "does-not-exist")):
         _run(write_slm_deployed_commit_marker("abc123"))
 
     assert any("deployed_commit" in rec.message for rec in caplog.records)

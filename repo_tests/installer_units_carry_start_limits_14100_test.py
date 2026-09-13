@@ -30,12 +30,12 @@ Two invariants, both structural, so they hold for units added later:
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from typing import Dict, List, Tuple
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 INSTALLER = REPO_ROOT / "autobot-infrastructure/shared/scripts/install-bare-metal.sh"
 
 # `cat > <dest> <<EOF` ... `EOF`, the shape the installer uses for every unit.

@@ -14,7 +14,7 @@ from typing import Any, Dict, List
 
 from agents.json_formatter_agent import CLASSIFICATION_SCHEMA, json_formatter
 from agents.llm_failsafe_agent import get_robust_llm_response
-from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.async_compat import fire_and_forget, run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import (
@@ -84,7 +84,7 @@ class ClassificationAgent(StandardizedAgent):
         try:
             asyncio.get_running_loop()
             # A running loop exists — schedule as a task
-            asyncio.create_task(self.initialize_communication(self.capabilities))
+            fire_and_forget(self.initialize_communication(self.capabilities), name="classification-agent-init-comms")
         except RuntimeError:
             # Event loop not available yet, will initialize later
             logger.debug("Event loop not available, will initialize communication later")

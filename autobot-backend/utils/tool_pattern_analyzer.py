@@ -17,7 +17,6 @@ Key features:
 - Integration with TodoWrite optimizer and Claude API infrastructure
 """
 
-import asyncio
 import json
 import statistics
 from collections import defaultdict, deque
@@ -201,7 +200,7 @@ class ToolPatternAnalyzer:
         self._update_tool_statistics(tool_call)
         self._update_pattern_tracking(tool_call)
         if len(self.tool_calls) % 10 == 0:
-            asyncio.create_task(self._analyze_patterns())
+            fire_and_forget(self._analyze_patterns(), name="tool-pattern-analysis")
 
     def record_tool_call(
         self,
@@ -696,7 +695,7 @@ class ToolPatternAnalyzer:
             return self.cached_analysis
 
         # Trigger new analysis
-        asyncio.create_task(self._analyze_patterns())
+        fire_and_forget(self._analyze_patterns(), name="tool-pattern-analysis")
 
         # Return current cached results or basic stats
         return self.cached_analysis or self._build_basic_stats()
@@ -845,7 +844,7 @@ class ToolPatternAnalyzer:
 # Global analyzer instance (thread-safe)
 import threading
 
-from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.async_compat import fire_and_forget, run_or_schedule
 
 _global_analyzer: ToolPatternAnalyzer | None = None
 _global_analyzer_lock = threading.Lock()

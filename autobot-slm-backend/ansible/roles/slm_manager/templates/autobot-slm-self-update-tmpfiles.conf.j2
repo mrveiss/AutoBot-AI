@@ -1,0 +1,9 @@
+# AutoBot SLM local self-update admin socket runtime directory (#15728)
+#
+# /run is tmpfs -- recreated empty on every boot -- so
+# autobot-slm-self-update.socket.j2's ListenStream= needs this directory to
+# exist again before that unit tries to bind, on every single boot, not just
+# the one where Ansible first provisioned the host. systemd-tmpfiles owns
+# that recreation; see service_units.yml for the `systemd-tmpfiles --create`
+# call that also makes it exist immediately, without waiting for a reboot.
+d {{ slm_self_update_socket_path | dirname }} 0750 {{ slm_user }} {{ slm_group }} -

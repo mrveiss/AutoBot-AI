@@ -9,13 +9,13 @@ Type definitions for the agent loop system including states, phases,
 iteration results, and configuration.
 """
 
-import os
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
 from typing import Any
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import BatchConfig, RetryConfig
 
@@ -24,7 +24,7 @@ from constants.threshold_constants import BatchConfig, RetryConfig
 # ---------------------------------------------------------------------------
 #: Seconds the loop suspends waiting for a human answer before escalating.
 #: Override with AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS (default: 300).
-ASK_HUMAN_TIMEOUT_SECONDS: int = int(os.environ.get("AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS", "300"))
+ASK_HUMAN_TIMEOUT_SECONDS: int = env_int("AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS", 300)
 
 # =============================================================================
 # Loop States and Phases

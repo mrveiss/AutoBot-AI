@@ -50,6 +50,23 @@ def _load(name, rel):
 
 drift = _load("drift", "services/drift_checker.py")
 
+# get_release_component_dir moved out of drift_checker.py to
+# services/deployed_dir_resolver.py (#13539 B2) — loaded separately so it is
+# unaffected by the file-size ratchet on the module it was extracted from.
+# It imports `_NONSTANDARD_COMPONENT_PATHS` from the CANONICAL
+# "services.drift_checker" name, not the "_drift_12872" key `drift` is
+# stashed under above, so `drift` is pinned there for the load — otherwise it
+# resolves to the suite's session-global MagicMock stub instead.
+_prev_dc_module = sys.modules.get("services.drift_checker")
+sys.modules["services.drift_checker"] = drift
+try:
+    ddr = _load("ddr", "services/deployed_dir_resolver.py")
+finally:
+    if _prev_dc_module is None:
+        sys.modules.pop("services.drift_checker", None)
+    else:
+        sys.modules["services.drift_checker"] = _prev_dc_module
+
 # The helpers validate that the resolved directory exists, and under the suite's
 # stubs DEFAULT_REPO_PATH is a MagicMock. Point them at the real repo, which
 # genuinely contains the override sources — so these assertions are about the
@@ -84,7 +101,7 @@ def test_ai_stack_source_is_the_mapped_leaf():
 
 
 def test_slm_agent_deploys_below_its_own_root():
-    deployed = drift.get_default_deployed_dir("autobot-slm-agent")
+    deployed = ddr.get_release_component_dir("autobot-slm-agent")
 
     assert deployed.endswith("/autobot-slm-agent/slm/agent"), (
         f"deployed path is {deployed}; the standard /opt/autobot/<component> "
@@ -95,7 +112,7 @@ def test_slm_agent_deploys_below_its_own_root():
 def test_standard_components_are_unaffected():
     """The override must not change components that follow the convention."""
     src = drift.get_default_source_dir("autobot-slm-backend")
-    dst = drift.get_default_deployed_dir("autobot-slm-backend")
+    dst = ddr.get_release_component_dir("autobot-slm-backend")
 
     assert src.endswith("/autobot-slm-backend")
     assert dst.endswith("/autobot-slm-backend")

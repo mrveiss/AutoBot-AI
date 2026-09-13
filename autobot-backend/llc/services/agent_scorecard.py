@@ -165,7 +165,7 @@ class AgentScorecardService(LLCServiceBase):
             if window_available
             else {}
         )
-        budget_stats = await self._aggregate_budgets(session, slugs)
+        budget_stats = await self._aggregate_budgets(session, sprint.company_id, slugs)
 
         scores = [
             self._assemble_score(org_node_id, counts, nodes.get(org_node_id), run_stats, budget_stats, window_available)
@@ -269,11 +269,18 @@ class AgentScorecardService(LLCServiceBase):
             by_slug.setdefault(slug, {})[status] = n
         return by_slug
 
-    async def _aggregate_budgets(self, session: AsyncSession, slugs: List[str]) -> Dict[str, LLCAgentBudget]:
+    async def _aggregate_budgets(
+        self, session: AsyncSession, company_id: uuid.UUID, slugs: List[str]
+    ) -> Dict[str, LLCAgentBudget]:
         """Return {agent_slug: LLCAgentBudget} — lifetime spend, not sprint-windowed."""
         if not slugs:
             return {}
-        result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id.in_(slugs)))
+        result = await session.execute(
+            select(LLCAgentBudget).where(
+                LLCAgentBudget.agent_id.in_(slugs),
+                LLCAgentBudget.company_id == str(company_id),
+            )
+        )
         return {row.agent_id: row for row in result.scalars().all()}
 
     def _assemble_score(

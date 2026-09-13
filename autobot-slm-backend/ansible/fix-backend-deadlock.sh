@@ -37,7 +37,7 @@ cat > "$TEMP_FILE" << 'EOF'
 # Author: mrveiss
 [Unit]
 Description=AutoBot Backend API
-After=network.target redis.service
+After=network.target redis-stack-server.service
 
 [Service]
 Type=simple

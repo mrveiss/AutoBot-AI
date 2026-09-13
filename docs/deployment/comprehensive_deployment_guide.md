@@ -78,8 +78,9 @@ docker-compose --version  # Should be 2.0.0 or higher
 
 #### Optional Dependencies
 ```bash
-# Redis (for enhanced performance)
-redis-server --version
+# Redis Stack (for enhanced performance). Its binary lives in
+# /opt/redis-stack/bin/ and is not necessarily on PATH, so check the service.
+systemctl is-active redis-stack-server
 
 # PostgreSQL (for production databases)
 psql --version
@@ -272,8 +273,13 @@ sqlite3 data/autobot_dev.db ".schema"
 # Update system
 sudo apt update && sudo apt upgrade -y
 
-# Install system dependencies
-sudo apt install -y python3 python3-pip python3-venv nodejs npm nginx redis-server postgresql
+# Install system dependencies. Redis is NOT in this list on purpose (#16071):
+# `redis-server` from apt is plain Redis, with no RediSearch, RedisJSON or
+# RedisTimeSeries. It installs, starts, and fails on the first module command,
+# which leaves a host that looks provisioned and is not. Redis Stack comes from
+# packages.redis.io and is provisioned by `roles/redis`, which owns the
+# repository, the suite pin (#7178) and the package.
+sudo apt install -y python3 python3-pip python3-venv nodejs npm nginx postgresql
 
 # Create autobot user
 sudo useradd -m -s /bin/bash autobot
@@ -360,7 +366,7 @@ python scripts/migrate_database.py --production
 ```ini
 [Unit]
 Description=AutoBot Backend Service
-After=network.target postgresql.service redis.service
+After=network.target postgresql.service redis-stack-server.service
 
 [Service]
 Type=exec
@@ -520,10 +526,14 @@ services:
       - autobot-network
 
   redis:
-    image: redis:7-alpine
+    # redis-stack, not redis:7-alpine (#16071). The plain image has no
+    # RediSearch, RedisJSON or RedisTimeSeries, so it starts and then fails on
+    # the first module command -- the container form of the same defect as
+    # `apt install redis-server`. Matches the repository's own
+    # docker-compose.yml, which uses redis/redis-stack:7.4.0-v1.
+    image: redis/redis-stack:7.4.0-v1
     container_name: autobot-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
     networks:

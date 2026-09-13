@@ -51,7 +51,12 @@
 
     - name: Ensure autobot_shared symlink exists
       ansible.builtin.file:
-        src: "{{ backend_install_dir }}/../autobot_shared"
+        # #13539/B4: was "{{ backend_install_dir }}/../autobot_shared", an
+        # absolute target rooted at /opt/autobot regardless of where
+        # backend_code_dir/autobot_shared actually sit -- the same defect as
+        # update-all-nodes.yml's five sites. A relative target resolves from
+        # the link's own directory ({{ backend_code_dir }}) instead.
+        src: ../autobot_shared
         dest: "{{ backend_code_dir }}/autobot_shared"
         state: link
         force: true

@@ -13,13 +13,12 @@ from time import time
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
 
+from api.auth_me import router as me_router
 from api.schemas_agent import (
     AuthCheckResponse,
     AuthPermissionResponse,
     AuthRoleEntry,
-    AuthUserInfoResponse,
     AuthValidateClaims,
     AuthValidateRequest,
     AuthValidateResponse,
@@ -32,6 +31,7 @@ from api.schemas_agent import (
     SignupRequest,
     SignupResponse,
 )
+from api.schemas_agent_requests import RS256RevokeRequest
 from api.schemas_common import DataResponse
 from api.schemas_system import AuthLogoutData, AuthRefreshData
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
@@ -45,6 +45,7 @@ from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
 from services.audit.audit import EventType  # GH#8290 Phase 2
 from services.audit.audit import emit as _emit_event  # GH#8290 Phase 2
 from user_management.database import db_session_context
+from user_management.middleware.rate_limit import SESSION_MAX_ATTEMPTS, SESSION_WINDOW_SECONDS  # #15757
 from user_management.services.user_service import UserService
 
 router = APIRouter()
@@ -52,8 +53,6 @@ logger = get_logger(__name__)
 
 
 # Rate limiting for password change endpoint (stricter limits for security)
-PASSWORD_CHANGE_RATE_WINDOW = 300  # 5 minutes
-PASSWORD_CHANGE_MAX_ATTEMPTS = 5  # max attempts per window
 
 
 async def _enrich_user_with_org_context(user_data: Dict) -> Dict:
@@ -77,13 +76,13 @@ async def _enrich_user_with_org_context(user_data: Dict) -> Dict:
     return user_data
 
 
-class PasswordChangeRateLimiter:
+class SessionPasswordChangeRateLimiter:
     """Rate limiter for password change attempts to prevent brute-force attacks."""
 
     def __init__(
         self,
-        window: int = PASSWORD_CHANGE_RATE_WINDOW,
-        max_attempts: int = PASSWORD_CHANGE_MAX_ATTEMPTS,
+        window: int = SESSION_WINDOW_SECONDS,
+        max_attempts: int = SESSION_MAX_ATTEMPTS,
     ):
         """Initialize rate limiter."""
         self.window = window
@@ -110,7 +109,7 @@ class PasswordChangeRateLimiter:
 
 
 # Global rate limiter for password changes
-password_change_limiter = PasswordChangeRateLimiter()
+password_change_limiter = SessionPasswordChangeRateLimiter()
 
 
 async def _authenticate_and_build_user_data(username: str, password: str, ip_address: str) -> Dict:
@@ -134,7 +133,7 @@ async def _authenticate_and_build_user_data(username: str, password: str, ip_add
         user_data = {
             "username": user.username,
             "user_id": str(user.id),
-            "role": "admin" if user.is_platform_admin else "user",
+            "role": role_value(Role.ADMIN) if user.is_platform_admin else role_value(Role.USER),
             "email": user.email,
             "last_login": (user.last_login_at.isoformat() if user.last_login_at else None),
         }
@@ -237,12 +236,6 @@ async def logout(request: Request, logout_data: LogoutRequest):
         return {"success": True, "message": "Logged out successfully"}
 
 
-class _RS256RevokeRequest(BaseModel):
-    """Request body for RS256 authority token revocation (#10278)."""
-
-    token: str
-
-
 @router.post("/revoke-rs256-token")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -250,7 +243,7 @@ class _RS256RevokeRequest(BaseModel):
     error_code_prefix="AUTH",
 )
 async def revoke_rs256_token(
-    body: _RS256RevokeRequest,
+    body: RS256RevokeRequest,
     current_user: Dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """Revoke an RS256 authority token by adding its jti to the cross-service denylist.
@@ -304,45 +297,9 @@ async def revoke_rs256_token(
     return {"revoked": result, "message": "Token revoked" if result else "Token already expired"}
 
 
-@router.get("/me", response_model=AuthUserInfoResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_current_user_info",
-    error_code_prefix="AUTH",
-)
-async def get_current_user_info(request: Request):
-    """
-    Get current authenticated user information.
-    """
-    try:
-        from user_management.config import get_deployment_config
-
-        config = get_deployment_config()
-        user_data = get_auth_middleware().get_user_from_request(request)
-
-        if not user_data:
-            raise HTTPException(status_code=401, detail="Not authenticated")
-
-        # #12135: use .get() with safe fallbacks, not hard `[...]` access.
-        # Every _extract_user_from_* path is expected to populate
-        # "username"/"role", but a valid, already-authenticated request
-        # must never 500 on an unexpected claim shape — degrade gracefully
-        # instead (matches the sub/user_id/username fallback convention
-        # used elsewhere, e.g. api/documents.py, api/voice.py).
-        return {
-            "username": user_data.get("username") or user_data.get("sub") or user_data.get("user_id", "unknown"),
-            "role": user_data.get("role", "user"),
-            "email": user_data.get("email", ""),
-            "auth_method": user_data.get("auth_method", "unknown"),
-            "authenticated": True,
-            "deployment_mode": config.mode.value,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Error getting user info: %s", e)
-        raise HTTPException(status_code=500, detail="Error retrieving user information")
+# GET /me lives in api/auth_me.py: it returns effective permissions now (#16270)
+# and this file is at its size ceiling. Included here, so the path is unchanged.
+router.include_router(me_router)
 
 
 @router.get("/check", response_model=AuthCheckResponse)
@@ -411,7 +368,7 @@ def _check_password_change_rate_limit(username: str, ip_address: str) -> None:
     """Check rate limit for password change attempts."""
     client_id = f"{username}:{ip_address}"
     if not password_change_limiter.is_allowed(client_id):
-        remaining_time = PASSWORD_CHANGE_RATE_WINDOW // 60
+        remaining_time = SESSION_WINDOW_SECONDS // 60
         get_auth_middleware().security_layer.audit_log(
             action="password_change_rate_limited",
             user=username,

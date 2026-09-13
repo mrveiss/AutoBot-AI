@@ -680,7 +680,7 @@ done
 
 # Check services on each VM
 ssh autobot@<frontend-ip> "systemctl status frontend"
-ssh autobot@<database-ip> "systemctl status redis"
+ssh autobot@<database-ip> "systemctl status redis-stack-server"
 ```
 
 ### Restart Services

@@ -58,8 +58,9 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = repo_root()
 _WORKFLOW = _REPO / ".github" / "workflows" / "code-quality.yml"
 
 #: The files `check_syntax.py` byte-compiled. Something must still parse each.

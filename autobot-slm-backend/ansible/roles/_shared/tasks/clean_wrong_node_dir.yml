@@ -33,9 +33,28 @@
 # chances to spell the destructive one differently.
 - name: "{{ caller_role }} | Clean: normalise {{ role_check_fact }} to a decidable token (#14856)"
   ansible.builtin.set_fact:
-    # `default=''` (not `false`): an undefined fact becomes an unrecognised
-    # token, and unrecognised is handled as "unknown" below — never as "false".
-    _wrong_node_fact: "{{ lookup('vars', role_check_fact, default='') | string | trim | lower }}"
+    # #15822: the token lives inside a MAPPING, not in a bare top-level string.
+    # set_fact coerces a top-level string argument whose rendered value is
+    # 'true'/'false'/'yes'/'no' straight back into a Python bool — ansible-core
+    # 2.17.14, lib/ansible/plugins/action/set_fact.py:54:
+    #   if not C.DEFAULT_JINJA2_NATIVE and isinstance(v, string_types) \
+    #      and v.lower() in ('true', 'false', 'yes', 'no'):
+    #       v = boolean(v, strict=False)
+    # `isinstance(v, string_types)` is the whole reason this is a mapping: the
+    # coercion only ever looks at top-level string values, so a token nested one
+    # level down arrives as the string the allowlists below are written against.
+    # Bare, the token arrived as a Python bool instead — `| length` raised
+    # "object of type 'bool' has no len()", which aborted every provisioning run
+    # and every install, and both allowlist tests compared a bool against strings
+    # and lost, so wrong-node cleanup could not fire at all.
+    # The fact is `_wrong_node_gate`, not `_wrong_node`: four role clean.yml
+    # files loop over this task with `loop_var: _wrong_node`, and a loop var
+    # outranks a fact — a fact of that name would be shadowed by the loop item
+    # on exactly the call sites this task exists to serve.
+    _wrong_node_gate:
+      # `default=''` (not `false`): an undefined fact becomes an unrecognised
+      # token, and unrecognised is handled as "unknown" below — never as "false".
+      token: "{{ lookup('vars', role_check_fact, default='') | string | trim | lower }}"
     # Deletion is gated on membership of an explicit ALLOWLIST of false-ish
     # spellings, not on `not (x | bool)`. `| bool` maps everything it does not
     # recognise — '', 'None', a half-rendered Jinja expression, a typo — onto
@@ -48,13 +67,18 @@
 
 - name: "{{ caller_role }} | Clean: {{ role_check_fact }} is not decidable — leaving {{ dir_name }} alone (#14856)"
   ansible.builtin.debug:
+    # #15822: `| length` is a type-agnostic-looking test that is not one — it
+    # raises on every non-sized value. `| string | trim` renders whatever the
+    # token turned out to be and then asks whether anything is left, which is
+    # answerable for a str, a bool, None or a number alike.
     msg: >-
-      {{ role_check_fact }} is {{ 'undefined' if _wrong_node_fact | length == 0 else _wrong_node_fact | to_json }}
+      {{ role_check_fact }} is
+      {{ 'undefined' if (_wrong_node_gate.token | string | trim) == '' else _wrong_node_gate.token | to_json }}
       on this host, which does not say whether {{ dir_name }} belongs here.
       Leaving it in place. An undefined fact usually means the play was run
       without the role-active facts — an inventory directory with group_vars, or
       an explicit vars_files load (#14289).
-  when: _wrong_node_fact not in (_wrong_node_false_tokens + _wrong_node_true_tokens)
+  when: _wrong_node_gate.token not in (_wrong_node_false_tokens + _wrong_node_true_tokens)
   tags: ['clean']
 
 - name: "{{ caller_role }} | Clean: wrong-node {{ dir_name }} dir"
@@ -62,7 +86,7 @@
   # Explicitly, recognisably false — nothing else. An undefined, empty or
   # unparseable fact is "unknown", never "inactive", and unknown keeps the
   # directory. That distinction is the whole point of #14856.
-  when: _wrong_node_fact in _wrong_node_false_tokens
+  when: _wrong_node_gate.token in _wrong_node_false_tokens
   vars:
     remove_dir_path: "/opt/autobot/{{ dir_name }}"
     remove_reason: "wrong node — {{ role_check_fact }} is false on this host"

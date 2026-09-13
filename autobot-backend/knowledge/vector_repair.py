@@ -7,9 +7,13 @@
 ``BackgroundVectorizer._extract_fact_content`` read the fact hash with **bytes**
 keys against a ``decode_responses=True`` client, so every fact the reconciler
 touched was inserted as ``Document(text="")`` and then stamped
-``vectorization_status=completed`` (#13274). The status stamp makes the row
-invisible to the fixed reconciler — ``_filter_pending_facts`` skips
-``completed`` — so the code fix cannot reach the existing damage.
+``vectorization_status=completed`` (#13274). The damage is invisible to the
+fixed reconciler either way: it used to be hidden by the ``completed`` stamp,
+and since #15663 ``_filter_pending_facts`` skips on the vector store's own
+membership instead — which a poisoned row satisfies, because an empty document
+is still a document. Deriving status from ChromaDB closes the *drift* class of
+bug; a row that is present but wrong is this module's job, so the code fix still
+cannot reach the existing damage.
 
 Three properties of the write path, verified against the pinned
 ``chromadb``/``llama-index`` versions, shape this module:
@@ -36,17 +40,17 @@ replacement row has been observed in the store.
 from __future__ import annotations
 
 import asyncio
-import os
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Sequence
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
 # Page size for the read-only census walk over the collection. Env-tunable so a
 # large collection can be scanned in smaller bites without a code change.
-SCAN_PAGE_SIZE = max(1, int(os.environ.get("KB_VECTOR_REPAIR_SCAN_PAGE_SIZE", "500")))
+SCAN_PAGE_SIZE = env_int_clamped("KB_VECTOR_REPAIR_SCAN_PAGE_SIZE", 500, min_v=1)
 
 # Metadata keys that can carry the originating fact id, in preference order.
 # ``fact_id`` comes first because it is the only one the inline writer sets to a

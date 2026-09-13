@@ -35,14 +35,14 @@ everything.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
-
-from autobot_shared.api_routing import router_prefixes as routing
+from repo_tests._paths import repo_root
 from repo_tests.sdk_request_shared import _BACKEND, _BACKEND_API_ROOT, SDK_REQUESTS, _template_for
 
-_DOCS = Path(__file__).resolve().parents[1] / "docs" / "sdk"
+from autobot_shared.api_routing import router_prefixes as routing
+
+_DOCS = repo_root() / "docs" / "sdk"
 
 #: A path literal inside a code fence: preceded by a quote, a backtick, or the
 #: ``}`` that closes an f-string / template interpolation (``f"{BASE_URL}/auth/login"``).

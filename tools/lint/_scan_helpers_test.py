@@ -200,3 +200,66 @@ def test_argv_mode_does_not_apply_excludes(tmp_path: Path) -> None:
     args = [str(tmp_path / ".worktrees" / "issue-1" / "a.py")]
     yielded = list(helpers.iter_python_files(args, tmp_path))
     assert yielded == [tmp_path / ".worktrees" / "issue-1" / "a.py"]
+
+
+# ---------------------------------------------------------------------------
+# logical_lines — shell continuation folding (#15938, #15961)
+# ---------------------------------------------------------------------------
+
+
+def test_logical_lines_with_no_continuation_is_one_entry_per_physical_line() -> None:
+    assert helpers.logical_lines("git status\ngit log") == [(1, "git status"), (2, "git log")]
+
+
+def test_logical_lines_folds_a_two_line_continuation() -> None:
+    """The shape a long invocation is actually written in (#15961).
+
+    Neutral tokens on purpose: the guards that call this helper scan every
+    tracked file, this one included, so a real offending spelling would trip
+    them. The guards' own test files carry the real spellings as fixtures.
+    """
+    joined = helpers.logical_lines("some-tool subcommand \\\n  --dangerous-flag /tmp/x")
+    assert len(joined) == 1
+    number, line = joined[0]
+    assert number == 1
+    assert "some-tool subcommand" in line and "--dangerous-flag /tmp/x" in line
+
+
+def test_logical_lines_folds_a_three_line_continuation() -> None:
+    joined = helpers.logical_lines("some-tool \\\n  -o \\\n  option=/tmp/x run")
+    assert len(joined) == 1
+    number, line = joined[0]
+    assert number == 1
+    assert "-o" in line
+    assert "option=/tmp/x" in line
+    assert "run" in line
+
+
+def test_logical_lines_does_not_fold_a_mid_line_backslash() -> None:
+    """A backslash is only a continuation as the LAST character of the line."""
+    assert helpers.logical_lines("echo a\\b\ngit status") == [
+        (1, "echo a\\b"),
+        (2, "git status"),
+    ]
+
+
+def test_logical_lines_never_folds_out_of_a_comment_line() -> None:
+    """Bash ends a comment at the newline, so its trailing backslash is text."""
+    assert helpers.logical_lines("# see the note \\\nsome-tool --dangerous-flag /tmp/x") == [
+        (1, "# see the note \\"),
+        (2, "some-tool --dangerous-flag /tmp/x"),
+    ]
+
+
+def test_logical_lines_reports_the_first_physical_line_of_each_fold() -> None:
+    """Numbering follows the fold, not the physical line count.
+
+    Line 1 stands alone at 1; lines 2-3 fold into one logical line reported at
+    the FIRST of the two (2), not the last; line 4 stands alone at 4 -- the
+    gap where line 3 would have been is the proof the number is not just an
+    incrementing counter over the output list.
+    """
+    joined = helpers.logical_lines("one\ntwo \\\n  three\nfour")
+    assert joined[0] == (1, "one")
+    assert joined[1][0] == 2
+    assert joined[2] == (4, "four")

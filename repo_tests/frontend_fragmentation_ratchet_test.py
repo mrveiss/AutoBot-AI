@@ -59,8 +59,9 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = repo_root()
 _FRONTEND_SRC = _REPO_ROOT / "autobot-frontend" / "src"
 
 _SOURCE_SUFFIXES = (".ts", ".vue", ".css", ".scss")
@@ -88,12 +89,12 @@ BASELINE = {
     # copy of the design system.
     "components_declaring_styles": 381,
     # Distinct class names declared anywhere in the frontend.
-    "distinct_class_names": 5627,
+    "distinct_class_names": 5619,
     # Total CSS rule declarations.
-    "css_rule_declarations": 9434,
+    "css_rule_declarations": 9401,
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
-    "button_definition_files": 102,
+    "button_definition_files": 101,
     # Distinct `.btn-*` class names declared anywhere.
     "button_class_names": 115,
     # Distinct notification entry points. Target is 1 canonical API, the rest
@@ -124,7 +125,7 @@ FAMILY_BASELINE = {
     "panel": 34,
     "form": 27,
     "action": 27,
-    "modal": 26,
+    "modal": 25,
     "empty": 23,
     "error": 35,
     "section": 23,
@@ -202,7 +203,7 @@ def _source_files() -> list[Path]:
         for path in sorted(_FRONTEND_SRC.rglob("*"))
         if path.suffix in _SOURCE_SUFFIXES
         and path.is_file()
-        and "node_modules" not in path.parts
+        and "node_modules" not in path.relative_to(_FRONTEND_SRC).parts  # #15510
         and not _is_test(path)
     ]
 
@@ -320,9 +321,9 @@ def test_fragmentation_only_shrinks(dimension: str) -> None:
     actual = _measure()[dimension]
     baseline = BASELINE[dimension]
 
-    assert actual <= baseline, (
-        f"{dimension} is {actual}, ratchet allows {baseline} (#12730, #12731).\n{_ADVICE[dimension]}"
-    )
+    assert (
+        actual <= baseline
+    ), f"{dimension} is {actual}, ratchet allows {baseline} (#12730, #12731).\n{_ADVICE[dimension]}"
     assert actual == baseline, (
         f"{dimension} is down to {actual} but the baseline still says {baseline} — "
         "lower it in the commit that did the work, so the number stays a deliberate claim"

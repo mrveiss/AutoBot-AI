@@ -10,6 +10,7 @@ import tempfile
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import scrubbed_git_env
 from skills.sync.base_sync import BaseRepoSync
 from skills.sync.local_sync import LocalDirSync
 
@@ -46,6 +47,7 @@ class GitRepoSync(BaseRepoSync):
                 self.url,
                 dest,
                 stderr=asyncio.subprocess.PIPE,
+                env=scrubbed_git_env(),
             )
         except FileNotFoundError as exc:
             raise RuntimeError("git clone failed: git binary not found on PATH") from exc

@@ -43,15 +43,15 @@ from __future__ import annotations
 import ast
 import importlib.util
 import logging
-import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths, TRACKED_PY_FLOOR
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 _SCRIPT = REPO_ROOT / "scripts" / "check_python_file_size.py"
 _BASELINE_SCRIPT = REPO_ROOT / "repo_tests" / "python_file_size_ratchet_baseline.py"
 _KNOWN_LARGE_SCRIPT = REPO_ROOT / "scripts" / "python_file_size_known_large.py"
@@ -85,18 +85,18 @@ ANNOTATED_AS_LIVE = _BASELINE_MODULE.ANNOTATED_AS_LIVE
 # an entry; never raise it to let a new one in without that being the point
 # of the diff.
 #
-# 512 is the population the walk measured on the merge that lands this change,
-# not a number chosen to fit: the repo recorded three ceilings before it, and
-# the other 509 files were over MAX_LINES with nothing recording them at all.
-# The count starts at whatever the walk finds the day it is switched on, and
-# only falls after, because from then an unlisted oversized file fails the
-# audit instead of joining the list.
-MAX_KNOWN_LARGE_ENTRIES = 512
+# 512 was the population the walk measured when this landed, and entries then
+# left without the number following them down: at 499 against 512 the slack
+# was room for thirteen silent additions, which is the slack this guard exists
+# to deny. #15641/#15642 re-pinned it to the measured population. It starts at
+# whatever the walk finds and only falls after, because an unlisted oversized
+# file now fails the audit instead of joining the list.
+MAX_KNOWN_LARGE_ENTRIES = 497
 
 
 # Floor for the tracked-Python enumeration (4958 files at the time of writing).
 # An enumeration that returns nothing must not read as "nothing to check".
-_TRACKED_PY_FLOOR = 3000
+_TRACKED_PY_FLOOR = TRACKED_PY_FLOOR  # canonical: one measured floor, was a local 3000 (#15928)
 
 
 def _count_lines(rel: str) -> int | None:
@@ -123,15 +123,7 @@ def hook():
 @pytest.fixture(scope="module")
 def tracked_py_files() -> list[str]:
     """Every tracked ``*.py`` path, enumerated by git rather than by the hook."""
-    out = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    )
-    return [line for line in out.stdout.splitlines() if line.strip()]
+    return tracked_paths(REPO_ROOT, "*.py")
 
 
 # --------------------------------------------------------------------------

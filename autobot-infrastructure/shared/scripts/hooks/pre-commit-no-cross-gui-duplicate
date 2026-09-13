@@ -80,14 +80,9 @@ TYPE_NAME_ALLOWLIST = {
     "FormatBytesOptions",
     "FormatDurationOptions",
     "FormatUptimeOptions",
-    # #14908 (SystemRepository.ts vs types/slm.ts) + #15401 (a third,
-    # incompatible HealthStatus in types/settings.ts, plus ServiceHealth /
-    # ServiceStatus name collisions with unrelated shapes). Each needs a
-    # decision verified against its backend's wire format before merging —
-    # explicitly "a decision, not a merge", not a mechanical promotion.
-    "HealthStatus",
-    "ServiceHealth",
-    "ServiceStatus",
+    # HealthStatus / ServiceHealth / ServiceStatus left this list in #15401: the
+    # main GUI's copies were renamed (the SLM keeps the names, as the owner of
+    # deep-settings vocabulary), so none of the three collides any more.
 }
 
 

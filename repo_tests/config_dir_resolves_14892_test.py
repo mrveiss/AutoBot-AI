@@ -147,8 +147,11 @@ def _iter_named_config_files() -> list[tuple[Path, int, str]]:
     root = project_root()
     found: list[tuple[Path, int, str]] = []
     for tree in _SWEPT_TREES:
-        for source in sorted((root / tree).rglob("*.py")):
-            if "node_modules" in source.parts:
+        scan_root = root / tree
+        for source in sorted(scan_root.rglob("*.py")):
+            # #15510: relative to the scan root -- `source.parts` on the absolute
+            # path also asks whether the checkout sits under a `node_modules`.
+            if "node_modules" in source.relative_to(scan_root).parts:
                 continue
             try:
                 tree_ast = ast.parse(source.read_text(encoding="utf-8"))

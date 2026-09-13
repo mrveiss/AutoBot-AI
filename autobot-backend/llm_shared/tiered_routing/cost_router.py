@@ -16,7 +16,7 @@ scoring so routing is still meaningful.
 from typing import Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import MODEL_PRICING_PER_1M_TOKENS
+from autobot_shared.model_pricing import MODEL_PRICING_PER_1M_TOKENS
 
 from .complexity_scorer import TaskComplexityScorer
 from .tier_config import ComplexityResult, TierConfig, TierMetrics

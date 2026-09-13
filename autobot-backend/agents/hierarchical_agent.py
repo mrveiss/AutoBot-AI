@@ -16,6 +16,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from chat_workflow.models import AgentContext
 from utils.errors import RepairableException
@@ -192,7 +193,7 @@ class HierarchicalAgent:
 
         Issue #665: Extracted from delegate() for single responsibility.
         """
-        asyncio.create_task(subordinate.execute(task))
+        fire_and_forget(subordinate.execute(task), name="hierarchical-agent-delegation")
 
         return DelegationResult(
             agent_id=subordinate_id,

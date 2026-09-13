@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
@@ -52,7 +53,7 @@ class BranchMetricsCollector:
     def __init__(
         self,
         repo_path: str | None = None,
-        base_branch: str = "Dev_new_gui",
+        base_branch: str = "main",
         stale_threshold_days: int = 30,
     ):
         """Initialize branch metrics collector."""
@@ -69,6 +70,7 @@ class BranchMetricsCollector:
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=scrubbed_git_env(),  # #16179
             )
             stdout, stderr = await proc.communicate()
             return stdout.decode(encoding="utf-8").strip(), proc.returncode
@@ -178,7 +180,7 @@ class BranchMetricsCollector:
 
 async def get_unhealthy_branches(
     repo_path: str | None = None,
-    base_branch: str = "Dev_new_gui",
+    base_branch: str = "main",
     health_threshold: float = 50.0,
 ) -> List[BranchMetrics]:
     """Get branches with health scores below threshold."""
@@ -189,7 +191,7 @@ async def get_unhealthy_branches(
 
 async def get_highly_diverged_branches(
     repo_path: str | None = None,
-    base_branch: str = "Dev_new_gui",
+    base_branch: str = "main",
     threshold: int = 20,
 ) -> List[BranchMetrics]:
     """Get branches with high divergence from base."""

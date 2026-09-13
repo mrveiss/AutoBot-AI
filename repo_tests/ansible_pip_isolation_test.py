@@ -32,13 +32,13 @@ describe it.
 
 from __future__ import annotations
 
-import pathlib
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml")
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+_REPO_ROOT = repo_root()
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 
 # (path relative to the ansible root, task name) -> why it may install system-wide.

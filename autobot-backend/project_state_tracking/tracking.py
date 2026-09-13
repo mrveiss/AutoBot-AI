@@ -15,6 +15,7 @@ import functools
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_24_HOURS
 
@@ -146,7 +147,7 @@ def _schedule_error_tracking(error: Exception, context: Dict[str, Any]) -> None:
     # Import here to avoid circular imports
     from . import track_system_error
 
-    asyncio.create_task(track_system_error(error, context))
+    fire_and_forget(track_system_error(error, context), name="system-error-tracking")
 
 
 def _run_error_tracking(error: Exception, context: Dict[str, Any]) -> None:

@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.time_utils import now_utc
@@ -460,7 +461,7 @@ def trigger_budget_evaluation(
     Non-blocking — never raises. Called from LLMCostTracker._build_and_persist_record.
     """
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
     except RuntimeError:
         return
 
@@ -472,7 +473,7 @@ def trigger_budget_evaluation(
         except Exception:
             logger.exception("Budget evaluation failed for agent=%s", agent_id)
 
-    loop.create_task(_run(), name=f"budget-eval-{agent_id}")
+    fire_and_forget(_run(), name=f"budget-eval-{agent_id}")
 
 
 # ---------------------------------------------------------------------------

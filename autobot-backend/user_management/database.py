@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import (
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import database_pool_settings
+from config import config_manager
 from user_management.config import get_deployment_config
 
 logger = get_logger(__name__)
@@ -108,6 +109,21 @@ def _get_pool_config() -> dict:
     return database_pool_settings()
 
 
+def _sql_echo_enabled() -> bool:
+    """Whether SQLAlchemy should echo every statement to the logger (#15587).
+
+    Wires ``logging.log_sql`` -- previously read only by
+    ``services/config_service.py`` for the settings UI and consulted nowhere
+    else, so toggling it in the UI persisted a value and changed nothing.
+
+    Must use ``get_nested`` rather than ``ConfigManager.get()``: the latter
+    is a flat top-level-dict lookup and never matches a dotted key like
+    "logging.log_sql" (same trap documented in
+    ``autobot_shared/logging_manager.py``'s log-level read).
+    """
+    return bool(config_manager.get_nested("logging.log_sql", False))
+
+
 def get_async_engine() -> AsyncEngine:
     """
     Get the async SQLAlchemy engine singleton.
@@ -141,7 +157,7 @@ def get_async_engine() -> AsyncEngine:
         # #10491: command_timeout bounds pre_ping so a WSL-dropped idle
         # connection fails fast instead of hanging ~30s on the dead socket.
         connect_args={"timeout": 10, "command_timeout": 10},
-        echo=False,
+        echo=_sql_echo_enabled(),
         future=True,
     )
 

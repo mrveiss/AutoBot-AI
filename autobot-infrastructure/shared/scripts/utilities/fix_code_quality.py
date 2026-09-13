@@ -231,7 +231,7 @@ def main():
     total_fixed = src_results["fixed"] + backend_results["fixed"]
     total_files = src_results["total"] + backend_results["total"]
 
-    print(f"\nCode Quality Fix Summary:")
+    print("\nCode Quality Fix Summary:")
     print(f"Files processed: {total_files}")
     print(f"Files fixed: {total_fixed}")
     print(f"Success rate: {(total_fixed/total_files*100):.1f}%" if total_files > 0 else "0%")

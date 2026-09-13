@@ -19,6 +19,7 @@ from typing import Any, Dict
 
 import psutil
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
@@ -440,7 +441,7 @@ class WorkerNode:
                     task_payload = json.loads(message["data"])
                     task_id = task_payload.get("task_id", "N/A")
                     logger.info("Worker %s received task: %s", self.worker_id, task_id)
-                    asyncio.create_task(self._process_and_respond(task_payload))
+                    fire_and_forget(self._process_and_respond(task_payload), name="worker-task-process")
         else:
             logger.info(f"Worker {self.worker_id} running in local task execution mode. " "No external task listening.")
             while True:

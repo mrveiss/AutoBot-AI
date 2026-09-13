@@ -32,6 +32,16 @@
         >
           {{ $t('nav.llmApiKeys') }}
         </router-link>
+        <!-- Issue #16429: audit log reads GET /api/audit/logs, which is
+             admin-only (api/audit.py) -- same gate as the LLM API Keys tab. -->
+        <router-link
+          v-if="userStore.isAdmin"
+          :to="{ name: 'secrets-audit-log' }"
+          class="secrets-tab"
+          active-class="secrets-tab--active"
+        >
+          {{ $t('secrets.auditLog.title') }}
+        </router-link>
       </nav>
 
       <!-- Child views (secrets manager / LLM API keys) -->

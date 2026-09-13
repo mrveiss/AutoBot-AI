@@ -8757,7 +8757,10 @@
           "systemd_service": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -9112,7 +9115,10 @@
           "systemd_service": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -14514,7 +14520,10 @@
           "systemd_service": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -15429,7 +15438,7 @@
     },
     "/api/api-keys/scopes": {
       "get": {
-        "description": "Get available API key scopes (no authentication required).",
+        "description": "Get the catalogue of available API key scopes. Unauthenticated by design (#16040 AC7).\n\nThe owner ruled on 2026-09-11 to keep this route open. It returns only the\nstatic scope names and their descriptions (``API_KEY_SCOPES``): no keys,\nno users, no tenant data. The key-creation form needs that catalogue before\nit can offer a choice. ``middleware/security_headers.py`` allowlists this\npath for the same reason.",
         "operationId": "get_api_scopes_api_api_keys_scopes_get",
         "responses": {
           "200": {
@@ -15703,6 +15712,26 @@
           }
         ],
         "summary": "Get Current User Info",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/proxy-check": {
+      "get": {
+        "description": "nginx auth_request target for the /autobot-api/ internal-key gate (#16374).\n\nA side-effect-free membership check, deliberately separate from ``/me``:\n``/me`` answers \"is this a live SLM session?\", which any backend login\ntoken satisfies by design (epic #10193) -- every read-only or non-admin\nuser therefore passed the old gate too, and nginx then attached the\ntrusted internal key that ``autobot-backend/auth_middleware.py`` treats\nas full admin. This answers \"does this session hold the role the key\nactually confers?\": 204 for a session whose role grants\n``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it\n-- including SUPERADMIN, which holds no granular permissions (#13854)\nand is refused here as on every other permission-gated SLM admin route\n-- and an unknown role resolves to USER, so it also fails closed. 401\ncovers a missing Authorization header (the upstream ``HTTPBearer``'s\n``auto_error=True`` raises it before this dependency runs) or an\ninvalid/expired token (``get_current_user`` raises it). Returns no body\neither way -- an ``auth_request`` subrequest's body is discarded, only\nthe status code is read.",
+        "operationId": "proxy_check_api_auth_proxy_check_get",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Proxy Check",
         "tags": [
           "auth"
         ]
@@ -19140,7 +19169,7 @@
     },
     "/api/code-sync/self-update": {
       "post": {
-        "description": "Trigger an Ansible-based update of the SLM server itself (#9073).\n\nLooks up the SLM's own node record by matching the external_url IP,\nthen runs update-all-nodes.yml against it as a fire-and-forget task\n(the service restarts mid-run, so the caller should poll health).\nReturns immediately with a queued message.",
+        "description": "Trigger an Ansible-based update of the SLM server itself (#9073).\n\nLooks up the SLM's own node record by matching the external_url IP,\nthen runs update-all-nodes.yml against it as a fire-and-forget task\n(the service restarts mid-run, so the caller should poll health).\nReturns immediately with a queued message.\n\nRequires an authenticated user -- unchanged by #15728. The credential-free\non-host trigger is a completely separate listener\n(``services/local_admin_socket.py``); it does not touch this dependency.",
         "operationId": "self_update_api_code_sync_self_update_post",
         "parameters": [
           {

@@ -12,7 +12,7 @@ not ``username`` — see autobot-slm-backend/services/auth.py). Two hard
 
 - ``AuthenticationMiddleware._extract_user_from_jwt`` (auth_middleware.py):
   ``token_data["username"]`` / ``token_data["role"]``.
-- ``get_current_user_info`` (api/auth.py): ``user_data["username"]`` /
+- ``get_current_user_info`` (api/auth_me.py since #16270): ``user_data["username"]`` /
   ``user_data["role"]``.
 
 Both must degrade gracefully (fallback to ``sub``/``user_id``, or a safe
@@ -89,11 +89,11 @@ class TestExtractUserFromJwtMissingUsername:
 
 
 class TestGetCurrentUserInfoMissingUsername:
-    """GET /api/auth/me handler (api/auth.py) — defensive claim access (#12135)."""
+    """GET /api/auth/me handler (api/auth_me.py since #16270) — defensive claim access (#12135)."""
 
     @pytest.fixture
     def auth_module(self):
-        import api.auth as auth_module
+        import api.auth_me as auth_module
 
         return auth_module
 

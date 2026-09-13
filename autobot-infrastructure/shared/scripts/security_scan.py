@@ -399,12 +399,12 @@ class SecurityScanner:
         """Generate markdown security report"""
         summary = self.scan_results["summary"]
 
-        report = """# 🛡️ AutoBot Security Scan Report
+        report = f"""# 🛡️ AutoBot Security Scan Report
 
-**Scan Date:** {self.scan_results["timestamp"]}
-**Overall Status:** {summary["overall_status"].upper()}
-**Critical Issues:** {summary["critical_issues"]}
-**Warnings:** {summary["warnings"]}
+**Scan Date:** {self.scan_results['timestamp']}
+**Overall Status:** {summary['overall_status'].upper()}
+**Critical Issues:** {summary['critical_issues']}
+**Warnings:** {summary['warnings']}
 
 ## 📦 Dependency Security
 

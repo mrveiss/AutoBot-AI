@@ -23,8 +23,9 @@ import venv
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 SCRIPT = REPO_ROOT / "scripts" / "setup-ci-parity-env.sh"
 PREFLIGHT = REPO_ROOT / "scripts" / "pr-preflight.sh"
 

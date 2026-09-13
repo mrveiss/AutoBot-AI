@@ -26,8 +26,14 @@
     # Backend configuration
     backend_user: autobot
     backend_group: autobot
-    backend_install_dir: /opt/autobot
-    backend_code_dir: /opt/autobot/autobot-backend
+    # #13539/B3: keep backend_install_dir meaning the component dir (matches
+    # roles/backend/defaults/main.yml and roles/ai-stack/defaults/main.yml),
+    # so the role's `backend_install_dir | dirname` derivation of the deploy
+    # root (autobot_shared PYTHONPATH entry, uvicorn --log-config) still
+    # resolves to /opt/autobot instead of /opt.
+    backend_deployed_root: /opt/autobot
+    backend_code_dir: "{{ backend_deployed_root }}/autobot-backend"
+    backend_install_dir: "{{ backend_code_dir }}"
     backend_log_dir: /var/log/autobot
     backend_data_dir: /var/lib/autobot
 

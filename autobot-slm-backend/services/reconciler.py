@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 # Role to systemd service mapping
 ROLE_SERVICE_MAP: Dict[str, list] = {
     "slm-agent": ["slm-agent"],
-    "redis": ["redis-server", "redis"],
+    "redis": ["redis-stack-server", "redis-server", "redis"],  # canonical 1st (#16060)
     "backend": ["autobot-backend", "autobot"],
     "frontend": ["autobot-frontend"],
     "npu-worker": ["autobot-npu-worker"],

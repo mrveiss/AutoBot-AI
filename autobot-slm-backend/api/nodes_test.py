@@ -21,13 +21,13 @@ real command, for both key- and password-based auth.
 These tests assert the built argv is well-formed: every ``-o`` token is
 immediately followed by a ``key=value`` token (never another bare flag).
 
-The two builders are pure functions (no DB/FastAPI/encryption dependency),
-but ``api/nodes.py`` as a whole registers FastAPI routes at import time
-(``response_model=...`` decoration fails against the MagicMock Pydantic
-stubs used elsewhere in this test suite -- see ``conftest.py``). Rather
-than importing the whole module, this test AST-extracts just the two
-target function definitions and execs them in an isolated namespace, so
-it has zero dependency on FastAPI/SQLAlchemy/DB stubs.
+The two builders are pure functions (no DB/FastAPI/encryption dependency).
+They lived in ``api/nodes.py`` until that module was split; they now live in
+``api/node_ssh_helpers.py``. This test still AST-extracts the two definitions
+and execs them in an isolated namespace rather than importing the module,
+because the helper module imports ``models.schemas``, which is stubbed with
+MagicMock Pydantic elsewhere in this suite (see ``conftest.py``). Extracting
+keeps the test's dependency surface at zero either way.
 """
 
 import ast
@@ -36,16 +36,16 @@ from types import SimpleNamespace
 
 import pytest
 
-_NODES_PY = Path(__file__).parent / "nodes.py"
+_SOURCE_PY = Path(__file__).parent / "node_ssh_helpers.py"
 _WANTED_FUNCTIONS = {"_build_key_ssh_command", "_build_password_ssh_command"}
 
 
 def _load_pure_functions() -> dict:
-    """AST-extract and exec only the target function defs from nodes.py."""
-    tree = ast.parse(_NODES_PY.read_text(encoding="utf-8"), filename=str(_NODES_PY))
+    """AST-extract and exec only the target function defs from the helper module."""
+    tree = ast.parse(_SOURCE_PY.read_text(encoding="utf-8"), filename=str(_SOURCE_PY))
     wanted_nodes = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in _WANTED_FUNCTIONS]
     assert len(wanted_nodes) == len(_WANTED_FUNCTIONS), (
-        f"Expected to find {sorted(_WANTED_FUNCTIONS)} in {_NODES_PY}, "
+        f"Expected to find {sorted(_WANTED_FUNCTIONS)} in {_SOURCE_PY}, "
         f"found {sorted(n.name for n in wanted_nodes)}. Rename tracking broke."
     )
     module = ast.Module(body=wanted_nodes, type_ignores=[])
@@ -53,7 +53,7 @@ def _load_pure_functions() -> dict:
     # Annotations reference ConnectionTestRequest -- only needed for the
     # `def` signature to evaluate; the functions themselves never touch it.
     namespace: dict = {"ConnectionTestRequest": object}
-    exec(compile(module, filename=str(_NODES_PY), mode="exec"), namespace)  # noqa: S102
+    exec(compile(module, filename=str(_SOURCE_PY), mode="exec"), namespace)  # noqa: S102
     return namespace
 
 

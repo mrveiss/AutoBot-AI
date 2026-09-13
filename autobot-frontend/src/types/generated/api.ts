@@ -598,7 +598,7 @@ export interface paths {
         };
         /**
          * Get Current User Info
-         * @description Get current authenticated user information.
+         * @description Get the current authenticated user, with their effective permissions (#16270).
          */
         get: operations["get_current_user_info_api_auth_me_get"];
         put?: never;
@@ -3144,7 +3144,7 @@ export interface paths {
         };
         /**
          * Search users for sharing
-         * @description Search users by name or username for use in sharing dialogs. Safe to call in all deployment modes — returns empty list with available=False when user management is not enabled. Issue #2072.
+         * @description Search users in the caller's own organisation by name or username, for sharing dialogs. Requires login and an organisation context (#16279). Returns an empty list with available=False if the search fails. Issue #2072.
          */
         get: operations["search_users_for_sharing_api_user_management_users_search_get"];
         put?: never;
@@ -3243,26 +3243,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/user-management/users/{user_id}/change-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Change password
-         * @description Change a user's password.
-         */
-        post: operations["change_password_api_user_management_users__user_id__change_password_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/user-management/users/{user_id}/roles/{role_id}": {
         parameters: {
             query?: never;
@@ -3307,6 +3287,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/user-management/users/{user_id}/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change password
+         * @description Change a user's password.
+         */
+        post: operations["change_password_api_user_management_users__user_id__change_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/user-management/teams": {
         parameters: {
             query?: never;
@@ -3325,6 +3325,26 @@ export interface paths {
          * @description Create a new team in the current organization.
          */
         post: operations["create_team_api_user_management_teams_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/user-management/teams/my-teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my teams
+         * @description Get all teams the current user is a member of.
+         */
+        get: operations["get_my_teams_api_user_management_teams_my_teams_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3405,26 +3425,6 @@ export interface paths {
          * @description Change a team member's role.
          */
         patch: operations["update_member_role_api_user_management_teams__team_id__members__user_id__patch"];
-        trace?: never;
-    };
-    "/api/user-management/teams/my-teams": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get my teams
-         * @description Get all teams the current user is a member of.
-         */
-        get: operations["get_my_teams_api_user_management_teams_my_teams_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/user-management/organizations": {
@@ -10061,13 +10061,19 @@ export interface paths {
          *
          *     Returns metrics on grounding operations:
          *     - % of claims verified
-         *     - % from KB vs research vs causal inference
-         *     - Top unverifiable claims
-         *     - Conflict resolution time
+         *     - % by verification method (methods with no producer yet are absent, not zero)
+         *     - Conflicts created/resolved
          *     - Overall confidence trends
          *
+         *     #14981: every field below is a real counter written by GroundedAgent
+         *     (respond_with_grounding, resolve_conflict), read since the hash was last
+         *     created or its TTL last refreshed -- not yet windowed by `period`.
+         *     `avg_resolution_time_hours` and `top_unverifiable` were promised here but
+         *     never implemented or returned; dropped rather than left as more
+         *     undelivered promises (#16421 if wanted).
+         *
          *     Query params:
-         *     - period: 1h|24h|7d|30d (default: 24h)
+         *     - period: 1h|24h|7d|30d (default: 24h; accepted, not yet applied -- see above)
          *
          *     Response:
          *     ```json
@@ -10078,17 +10084,12 @@ export interface paths {
          *         "total_claims_extracted": 8204,
          *         "claims_verified": 0.87,
          *         "claim_sources": {
-         *             "kb_lookup": 0.65,
-         *             "external_research": 0.22,
-         *             "causal_inference": 0.13
+         *             "kb_lookup": 0.74,
+         *             "claim_verifier_rag": 0.26
          *         },
          *         "average_confidence": 0.89,
          *         "conflicts_created": 142,
-         *         "conflicts_resolved": 128,
-         *         "avg_resolution_time_hours": 2.3,
-         *         "top_unverifiable": [
-         *             {"claim": "...", "count": 12}
-         *         ]
+         *         "conflicts_resolved": 128
          *     }
          *     ```
          *
@@ -17142,6 +17143,31 @@ export interface paths {
          * @description List delegations for an agent as delegator or assignee (#1753).
          */
         get: operations["list_agent_delegations_api_agents__agent_id__delegations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/coordination/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Claims
+         * @description The live claim table, optionally filtered.
+         *
+         *     A malformed `scope` or unknown `kind` is the caller's error and is reported
+         *     as 400 rather than silently returning everything -- a filter that fails open
+         *     would tell an operator "nothing holds this" when the truth is "that question
+         *     was not understood".
+         */
+        get: operations["get_claims_api_coordination_claims_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -36304,6 +36330,9 @@ export interface paths {
         /**
          * Delete File
          * @description Delete a file or directory within the sandbox.
+         *
+         *     A non-empty directory needs `recursive`, and one holding uncommitted work
+         *     needs `force` on top of it -- see #15777.
          */
         delete: operations["delete_file_api_sandbox_files_delete_delete"];
         options?: never;
@@ -43668,6 +43697,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat-knowledge/context/{chat_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Chat Context
+         * @description Get complete knowledge context for a chat
+         */
+        get: operations["get_chat_context_api_chat_knowledge_context__chat_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Chat Context
+         * @description Delete a chat-knowledge context -- its owner or an admin only (#16490).
+         *
+         *     404 is checked before authorization, using ``peek_chat_knowledge_manager``
+         *     (never the constructing accessor -- a manager that was never built has
+         *     certainly never held a context for *chat_id*). Checking existence first
+         *     also matters for a reason beyond cost: ``validate_chat_ownership``
+         *     (``api/chat.py``) silently claims an unowned ``chat_id`` for the caller
+         *     on its legacy-migration path (sessions predating ownership tracking)
+         *     rather than 404ing, so calling it before this existence check would let a
+         *     probe against a chat_id nothing ever created come back authorized with
+         *     nothing to delete, instead of a clean 404.
+         */
+        delete: operations["delete_chat_context_api_chat_knowledge_context__chat_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat-knowledge/context-orphans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find Orphaned Chat Contexts
+         * @description List chat-knowledge contexts whose chat_id matches no chat (#16490).
+         *
+         *     Same list-then-cleanup, admin-only shape as
+         *     ``api/knowledge_maintenance.py``'s ``GET /session-orphans``.
+         */
+        get: operations["find_orphaned_chat_contexts_api_chat_knowledge_context_orphans_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Cleanup Orphaned Chat Contexts
+         * @description Delete orphaned chat-knowledge contexts (#16490); dry_run defaults True.
+         */
+        delete: operations["cleanup_orphaned_chat_contexts_api_chat_knowledge_context_orphans_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat-knowledge/context/create": {
         parameters: {
             query?: never;
@@ -43822,26 +43912,6 @@ export interface paths {
          * @description Search knowledge across chats or within specific chat
          */
         post: operations["search_chat_knowledge_api_chat_knowledge_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat-knowledge/context/{chat_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Chat Context
-         * @description Get complete knowledge context for a chat
-         */
-        get: operations["get_chat_context_api_chat_knowledge_context__chat_id__get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -49895,6 +49965,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/ceo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Company Ceo
+         * @description The current designation, whether or not its holder still exists.
+         */
+        get: operations["get_company_ceo_api_llc_companies__company_id__ceo_get"];
+        /**
+         * Set Company Ceo
+         * @description Designate a user or an agent as CEO, replacing any existing designation.
+         *
+         *     PUT rather than POST: the position is single-valued and the write is
+         *     idempotent -- setting the same holder twice leaves one row, which is what
+         *     the unique constraint on `company_id` enforces anyway.
+         *
+         *     422 rather than 404 for a holder outside the company. The company is the
+         *     caller's own (`assert_company_access` has already run), so this is a
+         *     well-formed request naming a holder that cannot hold the position -- a
+         *     client-actionable condition, and one that says nothing about whether some
+         *     other company's holder exists.
+         */
+        put: operations["set_company_ceo_api_llc_companies__company_id__ceo_put"];
+        post?: never;
+        /**
+         * Clear Company Ceo
+         * @description Remove the designation. 404 when there was none.
+         *
+         *     Distinguished on purpose: `clear` returns whether it removed anything, and
+         *     collapsing that into an unconditional 204 would make "you cleared it" and
+         *     "there was nothing there" indistinguishable to a caller retrying a failed
+         *     request.
+         */
+        delete: operations["clear_company_ceo_api_llc_companies__company_id__ceo_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/contacts/directory": {
         parameters: {
             query?: never;
@@ -50670,6 +50783,57 @@ export interface paths {
          * @description Remove the rate. Every step of this role becomes not costable again.
          */
         delete: operations["clear_role_rate_api_llc_roles__company_id___role_id__rate_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/tools/{company_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tools */
+        get: operations["list_tools_api_llc_tools__company_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/tools/{company_id}/{tool_name}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tool Usage */
+        get: operations["tool_usage_api_llc_tools__company_id___tool_name__usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/tools/{company_id}/{tool_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upsert Tool Overlay */
+        put: operations["upsert_tool_overlay_api_llc_tools__company_id___tool_name__put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -51654,7 +51818,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Next Work Item */
+        /**
+         * Get Next Work Item
+         * @description Claim the next work item for this agent, or report that there is none (#15905).
+         *
+         *     "Next" is not a new opinion: `checkout_next` reuses the ordering
+         *     `BacklogService.list` already applies, so the item handed to an agent is the
+         *     one a human sees at the top of the same backlog.
+         *
+         *     `{"work_item": None}` with `checked_out: False` is an ordinary answer, not a
+         *     failure — an agent asking for work when there is none is the common case.
+         *     The field is kept distinct from the #15859 stub marker so a caller can tell
+         *     "nothing to do" from "this route does nothing", which is exactly the
+         *     distinction the stub response existed to make.
+         */
         get: operations["get_next_work_item_api_llc_agent_work_items_next_get"];
         put?: never;
         post?: never;
@@ -51673,7 +51850,18 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Update Work Item Status */
+        /**
+         * Update Work Item Status
+         * @description Transition a work item, enforcing the state machine (#15859).
+         *
+         *     This used to echo the requested status back with ``{"updated": True}``
+         *     without performing the transition, so a caller reading the response saw its
+         *     own input and concluded the write had happened.
+         *
+         *     The company check is not incidental: ``transition_status`` takes
+         *     ``company_id`` and this route is reached with an agent's context, so an
+         *     item belonging to another company must 404 rather than transition.
+         */
         post: operations["update_work_item_status_api_llc_agent_work_items__item_id__status_post"];
         delete?: never;
         options?: never;
@@ -51690,7 +51878,20 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ingest Cost Event */
+        /**
+         * Ingest Cost Event
+         * @description Record an agent's token cost against its budget (#15859).
+         *
+         *     This used to return ``{"recorded": True}`` without calling anything. A
+         *     budget that is never charged is never exceeded, so the hard stop could not
+         *     fire -- and the response carried no marker, so a caller could not tell
+         *     "recorded" from "discarded".
+         *
+         *     ``BudgetExhausted`` is propagated as 402 rather than swallowed: the whole
+         *     point of ingesting the event is that exceeding the limit stops the agent.
+         *     ``UnpricedModel`` is 422 -- the event is well-formed but its cost cannot be
+         *     computed, and charging zero is what #15860 was.
+         */
         post: operations["ingest_cost_event_api_llc_agent_cost_events_post"];
         delete?: never;
         options?: never;
@@ -51707,7 +51908,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Post Comment */
+        /**
+         * Post Comment
+         * @description Store an agent's comment on a work item (#15905).
+         *
+         *     The company check is not incidental. `add_comment` writes `company_id` from
+         *     its argument without reading the item, so without `assert_item_in_company`
+         *     an agent could comment on another company's work item and the comment would
+         *     be stored under its OWN company — readable by neither side and attached to
+         *     an item its company does not own.
+         */
         post: operations["post_comment_api_llc_agent_comments_post"];
         delete?: never;
         options?: never;
@@ -51741,7 +51951,24 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Report Heartbeat */
+        /**
+         * Report Heartbeat
+         * @description Record an agent's completion of a heartbeat run (#15905).
+         *
+         *     Updates the existing `llc_heartbeat_runs` row rather than inserting one. The
+         *     scheduler creates the run when it dispatches (`_create_run`, status
+         *     `queued`); this route is the agent reporting how it ended. Inserting here
+         *     would produce two rows for one run and make every count of runs wrong.
+         *
+         *     A `run_id` that names no row is a 404, not a silent no-op. The stub echoed
+         *     the caller's own `run_id` back, so a client reading the response saw its
+         *     input and concluded the write had happened — the same defect #15859 fixed on
+         *     two other routes, and the reason `recorded` is now the result of an UPDATE's
+         *     rowcount rather than a constant.
+         *
+         *     Scoped by company as well as by id: `run_id` is a UUID, but an agent must
+         *     not be able to close out another company's run by guessing or replaying one.
+         */
         post: operations["report_heartbeat_api_llc_agent_heartbeat_report_post"];
         delete?: never;
         options?: never;
@@ -52151,6 +52378,51 @@ export interface paths {
          *     null for those runs.
          */
         get: operations["export_fixture_api_llc_agents__agent_id__runs__run_id__fixture_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/reporting-lines/{company_id}/{subject_type}/{subject_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Chain
+         * @description Who this subject reports to, walking up to the bounded depth.
+         */
+        get: operations["get_chain_api_llc_reporting_lines__company_id___subject_type___subject_id__get"];
+        /** Set Reporting Line */
+        put: operations["set_reporting_line_api_llc_reporting_lines__company_id___subject_type___subject_id__put"];
+        post?: never;
+        /**
+         * Clear Reporting Line
+         * @description Clearing returns the subject to the default chain, it does not orphan them.
+         */
+        delete: operations["clear_reporting_line_api_llc_reporting_lines__company_id___subject_type___subject_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/reporting-lines/{company_id}/{subject_type}/{subject_id}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Direct Reports
+         * @description Who reports to this holder — derived from the stored edge, never stored.
+         */
+        get: operations["get_direct_reports_api_llc_reporting_lines__company_id___subject_type___subject_id__reports_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -58383,6 +58655,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AuthMeResponse
+         * @description Response for GET /auth/me: the identity fields, plus the caller's effective authority (#16270).
+         */
+        AuthMeResponse: {
+            /** Username */
+            username: string;
+            /** Role */
+            role: string;
+            /** Email */
+            email: string;
+            /** Auth Method */
+            auth_method: string;
+            /** Authenticated */
+            authenticated: boolean;
+            /** Deployment Mode */
+            deployment_mode: string;
+            /** Permissions */
+            permissions: string[];
+            /** Is Admin */
+            is_admin: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AuthPermissionResponse
          * @description Response for GET /auth/permissions/{operation}.
          */
@@ -58432,26 +58728,6 @@ export interface components {
             name: string;
             /** Permissions */
             permissions: string[];
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * AuthUserInfoResponse
-         * @description Response for GET /auth/me.
-         */
-        AuthUserInfoResponse: {
-            /** Username */
-            username: string;
-            /** Role */
-            role: string;
-            /** Email */
-            email: string;
-            /** Auth Method */
-            auth_method: string;
-            /** Authenticated */
-            authenticated: boolean;
-            /** Deployment Mode */
-            deployment_mode: string;
         } & {
             [key: string]: unknown;
         };
@@ -60960,6 +61236,45 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * CEODesignationRead
+         * @description The designation as stored, plus whether it currently resolves.
+         *
+         *     `holder_exists` is not redundant with `holder_id`. A designation can name a
+         *     holder that has been deleted or has left the company, and the org chart
+         *     treats that exactly like no designation at all -- so a UI reading only
+         *     `holder_id` would show a CEO the chart does not render.
+         */
+        CEODesignationRead: {
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** Holder Type */
+            holder_type?: string | null;
+            /** Holder Id */
+            holder_id?: string | null;
+            /** Holder Exists */
+            holder_exists: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** CEODesignationWrite */
+        CEODesignationWrite: {
+            /**
+             * Holder Type
+             * @description 'user' or 'agent'
+             */
+            holder_type: string;
+            /**
+             * Holder Id
+             * Format: uuid
+             */
+            holder_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * CFGAnalyzeFileRequest
          * @description Request to analyze a file.
          */
@@ -61476,6 +61791,18 @@ export interface components {
         ChainOfCommandResponse: {
             /** Chain */
             chain: components["schemas"]["AgentSummary"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ChainResponse
+         * @description The upward walk from one subject, and why it stopped.
+         */
+        ChainResponse: {
+            /** Managers */
+            managers: components["schemas"]["HolderRef"][];
+            /** Ended */
+            ended: string;
         } & {
             [key: string]: unknown;
         };
@@ -76084,7 +76411,29 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** HeartbeatReport */
+        /**
+         * HeartbeatReport
+         * @description What an agent reports when a heartbeat run ends (#15966).
+         *
+         *     This model used to declare ``duration_seconds``, ``tokens_in``,
+         *     ``tokens_out`` and ``model``. ``report_heartbeat`` read none of them: they
+         *     were accepted, answered ``200``, and discarded on every call. The only reads
+         *     of those names in this module belong to ``CostEvent`` on ``/cost-events``.
+         *
+         *     They are removed rather than persisted, because each already has a system of
+         *     record and a second durable copy is the wrong answer (``store_authority``):
+         *
+         *     * **duration** is derivable — ``report_heartbeat`` writes ``finished_at`` and
+         *       the scheduler writes ``started_at`` on the same row.
+         *     * **token counts and model** belong to ``POST /cost-events``, which passes
+         *       them to ``BudgetService.ingest_cost_event`` and charges the agent's budget.
+         *       A budget that is never charged is never exceeded (#15859), so cost has to
+         *       arrive on the route that charges it.
+         *
+         *     An agent reporting cost must call ``/cost-events``. Sending those fields here
+         *     never recorded them; not declaring them is what makes that visible instead of
+         *     silently true.
+         */
         HeartbeatReport: {
             /** Run Id */
             run_id: string;
@@ -76092,14 +76441,6 @@ export interface components {
             work_item_id?: string | null;
             /** Status */
             status: string;
-            /** Duration Seconds */
-            duration_seconds?: number | null;
-            /** Tokens In */
-            tokens_in?: number | null;
-            /** Tokens Out */
-            tokens_out?: number | null;
-            /** Model */
-            model?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -76178,6 +76519,24 @@ export interface components {
              * Format: uuid
              */
             holder_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * HolderRef
+         * @description One end of a reporting edge.
+         */
+        HolderRef: {
+            /**
+             * Type
+             * @description user or agent
+             */
+            type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         } & {
             [key: string]: unknown;
         };
@@ -76965,6 +77324,25 @@ export interface components {
         IngestResponse: {
             /** Cost */
             cost: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * InstallRequest
+         * @description Request body for installing a marketplace plugin.
+         */
+        InstallRequest: {
+            /**
+             * Plugin Name
+             * @description Name of the plugin to install from catalog
+             */
+            plugin_name: string;
+            /**
+             * Source Id
+             * @description Marketplace source id; 'builtin' or a user-added source UUID (#6481)
+             * @default builtin
+             */
+            source_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -87149,7 +87527,10 @@ export interface components {
             deltaY: number;
             /** Text */
             text?: string | null;
-            /** Session Id */
+            /**
+             * Session Id
+             * @description Isolated browser-context routing (#11539). Omitted, the caller joins the shared default context, which every other unscoped caller also uses.
+             */
             session_id?: string | null;
         } & {
             [key: string]: unknown;
@@ -87199,12 +87580,22 @@ export interface components {
              * @default networkidle
              */
             wait_until: string;
-            /** Session Id */
+            /**
+             * Session Id
+             * @description Isolated browser-context routing (#11539). Omitted, the caller joins the shared default context, which every other unscoped caller also uses.
+             */
             session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
-        /** PlaywrightScreenshotRequest */
+        /**
+         * PlaywrightScreenshotRequest
+         * @description Embedded-Playwright capture -- NOT the session-scoped browser worker.
+         *
+         *     `services/playwright_service.py` has no session concept at all (zero
+         *     references), so this route cannot route a capture into a browser context.
+         *     Use `/worker-screenshot` for that. See #15871.
+         */
         PlaywrightScreenshotRequest: {
             /** Url */
             url: string;
@@ -87218,7 +87609,10 @@ export interface components {
              * @default 5000
              */
             wait_timeout: number;
-            /** Session Id */
+            /**
+             * Session Id
+             * @description ACCEPTED AND IGNORED by /screenshot: the embedded browser is not session-partitioned (#15871). The capture happens in the shared embedded browser regardless. Use /worker-screenshot to capture inside a specific session's context.
+             */
             session_id?: string | null;
         } & {
             [key: string]: unknown;
@@ -87247,7 +87641,10 @@ export interface components {
          *     query param instead (no request body on GET).
          */
         PlaywrightSessionRequest: {
-            /** Session Id */
+            /**
+             * Session Id
+             * @description Isolated browser-context routing (#11539). Omitted, the caller joins the shared default context, which every other unscoped caller also uses.
+             */
             session_id?: string | null;
         } & {
             [key: string]: unknown;
@@ -88641,6 +89038,24 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * RS256RevokeRequest
+         * @description Request body for RS256 authority token revocation (#10278).
+         *
+         *     Moved out of api/auth.py by #15757. The no-local-schemas hook reads each
+         *     changed file whole, so this pre-existing violation surfaced on an unrelated
+         *     edit -- fixed rather than left for whoever touches auth.py next.
+         *
+         *     It lands here rather than in schemas_agent.py because that module is at its
+         *     grandfathered ceiling with zero headroom, as are every other frozen domain
+         *     module the hook names. See #15757 for the conflict that creates.
+         */
+        RS256RevokeRequest: {
+            /** Token */
+            token: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * RUMClearResponse
          * @description Response for POST /rum/clear.
          */
@@ -89647,6 +90062,12 @@ export interface components {
          * @enum {string}
          */
         RepoType: "git" | "local" | "http" | "mcp";
+        /** ReportingLineWrite */
+        ReportingLineWrite: {
+            manager: components["schemas"]["HolderRef"];
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * RepositoryAnalysisRequest
          * @description Request model for repository-wide conflict analysis.
@@ -94177,6 +94598,16 @@ export interface components {
         SkillHealthResponse: {
             [key: string]: unknown;
         };
+        /** SkillHubInstallRequest */
+        SkillHubInstallRequest: {
+            /**
+             * Skill Id
+             * @description Registry id or name of the skill to install
+             */
+            skill_id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * SkillInstallRequest
          * @description Request body for installing a skill from the catalog.
@@ -98115,6 +98546,26 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ToolCatalogueEntry
+         * @description One tool: registry identity, this company's facts, and its reach.
+         */
+        ToolCatalogueEntry: {
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Tags */
+            tags: string[];
+            /** Url */
+            url?: string | null;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Role Count */
+            role_count: number;
+        } & {
+            [key: string]: unknown;
+        };
         /** ToolInstallRequest */
         ToolInstallRequest: {
             /** Tool Name */
@@ -98164,6 +98615,30 @@ export interface components {
         ToolNodesResponse: {
             /** Nodes */
             nodes: components["schemas"]["ToolNode"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ToolOverlayUpdate
+         * @description This company's own facts about a tool. Both optional, both clearable.
+         */
+        ToolOverlayUpdate: {
+            /** Url */
+            url?: string | null;
+            /** Logo Url */
+            logo_url?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ToolUsage
+         * @description Which roles carry a tool, and which workflows those roles run.
+         */
+        ToolUsage: {
+            /** Role Ids */
+            role_ids: string[];
+            /** Workflow Ids */
+            workflow_ids: string[];
         } & {
             [key: string]: unknown;
         };
@@ -100671,33 +101146,16 @@ export interface components {
         };
         /**
          * WakeWordCheckResponse
-         * @description Response for wake word check
+         * @description Response for wake word check: whether the text matched, and the confidence only (#16247 ruling).
          */
         WakeWordCheckResponse: {
             /** Detected */
             detected: boolean;
             /**
-             * Wake Word
-             * @default
-             */
-            wake_word: string;
-            /**
              * Confidence
              * @default 0
              */
             confidence: number;
-            /**
-             * Timestamp
-             * @default 0
-             */
-            timestamp: number;
-            /**
-             * Metadata
-             * @default {}
-             */
-            metadata: {
-                [key: string]: unknown;
-            };
         } & {
             [key: string]: unknown;
         };
@@ -102314,16 +102772,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * _RS256RevokeRequest
-         * @description Request body for RS256 authority token revocation (#10278).
-         */
-        _RS256RevokeRequest: {
-            /** Token */
-            token: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** _RealtimeToolCallRequest */
         _RealtimeToolCallRequest: {
             /** Name */
@@ -102898,25 +103346,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * InstallRequest
-         * @description Request body for installing a marketplace plugin.
-         */
-        api__schemas_workflows__InstallRequest: {
-            /**
-             * Plugin Name
-             * @description Name of the plugin to install from catalog
-             */
-            plugin_name: string;
-            /**
-             * Source Id
-             * @description Marketplace source id; 'builtin' or a user-added source UUID (#6481)
-             * @default builtin
-             */
-            source_id: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * ProviderInfo
          * @description Information about a supported provider.
          */
@@ -102933,16 +103362,6 @@ export interface components {
             base_url_required: boolean;
             /** Documentation Url */
             documentation_url: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** InstallRequest */
-        api__skills_hub__InstallRequest: {
-            /**
-             * Skill Id
-             * @description Registry id or name of the skill to install
-             */
-            skill_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -104110,7 +104529,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["_RS256RevokeRequest"];
+                "application/json": components["schemas"]["RS256RevokeRequest"];
             };
         };
         responses: {
@@ -104151,7 +104570,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthUserInfoResponse"];
+                    "application/json": components["schemas"]["AuthMeResponse"];
                 };
             };
         };
@@ -107874,41 +108293,6 @@ export interface operations {
             };
         };
     };
-    change_password_api_user_management_users__user_id__change_password_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PasswordChange"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PasswordChangedResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     assign_role_api_user_management_users__user_id__roles__role_id__post: {
         parameters: {
             query?: never;
@@ -108008,6 +108392,41 @@ export interface operations {
             };
         };
     };
+    change_password_api_user_management_users__user_id__change_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordChangedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_teams_api_user_management_teams_get: {
         parameters: {
             query?: {
@@ -108073,6 +108492,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_teams_api_user_management_teams_my_teams_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamResponse"][];
                 };
             };
         };
@@ -108310,26 +108749,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_my_teams_api_user_management_teams_my_teams_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TeamResponse"][];
                 };
             };
         };
@@ -112761,9 +113180,7 @@ export interface operations {
     };
     trigger_cognition_seed_api_knowledge_cognition_store_seed_post: {
         parameters: {
-            query?: {
-                _user?: unknown;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -125627,6 +126044,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DelegationResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_claims_api_coordination_claims_get: {
+        parameters: {
+            query?: {
+                /** @description Only claims held by this agent */
+                agent_id?: string | null;
+                /** @description Only claims at or under this scope, segment-aligned */
+                scope?: string | null;
+                /** @description Only claims of this scope kind */
+                kind?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -150984,6 +151439,8 @@ export interface operations {
         parameters: {
             query: {
                 path: string;
+                recursive?: boolean;
+                force?: boolean;
             };
             header?: never;
             path?: never;
@@ -160684,6 +161141,120 @@ export interface operations {
             };
         };
     };
+    get_chat_context_api_chat_knowledge_context__chat_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_ChatKnowledgeContextData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_chat_context_api_chat_knowledge_context__chat_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    find_orphaned_chat_contexts_api_chat_knowledge_context_orphans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+        };
+    };
+    cleanup_orphaned_chat_contexts_api_chat_knowledge_context_orphans_delete: {
+        parameters: {
+            query?: {
+                /** @description If True, only report without deleting */
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_chat_context_api_chat_knowledge_context_create_post: {
         parameters: {
             query?: never;
@@ -160935,37 +161506,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_ChatKnowledgeSearchResultData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_chat_context_api_chat_knowledge_context__chat_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chat_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_ChatKnowledgeContextData_"];
                 };
             };
             /** @description Validation Error */
@@ -163366,7 +163906,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["api__skills_hub__InstallRequest"];
+                "application/json": components["schemas"]["SkillHubInstallRequest"];
             };
         };
         responses: {
@@ -166949,7 +167489,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["api__schemas_workflows__InstallRequest"];
+                "application/json": components["schemas"]["InstallRequest"];
             };
         };
         responses: {
@@ -169347,6 +169887,101 @@ export interface operations {
             };
         };
     };
+    get_company_ceo_api_llc_companies__company_id__ceo_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CEODesignationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_company_ceo_api_llc_companies__company_id__ceo_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CEODesignationWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CEODesignationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_company_ceo_api_llc_companies__company_id__ceo_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_directory_api_llc_contacts_directory_get: {
         parameters: {
             query?: never;
@@ -171106,6 +171741,105 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tools_api_llc_tools__company_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolCatalogueEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tool_usage_api_llc_tools__company_id___tool_name__usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                tool_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolUsage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_tool_overlay_api_llc_tools__company_id___tool_name__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                tool_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolOverlayUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolCatalogueEntry"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -174293,6 +175027,138 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_chain_api_llc_reporting_lines__company_id___subject_type___subject_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                subject_type: string;
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChainResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_reporting_line_api_llc_reporting_lines__company_id___subject_type___subject_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                subject_type: string;
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportingLineWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_reporting_line_api_llc_reporting_lines__company_id___subject_type___subject_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                subject_type: string;
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_direct_reports_api_llc_reporting_lines__company_id___subject_type___subject_id__reports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                subject_type: string;
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolderRef"][];
                 };
             };
             /** @description Validation Error */

@@ -11,7 +11,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node index.ts",
+    "pretest": "npm run build",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "pretest:integration": "npm run build",
     "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/integration.test.ts"
   },
   "dependencies": {

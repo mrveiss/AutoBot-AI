@@ -26,9 +26,9 @@ import uuid
 from enum import Enum
 from typing import Any, Dict, List
 
-from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_write import run_redis_write
 
 logger = get_logger(__name__)
 
@@ -88,8 +88,11 @@ def emit(
 ) -> None:
     """Fire-and-forget compliance event emission.
 
-    Safe to call from any async context.  Errors are swallowed at DEBUG level
-    so compliance writes never propagate to the caller.
+    Safe to call from any async context.  A failure is logged at ERROR and
+    never propagated to the caller (#15637 — it used to be logged at DEBUG, so
+    a lost compliance record produced no warning at all). Await
+    :func:`_write_event` directly where the record must be durable before the
+    caller continues.
     """
     run_redis_write(
         _write_event(

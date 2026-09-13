@@ -925,6 +925,6 @@ async def test_parallel_step_detection():
 
 ## 10. References
 
-- Manus Planner Module: `docs/external_apps/.../Manus Agent Tools & Prompt/Modules.txt`
-- Devin Planning Mode: `docs/external_apps/.../Devin AI/Prompt.txt`
+- Manus Planner Module: Manus Agent Tools & Prompt/Modules.txt (archived outside the repository, #15223)
+- Devin Planning Mode: Devin AI/Prompt.txt (archived outside the repository, #15223)
 - Existing TodoWrite: `src/utils/todo_manager.py` (if exists)

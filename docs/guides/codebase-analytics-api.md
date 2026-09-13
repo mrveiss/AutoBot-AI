@@ -1342,7 +1342,7 @@ List all registered code sources.
       "name": "autobot-backend",
       "source_type": "local",
       "repo": null,
-      "branch": "Dev_new_gui",
+      "branch": "main",
       "clone_path": "/opt/autobot/autobot-backend",
       "status": "ready",
       "last_synced": "2026-03-15T10:00:00",
@@ -2242,7 +2242,7 @@ curl -sk -X POST "https://<backend-ip>:8443/api/analytics/codebase/index"
 redis-cli -h <database-ip> -p 6379 -n 11 ping
 
 # Check Redis service on .23
-ssh autobot@<database-ip> "sudo systemctl status redis"
+ssh autobot@<database-ip> "sudo systemctl status redis-stack-server"
 ```
 
 The system falls back to in-memory storage, but data is lost on restart.

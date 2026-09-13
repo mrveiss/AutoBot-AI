@@ -21,7 +21,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List
 
-from autobot_shared.env_utils import env_float_clamped, env_int_clamped
+from autobot_shared.env_utils import env_float, env_float_clamped, env_int_clamped
+from autobot_shared.git_probe import start_git
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.inventory_builder import (
@@ -82,7 +83,7 @@ SELF_UPDATE_SHARED_DIR = Path(os.getenv("SLM_SELF_UPDATE_SHARED_DIR", "/opt/auto
 # run deliberately outlives this process (Play 1 restarts us), so the caller
 # cannot reliably delete these itself — see _stage_dir_for_run. Pruning on the
 # next run keeps the directory bounded without ever racing a live run.
-SELF_UPDATE_STAGE_TTL_SECONDS = float(os.getenv("SLM_SELF_UPDATE_STAGE_TTL_SECONDS", "86400"))
+SELF_UPDATE_STAGE_TTL_SECONDS = env_float("SLM_SELF_UPDATE_STAGE_TTL_SECONDS", 86400)
 
 # Env vars forwarded to the detached scope via explicit --setenv=NAME=VALUE.
 # `sudo` (env_reset, see setup-passwordless-sudo.yml) strips the environment
@@ -140,7 +141,7 @@ SELF_UPDATE_RUN_HEADER: str = "SELF-UPDATE RUN STARTED"
 SELF_UPDATE_LOG_FALLBACK_PATH = Path(ANSIBLE_LOCAL_TMP) / "self-update-ansible.log"
 
 # Poll interval while tailing the detached run's log file for live progress.
-SELF_UPDATE_LOG_TAIL_POLL_SEC = float(os.getenv("SLM_SELF_UPDATE_LOG_TAIL_POLL_SEC", "1.0"))
+SELF_UPDATE_LOG_TAIL_POLL_SEC = env_float("SLM_SELF_UPDATE_LOG_TAIL_POLL_SEC", 1.0)
 
 # #14524: grace period between SIGTERM and SIGKILL when a timed-out playbook
 # subprocess's WHOLE process group (see _kill_process_group) does not exit on
@@ -576,15 +577,7 @@ class PlaybookExecutor:
         ``self._kill_process_group`` reuse the same whole-process-group kill
         ``_run_subprocess`` uses, and never block unboundedly themselves.
         """
-        proc = await asyncio.create_subprocess_exec(
-            "git",
-            "-C",
-            str(code_source_dir),
-            *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            start_new_session=True,
-        )
+        proc = await start_git("-C", str(code_source_dir), *args, start_new_session=True)
         try:
             await asyncio.wait_for(proc.communicate(), timeout=GIT_COMMAND_TIMEOUT_S)
         except asyncio.TimeoutError:
@@ -601,15 +594,12 @@ class PlaybookExecutor:
         than _run_git's original bare ``proc.kill()``: an orphan, not just a
         leaked pipe wait).
         """
-        proc = await asyncio.create_subprocess_exec(
-            "git",
+        proc = await start_git(
             "-C",
             str(code_source_dir),
             "rev-parse",
             "--short",
             "HEAD",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
         )
         try:
@@ -656,7 +646,7 @@ class PlaybookExecutor:
             logger.debug("_update_code_source: no .git at %s — skipping", code_source_dir)
             return True
 
-        branch = os.getenv("AUTOBOT_GIT_BRANCH", "Dev_new_gui")
+        branch = os.getenv("AUTOBOT_GIT_BRANCH", "main")
         synced = True
 
         try:
@@ -664,8 +654,8 @@ class PlaybookExecutor:
                 logger.warning("_update_code_source: git checkout -- . failed; continuing")
                 synced = False
 
-            if await self._run_git(code_source_dir, "fetch", "origin") != 0:
-                logger.warning("_update_code_source: git fetch origin failed; continuing")
+            if await self._run_git(code_source_dir, "fetch", "--prune", "origin") != 0:
+                logger.warning("_update_code_source: git fetch --prune origin failed; continuing")
                 return False
 
             if await self._run_git(code_source_dir, "reset", "--hard", f"origin/{branch}") != 0:

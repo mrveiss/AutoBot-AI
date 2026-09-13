@@ -27,8 +27,9 @@ from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 INFRA_ROOT = REPO_ROOT / "autobot-infrastructure"
 RECONCILER = REPO_ROOT / "autobot-slm-backend/services/reconciler.py"
 

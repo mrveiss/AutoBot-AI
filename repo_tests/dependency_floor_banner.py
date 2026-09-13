@@ -21,11 +21,13 @@ box would be removed within a day.
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
-from pathlib import Path
 from types import ModuleType
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+_REPO_ROOT = repo_root()
 _CHECKER = _REPO_ROOT / "pipeline-scripts" / "check_dependency_floors.py"
 _MODULE_NAME = "check_dependency_floors"
 
@@ -64,5 +66,9 @@ def pytest_terminal_summary(terminalreporter) -> None:
     if not found:
         return
     terminalreporter.write_sep("=", "environment is BELOW the declared dependency floors", red=True)
-    for line in checker.render(found, examined):
+    # #16264: this same hook runs inside ci.yml's pytest invocations, where the
+    # interpreter collecting the run IS the CI job's own environment, not a
+    # stand-in for it -- render() needs to know which is true to say so correctly.
+    in_ci = bool(os.environ.get("CI"))
+    for line in checker.render(found, examined, in_ci=in_ci):
         terminalreporter.write_line(line)

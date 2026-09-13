@@ -25,7 +25,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     # No YAML anchor here: #12934 removed the pull_request.paths filter that
     # used to alias it, so naming the anchor now fails actionlint's
     # syntax-check as "defined but not used".
@@ -54,7 +54,7 @@ on:
     # frontend-test.yml (#10019, #10527). The real audit is gated on the
     # `changes` job below; the `api-wiring-skip` shim (same `name:`) reports the
     # context green when no relevant path was touched.
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -153,8 +153,8 @@ jobs:
   # Mutually exclusive with `api-wiring` above, and deliberately sharing its
   # check-context name so a PR always sees exactly one terminal "api-wiring"
   # conclusion — the real audit when wiring-relevant paths changed, an explicit
-  # green here when they did not (#12934). Mirrors `unit-tests-skip` in
-  # frontend-test.yml (#10527).
+  # green here when they did not (#12934). Mirrors `unit-tests-skip`, which the
+  # #13405 split moved into frontend-required-context.yml (#10527).
   api-wiring-skip:
     name: api-wiring
     needs: changes

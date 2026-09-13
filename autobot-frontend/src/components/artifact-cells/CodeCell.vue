@@ -326,76 +326,81 @@ onMounted(() => {
   color: inherit;
 }
 
-/* Syntax highlighting - light theme (when prefers-color-scheme: light) */
+/*
+ * Syntax highlighting, from the shared design tokens (#14853). Reuses
+ * canvas/CodeCell.vue's --codecell-syntax-* palette (#14770) rather than
+ * this file's own prior hex: AC2 (one token set for both CodeCells) and the
+ * literal "colours unchanged" reading of AC4 could not both hold once
+ * compared value-by-value -- see the coordinator's decision on #14853.
+ * --codecell-syntax-tag-* is new: neither prior palette had a tag category.
+ */
 @media (prefers-color-scheme: light) {
   .code-container {
     background: var(--bg-primary);
-    color: #333;
+    color: var(--text-primary);
   }
 
   :deep(.hljs-string),
-  :deep(.hljs-attr),
   :deep(.hljs-bullet) {
-    color: #008000;
+    color: var(--codecell-syntax-string-light);
   }
 
   :deep(.hljs-number),
   :deep(.hljs-literal) {
-    color: #0000ff;
+    color: var(--codecell-syntax-number-light);
   }
 
   :deep(.hljs-attr),
   :deep(.hljs-variable) {
-    color: #0000ff;
+    color: var(--codecell-syntax-attr-light);
   }
 
   :deep(.hljs-comment) {
-    color: #008080;
+    color: var(--codecell-syntax-comment-light);
   }
 
   :deep(.hljs-tag) {
-    color: #800000;
+    color: var(--codecell-syntax-tag-light);
   }
 
   :deep(.hljs-keyword) {
-    color: #0000ff;
+    color: var(--codecell-syntax-keyword-light);
   }
 }
 
-/* Syntax highlighting - dark theme (when prefers-color-scheme: dark) */
 @media (prefers-color-scheme: dark) {
   :deep(.hljs-string) {
-    color: #85e89d;
+    color: var(--codecell-syntax-string-dark);
   }
 
   :deep(.hljs-number),
   :deep(.hljs-literal) {
-    color: #79b8ff;
+    color: var(--codecell-syntax-number-dark);
   }
 
   :deep(.hljs-attr),
   :deep(.hljs-variable) {
-    color: #79b8ff;
+    color: var(--codecell-syntax-attr-dark);
   }
 
   :deep(.hljs-comment) {
-    color: #6a737d;
+    color: var(--codecell-syntax-comment-dark);
   }
 
   :deep(.hljs-tag) {
-    color: #f97583;
+    color: var(--codecell-syntax-tag-dark);
   }
 
   :deep(.hljs-keyword) {
-    color: #f97583;
+    color: var(--codecell-syntax-keyword-dark);
   }
 
   :deep(.hljs-function) {
-    color: #79b8ff;
+    color: var(--codecell-syntax-callable-dark);
   }
 
   :deep(.hljs-built_in) {
-    color: #f97583;
+    color: var(--codecell-syntax-callable-dark);
   }
 }
 

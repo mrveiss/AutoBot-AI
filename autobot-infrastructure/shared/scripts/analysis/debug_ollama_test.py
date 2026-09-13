@@ -26,7 +26,18 @@ def _build_test_request_data() -> dict:
         "messages": [
             {
                 "role": "system",
-                "content": "You are AutoBot, an intelligent Linux automation assistant with access to comprehensive documentation and knowledge base.\n\nYou have multi-agent architecture with the following capabilities:\n- System Administration: Linux commands, file management, process control\n- Workflow Automation: Template creation, scheduling, and execution\n- Knowledge Integration: AI-powered documentation search and retrieval\n- Enterprise Features: Scalable and monitored automation solutions\n\nYou can access LlamaIndex vectors in Redis, LangChain data, and semantic search capabilities for authoritative responses.\n\nAlways provide accurate, helpful information based on your knowledge base when available.",
+                "content": (
+                    "You are AutoBot, an intelligent Linux automation assistant with access to "
+                    "comprehensive documentation and knowledge base.\n\n"
+                    "You have multi-agent architecture with the following capabilities:\n"
+                    "- System Administration: Linux commands, file management, process control\n"
+                    "- Workflow Automation: Template creation, scheduling, and execution\n"
+                    "- Knowledge Integration: AI-powered documentation search and retrieval\n"
+                    "- Enterprise Features: Scalable and monitored automation solutions\n\n"
+                    "You can access LlamaIndex vectors in Redis, LangChain data, and semantic search "
+                    "capabilities for authoritative responses.\n\n"
+                    "Always provide accurate, helpful information based on your knowledge base when available."
+                ),
             },
             {"role": "system", "content": "Test knowledge context"},
             {"role": "user", "content": "hello"},

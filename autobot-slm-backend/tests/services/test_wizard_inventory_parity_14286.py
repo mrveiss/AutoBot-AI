@@ -243,7 +243,17 @@ def _gated_groups() -> set[str]:
     """Every group name a playbook's `hosts:` gates on."""
     found: set[str] = set()
     for path in _ANSIBLE_DIR.rglob("*.yml"):
-        if "roles/" in str(path.relative_to(_ANSIBLE_DIR)):
+        rel = str(path.relative_to(_ANSIBLE_DIR))
+        # `roles/` was already out of scope. `tests/` joins it for the same
+        # reason, not as an exemption: this guard asks whether the WIZARD's
+        # inventory builder can emit every group a play gates on, and the wizard
+        # never builds inventory for a test playbook. Test plays gate on the
+        # fixture inventory at `tests/inventory/`, which is the point of #15824 —
+        # running them against a real inventory rather than `-i 'localhost,'`.
+        # Listing those fixture hosts in _KNOWN_UNREACHABLE would have worked and
+        # been worse: a tolerance entry that outlives its reason exempts the next
+        # real case silently, whereas a scope rule states what the guard is about.
+        if "roles/" in rel or rel.startswith("tests/"):
             continue
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
             match = re.match(r"\s*hosts:\s*([^#]+)", line)
@@ -256,9 +266,21 @@ def _gated_groups() -> set[str]:
     return found
 
 
+#: Production `hosts:` groups found when the tests/ exclusion landed: 29.
+_MIN_GATED_GROUPS = 20
+
+
 def test_every_group_a_play_gates_on_is_reachable_through_this_path():
     gated = _gated_groups()
     assert gated, "found no `hosts:` lines — the scan is broken, not the inventory"
+    # Bound to REACH, not to findings. `assert gated` only proves the scan found
+    # something; it would pass on one surviving play after the rest were moved or
+    # renamed out of scope, and this guard's whole value is breadth. Measured 29
+    # production groups when the `tests/` exclusion above was added.
+    assert len(gated) >= _MIN_GATED_GROUPS, (
+        f"only {len(gated)} gated group(s) found, expected at least "
+        f"{_MIN_GATED_GROUPS} — the scan lost reach, so a clean result means nothing"
+    )
 
     every_role = sorted(ROLE_ANSIBLE_GROUPS)
     children = _children_for({"fleet-node": every_role, "slm-node": ["slm-backend"]})

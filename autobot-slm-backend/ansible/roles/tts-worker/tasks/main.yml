@@ -150,7 +150,7 @@
 # ============================================================
 - name: "TTS Worker | Enforce venv target Python version (env-drift fix)"
   ansible.builtin.include_role:
-    name: python314
+    name: python_interpreter
     tasks_from: ensure_venv_version
   vars:
     venv_path: "{{ tts_install_dir }}/venv"
@@ -183,13 +183,22 @@
   timeout: 120  # Issue #2835: prevent indefinite hang on network issues
   tags: ['tts', 'venv']
 
+# #15598: every floor here is now the specifier text `autobot-tts-worker/
+# requirements.txt` declares. This role provisions the very worker whose
+# manifest annotates `fastapi>=0.141.1` as a SECURITY UPDATE requiring starlette
+# >=0.52.1, and it asked for `>=0.100.0` -- so a fresh provision satisfied the
+# task below the floor the security note exists to hold, and the role never
+# installs that manifest to correct it afterwards. `-r` is not used because the
+# worker's packages are split across three pip tasks by index (torch comes from
+# the CPU-only wheel index below); the parity guard (#15568) binds the literals
+# to the manifest instead.
 - name: "TTS Worker | Install FastAPI and server dependencies"
   ansible.builtin.pip:
     name:
-      - fastapi>=0.100.0
-      - uvicorn[standard]>=0.20.0
-      - python-multipart>=0.0.6
-      - aiofiles>=23.0.0
+      - fastapi>=0.141.1
+      - uvicorn[standard]>=0.52.4
+      - python-multipart>=0.0.32
+      - aiofiles>=25.1.0
     virtualenv: "{{ tts_install_dir }}/venv"
     state: present
   become_user: "{{ tts_user }}"
@@ -198,10 +207,14 @@
   timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
   tags: ['tts', 'packages']
 
-- name: "TTS Worker | Install torch CPU-only (Pocket TTS requires >=2.5)"
+# #15598: floor raised from `>=2.5.0` to the `>=2.13.0` that
+# `autobot-tts-worker/requirements.txt` declares. Pocket TTS needs >=2.5, but
+# the worker ships against 2.13 and this task is what actually populates its
+# venv, so the lower number was the one that bound.
+- name: "TTS Worker | Install torch CPU-only from the CPU wheel index"
   ansible.builtin.pip:
     name:
-      - "torch>=2.5.0"
+      - "torch>=2.14.0"
     virtualenv: "{{ tts_install_dir }}/venv"
     state: present
     extra_args: "--index-url https://download.pytorch.org/whl/cpu --timeout 300"
@@ -214,19 +227,40 @@
 - name: "TTS Worker | Install pocket-tts and audio dependencies"
   ansible.builtin.pip:
     name:
-      # pocket-tts>=2.0.0 is required for TTSModel.generate_audio_stream()
+      # pocket-tts>=3.1.0 is required for TTSModel.generate_audio_stream()
       # (incremental audio-chunk streaming used by /tts/synthesize/stream,
-      # #12501) — verified present on 1.1.1, 2.0.0, and 2.1.0 (latest at
-      # pin time). Floor pinned to the earliest version validated against
-      # the worker's streaming code path, rather than an unbounded
-      # latest-wins resolve.
-      - pocket-tts>=2.0.0
-      - soundfile>=0.12.0
-      - numpy>=1.24.0
-      - scipy>=1.10.0
+      # #12501) — verified present on 1.1.1, 2.0.0, 2.1.0, and re-verified
+      # across the 2->3 major against the upstream Python API reference,
+      # which lists `generate_audio_stream(model_state, text_to_generate,
+      # frames_after_eos=None, copy_state=True)` beside `load_model` and
+      # `generate_audio` — the three methods the rendered worker
+      # template calls.
+      #
+      # A major bump is not a floor move. The parity guard fires on the
+      # NUMBER and cannot know whether the API that number gates still
+      # exists; answering that is the only reason this pin carries a comment.
+      - pocket-tts>=3.1.0
+      # #15598: `>=0.14.0` is the floor `autobot-tts-worker/requirements.txt`
+      # declares for this worker; `>=0.12.0` here undercut it by two minors.
+      - soundfile>=0.14.0
+      # #15568: numpy carries no floor here -- constraints/shared.txt is the
+      # single source of truth for it (#10524), and `autobot-tts-worker/
+      # requirements.txt` already lists it bare against that constraint. The
+      # `>=1.24.0` this replaced admitted numpy 1.x into the very venv the
+      # requirements file pins to >=2.5.2, which is the ABI skew the SSOT
+      # exists to prevent. Same bare-name + `-c` shape as roles/npu-worker.
+      # The `-c` fallback derives from `autobot.base_dir` (inventory/group_vars/all.yml)
+      # rather than restating a literal: an override of `code_source_dir` is still
+      # honoured, but the default no longer hardcodes a path. #15601 brought
+      # roles/npu-worker, roles/agent_config/openvino and roles/browser onto this
+      # same shape, so all five pip constraint sites now agree.
+      - numpy
+      - scipy>=1.18.1
     virtualenv: "{{ tts_install_dir }}/venv"
     state: present
-    extra_args: "--timeout 300"
+    extra_args: >-
+      --timeout 300
+      -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
   become_user: "{{ tts_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "300"

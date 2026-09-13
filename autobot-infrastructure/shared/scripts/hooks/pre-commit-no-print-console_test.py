@@ -33,7 +33,57 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # them and the changed-lines gate flagged both. print IS the mechanism there
 # -- it is a deprecated stdout-only entry point -- so the two lines carry
 # `# noqa: print` and the whole-repo count drops by exactly two.
-_KNOWN_REPO_VIOLATIONS = 502
+# 499 since #14982: tools/lint/check_no_blocking_io_in_async.py was missing its
+# executable bit, which blocked every commit touching autobot-backend/*.py.
+# Restoring it surfaced three pre-existing print() calls in that file -- a lint
+# tool reporting findings to a terminal, which is what print is for -- so they
+# carry `# noqa: print` and the count drops by exactly three. The other ~22
+# files under tools/lint/ share the shape and were NOT exempt from the hook's
+# path allowlist; that gap was #15730.
+# 444 since #15730: tools/lint/ (the substring match also covers the nested
+# tools/lint/canonical/ package) joined the path allowlist next to
+# code_analysis/ and ansible/ in get_staged_python_files(), on the same
+# reasoning as code_analysis/ -- the directory's entire purpose is emitting
+# findings to a terminal, so bare print() there is the mechanism, not a
+# violation. The ~22 files #14982 identified carry 55 print() call sites
+# between them (several files call print() more than once) -- measured by
+# running this hook over tools/lint/ before the allowlist change, matching
+# the whole-repo delta: 499 - 55 = 444.
+# 443 since #15687 converted the sweep summary in
+# scripts/check_ansible_file_references.py from the builtin to a module logger.
+# Lowered in the same commit as the removal, per this test's own instruction:
+# a drop is either a fix recorded here, or the scan silently losing reach.
+# 359 since #16008: `scripts/` CLI ENTRY POINTS became exempt, so the drop is a
+# change of POPULATION, not of tree -- 84 call sites that were violations are now
+# outside the definition, and not one of them was fixed. Recording that distinction
+# is the whole point: this test's own message offers only "they were fixed" or "the
+# scan lost reach", and a third case read as either would be a bypass licensed by a
+# number nobody could audit.
+#
+# The delta was MEASURED, not inferred: the pre-#16008 hook and the current one were
+# each run over the same tracked `scripts/**/*.py` set, from the hooks directory so
+# `lib/_common.sh` resolves for both. Old 84, new 0, and 443 - 84 = 359 exactly, so
+# the whole drop is accounted for with no residue -- which is what rules out the
+# second case, the scan quietly losing reach somewhere else.
+#
+# An earlier ESTIMATE of this delta said ~96, from 107 `print(` occurrences minus 11
+# carrying noqa. It was wrong because a multi-line call reports as ONE violation
+# spanning a line range, and some occurrences sit inside strings. A count of a proxy
+# is not a count of the thing, and the ratchet is pinned to the thing.
+# 322 since #16263: `pipeline-scripts/ci_dispatch_watchdog.py` routed its print()
+# calls through its own `_emit` helper, the file's one stated exception to #1082,
+# whose single print carries `# noqa: print`. That's a FIX, not a population change.
+# MEASURED, not inferred: this test on #16263's own head (2eb2e1f715, job
+# 103223385562) reported 322 against base's 359. The diff touches neither this hook,
+# its lib, nor the pre-commit config; it deletes or renames no file; and every
+# removed print()/console.* line is in that one file. So the whole drop of 37 is those
+# call sites, with no residue for a lost-reach case to hide in. (The removed LINES
+# number 40, which is the proxy the note above warns about.)
+# 317 since #16540: `.claude/skills/claims-audit/generate_report.py` writes its CLI
+# summary through sys.stdout instead of print(). MEASURED, not inferred: this test on
+# #16558's head (python-suite shard 11/12, job 103601998828) reported 317 against 322,
+# and the diff removes exactly 5 print() lines and adds none. A FIX, not a population change.
+_KNOWN_REPO_VIOLATIONS = 317
 
 
 def _test_git_env() -> dict[str, str]:

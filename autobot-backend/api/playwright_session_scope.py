@@ -1,0 +1,196 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Make an unscoped Playwright caller discoverable (#15802).
+
+`session_id` is optional on every Playwright request model, so a client written
+before #11539 keeps working, lands in the **shared default browser context**,
+and neither end can tell: the client believes it is isolated, the server sees a
+well-formed request. One such caller — an MCP server built against these routes
+in March 2026 — shared the default context for roughly six months and was found
+during unrelated host maintenance rather than by any check.
+
+This does not reject the request. Making the field required would break every
+existing caller, which is a decision for whoever owns those integrations rather
+than a fix; what is missing today is not enforcement but *visibility*. After
+this, "who is still unscoped" is a log query instead of an accident.
+
+WHY MIDDLEWARE RATHER THAN A CALL PER ROUTE
+-------------------------------------------
+A per-route call is a list that goes stale: the next Playwright route added is
+unscoped-by-default and silent again, and nothing notices. Path-scoped
+middleware covers every route the prefix has and every route it gains.
+
+It also keeps `api/playwright.py` and `api/schemas_code.py` at their recorded
+size ceilings (#14236). Four earlier shapes of this fix — a helper plus eight
+call sites, an extracted helper, instrumenting the fallback, and a router
+dependency — each breached one of those ceilings, the last by a single import
+line. The ratchet refusing all four was the useful signal: the instrumentation
+did not belong inside the module it was instrumenting.
+
+WHAT THIS DELIBERATELY DOES NOT READ
+------------------------------------
+The body is inspected only when `Content-Length` says it is small. Downstream,
+`ValidationMiddleware` buffers an unbounded body into memory *before* checking
+`MAX_BODY_BYTES` (#15857), so an unbounded read here would add a second full
+copy of a payload nothing has bounded yet. An oversized or unmeasurable body is
+therefore reported as *unconfirmed* rather than parsed — a weaker claim, and
+the only one that was actually established.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+
+from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
+
+#: Methods that carry a JSON body. `GET /status` takes `session_id` as a query
+#: parameter, which is read separately below.
+_BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
+
+#: Only these paths are inspected; everything else passes untouched.
+_PREFIX = "/api/playwright/"
+
+#: Largest body this will read looking for `session_id`. A scoped Playwright
+#: body is a URL and an id — well under a kilobyte — so anything past this is
+#: not a body worth parsing, and reading it would add a second full copy of a
+#: buffer that is already unbounded downstream (#15857).
+_INSPECT_MAX_BYTES = env_int_clamped("PLAYWRIGHT_SCOPE_INSPECT_MAX_BYTES", 64 * 1024, min_v=0)
+
+
+#: Anything that could end a log line or forge a new one. Uvicorn percent-decodes
+#: the request target, so ``/api/playwright/x%0A2026-01-01 ERROR fake`` arrives as a
+#: real newline in ``request.url.path`` (CWE-117).
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+
+#: Cap on each embedded field. The path is attacker-chosen — this middleware runs
+#: before routing, so any suffix under the prefix reaches it — and both the log and
+#: the flood filter's key space are better off bounded.
+_FIELD_MAX = 200
+
+
+def _safe(value: str) -> str:
+    """A request-controlled value, made safe to embed in a log line."""
+    cleaned = _CONTROL.sub("\ufffd", value)
+    return cleaned if len(cleaned) <= _FIELD_MAX else cleaned[:_FIELD_MAX] + "…"
+
+
+def _inspection_refusal(request: Request) -> tuple[str, str] | None:
+    """`(category, detail)` when this body must not be read, else None.
+
+    Split in two on purpose. `category` is one of three fixed strings and is the
+    only half that may be embedded in the log template; `detail` carries the
+    caller's own numbers and must stay an argument. See `_message`.
+
+    A missing or unparseable `Content-Length` counts as a refusal: the size is
+    then unknown, and an unknown quantity is exactly what must not be pulled
+    into memory.
+    """
+    declared = request.headers.get("content-length")
+    if declared is None:
+        return ("no-content-length", "no content-length header")
+    try:
+        size = int(declared)
+    except ValueError:
+        return ("unparseable-content-length", f"unparseable content-length {declared!r}")
+    if size > _INSPECT_MAX_BYTES:
+        return (
+            "body-over-bound",
+            f"{size} bytes over the {_INSPECT_MAX_BYTES} byte inspection bound",
+        )
+    return None
+
+
+def _declared_session_id(body: bytes, query_param: str | None) -> str | None:
+    """The `session_id` this request supplied, from body or query string.
+
+    A body that is absent, empty, or not an object is treated as *no id*
+    rather than as unparseable-so-skip: a caller that sent nothing is exactly
+    the caller this exists to find, and skipping it would reproduce the silence.
+    """
+    if query_param:
+        return query_param
+    if not body:
+        return None
+    try:
+        payload = json.loads(body)
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return payload.get("session_id") if isinstance(payload, dict) else None
+
+
+def _message(caller: str, category: str | None) -> str:
+    """The log **template**: only bounded values may appear in it.
+
+    `LogFloodSuppressionFilter` keys on the uninterpolated template plus call
+    site (#15774), so anything embedded here enlarges the key space — and that
+    space is a bounded LRU (`_FLOOD_MAX_KEYS`). Embedding the concrete path was
+    the mistake this fixes: `dispatch` runs before routing and matches on
+    `startswith`, so `/api/playwright/<anything>` reaches here, and a caller
+    walking `/a1`, `/a2`, … would mint keys until it evicted the suppression
+    state of the genuinely unscoped caller this exists to surface. Same defect as
+    one shared budget for every caller, wearing the other face.
+
+    So the template embeds the prefix (one value) and the refusal *category*
+    (three), and the concrete path, the caller's declared size and the
+    user-agent are passed as arguments. `caller` stays embedded because a
+    per-caller budget is the entire feature; that is the one axis deliberately
+    accepted, and it is bounded by who can reach the port.
+    """
+    if category is None:
+        return (
+            f"playwright call under {_PREFIX} without session_id from caller={caller} — this "
+            f"caller joins the SHARED default browser context and is NOT isolated (#15802). "
+            f"path=%s user_agent=%s"
+        )
+    return (
+        f"playwright call under {_PREFIX} not confirmed as scoped from caller={caller} "
+        f"[{category}] — body not inspected and no session_id query parameter, so this caller "
+        f"MAY be joining the SHARED default browser context (#15802). path=%s detail=%s "
+        f"user_agent=%s"
+    )
+
+
+class PlaywrightSessionScopeMiddleware(BaseHTTPMiddleware):
+    """Warn when a Playwright call omits `session_id`, and change nothing else."""
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path.startswith(_PREFIX):
+            await warn_if_unscoped(request)
+        return await call_next(request)
+
+
+async def warn_if_unscoped(request: Request) -> None:
+    """Log a Playwright call that did not establish a `session_id`."""
+    refusal: tuple[str, str] | None = None
+    body = b""
+    if request.method.upper() in _BODY_METHODS:
+        refusal = _inspection_refusal(request)
+        if refusal is None:
+            body = await request.body()
+
+    if _declared_session_id(body, request.query_params.get("session_id")):
+        return
+
+    client = getattr(request.client, "host", None) if request.client else None
+    # Caller and path are embedded in the message, not passed as %s arguments:
+    # the flood filter keys on the UNINTERPOLATED template plus call site
+    # (#15774), so arguments would hand every caller one shared 5-per-minute
+    # budget and let a chatty client silence a second unscoped one — the log
+    # could no longer answer "who". user_agent stays an argument: it is
+    # attacker-controlled and unbounded, so it must not enter the key space.
+    path = _safe(request.url.path)
+    agent = _safe(request.headers.get("user-agent") or "unknown")
+    if refusal is None:
+        logger.warning(_message(_safe(client or "unknown"), None), path, agent)
+        return
+    category, detail = refusal
+    logger.warning(_message(_safe(client or "unknown"), category), path, _safe(detail), agent)

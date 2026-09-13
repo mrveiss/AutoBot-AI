@@ -21,7 +21,7 @@ the branch name become dashes (`issue-1234`, `chore-triage-delta`).
 # Handoff: <branch-name>
 status: complete | blocked | partial
 pr: #NNNN
-base_at_push: <sha of origin/Dev_new_gui you rebased onto>
+base_at_push: <sha of origin/main you rebased onto>
 gates: wiring=PASS duplication=PASS tests=PASS|details   # or "n/a — <why>"
 needs_rebase_before_merge: yes | no
 remaining: <bullets, or "(none)">
@@ -36,7 +36,7 @@ session — base drift, untouched parallel worktrees, follow-up issue numbers).
 |-------|---------|
 | `status` | `complete` = mission done; `partial` = WIP committed with a `wip:` prefix; `blocked` = cannot proceed |
 | `pr` | The PR this branch opened (`#NNNN`), or how to find it |
-| `base_at_push` | The `origin/Dev_new_gui` SHA you rebased onto — lets the next session tell if a rebase is due |
+| `base_at_push` | The `origin/main` SHA you rebased onto — lets the next session tell if a rebase is due |
 | `gates` | Which gates ran and their result; `n/a` with a reason for docs/triage-only work |
 | `needs_rebase_before_merge` | `yes` if base advanced past `base_at_push` with overlapping files |
 | `remaining` | Outstanding work; empty when `complete` |

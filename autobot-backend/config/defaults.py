@@ -254,6 +254,13 @@ def _get_simple_configs() -> Dict[str, Any]:
             "log_level": "INFO",
             "log_to_file": True,
             "log_file_path": "logs/autobot.log",
+            # #15587: declared to match the live config.yaml so a factory
+            # reset (rebuild from this schema) doesn't silently drop an
+            # operator's settings-UI choice for these four.
+            "console": True,
+            "log_requests": False,
+            "log_sql": False,
+            "max_file_size": 10,
         },
         "network": {
             "share": {

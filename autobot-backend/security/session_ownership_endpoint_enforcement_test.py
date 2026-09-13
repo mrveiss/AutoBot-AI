@@ -251,6 +251,63 @@ def _endpoint_enforcement_references() -> tuple[str, ...]:
     return tuple(hits)
 
 
+_GETTER = "get_endpoint_enforcement"
+
+
+def _call_lines(source: str, name: str = _GETTER) -> list[int]:
+    """Line numbers where *name* is **called** in *source*, by AST.
+
+    #15510: the sweep below used to count any line containing the name, so a
+    prose mention in a non-test module's docstring satisfied "has a non-test
+    caller" on its own -- removing the single real call site left this guard
+    green until the docstring mention was removed too. A call is a call node;
+    text is not evidence of one.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+    lines: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        called = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+        if called == name:
+            lines.append(node.lineno)
+    return sorted(lines)
+
+
+def _endpoint_enforcement_call_sites() -> tuple[str, ...]:
+    """``path:line`` for every AST call of the getter across the backend."""
+    hits: list[str] = []
+    for path in _swept_files():
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        if _GETTER not in source:  # cheap prefilter; the AST decides
+            continue
+        for lineno in _call_lines(source):
+            hits.append(f"{path.relative_to(BACKEND_ROOT).as_posix()}:{lineno}")
+    return tuple(hits)
+
+
+def test_a_prose_mention_is_not_counted_as_a_call(tmp_path):
+    """The #15510 probe: text mentioning the getter is not a call site, and the
+    real call is. Fails if the detector goes back to string matching.
+    """
+    prose = '"""A docstring naming get_endpoint_enforcement in prose."""\n'
+    prose += "# get_endpoint_enforcement in a comment too\n"
+    assert _call_lines(prose) == [], "a prose mention was counted as a call"
+
+    real = "async def f(req):\n    return await get_endpoint_enforcement(req)\n"
+    assert _call_lines(real) == [2], "the real call site was not detected"
+
+    attribute = "async def f(m, req):\n    return await m.get_endpoint_enforcement(req)\n"
+    assert _call_lines(attribute) == [2], "an attribute call was not detected"
+
+
 def test_get_endpoint_enforcement_has_a_non_test_caller():
     """The regression this issue exists to prevent: a getter that only its own
     definition (and, now, its tests) ever mention is write-only again.
@@ -264,26 +321,14 @@ def test_get_endpoint_enforcement_has_a_non_test_caller():
         "the sweep found zero references to get_endpoint_enforcement -- FIX THE SWEEP, " "the sweep itself is broken"
     )
 
-    def _defines_it(path_part: str) -> bool:
-        """Whether *path_part* (a ``path:line`` reference's file) is the
-        ``async def get_endpoint_enforcement`` declaration itself, as opposed
-        to a call site. Checked by AST rather than string-matching ``def`` so a
-        comment or docstring mentioning the name is not mistaken for a caller.
-        """
-        file_path = BACKEND_ROOT / path_part
-        try:
-            tree = ast.parse(file_path.read_text(encoding="utf-8"))
-        except (SyntaxError, OSError):
-            return False
-        return any(
-            isinstance(node, ast.AsyncFunctionDef) and node.name == "get_endpoint_enforcement"
-            for node in ast.walk(tree)
-        )
-
-    non_definition_refs = [ref for ref in references if not _defines_it(ref.split(":")[0])]
-    non_test_refs = [ref for ref in non_definition_refs if "_test.py" not in ref and "/tests/" not in ref]
+    # #15510: callers are resolved as AST call nodes. A definition is not a
+    # call, so it drops out without a separate declaration check, and a prose
+    # mention never counted in the first place.
+    call_sites = _endpoint_enforcement_call_sites()
+    non_test_refs = [ref for ref in call_sites if "_test.py" not in ref and "/tests/" not in ref]
 
     assert non_test_refs, (
-        "get_endpoint_enforcement has no non-test, non-definition caller -- it is "
-        f"write-only again (#15086). All references: {sorted(references)}"
+        "get_endpoint_enforcement has no non-test caller -- it is write-only "
+        f"again (#15086). All call sites: {sorted(call_sites)}. All textual "
+        f"references: {sorted(references)}"
     )

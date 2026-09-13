@@ -10,7 +10,10 @@ Mirrors api/files.py but rooted at sandbox_files_root instead of file_manager_ro
 GH#7409
 """
 
+import asyncio
+import contextlib
 import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -28,7 +31,9 @@ from api.schemas_code import (
     FileSandboxViewResponse,
 )
 from auth_middleware import get_auth_middleware
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.security.path_validator import SandboxPathError, resolve_within_sandbox
 from constants.error_constants import ERR_DIRECTORY_NOT_FOUND, ERR_FILE_NOT_FOUND
 from utils.io_executor import run_in_file_executor
@@ -42,6 +47,15 @@ logger = logging.getLogger(__name__)
 SANDBOX_FILES_ROOT = get_data_path("sandbox_files_root").resolve()
 
 _sandbox_root_ready = False
+
+# Recursive delete is unrecoverable -- no trash, no snapshot, no undo -- and
+# this endpoint is agent-callable, so the guards below are the only thing
+# between a stale path and someone's uncommitted work (#15777).
+#: Clamped, not merely read: at 0 the probe times out before `git status`
+#: can answer, `_uncommitted_entries` returns None, and every delete inside
+#: a work tree becomes an unconditional 409 -- a misconfiguration that
+#: disables the feature while looking like the guard working.
+_GIT_STATUS_TIMEOUT_SECONDS = env_int_clamped("AUTOBOT_SANDBOX_GIT_STATUS_TIMEOUT_SECONDS", 10, min_v=1)
 
 
 def ensure_sandbox_root() -> None:
@@ -196,15 +210,132 @@ async def preview_file(request: Request, path: str):
     }
 
 
+def _entry_count(target: Path) -> int:
+    """Immediate children of `target` -- enough to tell scratch from workload."""
+    with os.scandir(target) as entries:
+        return sum(1 for _ in entries)
+
+
+def _enclosing_work_tree(target: Path) -> Path | None:
+    """Nearest git work tree at or above `target`, bounded by the sandbox root.
+
+    Bounded deliberately: on a developer machine the sandbox root may itself sit
+    inside a checkout, and walking past it would make every delete look like a
+    repository operation.
+    """
+    for candidate in (target, *target.parents):
+        if (candidate / ".git").exists():
+            return candidate
+        if candidate == SANDBOX_FILES_ROOT:
+            break
+    return None
+
+
+def _hermetic_git_env() -> dict[str, str]:
+    """Environment for a git probe that must answer about `-C`, nothing else.
+
+    Composes :func:`autobot_shared.paths.scrubbed_git_env` rather than
+    re-deriving a scrub beside it -- that duplication is what #15783 exists to
+    end, and a local copy would not inherit the variables that issue is adding
+    to ``AMBIENT_GIT_VARS``. Narrowed further to every ``GIT_`` name because
+    this probe is read-only and local: ``GIT_DIR`` overrides ``-C`` outright,
+    so an inherited environment would have the guard permit or refuse a delete
+    based on an unrelated tree. ``LC_ALL=C`` keeps ``--porcelain`` parsing
+    stable on a host with a translated git.
+    """
+    env = {key: value for key, value in scrubbed_git_env().items() if not key.startswith("GIT_")}
+    env["LC_ALL"] = "C"
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    return env
+
+
+async def _terminate(proc: asyncio.subprocess.Process) -> None:
+    """Kill and reap a probe that outstayed its timeout."""
+    if proc.returncode is not None:
+        return
+    try:
+        proc.kill()
+    except (ProcessLookupError, OSError):
+        return
+    with contextlib.suppress(Exception):
+        await proc.wait()
+
+
+async def _uncommitted_entries(work_tree: Path, target: Path) -> list[str] | None:
+    """Porcelain status lines for `target`; ``None`` when git cannot answer."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(work_tree),
+            "status",
+            "--porcelain",
+            "--",
+            str(target),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            env=_hermetic_git_env(),
+        )
+    except OSError:
+        return None
+    try:
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_GIT_STATUS_TIMEOUT_SECONDS)
+    except (OSError, asyncio.TimeoutError):
+        # wait_for abandons the await, not the child. Without this, the timeout
+        # added to bound a hung `git status` leaks the process it was bounding
+        # -- one orphan per timeout, on exactly the lock-contended or
+        # network-mounted work tree that makes timeouts happen at all.
+        await _terminate(proc)
+        return None
+    if proc.returncode != 0:
+        return None
+    return [line for line in stdout.decode("utf-8", errors="replace").splitlines() if line.strip()]
+
+
+async def _assert_directory_deletable(target_path: Path, path: str, recursive: bool, force: bool, entries: int) -> None:
+    """Refuse a recursive delete that would take unsaved work with it (#15777).
+
+    *entries* is counted once by the caller and passed in: counting again for
+    the audit line scanned every directory twice, and a directory that vanished
+    between the two reads raised ``FileNotFoundError`` -- a 500 where the
+    request deserved the 404 it would have got a moment earlier.
+    """
+    if entries and not recursive:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Directory '{path}' is not empty ({entries} entries); pass recursive=true to delete it",
+        )
+
+    work_tree = await run_in_file_executor(_enclosing_work_tree, target_path)
+    if work_tree is None or force:
+        return
+
+    dirty = await _uncommitted_entries(work_tree, target_path)
+    if dirty is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot verify whether '{path}' holds uncommitted work; pass force=true to delete anyway",
+        )
+    if dirty:
+        raise HTTPException(
+            status_code=409,
+            detail=f"'{path}' holds {len(dirty)} uncommitted change(s); pass force=true to delete anyway",
+        )
+
+
 @router.delete("/delete", response_model=FileSandboxDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="sandbox_delete_file",
     error_code_prefix="SANDBOX_FILES",
 )
-async def delete_file(request: Request, path: str):
-    """Delete a file or directory within the sandbox."""
-    _check_permission(request, "delete")
+async def delete_file(request: Request, path: str, recursive: bool = False, force: bool = False):
+    """Delete a file or directory within the sandbox.
+
+    A non-empty directory needs `recursive`, and one holding uncommitted work
+    needs `force` on top of it -- see #15777.
+    """
+    user = _check_permission(request, "delete")
     target_path = _validate_path(path)
 
     if not await run_in_file_executor(target_path.exists):
@@ -215,6 +346,20 @@ async def delete_file(request: Request, path: str):
         await run_in_file_executor(target_path.unlink)
         return {"message": f"File '{path}' deleted successfully"}
 
+    entries = await run_in_file_executor(_entry_count, target_path)
+    await _assert_directory_deletable(target_path, path, recursive, force, entries)
+    logger.warning(
+        "sandbox recursive delete: path=%s entries=%s forced=%s actor=%s",
+        path,
+        entries,
+        force,
+        user.get("username") or user.get("user_id") or "unknown",
+        # An audit record for a destructive operation is never a candidate for
+        # rate limiting: this call site has one template, so the flood guard
+        # would otherwise collapse every delete into a single key and drop the
+        # sixth in a window (#15774 review).
+        extra={"flood_exempt": True},
+    )
     await run_in_file_executor(shutil.rmtree, target_path)
     return {"message": f"Directory '{path}' deleted successfully"}
 

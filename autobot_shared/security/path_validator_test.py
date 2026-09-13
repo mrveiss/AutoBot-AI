@@ -438,3 +438,86 @@ class TestRequirePathString:
         """The context string points at the misconfigured setting."""
         with pytest.raises(TypeError, match="settings.backup_dir"):
             require_path_string(MagicMock(), context="settings.backup_dir")
+
+
+class TestRejectionBeforeThePathExpression:
+    """The escaping shapes are refused before the path is built (#15786).
+
+    The containment check was already sound — `realpath` both sides, then
+    `relative_to` raises on escape. What it was not was *legible*: the
+    sanitisation is a post-condition on the sink rather than a pre-condition on
+    the input, which is what `py/path-injection` objects to and what makes a
+    reader check the order twice. These are defence in depth; the barrier below
+    them is unchanged and still tested.
+    """
+
+    def test_a_parent_reference_is_refused_up_front(self, tmp_path) -> None:
+        with pytest.raises(ValueError, match="parent reference"):
+            validate_relative_path("../escape.txt", tmp_path)
+
+    def test_a_parent_reference_mid_path_is_refused(self, tmp_path) -> None:
+        """`a/../../b` normalises out of the base only after resolution."""
+        with pytest.raises(ValueError, match="parent reference"):
+            validate_relative_path("a/../../b.txt", tmp_path)
+
+    def test_an_absolute_segment_says_what_actually_happened(self, tmp_path) -> None:
+        """pathlib discards the base for an absolute right-hand side, so nothing
+        traversed out — the base was never involved."""
+        with pytest.raises(ValueError, match="Path traversal detected"):
+            validate_relative_path("/etc/passwd", tmp_path)
+
+    def test_a_legitimate_nested_segment_still_resolves(self, tmp_path) -> None:
+        """The contrast: refusing everything would satisfy every test above."""
+        resolved = validate_relative_path("sub/dir/file.txt", tmp_path)
+
+        assert str(resolved).startswith(str(tmp_path.resolve()))
+        assert resolved.name == "file.txt"
+
+    def test_a_filename_containing_dots_is_not_a_parent_reference(self, tmp_path) -> None:
+        """`..weird.txt` is a filename, not a traversal."""
+        resolved = validate_relative_path("..weird.txt", tmp_path)
+
+        assert resolved.name == "..weird.txt"
+
+    def test_the_containment_check_still_catches_a_symlink_escape(self, tmp_path) -> None:
+        """The barrier the pre-checks cannot replace.
+
+        A symlink *inside* the base pointing out of it passes every syntactic
+        check — it has no `..`, it is not absolute — and only `realpath` reveals
+        where it leads. This is why the containment check is retained rather
+        than replaced.
+        """
+        outside = tmp_path.parent / "outside_target"
+        outside.mkdir(exist_ok=True)
+        base = tmp_path / "base"
+        base.mkdir()
+        (base / "link").symlink_to(outside, target_is_directory=True)
+
+        with pytest.raises(ValueError, match="escapes base directory"):
+            validate_relative_path("link/secret.txt", base)
+
+
+class TestWindowsDriveQualifiedSegments:
+    """`PurePosixPath("C:/x").is_absolute()` is False, so the absolute check
+    alone lets a drive qualifier through (#15786 review).
+
+    On POSIX `base / "C:/x"` only makes an oddly named directory inside the
+    base, so containment still holds — but this validator lives in
+    `autobot_shared` and its contract is "stays under base" with no platform
+    qualifier. On Windows the same join escapes outright.
+    """
+
+    @pytest.mark.parametrize("segment", ["C:/escape.txt", "C:escape.txt", "C:\\escape.txt", "z:/other.txt"])
+    def test_a_drive_qualified_segment_is_refused(self, tmp_path, segment: str) -> None:
+        with pytest.raises(ValueError, match="drive qualifier"):
+            validate_relative_path(segment, tmp_path)
+
+    def test_a_colon_in_a_filename_is_not_a_drive(self, tmp_path) -> None:
+        """The contrast: rejecting every colon would be a different rule.
+
+        A colon is legal in a POSIX filename, and `PureWindowsPath` only reports
+        a drive for a single-letter qualifier at the start.
+        """
+        resolved = validate_relative_path("notes:2026-09-06.txt", tmp_path)
+
+        assert resolved.name == "notes:2026-09-06.txt"

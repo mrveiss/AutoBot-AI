@@ -4,7 +4,7 @@ name: Phase Validation Integration
 
 on:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     # #12986: the backend-Python entries are the canonical `backend-python`
     # set from .github/filters/backend-python-paths.yml; GitHub cannot include a file in an event path filter,
     # so pipeline-scripts/check_workflow_path_filters.py enforces the match.
@@ -19,7 +19,7 @@ on:
       - 'tools/lint/**'
       - '.github/workflows/phase_validation.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ release ]
     paths: *phase_paths
   workflow_dispatch:
     inputs:
@@ -49,7 +49,7 @@ jobs:
     - name: Set up Python 3.12
       uses: actions/setup-python@v7
       with:
-        python-version: '3.14'
+        python-version-file: '.python-version'
         cache: 'pip'
         cache-dependency-path: |
           requirements*.txt
@@ -100,10 +100,19 @@ jobs:
 
     - name: Run Phase Validation System
       env:
-        # autobot_shared/network_constants.py:34 bare-imports `from config.registry`
-        # which lives in autobot-backend; add it to PYTHONPATH so the script can
-        # import autobot_shared without ModuleNotFoundError. (#7496 — architectural
-        # smell tracked separately as a discovery issue.)
+        # STALE JUSTIFICATION, kept deliberately (#15877, #15894). This said
+        # `network_constants.py` bare-imports `from config.registry` at module
+        # scope (the citation named line 34, which is blank), so
+        # autobot-backend had to be on the path or importing autobot_shared would
+        # raise ModuleNotFoundError. That is no longer true: the import is lazy,
+        # inside `_get_config_value`, AND wrapped in `except (ImportError,
+        # ModuleNotFoundError)` -- so it cannot raise, and the stated reason for
+        # this entry is void.
+        #
+        # The entry is NOT removed here, because "the stated reason is void" and
+        # "nothing needs it" are different claims and only the first is proven.
+        # Other imports in the phase-validation script may depend on it. #15894
+        # settles whether it can go. (#7496 -- the underlying architectural smell.)
         PYTHONPATH: .:autobot-backend
       run: |
         echo "Running AutoBot Phase Validation System..."
@@ -154,9 +163,9 @@ jobs:
         echo "System maturity: ${MATURITY}%"
 
         # Set minimum maturity threshold for different branches
-        if [ "$GH_REF" == "refs/heads/main" ]; then
+        if [ "$GH_REF" == "refs/heads/release" ]; then
           THRESHOLD=80
-          echo "Main branch - requiring ${THRESHOLD}% maturity"
+          echo "Release branch - requiring ${THRESHOLD}% maturity"
         else
           THRESHOLD=60
           echo "Development branch - requiring ${THRESHOLD}% maturity"
@@ -240,7 +249,7 @@ jobs:
     name: Integration Phase Validation
     runs-on: ubuntu-latest
     needs: phase-validation
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
+    if: github.ref == 'refs/heads/release' || github.ref == 'refs/heads/main'
 
     steps:
     - name: Checkout code

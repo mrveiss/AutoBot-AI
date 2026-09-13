@@ -22,17 +22,17 @@ in as a golden with only these three keys added — no new format invented.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 
 # #11062: bound the golden loader so a runaway fixture dir cannot OOM/hang the
 # harness. Env-tunable; defaults are generous vs the current ~75 goldens.
-_MAX_GOLDEN_COUNT = int(os.environ.get("EVAL_MAX_GOLDEN_COUNT", "1000"))
-_MAX_GOLDEN_FILE_BYTES = int(os.environ.get("EVAL_MAX_GOLDEN_FILE_BYTES", str(1_000_000)))
+_MAX_GOLDEN_COUNT = env_int("EVAL_MAX_GOLDEN_COUNT", 1000)
+_MAX_GOLDEN_FILE_BYTES = env_int("EVAL_MAX_GOLDEN_FILE_BYTES", 1_000_000)
 
 logger = get_logger(__name__)
 

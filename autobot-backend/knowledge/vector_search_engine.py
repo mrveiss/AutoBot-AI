@@ -210,7 +210,11 @@ class _CPUBackend:
         from knowledge import get_knowledge_base  # noqa: PLC0415
 
         kb = await get_knowledge_base()
-        raw = await kb.search(query=query, top_k=top_k, filters=filters)
+        # #15165: kb.search() is the orchestrator THIS backend is reached from
+        # (the CPU leg of its own hardware dispatch) -- calling it again here
+        # recurses with no base case. basic_vector_search() is the direct,
+        # non-recursive leaf: validate, sanitize, query ChromaDB.
+        raw = await kb.basic_vector_search(query=query, top_k=top_k, filters=filters)
         return [
             SearchResult(
                 text=r.get("content", ""),

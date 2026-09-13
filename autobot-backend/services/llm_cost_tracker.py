@@ -24,6 +24,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.model_pricing import MODEL_PRICING_PER_1M_TOKENS
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.status_enums import LLMProvider  # noqa: F401 (re-exported, #12661)
@@ -37,7 +38,6 @@ from constants.model_constants import (
     GOOGLE_GEMINI15_PRO,
     GOOGLE_GEMINI20_FLASH,
     GOOGLE_GEMINI25_PRO,
-    MODEL_PRICING_PER_1M_TOKENS,
     OPENAI_GPT4_TURBO,
     OPENAI_GPT4O,
     OPENAI_GPT35_TURBO,

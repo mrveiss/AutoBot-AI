@@ -115,7 +115,6 @@ core → SLM → modules picture.
 | Analysis | [[analysis/_index\|Analysis]] | Analysis reports and findings |
 | Discovery | [[discovery/_index\|Discovery]] | Discovery and exploration reports |
 | Audit | [[audit/_index\|Audit]] | Audit reports |
-| External Apps | [external_apps/README](external_apps/README.md) | External application research and RAG optimization |
 
 ---
 

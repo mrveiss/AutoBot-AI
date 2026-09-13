@@ -9,7 +9,6 @@ Endpoints for accessing task outcome history, learned strategies,
 and resetting learning state per agent/task type.
 """
 
-import os
 from typing import Any, List
 
 from fastapi import APIRouter, Depends, Query
@@ -24,6 +23,7 @@ from api.schemas_agent import (
     TaskOutcomeResponse,
 )
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
@@ -32,13 +32,13 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 # Default confidence floor for exporting a failure pattern (governance review).
-_DEFAULT_MIN_CONFIDENCE = float(os.environ.get("AUTOBOT_KNOWLEDGE_EXPORT_MIN_CONFIDENCE", "0.8"))
+_DEFAULT_MIN_CONFIDENCE = env_float("AUTOBOT_KNOWLEDGE_EXPORT_MIN_CONFIDENCE", 0.8)
 # Max chars kept from untrusted imported free-text (mirrors the learned-template
 # sanitization limit in orchestration/orchestrator_prompts.py, #11060).
-_IMPORT_TEXT_MAX = int(os.environ.get("AUTOBOT_LEARNED_TEMPLATE_MAX", "500"))
+_IMPORT_TEXT_MAX = env_int("AUTOBOT_LEARNED_TEMPLATE_MAX", 500)
 # Max failure patterns scanned for a knowledge export (explicit, not the store's
 # default 50) so a governance export doesn't silently omit patterns (GH#11179).
-_EXPORT_PATTERN_LIMIT = int(os.environ.get("AUTOBOT_KNOWLEDGE_EXPORT_PATTERN_LIMIT", "500"))
+_EXPORT_PATTERN_LIMIT = env_int("AUTOBOT_KNOWLEDGE_EXPORT_PATTERN_LIMIT", 500)
 
 # Module-level singletons initialized on first use
 _judge = None
@@ -259,7 +259,7 @@ async def import_agent_knowledge(
 ) -> KnowledgeImportResponse:
     """Persist a reviewer-curated strategy, sanitizing untrusted free-text first (GH#11151)."""
     from agents.task_pattern_learner import LearnedStrategy, TaskPatternLearner
-    from orchestration.orchestrator_prompts import _sanitize_injected
+    from autobot_shared.prompt_rules import sanitize_injected
 
     learner = _get_learner()
     task_type = TaskPatternLearner.normalize_task_type(payload.task_type or agent_id)
@@ -267,12 +267,12 @@ async def import_agent_knowledge(
         task_type=task_type,
         # Imported free-text is untrusted — neutralize it exactly like a learned
         # template before it can ever reach the planner prompt (#11060).
-        best_approach=_sanitize_injected(payload.best_approach, _IMPORT_TEXT_MAX),
-        best_prompt_template=_sanitize_injected(payload.best_prompt_template, _IMPORT_TEXT_MAX),
+        best_approach=sanitize_injected(payload.best_approach, _IMPORT_TEXT_MAX),
+        best_prompt_template=sanitize_injected(payload.best_prompt_template, _IMPORT_TEXT_MAX),
         avg_score=payload.avg_score,
         sample_size=payload.sample_size,
         confidence=payload.confidence,
-        failure_patterns=[_sanitize_injected(fp, _IMPORT_TEXT_MAX) for fp in payload.failure_patterns],
+        failure_patterns=[sanitize_injected(fp, _IMPORT_TEXT_MAX) for fp in payload.failure_patterns],
     )
     await learner.save_strategy(strategy, tenant_id=_caller_tenant(current_user))
     return KnowledgeImportResponse(

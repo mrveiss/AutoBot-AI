@@ -51,6 +51,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _scan_helpers import tracked_paths  # noqa: E402
+import _scan_helpers
 
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside
 # a lint job, and `autobot_shared.logging_manager` would drag config loading
@@ -90,7 +91,7 @@ ARTIFACT_DIR_NAMES = frozenset(
 
 #: Floor for the tracked-Python enumeration. An enumeration that returns nothing
 #: must not read as "no bare entry covers any source".
-TRACKED_PY_FLOOR = 3000
+TRACKED_PY_FLOOR = _scan_helpers.TRACKED_PY_FLOOR  # canonical: one measured floor, was a local 3000 (#15928)
 
 #: Mirror of ``flake8.utils.COMMA_SEPARATED_LIST_RE``. Reimplemented rather than
 #: imported so this runs wherever Python does — a guard that skips itself when a

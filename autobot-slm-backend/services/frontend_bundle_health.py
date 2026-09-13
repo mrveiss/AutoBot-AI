@@ -40,12 +40,28 @@ logger = logging.getLogger(__name__)
 # The build output nginx aliases for this node's UI. Relative to the SSOT
 # base_dir, never a literal path (#15462 review: an absolute default here would
 # be the third place the install location is written down).
-_BUNDLE_DIR = "autobot-slm-frontend/dist"
+#
+# #15610: nginx serves `current`, a symlink the publish flips onto a per-build
+# directory with one rename(2) — it replaced `dist`, which was renamed twice
+# per publish and so did not exist in between. This probe follows the served
+# path, because the outage it detects is "what nginx opens has no index.html".
+_BUNDLE_DIR = "autobot-slm-frontend/current"
+
+# The pre-#15610 served directory. A node that has not published since the
+# migration still serves this one, and reporting `not_applicable` for it would
+# silently stop probing exactly the hosts most likely to be mid-migration.
+# Retired once every node has published under the new layout (#15648).
+_LEGACY_BUNDLE_DIR = "autobot-slm-frontend/dist"
 _ENTRY_POINT = "index.html"
 
 
 def bundle_dir() -> Path:
-    return config.path.resolve(_BUNDLE_DIR)
+    """The directory nginx serves, preferring the #15610 pointer."""
+    current = config.path.resolve(_BUNDLE_DIR)
+    if current.exists():
+        return current
+    legacy = config.path.resolve(_LEGACY_BUNDLE_DIR)
+    return legacy if legacy.is_dir() else current
 
 
 def frontend_bundle_status(directory: Optional[Path] = None) -> str:
@@ -61,6 +77,17 @@ def frontend_bundle_status(directory: Optional[Path] = None) -> str:
     """
     root = bundle_dir() if directory is None else directory
     try:
+        # A `current` that exists as a symlink but resolves to nothing is a
+        # BROKEN POINTER, not an absent frontend: the node was publishing here
+        # and its served target has gone. Checked before the `is_dir()` branch
+        # below, because a dangling link fails `is_dir()` and would otherwise be
+        # classified `not_applicable` — dropping the exact real outage this
+        # probe exists to catch out of the health rollup as "no frontend on this
+        # node" (#15610).
+        pointer = root if directory is None else None
+        if pointer is not None and pointer.is_symlink() and not pointer.exists():
+            return "unhealthy: the served pointer does not resolve to a bundle"
+
         if not root.is_dir():
             # Not "unhealthy": no build output directory at all means this node
             # does not serve the UI — a backend-only node, or a checkout. A

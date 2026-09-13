@@ -12,6 +12,7 @@ Validates that AlertManager webhook integration works correctly.
 import sys
 from pathlib import Path
 
+
 def main() -> int:
     """Print the AlertManager integration status summary.
 

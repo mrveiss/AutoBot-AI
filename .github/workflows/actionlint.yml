@@ -2,7 +2,7 @@ name: actionlint
 
 on:
   push:
-    branches: [main, Dev_new_gui]
+    branches: [release, main]
     paths: [".github/workflows/**"]
   pull_request:
     paths: [".github/workflows/**"]

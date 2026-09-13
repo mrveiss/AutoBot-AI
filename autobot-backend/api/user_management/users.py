@@ -6,6 +6,13 @@
 Users API Endpoints
 
 REST API for user management operations.
+
+Authorization for the six routes #15738 found checking no role or ownership:
+creating and deleting accounts and assigning or revoking roles is admin-only,
+matching the SLM backend's ``ADMIN_USERS_WRITE`` gate on the same capability.
+Reading and updating one account is self-or-admin, the shape #15743
+established for change-password. Both gates are declared dependencies, so
+``user_management_route_posture_test.py`` can see them (#15737).
 """
 
 import uuid
@@ -13,7 +20,6 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.schemas_agent import (
-    PasswordChangedResponse,
     RoleAssignmentResponse,
     RoleUpdateRequest,
     RoleUpdateResponse,
@@ -25,27 +31,23 @@ from api.schemas_agent import (
 from api.user_management.dependencies import (
     get_current_user,
     get_user_service,
+    require_org_context,
     require_platform_admin,
-    require_user_management_enabled,
+    require_self_or_admin,
+    user_management_route_marker,
 )
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
-from user_management.middleware.rate_limit import (
-    PasswordChangeRateLimiter,
-    RateLimitExceeded,
-)
 from user_management.schemas import (
-    PasswordChange,
     UserCreate,
     UserListResponse,
     UserResponse,
     UserUpdate,
 )
-from user_management.services import UserService
+from user_management.services import TenantContext, UserService
 from user_management.services.user_service import (
     DuplicateUserError,
-    InvalidCredentialsError,
     UserNotFoundError,
 )
 
@@ -63,7 +65,7 @@ logger = get_logger(__name__)
     response_model=UserListResponse,
     summary="List users",
     description="List users with pagination and optional search filter.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def list_users(
     pagination: PaginationParams = Depends(),
@@ -92,65 +94,48 @@ async def list_users(
     response_model=UserSearchResponse,
     summary="Search users for sharing",
     description=(
-        "Search users by name or username for use in sharing dialogs. "
-        "Safe to call in all deployment modes — returns empty list with "
-        "available=False when user management is not enabled. Issue #2072."
+        "Search users in the caller's own organisation by name or username, for "
+        "sharing dialogs. Requires login and an organisation context (#16279). "
+        "Returns an empty list with available=False if the search fails. Issue #2072."
     ),
 )
 async def search_users_for_sharing(
     q: str = Query("", description="Search query (name or username)"),
     limit: int = Query(10, ge=1, le=50, description="Maximum results"),
+    _org: TenantContext = Depends(require_org_context),
+    user_service: UserService = Depends(get_user_service),
 ) -> UserSearchResponse:
-    """Search users by name/username for the knowledge sharing dialog.
+    """Search the caller's own organisation by name/username for the knowledge sharing dialog.
 
-    Returns matching users from the Postgres-backed user store.
+    #16279: this route used to need no login. It searched through a hand-built
+    platform-admin context with no org, so an anonymous caller could list names
+    from every organisation.
+
+    Now ``require_org_context`` demands a logged-in caller with an org, and
+    answers 400 without one. ``get_user_service`` carries that same tenant
+    context, and its ``apply_tenant_filter`` confines the query to the
+    caller's org.
     """
-    return await _search_users_from_db(q, limit)
+    return await _search_users_from_db(user_service, q, limit)
 
 
-async def _search_users_from_db(q: str, limit: int) -> UserSearchResponse:
-    """Perform a database user search and return sharing-compatible results.
-
-    Issue #2072: Helper that performs the actual DB search so the main
-    endpoint stays within the 30-line target.
-    """
-    from user_management.database import get_async_session
-    from user_management.services import TenantContext
-
+async def _search_users_from_db(user_service: UserService, q: str, limit: int) -> UserSearchResponse:
+    """Run the search and shape the results for the sharing dialog (#2072: keeps the endpoint short)."""
     try:
-        async for session in get_async_session():
-            context = TenantContext(org_id=None, user_id=None, is_platform_admin=True)
-            service = UserService(session, context)
-            search_term = q.strip() if q.strip() else None
-            users, _ = await service.list_users(
-                limit=limit,
-                offset=0,
-                search=search_term,
-                include_inactive=False,
-            )
-            results = [
-                UserSearchResult(
-                    id=str(user.id),
-                    name=user.full_name,  # #13957: the canonical rule, not a sixth copy of it
-                    type="user",
-                )
-                for user in users
-            ]
-            logger.debug("search_users_for_sharing: found %d results for %r", len(results), q)
-            return UserSearchResponse(
-                users=results,
-                available=True,
-                message="",
-            )
+        users, _ = await user_service.list_users(
+            limit=limit, offset=0, search=q.strip() or None, include_inactive=False
+        )
     except Exception:
         logger.exception("search_users_for_sharing: database query failed")
-        return UserSearchResponse(
-            users=[],
-            available=False,
-            message="User search temporarily unavailable",
-        )
+        return UserSearchResponse(users=[], available=False, message="User search temporarily unavailable")
 
-    return UserSearchResponse(users=[], available=True, message="")
+    results = [
+        # #13957: full_name is the canonical rule, not a sixth copy of it.
+        UserSearchResult(id=str(user.id), name=user.full_name, type="user")
+        for user in users
+    ]
+    logger.debug("search_users_for_sharing: found %d results for %r", len(results), q)
+    return UserSearchResponse(users=results, available=True, message="")
 
 
 @router.post(
@@ -159,7 +144,10 @@ async def _search_users_from_db(q: str, limit: int) -> UserSearchResponse:
     status_code=status.HTTP_201_CREATED,
     summary="Create user",
     description="Create a new user account.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def create_user(
     user_data: UserCreate,
@@ -181,10 +169,10 @@ async def create_user(
             user=_user_to_response(user),
         )
 
-    except DuplicateUserError:
+    except DuplicateUserError as exc:  # admin-only (#15738): the 409 discloses nothing new (#15736)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Internal server error",
+            detail=f"A user with this {exc.field} already exists",
         )
 
 
@@ -193,7 +181,7 @@ async def create_user(
     response_model=UserResponse,
     summary="Get current user",
     description="Get the currently authenticated user's profile.",
-    # Note: No require_user_management_enabled - /me works in all modes
+    # Note: No user_management_route_marker - /me works in all modes
 )
 async def get_current_user_profile(
     current_user: dict = Depends(get_current_user),
@@ -231,7 +219,10 @@ async def get_current_user_profile(
     response_model=UserResponse,
     summary="Get user",
     description="Get a specific user by ID.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_self_or_admin),
+    ],
 )
 async def get_user(
     user_id: uuid.UUID,
@@ -253,7 +244,10 @@ async def get_user(
     response_model=UserResponse,
     summary="Update user",
     description="Update a user's profile.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_self_or_admin),
+    ],
 )
 async def update_user(
     user_id: uuid.UUID,
@@ -279,10 +273,10 @@ async def update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
-    except DuplicateUserError:
+    except DuplicateUserError as exc:  # self-or-admin (#15738): inherent to the operation (#15736)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Internal server error",
+            detail=f"A user with this {exc.field} already exists",
         )
 
 
@@ -291,7 +285,10 @@ async def update_user(
     response_model=UserDeletedResponse,
     summary="Delete user",
     description="Delete a user account (soft delete by default).",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def delete_user(
     user_id: uuid.UUID,
@@ -323,7 +320,7 @@ async def delete_user(
     response_model=UserResponse,
     summary="Activate user",
     description="Activate a deactivated user account.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def activate_user(
     user_id: uuid.UUID,
@@ -347,7 +344,7 @@ async def activate_user(
     response_model=UserResponse,
     summary="Deactivate user",
     description="Deactivate a user account.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def deactivate_user(
     user_id: uuid.UUID,
@@ -366,71 +363,9 @@ async def deactivate_user(
         )
 
 
-# -------------------------------------------------------------------------
-# Password Management
-# -------------------------------------------------------------------------
-
-
-@router.post(
-    "/{user_id}/change-password",
-    response_model=PasswordChangedResponse,
-    summary="Change password",
-    description="Change a user's password.",
-    dependencies=[Depends(require_user_management_enabled)],
-)
-async def change_password(
-    user_id: uuid.UUID,
-    password_data: PasswordChange,
-    user_service: UserService = Depends(get_user_service),
-    current_user: dict = Depends(get_current_user),
-):
-    """Change user password with rate limiting and session invalidation."""
-    rate_limiter = PasswordChangeRateLimiter()
-
-    # Check rate limit before attempting password change.
-    # The limiter's message carries the caller-facing retry window ("Too many
-    # attempts. Try again in N minutes.") and discloses nothing sensitive, so
-    # it is returned verbatim — the previous "Internal server error" detail
-    # contradicted the 429 status and stripped the retry guidance.
-    try:
-        await rate_limiter.check_rate_limit(user_id)
-    except RateLimitExceeded as exc:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(exc),
-        ) from exc
-
-    try:
-        # Extract current token to preserve this session
-        current_token = current_user.get("token")
-
-        await user_service.change_password(
-            user_id=user_id,
-            current_password=password_data.current_password,
-            new_password=password_data.new_password,
-            require_current=password_data.current_password is not None,
-            current_token=current_token,
-        )
-
-        # Record successful attempt (clears rate limit counter)
-        await rate_limiter.record_attempt(user_id, success=True)
-
-        return PasswordChangedResponse(
-            message="Password changed successfully",
-        )
-
-    except UserNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User {user_id} not found",
-        )
-    except InvalidCredentialsError:
-        # Record failed attempt
-        await rate_limiter.record_attempt(user_id, success=False)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Current password is incorrect",
-        )
+# Password Management: split into api/user_management/password_change.py (#15743) --
+# the account-takeover fix there needed a caller-identity gate of its own, and this
+# file was already at the repo's file-size ceiling.
 
 
 # -------------------------------------------------------------------------
@@ -443,7 +378,10 @@ async def change_password(
     response_model=RoleAssignmentResponse,
     summary="Assign role",
     description="Assign a role to a user.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def assign_role(
     user_id: uuid.UUID,
@@ -469,7 +407,10 @@ async def assign_role(
     response_model=RoleAssignmentResponse,
     summary="Revoke role",
     description="Revoke a role from a user.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def revoke_role(
     user_id: uuid.UUID,
@@ -504,7 +445,7 @@ async def revoke_role(
         "Requires admin privilege. Issue #1801."
     ),
     dependencies=[
-        Depends(require_user_management_enabled),
+        Depends(user_management_route_marker),
         Depends(require_platform_admin),
     ],
 )

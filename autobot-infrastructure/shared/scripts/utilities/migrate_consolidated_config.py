@@ -53,9 +53,12 @@ class ConfigMigrator:
             "from utils.config_manager import config_manager": "from config_consolidated import config",
             "from async_config_manager import": "from config_consolidated import config",
             # Legacy variable imports
-            "from config import config as global_config_manager": "from config_consolidated import config as global_config_manager",
-            "from config_helper import cfg": "from config_consolidated import cfg",
-            "from utils.config_manager import ConfigManager": "from config_consolidated import ConsolidatedConfigManager as ConfigManager",
+            "from config import config as global_config_manager": (
+                "from config_consolidated import config as global_config_manager"
+            ),
+            "from utils.config_manager import ConfigManager": (
+                "from config_consolidated import ConsolidatedConfigManager as ConfigManager"
+            ),
         }
 
     def scan_files_for_migration(self) -> List[Path]:

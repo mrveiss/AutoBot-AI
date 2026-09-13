@@ -1,0 +1,58 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - Guard self-test: this suite must fail on #15822's defect (#15824)
+#
+# #15822 broke wrong-node cleanup on every host for eleven days and
+# ansible-role-facts-test stayed green throughout. An issue was filed blaming an
+# ansible-core version gap; measurement disproved that, and disproved the
+# inventory explanation too -- a literal `role_slm_active: true` coerces to the
+# same bool the folded group_vars Jinja does. What was left is that the runner
+# never executed the ansible-core the workflow installed (see
+# constraints/ansible-core.txt), so the abort simply did not happen there.
+#
+# A pin fixes that once. This playbook keeps it fixed: it runs the FROZEN pre-fix
+# copy of the shared task at tests/fixtures/defect_15822/clean_wrong_node_dir.yml
+# and must abort with `object of type 'bool' has no len()`. The workflow step
+# inverts the exit status and greps for that text, so:
+#
+#   - abort with that error  -> the guard can see the defect class. PASS.
+#   - exit 0                 -> the guard has gone blind again. FAIL.
+#   - abort with other text  -> failed for the wrong reason. FAIL.
+#
+# The fact is `role_backend_active`, which is decidably TRUE on this host, so the
+# abort lands on the "not decidable" debug task -- the exact task the defect
+# broke -- and the delete branch is never evaluated.
+#
+# Usage (this playbook is EXPECTED to exit non-zero):
+#   cd autobot-slm-backend/ansible
+#   ansible-playbook --check --connection=local \
+#                    -i tests/inventory/test_role_facts.yml \
+#                    tests/playbooks/test_guard_sees_defect_15822.yml
+---
+- name: "Guard self-test: the pre-#15827 wrong-node task must abort (#15824)"
+  hosts: test-single-host-slm-and-backend
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    # Without this the playbook could "reproduce the defect" against no host at
+    # all: an unmatched host pattern exits 0 and would read as "gone blind".
+    - name: "The gate input must come from the real inventory, not a literal"
+      ansible.builtin.assert:
+        that:
+          - node_roles is defined
+          - role_backend_active is defined
+        fail_msg: >-
+          role_backend_active did not resolve from inventory/group_vars/all.yml.
+          Run this with -i tests/inventory/test_role_facts.yml so the fact takes
+          the same path it takes on a host (#15824).
+        success_msg: "role_backend_active resolved from group_vars."
+
+    - name: "Run the frozen pre-fix wrong-node task (#15822) — this must abort"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../fixtures/defect_15822/clean_wrong_node_dir.yml"
+      vars:
+        caller_role: "Guard self-test"
+        # Never a real component path: the decidably-true fact keeps the delete
+        # branch unevaluated, and this name would not match one if it were.
+        dir_name: "_guard_self_test_15824"
+        role_check_fact: role_backend_active

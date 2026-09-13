@@ -227,33 +227,20 @@
 # Kept here so a vnc-only node still ends up with one. It stays root:root 0600
 # because nginx, Redis and PostgreSQL consume it — VNC gets its own pair below
 # rather than widening access to this key (#13060).
-- name: Ensure TLS cert directory exists
-  ansible.builtin.file:
-    path: /etc/autobot/certs
-    state: directory
-    mode: "0755"
-  become: true
-
-- name: Check TLS certificates exist for websockify
-  ansible.builtin.stat:
-    path: "/etc/autobot/certs/{{ item }}"
-  register: tls_cert_check
-  loop:
-    - server-cert.pem
-    - server-key.pem
-  become: true
-
-- name: Generate self-signed TLS cert if missing (#1962)
-  ansible.builtin.shell: |
-    set -e
-    openssl req -x509 -newkey rsa:2048 -nodes \
-      -keyout /etc/autobot/certs/server-key.pem \
-      -out /etc/autobot/certs/server-cert.pem \
-      -days 3650 -subj '/CN={{ inventory_hostname }}.autobot.internal'
-    chmod 0644 /etc/autobot/certs/server-cert.pem
-    chmod 0600 /etc/autobot/certs/server-key.pem
-  become: true
-  when: tls_cert_check.results | selectattr('stat.exists', 'equalto', false) | list | length > 0
+#
+# #16020: this used to be a fourth hand-rolled openssl block. The failure that
+# closed the gap was nginx on a VNC node, which is owned by THIS role and not by
+# roles/nginx -- so the shared task landing in roles/nginx and roles/redis fixed
+# the two roles that were already correct and missed the one that was failing.
+# Six auto-remediation give-ups over two days, each ending
+# `[emerg] cannot load certificate "/etc/autobot/certs/server-cert.pem"`.
+#
+# The shared task also renews: it regenerates when the cert expires inside a
+# week, which the 3650-day block it replaces never did. A node already carrying
+# a ten-year cert from that block keeps it -- `openssl x509 -checkend` passes,
+# so nothing is reissued and no service is restarted by this change.
+- name: "VNC | Ensure the shared node TLS keypair exists (#16020)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
 
 # --- Dedicated VNC keypair (#13060) ---
 # Xvnc (for the X509Vnc security type) and websockify (--ssl-only) both run as

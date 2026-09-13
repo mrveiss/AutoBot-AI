@@ -148,7 +148,7 @@
     - name: Find SQLite databases
       ansible.builtin.find:
         paths:
-          - /opt/autobot/autobot-user-backend/data
+          - /opt/autobot/autobot-backend/data
           - /opt/autobot/autobot-slm-backend/data
         patterns: "*.db"
         recurse: true
