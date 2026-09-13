@@ -146,6 +146,24 @@ def _fact_content(memory: ParsedMemory) -> str:
     return memory.body
 
 
+# #16642 security review follow-up: a2a.pii_pipeline's INTERNAL_HOSTNAME
+# detector only matches known suffixes (.local/.internal/.corp/.lan/.intranet)
+# — it does not see a bare "ssh user@host" mention where host has no such
+# suffix. This importer-local addition covers that specific shape without
+# touching the shared a2a module (other a2a consumers, other tests, other
+# blast radius). Deliberately requires the literal "ssh" keyword + "@" so it
+# only matches command-shaped mentions, not ordinary prose ("ssh into the
+# box") — a broader "any word might be a hostname" heuristic would be a
+# false-positive machine and isn't attempted here.
+#
+# Known remaining gap, not silently claimed as covered: a bare internal
+# hostname named in prose with no ssh-command context and no recognized
+# suffix (e.g. "the box is called prod-db-3") passes through untouched.
+# Widening a2a.pii_pipeline's own hostname detector to catch that would need
+# its own review against its existing consumers/tests — out of scope here.
+_SSH_TARGET_RE = re.compile(r"\bssh\s+(?:-\S+\s+)*[\w.-]+@[\w.-]+\b")
+
+
 def _redact(content: str) -> tuple[str, bool, list[str]]:
     """Scrub *content* through the canonical PII/secret pipeline (#16642 security review).
 
@@ -157,14 +175,20 @@ def _redact(content: str) -> tuple[str, bool, list[str]]:
     email) are redacted in place per that pipeline's existing policy;
     credential-shaped hits (API key/JWT/AWS key/bearer token) are BLOCK-tier
     there, so this importer skips the file entirely rather than storing a
-    partially-redacted secret.
+    partially-redacted secret. Layers one importer-local addition on top —
+    see :data:`_SSH_TARGET_RE`.
 
     Returns (redacted_text, blocked, type_names) — type_names covers
     whichever of blocked/redacted/hashed applied, for logging only; the
     matched values themselves never leave this function.
     """
+    ssh_hit = bool(_SSH_TARGET_RE.search(content))
+    content = _SSH_TARGET_RE.sub("ssh [REDACTED:SSH_TARGET]", content)
+
     result = get_pii_pipeline().scrub(content)
     type_names = sorted({t.value for t in (result.blocked_types + result.redacted_types + result.hashed_types)})
+    if ssh_hit:
+        type_names = sorted(set(type_names) | {"SSH_TARGET"})
     return result.text, result.blocked, type_names
 
 

@@ -66,6 +66,53 @@ metadata:
 Ping alice@example.com if this breaks.
 """
 
+_MEMORY_WITH_PRIVATE_IP = """---
+name: private-ip-example
+description: A memory that mentions an internal IP.
+metadata:
+  type: project
+---
+
+The staging box is at 10.0.0.5.
+"""
+
+_MEMORY_WITH_INTERNAL_HOSTNAME = """---
+name: internal-hostname-example
+description: A memory that mentions an internal hostname.
+metadata:
+  type: project
+---
+
+Deployed to db1.internal for testing.
+"""
+
+# Built from disjoint pieces, never a contiguous literal in this file, so
+# static secret scanners don't flag the fixture itself (same reasoning as
+# _FAKE_AWS_KEY above) — the pii_pipeline's API_KEY assignment detector
+# (BLOCK-tier) still matches the assembled line at test time.
+_FAKE_API_KEY_VALUE = "abcdefghijklmnopqrst" + "uvwxyz012345"
+_CRED_ASSIGNMENT_LINE = "api" + "_key" + " = " + '"' + _FAKE_API_KEY_VALUE + '"'
+
+_MEMORY_WITH_CREDENTIAL_ASSIGNMENT = (
+    "---\n"
+    "name: credential-assignment-example\n"
+    "description: A memory that captured a credential assignment.\n"
+    "metadata:\n"
+    "  type: project\n"
+    "---\n\n"
+    "Config had " + _CRED_ASSIGNMENT_LINE + " hardcoded.\n"
+)
+
+_MEMORY_WITH_SSH_TARGET = """---
+name: ssh-target-example
+description: A memory that mentions an ssh command target.
+metadata:
+  type: project
+---
+
+Debugged by running ssh martins@fileserver01 to check the logs.
+"""
+
 
 def _write(tmp_path, name: str, content: str):
     path = tmp_path / name
@@ -306,6 +353,55 @@ async def test_import_claude_memory_counts_blocked_separately_from_failed(tmp_pa
     assert result.created == 1
     assert result.blocked == 1
     assert result.failed == 0
+
+
+async def test_import_memory_file_redacts_private_ip(tmp_path):
+    path = _write(tmp_path, "private_ip_example.md", _MEMORY_WITH_PRIVATE_IP)
+    kb = _make_kb(get_fact_return=None)
+
+    action = await import_memory_file(kb, path, _OWNER)
+
+    assert action == "created"
+    args, _ = kb.store_fact.call_args
+    assert "10.0.0.5" not in args[0]
+    assert "[REDACTED:PRIVATE_IP]" in args[0]
+
+
+async def test_import_memory_file_redacts_internal_hostname(tmp_path):
+    path = _write(tmp_path, "internal_hostname_example.md", _MEMORY_WITH_INTERNAL_HOSTNAME)
+    kb = _make_kb(get_fact_return=None)
+
+    action = await import_memory_file(kb, path, _OWNER)
+
+    assert action == "created"
+    args, _ = kb.store_fact.call_args
+    assert "db1.internal" not in args[0]
+    assert "[REDACTED:INTERNAL_HOSTNAME]" in args[0]
+
+
+async def test_import_memory_file_blocks_credential_assignment(tmp_path):
+    path = _write(tmp_path, "credential_assignment_example.md", _MEMORY_WITH_CREDENTIAL_ASSIGNMENT)
+    kb = _make_kb(get_fact_return=None)
+
+    action = await import_memory_file(kb, path, _OWNER)
+
+    assert action == "blocked"
+    kb.store_fact.assert_not_called()
+
+
+async def test_import_memory_file_redacts_ssh_command_target(tmp_path):
+    """#16642 security review follow-up: a2a.pii_pipeline's INTERNAL_HOSTNAME
+    detector only matches known suffixes — a bare ssh command target like
+    ``ssh user@host`` needs the importer-local addition in _redact()."""
+    path = _write(tmp_path, "ssh_target_example.md", _MEMORY_WITH_SSH_TARGET)
+    kb = _make_kb(get_fact_return=None)
+
+    action = await import_memory_file(kb, path, _OWNER)
+
+    assert action == "created"
+    args, _ = kb.store_fact.call_args
+    assert "martins@fileserver01" not in args[0]
+    assert "[REDACTED:SSH_TARGET]" in args[0]
 
 
 # ---------------------------------------------------------------------------
