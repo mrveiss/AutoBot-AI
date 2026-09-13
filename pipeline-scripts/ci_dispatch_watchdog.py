@@ -38,7 +38,7 @@ This module handles both:
   state grounds, so it changes nothing and is safe to run from an unreviewed
   branch. This exists because ``--dry-run`` deliberately issues no approve
   request and therefore cannot answer the question at all.
-* ``--check runner-starvation`` — reports runs that have been queued past a
+* ``--check runner-starvation`` — reports self-hosted runs queued past a
   threshold while no self-hosted job is executing, and separately reports
   self-hosted jobs still executing well past the longest timeout any job in
   this repository declares. The ``/actions/runners`` administration endpoint
@@ -96,6 +96,7 @@ Environment:
     WATCHDOG_POLL_INTERVAL_SECONDS   delay between those attempts
     WATCHDOG_STATUS_CONTEXT          commit status context name
     WATCHDOG_MAX_JOB_LOOKUPS         runs inspected for runner liveness per check
+    WATCHDOG_MAX_QUEUED_JOB_LOOKUPS  starved runs whose job labels are read per check
     WATCHDOG_JOB_OVERDUE_MINUTES     runtime after which a self-hosted job is wedged
     WATCHDOG_ONLY_PR                 sweep just this PR number (default: every open PR)
 
@@ -138,8 +139,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
 
-# The release-sync PR's one definition, shared with release_sync_main.py (#16272), reached by path.
+# Reached by path: the release-sync PR's one definition, shared with release_sync_main.py
+# (#16272), and the runner-pool placement of a starved run (#16309).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ci_dispatch_labels import (  # noqa: E402
+    DEFAULT_QUEUED_JOB_LOOKUPS,
+    SELF_HOSTED_LABEL,
+    QueuedJobReader,
+    hosted_in_progress,
+    job_is_self_hosted,
+    self_hosted_starved,
+    starved_verdict,
+)
 from release_sync_pull import release_sync_pulls  # noqa: E402
 
 # GitHub returns this message when the *token* lacks `actions: write`.
@@ -152,14 +163,10 @@ NOT_WAITING_MARKER = "not waiting for approval"
 # reason are reported, never approved — see the fork-safety note above.
 UPDATE_BOT_LOGIN = "github-actions[bot]"
 
-# A job carrying this label ran on the self-hosted pool.
-SELF_HOSTED_LABEL = "self-hosted"
-
-# Where workflow definitions are read from, so a QUEUED run can be attributed to
-# a runner pool (#14364). Labels live on jobs and a starved run has none — that
-# absence is the condition being detected — but the run payload carries the
-# workflow's `path`, and `runs-on` is declared in that file. Reading it answers
-# the attribution question the job listing cannot.
+# Where workflow definitions are read from, so a starved run with no readable job
+# (#13045's `jobs: []`) can still be attributed to a runner pool (#14364): the run
+# payload carries the workflow's `path`, and `runs-on` is declared in that file.
+# A run whose jobs can be read is placed by their labels instead (#16309).
 DEFAULT_WORKFLOW_DIR = ".github/workflows"
 WORKFLOW_SUFFIXES = frozenset({".yml", ".yaml"})
 RUNS_ON_RE = re.compile(r"^\s*runs-on:\s*(?P<value>.*)$")
@@ -303,10 +310,13 @@ class PoolState(NamedTuple):
     the caller can say "unknown" rather than inventing a verdict. It is ``True``
     only when a self-hosted job is executing *within* a plausible runtime —
     a wedged job is deliberately not evidence of health (#13341).
+    ``hosted_running`` counts the GitHub-hosted jobs executing in the runs it
+    read: the ``M running`` of a hosted-saturation finding (#16309).
     """
 
     serving: Optional[bool]
     overdue: List[OverdueJob]
+    hosted_running: Optional[int] = None
 
 
 class SweepOutcome(NamedTuple):
@@ -504,12 +514,6 @@ def superseded_stuck_runs(
     return stuck[:budget]
 
 
-def job_is_self_hosted(job: Dict[str, Any]) -> bool:
-    """True when this job was dispatched to the self-hosted pool."""
-    labels = [str(label).lower() for label in (job.get("labels") or [])]
-    return SELF_HOSTED_LABEL in labels
-
-
 def _strip_comment(value: str) -> str:
     """A YAML scalar with any trailing `#` comment removed."""
     return value.split("#", 1)[0].strip()
@@ -576,20 +580,6 @@ def self_hosted_workflow_paths(workflow_dir: str) -> Optional[Set[str]]:
     return paths
 
 
-def run_requires_self_hosted(run: Dict[str, Any], self_hosted_paths: Optional[Set[str]]) -> bool:
-    """True when this run's workflow declares at least one self-hosted job.
-
-    Unknown resolves to True from both directions — an unreadable workflow set,
-    or a run carrying no `path`. The verdict this gates asserts a specific
-    cause, and suppressing a real self-hosted outage is the worse error of the
-    two, so an unattributable run stays reportable.
-    """
-    if self_hosted_paths is None:
-        return True
-    path = str(run.get("path") or "")
-    return not path or path in self_hosted_paths
-
-
 def job_is_overdue(job: Dict[str, Any], now: datetime, overdue_minutes: int) -> bool:
     """
     True when a self-hosted job has been executing past the point of plausibility.
@@ -620,6 +610,8 @@ def classify_dispatch(
     pool_serving: bool = True,
     overdue: Sequence[OverdueJob] = (),
     self_hosted_paths: Optional[Set[str]] = None,
+    queued_jobs: Optional[Dict[Any, List[Dict[str, Any]]]] = None,
+    hosted_running: Optional[int] = None,
 ) -> Tuple[str, str]:
     """
     Decide the commit-status state for one PR head.
@@ -650,31 +642,13 @@ def classify_dispatch(
             _truncate(f"{len(overdue)} job(s) wedged far past their declared timeout: {names}"),
         )
 
+    # A starved run is placed by its queued jobs' labels, so a GitHub-hosted
+    # backlog is saturation and only a self-hosted run with no self-hosted job
+    # served is an outage (#16309, #14364); see ci_dispatch_labels.
     starved = starved_runs(runs, now, stall_minutes)
-    if starved:
-        # Only runs that can actually reach the self-hosted pool may be cited as
-        # evidence it is starved (#14364). `pool_serving` is derived from
-        # self-hosted job labels alone, so an idle-but-healthy pool reads as not
-        # serving; without this filter a GitHub-hosted capacity backlog was
-        # published as `no runner available`, and the healthier the pool was the
-        # more reliably that happened.
-        needs_pool = [run for run in starved if run_requires_self_hosted(run, self_hosted_paths)]
-        if needs_pool and not pool_serving:
-            names = ", ".join(sorted({str(run.get("name", "?")) for run in needs_pool})[:3])
-            return (
-                "failure",
-                _truncate(
-                    f"{len(needs_pool)} self-hosted run(s) queued over {stall_minutes}m "
-                    f"with no runner available: {names}"
-                ),
-            )
-        # Contention, not an outage — still never green, because the head is
-        # demonstrably not verified yet.
-        names = ", ".join(sorted({str(run.get("name", "?")) for run in starved})[:3])
-        return (
-            "pending",
-            _truncate(f"{len(starved)} run(s) queued over {stall_minutes}m behind a busy queue: {names}"),
-        )
+    verdict = starved_verdict(starved, queued_jobs, self_hosted_paths, stall_minutes, pool_serving, hosted_running)
+    if verdict:
+        return verdict[0], _truncate(verdict[1])
 
     if not runs:
         waited = age_minutes(head_pushed_at, now)
@@ -840,13 +814,14 @@ def inspect_self_hosted_pool(
     # passed throughout, because a synthetic listing has nothing to truncate.
     # Sorting costs nothing: it is the same single listing call.
     running.sort(key=lambda run: str(run.get("run_started_at") or run.get("created_at") or ""))
-    serving = False
+    serving, hosted = False, 0
     for run in running[:max_lookups]:
         try:
             jobs = api.run_jobs(int(run["id"]))
         except WatchdogApiError as exc:
             _emit(f"  runner liveness partial: {exc}")
             continue
+        hosted += hosted_in_progress(jobs)
         for job in jobs:
             if job.get("status") != "in_progress" or not job_is_self_hosted(job):
                 continue
@@ -863,7 +838,7 @@ def inspect_self_hosted_pool(
                 )
                 continue
             serving = True
-    return PoolState(serving, overdue)
+    return PoolState(serving, overdue, hosted)
 
 
 def self_hosted_pool_is_serving(api: GitHubApi, max_lookups: int) -> Optional[bool]:
@@ -1161,6 +1136,7 @@ def publish_dispatch_states(
     dry_run: bool,
     pool_serving: Optional[bool],
     overdue: Sequence[OverdueJob] = (),
+    hosted_running: Optional[int] = None,
 ) -> int:
     """Write the dispatch commit status for each head. Returns the not-dispatched count."""
     now = datetime.now(timezone.utc)
@@ -1178,6 +1154,7 @@ def publish_dispatch_states(
             f"::warning::{workflow_dir} unreadable — a starved run cannot be "
             "attributed to a runner pool, so pool verdicts fall back to unfiltered."
         )
+    reader = QueuedJobReader(api, WatchdogApiError, _emit, config.get("max_queued_job_lookups"))
     blocked = 0
     for head in heads:
         try:
@@ -1197,6 +1174,8 @@ def publish_dispatch_states(
                 pool_serving is not False,
                 wedged.get(head.sha, ()),
                 self_hosted_paths,
+                reader.read(starved_runs(runs, now, config["stall_minutes"])),
+                hosted_running,
             )
         target = _run_url(api.repository, runs[0]) if runs else head.url
         if dry_run:
@@ -1254,7 +1233,7 @@ def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False
     approved, refused, raced, _touched, deferred = sweep_parked_runs(api, heads, config, dry_run)
     pool = inspect_self_hosted_pool(api, config["max_job_lookups"], config["job_overdue_minutes"])
     report_overdue_jobs(pool.overdue, config["job_overdue_minutes"])
-    blocked = publish_dispatch_states(api, heads, config, dry_run, pool.serving, pool.overdue)
+    blocked = publish_dispatch_states(api, heads, config, dry_run, pool.serving, pool.overdue, pool.hosted_running)
 
     _emit(
         f"Sweep complete: {approved} approved, {raced} already released, "
@@ -1336,23 +1315,15 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
     # parked runs this repository carries, which can hide every queued run.
     #
     # The listing cannot tell the two pools apart on its own: labels live on
-    # JOBS, and a starved run has no jobs — that absence IS the condition being
-    # detected. That limit used to be stated and left open, and qualifying the
-    # verdict with the label-attributed pool inspection was not enough: an idle
-    # pool is "not serving", so a GitHub-hosted capacity backlog read as a
-    # self-hosted outage (#14364).
-    #
-    # It is answered here without a job listing. The run payload carries the
-    # workflow's `path`, `runs-on` is declared in that file, and the file is on
-    # disk because the job checks the repository out. Attribution is therefore a
-    # local read rather than an API call, and costs no budget.
+    # JOBS, and an idle pool is "not serving", so an unattributed GitHub-hosted
+    # backlog read as a self-hosted outage (#14364, #16309). Each starved run is
+    # placed by its queued jobs' labels; one with no readable job (#13045's
+    # `jobs: []`) by its workflow's declared `runs-on`, read from the checkout.
     queued = api.recent_runs(run_status="queued")
     self_hosted_paths = self_hosted_workflow_paths(config.get("workflow_dir", DEFAULT_WORKFLOW_DIR))
-    starved = [
-        run
-        for run in starved_runs(queued, now, config["stall_minutes"])
-        if run_requires_self_hosted(run, self_hosted_paths)
-    ]
+    candidates = starved_runs(queued, now, config["stall_minutes"])
+    reader = QueuedJobReader(api, WatchdogApiError, _emit, config.get("max_queued_job_lookups"))
+    starved = self_hosted_starved(candidates, reader.read(candidates), self_hosted_paths)
     pool = inspect_self_hosted_pool(api, config["max_job_lookups"], config["job_overdue_minutes"], now)
     report_overdue_jobs(pool.overdue, config["job_overdue_minutes"])
 
@@ -1407,6 +1378,7 @@ def load_config() -> Dict[str, Any]:
         "poll_interval_seconds": _env_int("WATCHDOG_POLL_INTERVAL_SECONDS", DEFAULT_POLL_INTERVAL_SECONDS),
         "status_context": os.environ.get("WATCHDOG_STATUS_CONTEXT", DEFAULT_STATUS_CONTEXT),
         "max_job_lookups": _env_int("WATCHDOG_MAX_JOB_LOOKUPS", DEFAULT_MAX_JOB_LOOKUPS),
+        "max_queued_job_lookups": _env_int("WATCHDOG_MAX_QUEUED_JOB_LOOKUPS", DEFAULT_QUEUED_JOB_LOOKUPS),
         "job_overdue_minutes": _env_int("WATCHDOG_JOB_OVERDUE_MINUTES", DEFAULT_JOB_OVERDUE_MINUTES),
         "only_pr": _env_non_negative_int("WATCHDOG_ONLY_PR", DEFAULT_ONLY_PR),
     }

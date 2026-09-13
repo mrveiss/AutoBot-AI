@@ -205,12 +205,13 @@ jobs:
           # branch. When the PR DOES touch them, the sweep drops to --dry-run,
           # so unreviewed watchdog code never reaches `approve` or `statuses`
           # while holding write permission. The listing failing is treated as
-          # self-modification — fail closed, never open.
+          # self-modification — fail closed, never open. The pattern names every
+          # module the sweep imports, not only its entry script.
           SELF_MODIFYING=yes
           if CHANGED=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" \
                 --paginate --jq '.[].filename'); then
             case "$CHANGED" in
-              *ci_dispatch_watchdog*|*ci-dispatch-watchdog*|*ci_dispatch_retry*) SELF_MODIFYING=yes ;;
+              *ci_dispatch_watchdog*|*ci_dispatch_labels*|*release_sync_pull*|*ci-dispatch-watchdog*|*ci_dispatch_retry*) SELF_MODIFYING=yes ;;
               *) SELF_MODIFYING=no ;;
             esac
           else

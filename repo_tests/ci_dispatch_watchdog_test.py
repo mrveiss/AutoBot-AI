@@ -1217,16 +1217,6 @@ def test_a_self_hosted_run_behind_a_serving_pool_is_still_contention(watchdog):
     assert state == "pending"
 
 
-def test_an_unattributable_run_stays_reportable(watchdog):
-    """Unknown must not silence a real outage — it resolves toward reporting."""
-    no_paths_known = None
-    no_path_on_run = {_LABEL}
-
-    assert watchdog.run_requires_self_hosted(_starved_on(HOSTED_PATH), no_paths_known) is True
-    assert watchdog.run_requires_self_hosted(_run(), no_path_on_run) is True
-    assert watchdog.run_requires_self_hosted(_starved_on(""), no_path_on_run) is True
-
-
 # --- workflow parsing: the comment trap ------------------------------------
 
 
