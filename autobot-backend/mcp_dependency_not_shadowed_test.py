@@ -71,8 +71,8 @@ def test_no_top_level_backend_package_shadows_a_declared_dependency() -> None:
     )
 
 
-def test_import_mcp_resolves_to_the_installed_sdk_not_a_repo_package() -> None:
-    sys.modules.pop("mcp", None)
+def test_import_mcp_resolves_to_the_installed_sdk_not_a_repo_package(monkeypatch) -> None:
+    monkeypatch.delitem(sys.modules, "mcp", raising=False)
     mcp = importlib.import_module("mcp")
     path = getattr(mcp, "__file__", "") or ""
     assert "site-packages" in path or "dist-packages" in path, (
