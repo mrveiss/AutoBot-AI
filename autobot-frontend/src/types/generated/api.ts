@@ -43697,6 +43697,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat-knowledge/context/{chat_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Chat Context
+         * @description Get complete knowledge context for a chat
+         */
+        get: operations["get_chat_context_api_chat_knowledge_context__chat_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Chat Context
+         * @description Delete a chat-knowledge context -- its owner or an admin only (#16490).
+         *
+         *     404 is checked before authorization, using ``peek_chat_knowledge_manager``
+         *     (never the constructing accessor -- a manager that was never built has
+         *     certainly never held a context for *chat_id*). Checking existence first
+         *     also matters for a reason beyond cost: ``validate_chat_ownership``
+         *     (``api/chat.py``) silently claims an unowned ``chat_id`` for the caller
+         *     on its legacy-migration path (sessions predating ownership tracking)
+         *     rather than 404ing, so calling it before this existence check would let a
+         *     probe against a chat_id nothing ever created come back authorized with
+         *     nothing to delete, instead of a clean 404.
+         */
+        delete: operations["delete_chat_context_api_chat_knowledge_context__chat_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat-knowledge/context-orphans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find Orphaned Chat Contexts
+         * @description List chat-knowledge contexts whose chat_id matches no chat (#16490).
+         *
+         *     Same list-then-cleanup, admin-only shape as
+         *     ``api/knowledge_maintenance.py``'s ``GET /session-orphans``.
+         */
+        get: operations["find_orphaned_chat_contexts_api_chat_knowledge_context_orphans_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Cleanup Orphaned Chat Contexts
+         * @description Delete orphaned chat-knowledge contexts (#16490); dry_run defaults True.
+         */
+        delete: operations["cleanup_orphaned_chat_contexts_api_chat_knowledge_context_orphans_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat-knowledge/context/create": {
         parameters: {
             query?: never;
@@ -43851,26 +43912,6 @@ export interface paths {
          * @description Search knowledge across chats or within specific chat
          */
         post: operations["search_chat_knowledge_api_chat_knowledge_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat-knowledge/context/{chat_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Chat Context
-         * @description Get complete knowledge context for a chat
-         */
-        get: operations["get_chat_context_api_chat_knowledge_context__chat_id__get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -161100,6 +161141,120 @@ export interface operations {
             };
         };
     };
+    get_chat_context_api_chat_knowledge_context__chat_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_ChatKnowledgeContextData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_chat_context_api_chat_knowledge_context__chat_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    find_orphaned_chat_contexts_api_chat_knowledge_context_orphans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+        };
+    };
+    cleanup_orphaned_chat_contexts_api_chat_knowledge_context_orphans_delete: {
+        parameters: {
+            query?: {
+                /** @description If True, only report without deleting */
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_chat_context_api_chat_knowledge_context_create_post: {
         parameters: {
             query?: never;
@@ -161351,37 +161506,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_ChatKnowledgeSearchResultData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_chat_context_api_chat_knowledge_context__chat_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chat_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_ChatKnowledgeContextData_"];
                 };
             };
             /** @description Validation Error */
