@@ -302,13 +302,17 @@ comment body is literal markdown, never raw JSON or a file path.
 
 Run these gates before creating a PR or merging any branch. Gates are ordered by cost — cheapest first.
 
-**Shortcut — run the CI-facing gates in one command:**
+**Shortcut — the pre-push step: run before every push, not just once before opening the PR.** A push that turns out red costs the full 8.9-minute suite before you find out (#15932); this is the same confirmation, available locally in a fraction of that time, every time you push rather than only at the start.
 
 ```bash
 scripts/pr-preflight.sh --issue N [--body pr.md] [--message msg.txt]
+scripts/pr-preflight.sh --issue N --full   # also run the checks a path filter would otherwise skip
+scripts/pr-preflight.sh --issue N --only 'ERE'   # run only the required checks whose name matches; the rest are named as not selected
 ```
 
-It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs. The gates below remain the reference; this runs the mechanical ones early.
+It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs.
+
+It also runs (or explains why it did not) each of the ten required status checks the `Main` ruleset gates `Dev_new_gui` on. Every check is path-filtered by default, using the same `.github/filters/*.yml` set its own workflow uses, so a diff outside those paths gets the identical "nothing to check" verdict locally that it would in CI. `--full` bypasses that filter and forces every check to actually run, and is also what turns on `api-wiring` (it builds the whole backend app to dump its OpenAPI schema, so it stays behind `--full` even on a relevant diff). Two checks are out of reach either way: `migration-matrix` needs a live PostgreSQL (set `AUTOBOT_MIGRATION_TEST_ADMIN_URL` to enable it), and `smoke-test` needs a Docker daemon plus three image builds and a running compose stack — reported SKIPPED with that reason rather than approximated (#15933). The gates below remain the reference; this runs the mechanical ones early.
 
 **Match CI's interpreter first (#13573).** CI runs Python **3.14**. A box's default `python3` is often older, and every local gate silently uses it:
 
