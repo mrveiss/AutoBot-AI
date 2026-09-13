@@ -13,10 +13,19 @@ in the backend Docker build -> smoke-test red on *every* open PR (reverted #1102
 
 This guard fails FAST with a clear message instead of the opaque, multi-minute
 ResolutionImpossible — the durable protection requested in #11030 (option 2). It
-does NOT touch the shared constraint (option 1 would break ``autobot-slm-backend``,
-which legitimately pins ``websockets>=16,<17`` and does not use the shared
-constraint). When ``langgraph`` is ever dropped from the backend the cap is no
-longer required, so the guard auto-relaxes.
+does NOT touch the shared constraint (option 1 would have coupled the pin to
+``autobot-slm-backend``'s, and ``autobot-slm-backend`` still does not use the
+shared constraint file). ``autobot-slm-backend/requirements.txt`` pins its own
+independent ``websockets>=17.1,<18`` floor -- SLM's own code never imports
+websockets, and its pin is not bound by the backend's langgraph-sdk cap.
+ci.yml's python-shard job installs SLM's tests into the SAME venv as the
+backend (#13300), so ``pip``/CI briefly sees the two floors conflict there;
+#16264 handles that with a named ``(package, requirements file)`` exemption in
+``pipeline-scripts/check_dependency_floors.py`` rather than lowering SLM's
+floor, which would downgrade the version already running in SLM production.
+That exemption is a stopgap pending a genuinely separate SLM venv (#16394).
+When ``langgraph`` is ever dropped from the backend the cap is no longer
+required, so the guard auto-relaxes.
 
 Run from the repo root:  python3 scripts/check_websockets_cap.py
 Exit 0 = compliant; exit 1 = the cap is violated (or the file/pin is missing).
@@ -90,7 +99,8 @@ def main() -> int:
         return 1
 
     print(
-        f"OK: {_CAP_PKG} {ws.specifier} in {_BACKEND_REQ} correctly excludes >={_FORBIDDEN_VERSION} (langgraph cap held)."
+        f"OK: {_CAP_PKG} {ws.specifier} in {_BACKEND_REQ} correctly excludes "
+        f">={_FORBIDDEN_VERSION} (langgraph cap held)."
     )
     return 0
 
