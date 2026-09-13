@@ -67,6 +67,13 @@ declares `EXCLUDED_PREFIXES` **and** pins it with
 scope and the hook's `exclude:` diverge. That pairing is what makes the exclusion
 a decision rather than an accident.
 
+`duplication-guard.yml`'s SLM scope is the same shape (#16401): it excludes
+`autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/`, the Ansible
+mirror that `ansible/tests/detect_agent_code_drift_test.py` already forces
+byte-identical to its source, so jscpd stopped counting the mandatory copy as a
+clone of the original. `duplication_guard_excludes_agent_mirror_test.py` fails
+if that ignore entry disappears or widens past the one path.
+
 ### 3. Derive the population a second way before freezing it
 
 Once, at freeze time, and again whenever the matcher changes — not a permanently
