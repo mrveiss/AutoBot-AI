@@ -66,14 +66,22 @@ def test_existing_installs_are_backfilled_with_the_username_before_the_password(
     tasks = _tasks(_SLM_TASKS)
     user = _index(tasks, "Add AUTOBOT_REDIS_USERNAME")
     password = _index(tasks, "Add AUTOBOT_REDIS_PASSWORD")
-    assert user < password, "the SLM env must never hold a password without the username"
-    for i, key in ((user, "AUTOBOT_REDIS_USERNAME"), (password, "AUTOBOT_REDIS_PASSWORD")):
-        edit = tasks[i]["ansible.builtin.lineinfile"]
+    assert user < password, "a generated password never lands before its username"
+    for key in ("AUTOBOT_REDIS_USERNAME", "AUTOBOT_REDIS_PASSWORD"):
+        check = tasks[_index(tasks, f"Check if {key} present")]
+        assert f"grep -q '^{key}=.\\+'" in check["ansible.builtin.shell"]["cmd"], "append only when absent or empty"
+        edit = tasks[_index(tasks, f"Add {key}")]["ansible.builtin.lineinfile"]
         assert edit["regexp"] == f"^{key}="
         assert edit["create"] is False
-        check = tasks[i - 1]
-        assert f"grep -q '^{key}=.\\+'" in check["ansible.builtin.shell"]["cmd"], "append only when absent or empty"
     assert tasks[password]["no_log"] is True
+
+
+def test_a_username_is_only_backfilled_beside_a_password_the_slm_generates():
+    """An operator's existing AUTOBOT_REDIS_PASSWORD may be the requirepass the legacy playbooks
+    render; a username beside it would switch that enforcement off, so it is left alone."""
+    tasks = _tasks(_SLM_TASKS)
+    assert _index(tasks, "Check if AUTOBOT_REDIS_PASSWORD present") < _index(tasks, "Add AUTOBOT_REDIS_USERNAME")
+    assert "_slm_redis_pw_check.rc != 0" in tasks[_index(tasks, "Add AUTOBOT_REDIS_USERNAME")]["when"]
 
 
 def test_the_secrets_template_carries_both_keys_with_the_username_first():

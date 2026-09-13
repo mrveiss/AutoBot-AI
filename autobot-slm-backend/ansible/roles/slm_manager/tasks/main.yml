@@ -526,12 +526,26 @@
   no_log: true
   tags: ['slm', 'secrets']
 
-# #16627: same back-fill for the Redis credential. The username goes in first:
-# this file is the SLM's own EnvironmentFile, and while the server's default user
-# is nopass a password sent WITHOUT a username (AUTH <password>) is refused, so
-# the password must never be present without it. Both are append-only, gated on
-# the key being absent or empty, so an operator-supplied value is never rewritten
-# and the password is never regenerated.
+# #16627: same back-fill for the Redis credential. This file is the SLM's own
+# EnvironmentFile, and while the server's default user is nopass a password sent
+# WITHOUT a username (AUTH <password>) is refused -- so a password generated here
+# always gets its username first. A password an operator already put here is
+# left exactly as it is, username included: the legacy deploy playbooks render an
+# env password as requirepass unless a username sits beside it, so adding one
+# would silently switch that enforcement off. Both lines are append-only and
+# gated on the key being absent or empty; the password is never regenerated.
+- name: "SLM | Check if AUTOBOT_REDIS_PASSWORD present in secrets file (#16627)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^AUTOBOT_REDIS_PASSWORD=.\+'
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_redis_pw_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  no_log: true
+  tags: ['slm', 'secrets']
+
 - name: "SLM | Check if AUTOBOT_REDIS_USERNAME present in secrets file (#16627)"
   ansible.builtin.shell:
     cmd: >-
@@ -552,18 +566,7 @@
   when:
     - slm_secrets_stat.stat.exists
     - _slm_redis_user_check.rc != 0
-  tags: ['slm', 'secrets']
-
-- name: "SLM | Check if AUTOBOT_REDIS_PASSWORD present in secrets file (#16627)"
-  ansible.builtin.shell:
-    cmd: >-
-      grep -q '^AUTOBOT_REDIS_PASSWORD=.\+'
-      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
-  register: _slm_redis_pw_check
-  changed_when: false
-  failed_when: false
-  when: slm_secrets_stat.stat.exists
-  no_log: true
+    - _slm_redis_pw_check.rc != 0
   tags: ['slm', 'secrets']
 
 - name: "SLM | Add AUTOBOT_REDIS_PASSWORD to existing secrets file (#16627)"
