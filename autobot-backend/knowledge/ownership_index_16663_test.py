@@ -21,8 +21,8 @@ from knowledge.ownership import KnowledgeOwnership, VisibilityLevel
 from knowledge.ownership_index import (
     drop_ownership_unless_admin,
     index_ownership,
+    ownership_changed,
     reindex_ownership,
-    touches_ownership,
 )
 
 _SYSTEM_INDEX = "kb:system:facts"
@@ -45,11 +45,13 @@ def _owned(**extra):
     return {"owner_id": "u1", "source_type": "manual", **extra}
 
 
-def test_only_ownership_fields_count_as_touching_ownership():
-    assert not touches_ownership(None)
-    assert not touches_ownership({"title": "renamed"})
-    assert touches_ownership({"visibility": VisibilityLevel.PRIVATE})
-    assert touches_ownership({"owner_id": "u2"})
+def test_only_a_changed_ownership_value_counts_as_an_ownership_change():
+    stored = _owned(visibility="system", shared_with=["u2"])
+    assert not ownership_changed(stored, {**stored, "title": "renamed", "preserve": True})
+    assert not ownership_changed(stored, {**stored, "visibility": VisibilityLevel.SYSTEM})  # str enum == value
+    assert ownership_changed(stored, {**stored, "visibility": "private"})
+    assert ownership_changed(stored, {**stored, "owner_id": "u3"})
+    assert ownership_changed(stored, {**stored, "shared_with": []})
 
 
 def test_a_non_admin_cannot_choose_ownership_on_ingestion():
@@ -164,6 +166,37 @@ async def test_update_fact_leaves_the_indexes_alone_when_ownership_is_untouched(
 
     manager.cleanup_ownership_indexes.assert_not_awaited()
     manager.set_owner.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_writing_back_the_whole_metadata_with_a_flag_does_not_reindex(durable_row):
+    """chat-knowledge preserve writes the full fetched dict back; that is not an ownership change."""
+    manager = AsyncMock()
+    stored = _owned(visibility="system")
+
+    await _KB(stored, manager).update_fact("f1", metadata={**stored, "preserve": True})
+
+    manager.cleanup_ownership_indexes.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_reindex_that_fails_midway_fails_closed_and_a_retry_converges(durable_row):
+    store = _SetStore()
+    manager = KnowledgeOwnership(store)
+    stored = _owned(visibility="system")
+    await index_ownership(manager, "f1", stored)
+    kb = _KB(stored, manager)
+
+    with patch.object(manager, "set_owner", AsyncMock(side_effect=RuntimeError("redis blip"))):
+        failed = await kb.update_fact("f1", metadata={"visibility": "private"})
+
+    assert failed["status"] == "error"
+    assert "f1" not in store.sets[_SYSTEM_INDEX]  # fewer indexes, never a stale grant
+
+    retried = await kb.update_fact("f1", metadata={"visibility": "private"})
+
+    assert retried["status"] == "success"
+    assert "f1" in store.sets["user:kb:facts:u1"] and "f1" not in store.sets[_SYSTEM_INDEX]
 
 
 @pytest.mark.asyncio

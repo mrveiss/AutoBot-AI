@@ -120,3 +120,38 @@ async def test_a_failed_admin_visibility_write_is_not_reported_as_success():
         await _admin_sets_visibility(_ownership_kb(write_status="error"), "private")
 
     assert err.value.status_code == 500
+
+
+async def _admin_changes_sharing(kb, action: str):
+    from api import knowledge_ownership as ownership_api
+
+    request = MagicMock()
+    request.state.user = {"user_id": "u1"}
+    kb.ownership_manager.share_fact = AsyncMock(return_value={"owner_id": "u1", "shared_with": ["u2"]})
+    kb.ownership_manager.unshare_fact = AsyncMock(return_value={"owner_id": "u1", "shared_with": []})
+    with patch.object(ownership_api, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+        if action == "share":
+            return await ownership_api.share_fact(
+                fact_id="f1", request_body=SimpleNamespace(user_ids=["u2"]), request=request, _={}
+            )
+        return await ownership_api.unshare_fact(fact_id="f1", user_id_to_remove="u2", request=request, _={})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["share", "unshare"])
+async def test_a_failed_admin_sharing_write_is_not_reported_as_success(action):
+    with pytest.raises(HTTPException) as err:
+        await _admin_changes_sharing(_ownership_kb(write_status="error"), action)
+
+    assert err.value.status_code == 500
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["share", "unshare"])
+async def test_an_admin_sharing_change_is_written_through_update_fact(action):
+    kb = _ownership_kb()
+
+    response = await _admin_changes_sharing(kb, action)
+
+    assert response["success"] is True
+    kb.update_fact.assert_awaited_once()

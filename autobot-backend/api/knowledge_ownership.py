@@ -134,8 +134,10 @@ async def share_fact(
     metadata = fact.get("metadata", {})
     updated_metadata = await kb.ownership_manager.share_fact(fact_id, request_body.user_ids, metadata)
 
-    # Save updated metadata
-    await kb.update_fact(fact_id=fact_id, metadata=updated_metadata)
+    # Save updated metadata; a failed write is not a successful share (#16663)
+    result = await kb.update_fact(fact_id=fact_id, metadata=updated_metadata)
+    if result.get("status") != "success":
+        raise HTTPException(status_code=500, detail="Failed to update sharing")
 
     return {
         "success": True,
@@ -195,8 +197,10 @@ async def unshare_fact(
     metadata = fact.get("metadata", {})
     updated_metadata = await kb.ownership_manager.unshare_fact(fact_id, [user_id_to_remove], metadata)
 
-    # Save updated metadata
-    await kb.update_fact(fact_id=fact_id, metadata=updated_metadata)
+    # Save updated metadata; a failed write is not a successful share (#16663)
+    result = await kb.update_fact(fact_id=fact_id, metadata=updated_metadata)
+    if result.get("status") != "success":
+        raise HTTPException(status_code=500, detail="Failed to update sharing")
 
     return {
         "success": True,

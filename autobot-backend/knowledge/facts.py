@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.fact_projection import FactProjectionMixin
-from knowledge.ownership_index import index_ownership, reindex_ownership, touches_ownership
+from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 
 if TYPE_CHECKING:
     import aioredis
@@ -1140,7 +1140,7 @@ class FactsMixin(FactProjectionMixin):
                     "timestamp": decoded.get("timestamp", ""),
                 },
             )
-            if touches_ownership(metadata) and getattr(self, "ownership_manager", None):
+            if ownership_changed(previous, current_metadata) and getattr(self, "ownership_manager", None):
                 await reindex_ownership(self.ownership_manager, fact_id, previous, current_metadata)
 
             if content is not None and self.vector_store:
