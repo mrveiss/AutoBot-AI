@@ -89,7 +89,7 @@ BASELINE = {
     # copy of the design system.
     "components_declaring_styles": 380,  # #16245: RedisServiceControl.vue removed
     # Distinct class names declared anywhere in the frontend.
-    "distinct_class_names": 5619,  # #16245: recounted at the rebased tree, combined with #16596's cuts
+    "distinct_class_names": 5617,  # #16245: recounted at the rebased tree, combined with #16596's cuts
     # Total CSS rule declarations.
     "css_rule_declarations": 9398,  # #16245: recounted at the rebased tree, combined with #16596's cuts
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
