@@ -162,8 +162,10 @@ def test_no_merge_base_on_an_existing_branch_falls_back_to_the_old_range(tmp_pat
     _set_origin_main(repo, _sha(repo, "HEAD"))
 
     # A history with no common ancestor with origin/main: an orphan branch.
+    # base.txt tags along from the index git carries into --orphan -- harmless,
+    # since it is not origin/main's tip either way and merge-base still finds
+    # nothing shared with a ref this branch never descends from.
     _git(repo, "switch", "--quiet", "--orphan", "detached")
-    _git(repo, "rm", "-rf", "--quiet", ".")
     remote_sha = _commit(repo, "orphan_a.txt", "orphan first commit")
     local_sha = _commit(repo, "orphan_b.txt", "orphan second commit")
 
