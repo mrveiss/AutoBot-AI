@@ -187,6 +187,22 @@ async def test_epoch_and_check_agree_end_to_end():
         assert await is_token_revoked_by_password_change({"sub": "bob", "iat": 1}) is False
 
 
+@pytest.mark.asyncio
+async def test_recording_an_epoch_never_logs_its_value():
+    """The success line names the subject only, never the epoch it wrote -- the same
+    rule as the rejection path (CodeQL py/clear-text-logging-sensitive-data)."""
+    import autobot_shared.user_management.password_epoch as password_epoch_mod
+
+    with patch(_MOD, AsyncMock(return_value=_redis())):
+        with patch.object(password_epoch_mod.logger, "info") as log_info:
+            assert await set_password_epoch("alice", now=987654321) == 987654321
+
+    message, *args = log_info.call_args.args
+    rendered = message % tuple(args)
+    assert "alice" in rendered
+    assert "987654321" not in rendered
+
+
 def test_encode_jwt_now_stamps_iat():
     """The epoch check is meaningless without iat on minted tokens (#12924)."""
     import jwt as pyjwt
