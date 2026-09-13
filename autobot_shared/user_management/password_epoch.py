@@ -29,20 +29,24 @@ self-service endpoint in ``api/auth.py`` (which only knows a username) and the
 database-backed ``UserService.change_password`` (which knows a UUID). Keying on
 the subject is the one identifier both paths and both backends share.
 
-**Failure policy: fail open, loudly.** If Redis is unavailable the check
-returns "not revoked" and logs. This matches the existing convention in
-``autobot-slm-backend/services/token_denylist.py`` (``is_jti_revoked`` fails
-open for the same reason): a Redis outage must not lock every user out of the
-platform. The exposure is bounded — an attacker would need to hold a token
-issued before a password change *and* catch Redis down.
+**Failure policy: fail closed** (#16411, owner decision 2026-09-12; the SLM's
+rule since #16387). If Redis cannot answer, ``get_password_epoch`` raises
+:class:`RevocationCheckUnavailable` rather than reporting "not revoked", and
+both callers deny the token with a 401. A token that may be revoked is never
+honoured; the accepted cost is that a Redis outage takes login down with it.
+A marker or a token ``iat`` that is not an integer is treated the same way
+(#16422): the check cannot place the token against the epoch, so it denies.
 
 **Tokens minted before this shipped have no ``iat``** and are treated as not
 revoked, so deploying this does not sign everyone out. They age out naturally
 at their own ``exp``; #12924's window closes as soon as they do.
 """
 
+import asyncio
 import logging
 import time
+
+from redis.exceptions import RedisError
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import TTL_24_HOURS
@@ -68,9 +72,35 @@ PASSWORD_EPOCH_PREFIX = "auth:pwd_epoch:"  # nosec B105
 PASSWORD_EPOCH_TTL_SECONDS = TTL_24_HOURS
 
 
+#: What a store that cannot answer raises: the client's own errors plus the
+#: connection and timeout errors it can surface. Deliberately not ``Exception``
+#: -- a bug in this module must surface as itself, not pass for an outage.
+_STORE_FAILURES = (asyncio.TimeoutError, OSError, RedisError)
+
+
+class RevocationCheckUnavailable(ConnectionError):
+    """The check reached no verdict, so revocation cannot be ruled out (#16411, #16422).
+
+    A ``ConnectionError`` so the SLM, which catches the store failures around
+    this check and denies with a 401 (#16387), treats it exactly as it treats
+    the client's own errors -- never as a 500.
+    """
+
+
 def _epoch_key(subject: str) -> str:
     """Redis key holding the password-change epoch for *subject*."""
     return f"{PASSWORD_EPOCH_PREFIX}{subject}"
+
+
+async def _epoch_store():
+    """The Redis client the check reads, or :class:`RevocationCheckUnavailable`."""
+    try:
+        redis = await get_async_redis_client()
+    except _STORE_FAILURES as exc:
+        raise RevocationCheckUnavailable(f"no Redis client ({type(exc).__name__})") from exc
+    if redis is None:
+        raise RevocationCheckUnavailable("no Redis client")
+    return redis
 
 
 async def set_password_epoch(subject: str, *, now: int | None = None) -> int | None:
@@ -111,33 +141,37 @@ async def set_password_epoch(subject: str, *, now: int | None = None) -> int | N
 
 
 async def get_password_epoch(subject: str) -> int | None:
-    """Return *subject*'s password-change epoch, or None if unset/unavailable."""
-    redis = await get_async_redis_client()
-    if redis is None:
-        return None
+    """Return *subject*'s password-change epoch, or None if none is recorded.
 
+    Raises:
+        RevocationCheckUnavailable: Redis could not answer (#16411), or the
+            stored marker is not an integer (#16422).
+    """
+    redis = await _epoch_store()
     try:
         raw = await redis.get(_epoch_key(subject))
-    except Exception as exc:
-        logger.warning("password epoch lookup failed for subject=%s: %s — failing open", subject, exc)
-        return None
+    except _STORE_FAILURES as exc:
+        raise RevocationCheckUnavailable(f"epoch lookup failed ({type(exc).__name__})") from exc
 
     if raw is None:
         return None
 
     try:
         return int(raw)
-    except (TypeError, ValueError):
-        logger.warning("password epoch for subject=%s is not an integer: %r — ignoring", subject, raw)
-        return None
+    except (TypeError, ValueError) as exc:
+        raise RevocationCheckUnavailable("epoch marker is not an integer") from exc
 
 
 async def is_token_revoked_by_password_change(claims: dict) -> bool:
     """True if *claims* describe a token issued before its subject's password change.
 
-    Fails open (returns ``False``) when the subject is unknown, the token
-    carries no ``iat``, or Redis cannot answer — see the module docstring for
-    why. Every one of those cases is logged by the helper that hit it.
+    Returns ``False`` when the subject is unknown or the token carries no
+    ``iat`` -- see the module docstring for why.
+
+    Raises:
+        RevocationCheckUnavailable: Redis could not answer (#16411), or the
+            marker or the token's ``iat`` is not an integer (#16422). The token
+            may be revoked, so every caller must deny it.
     """
     subject = claims.get("sub")
     if not subject:
@@ -148,14 +182,15 @@ async def is_token_revoked_by_password_change(claims: dict) -> bool:
         # Pre-#12924 token: no way to place it relative to the epoch.
         return False
 
-    epoch = await get_password_epoch(str(subject))
-    if epoch is None:
-        return False
-
     try:
         issued_at = int(issued_at)
-    except (TypeError, ValueError):
-        logger.warning("token for subject=%s has a non-integer iat: %r — failing open", subject, issued_at)
+    except (TypeError, ValueError) as exc:
+        # An unreadable iat cannot be placed against any epoch, so the token is
+        # denied whether or not its subject has a marker (#16422).
+        raise RevocationCheckUnavailable("token iat is not an integer") from exc
+
+    epoch = await get_password_epoch(str(subject))
+    if epoch is None:
         return False
 
     if issued_at < epoch:
