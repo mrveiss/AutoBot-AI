@@ -102,17 +102,27 @@ def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
 #: measurement. Splitting them is what makes that sentence possible; with one
 #: band nobody could say which part was which.
 #:
-#: Ratcheted 5100 -> 5822 (#16702): the 2d batch vehicle combines 14
+#: Ratcheted 5100 -> 5450 (#16702): the 2d batch vehicle combines 14
 #: independently-reviewed PRs' new/moved files onto one tree, and that alone
-#: closed most of the old floor's 700-file runway. Measured with the same
-#: `git ls-files "*.py"` this declaration's own `discover` runs, on the
-#: vehicle branch at this commit -- not estimated, not read off a CI log.
-#: `skips`/`growth` are unchanged; this is the population catching up, not a
-#: change in what either band means.
+#: closed most of the old floor's 700-file runway. `git ls-files "*.py"`
+#: (this declaration's own `discover`) measures 5824 on the vehicle branch at
+#: this commit -- not estimated, not read off a CI log.
+#:
+#: 5450, not 5824: the guard's `completed()` bound is a hard floor with no
+#: skips/growth allowance (unlike `verify_floor`'s examined-vs-floor check),
+#: and the pre-push hook's own actual run of THIS guard reported
+#: `completed 5497` against that same 5824 discovered -- 327 files this
+#: parse-and-check-for-a-4th-literal sweep cannot complete (unparseable /
+#: no set-of-string-literals), a bigger gap than the 262 measured when
+#: skips=300 was set. Setting floor above 5497 would fail every honest run
+#: outright, which the first version of this fix did. 5450 leaves a small
+#: margin below the measured 5497 for ordinary skip-count fluctuation while
+#: using most of the slack `verify_floor` allows (5824-5450=374, within
+#: skips=300+growth=400=700). `skips`/`growth` themselves are unchanged.
 REACH = declare(
     "audio-extension-allowlist",
     discover=_tracked_python_files,
-    floor=5822,
+    floor=5450,
     growth=400,
     skips=300,
     what="tracked python files",
