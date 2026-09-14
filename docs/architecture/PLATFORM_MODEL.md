@@ -178,16 +178,20 @@ See **[AutoBot LLC](../llc/_index.md)** for the module overview and the
 
 ---
 
-## Governance & EU AI Act Fit
+## Governance, EU AI Act & ISO 42001/14001 Fit
 
 AutoBot's governance primitives (RBAC, review gates, budgets, audit logging, retention
 policies — see `autobot-backend/security/enterprise/compliance_manager.py`) were built for
 GDPR/SOC2/ISO27001. The same architecture — self-hosted data, a provider-agnostic LLM
 gateway, and human-oversight-capable governance — maps onto the EU AI Act's data-governance
-and human-oversight expectations more directly than a third-party SaaS API can.
+and human-oversight expectations, and onto ISO/IEC 42001's AI-management-system expectations,
+more directly than a third-party SaaS API can. The fit is narrower and structural-only for
+ISO 14001 (environmental management) — who controls the hardware/energy variables, not a
+measured environmental benefit.
 
 **This is not a compliance certification.** No risk-tier classifier, technical-
-documentation generator, or Art.-12-shaped log schema exists yet. See
+documentation generator, Art.-12-shaped log schema, AI risk register, or environmental
+telemetry exists yet. See
 [EU AI Act & Governance Fit](EU_AI_GOVERNANCE.md) for exactly what's covered today and
 what's still a gap.
 
