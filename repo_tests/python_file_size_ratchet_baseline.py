@@ -109,7 +109,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/http_client_mcp.py": 963,
     "autobot-backend/api/ide_integration.py": 928,
     "autobot-backend/api/knowledge.py": 3477,
-    "autobot-backend/api/knowledge_ai_stack.py": 712,
+    "autobot-backend/api/knowledge_ai_stack.py": 641,
     "autobot-backend/api/knowledge_api_integration_test.py": 623,
     "autobot-backend/api/knowledge_categories.py": 674,
     "autobot-backend/api/knowledge_collections.py": 726,
@@ -117,7 +117,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/knowledge_maintenance.py": 1987,
     "autobot-backend/api/knowledge_mcp.py": 1460,
     "autobot-backend/api/knowledge_population.py": 1547,
-    "autobot-backend/api/knowledge_rag.py": 672,
     "autobot-backend/api/knowledge_search.py": 851,  # #16507: +auth dep
     "autobot-backend/api/knowledge_search_aggregator.py": 967,  # #16507: +auth dep
     "autobot-backend/api/knowledge_tags.py": 887,

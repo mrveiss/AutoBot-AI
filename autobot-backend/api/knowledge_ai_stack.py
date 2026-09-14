@@ -10,7 +10,6 @@ including RAG (Retrieval-Augmented Generation), knowledge extraction, and
 intelligent content analysis using the AI Stack VM.
 """
 
-import asyncio
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Request
@@ -20,8 +19,6 @@ from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     AIStackDocumentAnalysisData,
     AIStackHealthStatusData,
-    AIStackKnowledgeExtractData,
-    AIStackKnowledgeExtractionRequest,
     AIStackQueryReformulateData,
     AIStackRAGQueryRequest,
     AIStackRagSearchData,
@@ -32,11 +29,16 @@ from api.schemas_knowledge import (
     DocumentAnalysisRequest,
 )
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from dependencies import get_knowledge_base
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.search_filters import (
+    extract_user_context_from_request,
+    filter_search_results_by_permission,
+)
 from knowledge_factory import get_or_create_knowledge_base
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from utils.response_helpers import (
@@ -74,17 +76,26 @@ async def _search_local_knowledge_base(
     query: str,
     max_results: int,
     confidence_threshold: float,
+    user_id: str,
+    user_org_id: str | None,
+    user_group_ids: list,
+    is_admin: bool,
 ) -> Dict[str, Any]:
     """
     Search local knowledge base with confidence filtering.
 
     Issue #281: Extracted helper for local KB search.
+    Issue #16665: results are scoped to the caller before any other filtering.
 
     Args:
         req: FastAPI request for app state access
         query: Search query string
         max_results: Maximum results to return
         confidence_threshold: Minimum confidence score
+        user_id: Authenticated caller's user id
+        user_org_id: Caller's organization id, if any
+        user_group_ids: Caller's group ids
+        is_admin: Whether the caller is an admin (unconditional read)
 
     Returns:
         Dictionary with search results and metadata
@@ -93,6 +104,14 @@ async def _search_local_knowledge_base(
         kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
         if kb_to_use:
             local_results = await kb_to_use.search(query=query, top_k=max_results)
+            local_results = await filter_search_results_by_permission(
+                local_results,
+                user_id,
+                user_org_id,
+                user_group_ids,
+                ownership_manager=getattr(kb_to_use, "ownership_manager", None),
+                is_admin=is_admin,
+            )
 
             # Filter by confidence threshold
             filtered_local = [result for result in local_results if result.get("score", 0) >= confidence_threshold]
@@ -220,6 +239,10 @@ async def _run_all_search_sources(
     request_data: "AIStackSearchRequest",
     req: Request,
     knowledge_base,
+    user_id: str,
+    user_org_id: str | None,
+    user_group_ids: list,
+    is_admin: bool,
 ) -> Dict[str, Any]:
     """Helper for enhanced_search. Ref: #1088.
 
@@ -230,6 +253,10 @@ async def _run_all_search_sources(
         request_data: Validated search request parameters
         req: FastAPI request for app state access
         knowledge_base: Injected knowledge base dependency
+        user_id: Authenticated caller's user id
+        user_org_id: Caller's organization id, if any
+        user_group_ids: Caller's group ids
+        is_admin: Whether the caller is an admin (unconditional read)
 
     Returns:
         Dict mapping source name to search result data
@@ -242,6 +269,10 @@ async def _run_all_search_sources(
             query=request_data.query,
             max_results=request_data.max_results,
             confidence_threshold=request_data.confidence_threshold,
+            user_id=user_id,
+            user_org_id=user_org_id,
+            user_group_ids=user_group_ids,
+            is_admin=is_admin,
         )
 
     if request_data.include_rag:
@@ -278,6 +309,9 @@ async def search(
 
     Issue #281: Refactored from 144 lines to use extracted helper methods.
     Issue #744: Requires authenticated user.
+    Issue #16665: local KB results are scoped to the caller before use, including
+    as RAG context -- an unfiltered fact would otherwise reach both the response
+    and the RAG synthesis prompt.
 
     This endpoint provides superior search results by combining:
     - Local knowledge base semantic search
@@ -285,7 +319,11 @@ async def search(
     - Intelligent result ranking and synthesis
     """
     try:
-        results = await _run_all_search_sources(request_data, req, knowledge_base)
+        user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
+        is_admin = is_admin_role(current_user.get("role"))
+        results = await _run_all_search_sources(
+            request_data, req, knowledge_base, user_id, user_org_id, user_group_ids, is_admin
+        )
         combined_results, source_count = _combine_search_results(results)
 
         return create_success_response(
@@ -330,6 +368,8 @@ async def rag_search(
     understanding and context-aware response generation.
 
     Issue #744: Requires authenticated user.
+    Issue #16665: locally-retrieved documents are scoped to the caller before
+    being used as RAG context.
     """
     try:
         ai_client = await get_ai_stack_client()
@@ -344,7 +384,16 @@ async def rag_search(
                     top_k=15,  # Get more documents for RAG context
                     filters=RESEARCH_QUARANTINE_FILTER,
                 )
-                documents = kb_results if isinstance(kb_results, list) else []
+                kb_results = kb_results if isinstance(kb_results, list) else []
+                user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
+                documents = await filter_search_results_by_permission(
+                    kb_results,
+                    user_id,
+                    user_org_id,
+                    user_group_ids,
+                    ownership_manager=getattr(knowledge_base, "ownership_manager", None),
+                    is_admin=is_admin_role(current_user.get("role")),
+                )
                 logger.info(f"Retrieved {len(documents)} documents from local KB for RAG")
             except Exception as e:
                 logger.warning("Local KB document retrieval failed: %s", e)
@@ -369,126 +418,6 @@ async def rag_search(
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "RAG search")
-
-
-# ====================================================================
-# Knowledge Extraction and Analysis Endpoints
-# ====================================================================
-
-
-async def _store_single_fact_with_semaphore(
-    kb,
-    fact: Dict[str, Any],
-    semaphore: asyncio.Semaphore,
-    title: str | None,
-    source: str | None,
-    category: str | None,
-) -> Dict[str, Any]:
-    """Store a single fact with semaphore-bounded concurrency."""
-    async with semaphore:
-        try:
-            return await kb.store_fact(
-                content=fact.get("content", ""),
-                metadata={
-                    "title": title or fact.get("title", "Extracted Knowledge"),
-                    "source": source,
-                    "category": category,
-                    "extraction_confidence": fact.get("confidence", 0.5),
-                    "extracted_at": utc_timestamp(),
-                },
-            )
-        except Exception as e:
-            logger.warning("Failed to store extracted fact: %s", e)
-            return {"status": "error", "message": "Operation failed"}
-
-
-async def _store_extracted_facts(
-    req: Request, extraction_result: dict, request_data: AIStackKnowledgeExtractionRequest
-) -> List[Dict[str, Any]]:
-    """Store extracted facts in knowledge base with parallel processing."""
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-    if not kb_to_use:
-        return []
-
-    extracted_facts = extraction_result.get("extracted_facts")
-    if not extracted_facts:
-        return []
-
-    # Use asyncio.gather for parallel fact storage with bounded concurrency
-    semaphore = asyncio.Semaphore(50)
-
-    # Store all facts in parallel
-    results = await asyncio.gather(
-        *[
-            _store_single_fact_with_semaphore(
-                kb_to_use,
-                fact,
-                semaphore,
-                request_data.title,
-                request_data.source,
-                request_data.category,
-            )
-            for fact in extracted_facts
-        ],
-        return_exceptions=True,
-    )
-
-    # Filter successful results
-    stored_facts = [result for result in results if isinstance(result, dict) and result.get("status") != "error"]
-
-    logger.info("Stored %s extracted facts in knowledge base", len(stored_facts))
-    return stored_facts
-
-
-@router.post("/extract", response_model=DataResponse[AIStackKnowledgeExtractData])
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="extract_knowledge",
-    error_code_prefix="KNOWLEDGE_AI_STACK",
-)
-async def extract_knowledge(
-    request_data: AIStackKnowledgeExtractionRequest,
-    req: Request,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Extract structured knowledge from content using AI Stack capabilities.
-
-    This endpoint uses AI Stack's knowledge extraction agent to identify
-    and structure knowledge from various content types.
-
-    Issue #744: Requires authenticated user.
-    """
-    try:
-        ai_client = await get_ai_stack_client()
-
-        # Extract knowledge using AI Stack
-        extraction_result = await ai_client.extract_knowledge(
-            content=request_data.content,
-            content_type=request_data.content_type,
-            extraction_mode=request_data.extraction_mode,
-        )
-
-        # Optionally store extracted knowledge in local knowledge base
-        stored_facts = []
-        if request_data.auto_store:
-            try:
-                stored_facts = await _store_extracted_facts(req, extraction_result, request_data)
-            except Exception as e:
-                logger.warning("Auto-storage of extracted knowledge failed: %s", e)
-
-        return create_success_response(
-            {
-                "extraction_result": extraction_result,
-                "auto_stored": request_data.auto_store,
-                "stored_facts_count": len(stored_facts),
-                "stored_facts": stored_facts if stored_facts else None,
-            }
-        )
-
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "Knowledge extraction")
 
 
 @router.post("/analyze/documents", response_model=DataResponse[AIStackDocumentAnalysisData])

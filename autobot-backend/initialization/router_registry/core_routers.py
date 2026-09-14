@@ -49,6 +49,7 @@ from api.intelligent_agent import router as intelligent_agent_router
 from api.jwks import auth_router as jwks_auth_router  # #10196
 from api.knowledge import router as knowledge_router
 from api.knowledge_ai_stack import router as knowledge_ai_stack_router
+from api.knowledge_ai_stack_extraction import router as knowledge_ai_stack_extraction_router
 from api.knowledge_audit import router as knowledge_audit_router
 from api.knowledge_boards import router as knowledge_boards_router
 from api.knowledge_categories import router as knowledge_categories_router
@@ -332,6 +333,12 @@ def _get_knowledge_feature_routers() -> list:
             "/knowledge_base",
             ["knowledge-enhanced", "knowledge-ai"],
             "knowledge_ai_stack",
+        ),
+        (
+            knowledge_ai_stack_extraction_router,
+            "/knowledge_base",
+            ["knowledge-ai-extraction"],
+            "knowledge_ai_stack_extraction",
         ),
         (
             knowledge_boards_router,
