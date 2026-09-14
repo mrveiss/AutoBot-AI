@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.fact_projection import FactProjectionMixin
+from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 
 if TYPE_CHECKING:
     import aioredis
@@ -27,7 +28,6 @@ if TYPE_CHECKING:
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
 logger = get_logger(__name__)
-
 
 # =============================================================================
 # NPU-ACCELERATED EMBEDDING GENERATION (Issue #165)
@@ -599,13 +599,7 @@ class FactsMixin(FactProjectionMixin):
         # Issue #688: Track ownership indexes for user-based access control
         owner_id = metadata.get("owner_id") or metadata.get("user_id")
         if hasattr(self, "ownership_manager") and owner_id:
-            await self.ownership_manager.set_owner(
-                fact_id=fact_id,
-                owner_id=owner_id,
-                visibility=metadata.get("visibility", "private"),
-                source_type=metadata.get("source_type", "manual"),
-                shared_with=metadata.get("shared_with", []),
-            )
+            await index_ownership(self.ownership_manager, fact_id, metadata)  # #16663: org/group too
         elif owner_id:
             # Issue #689: Fallback simple tracking when ownership manager
             # is not initialized
@@ -1120,6 +1114,7 @@ class FactsMixin(FactProjectionMixin):
             if current is None:
                 return {"status": "error", "message": "Fact not found"}
             decoded, current_metadata = current
+            previous = dict(current_metadata)  # #16663: the indexes the fact is filed under now
 
             if content is not None:
                 # Issue #1375: Refresh dedup key + fingerprint on content change
@@ -1145,6 +1140,8 @@ class FactsMixin(FactProjectionMixin):
                     "timestamp": decoded.get("timestamp", ""),
                 },
             )
+            if ownership_changed(previous, current_metadata) and getattr(self, "ownership_manager", None):
+                await reindex_ownership(self.ownership_manager, fact_id, previous, current_metadata)
 
             if content is not None and self.vector_store:
                 await self._revectorize_fact(fact_id, decoded["content"], current_metadata)

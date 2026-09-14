@@ -86,6 +86,8 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/config/defaults.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
     ("autobot-backend/config/service_config.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
     ("autobot-backend/knowledge/base.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
+    ("autobot-slm-backend/services/redis_cli_auth.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
+    ("autobot-slm-backend/services/replication.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
     ("autobot-backend/utils/async_chromadb_client.py", "chromadb_auth_token"): (
         f"{_AUTH_BOOTSTRAP}: internal ChromaDB data-layer service credential"
     ),

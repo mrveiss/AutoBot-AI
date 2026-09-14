@@ -60,7 +60,8 @@ def test_redis_role_readiness_ping_sends_the_user_first():
     task = _task(
         _ANSIBLE / "roles" / "redis" / "tasks" / "main.yml", "Redis | Wait for Redis to be ready (retry-based)"
     )
-    ctx = {"redis_port": 6379, "redis_password": _PW}
+    # #16627: the ping authenticates as the role's client, whose credential defaults to redis_password.
+    ctx = {"redis_port": 6379, "redis_client_password": _PW}
     assert "--user" not in _render(task["command"], redis_username="", **ctx)
     rendered = _render(task["command"], redis_username="default", **ctx)
     assert rendered.index("--user default") < rendered.index(f"-a {_PW}")
@@ -99,10 +100,35 @@ def _url_userinfo(rendered: str) -> str:
     return re.search(r"AUTOBOT_REDIS_URL=redis://([^@\n]*)@", rendered).group(1)
 
 
-def test_backend_env_without_a_username_is_unchanged():
+def test_backend_env_sends_default_with_a_password_and_no_username():
+    """#16668: a password-only URL is refused by a nopass server, so the password never travels alone."""
     out = _render(_backend_redis_block(), backend_redis_host="h", backend_redis_port=6379, backend_redis_password=_PW)
-    assert "AUTOBOT_REDIS_USERNAME" not in out
-    assert _url_userinfo(out) == f":{_PW}"
+    assert "AUTOBOT_REDIS_USERNAME=default" in out
+    assert _url_userinfo(out) == f"default:{_PW}"
+
+
+def test_backend_env_keeps_a_configured_username():
+    out = _render(
+        _backend_redis_block(),
+        backend_redis_host="h",
+        backend_redis_port=6379,
+        backend_redis_password=_PW,
+        backend_redis_username="svc",
+    )
+    assert "AUTOBOT_REDIS_USERNAME=svc" in out
+    assert _url_userinfo(out) == f"svc:{_PW}"
+
+
+def test_backend_env_without_a_password_sends_no_credential():
+    out = _render(
+        _backend_redis_block(),
+        backend_redis_host="h",
+        backend_redis_port=6379,
+        backend_redis_password="",
+        backend_redis_username="default",
+    )
+    assert "AUTOBOT_REDIS_USERNAME" not in out and "AUTOBOT_REDIS_PASSWORD" not in out
+    assert "AUTOBOT_REDIS_URL=redis://h:6379" in out
 
 
 def test_backend_env_renders_the_username():
