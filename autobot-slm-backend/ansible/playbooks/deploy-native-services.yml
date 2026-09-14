@@ -184,7 +184,8 @@
         - '8002'  # RedisInsight
 
     - name: Test Redis connectivity
-      shell: redis-cli {% if autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) %}--user {{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }} {% endif %}-a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }} ping
+      # #16678: the username always travels with the password -- a nopass server refuses AUTH <pw> alone
+      shell: redis-cli --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) | quote }} ping
       register: redis_test
 
     - name: Display Redis status
@@ -677,7 +678,7 @@
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
-          Environment="REDIS_USERNAME={{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }}"
+          Environment="REDIS_USERNAME={{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') if autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) else '' }}"
           Environment="OLLAMA_HOST=http://localhost:11434"
           Restart=always
           RestartSec=3
@@ -703,7 +704,7 @@
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
-          Environment="REDIS_USERNAME={{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }}"
+          Environment="REDIS_USERNAME={{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') if autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) else '' }}"
           Environment="DEVICE=CPU"
           Restart=always
           RestartSec=3
@@ -795,7 +796,7 @@
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
-          Environment="REDIS_USERNAME={{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }}"
+          Environment="REDIS_USERNAME={{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') if autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) else '' }}"
           Restart=always
           RestartSec=3
 
