@@ -80,36 +80,40 @@ docker --version   # Should be 24+
 
 Before diving into setup, it's crucial to understand why AutoBot uses a distributed architecture:
 
-### Why 6 Virtual Machines?
+### Why Role-Based, Not a Fixed Machine Count?
+
+AutoBot has no fixed machine count: it runs in Docker, on a single VM, or scaled out by role
+across however many machines an operator chooses. The roles below can all be co-located, or
+split out one at a time as load or hardware needs demand.
 
 **Problem Solved**: Environment conflicts between Python/Node.js dependencies, GPU resource contention, and service isolation needs.
 
 **Architecture Benefits**:
-1. **Dependency Isolation**: Each VM has optimized environment for its specific role
-2. **Resource Optimization**: GPU/NPU/CPU resources distributed optimally  
+1. **Dependency Isolation**: Each role has an optimized environment for its specific responsibility
+2. **Resource Optimization**: GPU/NPU/CPU resources distributed optimally
 3. **Fault Tolerance**: One service failure doesn't cascade to others
-4. **Scalability**: Each tier can be scaled independently
-5. **Security**: Network-level isolation between services
+4. **Scalability**: Each role can be scaled independently
+5. **Security**: Network-level isolation between services, when roles are split onto separate machines
 
 ```
-Physical Host (WSL2)     ←→    VM1: Frontend (Vue.js)
-├─ FastAPI Backend              ├─ Modern web interface
-├─ Ollama LLM Service          └─ Real-time dashboard
+Physical Host (WSL2 / control)  ←→    Frontend role (Vue.js)
+├─ FastAPI Backend                     ├─ Modern web interface
+├─ Ollama LLM Service                 └─ Real-time dashboard
 ├─ VNC Desktop Access
-└─ System Integration    ←→    VM2: NPU Worker
-                                ├─ Intel NPU acceleration  
-                                ├─ GPU processing fallback
-                                └─ Computer vision tasks
+└─ System Integration            ←→    NPU Worker role
+                                        ├─ Intel NPU acceleration
+                                        ├─ GPU processing fallback
+                                        └─ Computer vision tasks
 
-    VM3: Redis Stack     ←→    VM4: AI Orchestrator
-    ├─ 11 specialized DBs       ├─ Multi-provider LLM routing
-    ├─ 13,383 knowledge vectors ├─ Model caching & optimization
-    └─ Session management       └─ Intelligent failover
+    Database role (Redis Stack)  ←→    AI/ML role (AI Orchestrator)
+    ├─ 11 specialized DBs               ├─ Multi-provider LLM routing
+    ├─ 13,383 knowledge vectors         ├─ Model caching & optimization
+    └─ Session management               └─ Intelligent failover
 
-                         ←→    VM5: Browser Automation
-                                ├─ Playwright multi-browser
-                                ├─ Screenshot & interaction
-                                └─ Web automation tasks
+                                  ←→    Browser role (Automation)
+                                        ├─ Playwright multi-browser
+                                        ├─ Screenshot & interaction
+                                        └─ Web automation tasks
 ```
 
 ## Automated Setup Process

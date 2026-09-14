@@ -103,18 +103,18 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/git_mcp.py": 1357,
     "autobot-backend/api/http_client_mcp.py": 963,
     "autobot-backend/api/ide_integration.py": 928,
-    "autobot-backend/api/knowledge.py": 3477,
+    "autobot-backend/api/knowledge.py": 3420,
     "autobot-backend/api/knowledge_ai_stack.py": 712,
     "autobot-backend/api/knowledge_api_integration_test.py": 623,
     "autobot-backend/api/knowledge_categories.py": 674,
     "autobot-backend/api/knowledge_collections.py": 726,
     "autobot-backend/api/knowledge_connectors.py": 929,
     "autobot-backend/api/knowledge_maintenance.py": 1987,
-    "autobot-backend/api/knowledge_mcp.py": 1460,
+    "autobot-backend/api/knowledge_mcp.py": 1455,
     "autobot-backend/api/knowledge_population.py": 1547,
     "autobot-backend/api/knowledge_rag.py": 672,
-    "autobot-backend/api/knowledge_search.py": 851,  # #16507: +auth dep
-    "autobot-backend/api/knowledge_search_aggregator.py": 967,  # #16507: +auth dep
+    "autobot-backend/api/knowledge_search.py": 820,  # #16665: analytics endpoints moved out
+    "autobot-backend/api/knowledge_search_aggregator.py": 951,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1704,
     "autobot-backend/api/knowledge_vectorization_test.py": 601,
@@ -164,7 +164,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1358,
     "autobot-backend/chat_workflow/manager.py": 4068,
-    "autobot-backend/chat_workflow/tool_handler.py": 3693,
+    "autobot-backend/chat_workflow/tool_handler.py": 3729,  # #11542: external MCP dispatch merged into MCPDispatcher
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/circuit_breaker.py": 689,
@@ -203,7 +203,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/code_intelligence/vue_analyzer.py": 613,
     "autobot-backend/command_manual_manager.py": 908,
     "autobot-backend/computer_vision/screen_analyzer.py": 662,
-    "autobot-backend/conftest.py": 1570,
+    "autobot-backend/conftest.py": 1505,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 640,
@@ -251,7 +251,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/suggestions.py": 704,
     "autobot-backend/knowledge/tags.py": 834,
     "autobot-backend/knowledge_sync_incremental.py": 894,
-    "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 613,
+    "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
     "autobot-backend/llc/api/companies.py": 1732,
     "autobot-backend/llc/api/roles.py": 741,
     "autobot-backend/llc/api/sprints.py": 1223,
@@ -355,14 +355,12 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1486,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1216,
-    "autobot-backend/services/llm_service.py": 1263,
+    "autobot-backend/services/llm_service.py": 1206,
     "autobot-backend/services/load_balancer.py": 693,
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 634,
     "autobot-backend/services/npu_worker_manager.py": 1419,
     "autobot-backend/services/rag_service.py": 1312,
-    "autobot-backend/services/redis_service_api_integration_test.py": 871,
-    "autobot-backend/services/redis_service_management_e2e_test.py": 613,
     "autobot-backend/services/redis_service_manager.py": 623,
     "autobot-backend/services/redis_service_manager_test.py": 839,
     "autobot-backend/services/secrets_service.py": 688,
@@ -445,7 +443,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 675,
     "autobot-slm-backend/api/code_source.py": 720,
-    "autobot-slm-backend/api/code_sync.py": 6091,  # #16610: stage-failure blocks folded into _fail_fleet_stage
+    "autobot-slm-backend/api/code_sync.py": 6026,  # #16713: three functions moved to code_sync_paths.py
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
     "autobot-slm-backend/api/monitoring.py": 1087,
@@ -484,7 +482,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/services/service_orchestrator.py": 955,
     "autobot-slm-backend/services/sync_orchestrator.py": 649,
     "autobot-slm-backend/slm/agent/agent.py": 675,
-    "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 2155,
+    "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 2012,  # #16713: containment tests moved out
     "autobot-slm-backend/tests/api/test_drift_resolve.py": 606,
     "autobot-slm-backend/tests/api/test_fleet_node_update_11511.py": 1051,
     "autobot-slm-backend/tests/api/test_prometheus_scrape_is_unauthenticated_14339.py": 973,
@@ -495,7 +493,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 778,
     "autobot-slm-backend/user_management/services/user_service.py": 863,
-    "autobot_shared/env_registry.py": 1225,  # #15774: logging component split to env_registry_logging.py
+    "autobot_shared/env_registry.py": 1214,  # #13099: LLC vars split to env_registry_llc.py
     "autobot_shared/monitoring/prometheus_metrics.py": 954,
     "autobot_shared/network_constants.py": 616,
     "autobot_shared/npu/integration.py": 929,
@@ -515,6 +513,7 @@ KNOWN_LARGE: dict[str, int] = {
     "pipeline-scripts/detect-hardcoded-values_test.py": 653,
     "repo_tests/ci_dispatch_watchdog_test.py": 1283,
     "repo_tests/enum_union_guard_test.py": 801,
+    "repo_tests/sync_deletions_ansible_wiring_16310_test.py": 674,  # #16310
     "repo_tests/sys_modules_leak_guard.py": 1164,
     "scripts/audit_api_wiring.py": 897,
 }

@@ -42,7 +42,8 @@
 #     reported as a hard result instead of a stated non-result.
 #       * 19 errors — `redis_service_api_integration_test.py` had no
 #         `backend_url` fixture on this tree at all, so every test in it errored
-#         at setup. The fixture is now defined in the module.
+#         at setup. The fixture was then defined in the module. #16245 later
+#         removed the module, with the unreachable client it exercised.
 #       * 16 failures — `infrastructure_integration_test.py` (6) and
 #         `voice_integration_test.py` (10) dial a backend on :8001 and a TTS
 #         worker on :8083 over real HTTP. Both now skip, naming the absent

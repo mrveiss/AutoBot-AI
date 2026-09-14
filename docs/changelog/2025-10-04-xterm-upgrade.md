@@ -8,6 +8,8 @@ date: 2025-10-04
 # xterm.js Terminal Upgrade Implementation Summary
 
 **Date:** 2025-10-04
+
+> **Historical record:** the host list below reflects `HostSelector.vue` as shipped on this date, for the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; a current deployment may have a different number of hosts.
 **Status:** ✅ Implementation Complete - Ready for Integration
 
 ## Overview

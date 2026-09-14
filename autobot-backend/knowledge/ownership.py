@@ -321,8 +321,8 @@ class KnowledgeOwnership:
         if fact_metadata is None:
             fact_metadata = {}
 
-        shared_with = set(fact_metadata.get("shared_with", []))
-        fact_group_ids = set(fact_metadata.get("group_ids", []))
+        shared_with = set(decode_id_list(fact_metadata.get("shared_with")))  # #16662: may be comma-joined
+        fact_group_ids = set(decode_id_list(fact_metadata.get("group_ids")))
 
         new_users = await self._share_with_users(fact_id, user_ids, shared_with)
         new_groups = await self._share_with_groups(fact_id, group_ids, fact_group_ids)
@@ -402,8 +402,8 @@ class KnowledgeOwnership:
         if fact_metadata is None:
             fact_metadata = {}
 
-        shared_with = set(fact_metadata.get("shared_with", []))
-        fact_group_ids = set(fact_metadata.get("group_ids", []))
+        shared_with = set(decode_id_list(fact_metadata.get("shared_with")))  # #16662: may be comma-joined
+        fact_group_ids = set(decode_id_list(fact_metadata.get("group_ids")))
 
         removed_users = await self._unshare_from_users(fact_id, user_ids, shared_with)
         removed_groups = await self._unshare_from_groups(fact_id, group_ids, fact_group_ids)
@@ -718,9 +718,9 @@ class KnowledgeOwnership:
         """
         owner_id = fact_metadata.get("owner_id")
         source_type = fact_metadata.get("source_type")
-        shared_with = fact_metadata.get("shared_with", [])
+        shared_with = decode_id_list(fact_metadata.get("shared_with"))  # #16662: may be comma-joined
         organization_id = fact_metadata.get("organization_id")
-        group_ids = fact_metadata.get("group_ids", [])
+        group_ids = decode_id_list(fact_metadata.get("group_ids"))
         visibility = fact_metadata.get("visibility")
 
         # Remove from owner's index
