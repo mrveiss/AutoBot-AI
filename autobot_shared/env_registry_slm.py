@@ -325,3 +325,48 @@ register_env_var(
         component="slm",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONSTRAINTS_RSYNC_TIMEOUT_S",
+        type=float,
+        default=30.0,
+        description=(
+            "Timeout, in seconds, for the top-level constraints/ rsync a "
+            "backend component sync runs before pip so a requirements.txt "
+            "`-c ../constraints/shared.txt` reference resolves "
+            "(autobot-slm-backend/api/code_sync_paths.py, #16713)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ROOT_REQS_CP_TIMEOUT_S",
+        type=float,
+        default=10.0,
+        description=(
+            "Timeout, in seconds, for copying a single top-level repo-root "
+            "file (e.g. requirements.txt) a backend component sync runs before "
+            "pip so a `-r ../requirements.txt` reference resolves "
+            "(autobot-slm-backend/api/code_sync_paths.py, #16713)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ALEMBIC_UPGRADE_TIMEOUT_S",
+        type=float,
+        default=300.0,
+        description=(
+            "Timeout, in seconds, for `alembic upgrade heads` during a "
+            "component's post-sync migration step. Raising it tolerates a "
+            "slower migration; lowering it fails a wedged migration sooner "
+            "(autobot-slm-backend/api/code_sync_paths.py, #11255, #16713)."
+        ),
+        component="slm",
+    )
+)

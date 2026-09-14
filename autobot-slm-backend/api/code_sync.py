@@ -33,6 +33,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api._pricing_post_sync import _load_env_file, run_pricing_refresh_post_sync
+
+# _CONSTRAINTS_SOURCE_SUBDIR / _REPO_ROOT_REQUIREMENT_FILES: re-exported only —
+# code_sync.py's own code no longer reads them, but external test modules
+# still import the constants from this module by their original name (#16713).
+from api.code_sync_paths import (  # noqa: F401
+    _CONSTRAINTS_SOURCE_SUBDIR,
+    _REPO_ROOT_REQUIREMENT_FILES,
+    _deploy_constraints_dir,
+    _deploy_repo_root_requirements,
+    _run_alembic_upgrade_subprocess,
+)
 from api.venv_reconcile import (
     EXPLICIT_LIST_COMPONENTS,
 )
@@ -1625,19 +1636,9 @@ _PROVISION_PYTHON_PLAYBOOK: Path = _ANSIBLE_DIR / "playbooks" / "provision-local
 # rule. ANSIBLE_CONFIG is also set as a fallback (honored only if sudoers keeps it).
 _ANSIBLE_CONFIG: Path = _ANSIBLE_DIR / "ansible.cfg"
 
-# Deployed path for the top-level constraints/ dir (#11322).
-# `autobot-backend/requirements.txt` uses `-c ../constraints/shared.txt` so the
-# relative path resolves to /opt/autobot/constraints/ at runtime.  Code-sync
-# only rsyncs component subdirs, so the constraints dir must be deployed
-# explicitly before pip runs.
-_CONSTRAINTS_SOURCE_SUBDIR: str = "constraints"
-
-# Repo-root files referenced via `-r ../X` in component requirements (#11336).
-# `autobot-backend/requirements.txt` uses `-r ../requirements.txt` which from
-# /opt/autobot/autobot-backend/ resolves to /opt/autobot/requirements.txt — a
-# path code-sync never writes.  This tuple lists the bare filenames (relative to
-# the repo root) that must be copied to /opt/autobot/ before pip runs.
-_REPO_ROOT_REQUIREMENT_FILES: tuple[str, ...] = ("requirements.txt",)
+# _CONSTRAINTS_SOURCE_SUBDIR and _REPO_ROOT_REQUIREMENT_FILES live in
+# api/code_sync_paths.py (#16713, #14236 ceiling) alongside the two functions
+# that are their only consumers; imported back above under these same names.
 
 # Maps component name → deployed frontend directory for npm rebuild.
 _COMPONENT_FRONTEND_DIRS: Dict[str, str] = {
@@ -1808,73 +1809,10 @@ _COMPONENT_SERVICES: Dict[str, List[str]] = {
 }
 
 
-async def _deploy_constraints_dir(source_root: str, steps: List[str]) -> None:
-    """Rsync top-level constraints/ to /opt/autobot/constraints/ before pip (#11322).
-
-    autobot-backend/requirements.txt uses `-c ../constraints/shared.txt` so the
-    relative reference resolves to /opt/autobot/constraints/shared.txt at deploy
-    time. Code-sync only rsyncs component subdirs, so this helper deploys the
-    constraints dir explicitly — preventing the silent pip failure that occurred
-    when the file was absent.
-    """
-    src = f"{source_root}/{_CONSTRAINTS_SOURCE_SUBDIR}/"
-    dst = f"/opt/autobot/{_CONSTRAINTS_SOURCE_SUBDIR}/"
-    if not Path(src).exists():
-        steps.append(f"constraints: source {src} not found — skipped")
-        return
-    steps.append(f"constraints: deploying {src} -> {dst}")
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "rsync",
-            "-avz",
-            "--delete",
-            src,
-            dst,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        _, _ = await asyncio.wait_for(proc.communicate(), timeout=30.0)
-        if proc.returncode == 0:
-            steps.append("constraints: deployed ok")
-        else:
-            steps.append(f"constraints: rsync failed (rc={proc.returncode})")
-    except Exception as exc:
-        steps.append(f"constraints: deploy error: {exc}")
-
-
-async def _deploy_repo_root_requirements(source_root: str, steps: List[str]) -> None:
-    """Copy top-level repo-root files to /opt/autobot/ before pip (#11336).
-
-    autobot-backend/requirements.txt uses `-r ../requirements.txt` so the
-    relative reference resolves to /opt/autobot/requirements.txt at deploy time.
-    Code-sync only rsyncs component subdirs, so each file listed in
-    _REPO_ROOT_REQUIREMENT_FILES is copied explicitly from source_root.
-    Skips gracefully when the source file is absent (non-fatal).
-    """
-    base = _get_deploy_base()
-    for filename in _REPO_ROOT_REQUIREMENT_FILES:
-        src = Path(source_root) / filename
-        dst = base / filename
-        if not src.exists():
-            steps.append(f"root-reqs: {src} not found — skipped")
-            continue
-        steps.append(f"root-reqs: copying {src} -> {dst}")
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "cp",
-                "--",
-                str(src),
-                str(dst),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
-            _, _ = await asyncio.wait_for(proc.communicate(), timeout=10.0)
-            if proc.returncode == 0:
-                steps.append(f"root-reqs: {filename} deployed ok")
-            else:
-                steps.append(f"root-reqs: cp {filename} failed (rc={proc.returncode})")
-        except Exception as exc:
-            steps.append(f"root-reqs: {filename} deploy error: {exc}")
+# _deploy_constraints_dir and _deploy_repo_root_requirements live in
+# api/code_sync_paths.py (#16713, #14236 ceiling): each inlines a CodeQL
+# py/path-injection containment check in the same scope as its filesystem
+# sink. Imported back above under these same names.
 
 
 async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
@@ -2148,6 +2086,31 @@ def _resolve_pg_db_url(env_vars: Dict[str, str]) -> str:
     )
 
 
+def _build_pg_dump_command(parsed, dump_path: Path, env_vars: Dict[str, str]) -> Tuple[List[str], Dict[str, str]]:
+    """Build the pg_dump argv and subprocess env from a parsed DATABASE_URL.
+
+    Split out of _pg_dump_before_migration to keep it under the function-length
+    guard (#620) — *dump_path* is already containment-checked by the caller
+    before this runs, and this helper touches no filesystem sink itself.
+    """
+    cmd = ["pg_dump", "--format=custom", f"--file={dump_path}"]
+    if parsed.hostname:
+        cmd += ["-h", parsed.hostname]
+    if parsed.port:
+        cmd += ["-p", str(parsed.port)]
+    if parsed.username:
+        cmd += ["-U", parsed.username]
+    db_name = (parsed.path or "").lstrip("/") or parsed.username or ""
+    if db_name:
+        cmd.append(db_name)
+
+    env = dict(os.environ)
+    if parsed.password:
+        env["PGPASSWORD"] = parsed.password
+    env.update(env_vars)
+    return cmd, env
+
+
 async def _pg_dump_before_migration(component: str, deployed_dir: str, steps: List[str]) -> Optional[str]:
     """Take a pg_dump of the component DB before running migrations (#11376, #11431).
 
@@ -2183,22 +2146,16 @@ async def _pg_dump_before_migration(component: str, deployed_dir: str, steps: Li
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     dump_path = backup_dir / f"{component}_{ts}.dump"
-
-    cmd = ["pg_dump", "--format=custom", f"--file={dump_path}"]
-    if parsed.hostname:
-        cmd += ["-h", parsed.hostname]
-    if parsed.port:
-        cmd += ["-p", str(parsed.port)]
-    if parsed.username:
-        cmd += ["-U", parsed.username]
-    db_name = (parsed.path or "").lstrip("/") or parsed.username or ""
-    if db_name:
-        cmd.append(db_name)
-
-    env = dict(os.environ)
-    if parsed.password:
-        env["PGPASSWORD"] = parsed.password
-    env.update(env_vars)
+    # CodeQL py/path-injection (#16713): inlined here, in the same scope as the
+    # .exists()/.unlink() sinks below — a guard raised by a helper elsewhere is
+    # not recognised as a sanitiser for this value (#16229 review).
+    resolved_dump = os.path.realpath(str(dump_path))
+    resolved_backup_dir = os.path.realpath(str(backup_dir))
+    if not resolved_dump.startswith(resolved_backup_dir + os.sep):
+        steps.append(f"pg_dump: refusing to write outside the backup directory for {component}")
+        return None
+    dump_path = Path(resolved_dump)
+    cmd, env = _build_pg_dump_command(parsed, dump_path, env_vars)
 
     steps.append(f"pg_dump: backing up {component} DB to {dump_path}")
     try:
@@ -2246,6 +2203,19 @@ async def _run_alembic_migrations(component: str, deployed_dir: str, steps: List
     _, pip_bin = paths
     alembic_bin = str(Path(pip_bin).with_name("alembic"))
     cfg_path = str(Path(deployed_dir) / cfg_rel)
+    # CodeQL py/path-injection (#16713): inlined here, in the same scope as the
+    # .exists() sink below and the subprocess "-c" argument further down — a
+    # guard raised by a helper elsewhere is not recognised as a sanitiser for
+    # this value (#16229 review).
+    from services.deployed_dir_resolver import deployed_root
+
+    root = os.path.realpath(deployed_root())
+    resolved_cfg = os.path.realpath(cfg_path)
+    if not resolved_cfg.startswith(root + os.sep):
+        logger.error("drift resolve: alembic config outside deployed root for %s: %s", component, resolved_cfg)
+        steps.append(f"alembic: ABORTED — config path outside the deployed root for {component}")
+        return False
+    cfg_path = resolved_cfg
     if not Path(alembic_bin).exists() or not Path(cfg_path).exists():
         steps.append(f"alembic: binary or config missing for {component} — skipped")
         return True
@@ -2268,43 +2238,9 @@ async def _run_alembic_migrations(component: str, deployed_dir: str, steps: List
     env.setdefault("PYTHONPATH", deployed_dir)
 
     steps.append(f"alembic: upgrade heads ({cfg_rel})")
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            alembic_bin,
-            "-c",
-            cfg_path,
-            "upgrade",
-            "heads",
-            cwd=deployed_dir,
-            env=env,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        out = stdout.decode(errors="replace") if stdout else ""
-        if proc.returncode == 0:
-            logger.info("drift resolve: alembic upgrade ok for %s", component)
-            steps.append("alembic: upgrade succeeded")
-            return True
-        logger.error(
-            "drift resolve: alembic upgrade FAILED (%d) for %s: %s",
-            proc.returncode,
-            component,
-            out[-400:],
-        )
-        _backup_ref = f" — DB backup at {display_dump}" if display_dump else ""
-        steps.append(f"alembic: upgrade FAILED (rc={proc.returncode}): {out[-200:]}{_backup_ref}")
-        return False
-    except asyncio.TimeoutError:
-        logger.error("drift resolve: alembic upgrade timed out for %s", component)
-        _backup_ref = f" — DB backup at {display_dump}" if display_dump else ""
-        steps.append(f"alembic: upgrade timed out after 300s{_backup_ref}")
-        return False
-    except Exception as exc:
-        logger.error("drift resolve: alembic upgrade error for %s: %s", component, exc)
-        _backup_ref = f" — DB backup at {display_dump}" if display_dump else ""
-        steps.append(f"alembic: upgrade error: {exc}{_backup_ref}")
-        return False
+    return await _run_alembic_upgrade_subprocess(
+        alembic_bin, cfg_path, deployed_dir, env, component, display_dump, steps
+    )
 
 
 def _lockfile_hash(frontend_dir: str) -> Optional[str]:
@@ -2817,6 +2753,17 @@ def _get_deploy_base() -> Path:
         return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
 
 
+def _get_code_source_root() -> Path:
+    """Return the code_source checkout root (SLM_REPO_PATH, #16713).
+
+    Mirrors _get_deploy_base(): a thin, patchable getter so tests can
+    monkeypatch this function directly rather than the module-level
+    DEFAULT_REPO_PATH constant it wraps. Used by api/code_sync_paths.py's
+    containment checks as the trusted root a source path must resolve under.
+    """
+    return Path(DEFAULT_REPO_PATH)
+
+
 async def _ensure_autobot_shared_symlink(component: str, steps: List[str]) -> None:
     """Restore <AUTOBOT_BASE_DIR>/<component>/autobot_shared → <AUTOBOT_BASE_DIR>/autobot_shared (#10912).
 
@@ -2841,6 +2788,16 @@ async def _ensure_autobot_shared_symlink(component: str, steps: List[str]) -> No
         steps.append(f"symlink: {shared_target} not found — skipped")
         return
     link_path = base / component / "autobot_shared"
+    # CodeQL py/path-injection (#16713): the containment check is inlined here,
+    # in the same scope as the unlink()/symlink_to() sinks below, rather than
+    # delegated to a helper — CodeQL only recognises a guard as a sanitiser for
+    # a value used in the scope the guard itself runs in (#16229 review).
+    resolved_link = os.path.realpath(str(link_path))
+    resolved_base = os.path.realpath(str(base))
+    if not resolved_link.startswith(resolved_base + os.sep):
+        logger.error("drift resolve: symlink path outside deploy base for %s: %s", component, resolved_link)
+        steps.append(f"symlink: refusing a path outside the deploy base for {component}")
+        return
     try:
         if link_path.is_symlink() and link_path.resolve() == shared_target.resolve():
             steps.append(f"symlink: {link_path} already correct")

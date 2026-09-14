@@ -216,6 +216,30 @@ def test_skipped_when_shared_target_missing(tmp_path) -> None:
     assert any("not found" in s for s in steps)
 
 
+def test_symlink_refuses_traversal_before_filesystem_access(tmp_path) -> None:
+    """A component value escaping the deploy base is refused (CodeQL
+    py/path-injection, #16713) before any filesystem call is made — even if
+    it somehow bypassed the _BACKEND_COMPONENTS membership check upstream."""
+    from unittest.mock import patch
+
+    shared_target = tmp_path / "autobot_shared"
+    shared_target.mkdir()
+    malicious = "../../etc"
+
+    steps: list = []
+    with (
+        patch("api.code_sync._get_deploy_base", return_value=tmp_path),
+        patch("api.code_sync._BACKEND_COMPONENTS", frozenset({malicious})),
+        patch("pathlib.Path.unlink") as mock_unlink,
+        patch("pathlib.Path.symlink_to") as mock_symlink_to,
+    ):
+        _run(_ensure_autobot_shared_symlink(malicious, steps))
+
+    mock_unlink.assert_not_called()
+    mock_symlink_to.assert_not_called()
+    assert any("refusing" in s for s in steps), steps
+
+
 # ---------------------------------------------------------------------------
 # _run_post_sync_steps — pip backend path calls symlink restore before restart
 # ---------------------------------------------------------------------------

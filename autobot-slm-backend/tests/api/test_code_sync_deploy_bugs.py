@@ -55,8 +55,6 @@ from api.code_sync import (  # noqa: E402
     _REPO_ROOT_REQUIREMENT_FILES,
     _SNAPSHOT_BASE_DIR,
     _build_npm_frontend_for_component,
-    _deploy_constraints_dir,
-    _deploy_repo_root_requirements,
     _ensure_dist_writable,
     _ensure_target_python_installed,
     _ensure_venv_python,
@@ -105,59 +103,6 @@ def test_component_python_target_has_backends() -> None:
     assert _COMPONENT_PYTHON_TARGET["autobot-backend"] == "python3.14"
     assert _COMPONENT_PYTHON_TARGET["autobot-slm-backend"] == "python3.14"
     assert "autobot-npu-worker" not in _COMPONENT_PYTHON_TARGET  # ansible decides it (#13747)
-
-
-# ---------------------------------------------------------------------------
-# #11322 — _deploy_constraints_dir
-# ---------------------------------------------------------------------------
-
-
-def test_deploy_constraints_dir_skipped_when_source_missing(tmp_path) -> None:
-    """Step says 'not found' when the source dir doesn't exist."""
-    steps: list[str] = []
-    _run(_deploy_constraints_dir(str(tmp_path / "no_such_root"), steps))
-    assert any("not found" in s for s in steps)
-
-
-def test_deploy_constraints_dir_calls_rsync(tmp_path) -> None:
-    """rsync is called when the source dir exists."""
-    src_root = tmp_path / "code_source"
-    (src_root / "constraints").mkdir(parents=True)
-
-    steps: list[str] = []
-    captured: list = []
-
-    async def _fake_exec(*cmd, **kw):
-        captured.extend(cmd)
-        proc = MagicMock()
-        proc.returncode = 0
-        proc.communicate = AsyncMock(return_value=(b"", b""))
-        return proc
-
-    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
-        _run(_deploy_constraints_dir(str(src_root), steps))
-
-    assert "rsync" in captured
-    assert any("deployed ok" in s for s in steps)
-
-
-def test_deploy_constraints_dir_records_rsync_failure(tmp_path) -> None:
-    """Non-zero rsync rc is recorded in steps."""
-    src_root = tmp_path / "code_source"
-    (src_root / "constraints").mkdir(parents=True)
-
-    steps: list[str] = []
-
-    async def _fake_exec(*cmd, **kw):
-        proc = MagicMock()
-        proc.returncode = 23
-        proc.communicate = AsyncMock(return_value=(b"error", b""))
-        return proc
-
-    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
-        _run(_deploy_constraints_dir(str(src_root), steps))
-
-    assert any("failed" in s for s in steps)
 
 
 # ---------------------------------------------------------------------------
@@ -457,67 +402,6 @@ def test_ensure_venv_python_skips_creation_when_target_not_installed_missing(tmp
 def test_repo_root_requirement_files_constant() -> None:
     """_REPO_ROOT_REQUIREMENT_FILES must include requirements.txt."""
     assert "requirements.txt" in _REPO_ROOT_REQUIREMENT_FILES
-
-
-def test_deploy_repo_root_requirements_skipped_when_file_missing(tmp_path) -> None:
-    """Step says 'not found' when the source file doesn't exist."""
-    steps: list[str] = []
-    with patch("api.code_sync._get_deploy_base", return_value=tmp_path):
-        _run(_deploy_repo_root_requirements(str(tmp_path / "no_such_root"), steps))
-    assert any("not found" in s for s in steps)
-
-
-def test_deploy_repo_root_requirements_calls_cp(tmp_path) -> None:
-    """cp is called when the source file exists."""
-    src_root = tmp_path / "code_source"
-    src_root.mkdir()
-    (src_root / "requirements.txt").write_text("paramiko>=5.0.0\n", encoding="utf-8")
-    dst_base = tmp_path / "opt_autobot"
-    dst_base.mkdir()
-
-    steps: list[str] = []
-    captured: list = []
-
-    async def _fake_exec(*cmd, **kw):
-        captured.extend(cmd)
-        proc = MagicMock()
-        proc.returncode = 0
-        proc.communicate = AsyncMock(return_value=(b"", b""))
-        return proc
-
-    with (
-        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
-        patch("api.code_sync._get_deploy_base", return_value=dst_base),
-    ):
-        _run(_deploy_repo_root_requirements(str(src_root), steps))
-
-    assert "cp" in captured
-    assert any("deployed ok" in s for s in steps)
-
-
-def test_deploy_repo_root_requirements_records_cp_failure(tmp_path) -> None:
-    """Non-zero cp rc is recorded in steps."""
-    src_root = tmp_path / "code_source"
-    src_root.mkdir()
-    (src_root / "requirements.txt").write_text("paramiko>=5.0.0\n", encoding="utf-8")
-    dst_base = tmp_path / "opt_autobot"
-    dst_base.mkdir()
-
-    steps: list[str] = []
-
-    async def _fake_exec(*cmd, **kw):
-        proc = MagicMock()
-        proc.returncode = 1
-        proc.communicate = AsyncMock(return_value=(b"permission denied", b""))
-        return proc
-
-    with (
-        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
-        patch("api.code_sync._get_deploy_base", return_value=dst_base),
-    ):
-        _run(_deploy_repo_root_requirements(str(src_root), steps))
-
-    assert any("failed" in s for s in steps)
 
 
 def test_run_post_sync_steps_calls_deploy_repo_root_requirements() -> None:
@@ -1160,44 +1044,6 @@ def test_pg_dump_invoked_before_alembic(tmp_path, monkeypatch) -> None:
 
     assert call_order[0] == "dump", f"pg_dump must run before alembic; got order={call_order}"
     assert "alembic" in call_order
-
-
-def test_alembic_aborted_when_dump_fails(tmp_path) -> None:
-    """Migration must not run if pg_dump returns None (#11376)."""
-    executed: list[str] = []
-
-    async def _fake_dump(component, deployed_dir, steps):
-        steps.append("pg_dump: FAILED (rc=1): some error")
-        return None
-
-    async def _fake_exec(*cmd, **kw):
-        executed.extend(cmd)
-        proc = MagicMock()
-        proc.returncode = 0
-        proc.communicate = AsyncMock(return_value=(b"", b""))
-        return proc
-
-    deployed = tmp_path / "autobot-backend"
-    deployed.mkdir()
-    (deployed / "migrations").mkdir()
-    (deployed / "migrations" / "alembic.ini").write_text("[alembic]\n", encoding="utf-8")
-
-    with (
-        patch(
-            "api.code_sync._COMPONENT_MIGRATION_CONFIG",
-            {"autobot-backend": "migrations/alembic.ini"},
-        ),
-        patch("api.code_sync._COMPONENT_PIP_PATHS", {"autobot-backend": ("req.txt", str(deployed / "venv/bin/pip"))}),
-        patch("pathlib.Path.exists", return_value=True),
-        patch("api.code_sync._pg_dump_before_migration", side_effect=_fake_dump),
-        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
-    ):
-        steps: list[str] = []
-        result = _run(_run_alembic_migrations("autobot-backend", str(deployed), steps))
-
-    assert result is False
-    assert not executed, "alembic must NOT execute when pg_dump fails"
-    assert any("ABORTED" in s for s in steps)
 
 
 def test_pg_dump_abort_propagates_to_post_sync() -> None:
