@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.ingestion_visibility import INGESTED_DOCUMENT_VISIBILITY
 
 logger = get_logger(__name__)
 
@@ -169,6 +170,7 @@ class ManPageContent:
             "category": "system_commands",
             "source": "man_page_parser",
             "parse_method": self.parse_method,
+            "visibility": INGESTED_DOCUMENT_VISIBILITY,  # #16693: a man page is a document for everyone
         }
 
         if self.file_path:
