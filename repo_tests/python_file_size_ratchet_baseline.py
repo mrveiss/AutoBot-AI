@@ -209,7 +209,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/code_intelligence/vue_analyzer.py": 613,
     "autobot-backend/command_manual_manager.py": 908,
     "autobot-backend/computer_vision/screen_analyzer.py": 662,
-    "autobot-backend/conftest.py": 1570,
+    "autobot-backend/conftest.py": 1568,
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 640,
@@ -451,7 +451,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 675,
     "autobot-slm-backend/api/code_source.py": 720,
-    "autobot-slm-backend/api/code_sync.py": 6091,  # #16610: stage-failure blocks folded into _fail_fleet_stage
+    "autobot-slm-backend/api/code_sync.py": 6079,  # #16610 + #16231 combined shrinks, remeasured on merge
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
     "autobot-slm-backend/api/monitoring.py": 1087,
@@ -490,7 +490,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/services/service_orchestrator.py": 955,
     "autobot-slm-backend/services/sync_orchestrator.py": 649,
     "autobot-slm-backend/slm/agent/agent.py": 675,
-    "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 2155,
+    "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 2166,  # #16229 review: SLM_DEPLOYED_ROOT patches
     "autobot-slm-backend/tests/api/test_drift_resolve.py": 606,
     "autobot-slm-backend/tests/api/test_fleet_node_update_11511.py": 1051,
     "autobot-slm-backend/tests/api/test_prometheus_scrape_is_unauthenticated_14339.py": 973,

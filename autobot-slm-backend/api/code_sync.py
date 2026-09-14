@@ -32,6 +32,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from api._pricing_post_sync import _load_env_file, run_pricing_refresh_post_sync
 from api.venv_reconcile import (
     EXPLICIT_LIST_COMPONENTS,
 )
@@ -2101,20 +2102,6 @@ _COMPONENT_HEALTH_URLS: Dict[str, str] = {
 }
 
 
-def _load_env_file(env_path: Path) -> Dict[str, str]:
-    """Parse a deployed KEY=VALUE .env into a dict (for subprocess env)."""
-    env: Dict[str, str] = {}
-    if not env_path.exists():
-        return env
-    for raw in env_path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        env[key.strip()] = value.strip().strip('"').strip("'")
-    return env
-
-
 def _prune_old_backups(backup_dir: Path, component: str, max_keep: int) -> None:
     """Delete oldest pg_dump files for *component* beyond *max_keep* (#11376)."""
     prefix = f"{component}_"
@@ -2966,6 +2953,7 @@ async def _run_post_sync_backend_branch(
         await _rollback_component(component, snapshot, steps, last_dump_path)
         return False
     await _ensure_autobot_shared_symlink(component, steps)
+    await run_pricing_refresh_post_sync(component, deployed_dir, pip_bin, steps)
     if not restart:
         steps.append("post-sync: restart deferred")
         return True
