@@ -74,7 +74,7 @@ def _kb(search_results=(), fact=None):
 
 @pytest.mark.asyncio
 async def test_mcp_search_returns_only_non_private_facts():
-    from mcp.autobot_server import AutoBotMCPServer
+    from mcp_server.autobot_server import AutoBotMCPServer
 
     kb = _kb([_SYSTEM, _PRIVATE])
     with patch("knowledge._composed.get_knowledge_base", AsyncMock(return_value=kb)):
@@ -87,7 +87,7 @@ async def test_mcp_search_returns_only_non_private_facts():
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("fact", "found"), [(_SYSTEM, True), (_PRIVATE, False)])
 async def test_mcp_get_document_does_not_disclose_a_private_fact(fact, found):
-    from mcp.autobot_server import AutoBotMCPServer
+    from mcp_server.autobot_server import AutoBotMCPServer
 
     with patch("knowledge._composed.get_knowledge_base", AsyncMock(return_value=_kb(fact=fact))):
         doc = await AutoBotMCPServer()._kb_get_document(fact["id"])
