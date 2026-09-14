@@ -60,6 +60,14 @@ _CURRENT_LINK = "current"
 _PREVIOUS_LINK = "previous"
 _LEGACY_DIR = "dist"
 
+# The pre-#15610 rollback target: a real directory copy, not a symlink. The
+# `dist-<id>/` pruner in _prune_old_builds never matches it (no `dist-`
+# prefix), so it survived every publish since the symlink layout landed
+# (#16310). Removed only once BOTH `current` and `previous` are the new
+# symlinks -- i.e. this node has published at least twice under #15610 and
+# nothing can still be pointing a rollback at the legacy directory.
+_LEGACY_PREVIOUS_DIR = "dist.previous"
+
 # How many build directories survive a publish. Bounded, or the disk grows by
 # one bundle per self-sync forever. Env-backed for the same reason the timeouts
 # above are: the Ansible half reads `slm_frontend_release_keep` from inventory
@@ -135,6 +143,26 @@ def _prune_old_builds(root: Path) -> None:
             shutil.rmtree(root / name)
         except OSError as exc:
             logger.warning("SLM self-sync: could not prune old bundle %s: %s", name, exc)
+
+
+def _remove_legacy_previous(root: Path) -> None:
+    """Remove the pre-#15610 ``dist.previous/`` rollback dir (#16310).
+
+    Only once ``current`` AND ``previous`` are both the new-layout symlinks --
+    the same guard that governs anything else here that could delete: safe to
+    remove because nothing under the current or #15610 layouts can still
+    resolve a rollback to it.
+    """
+    if not (root / _CURRENT_LINK).is_symlink() or not (root / _PREVIOUS_LINK).is_symlink():
+        return
+    legacy = root / _LEGACY_PREVIOUS_DIR
+    if not legacy.is_dir() or legacy.is_symlink():
+        return
+    try:
+        shutil.rmtree(legacy)
+        logger.info("SLM self-sync: removed legacy %s (#16310)", _LEGACY_PREVIOUS_DIR)
+    except OSError as exc:
+        logger.warning("SLM self-sync: could not remove legacy %s: %s", _LEGACY_PREVIOUS_DIR, exc)
 
 
 async def _chown_slm_frontend(frontend_dir: str) -> None:
@@ -226,6 +254,7 @@ async def _publish_build(frontend_dir: str, build_id: str) -> bool:
         if replaced:
             _flip(root, _PREVIOUS_LINK, replaced)
         _prune_old_builds(root)
+        _remove_legacy_previous(root)
 
     await asyncio.to_thread(_swap)
     return True
