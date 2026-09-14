@@ -16,6 +16,7 @@ from api.schemas_knowledge import (
     ScopedSearchRequest,
 )
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.search_filters import (
@@ -60,7 +61,7 @@ async def _resolve_search_context(request: Request, current_user: User, query: s
 
 
 async def _execute_permission_filtered_search(
-    kb, search_request: ScopedSearchRequest, user_id, user_org_id, user_group_ids
+    kb, search_request: ScopedSearchRequest, user_id, user_org_id, user_group_ids, is_admin: bool = False
 ):
     """Helper for scoped_search. Ref: #1088.
 
@@ -72,6 +73,7 @@ async def _execute_permission_filtered_search(
         user_id=user_id,
         user_org_id=user_org_id,
         user_group_ids=user_group_ids,
+        is_admin=is_admin,  # #16662: an admin's explicit search is not narrowed to their own scope
     )
 
     if not hasattr(kb, "search"):
@@ -91,6 +93,7 @@ async def _build_scoped_search_response(
     user_org_id,
     user_group_ids,
     ownership_manager,
+    is_admin: bool = False,
 ) -> dict:
     """Helper for scoped_search. Ref: #1088.
 
@@ -102,6 +105,7 @@ async def _build_scoped_search_response(
         user_org_id=user_org_id,
         user_group_ids=user_group_ids,
         ownership_manager=ownership_manager,
+        is_admin=is_admin,
     )
 
     logger.info(
@@ -149,14 +153,15 @@ async def scoped_search(
         kb, user_id, user_org_id, user_group_ids = await _resolve_search_context(
             request, current_user, search_request.query
         )
-        results = await _execute_permission_filtered_search(kb, search_request, user_id, user_org_id, user_group_ids)
+        # #16662: plain scoped search is an explicit read API, so an admin reads every fact here;
+        # the RAG route keeps the default -- synthesis is chat-like, and chat gets no bypass (#16654)
+        role = current_user.get("role") if isinstance(current_user, dict) else getattr(current_user, "role", None)
+        is_admin = is_admin_role(role)
+        results = await _execute_permission_filtered_search(
+            kb, search_request, user_id, user_org_id, user_group_ids, is_admin=is_admin
+        )
         return await _build_scoped_search_response(
-            results,
-            search_request,
-            user_id,
-            user_org_id,
-            user_group_ids,
-            kb.ownership_manager,
+            results, search_request, user_id, user_org_id, user_group_ids, kb.ownership_manager, is_admin=is_admin
         )
 
     except HTTPException:

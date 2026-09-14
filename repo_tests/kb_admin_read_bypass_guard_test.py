@@ -6,14 +6,15 @@
 
 Owner decision on #16654: an admin can read any fact through the explicit search and
 read APIs, but an admin's chat gets NO bypass. So the ``is_admin`` input of
-``check_access`` and ``filter_search_results_by_permission`` may be passed only from
+``check_access``, ``filter_search_results_by_permission`` and
+``augment_search_request_with_permissions`` may be passed only from
 :data:`EXPLICIT_READ_APIS`, plus the helper that forwards it
 (:data:`PASS_THROUGH`). Any other production call that passes it fails here, and that
 includes every chat, agent, RAG and grounding path.
 
 **Scope.** Git-tracked production Python under ``autobot-backend/`` and
 ``autobot_shared/``, tests excluded. A call counts when it is ``<x>.check_access(...)``,
-``check_access(...)``, or the same for ``filter_search_results_by_permission``, and it
+``check_access(...)``, or the same for the other :data:`GATED_HELPERS`, and it
 passes an ``is_admin=`` keyword. It cannot see the flag passed positionally, through
 ``**kwargs``, or through a renamed alias. Those are the declared blind spots, and the
 known-positive test below shows that the keyword form is detected.
@@ -31,7 +32,9 @@ from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
 SCAN_ROOTS = ("autobot-backend/", "autobot_shared/")
-GATED_HELPERS = frozenset({"check_access", "filter_search_results_by_permission"})
+GATED_HELPERS = frozenset(
+    {"check_access", "filter_search_results_by_permission", "augment_search_request_with_permissions"}
+)
 
 #: Explicit, admin-aware read APIs (owner decision on #16654). Adding a file here needs
 #: that decision, not convenience: a chat or grounding path must never appear.
@@ -94,11 +97,13 @@ def test_only_explicit_read_apis_pass_the_admin_bypass():
     )
 
 
-def test_the_scan_reached_the_admin_aware_call_sites():
-    """Not vacuous: the scan found at least one admin-aware call site it exists to bound."""
+def test_every_explicit_read_api_passes_the_admin_input():
+    """Not vacuous, and the owner decision is wired: each explicit read API reads as an admin."""
     found, scanned = _scan()
     assert scanned > 1000, f"only {scanned} production files scanned"
-    assert set(found) & (EXPLICIT_READ_APIS | PASS_THROUGH), f"no admin-aware call site found: {sorted(found)}"
+    assert EXPLICIT_READ_APIS <= set(
+        found
+    ), f"explicit read APIs not passing is_admin: {sorted(EXPLICIT_READ_APIS - set(found))}"
 
 
 def test_a_chat_path_passing_the_bypass_is_detected():
