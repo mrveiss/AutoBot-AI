@@ -11,6 +11,8 @@ ownership filter, keyed ``(repo-relative file, enclosing function) -> reason``. 
 * ``SCOPED`` -- the read is already limited to facts the caller may see by construction.
 * ``NOT_USER_FACING`` -- the result never reaches a user or a prompt.
 * ``IMPL`` -- the knowledge base reading its own store.
+* ``ADMIN_ONLY`` -- a raw read reachable only behind an admin gate (the owner ruled raw
+  collection access that bypasses visibility admin-only, #16654).
 
 THIS MAPPING ONLY SHRINKS. A path that starts filtering must leave in the same PR (the
 guard fails on a stale entry), and the guard's ``UNFILTERED_READ_CEILING`` is lowered with
@@ -22,6 +24,12 @@ from __future__ import annotations
 _T2 = "TRACKED_GAP #16664: puts KB content into a chat, agent or RAG path without the user's scope"
 _T3 = "TRACKED_GAP #16665: returns KB facts to an API caller without the caller's scope"
 _T4 = "TRACKED_GAP #16666: MCP knowledge access with no user identity (owner: non-private facts only)"
+_SUMMARIES = "TRACKED_GAP #16694: raw knowledge_summaries reads served to any signed-in user"
+_RAG_CACHE = "TRACKED_GAP #16664: a query-keyed RAG cache shared across users; partition it by visibility scope"
+_RAW_ADMIN = "ADMIN_ONLY: raw KB-collection read reachable only behind an admin gate"
+_RAW_REPAIR = "NOT_USER_FACING: operator vector-repair CLI; returns row ids and booleans, no fact content"
+_RAW_ADMIN_MEMORY = "ADMIN_ONLY: platform-admin user reassignment over the verbatim and trajectory stores, not KB facts"
+_CACHE_EVICT = "NOT_USER_FACING: cache eviction reads metadata only"
 
 ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/advanced_rag_optimizer.py", "AdvancedRAGOptimizer._perform_semantic_search"): _T2,
@@ -132,4 +140,22 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/embedded.py",
         "EmbeddedKnowledgeClient.search",
     ): _T4,
+    # --- raw ChromaDB reads on KB-content collections (#16667 part 3, classified 2026-09-14) ---
+    ("autobot-backend/api/knowledge_chroma.py", "list_documents"): _T4,
+    ("autobot-backend/api/knowledge_chroma.py", "search_collection"): _T4,
+    ("autobot-backend/api/knowledge_maintenance.py", "_fetch_all_chunks._load"): _RAW_ADMIN,
+    ("autobot-backend/api/knowledge_vectorization.py", "_fetch_chunks_by_ids"): _RAW_ADMIN,
+    ("autobot-backend/api/knowledge_vectorization.py", "_fetch_unenriched_ids"): _RAW_ADMIN,
+    ("autobot-backend/knowledge/summary_search.py", "SummarySearchService.search_summaries"): _SUMMARIES,
+    ("autobot-backend/knowledge/summary_search.py", "SummarySearchService.get_document_overview"): _SUMMARIES,
+    ("autobot-backend/knowledge/summary_search.py", "SummarySearchService.drill_down"): _SUMMARIES,
+    ("autobot-backend/knowledge/vector_repair.py", "scan_poisoned_rows"): _RAW_REPAIR,
+    ("autobot-backend/knowledge/vector_repair.py", "has_reachable_vector"): _RAW_REPAIR,
+    ("autobot-backend/memory/ownership_reassign.py", "_reassign_kb_facts_chroma"): _RAW_ADMIN,
+    ("autobot-backend/memory/ownership_reassign.py", "_reassign_chroma_store"): _RAW_ADMIN_MEMORY,
+    ("autobot-backend/services/semantic_query_cache.py", "SemanticQueryCache.lookup"): _RAG_CACHE,
+    ("autobot-backend/services/semantic_query_cache.py", "SemanticQueryCache._maybe_evict"): _CACHE_EVICT,
+    ("autobot-backend/services/semantic_query_cache.py", "SemanticQueryCache.clear"): _RAW_ADMIN,
+    ("autobot-backend/services/topic_retrieval_cache.py", "TopicRetrievalCache.lookup"): _RAG_CACHE,
+    ("autobot-backend/services/topic_retrieval_cache.py", "TopicRetrievalCache._maybe_evict"): _CACHE_EVICT,
 }
