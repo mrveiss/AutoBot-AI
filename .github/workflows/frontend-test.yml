@@ -231,7 +231,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Upload test results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: test-results-unit
@@ -338,7 +338,7 @@ jobs:
           npx auditjs ossi || true
 
       - name: Upload security scan results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: security-scan-results
