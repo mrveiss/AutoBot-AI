@@ -235,7 +235,7 @@
             <button @click.stop="editSecret(item.data)" class="action-btn" :title="t('security.secretsManager.edit')">
               <Icon name="edit" />
             </button>
-            <button @click.stop="shareSecret(secret)" class="action-btn" :title="t('security.secretsManager.share')">
+            <button @click.stop="shareSecret(item.data)" class="action-btn" :title="t('security.secretsManager.share')">
               <Icon name="user-plus" />
             </button>
             <button

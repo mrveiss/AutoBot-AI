@@ -72,9 +72,10 @@ const { t } = useI18n()
 const roleOwners = ref<Record<string, string>>({})
 const ORCH_INFRA_ROLES = ['autobot_shared', 'slm-agent']
 
-// The Redis panel acts on the node holding the `redis` role, through that role's unit (#16245)
+// The Redis panel acts on the node holding the `redis` role, through that role's unit (#16245).
+// #16025 made systemd_service a sequence (a role can own >1 unit); redis owns exactly one.
 const redisSystemdService = computed(
-  () => roles.roles.find((role) => role.name === 'redis')?.systemd_service ?? undefined,
+  () => roles.roles.find((role) => role.name === 'redis')?.systemd_service?.[0] ?? undefined,
 )
 
 async function fetchRoleOwners(): Promise<void> {
