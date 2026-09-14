@@ -1,19 +1,21 @@
-# AutoBot Phase 5 - Distributed Multi-Modal Architecture
+# AutoBot Distributed Multi-Modal Architecture
 
 > **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
-**6-VM Distributed System with Multi-Modal AI Integration**
 
-Generated: `2025-09-10`  
-Status: **Production Ready** - All distributed services operational
+**Role-Based Distributed System with Multi-Modal AI Integration**
+
+Status: **Production Ready** — all distributed services operational. For the historical
+setup record of one specific installation, see
+[`../archives/DISTRIBUTED_6VM_SETUP_20250912.md`](../archives/DISTRIBUTED_6VM_SETUP_20250912.md).
 
 ## Executive Summary
 
-AutoBot Phase 5 implements a sophisticated distributed architecture across 6 dedicated virtual machines, each optimized for specific workloads. This design resolves environment conflicts, maximizes hardware utilization, and provides scalability and reliability.
+AutoBot implements a sophisticated distributed architecture in which each service role (frontend, backend, database, AI/ML, NPU acceleration, browser automation) is a separable unit optimized for its own workload. A deployment can run every role in Docker on one machine, split them across a small number of VMs, or scale out to as many hosts as the operator needs — see [VM_ROLES.md](VM_ROLES.md) for the role definitions and placement rules. This design resolves environment conflicts, maximizes hardware utilization, and provides scalability and reliability.
 
-### Why Distributed Architecture?
+### Why Role Separation?
 
 **Technical Justification**:
-1. **Environment Isolation**: Python/Node.js dependency conflicts resolved through VM separation
+1. **Environment Isolation**: Python/Node.js dependency conflicts resolved through role separation
 2. **Hardware Optimization**: Intel NPU, RTX 4070 GPU, and multi-core CPU optimally distributed
 3. **Service Scalability**: Independent scaling of AI processing, data storage, and web services
 4. **Fault Tolerance**: Service isolation prevents cascade failures
@@ -29,28 +31,28 @@ graph TB
         VNC[VNC Desktop<br/>127.0.0.1:6080<br/>noVNC + kex]
     end
 
-    subgraph "VM1 - Frontend (<frontend-ip>)"
+    subgraph "Frontend Role (<frontend-ip>)"
         Vue3[Vue 3 + TypeScript<br/>Port 5173<br/>Nginx + Hot Reload]
         Vite[Vite Dev Server<br/>HMR + Proxy Config]
     end
 
-    subgraph "VM2 - NPU Worker (<npu-ip>)"
+    subgraph "NPU Worker Role (<npu-ip>)"
         NPUService[Intel NPU Service<br/>Port 8081<br/>OpenVINO + NPU Acceleration]
         GPUProcess[GPU Acceleration<br/>CUDA/OpenCL<br/>Computer Vision Tasks]
     end
 
-    subgraph "VM3 - Redis Stack (<database-ip>)"
+    subgraph "Database Role (<database-ip>)"
         RedisStack[Redis Stack 7.4.0<br/>Port 6379<br/>11 Specialized Databases]
         RedisInsight[RedisInsight<br/>Port 8002<br/>Visual Management]
         VectorDB[Vector Storage<br/>13,383 Embeddings<br/>Knowledge Vectors]
     end
 
-    subgraph "VM4 - AI Stack (<aiml-ip>)"
+    subgraph "AI Stack Role (<aiml-ip>)"
         AIOrchestrator[AI Model Orchestrator<br/>Port 8080<br/>Multi-Provider Support]
         ModelCache[Model Cache<br/>GPU Memory Management<br/>Inference Optimization]
     end
 
-    subgraph "VM5 - Browser Service (<browser-ip>)"
+    subgraph "Browser Role (<browser-ip>)"
         Playwright[Playwright Automation<br/>Port 3000<br/>Multi-Browser Support]
         WebDrivers[Chrome + Firefox<br/>Headless/Headed Modes<br/>Screenshot + Interaction]
     end
@@ -72,8 +74,8 @@ graph TB
 
 ## Detailed Component Architecture
 
-### Main Host (WSL2) - <backend-ip>
-**Role**: Core API server, system integration, and desktop access
+### Backend Role (`backend`) — example host <backend-ip> (WSL2)
+**Function**: Core API server, system integration, and desktop access
 
 **Specifications**:
 - **OS**: Ubuntu 22.04 LTS on WSL2
@@ -90,7 +92,7 @@ backend/
 │   ├── knowledge.py       # Knowledge base operations  
 │   ├── system.py          # System health monitoring
 │   ├── workflow_automation.py  # Workflow orchestration
-│   └── multimodal_ai.py   # Phase 5 AI integration
+│   └── multimodal_ai.py   # Multi-modal AI integration
 ├── services/              # Business logic layer
 ├── utils/                 # Utility functions
 └── fast_app_factory_fix.py  # Optimized startup (2s vs 30s)
@@ -115,8 +117,8 @@ VNC_PASSWORD=autobot_secure
 DISPLAY=:99
 ```
 
-### VM1 - Frontend Service (<frontend-ip>)
-**Role**: Modern web interface with real-time capabilities
+### Frontend Role (`frontend`) — example host <frontend-ip>
+**Function**: Modern web interface with real-time capabilities
 
 **Specifications**:
 - **OS**: Ubuntu 22.04 LTS
@@ -138,7 +140,7 @@ autobot-frontend/
 │   ├── services/
 │   │   ├── WebSocketService.js  # Real-time communication
 │   │   ├── ApiService.js   # REST API integration
-│   │   └── MultiModalService.js # Phase 5 AI integration
+│   │   └── MultiModalService.js # Multi-modal AI integration
 │   └── stores/            # Pinia state management with persistence
 ├── vite.config.ts         # Proxy configuration for backend
 └── package.json           # Dependencies including @xterm packages
@@ -176,8 +178,8 @@ server {
 }
 ```
 
-### VM2 - NPU Worker (<npu-ip>)  
-**Role**: Hardware-accelerated AI processing and computer vision
+### NPU Worker Role (`aiml` / `npu_workers`) — example host <npu-ip>
+**Function**: Hardware-accelerated AI processing and computer vision
 
 **Specifications**:
 - **OS**: Ubuntu 22.04 LTS with Intel NPU drivers
@@ -226,8 +228,8 @@ models:
     fallback: "sentence_transformer_gpu.onnx"
 ```
 
-### VM3 - Redis Stack (<database-ip>)
-**Role**: Centralized data persistence and caching
+### Database Role (`database`) — example host <database-ip>
+**Function**: Centralized data persistence and caching
 
 **Specifications**:
 - **OS**: Ubuntu 22.04 LTS  
@@ -287,8 +289,8 @@ loadmodule /opt/redis-stack/lib/redisearch.so
 loadmodule /opt/redis-stack/lib/rejson.so
 ```
 
-### VM4 - AI Stack (<aiml-ip>)
-**Role**: Multi-provider AI model orchestration and inference
+### AI Stack Role (`aiml`) — example host <aiml-ip>
+**Function**: Multi-provider AI model orchestration and inference
 
 **Specifications**:
 - **OS**: Ubuntu 22.04 LTS
@@ -361,8 +363,8 @@ routing_rules:
     model: "claude-3-opus-20240229"
 ```
 
-### VM5 - Browser Service (<browser-ip>)
-**Role**: Web automation and browser-based task execution
+### Browser Role (`browser`) — example host <browser-ip>
+**Function**: Web automation and browser-based task execution
 
 **Specifications**:
 - **OS**: Ubuntu 22.04 LTS with GUI support
@@ -428,12 +430,12 @@ GET /api/sessions/{session_id}/screenshot
 
 ### Network Topology
 ```
-Physical Host (<backend-ip>)
-├── Frontend VM (<frontend-ip>)     # DMZ - Public facing
-├── NPU Worker (<npu-ip>)      # Compute tier - Internal only  
-├── Redis Stack (<database-ip>)     # Data tier - Internal only
-├── AI Stack (<aiml-ip>)        # Service tier - Internal only
-└── Browser Service (<browser-ip>) # Automation tier - Controlled access
+Backend role (<backend-ip>)
+├── Frontend role (<frontend-ip>)     # DMZ - Public facing
+├── NPU Worker role (<npu-ip>)      # Compute tier - Internal only  
+├── Database role (<database-ip>)     # Data tier - Internal only
+├── AI Stack role (<aiml-ip>)        # Service tier - Internal only
+└── Browser role (<browser-ip>) # Automation tier - Controlled access
 ```
 
 **Firewall Rules**:
@@ -538,21 +540,21 @@ sudo systemctl enable autobot-backend.service
 sudo systemctl enable autobot-ollama.service
 sudo systemctl enable autobot-vnc.service
 
-# VM1 - Frontend
+# Frontend role
 sudo systemctl enable nginx
 sudo systemctl enable autobot-frontend.service
 
-# VM2 - NPU Worker
+# NPU worker role
 sudo systemctl enable autobot-npu-worker.service
 
-# VM3 - Redis
+# Database role (Redis)
 sudo systemctl enable redis-stack-server
 sudo systemctl enable redisinsight
 
-# VM4 - AI Stack  
+# AI Stack role
 sudo systemctl enable autobot-ai-orchestrator.service
 
-# VM5 - Browser Service
+# Browser role
 sudo systemctl enable autobot-browser.service
 ```
 
@@ -560,28 +562,28 @@ sudo systemctl enable autobot-browser.service
 ```python
 # Comprehensive health check system
 health_checks = {
-    "main_host": {
+    "backend": {
         "backend_api": "https://<backend-ip>:8443/api/health",
         "ollama_service": "http://127.0.0.1:11434/api/tags",
         "vnc_desktop": "tcp://127.0.0.1:5900"
     },
-    "vm1_frontend": {
+    "frontend": {
         "nginx": "http://<frontend-ip>:80/health",
         "vue_dev": "http://<frontend-ip>:5173"
     },
-    "vm2_npu": {
+    "npu_worker": {
         "npu_service": "http://<npu-ip>:8081/health",
         "gpu_status": "nvidia-smi"
     },
-    "vm3_redis": {
+    "database": {
         "redis_server": "tcp://<database-ip>:6379",
         "redisinsight": "http://<database-ip>:8002"
     },
-    "vm4_ai": {
+    "ai_stack": {
         "orchestrator": "http://<aiml-ip>:8080/health",
         "model_status": "http://<aiml-ip>:8080/models/status"
     },
-    "vm5_browser": {
+    "browser": {
         "playwright": "http://<browser-ip>:3000/health",
         "browser_pools": "http://<browser-ip>:3000/sessions/stats"
     }
@@ -730,8 +732,8 @@ troubleshooting:
       solution: "Rebuild FAISS index or increase Redis memory"
 
   connectivity_issues:
-    vm_communication_failure:
-      symptoms: "Services can't reach other VMs"
+    role_communication_failure:
+      symptoms: "Services can't reach other role hosts"
       cause: "Network configuration or firewall rules"
       solution: "Check SSH connectivity and firewall status"
 
@@ -747,7 +749,7 @@ troubleshooting:
 #!/bin/bash
 # autobot_weekly_maintenance.sh
 
-echo "=== AutoBot Phase 5 Weekly Maintenance ==="
+echo "=== AutoBot Weekly Maintenance ==="
 
 # 1. Health check all services
 echo "Checking service health..."
@@ -779,6 +781,7 @@ echo "Maintenance completed successfully"
 ---
 
 **Related Documentation**:
+- [VM_ROLES.md](VM_ROLES.md) — role definitions, ports, and count-agnostic placement rules
 - [API Documentation](../api/COMPREHENSIVE_API_DOCUMENTATION.md)  
 - [Multi-Modal AI Integration Guide](../features/MULTIMODAL_AI_INTEGRATION.md)
 - [Security Implementation](../security/SECURITY_IMPLEMENTATION.md)

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """
 Distributed System Integration Testing for AutoBot
-Tests the 6-VM architecture and prevents distributed system failures
+Tests AutoBot's distributed, role-based architecture and prevents distributed system failures
 
 Converted from an operational script to a pytest suite (#14979). The
 ``DistributedSystemTester`` class defined ``__init__``, so pytest collected

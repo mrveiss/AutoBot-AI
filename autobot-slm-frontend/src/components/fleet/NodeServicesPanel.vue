@@ -22,6 +22,8 @@ import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
 import type { NodeService, ServiceStatus } from '@/types/slm'
+import i18n from '@/i18n'
+import ServiceLogsModal from '@/components/fleet/ServiceLogsModal.vue'
 
 const logger = createLogger('NodeServicesPanel')
 
@@ -60,11 +62,8 @@ const statusFilter = ref<string>('all')
 const searchQuery = ref('')
 const autoRefresh = ref(true)
 
-// Logs modal
-const showLogsModal = ref(false)
+// Logs modal: ServiceLogsModal is open while a service name is set (#16245)
 const logsServiceName = ref<string | null>(null)
-const logsContent = ref('')
-const isLoadingLogs = ref(false)
 
 // Pagination
 const currentPage = ref(1)
@@ -220,34 +219,19 @@ async function handleAction(serviceName: string, action: 'start' | 'stop' | 'res
     }
   } catch (error) {
     logger.error(`Failed to ${action} service:`, error)
-    errorMessage.value = `Failed to ${action} ${serviceName}`
+    errorMessage.value = i18n.global.t('fleet.nodeServicesPanel.actionFailed', { action, service: serviceName })
   } finally {
     isActionInProgress.value = false
     actionService.value = null
   }
 }
 
-async function viewLogs(serviceName: string): Promise<void> {
+function viewLogs(serviceName: string): void {
   logsServiceName.value = serviceName
-  logsContent.value = ''
-  showLogsModal.value = true
-  isLoadingLogs.value = true
-
-  try {
-    const response = await api.getServiceLogs(props.nodeId, serviceName, { lines: 100 })
-    logsContent.value = response.logs
-  } catch (error) {
-    logger.error('Failed to fetch logs:', error)
-    logsContent.value = 'Failed to load logs. The service may not have any logs yet.'
-  } finally {
-    isLoadingLogs.value = false
-  }
 }
 
 function closeLogsModal(): void {
-  showLogsModal.value = false
   logsServiceName.value = null
-  logsContent.value = ''
 }
 
 // Debounced search
@@ -611,50 +595,6 @@ onUnmounted(() => {
     </div>
 
     <!-- Logs Modal -->
-    <teleport to="body">
-      <div v-if="showLogsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <!-- Backdrop -->
-        <div class="absolute inset-0 bg-black/50" @click="closeLogsModal"></div>
-
-        <!-- Modal -->
-        <div class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col">
-          <!-- Header -->
-          <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-            <h3 class="text-lg font-semibold text-gray-900">{{ $t('fleet.nodeServicesPanel.logsValue0', { value0: logsServiceName }) }}</h3>
-            <button
-              @click="closeLogsModal"
-              class="text-gray-400 hover:text-gray-600 transition-colors"
-              :aria-label="$t('fleet.nodeServicesPanel.close')"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <!-- Content -->
-          <div class="flex-1 overflow-auto p-4 bg-gray-900">
-            <div v-if="isLoadingLogs" class="flex items-center justify-center py-12 text-gray-400">
-              <svg class="w-6 h-6 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-              </svg>
-              {{ $t('fleet.nodeServicesPanel.loadingLogs') }}
-            </div>
-            <pre v-else class="text-sm text-green-400 font-mono whitespace-pre-wrap">{{ logsContent }}</pre>
-          </div>
-
-          <!-- Footer -->
-          <div class="px-4 py-3 border-t border-gray-200 flex justify-end">
-            <button
-              @click="closeLogsModal"
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              {{ $t('fleet.nodeServicesPanel.close') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </teleport>
+    <ServiceLogsModal :node-id="nodeId" :service-name="logsServiceName" @close="closeLogsModal" />
   </div>
 </template>

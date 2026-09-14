@@ -38,18 +38,30 @@
 
 - name: Update Python packages with security fixes
   block:
+    # #16641: `virtualenv:` alone falls back to the standalone `virtualenv`
+    # executable if the venv does not exist, and this fleet only has the
+    # stdlib's `venv` module -- but "Fail if venv does not exist" above
+    # already aborts the play before either pip task here can run against a
+    # missing venv, so `virtualenv_command:` is unreachable defence-in-depth
+    # rather than a live gap. Not version-pinned: this role patches whatever
+    # venv `host_venv_path` names, for whichever service defines it, so no
+    # single target interpreter applies the way it does in a role that owns
+    # one component's venv.
     - name: Upgrade pip first (if needed)
       ansible.builtin.pip:
         name: pip
         state: latest
         virtualenv: "{{ host_venv_path }}"
+        virtualenv_command: "python3 -m venv"
         extra_args: "{{ pip_extra_args }}"
       when: "'pip' in python_security_updates"
 
+    # #16641: see "Upgrade pip first (if needed)" above.
     - name: Install security updates
       ansible.builtin.pip:
         requirements: /tmp/requirements-security-update.txt
         virtualenv: "{{ host_venv_path }}"
+        virtualenv_command: "python3 -m venv"
         extra_args: "{{ pip_extra_args }}"
       register: pip_update
       timeout: "{{ update_timeout }}"

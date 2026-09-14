@@ -144,7 +144,7 @@
                 - REDIS_ARGS=--appendonly yes --save 60 1{% if autobot_redis_password | default('') or (lookup('env', 'AUTOBOT_REDIS_PASSWORD') and not lookup('env', 'AUTOBOT_REDIS_USERNAME')) %} --requirepass {{ autobot_redis_password | default('') or lookup('env', 'AUTOBOT_REDIS_PASSWORD') }}{% endif %}
                 - REDISINSIGHT_PORT=8001
               healthcheck:
-                test: ["CMD", "redis-cli", "--no-auth-warning",{% if autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) %} "--user", "{{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }}",{% endif %} "-a", "{{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}", "ping"]
+                test: ["CMD", "redis-cli", "--no-auth-warning", "--user", "{{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default' }}", "-a", "{{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}", "ping"]
                 interval: 30s
                 timeout: 10s
                 retries: 3
@@ -179,7 +179,7 @@
 
     - name: Test Redis connectivity
       shell: |
-        docker exec {{ container_name }} redis-cli --no-auth-warning {% if autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) %}--user {{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }} {% endif %}-a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }} ping
+        docker exec {{ container_name }} redis-cli --no-auth-warning --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) | quote }} ping
       register: redis_test
 
     - name: Display Redis status
@@ -295,7 +295,7 @@
                 - REDIS_HOST={{ hostvars['autobot-database']['ansible_host'] }}
                 - REDIS_PORT=6379
                 - REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}
-                - REDIS_USERNAME={{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }}
+                - REDIS_USERNAME={{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') if autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) else '' }}
                 - OLLAMA_HOST=http://localhost:11434
               build:
                 context: /tmp/autobot

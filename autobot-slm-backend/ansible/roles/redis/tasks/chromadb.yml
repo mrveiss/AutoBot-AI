@@ -37,11 +37,15 @@
   become_user: "{{ redis_owner }}"
   tags: ['redis', 'chromadb']
 
+# #16641: without this, pip falls back to shelling out to the standalone
+# `virtualenv` executable, absent from these hosts -- matches the
+# interpreter "ChromaDB | Create Python venv" above already targets.
 - name: "ChromaDB | Upgrade pip in venv"
   ansible.builtin.pip:
     name: pip
     state: latest
     virtualenv: "{{ chromadb_install_dir }}/venv"
+    virtualenv_command: "python3.14 -m venv"
   become: true
   become_user: "{{ redis_owner }}"
   environment:
@@ -56,11 +60,13 @@
 # for the reason those manifests state next to it -- it guards against breaking
 # API changes above 2.x -- and an unbounded floor in a venv with no `-c` would
 # resolve straight past it.
+# #16641: see "ChromaDB | Upgrade pip in venv" above.
 - name: "ChromaDB | Install chromadb package"
   ansible.builtin.pip:
     name: "chromadb>=1.5.9,<2.0.0"
     state: present
     virtualenv: "{{ chromadb_install_dir }}/venv"
+    virtualenv_command: "python3.14 -m venv"
     extra_args: "--timeout 300"
   become: true
   become_user: "{{ redis_owner }}"

@@ -240,6 +240,36 @@ class ClaimConflict:
         )
 
 
+def claim_payload(claim: Claim) -> dict[str, Any]:
+    """The wire shape of a held scope: one row of ``GET /api/coordination/claims``.
+
+    Every field is already user-facing. Scope paths are repo-relative by
+    construction -- `Scope.parse` rejects an empty leading segment, so an
+    absolute path cannot become a scope in the first place, and no internal
+    filesystem path can reach a payload through here.
+    """
+    return {
+        "scope": claim.scope,
+        "kind": claim.parsed_scope.kind,
+        "agent_id": claim.agent_id,
+        "task_id": claim.task_id,
+        "mode": claim.mode,
+        "intent": claim.intent,
+        "acquired_at": claim.acquired_at,
+        "expires_at": claim.expires_at,
+    }
+
+
+def conflict_payload(conflict: ClaimConflict) -> dict[str, Any]:
+    """The one wire shape of a refusal, whichever layer reports it (#16208).
+
+    The holder is a :func:`claim_payload` row, identical to that claim's row in
+    the claims table, so a client parses a holder once rather than once per
+    layer. ``reason`` is the rendered conflict, for a reader that wants a line.
+    """
+    return {"requested": conflict.requested, "holder": claim_payload(conflict.holder), "reason": str(conflict)}
+
+
 class ClaimConflictError(RuntimeError):
     """Raised by :func:`work_claim` when the scope is held by someone else."""
 
