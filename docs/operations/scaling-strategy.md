@@ -4,13 +4,13 @@
 **Related Issue**: [#251](https://github.com/mrveiss/AutoBot-AI/issues/251)
 **Classification**: Operations Critical
 
-This document provides scaling strategies and playbooks for AutoBot's distributed VM infrastructure.
+This document provides scaling strategies and playbooks for AutoBot's distributed, role-based infrastructure — Docker, a single VM, or however many machines a deployment scales to.
 
 ---
 
 ## Scaling Philosophy
 
-AutoBot's 6-VM architecture enables independent scaling of each component. This document covers:
+AutoBot's role-based architecture enables independent scaling of each component, on as many or as few machines as the deployment needs. This document covers:
 - **Vertical Scaling**: Adding more resources (CPU, RAM, storage) to existing VMs
 - **Horizontal Scaling**: Adding more VM instances for load distribution
 
@@ -18,14 +18,17 @@ AutoBot's 6-VM architecture enables independent scaling of each component. This 
 
 ## Current Resource Allocations
 
-| VM | IP | vCPUs | RAM | Storage | Purpose |
+| Role | IP | vCPUs | RAM | Storage | Purpose |
 |----|-----|-------|-----|---------|---------|
-| Main (WSL) | <backend-ip> | 4 | 8 GB | 50 GB | Backend API + VNC |
-| VM1 Frontend | <frontend-ip> | 2 | 4 GB | 20 GB | Web interface |
-| VM2 NPU Worker | <npu-ip> | 4 | 8 GB | 30 GB | Hardware AI |
-| VM3 Redis | <database-ip> | 2 | 8 GB | 50 GB | Data layer |
-| VM4 AI Stack | <aiml-ip> | 4 | 16 GB | 100 GB | LLM models |
-| VM5 Browser | <browser-ip> | 2 | 4 GB | 20 GB | Playwright |
+| Main / Control (WSL) | <backend-ip> | 4 | 8 GB | 50 GB | Backend API + VNC |
+| Frontend | <frontend-ip> | 2 | 4 GB | 20 GB | Web interface |
+| NPU Worker | <npu-ip> | 4 | 8 GB | 30 GB | Hardware AI |
+| Redis (Database) | <database-ip> | 2 | 8 GB | 50 GB | Data layer |
+| AI Stack | <aiml-ip> | 4 | 16 GB | 100 GB | LLM models |
+| Browser | <browser-ip> | 2 | 4 GB | 20 GB | Playwright |
+
+This is one example allocation. Each role may be co-located on a single machine, split onto its own,
+or scaled to more than one instance, depending on the deployment.
 
 ---
 
@@ -38,13 +41,13 @@ AutoBot's 6-VM architecture enables independent scaling of each component. This 
 | API Response Time | > 500ms | > 2s | Scale Backend |
 | LLM Response Time | > 10s | > 30s | Scale AI Stack |
 | Redis Memory | > 70% | > 90% | Scale Redis |
-| CPU Usage (sustained) | > 70% | > 90% | Scale affected VM |
+| CPU Usage (sustained) | > 70% | > 90% | Scale affected role |
 | Embedding Queue Depth | > 100 | > 500 | Scale NPU Worker |
 | Concurrent Users | > 10 | > 50 | Scale Frontend + Backend |
 
 ---
 
-## VM1: Frontend Scaling
+## Frontend Scaling
 
 ### Current Load Capacity
 - ~20 concurrent users with dev server
@@ -52,7 +55,7 @@ AutoBot's 6-VM architecture enables independent scaling of each component. This 
 
 ### Vertical Scaling
 
-**When**: Response times > 200ms, high CPU on VM1
+**When**: Response times > 200ms, high CPU on the frontend role
 
 ```powershell
 # On Hyper-V host - Stop VM first
@@ -132,7 +135,7 @@ nproc    # Verify CPUs
 
 ---
 
-## VM2: NPU Worker Scaling
+## NPU Worker Scaling
 
 ### Current Load Capacity
 - ~50 embeddings/second with Intel NPU
@@ -185,7 +188,7 @@ NPU_WORKERS = [
 
 ---
 
-## VM3: Redis Scaling
+## Redis (Database) Scaling
 
 ### Current Load Capacity
 - ~10,000 ops/second
@@ -264,7 +267,7 @@ sudo systemctl restart redis-stack-server
 
 ---
 
-## VM4: AI Stack Scaling
+## AI Stack Scaling
 
 ### Current Load Capacity
 - ~5 concurrent LLM requests (depends on model size)
@@ -325,7 +328,7 @@ async def get_available_ollama():
 
 ---
 
-## VM5: Browser Automation Scaling
+## Browser Automation Scaling
 
 ### Current Load Capacity
 - ~5 concurrent browser sessions

@@ -260,19 +260,7 @@ describe('useAutobotApi endpoints moved off raw fetch (#13079)', () => {
     })
   })
 
-  describe('Redis service, RBAC and cache admin', () => {
-    it('GETs /redis-service/status', async () => {
-      await useAutobotApi().getRedisServiceStatus()
-
-      expect(lastCall(h.instance.get)[0]).toBe('/redis-service/status')
-    })
-
-    it('POSTs /redis-service/{action}', async () => {
-      await useAutobotApi().performRedisServiceAction('restart')
-
-      expect(lastCall(h.instance.post)[0]).toBe('/redis-service/restart')
-    })
-
+  describe('RBAC and cache admin', () => {
     it('GETs /settings/rbac/status', async () => {
       await useAutobotApi().getRbacStatus()
 

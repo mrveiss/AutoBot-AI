@@ -5,7 +5,7 @@
 ################################################################################
 # Access Control Validation Suite
 #
-# Comprehensive validation of access control deployment across 6-VM infrastructure.
+# Comprehensive validation of access control deployment across AutoBot's distributed, role-based infrastructure.
 # Tests ownership coverage, enforcement modes, audit logging, and performance.
 #
 # Usage:

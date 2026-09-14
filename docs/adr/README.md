@@ -29,7 +29,7 @@ Each ADR follows a consistent template (see [template.md](template.md)):
 
 | ADR | Title | Status | Date |
 |-----|-------|--------|------|
-| [ADR-001](001-distributed-vm-architecture.md) | Distributed 6-VM Architecture | Accepted | 2025-01-01 |
+| [ADR-001](001-distributed-vm-architecture.md) | Distributed 6-VM Architecture (historical) | Superseded by ADR-010 | 2025-01-01 |
 | [ADR-002](002-redis-database-separation.md) | Redis Database Separation Strategy | Accepted | 2025-01-01 |
 | [ADR-003](003-npu-integration-strategy.md) | NPU Hardware Acceleration Integration | Accepted | 2025-01-01 |
 | [ADR-004](004-chat-workflow-architecture.md) | Chat Workflow and Message Processing | Accepted | 2025-01-01 |
@@ -38,6 +38,7 @@ Each ADR follows a consistent template (see [template.md](template.md)):
 | [ADR-007](007-connector-oauth-token-storage.md) | Connector OAuth Token and Credential Storage | Accepted | 2026-05-30 |
 | [ADR-008](008-frontend-shared-code-boundary.md) | Frontend Shared-Code Boundary Between the Two SPAs | Accepted | 2026-07-31 |
 | [ADR-009](009-canonical-browser-interface.md) | One Canonical Browser Interface, With Execution Backends Behind It | Proposed | 2026-08-01 |
+| [ADR-010](010-role-separation-count-agnostic-placement.md) | Role Separation with Count-Agnostic Placement | Accepted | 2026-09-12 |
 
 ## Creating a New ADR
 

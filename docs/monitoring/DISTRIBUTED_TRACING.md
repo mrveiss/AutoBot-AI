@@ -10,16 +10,16 @@ This document covers the distributed tracing implementation for the AutoBot plat
 
 ## Overview
 
-AutoBot uses OpenTelemetry for distributed tracing across its 5-VM infrastructure:
+AutoBot uses OpenTelemetry for distributed tracing across its role-based infrastructure — Docker, a single VM, or however many machines a deployment scales to:
 
-| VM | IP Address | Service Name | Role |
-|----|------------|--------------|------|
-| Main Machine | <backend-ip> | autobot-backend | Backend API |
-| VM1 Frontend | <frontend-ip> | autobot-frontend | Web interface |
-| VM2 NPU Worker | <npu-ip> | autobot-npu-worker | Hardware AI acceleration |
-| VM3 Redis | <database-ip> | autobot-redis | Data layer + Jaeger |
-| VM4 AI Stack | <aiml-ip> | autobot-ai-stack | AI processing |
-| VM5 Browser | <browser-ip> | autobot-browser | Web automation |
+| Role | IP Address | Service Name |
+|----|------------|--------------|
+| Main / Control | <backend-ip> | autobot-backend |
+| Frontend | <frontend-ip> | autobot-frontend |
+| NPU Worker | <npu-ip> | autobot-npu-worker |
+| Database (Redis) | <database-ip> | autobot-redis + Jaeger |
+| AI/ML | <aiml-ip> | autobot-ai-stack |
+| Browser | <browser-ip> | autobot-browser |
 
 ## Architecture
 
@@ -78,7 +78,7 @@ ASGI middleware (267 lines) adding AutoBot-specific tracing:
 
 ### 3. Traced HTTP Client (`src/utils/traced_http_client.py`)
 
-HTTP client wrapper (245 lines) for cross-VM communication:
+HTTP client wrapper (245 lines) for cross-role communication:
 - Automatic trace context propagation via headers
 - Span creation for each HTTP request
 - Error recording with exception details
@@ -101,14 +101,14 @@ opentelemetry-exporter-otlp
 opentelemetry-propagator-b3
 ```
 
-### Jaeger Setup (VM3 Redis - <database-ip>)
+### Jaeger Setup (Database Role - Redis - <database-ip>)
 
-Since AutoBot doesn't use Docker, Jaeger runs as a native binary on the Redis VM.
+Since AutoBot doesn't use Docker, Jaeger runs as a native binary on the database role's host in this example.
 
 #### Download and Install Jaeger
 
 ```bash
-# SSH to Redis VM
+# SSH to the database role's host
 ssh -i ~/.ssh/autobot_key autobot@<database-ip>
 
 # Download Jaeger (latest version)
@@ -233,7 +233,7 @@ with tracing.span("risky_operation"):
 
 ### Cross-Service Propagation
 
-For HTTP calls between VMs, use the `TracedHttpClient` for automatic trace propagation:
+For HTTP calls between roles, use the `TracedHttpClient` for automatic trace propagation:
 
 ```python
 from src.utils.traced_http_client import get_traced_http_client
@@ -381,9 +381,9 @@ sudo systemctl edit jaeger
 sudo systemctl restart jaeger
 ```
 
-## VM-Specific Setup
+## Per-Role Setup
 
-### NPU Worker (VM2 - <npu-ip>)
+### NPU Worker (<npu-ip>)
 
 ```python
 # In NPU worker initialization
@@ -396,7 +396,7 @@ tracing.initialize(
 )
 ```
 
-### AI Stack (VM4 - <aiml-ip>)
+### AI Stack (<aiml-ip>)
 
 ```python
 # In AI stack initialization
@@ -406,7 +406,7 @@ tracing.initialize(
 )
 ```
 
-### Browser Automation (VM5 - <browser-ip>)
+### Browser Automation (<browser-ip>)
 
 ```python
 # In browser automation service

@@ -69,6 +69,25 @@
     not autobot_node_cert_stat.stat.exists
     or (autobot_node_cert_valid.rc | default(1)) != 0
 
+# #16020: names the missing path and the task that was supposed to provide it,
+# rather than letting a silent generation failure surface later as nginx's
+# opaque "cannot load certificate ... No such file or directory" -- the
+# original symptom, one step downstream of where the real cause would be.
+- name: "TLS | Confirm the shared node certificate now exists"
+  ansible.builtin.stat:
+    path: /etc/autobot/certs/server-cert.pem
+  register: autobot_node_cert_confirmed
+  become: true
+
+- name: "TLS | Fail loudly if generation did not produce the certificate"
+  ansible.builtin.fail:
+    msg: >-
+      /etc/autobot/certs/server-cert.pem is still missing after
+      "TLS | Generate the shared node keypair when missing or expiring" ran.
+      That task's own openssl command did not report an error, so check disk
+      space and /etc/autobot/certs permissions on this node.
+  when: not autobot_node_cert_confirmed.stat.exists
+
 - name: "TLS | Ensure the certificate is world-readable"
   ansible.builtin.file:
     path: /etc/autobot/certs/server-cert.pem
