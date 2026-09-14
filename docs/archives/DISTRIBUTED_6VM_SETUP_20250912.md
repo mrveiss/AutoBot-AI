@@ -28,7 +28,7 @@ AutoBot is now properly configured for the **6-VM distributed architecture** wit
 
 ### ✅ **All Services Online and Connected**
 
-- **Backend API Coordinator**: `http://<backend-ip>:8002` ✅ 
+- **Backend API Coordinator**: `http://<backend-ip>:8002` ✅
 - **Frontend Interface**: `http://<frontend-ip>:5173` ✅
 - **Redis Stack + Insight**: `http://<database-ip>:6379` + `http://<database-ip>:8002` ✅
 - **NPU Worker**: `http://<npu-ip>:8081` ✅
@@ -43,7 +43,7 @@ AutoBot is now properly configured for the **6-VM distributed architecture** wit
 
 ### **1. Distributed Redis Client**
 - **File**: `src/utils/distributed_redis_client.py`
-- **Features**: 
+- **Features**:
   - Remote Redis VM connection (<database-ip>:6379)
   - Connection pooling and retry logic
   - Non-blocking with graceful fallbacks
@@ -119,7 +119,7 @@ curl http://<aiml-ip>:8080/health
 - **Redis Insight Dashboard**: http://<database-ip>:8002
 - **VNC Desktop Access**: http://127.0.0.1:6080
 
-### **Service APIs** 
+### **Service APIs**
 - **Backend Coordinator API**: http://<backend-ip>:8002/api/
 - **NPU Worker API**: http://<npu-ip>:8081/
 - **AI Stack API**: http://<aiml-ip>:8080/
@@ -152,7 +152,7 @@ curl http://<aiml-ip>:8080/health
 - **RAM**: 32GB+ - In-memory caching and processing
 - **Role**: API coordination, local LLM, VNC desktop
 
-### **NPU Worker VM (<npu-ip>)** 
+### **NPU Worker VM (<npu-ip>)**
 - **NPU**: Intel AI Boost (NPU) - Hardware AI acceleration
 - **GPU**: Intel Arc (if available) - Additional GPU processing
 - **Role**: OpenVINO acceleration, inference optimization

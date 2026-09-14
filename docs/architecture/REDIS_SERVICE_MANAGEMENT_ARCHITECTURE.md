@@ -12,7 +12,7 @@
 
 ## Executive Summary
 
-This document defines the architecture for Redis service management features in AutoBot's distributed VM infrastructure. The design enables frontend UI controls and backend auto-detection/auto-start capabilities for the Redis service running on VM3 (<database-ip>), while maintaining security, auditability, and alignment with AutoBot's "No Temporary Fixes" policy.
+This document defines the architecture for Redis service management features in AutoBot's distributed, role-based infrastructure. The design enables frontend UI controls and backend auto-detection/auto-start capabilities for the Redis service running on the database role's host (<database-ip>), while maintaining security, auditability, and alignment with AutoBot's "No Temporary Fixes" policy.
 
 ---
 
@@ -36,7 +36,7 @@ This document defines the architecture for Redis service management features in 
 ### 1.1 Current State
 
 **Infrastructure:**
-- Redis service runs on VM3 (<database-ip>:6379)
+- Redis service runs on the database role's host (<database-ip>:6379)
 - SSH key-based authentication configured (~/.ssh/autobot_key)
 - Existing SSHManager handles remote command execution
 - ConsolidatedHealthService aggregates component health
@@ -73,7 +73,7 @@ This document defines the architecture for Redis service management features in 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         Frontend (VM1: <frontend-ip>)               │
+│                         Frontend (<frontend-ip>)                    │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │  RedisServiceControl.vue                                      │  │
 │  │  - Service status display                                     │  │
@@ -125,7 +125,7 @@ This document defines the architecture for Redis service management features in 
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    Redis VM (VM3: <database-ip>)                    │
+│                    Database Role (<database-ip>)                    │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │  systemd (redis-stack-server.service)                         │  │
 │  │  ┌─────────────────────────────────────────────────────────┐  │  │
@@ -541,7 +541,7 @@ async def auto_recover(self) -> RecoveryResult:
 
 #### POST /api/services/redis/start
 
-**Description:** Start Redis service on VM3
+**Description:** Start Redis service on the database role's host
 
 **Authentication:** Required (Bearer token)
 
@@ -600,7 +600,7 @@ async def auto_recover(self) -> RecoveryResult:
 
 #### POST /api/services/redis/stop
 
-**Description:** Stop Redis service on VM3
+**Description:** Stop Redis service on the database role's host
 
 **Authentication:** Required (Bearer token)
 
@@ -640,7 +640,7 @@ async def auto_recover(self) -> RecoveryResult:
 
 #### POST /api/services/redis/restart
 
-**Description:** Restart Redis service on VM3
+**Description:** Restart Redis service on the database role's host
 
 **Authentication:** Required (Bearer token)
 
@@ -1620,7 +1620,7 @@ def validate_service_command(operation: str) -> str:
 - Dedicated service account (`autobot`)
 - Limited sudo permissions via /etc/sudoers.d/
 
-**sudoers Configuration (VM3):**
+**sudoers Configuration (database role's host):**
 
 ```bash
 # /etc/sudoers.d/autobot-redis
@@ -2741,7 +2741,7 @@ redis_service_management:
   - [ ] Restart backend service
 
 - [ ] Deploy frontend changes
-  - [ ] Sync frontend to VM1
+  - [ ] Sync frontend to the frontend role's host
   - [ ] Restart frontend service
 
 - [ ] Configure Redis VM

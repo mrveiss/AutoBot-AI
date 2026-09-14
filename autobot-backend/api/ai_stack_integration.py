@@ -6,7 +6,7 @@
 AI Stack Integration API - Enhanced AI capabilities for AutoBot.
 
 This module provides comprehensive API endpoints that integrate all AI Stack agents
-from VM4 (uses NetworkConstants.AI_STACK_VM_IP) with the main AutoBot backend.
+from the AI Stack role's host (uses NetworkConstants.AI_STACK_VM_IP) with the main AutoBot backend.
 """
 
 from typing import Any, Awaitable, Callable, Dict, List
