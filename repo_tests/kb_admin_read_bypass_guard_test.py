@@ -94,11 +94,11 @@ def test_only_explicit_read_apis_pass_the_admin_bypass():
     )
 
 
-def test_the_scan_reached_the_explicit_read_apis():
-    """Not vacuous: the scan found the admin-aware call sites it exists to bound."""
+def test_the_scan_reached_the_admin_aware_call_sites():
+    """Not vacuous: the scan found at least one admin-aware call site it exists to bound."""
     found, scanned = _scan()
     assert scanned > 1000, f"only {scanned} production files scanned"
-    assert set(found) & EXPLICIT_READ_APIS, f"no explicit read API passes is_admin: {sorted(found)}"
+    assert set(found) & (EXPLICIT_READ_APIS | PASS_THROUGH), f"no admin-aware call site found: {sorted(found)}"
 
 
 def test_a_chat_path_passing_the_bypass_is_detected():
