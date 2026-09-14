@@ -13,7 +13,8 @@ ownership filter, keyed ``(repo-relative file, enclosing function) -> reason``. 
 * ``IMPL`` -- the knowledge base reading its own store.
 
 THIS MAPPING ONLY SHRINKS. A path that starts filtering must leave in the same PR (the
-guard fails on a stale entry), and ``MAX_ALLOWLISTED`` is lowered with it.
+guard fails on a stale entry), and the guard's ``UNFILTERED_READ_CEILING`` is lowered with
+it. That ceiling is checked against the detected reads, not this mapping's length (#16667).
 """
 
 from __future__ import annotations
@@ -132,6 +133,3 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "EmbeddedKnowledgeClient.search",
     ): _T4,
 }
-
-#: Ceiling on ALLOWLIST: lower it with every entry removed, never raise it.
-MAX_ALLOWLISTED = 84

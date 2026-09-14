@@ -39,7 +39,7 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
-from repo_tests.kb_read_visibility_allowlist import ALLOWLIST, MAX_ALLOWLISTED
+from repo_tests.kb_read_visibility_allowlist import ALLOWLIST
 
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -100,6 +100,18 @@ FILTER_HELPERS = frozenset(
 #: method was renamed, and the guard would otherwise pass vacuously. The floor on what it
 #: examined is :data:`REACH`.
 MIN_READS_FOUND = 40
+
+#: The recorded number of unfiltered KB reads the detector FINDS, keyed ``(file, function)``.
+#: THIS RATCHET TURNS BOTH WAYS, like ``credential_vault_resolution_ratchet_test.py``'s
+#: TRACKED_GAP ceiling. Lower it whenever a read starts filtering. Raise it only when a new
+#: read is filed with its own classified ALLOWLIST entry in the same change, or when the
+#: detector is deliberately widened, re-measured and re-frozen per
+#: ``docs/developer/RATCHET_BASELINES.md``.
+#:
+#: It lives here, not beside ALLOWLIST (#16667). The old ``len(ALLOWLIST) == MAX_ALLOWLISTED``
+#: check compared the list with a number stored next to it, so both could rise together
+#: and the check would still pass. This number is checked against what the scan detects.
+UNFILTERED_READ_CEILING = 84
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
@@ -241,11 +253,34 @@ def test_every_allowlist_entry_is_still_an_unfiltered_read():
     assert not stale, f"allowlist entries with no unfiltered read left -- delete them: {stale}"
 
 
-def test_the_allowlist_ceiling_matches_and_never_rises():
-    assert len(ALLOWLIST) == MAX_ALLOWLISTED, (
-        f"ALLOWLIST has {len(ALLOWLIST)} entries but MAX_ALLOWLISTED is {MAX_ALLOWLISTED}: "
-        "lower the ceiling with every entry removed; never raise it"
-    )
+def _ceiling_verdict(live: int, ceiling: int) -> str | None:
+    """Message for the detected unfiltered-read count against its recorded ceiling, or None."""
+    if live > ceiling:
+        return (
+            f"the scan detects {live} unfiltered KB reads, over the recorded ceiling of {ceiling}: "
+            "filter the new read through knowledge.search_filters / check_access, or file it with a "
+            "classified ALLOWLIST entry and raise UNFILTERED_READ_CEILING in the same change"
+        )
+    if live < ceiling:
+        return (
+            f"the scan detects {live} unfiltered KB reads, under the recorded ceiling of {ceiling}: "
+            f"lower UNFILTERED_READ_CEILING to {live}; an unlowered ceiling re-licenses the reads just fixed"
+        )
+    return None
+
+
+def test_the_detected_unfiltered_reads_sit_at_the_recorded_ceiling():
+    """Checked against what the scan finds, not against ALLOWLIST's own length (#16667)."""
+    unfiltered, _ = _scan()
+    verdict = _ceiling_verdict(len(unfiltered), UNFILTERED_READ_CEILING)
+    assert verdict is None, verdict
+
+
+def test_the_ceiling_verdict_turns_both_ways():
+    """Known cases: growth fails, an unlowered ceiling fails, and only equality passes."""
+    assert "over the recorded ceiling" in _ceiling_verdict(85, 84)
+    assert "lower UNFILTERED_READ_CEILING to 83" in _ceiling_verdict(83, 84)
+    assert _ceiling_verdict(84, 84) is None
 
 
 def test_every_allowlist_reason_is_classified():
