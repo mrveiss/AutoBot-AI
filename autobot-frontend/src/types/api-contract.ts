@@ -540,3 +540,25 @@ export type SessionRemoveResponse = components['schemas']['CollabRemoveResponse'
 
 /** `POST /sessions/{session_id}/secrets/share` response. */
 export type SessionShareSecretResponse = components['schemas']['SessionShareSecretResponse']
+
+// --- session collaboration schemas, continued (#16460) ---------------------
+// Presence, the persisted activity/notification event history, and the
+// invitation list/respond endpoints added alongside it.
+
+/** `GET /sessions/{session_id}/presence` response. */
+export type SessionPresenceResponse = components['schemas']['SessionPresenceResponse']
+
+/** Single event in `GET /sessions/{session_id}/events` (activity/notification history). */
+export type CollabEventResponse = components['schemas']['CollabEventResponse']
+
+/** `GET /sessions/{session_id}/events` response. */
+export type SessionEventsResponse = components['schemas']['SessionEventsResponse']
+
+/** Single row of `GET /sessions/invitations/mine`. */
+export type PendingInvitationResponse = components['schemas']['PendingInvitationResponse']
+
+/** `GET /sessions/invitations/mine` response. */
+export type MyInvitationsResponse = components['schemas']['MyInvitationsResponse']
+
+/** `POST /sessions/{session_id}/invitations/respond` response. */
+export type InvitationRespondResponse = components['schemas']['InvitationRespondResponse']

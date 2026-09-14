@@ -22,8 +22,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from autobot_shared.ssot_config import config
-from mcp.auth_throttle import PreAuthThrottle, get_pre_auth_throttle
-from mcp.autobot_server import AutoBotMCPServer
+from mcp_server.auth_throttle import PreAuthThrottle, get_pre_auth_throttle
+from mcp_server.autobot_server import AutoBotMCPServer
 
 TEST_SECRET = "test-mcp-secret"
 VALID_TOKEN = f"{TEST_SECRET}:kb,memory,agents"

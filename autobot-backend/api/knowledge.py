@@ -64,6 +64,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
+from knowledge.ingestion_visibility import stamp_if_document
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from knowledge.schemas.documents import (
     DocsBrowseResponse,
@@ -675,17 +676,10 @@ async def add_text_to_knowledge(
 
 
 async def _store_fact_in_kb(kb, content: str, metadata: dict) -> str:
-    """
-    Helper to store a fact in the knowledge base (Issue #549 Code Review: Extract duplication).
-
-    Args:
-        kb: Knowledge base instance
-        content: Text content to store
-        metadata: Metadata dict with title, source, category, tags, etc.
-
-    Returns:
-        Fact ID of stored content
-    """
+    """Store *content* under *metadata* and return the fact id (#549). An admin file upload, the only
+    caller writing ``type: file``, is a document: SYSTEM unless something already claims it (#16693)."""
+    if metadata.get("type") == "file":
+        stamp_if_document(metadata)
     if hasattr(kb, "store_fact"):
         result = await kb.store_fact(content=content, metadata=metadata)
     else:
