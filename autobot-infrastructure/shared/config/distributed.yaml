@@ -1,13 +1,12 @@
 # AutoBot Distributed Architecture Configuration
-# Distributed 6-VM setup — IPs set at deploy time via Ansible inventory
+# Distributed, role-based setup — IPs set at deploy time via Ansible inventory
 # SSOT: IPs derived from complete.yaml → .env.network → ssot-config.sh (#808)
 
 # Deployment Architecture
 deployment:
   mode: "distributed"
   coordinator_host: ""  # Set via AUTOBOT_BACKEND_HOST env var
-  total_vms: 6
-  architecture: "6-vm-distributed"
+  architecture: "role-based-distributed"  # count-agnostic — see ADR-010
 
 # VM Infrastructure Mapping
 infrastructure:

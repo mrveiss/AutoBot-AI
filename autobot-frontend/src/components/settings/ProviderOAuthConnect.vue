@@ -5,13 +5,13 @@
         :class="['auth-tab', { active: authMode === 'apikey' }]"
         @click="authMode = 'apikey'"
       >
-        API Key
+        {{ t('settings.providerAuth.apiKeyTab') }}
       </button>
       <button
         :class="['auth-tab', { active: authMode === 'oauth' }]"
         @click="authMode = 'oauth'"
       >
-        Sign in with {{ providerLabel }}
+        {{ t('settings.providerAuth.signInWith', { provider: providerLabel }) }}
       </button>
     </div>
 
@@ -26,13 +26,13 @@
       <div v-if="status !== null" class="connection-status">
         <span :class="['status-dot', status.connected ? 'connected' : 'disconnected']" />
         <span v-if="status.connected" class="status-text connected-text">
-          Connected
+          {{ t('settings.providerAuth.connected') }}
           <span v-if="status.expires_at" class="expiry-note">
-            &mdash; expires {{ formatExpiry(status.expires_at) }}
+            {{ t('settings.providerAuth.expiresAt', { date: formatExpiry(status.expires_at) }) }}
           </span>
         </span>
-        <span v-else class="status-text">Not connected</span>
-        <button v-if="status.connected" class="btn-danger-sm" @click="revoke">Disconnect</button>
+        <span v-else class="status-text">{{ t('settings.providerAuth.notConnected') }}</span>
+        <button v-if="status.connected" class="btn-danger-sm" @click="revoke">{{ t('settings.providerAuth.disconnect') }}</button>
       </div>
 
       <!-- ToS / capability notice -->
@@ -41,18 +41,20 @@
       <!-- Device-code flow (headless / CLI) -->
       <div v-if="deviceAuth && !status?.connected" class="device-flow">
         <button class="btn-secondary" :disabled="busy" @click="startDeviceFlow">
-          <span v-if="busy && deviceStep === 'initiating'">Connecting...</span>
-          <span v-else>Connect via device code</span>
+          <span v-if="busy && deviceStep === 'initiating'">{{ t('settings.providerAuth.connecting') }}</span>
+          <span v-else>{{ t('settings.providerAuth.connectDeviceCode') }}</span>
         </button>
         <div v-if="deviceInstruction" class="device-instruction">
-          <p>
-            Visit <a :href="deviceInstruction.verification_uri" target="_blank" rel="noopener noreferrer">
-              {{ deviceInstruction.verification_uri }}
-            </a> and enter code:
-          </p>
+          <i18n-t keypath="settings.providerAuth.deviceInstruction" tag="p">
+            <template #url>
+              <a :href="deviceInstruction.verification_uri" target="_blank" rel="noopener noreferrer">
+                {{ deviceInstruction.verification_uri }}
+              </a>
+            </template>
+          </i18n-t>
           <code class="device-code">{{ deviceInstruction.user_code }}</code>
           <button class="btn-primary btn-sm" :disabled="busy" @click="pollDeviceFlow">
-            {{ busy ? 'Checking...' : 'I approved it' }}
+            {{ busy ? t('settings.providerAuth.checking') : t('settings.providerAuth.approvedButton') }}
           </button>
         </div>
       </div>
@@ -60,11 +62,11 @@
       <!-- Standard OAuth redirect (non-headless) -->
       <div v-else-if="!deviceAuth && !status?.connected" class="oauth-flow">
         <p class="oauth-description">
-          Authenticate with your existing {{ providerLabel }} subscription.
-          No API key required.
+          {{ t('settings.providerAuth.oauthDescription', { provider: providerLabel }) }}
+          {{ t('settings.providerAuth.noApiKeyRequired') }}
         </p>
         <button class="btn-primary" :disabled="busy" @click="initiateOAuth">
-          {{ busy ? 'Redirecting...' : `Sign in with ${providerLabel}` }}
+          {{ busy ? t('settings.providerAuth.redirecting') : t('settings.providerAuth.signInWith', { provider: providerLabel }) }}
         </button>
       </div>
 
@@ -75,6 +77,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 
 interface DeviceInstruction {
@@ -118,6 +121,10 @@ const errorMsg = ref('')
 const deviceInstruction = ref<DeviceInstruction | null>(null)
 const deviceStep = ref<'idle' | 'initiating' | 'polling'>('idle')
 
+// #15031: every user-facing string, the error messages included, goes through
+// i18n; `locale` also formats the token expiry in the reader's language.
+const { t, locale } = useI18n()
+
 onMounted(loadStatus)
 
 async function loadStatus(): Promise<void> {
@@ -137,7 +144,7 @@ async function revoke(): Promise<void> {
     await loadStatus()
     authMode.value = 'apikey'
   } catch (err: unknown) {
-    errorMsg.value = (err as Error).message ?? 'Disconnect failed'
+    errorMsg.value = (err as Error).message ?? t('settings.providerAuth.disconnectFailed')
   } finally {
     busy.value = false
   }
@@ -150,7 +157,7 @@ async function initiateOAuth(): Promise<void> {
     // The backend manages the PKCE verifier + state via the code-exchange endpoint.
     // For browser-redirect flows the SPA opens the authorize URL directly.
     // This stub redirects to a provider-specific authorize URL when configured.
-    errorMsg.value = 'OAuth browser-redirect flow requires server-side callback configuration. Use device-code for headless environments.'
+    errorMsg.value = t('settings.providerAuth.redirectNeedsCallback')
   } finally {
     busy.value = false
   }
@@ -158,7 +165,7 @@ async function initiateOAuth(): Promise<void> {
 
 async function startDeviceFlow(): Promise<void> {
   if (!props.deviceAuthorizationUrl || !props.clientId) {
-    errorMsg.value = 'Device auth is not configured for this provider'
+    errorMsg.value = t('settings.providerAuth.deviceNotConfigured')
     return
   }
   busy.value = true
@@ -173,7 +180,7 @@ async function startDeviceFlow(): Promise<void> {
     })
     deviceInstruction.value = resp as DeviceInstruction
   } catch (err: unknown) {
-    errorMsg.value = (err as Error).message ?? 'Device flow initiation failed'
+    errorMsg.value = (err as Error).message ?? t('settings.providerAuth.deviceInitFailed')
   } finally {
     busy.value = false
     deviceStep.value = 'idle'
@@ -196,10 +203,10 @@ async function pollDeviceFlow(): Promise<void> {
       deviceInstruction.value = null
       await loadStatus()
     } else {
-      errorMsg.value = 'Still waiting for approval — try again in a moment.'
+      errorMsg.value = t('settings.providerAuth.stillWaiting')
     }
   } catch (err: unknown) {
-    errorMsg.value = (err as Error).message ?? 'Poll failed'
+    errorMsg.value = (err as Error).message ?? t('settings.providerAuth.pollFailed')
   } finally {
     busy.value = false
     deviceStep.value = 'idle'
@@ -207,7 +214,7 @@ async function pollDeviceFlow(): Promise<void> {
 }
 
 function formatExpiry(ts: number): string {
-  return new Date(ts * 1000).toLocaleString()
+  return new Date(ts * 1000).toLocaleString(locale.value)
 }
 </script>
 
@@ -231,10 +238,10 @@ function formatExpiry(ts: number): string {
 
 .connection-status { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; }
-.status-dot.connected { background: #22c55e; }
-.status-dot.disconnected { background: #ef4444; }
+.status-dot.connected { background: var(--color-success); }
+.status-dot.disconnected { background: var(--color-error); }
 .status-text { font-size: 0.85rem; color: var(--autobot-text-secondary); }
-.connected-text { color: #22c55e; }
+.connected-text { color: var(--color-success); }
 .expiry-note { font-size: 0.75rem; color: var(--autobot-text-muted); }
 
 .tos-notice { font-size: 0.75rem; color: var(--autobot-text-muted); margin-bottom: 0.5rem; }
@@ -245,9 +252,9 @@ function formatExpiry(ts: number): string {
 .device-instruction { padding: 0.75rem; background: var(--autobot-bg-surface); border-radius: 6px; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem; }
 .device-code { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.15em; text-align: center; padding: 0.25rem; }
 
-.btn-danger-sm { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid #ef4444; color: #ef4444; background: transparent; cursor: pointer; }
-.btn-danger-sm:hover { background: #fee2e2; }
+.btn-danger-sm { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid var(--color-error); color: var(--color-error); background: transparent; cursor: pointer; }
+.btn-danger-sm:hover { background: var(--color-error-bg); }
 .btn-sm { font-size: 0.8rem; padding: 0.3rem 0.75rem; }
 
-.error-msg { color: #ef4444; font-size: 0.8rem; }
+.error-msg { color: var(--color-error); font-size: 0.8rem; }
 </style>

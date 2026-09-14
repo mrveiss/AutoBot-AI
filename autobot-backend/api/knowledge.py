@@ -141,42 +141,14 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:  # pragma: no cover - type-only import, avoids a module-level dependency
     from media.document.extraction import ExtractedDocument
 
-# Cache TTL constants (seconds)
-CATEGORY_CACHE_TTL = 3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
-
 # Performance optimization: O(1) lookup for metadata types (Issue #326)
 MANUAL_PAGE_TYPES = {"manual_page", "system_command"}
 
-
-def _get_fact_source(fact: dict) -> str:
-    """Extract source identifier from fact for categorization (Issue #315: extracted).
-
-    Args:
-        fact: Fact dictionary with metadata
-
-    Returns:
-        Source string for category lookup
-    """
-    source = fact.get("metadata", {}).get("source", "") or fact.get("source", "")
-    if not source:
-        # Try filename or title as fallback
-        source = fact.get("metadata", {}).get("filename", "") or fact.get("title", "")
-    return source
-
-
-async def _compute_category_counts(all_facts: list, get_category_for_source, category_counts: dict) -> None:
-    """Compute category counts from facts (Issue #315: extracted).
-
-    Args:
-        all_facts: List of fact dictionaries
-        get_category_for_source: Function to map source to category
-        category_counts: Dict to update with counts (mutated in place)
-    """
-    for fact in all_facts:
-        source = _get_fact_source(fact)
-        main_category = get_category_for_source(source)
-        if main_category in category_counts:
-            category_counts[main_category] += 1
+# Import category-count computation/caching (extracted from this file - Issue #16665)
+from api.knowledge_category_counts import (
+    _get_category_cache_keys,
+    _get_or_compute_category_counts,
+)
 
 
 def _format_knowledge_entry(fact_id: bytes | str, fact: dict) -> dict:
@@ -361,35 +333,6 @@ async def get_knowledge_stats_basic(
         categories=stats.get("categories", []),
         status="online" if stats.get("initialized", False) else "offline",
     )
-
-
-def _get_category_cache_keys(KnowledgeCategory) -> dict:
-    """Get cache keys for category counts (Issue #398: extracted)."""
-    return {
-        KnowledgeCategory.AUTOBOT_DOCUMENTATION: "kb:stats:category:autobot-documentation",
-        KnowledgeCategory.SYSTEM_KNOWLEDGE: "kb:stats:category:system-knowledge",
-        KnowledgeCategory.USER_KNOWLEDGE: "kb:stats:category:user-knowledge",
-    }
-
-
-async def _get_or_compute_category_counts(kb, cache_keys: dict, get_category_for_source, category_counts: dict) -> None:
-    """Get cached counts or compute from facts (Issue #398: extracted)."""
-    cached_values = await kb.redis().mget(list(cache_keys.values()))
-    if all(v is not None for v in cached_values):
-        # Use cached values
-        for i, cat_id in enumerate(cache_keys.keys()):
-            category_counts[cat_id] = int(cached_values[i])
-        logger.debug("Using cached category counts: %s", category_counts)
-    else:
-        # Cache miss - compute counts
-        logger.info("Cache miss - computing category counts from all facts")
-        all_facts = await kb.get_all_facts()
-        logger.info("Categorizing %s facts into main categories", len(all_facts))
-        await _compute_category_counts(all_facts, get_category_for_source, category_counts)
-        logger.info("Category counts: %s", category_counts)
-        # Cache for 1 hour
-        for cat_id, cache_key in cache_keys.items():
-            await kb.redis().set(cache_key, category_counts[cat_id], ex=CATEGORY_CACHE_TTL)
 
 
 def _build_main_categories(CATEGORY_METADATA, category_counts: dict) -> list:

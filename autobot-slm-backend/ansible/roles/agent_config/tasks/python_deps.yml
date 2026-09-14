@@ -14,6 +14,12 @@
   pip:
     requirements: "{{ project_root }}/{{ requirements_file }}"
     virtualenv: "{{ venv_dir }}"
+    # #16641: see roles/browser/tasks/main.yml for the full reason.
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
+    # #15684: constraints/shared.txt applied here too, the same shape every
+    # other pip site in this venv now uses -- see openvino.yml, already
+    # ahead of this one.
+    extra_args: "-c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt"
   become_user: "{{ service_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "120"

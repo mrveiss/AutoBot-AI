@@ -21,6 +21,7 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util as _ilu
 import pathlib
 import sys
@@ -259,7 +260,7 @@ async def test_rate_limit_honors_retry_after(monkeypatch):
     async def _record_sleep(seconds):
         slept.append(seconds)
 
-    monkeypatch.setattr(_llm_service_mod.asyncio, "sleep", _record_sleep)
+    monkeypatch.setattr(asyncio, "sleep", _record_sleep)
 
     result = await svc.chat([{"role": "user", "content": "hi"}], temperature=0.0)
 
@@ -295,7 +296,7 @@ async def test_rate_limit_no_sleep_when_switching_provider(monkeypatch):
 
     monkeypatch.setattr(_llm_service_mod, "get_fallback_chain_manager", lambda: _OtherProviderFallback())
     slept: List[float] = []
-    monkeypatch.setattr(_llm_service_mod.asyncio, "sleep", lambda s: slept.append(s))
+    monkeypatch.setattr(asyncio, "sleep", lambda s: slept.append(s))
 
     await svc.chat([{"role": "user", "content": "hi"}], temperature=0.0)
     assert slept == []  # no wait when moving to a healthy different provider

@@ -101,10 +101,32 @@ def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
 #: growth -- and is the only number here chosen by judgement rather than
 #: measurement. Splitting them is what makes that sentence possible; with one
 #: band nobody could say which part was which.
+#:
+#: Ratcheted 5100 -> 5450 (#16702): the 2d batch vehicle combines 14
+#: independently-reviewed PRs' new/moved files onto one tree, and that alone
+#: closed most of the old floor's 700-file runway. `git ls-files "*.py"`
+#: (this declaration's own `discover`) measures 5824 on the vehicle branch at
+#: this commit -- not estimated, not read off a CI log.
+#:
+#: 5450, not 5824: the guard's `completed()` bound is a hard floor with no
+#: skips/growth allowance (unlike `verify_floor`'s examined-vs-floor check),
+#: and the pre-push hook's own actual run of THIS guard reported
+#: `completed 5497` against that same 5824 discovered -- 327 files short.
+#: Corrected (e5 review): that gap is NOT unparseable files -- `test_no_
+#: fourth_literal_copy_exists`'s own loop `continue`s past the canonical
+#: file and everything under `repo_tests/` by design before it ever reads a
+#: file, which is most of the gap; a genuinely unparseable file fails the
+#: test outright via its own `assert not unparsed`, not a silent skip.
+#: Setting floor above 5497 would fail every honest run outright, which the
+#: first version of this fix did. 5450 leaves a small margin below the
+#: measured 5497 for ordinary population fluctuation while using most of
+#: the slack `verify_floor` allows (5824-5450=374, within
+#: skips=300+growth=400=700). `skips`/`growth` themselves are unchanged --
+#: #16724 tracks re-measuring this floor from CI's own log post-merge.
 REACH = declare(
     "audio-extension-allowlist",
     discover=_tracked_python_files,
-    floor=5100,
+    floor=5450,
     growth=400,
     skips=300,
     what="tracked python files",
