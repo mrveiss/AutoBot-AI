@@ -54,6 +54,9 @@
     requirements: /opt/autobot/app/requirements.txt
     virtualenv: /opt/autobot/venv
     virtualenv_command: "{{ python_interpreter_binary }} -m venv"
+    # #15684: constraints/shared.txt applied here too, the same shape every
+    # other pip site in this venv now uses.
+    extra_args: "-c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt"
   become_user: autobot
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
