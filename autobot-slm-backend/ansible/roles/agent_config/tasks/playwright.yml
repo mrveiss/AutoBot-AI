@@ -24,10 +24,20 @@
       - libasound2
     state: present
 
+# #15684: this venv is also filled from the deployed root requirements.txt
+# (python_deps.yml), so this restates a package that manifest could declare
+# instead -- multi-source, #15671's class of bug. Left as-is rather than
+# moved: root requirements.txt is `-r`-included by autobot-backend's own
+# manifest (autobot-backend/requirements.txt:66), so adding playwright there
+# would pull a headless-browser automation stack into the backend's venv too,
+# which nothing in autobot-backend imports. See MULTI_SOURCE_VENVS in
+# repo_tests/ansible_manifest_resolution.py for the recorded reason.
 - name: Install Playwright via pip in venv
   pip:
     name: playwright
     virtualenv: "{{ venv_dir }}"
+    # #16641: see roles/browser/tasks/main.yml for the full reason.
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
   become_user: "{{ service_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "120"

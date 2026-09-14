@@ -30,6 +30,8 @@
     name: pip
     state: latest
     virtualenv: "{{ venv_dir }}"
+    # #16641: see roles/browser/tasks/main.yml for the full reason.
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
   become_user: "{{ service_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
