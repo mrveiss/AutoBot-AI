@@ -48,9 +48,11 @@ async def _run(kb, *rows):
         patch("knowledge.fact_store.backfill_candidates", return_value=_CANDIDATES),
         patch("knowledge.fact_store.count_facts", AsyncMock(return_value=len(rows))) as count,
         patch("knowledge.fact_store.iter_facts", iter_facts),
+        patch("knowledge.fact_store.clear_backfill_candidates", AsyncMock()) as clear,
     ):
         report = await kb.backfill_document_visibility()
     walk["counted"] = count.await_args.args
+    walk["cleared"] = [fid for call in clear.await_args_list for fid in call.args[0]]
     return report, walk
 
 
@@ -60,50 +62,57 @@ async def test_an_ownerless_document_is_made_system_through_update_fact():
     report, walk = await _run(kb, ("f1", _DOC))
     kb.update_fact.assert_awaited_once_with("f1", metadata=BACKFILL_MARK)
     assert (report["found"], report["updated"]) == (1, {"documentation": 1})
-    assert walk == {"where": _CANDIDATES, "counted": _CANDIDATES}  # counted and walked on the same rows
+    # counted and walked on the same rows, and decided for good
+    assert walk == {"where": _CANDIDATES, "counted": _CANDIDATES, "cleared": ["f1"]}
 
 
 @pytest.mark.asyncio
 async def test_every_other_ownerless_fact_stays_private_and_is_counted_by_provenance():
     kb = _Backfill({"f2": ({}, dict(_DIARY))})
-    report, _ = await _run(kb, ("f2", _DIARY))
+    report, walk = await _run(kb, ("f2", _DIARY))
     kb.update_fact.assert_not_awaited()
     assert report["kept_private"] == {"manual_upload/AGENT_DIARY": 1}
+    assert walk["cleared"] == ["f2"]  # decided: a later start doesn't walk it again
 
 
 @pytest.mark.asyncio
 async def test_a_fact_whose_live_copy_has_an_owner_is_never_touched():
     """update_fact merges onto the copy it reads; the row alone can't license the change."""
     kb = _Backfill({"f3": ({}, {**_DOC, "owner_id": "u1"})})
-    report, _ = await _run(kb, ("f3", _DOC))
+    report, walk = await _run(kb, ("f3", _DOC))
     kb.update_fact.assert_not_awaited()
     assert report["skipped"] == {"documentation": 1}
+    assert walk["cleared"] == ["f3"]
 
 
 @pytest.mark.asyncio
-async def test_a_failed_update_is_reported_not_hidden():
+async def test_a_failed_update_is_reported_and_kept_for_the_next_start():
     kb = _Backfill({"f4": ({}, dict(_DOC))})
     kb.update_fact.return_value = {"status": "error"}
-    report, _ = await _run(kb, ("f4", _DOC))
+    report, walk = await _run(kb, ("f4", _DOC))
     assert report["failed"] == {"documentation": 1}
     assert report["updated"] == {}
+    assert walk["cleared"] == []  # still flagged, so the next start retries it
 
 
-def test_candidates_are_unowned_unset_and_marked_legacy_by_the_migration():
-    """A fact stored after deploy carries no mark, so it can never be promoted by the backfill."""
-    from knowledge.fact_store import BACKFILL_CANDIDATE_KEY, backfill_candidates
+def test_candidates_are_flagged_by_the_migration_and_still_unowned_and_unset():
+    """No write path sets the flag, so a fact stored after deploy can never be promoted."""
+    from knowledge.fact_store import backfill_candidates
+    from models.knowledge_fact import KnowledgeFact
 
     sql = [str(clause.compile(dialect=postgresql.dialect())) for clause in backfill_candidates()]
-    assert sql[0] == "knowledge_facts.owner_id IS NULL"
-    assert "->>" in sql[1] and sql[1].endswith(") IS NULL")  # no visibility: absent, or JSON null
-    assert "->>" in sql[2] and sql[2].endswith(") IS NOT NULL")  # the migration's mark
+    assert sql[0] == "knowledge_facts.visibility_backfill_candidate IS true"
+    assert sql[1] == "knowledge_facts.owner_id IS NULL"
+    assert "->>" in sql[2] and sql[2].endswith(") IS NULL")  # no visibility: absent, or JSON null
+    assert "visibility_backfill_candidate" in KnowledgeFact.__table__.columns
     migration = (
         Path(__file__).resolve().parents[1]
         / "migrations"
         / "versions"
         / "20260914_092_kb_visibility_backfill_candidates.py"
     ).read_text(encoding="utf-8")
-    assert migration.count(BACKFILL_CANDIDATE_KEY) >= 2  # marks and unmarks the key this module selects on
+    # a structural marker, so baseline adoption observes the revision instead of re-running it
+    assert 'op.add_column("knowledge_facts", sa.Column("visibility_backfill_candidate"' in migration
 
 
 class _SetStore:

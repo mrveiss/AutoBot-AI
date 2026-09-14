@@ -80,7 +80,7 @@ async def _adopt_then_backfill(kb) -> None:
 
     In that order because the backfill walks the durable rows: a fact still only in
     Redis would be missed. The builtin updater restarts the backend after an update, so
-    this is how the backfill ships; a second run finds nothing left to change.
+    this is how the backfill ships; a later start retries only the updates that failed.
     """
     await kb.adopt_legacy_facts()
     await kb.backfill_document_visibility()

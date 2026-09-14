@@ -263,12 +263,12 @@ class FactProjectionMixin:
         ingested documents keep that reach, now explicit and auditable, and every other
         ownerless fact stays private. :mod:`knowledge.ingestion_visibility` decides which.
 
-        Only facts that migration 20260914_092 marked at deploy are candidates. A fact
+        Only facts that migration 20260914_092 flagged at deploy are candidates. A fact
         stored later can't be promoted by imitating an ingestion marker, because new
         ingestion writes its visibility itself. Each change goes through :meth:`update_fact`,
         so the row, the Redis projection, ChromaDB and ``kb:system:facts`` move together.
-        Each carries a ``visibility_backfill`` tag so it can be found and reversed.
-        Idempotent: a changed fact has a visibility, so a second run no longer selects it.
+        Each carries a ``visibility_backfill`` tag so it can be found and reversed. Every
+        decided candidate loses its flag, so a later start revisits only failed updates.
         """
         # Lazy: see the module docstring on why fact_store is not imported at module scope.
         from knowledge import fact_store
@@ -278,9 +278,13 @@ class FactProjectionMixin:
         logger.info("Visibility backfill (#16693): %d legacy facts have no owner and no visibility", found)
         tally: Dict[str, Counter] = defaultdict(Counter)
         async for batch in fact_store.iter_facts(batch_size=batch_size, where=candidates):
+            decided = []
             for fact in batch:
                 outcome, label = await self._backfill_one_document(fact["fact_id"], fact["metadata"])
                 tally[outcome][label] += 1
+                if outcome != "failed":
+                    decided.append(fact["fact_id"])
+            await fact_store.clear_backfill_candidates(decided)
         report = {"status": "success", "found": found, **{o: dict(tally[o]) for o in _BACKFILL_OUTCOMES}}
         (logger.warning if tally["updated"] or tally["failed"] else logger.info)(
             "Visibility backfill (#16693): %s", report

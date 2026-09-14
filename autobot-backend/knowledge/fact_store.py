@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, AsyncIterator, Dict, List, Sequence
 
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select, tuple_, update
@@ -118,22 +118,34 @@ async def fact_id_for_unique_key(unique_key: str) -> str | None:
         return found.scalar_one_or_none()
 
 
-#: Set by migration 20260914_092 on every fact that had no owner and no visibility at deploy.
-BACKFILL_CANDIDATE_KEY = "visibility_backfill_candidate"
-
-
 def backfill_candidates() -> tuple:
-    """Rows the #16693 backfill may change: marked legacy by its migration, still unowned and unset.
+    """Rows the #16693 backfill may change: flagged by its migration, still unowned and unset.
 
-    Only the migration marks rows, so a fact stored after deploy is never a candidate,
-    whatever its metadata imitates. ``->>`` is NULL when a key is absent or holds JSON null.
+    Only migration 20260914_092 sets the flag, so a fact stored after deploy is never a
+    candidate, whatever its metadata imitates. ``->>`` is NULL when a key is absent or
+    holds JSON null.
     """
-    meta = KnowledgeFact.metadata_json
     return (
+        KnowledgeFact.visibility_backfill_candidate.is_(True),
         KnowledgeFact.owner_id.is_(None),
-        meta["visibility"].astext.is_(None),
-        meta[BACKFILL_CANDIDATE_KEY].astext.isnot(None),
+        KnowledgeFact.metadata_json["visibility"].astext.is_(None),
     )
+
+
+async def clear_backfill_candidates(fact_ids: Sequence[str]) -> None:
+    """Drop the backfill flag from *fact_ids*, which the backfill has decided for good.
+
+    Row-only by design: the flag lives in this column and nowhere else, so clearing it
+    moves no projection out of step.
+    """
+    if not fact_ids:
+        return
+    factory = get_async_session_factory()
+    async with factory() as session:
+        await session.execute(
+            update(KnowledgeFact).where(KnowledgeFact.id.in_(list(fact_ids))).values(visibility_backfill_candidate=None)
+        )
+        await session.commit()
 
 
 async def count_facts(*conditions) -> int:
