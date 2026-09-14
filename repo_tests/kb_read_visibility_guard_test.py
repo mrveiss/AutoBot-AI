@@ -15,7 +15,8 @@ knowledge base several service layers down, and a per-route rule would miss ever
 
 **Raw ChromaDB reads (#16667).** A Chroma-style ``.query``/``.get``/``.peek`` on a
 collection-named receiver also counts, when the receiver is the KB's own collection handle
-(:data:`KB_COLLECTION_HANDLES`, anywhere) or the call sits in :data:`KB_CONTENT_MODULES`, the
+(:data:`KB_HANDLE_SUFFIXES`, anywhere -- directly, through a local assigned from one, or behind
+``asyncio.to_thread``) or the call sits in :data:`KB_CONTENT_MODULES`, the
 modules whose collections hold KB facts, summaries, cached RAG results or vector chunks. That is
 how the raw explorer and the summary routes bypassed fact visibility (#16666, #16694).
 
@@ -30,7 +31,8 @@ bound method and called later (``HybridSearcher`` keeps ``self.search``); polymo
 backend dispatch (``VectorSearchEngine`` backends); filters hidden in ``**kwargs``; the
 infra MCP server's HTTP hop; reads that bypass the primitives through direct ``fact:*`` Redis
 reads; raw ChromaDB reads on a KB-content collection outside :data:`KB_CONTENT_MODULES` that
-do not go through the KB's own handle (see :func:`_is_raw_kb_read`); receivers named
+reach it through a parameter or an attribute other than the KB's own handles (e.g.
+``knowledge/vector_membership.py``'s ``vectorized_ids(collection)``; see :func:`_is_raw_kb_read`); receivers named
 outside :data:`KB_RECEIVERS` -- including a bare ``self`` (the KB's own mixins calling a
 sibling reader, e.g. ``FactsMixin.get_shared_facts``; ``self.advanced_search`` in the RAG
 optimizer) and a call-result receiver (``self._get_hybrid_searcher().search(...)``); and
@@ -104,8 +106,9 @@ FILTER_HELPERS = frozenset(
 )
 
 RAW_READ_METHODS = frozenset({"get", "query", "peek"})
-#: The KB's own ChromaDB handles (``knowledge/base.py``): a raw read through one is a KB read anywhere.
-KB_COLLECTION_HANDLES = frozenset({"chroma_collection", "_async_chroma_collection"})
+#: The KB's own ChromaDB handles, as dotted receiver suffixes (``knowledge/base.py``). A raw read through
+#: one -- directly, through a local assigned from one, or behind ``asyncio.to_thread`` -- is a KB read anywhere.
+KB_HANDLE_SUFFIXES = (".chroma_collection", "._async_chroma_collection", "vector_store._collection")
 #: Modules whose ChromaDB collections hold KB content (classified 2026-09-14 for #16667: of 66
 #: functions with a raw collection read, 17 sit here; the others read code analytics, agent
 #: memory, LLC or synthetic benchmark collections). ``ownership_reassign`` also reads the
@@ -142,7 +145,9 @@ MIN_READS_FOUND = 40
 #: and the check would still pass. This number is checked against what the scan detects.
 #: Re-frozen 84 -> 101 in #16667 part 3: the detector widened to raw ChromaDB reads, and the
 #: 17 it newly sees are each classified in ALLOWLIST. That is a measured expansion, not new debt.
-UNFILTERED_READ_CEILING = 101
+#: Then 101 -> 103: the review widened it to reads behind ``asyncio.to_thread`` and through a local
+#: aliasing a KB handle (``SearchMixin._query_chromadb``, ``FactsMixin._find_duplicate``; both IMPL).
+UNFILTERED_READ_CEILING = 103
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
@@ -230,18 +235,38 @@ def _is_kb_read(call: ast.Call) -> bool:
     )
 
 
-def _is_raw_kb_read(call: ast.Call, rel: str) -> bool:
-    """A Chroma-style raw read on a KB-content collection (see the module docstring)."""
-    if not isinstance(call.func, ast.Attribute) or call.func.attr not in RAW_READ_METHODS:
+def _is_kb_handle(receiver: str) -> bool:
+    return "." in receiver and receiver.endswith(KB_HANDLE_SUFFIXES)
+
+
+def _handle_aliases(func: ast.AST) -> frozenset[str]:
+    """Locals assigned from a KB handle in *func*'s own body (``c = self.vector_store._collection``)."""
+    names, stack = set(), list(ast.iter_child_nodes(func))
+    while stack:
+        node = stack.pop()
+        if isinstance(node, _NESTED):
+            continue
+        if isinstance(node, ast.Assign) and _is_kb_handle(_dotted(node.value) or ""):
+            names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        stack.extend(ast.iter_child_nodes(node))
+    return frozenset(names)
+
+
+def _is_raw_kb_read(call: ast.Call, rel: str, aliases: frozenset[str] = frozenset()) -> bool:
+    """A Chroma-style raw read on a KB-content collection (see the module docstring).
+
+    ``asyncio.to_thread(<collection>.<read>, ...)`` counts as the read it offloads. A positional
+    string is not excluded: ChromaDB's ``get`` takes ``ids`` positionally.
+    """
+    func = call.args[0] if _dotted(call.func) in THREAD_OFFLOADS and call.args else call.func
+    if not isinstance(func, ast.Attribute) or func.attr not in RAW_READ_METHODS:
         return False
-    last = (_dotted(call.func.value) or "").rsplit(".", 1)[-1]
-    if not last.lower().endswith("collection"):
+    receiver = _dotted(func.value) or ""
+    if receiver in aliases:
+        return True  # an alias of a KB handle is the KB collection, whatever the local is called
+    if not receiver.rsplit(".", 1)[-1].lower().endswith("collection"):
         return False
-    if call.func.attr != "query" and any(isinstance(a, ast.Constant) and isinstance(a.value, str) for a in call.args):
-        return False  # ``collection.get("id")`` is a dict.get; ChromaDB's get/peek take keywords
-    receiver = _dotted(call.func.value) or ""
-    via_kb_handle = "." in receiver and last in KB_COLLECTION_HANDLES  # ``kb.chroma_collection``, not a local
-    return via_kb_handle or rel in KB_CONTENT_MODULES
+    return _is_kb_handle(receiver) or rel in KB_CONTENT_MODULES
 
 
 def kb_reads(source: str, rel: str = "") -> list[tuple[str, int, bool]]:
@@ -255,8 +280,11 @@ def kb_reads(source: str, rel: str = "") -> list[tuple[str, int, bool]]:
             name = f"{qual}.{child.name}" if qual else child.name
             if not isinstance(child, ast.ClassDef):
                 filtered = any(_called_name(c) in FILTER_HELPERS for c in ast.walk(child) if isinstance(c, ast.Call))
+                aliases = _handle_aliases(child)
                 reads.extend(
-                    (name, c.lineno, filtered) for c in _own_calls(child) if _is_kb_read(c) or _is_raw_kb_read(c, rel)
+                    (name, c.lineno, filtered)
+                    for c in _own_calls(child)
+                    if _is_kb_read(c) or _is_raw_kb_read(c, rel, aliases)
                 )
             visit(child, name)
 
@@ -393,16 +421,23 @@ def test_a_raw_read_through_the_kb_handle_is_found_anywhere():
     assert kb_reads(source, "autobot-backend/anywhere/else.py") == [("dump", 2, False)]
 
 
-def test_raw_reads_outside_kb_content_and_dict_gets_are_not_kb_reads():
-    """Contrast: a code-analytics collection, and ``collection.get("id")`` on a plain dict."""
-    assert (
-        kb_reads(
-            "def s(code_collection):\n    return code_collection.query(query_texts=['x'])\n",
-            "autobot-backend/api/analytics_code.py",
-        )
-        == []
+def test_reads_outside_kb_content_and_non_collection_receivers_are_not_kb_reads():
+    """Contrast: a code-analytics collection, and a non-collection ``.get`` inside a KB-content module."""
+    outside = "def s(code_collection):\n    return code_collection.query(query_texts=['x'])\n"
+    assert kb_reads(outside, "autobot-backend/api/analytics_code.py") == []
+    assert kb_reads("def g(results):\n    return results.get('id')\n", "autobot-backend/api/knowledge_chroma.py") == []
+
+
+def test_a_positional_ids_get_and_a_peek_are_reads():
+    """ChromaDB's ``get`` takes ``ids`` positionally, and ``peek`` returns documents too."""
+    src = "def g(collection):\n    a = collection.get('fact-id')\n    return collection.peek(3)\n"
+    assert sorted(kb_reads(src, "autobot-backend/api/knowledge_chroma.py")) == [("g", 2, False), ("g", 3, False)]
+
+
+def test_an_offloaded_read_through_a_local_kb_handle_is_found_anywhere():
+    """The KB's own search shape: alias the vector store's collection, then query it on a worker thread."""
+    src = (
+        "import asyncio\nasync def q(self):\n    c = self.vector_store._collection\n"
+        "    return await asyncio.to_thread(c.query, query_texts=['x'])\n"
     )
-    assert (
-        kb_reads("def g(collection):\n    return collection.get('id')\n", "autobot-backend/api/knowledge_chroma.py")
-        == []
-    )
+    assert kb_reads(src, "autobot-backend/knowledge/elsewhere.py") == [("q", 4, False)]
