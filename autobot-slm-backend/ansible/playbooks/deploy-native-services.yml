@@ -91,7 +91,11 @@
           # Redis Stack Configuration
           port 6379
           bind 0.0.0.0
-          requirepass {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}
+          {# #16627: with AUTOBOT_REDIS_USERNAME set -- the SLM's own environment since
+             P1b -- the env password is a CLIENT credential for a nopass server, and
+             falling back to it would turn enforcement on (P2, #16628). Without a
+             username the legacy env-driven requirepass is kept. #}
+          {% if autobot_redis_password | default('') or (lookup('env', 'AUTOBOT_REDIS_PASSWORD') and not lookup('env', 'AUTOBOT_REDIS_USERNAME')) %}requirepass {{ autobot_redis_password | default('') or lookup('env', 'AUTOBOT_REDIS_PASSWORD') }}{% endif %}
 
           # Persistence
           appendonly yes
@@ -673,6 +677,7 @@
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+          Environment="REDIS_USERNAME={{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }}"
           Environment="OLLAMA_HOST=http://localhost:11434"
           Restart=always
           RestartSec=3
@@ -698,6 +703,7 @@
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+          Environment="REDIS_USERNAME={{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }}"
           Environment="DEVICE=CPU"
           Restart=always
           RestartSec=3
@@ -789,6 +795,7 @@
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+          Environment="REDIS_USERNAME={{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }}"
           Restart=always
           RestartSec=3
 
