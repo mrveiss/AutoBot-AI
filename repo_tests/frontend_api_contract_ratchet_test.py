@@ -74,7 +74,9 @@ _BASELINES = {
         "clients": 8,
         "raw_fetch": 17,
         "axios": 0,
-        "responses": 187,
+        # #16460: +9 for the new invitation list/respond and activity/notification
+        # history response shapes this PR adds.
+        "responses": 196,
         # #15455: raised for the four typed detail fetches #15429 added. Same
         # limitation — this counts assertions, and a correct new call is one.
         # #16245: SettingsPanel.vue's unrendered /system/health/detailed loader was
