@@ -3,6 +3,7 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 import { describe, it, expect } from 'vitest'
+import { ROLE_PRIORITY } from '@/types/_generated/workflow'
 import { isAdminRole, ADMIN_ROLES, ROLE_RANK, meetsMinRole } from '../roles'
 
 describe('isAdminRole (#14937)', () => {
@@ -37,6 +38,10 @@ describe('isAdminRole (#14937)', () => {
 })
 
 describe('ROLE_RANK / meetsMinRole (#16244)', () => {
+  it('is the generated backend priority map itself, not a hand copy (#16491)', () => {
+    expect(ROLE_RANK).toBe(ROLE_PRIORITY)
+  })
+
   it('ranks superadmin above admin, mirroring the backend _ROLE_META comment', () => {
     expect(ROLE_RANK.superadmin).toBeGreaterThan(ROLE_RANK.admin)
   })

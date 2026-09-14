@@ -170,7 +170,7 @@ bash .claude/hooks/block-dangerous-commands_test.sh
 ```
 Must be 0 failed, with at least 60 cases run — the suite asserts that floor itself, so a sandbox that failed to build cannot report clean (#15296). Add test cases for new rules. Use `bash` (GNU grep 3.7), not interactively — the shell `grep` alias is `ugrep` (PCRE2) which has different variable-length lookbehind support. See #8262.
 
-CI runs it too, via `repo_tests/shell_lib_test.py`; before #15296 no workflow invoked it and it had been dormant since it was written. A new `*_test.sh` under `.claude/hooks/` or `scripts/lib/` must be registered in that file's `SHELL_SUITES` or it silently never runs.
+CI runs it too, via `repo_tests/shell_lib_test.py`; before #15296 no workflow invoked it and it had been dormant since it was written. A new `*_test.sh` anywhere in the tree must be registered in that file's `SHELL_SUITES`: its registration check sweeps every tracked suite and fails until it is (#15933).
 
 ---
 

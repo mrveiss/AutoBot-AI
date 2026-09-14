@@ -20,6 +20,7 @@ import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import { slmApiClient } from '@/utils/ApiClient'
 import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
+import { useNodeServices } from '@/composables/useNodeServices'
 
 const fleetStore = useFleetStore()
 const { t } = useI18n()
@@ -78,6 +79,9 @@ const result = ref<string | null>(null)
 // Tool-specific state
 const selectedNode = ref<string>('')
 const selectedService = ref<string>('')
+// Shared with FleetToolsTab (#16256): one fetch path, one set of failure
+// semantics for the node's service journal, instead of a second direct call.
+const nodeServices = useNodeServices(selectedNode)
 const redisCommand = ref<string>('PING')
 const ansibleCommand = ref<string>('uptime')
 const logLines = ref<number>(100)
@@ -206,18 +210,8 @@ async function getServiceLogs(): Promise<void> {
   result.value = null
 
   try {
-    const response = await slmApiClient.rawRequest(
-      `/nodes/${selectedNode.value}/services/${selectedService.value}/logs?lines=${logLines.value}`,
-      { timeout: REMOTE_EXEC_TIMEOUT_MS }
-    )
-
-    if (!response.ok) {
-      const err = await response.json()
-      throw new Error(err.detail || t('toolsView.failedToFetchLogs'))
-    }
-
-    const data = await response.json()
-    result.value = data.logs || t('toolsView.noLogsAvailable')
+    const logs = await nodeServices.getLogs(selectedService.value, logLines.value)
+    result.value = logs || t('toolsView.noLogsAvailable')
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('toolsView.failedToFetchLogs')
   } finally {

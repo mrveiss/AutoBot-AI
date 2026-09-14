@@ -1718,7 +1718,7 @@ async def resume_chat_graph(
 
     decision = {
         "approved": request_data.get("approved", False),
-        "reason": request_data.get("reason", ""),
+        "reason": scan_chat_message(request_data.get("reason", ""), chat_id),  # #16561
     }
 
     return _create_streaming_response(
@@ -2012,7 +2012,7 @@ async def _store_ai_stack_user_message(
     chat_history_manager,
 ) -> str:
     """Store user message and log event for AI Stack chat."""
-    user_message_id, message.content = str(uuid4()), scan_chat_message(message.content, session_id)  # #16529/#16530
+    user_message_id = str(uuid4())  # message.content already scanned by caller (#16529/#16530, #16561)
     user_message_data = {
         "id": user_message_id,
         "content": message.content,
@@ -2450,7 +2450,7 @@ async def chat_ai_stack(
 
     Issue #744: Requires authenticated user.
     """
-    request_id = generate_request_id()
+    request_id, message.content = generate_request_id(), scan_chat_message(message.content, message.session_id)
 
     try:
         # Validate message content
@@ -2513,7 +2513,7 @@ async def stream_ai_stack_chat(
 
     Issue #744: Requires authenticated user.
     """
-    request_id = generate_request_id()
+    request_id, message.content = generate_request_id(), scan_chat_message(message.content, message.session_id)
 
     return StreamingResponse(
         _generate_ai_stack_stream(message, request, request_id, preferences),

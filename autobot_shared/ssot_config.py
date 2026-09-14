@@ -45,6 +45,7 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import ClassVar, Dict, FrozenSet, List
+from urllib.parse import quote
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -759,6 +760,7 @@ class RedisConfig(RedactedSettings):
 
     # Security
     password: str | None = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
+    username: str | None = Field(default=None, alias="AUTOBOT_REDIS_USERNAME")  # ACL user (#16626)
 
 
 class CacheCoordinatorConfig(RedactedSettings):
@@ -1981,6 +1983,7 @@ class MiscConfig(RedactedSettings):
     github_actions: str = Field(default="", alias="GITHUB_ACTIONS")
     google_api_key: str = Field(default="", alias="GOOGLE_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
+    grounding_stats_ttl: str = Field(default="", alias="AUTOBOT_GROUNDING_STATS_TTL")
     hf_hub_cache: str = Field(default="", alias="HF_HUB_CACHE")
     hf_hub_disable_progress_bars: bool = Field(default=False, alias="HF_HUB_DISABLE_PROGRESS_BARS")
     hf_token: str = Field(default="", alias="HF_TOKEN")
@@ -2546,15 +2549,13 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def redis_url_with_auth(self) -> str:
-        """Get the full Redis URL with password if configured."""
-        if self.tls.redis_tls_enabled:
-            scheme = "rediss"
-            port = self.tls.redis_tls_port
-        else:
-            scheme = "redis"
-            port = self.port.redis
+        """Get the full Redis URL with credentials if configured (URL-encoded)."""
+        tls = self.tls.redis_tls_enabled
+        scheme, port = ("rediss", self.tls.redis_tls_port) if tls else ("redis", self.port.redis)
         if self.redis.password:
-            return f"{scheme}://:{self.redis.password}@{self.vm.redis}:{port}"
+            # #16626: userinfo carries the ACL username when set; unset keeps ":<password>"
+            userinfo = f"{quote(self.redis.username or '', safe='')}:{quote(self.redis.password, safe='')}"
+            return f"{scheme}://{userinfo}@{self.vm.redis}:{port}"
         return f"{scheme}://{self.vm.redis}:{port}"
 
     @property

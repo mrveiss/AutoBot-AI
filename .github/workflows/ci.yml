@@ -134,6 +134,29 @@ jobs:
     # 1h24m have both been recorded), and a shard whose durations have drifted
     # can run long without being broken.
     timeout-minutes: 60
+    # #16516: a hung test used this job's whole hour and printed nothing: `-q`
+    # prints bare dots, so the log could not say which test was stuck. Both
+    # pytest invocations below pass `-o faulthandler_timeout` from this ONE
+    # setting. A test still running after this many seconds gets every thread's
+    # traceback dumped into the log, naming the test and the frame it blocks in.
+    # The dump neither fails nor stops the test (faulthandler_exit_on_timeout
+    # stays off), so a spurious one costs a few log lines, never a red shard.
+    #
+    # 600s against the slowest recorded tests: 180.6s in .test_durations_slm and
+    # 10.8s in .test_durations. That clears the ~2x runner variance noted above,
+    # and a hang still dumps within ten minutes of starting, well inside the hour.
+    #
+    # Under xdist the dump still reaches this log. execnet starts each worker
+    # with stdin and stdout piped and stderr inherited from this step, and
+    # pytest's faulthandler plugin writes to a dup of the worker's stderr taken
+    # while capture is suspended, so per-test output capture does not swallow it.
+    #
+    # timeout-minutes is NOT derived from this setting: a job-level
+    # timeout-minutes cannot read the `env` context, and expressions have no
+    # arithmetic to turn seconds into minutes.
+    # repo_tests/ci_faulthandler_timeout_16516_test.py pins the wiring.
+    env:
+      PYTEST_FAULTHANDLER_TIMEOUT_S: 600
 
     strategy:
       # Never cancel sibling shards. Cancelling them would hide every failure
@@ -330,6 +353,7 @@ jobs:
           --shard-durations .test_durations \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
+          -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
           --durations=25 \
           --durations-min=10.0 \
           -q
@@ -373,6 +397,7 @@ jobs:
           --shard-durations .test_durations_slm \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
+          -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
           --durations=25 \
           --durations-min=10.0 \
           -q

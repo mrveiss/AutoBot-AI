@@ -654,8 +654,8 @@ class PlaybookExecutor:
                 logger.warning("_update_code_source: git checkout -- . failed; continuing")
                 synced = False
 
-            if await self._run_git(code_source_dir, "fetch", "origin") != 0:
-                logger.warning("_update_code_source: git fetch origin failed; continuing")
+            if await self._run_git(code_source_dir, "fetch", "--prune", "origin") != 0:
+                logger.warning("_update_code_source: git fetch --prune origin failed; continuing")
                 return False
 
             if await self._run_git(code_source_dir, "reset", "--hard", f"origin/{branch}") != 0:

@@ -422,16 +422,33 @@
       {{ chromadb_auth_token
          if (chromadb_auth_token | default('') | trim | length > 0)
          else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    # #16627 (P1b of #13568): the Redis password every consumer sends as user
+    # `default` while the server stays nopass (P2, #16628, enforces it). The SLM
+    # generates it here once; roles and the SLM itself only ever read it back.
+    # Alphanumeric, so it is URL-safe in the backend's AUTOBOT_REDIS_URL too.
+    slm_redis_password: >-
+      {{ slm_redis_password
+         if (slm_redis_password | default('') | trim | length > 0)
+         else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
     # #14758: the canonical envelope secret store's root key. Nothing generated
     # it, so the store raised at import on every provisioned deployment and each
     # consumer swallowed the failure — an absent store was indistinguishable
     # from "that secret does not exist". `load_root_key` base64-DECODES this and
     # requires exactly 32 bytes, so it is not interchangeable with the opaque
-    # 48-char secrets above: 32 chars b64-encoded decode back to 32 bytes.
+    # 48-char secrets above.
+    #
+    # #16405: the `lookup('password', ... chars=ascii_letters,digits')` this
+    # used to read only ever drew from 62 characters (~5.95 bits each), so the
+    # decoded key carried ~190 bits of entropy, not the 256 its length implied
+    # -- `load_root_key` cannot tell a weak key from a strong one, since both
+    # shapes decode to exactly 32 bytes. `openssl rand -base64 32` reads the 32
+    # bytes themselves from the OS CSPRNG, full byte range, then base64-encodes
+    # them; `replace` only maps the output alphabet to url-safe, same as every
+    # other generator here.
     autobot_secrets_root_key: >-
       {{ autobot_secrets_root_key
          if (autobot_secrets_root_key | default('') | trim | length > 0)
-         else (lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode) | replace('+', '-') | replace('/', '_') }}
+         else lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
@@ -509,6 +526,64 @@
   no_log: true
   tags: ['slm', 'secrets']
 
+# #16627: same back-fill for the Redis credential. This file is the SLM's own
+# EnvironmentFile, and while the server's default user is nopass a password sent
+# WITHOUT a username (AUTH <password>) is refused -- so a password generated here
+# always gets its username first. A password an operator already put here is
+# left exactly as it is, username included: the legacy deploy playbooks render an
+# env password as requirepass unless a username sits beside it, so adding one
+# would silently switch that enforcement off. Both lines are append-only and
+# gated on the key being absent or empty; the password is never regenerated.
+- name: "SLM | Check if AUTOBOT_REDIS_PASSWORD present in secrets file (#16627)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^AUTOBOT_REDIS_PASSWORD=.\+'
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_redis_pw_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  no_log: true
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Check if AUTOBOT_REDIS_USERNAME present in secrets file (#16627)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^AUTOBOT_REDIS_USERNAME=.\+'
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_redis_user_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Add AUTOBOT_REDIS_USERNAME to existing secrets file (#16627)"
+  ansible.builtin.lineinfile:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+    regexp: "^AUTOBOT_REDIS_USERNAME="
+    line: "AUTOBOT_REDIS_USERNAME={{ slm_redis_username }}"
+    create: false
+  when:
+    - slm_secrets_stat.stat.exists
+    - _slm_redis_user_check.rc != 0
+    - _slm_redis_pw_check.rc != 0
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Add AUTOBOT_REDIS_PASSWORD to existing secrets file (#16627)"
+  ansible.builtin.lineinfile:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+    regexp: "^AUTOBOT_REDIS_PASSWORD="
+    line: >-
+      AUTOBOT_REDIS_PASSWORD={{ slm_redis_password
+         if (slm_redis_password | default('') | trim | length > 0)
+         else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    create: false
+  when:
+    - slm_secrets_stat.stat.exists
+    - _slm_redis_pw_check.rc != 0
+  no_log: true
+  tags: ['slm', 'secrets']
+
 # #14758: same back-fill for the envelope root key. Every host provisioned
 # before this change already has the secrets file, so the template task above is
 # skipped and the key would never appear — which is the state the issue reports.
@@ -532,7 +607,9 @@
   ansible.builtin.lineinfile:
     path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
     regexp: "^AUTOBOT_SECRETS_ROOT_KEY="
-    line: "AUTOBOT_SECRETS_ROOT_KEY={{ (lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode) | replace('+', '-') | replace('/', '_') }}"
+    # #16405: same fix as the set_fact generator above -- 32 random bytes from
+    # openssl rand, not 32 characters from a password lookup.
+    line: "AUTOBOT_SECRETS_ROOT_KEY={{ lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}"
     create: false
   when:
     - slm_secrets_stat.stat.exists

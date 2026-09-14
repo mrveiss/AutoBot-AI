@@ -4,7 +4,10 @@ version: "1.0.0"
 target_node: ai-stack
 
 deploy:
-  source: autobot-ai-stack/
+  # #16025: NOT autobot-ai-stack/ -- that repo dir holds a placeholder README
+  # and nothing else (#14275). The real sources role_registry.py's
+  # post_sync_cmd / ansible both deploy from are here.
+  source: autobot-infrastructure/shared/docker/ai-stack/
   destination: /opt/autobot/autobot-ai-stack/
   shared: true
   infrastructure: true

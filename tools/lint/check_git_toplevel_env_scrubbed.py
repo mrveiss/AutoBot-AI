@@ -112,7 +112,7 @@ by tests rather than half-implemented.
   ``FLAG=--show-toplevel; git rev-parse "$FLAG"`` or a local ``toplevel()``
   wrapper is invisible to it — the same class of gap as the Python argv-
   through-a-variable case above, for the same reason (no evaluation of shell
-  is attempted here).
+  is attempted here). ``sync_orchestrator.py:392`` runs git over ssh (by design; #16179).
 
 The behavioural half of the guard (``repo_tests/git_repo_root_scrub_test.py``
 for Python, ``scripts/lib/git-root_test.sh`` for shell) covers what static
@@ -331,7 +331,7 @@ def is_production_path(rel: str) -> bool:
     """
     name = rel.rsplit("/", 1)[-1]
     if name.endswith("_test.py") or name.startswith("test_"):
-        return False
+        return rel == "scripts/test_first_remediation.py"  # real tool, no fixture (#16179)
     return "/tests/" not in f"/{rel}"
 
 

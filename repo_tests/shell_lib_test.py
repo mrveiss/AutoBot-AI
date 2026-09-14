@@ -31,10 +31,7 @@ import subprocess
 import pytest
 
 from autobot_shared.paths import project_root
-
-#: Directories swept for bash suites. A suite living anywhere else is invisible
-#: to the registration check below, so new homes belong here, not in a comment.
-SUITE_DIRS = (".claude/hooks", "scripts/lib")
+from tools.lint._scan_helpers import tracked_paths
 
 SHELL_SUITES = [
     ".claude/hooks/block-dangerous-commands_test.sh",
@@ -43,6 +40,7 @@ SHELL_SUITES = [
     "scripts/lib/git-scope_test.sh",
     "scripts/lib/project_root_test.sh",
     "scripts/lib/session-handoffs_test.sh",
+    "scripts/pr-preflight_test.sh",
 ]
 
 
@@ -60,7 +58,8 @@ def test_shell_suite_passes(suite: str) -> None:
         [bash, str(script)],
         capture_output=True,
         text=True,
-        # The hook suite runs ~65 cases, each spawning bash, jq and python3.
+        # The hook suite runs ~65 cases, each spawning bash, jq and python3. The
+        # preflight suite runs the preflight once per case, each scoped by --only.
         timeout=300,
         cwd=str(project_root()),
     )
@@ -112,20 +111,21 @@ def test_every_shell_suite_is_registered() -> None:
     This is the guard for the failure this module exists to fix: the suite was
     not broken, it was simply never invoked by anything.
 
-    Each swept directory carries a reach floor. Without one, a directory that
-    was renamed, moved, or excluded from the checkout would contribute an empty
-    set, the equality would still hold against a shrunken ``SHELL_SUITES``, and
-    the sweep would report clean having asserted nothing about it (#15296).
+    The sweep is every tracked suite in the repository, not a list of
+    directories (#15933). A directory list sees only what someone thought to
+    name: ``scripts/pr-preflight_test.sh`` sat one level above ``scripts/lib``,
+    outside both swept directories, and stayed dormant while this check passed.
+    ``tracked_paths`` hands the pattern to git as a plain pathspec, whose ``*``
+    crosses ``/``, so a suite anywhere in the tree is seen.
+
+    That also retires the per-directory reach floor (#15296). ``tracked_paths``
+    raises on an empty listing, so a sweep that lost its reach fails rather
+    than reading as clean, and the equality below, checked both ways, names any
+    registered suite the listing no longer contains.
     """
-    root = project_root()
-    per_dir = {rel: {f"{rel}/{p.name}" for p in (root / rel).glob("*_test.sh")} for rel in SUITE_DIRS}
-
-    empty = sorted(rel for rel, found in per_dir.items() if not found)
-    assert not empty, f"swept directories with no *_test.sh at all — the sweep lost reach: {empty}"
-
-    on_disk: set[str] = set().union(*per_dir.values())
-    assert on_disk == set(SHELL_SUITES), (
-        "shell test suites on disk do not match the registered list — "
-        f"unregistered: {sorted(on_disk - set(SHELL_SUITES))}, "
-        f"missing from disk: {sorted(set(SHELL_SUITES) - on_disk)}"
+    tracked = set(tracked_paths(project_root(), "*_test.sh"))
+    assert tracked == set(SHELL_SUITES), (
+        "tracked shell test suites do not match the registered list — "
+        f"unregistered: {sorted(tracked - set(SHELL_SUITES))}, "
+        f"registered but not tracked: {sorted(set(SHELL_SUITES) - tracked)}"
     )
