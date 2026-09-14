@@ -101,10 +101,18 @@ def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
 #: growth -- and is the only number here chosen by judgement rather than
 #: measurement. Splitting them is what makes that sentence possible; with one
 #: band nobody could say which part was which.
+#:
+#: Ratcheted 5100 -> 5822 (#16702): the 2d batch vehicle combines 14
+#: independently-reviewed PRs' new/moved files onto one tree, and that alone
+#: closed most of the old floor's 700-file runway. Measured with the same
+#: `git ls-files "*.py"` this declaration's own `discover` runs, on the
+#: vehicle branch at this commit -- not estimated, not read off a CI log.
+#: `skips`/`growth` are unchanged; this is the population catching up, not a
+#: change in what either band means.
 REACH = declare(
     "audio-extension-allowlist",
     discover=_tracked_python_files,
-    floor=5100,
+    floor=5822,
     growth=400,
     skips=300,
     what="tracked python files",
