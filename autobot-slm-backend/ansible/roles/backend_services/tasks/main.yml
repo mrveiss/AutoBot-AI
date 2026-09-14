@@ -34,6 +34,7 @@
 - name: "Backend Services | Install target Python interpreter"
   ansible.builtin.include_role:
     name: python_interpreter
+    public: true  # #16750: role defaults (python_interpreter_binary) must reach the pip task below
 
 - name: "Backend Services | Enforce venv target Python version (env-drift fix)"
   ansible.builtin.include_role:

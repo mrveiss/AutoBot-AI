@@ -70,6 +70,21 @@
 - name: "{{ sync_deletions_label }} | Deletions"
   tags: ['slm', 'deploy']
   block:
+    # #16750: code_source_dir itself is NOT part of this module's contract --
+    # it is unset in the frontend role's scope (and any other caller that
+    # never sets it), so the "resolve the commit being deployed" task below
+    # used to fail there with an undefined-variable error, silently skipping
+    # the whole deletion pass (this block's own rescue swallowed it into a
+    # warning). _sd_code_source_dir applies the SAME override-first,
+    # SSOT-derived fallback its callers already use for
+    # sync_deletions_source_dir, so this module works standalone regardless
+    # of whether the calling role happens to define code_source_dir. Kept
+    # inside the block (not a sibling task before it) so this file's one
+    # top-level task stays the block/rescue #16310 wiring asserts on.
+    - name: "{{ sync_deletions_label }} | Deletions: resolve code_source_dir (#16750)"
+      ansible.builtin.set_fact:
+        _sd_code_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
+
     - name: "{{ sync_deletions_label }} | Deletions: slurp this module's own marker from the target"
       ansible.builtin.slurp:
         src: "{{ sync_deletions_target_dir }}/.autobot_sync_deletions_commit"
@@ -96,7 +111,7 @@
 
     - name: "{{ sync_deletions_label }} | Deletions: resolve the commit being deployed"
       ansible.builtin.command:
-        cmd: git -c safe.directory={{ code_source_dir }} -C {{ code_source_dir }} rev-parse HEAD
+        cmd: git -c safe.directory={{ _sd_code_source_dir }} -C {{ _sd_code_source_dir }} rev-parse HEAD
       register: _sd_new_commit_git
       changed_when: false
       delegate_to: localhost
@@ -106,7 +121,7 @@
         cmd: >-
           {{ sync_deletions_planner_python | default(autobot.base_dir ~ '/autobot-slm-backend/venv/bin/python3') }}
           {{ autobot.base_dir }}/autobot-slm-backend/scripts/sync_deletion_planner.py
-          diff --repo-root {{ code_source_dir }} --source-dir {{ sync_deletions_source_dir }}
+          diff --repo-root {{ _sd_code_source_dir }} --source-dir {{ sync_deletions_source_dir }}
           --previous-commit {{ _sd_previous_commit }} --new-commit {{ _sd_new_commit_git.stdout | trim }}
       register: _sd_plan_diff
       changed_when: false
@@ -186,7 +201,7 @@
         cmd: >-
           {{ sync_deletions_planner_python | default(autobot.base_dir ~ '/autobot-slm-backend/venv/bin/python3') }}
           {{ autobot.base_dir }}/autobot-slm-backend/scripts/sync_deletion_planner.py
-          bootstrap --repo-root {{ code_source_dir }} --source-dir {{ sync_deletions_source_dir }}
+          bootstrap --repo-root {{ _sd_code_source_dir }} --source-dir {{ sync_deletions_source_dir }}
           --new-commit {{ _sd_new_commit_git.stdout | trim }} --present-file {{ _sd_present_file.path }}
       register: _sd_plan_bootstrap
       changed_when: false
