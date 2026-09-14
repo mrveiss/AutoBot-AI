@@ -227,16 +227,36 @@
   become: true
   tags: ['redis', 'service']
 
+# #16627 (P1b of #13568): the role's own CLIENTS -- the readiness ping below and
+# the redis_exporter unit -- authenticate as `default` with the SLM-generated
+# password while the server stays nopass. `redis_password` still owns the
+# server's requirepass and is NOT touched here (P2, #16628, enforces). The client
+# credential defaults to `redis_password`, so the SLM secret is adopted only when
+# the server has no password of its own, and always with the username.
+- name: "Redis | Read the SLM-generated Redis credential (#16627)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/read_redis_password.yml
+  tags: ['redis', 'validation', 'monitoring']
+
+- name: "Redis | Adopt the SLM-generated credential for the role's clients when none is set (#16627)"
+  ansible.builtin.set_fact:
+    redis_client_password: "{{ _redis_password_read }}"
+    redis_username: "{{ redis_username | default('', true) or _redis_username_read }}"
+  when:
+    - (_redis_password_read | default('') | trim) | length > 0
+    - (redis_client_password | default('') | trim) | length == 0
+  no_log: true
+  tags: ['redis', 'validation', 'monitoring']
+
 - name: "Redis | Wait for Redis to be ready (retry-based)"
   command: >
     {{ redis_cli_path | default('/usr/bin/redis-cli') }}
     -h 127.0.0.1 -p {{ redis_port }}
     {% if redis_username is defined and redis_username %}--user {{ redis_username }}{% endif %}
-    {% if redis_password is defined and redis_password %}-a {{ redis_password }}{% endif %}
+    {% if redis_client_password is defined and redis_client_password %}-a {{ redis_client_password }}{% endif %}
     ping
   register: redis_ping
   changed_when: false
-  no_log: "{{ redis_password is defined and redis_password | default(false) | bool }}"
+  no_log: "{{ redis_client_password is defined and redis_client_password | default(false) | bool }}"
   retries: 60
   delay: 5
   until: redis_ping is succeeded
