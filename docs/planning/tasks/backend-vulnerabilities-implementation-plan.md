@@ -5,6 +5,8 @@
 **Total Timeline:** 5 weeks (80% confidence)
 **Team Size:** 8 specialized agents (parallel execution)
 
+> **Historical record:** this plan targets the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; the counts below describe that one install.
+
 ---
 
 ## Executive Summary
@@ -138,14 +140,14 @@ Comprehensive task breakdown for fixing 6 CRITICAL backend vulnerabilities in Au
 - **Files Affected:**
   - `tests/distributed/test_db_initialization.py` (new file)
 - **Verification Criteria:**
-  - Fresh deployment on VM0 creates schema
+  - Fresh deployment on the backend/control role creates schema
   - All VMs can access initialized database
   - Deployment automation includes initialization
 - **Test Scenarios:**
-  1. Fresh VM0 deployment initializes DB
-  2. NPU Worker (VM2) upload triggers no errors
-  3. Browser (VM5) screenshot save works
-  4. Frontend (VM1) file upload succeeds
+  1. Fresh backend/control role deployment initializes DB
+  2. NPU Worker role upload triggers no errors
+  3. Browser role screenshot save works
+  4. Frontend role file upload succeeds
 
 ### Parallel Execution Plan
 
@@ -588,7 +590,7 @@ Day 5:   Task 3.6 (Gradual rollout)
 - **Dependencies:** None (parallel with 4.1)
 - **Files Affected:**
   - `backend/services/ai_stack_client.py` (add get_model_info)
-  - `config/model_config.yaml` on VM4 (read capabilities)
+  - `config/model_config.yaml` on the AI/ML role (read capabilities)
 - **Verification Criteria:**
   - Fetch context window limit per model
   - Cache model info (5 min TTL)
@@ -956,9 +958,9 @@ Day 5:   Task 5.5 (Performance validation)
   - `tests/distributed/test_access_control.py`
   - `tests/distributed/test_race_conditions.py`
 - **Test Scenarios:**
-  1. Frontend (VM1) → Backend (VM0) → Redis (VM3) workflows
-  2. NPU Worker (VM2) → Backend file operations
-  3. Browser (VM5) → Backend screenshot storage
+  1. Frontend role → Backend role → Redis (database role) workflows
+  2. NPU Worker role → Backend file operations
+  3. Browser role → Backend screenshot storage
   4. Concurrent access from multiple VMs
 
 #### 6.3: Security Testing
@@ -996,10 +998,10 @@ Day 5:   Task 5.5 (Performance validation)
   - `tests/chaos/test_network_partitions.py`
   - `tests/chaos/test_service_unavailability.py`
 - **Chaos Scenarios:**
-  1. Redis VM (VM3) unreachable → graceful degradation
-  2. AI Stack VM (VM4) timeout → circuit breaker activation
+  1. Redis (database role) unreachable → graceful degradation
+  2. AI Stack role timeout → circuit breaker activation
   3. Network partition between VMs → eventual consistency
-  4. NPU Worker (VM2) crash → automatic failover
+  4. NPU Worker role crash → automatic failover
 
 #### 6.6: End-to-End Testing
 - **Effort:** 6 hours (Week 5)

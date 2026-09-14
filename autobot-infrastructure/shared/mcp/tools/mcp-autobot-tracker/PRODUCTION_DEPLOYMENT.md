@@ -35,13 +35,13 @@ MCP AutoBot Tracker Architecture:
 │   ├── Task storage and correlation
 │   ├── Error pattern tracking
 │   └── Conversation session management
-├── VM Health Monitoring
-│   ├── Frontend (172.16.168.21:5173)
-│   ├── NPU Worker (172.16.168.22:8081)
-│   ├── Redis (172.16.168.23:6379)
-│   ├── AI Stack (172.16.168.24:8080)
-│   ├── Browser (172.16.168.25:3000)
-│   └── Backend (172.16.168.20:8001)
+├── Deployment Health Monitoring (by role)
+│   ├── Frontend (<frontend-ip>:5173)
+│   ├── NPU Worker (<npu-ip>:8081)
+│   ├── Redis / Database (<database-ip>:6379)
+│   ├── AI Stack (<aiml-ip>:8080)
+│   ├── Browser (<browser-ip>:3000)
+│   └── Backend (<backend-ip>:8001)
 └── Knowledge Base Integration (Redis DB 1)
     ├── Pattern analysis and insights
     ├── System context correlation
@@ -53,8 +53,8 @@ MCP AutoBot Tracker Architecture:
 ### Prerequisites
 
 - Node.js 18+ installed
-- Redis server accessible at 172.16.168.23:6379
-- AutoBot system running with distributed VM architecture
+- Redis server accessible at the database role's address (`<database-ip>:6379`)
+- AutoBot system running (Docker, a single VM, or distributed by role across any number of machines)
 - Claude Desktop or compatible MCP client
 
 ### Quick Installation
@@ -104,16 +104,16 @@ cd mcp-autobot-tracker
 - **DB 1**: Knowledge base and insights (shared with AutoBot)
 - **DB 10**: MCP tracker data (conversations, tasks, errors)
 
-### VM Network Configuration
+### Network Configuration
 
-All VMs in the 172.16.168.x network with specific service assignments:
+Each role has its own address, resolved via `infrastructure.hosts.<role>` — never hardcoded:
 
-- `.20`: Backend API server
-- `.21`: Frontend web interface  
-- `.22`: NPU worker for AI acceleration
-- `.23`: Redis data layer
-- `.24`: AI stack processing
-- `.25`: Browser automation (Playwright)
+- Backend: API server
+- Frontend: web interface
+- NPU worker: AI acceleration
+- Database: Redis data layer
+- AI Stack: AI processing
+- Browser: automation (Playwright)
 
 ## 🚦 Service Management
 
@@ -181,7 +181,7 @@ Finally, use get_insights to identify patterns in the issues we're tracking.
 - **Task Completion Rate**: Currently 41% (36/87 tasks completed)
 - **Error Detection Rate**: 20+ active system issues tracked
 - **Insight Confidence**: 95% average for recurring patterns
-- **VM Health Status**: All 6 VMs reporting healthy
+- **Deployment Health Status**: All deployment machines reporting healthy
 - **Response Time**: <60ms for most MCP operations
 
 ### Dashboard Metrics
@@ -205,10 +205,10 @@ Finally, use get_insights to identify patterns in the issues we're tracking.
 1. **Redis Connection Refused**
    ```bash
    # Check Redis service
-   redis-cli -h 172.16.168.23 ping
+   redis-cli -h <database-ip> ping
 
    # Verify network connectivity
-   curl -f http://172.16.168.23:6379 || echo "Redis not accessible"
+   curl -f http://<database-ip>:6379 || echo "Redis not accessible"
    ```
 
 2. **TypeScript Compilation Errors**
@@ -300,7 +300,7 @@ The MCP AutoBot Tracker has achieved the following production readiness metrics:
 - ✅ **Real-time ingestion** working with live conversation data
 - ✅ **87 tasks tracked** with intelligent categorization
 - ✅ **11 insights generated** with high confidence patterns
-- ✅ **6 VM health monitoring** with distributed architecture support
+- ✅ **Deployment-wide health monitoring** with distributed, role-based architecture support
 - ✅ **Background monitoring active** on all critical system logs
 - ✅ **Production installation scripts** ready for deployment
 

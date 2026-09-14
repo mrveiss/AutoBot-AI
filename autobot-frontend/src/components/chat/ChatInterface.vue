@@ -100,6 +100,17 @@
             >
               <Icon name="columns" />
             </button>
+            <!-- #16443: collaboration panel toggle, collaborative sessions only -->
+            <button
+              v-if="isCollaborativeSession"
+              @click="toggleCollaborationPanel"
+              class="header-btn"
+              :class="{ 'bg-electric-100 text-electric-600': showCollaborationPanel }"
+              :title="$t('collaboration.panel.title')"
+              :aria-pressed="showCollaborationPanel"
+            >
+              <Icon name="users" />
+            </button>
           </template>
         </ChatHeader>
 
@@ -144,6 +155,10 @@
         <VoiceConversationPanel
           v-else-if="showVoicePanel"
           @close="closeVoicePanel"
+        />
+        <ChatCollaborationPanel
+          v-else-if="showCollaborationPanel && isCollaborativeSession"
+          @close="showCollaborationPanel = false"
         />
       </Transition>
 
@@ -302,6 +317,7 @@ import ChatHeader from './ChatHeader.vue'
 import ChatTabs from './ChatTabs.vue'
 import ChatTabContent from './ChatTabContent.vue'
 import ChatFilePanel from './ChatFilePanel.vue'
+import ChatCollaborationPanel from './ChatCollaborationPanel.vue'
 import KnowledgePersistenceDialog from '@/components/knowledge/KnowledgePersistenceDialog.vue'
 import CommandPermissionDialog from '@/components/ui/CommandPermissionDialog.vue'
 import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget.vue'
@@ -490,6 +506,7 @@ const { voiceDisplayMode, contextOverflowMode } = usePreferences()
 function openVoiceConversation(): void {
   if (voiceDisplayMode.value === 'sidepanel') {
     showFilePanel.value = false
+    showCollaborationPanel.value = false
     showVoicePanel.value = true
   } else {
     showVoiceOverlay.value = true
@@ -554,6 +571,8 @@ const showKnowledgeDialog = ref(false)
 const showCommandDialog = ref(false)
 const showWorkflowProgress = ref(false)
 const showFilePanel = ref(false)
+// #16443: collaboration panel (participants/activity/notifications)
+const showCollaborationPanel = ref(false)
 // Mobile sidebar overlay (#1804)
 const showMobileSidebar = ref(false)
 // Chat settings modal (MVA-2006)
@@ -719,7 +738,17 @@ const sessionInfo = computed(() => {
 // Methods
 const toggleFilePanel = () => {
   showVoicePanel.value = false
+  showCollaborationPanel.value = false
   showFilePanel.value = !showFilePanel.value
+}
+
+// #16443
+const isCollaborativeSession = computed(() => store.currentSession?.mode === 'collaborative')
+
+const toggleCollaborationPanel = () => {
+  showVoicePanel.value = false
+  showFilePanel.value = false
+  showCollaborationPanel.value = !showCollaborationPanel.value
 }
 
 const exportSession = async () => {
@@ -1208,6 +1237,7 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
     // Close file panel when switching sessions
     showFilePanel.value = false
     showVoicePanel.value = false
+    showCollaborationPanel.value = false
 
     // Prime TTS cursor to end of new session's last speakable message (#1488).
     // Without this the TTS watcher fires, sees current.id !== _lastStreamingMsgId,

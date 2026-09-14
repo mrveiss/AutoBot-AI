@@ -66,16 +66,16 @@ _LOCALES = _REPO_ROOT / "autobot-frontend" / "src" / "i18n" / "locales"
 # Lower these as translations land. Never raise one to admit a new untranslated
 # string: translate it, or leave the key out until it can be translated.
 BASELINE = {
-    "ar": 3741,
+    "ar": 3727,
     "de": 1618,
     "es": 1667,
-    "fa": 3805,
+    "fa": 3790,
     "fr": 1864,
-    "he": 3805,
+    "he": 3790,
     "lv": 2259,
     "pl": 2225,
     "pt": 2062,
-    "ur": 3805,
+    "ur": 3790,
 }
 
 # Below this length a match is far more likely to be a shared token than an

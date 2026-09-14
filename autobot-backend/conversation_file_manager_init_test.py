@@ -577,8 +577,8 @@ class TestConcurrentInitialization:
         """
         Test Case 1.7: Concurrent initialization from multiple instances is safe
 
-        This simulates multiple VMs initializing the same database simultaneously,
-        which can happen in a distributed AutoBot environment.
+        This simulates multiple role hosts initializing the same database simultaneously,
+        which can happen in a distributed AutoBot deployment.
 
         Validates:
         - Multiple managers can initialize simultaneously
@@ -588,7 +588,7 @@ class TestConcurrentInitialization:
         """
         logger.info("=== Test 1.7: Concurrent initialization safety ===")
 
-        # Create 5 manager instances (simulating 5 VMs)
+        # Create 5 manager instances (simulating concurrent role hosts; fixture count, not topology)
         managers = [
             ConversationFileManager(
                 storage_dir=temp_db_path["storage_dir"],

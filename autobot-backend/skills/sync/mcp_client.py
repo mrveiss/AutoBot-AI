@@ -23,6 +23,7 @@ from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from security.content_firewall import ContentSource, get_content_firewall
+from services.mcp_isolation_config import BridgePolicy
 from skills.sync.mcp_transport import MCPTransport, create_transport
 from type_defs.mcp import (
     MCPPromptDefinition,
@@ -45,14 +46,37 @@ class MCPClient:
     multiplexed (stdio and HTTP).
     """
 
-    def __init__(self, server_uri: str, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        server_uri: str,
+        timeout: float = 30.0,
+        guard_egress: bool | None = None,
+        extra_headers: dict[str, str] | None = None,
+        resource_policy: BridgePolicy | None = None,
+    ) -> None:
         """Create a client for the given server URI.
 
         Args:
             server_uri: ``stdio://``, ``sse://``, ``http://`` or ``https://``
             timeout:    seconds to wait for each response
+            guard_egress: SSRF policy (#13625) for the remote transports —
+                ``None`` (default) skips guarding, unchanged for every
+                existing caller. Pass explicitly for a user-configured
+                remote server (#11542).
+            extra_headers: Headers merged into every remote-transport request
+                — e.g. an ``Authorization`` header built from a stored
+                credential (#11542). Ignored by the stdio transport.
+            resource_policy: cpu/memory/nofile rlimits (#3229) the spawned
+                subprocess self-applies before exec — stdio transport only
+                (#11542). Ignored by the remote transports.
         """
-        self._transport: MCPTransport = create_transport(server_uri, timeout=timeout)
+        self._transport: MCPTransport = create_transport(
+            server_uri,
+            timeout=timeout,
+            guard_egress=guard_egress,
+            extra_headers=extra_headers,
+            resource_policy=resource_policy,
+        )
         self._timeout = timeout
         self._req_id = _INIT_REQ_ID
         self._lock = asyncio.Lock()

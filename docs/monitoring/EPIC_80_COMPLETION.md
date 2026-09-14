@@ -108,9 +108,9 @@ All dashboards are accessible via: **Monitoring → Dashboards** in AutoBot UI
 
 **Script**: `scripts/install-prometheus-stack.sh`
 
-- Installed Prometheus 2.47.0 on VM3
-- Installed Grafana 10.2.0 on VM3
-- Installed AlertManager 0.26.0 on VM3
+- Installed Prometheus 2.47.0 on the database role
+- Installed Grafana 10.2.0 on the database role
+- Installed AlertManager 0.26.0 on the database role
 - Created systemd services for automatic startup
 - Configured 30-day data retention
 
@@ -154,7 +154,7 @@ scrape_configs:
 
 ### Phase 4: Grafana Configuration (Completed)
 
-**File**: `/etc/grafana/grafana.ini` on VM3
+**File**: `/etc/grafana/grafana.ini` on the database role
 
 **Key Settings**:
 ```ini
@@ -301,7 +301,7 @@ The backend exposes the following metrics at `/api/monitoring/metrics`:
 - **Interval**: 15 seconds
 - **Timeout**: 10 seconds
 - **Retention**: 30 days
-- **Storage**: `/var/lib/prometheus/` on VM3
+- **Storage**: `/var/lib/prometheus/` on the database role
 
 ---
 
@@ -441,7 +441,7 @@ Targets monitored: 9
 - **Redis Exporter**: Redis-specific metrics
   - Current: Backend reports Redis pool metrics
   - Impact: No Redis internals monitoring
-  - Future: Install redis_exporter on VM3 if needed
+  - Future: Install redis_exporter on the database role if needed
 
 ### Deprecated REST API
 - **Status**: Functional but deprecated

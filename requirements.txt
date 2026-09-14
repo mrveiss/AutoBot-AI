@@ -47,7 +47,7 @@ python-pptx>=1.0.2        # Microsoft PowerPoint (.pptx)
 odfpy>=1.4.1              # OpenDocument formats (.odt, .ods, .odp, .odg)
 
 # OpenTelemetry - Distributed Tracing (Issue #57, #697)
-# Provides request tracing across the 5-VM AutoBot infrastructure
+# Provides request tracing across AutoBot's distributed, role-based infrastructure
 opentelemetry-api==1.44.0
 opentelemetry-sdk==1.44.0
 opentelemetry-exporter-otlp==1.44.0
