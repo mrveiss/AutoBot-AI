@@ -69,13 +69,13 @@ BASELINE = {
     "ar": 3727,
     "de": 1618,
     "es": 1667,
-    "fa": 3791,
+    "fa": 3790,
     "fr": 1864,
-    "he": 3791,
+    "he": 3790,
     "lv": 2259,
     "pl": 2225,
     "pt": 2062,
-    "ur": 3791,
+    "ur": 3790,
 }
 
 # Below this length a match is far more likely to be a shared token than an
