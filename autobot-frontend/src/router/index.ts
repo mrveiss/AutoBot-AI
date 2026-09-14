@@ -370,13 +370,10 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // Watch Folders moved under Manage as a tab (owner request, 2026-09-14):
+        // it belongs beside Upload/Manage, not as a standalone top-level page.
         path: 'watch-folders',
-        name: 'knowledge-watch-folders',
-        component: () => import('@/views/knowledge/WatchFoldersView.vue'),
-        meta: {
-          title: 'Watch Folders',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/manage?tab=watchFolders'
       }
     ]
   },
