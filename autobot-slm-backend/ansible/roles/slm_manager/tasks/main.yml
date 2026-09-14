@@ -136,44 +136,24 @@
   tags: ['slm', 'directories', 'backup']
 
 # ==========================================================
-# TLS certificates (idempotent - skip if valid cert exists)
+# TLS certificates (consolidated #16020 -- see _shared/tasks/ensure_node_tls_cert.yml)
 # ==========================================================
-- name: "SLM | Check if TLS certificate exists"
-  ansible.builtin.stat:
-    path: "{{ slm_tls_cert }}"
-  register: slm_cert_stat
+- name: "SLM | Ensure the shared node TLS keypair exists (#16020)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
   tags: ['slm', 'tls']
 
-- name: "SLM | Check certificate expiry"
-  ansible.builtin.command:
-    cmd: openssl x509 -checkend 604800 -noout -in {{ slm_tls_cert }}
-  register: slm_cert_valid
-  changed_when: false
-  # (#2872) Intentional: openssl exits rc=1 when cert expires within the
-  # check window — that is a valid "needs renewal" signal, not an error.
-  failed_when: false
-  when: slm_cert_stat.stat.exists
-  tags: ['slm', 'tls']
-
-- name: "SLM | Generate self-signed TLS certificate"
-  ansible.builtin.command:
-    cmd: >-
-      openssl req -x509 -nodes -days {{ slm_tls_days }} -newkey rsa:2048
-      -keyout {{ slm_tls_key }}
-      -out {{ slm_tls_cert }}
-      -subj '{{ slm_tls_subject }}'
-  when: >-
-    not slm_cert_stat.stat.exists
-    or (slm_cert_valid.rc | default(1)) != 0
+# #16020: the shared task has no restart handler of its own -- it also
+# serves backend and Redis, neither of which restart the same way. Reuses
+# the shared task's own registered vars (the exact condition it used to
+# decide whether to (re)generate) rather than re-deriving the check, so
+# nginx keeps restarting on a cert rotation as it did before consolidation.
+# The key-permission step this replaced is redundant, not dropped:
+# generate_self_signed_cert.yml already leaves the key at 0600 root:root.
+- name: "SLM | Flag a cert rotation for the restart handler"
+  ansible.builtin.set_fact:
+    _slm_cert_rotated: "{{ not autobot_node_cert_stat.stat.exists or (autobot_node_cert_valid.rc | default(1)) != 0 }}"
+  changed_when: _slm_cert_rotated
   notify: restart nginx
-  tags: ['slm', 'tls']
-
-- name: "SLM | Set certificate key permissions"
-  ansible.builtin.file:
-    path: "{{ slm_tls_key }}"
-    mode: "0600"
-    owner: root
-    group: root
   tags: ['slm', 'tls']
 
 # Issue #1103: Prevent nginx start when SSL cert missing
