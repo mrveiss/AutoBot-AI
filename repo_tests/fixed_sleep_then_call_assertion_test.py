@@ -90,6 +90,14 @@ _EXEMPT_SITES: dict[tuple[str, str], int] = {
         "TestCPUProfileBaseline.test_idle_listening_cpu_baseline",
     ): 1,  # sustained-operation CPU baseline; wall time is the subject
     (
+        "autobot-backend/tests/agents/test_scope_enforcement.py",
+        "test_a_run_that_goes_silent_lapses_and_stops_renewing",
+    ): 1,  # a renewal interval must pass with nothing happening
+    (
+        "autobot-backend/tests/agents/test_scope_enforcement.py",
+        "test_a_run_that_keeps_reporting_progress_keeps_its_claim",
+    ): 1,  # elapsed time past the stall window is the subject
+    (
         "autobot-backend/tests/services/test_concurrent_limiter.py",
         "TestDropOldestCallbackInvoked.test_oldest_workflow_is_evicted_not_newest",
     ): 1,  # eviction order reads time.time(); no injectable clock, must differ
