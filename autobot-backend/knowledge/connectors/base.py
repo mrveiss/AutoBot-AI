@@ -34,6 +34,7 @@ from knowledge.connectors.models import (
     SourceInfo,
     SyncResult,
 )
+from knowledge.ingestion_visibility import stamp_if_document
 
 T = TypeVar("T")
 
@@ -600,6 +601,7 @@ class AbstractConnector(ABC):
                 "verification_status": self.config.verification_mode,
             }
         )
+        stamp_if_document(ingest_metadata)  # #16693: unclaimed connector content is a document
 
         text = content.content
         if not text.strip():
@@ -607,11 +609,7 @@ class AbstractConnector(ABC):
             return
 
         await kb.store_fact(text, ingest_metadata, fact_id=content.source_id)
-        self.logger.debug(
-            "Ingested source %s into KB (connector=%s)",
-            content.source_id,
-            self.config.connector_id,
-        )
+        self.logger.debug("Ingested source %s into KB (connector=%s)", content.source_id, self.config.connector_id)
 
     # ------------------------------------------------------------------
     # Job state helpers (Issue #8149)

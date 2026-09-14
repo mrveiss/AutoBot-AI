@@ -1979,6 +1979,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sessions/{session_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Events
+         * @description List recent collaboration events (activity + secret-share notifications)
+         *     for a session, newest first (#16460).
+         *
+         *     Requires: VIEWER permission
+         */
+        get: operations["get_session_events_api_sessions__session_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/invitations/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Invitations
+         * @description List pending collaboration invitations addressed to the current user,
+         *     across every session (#16460).
+         *
+         *     Authorization: identity only, no participant/owner permission check --
+         *     you can only ever see invitations naming your own user_id, and you are
+         *     by definition not yet a participant of a session you're merely invited
+         *     to (that's exactly what accepting the invitation would make you).
+         */
+        get: operations["list_my_invitations_api_sessions_invitations_mine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/invitations/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Respond To Invitation
+         * @description Accept or decline a pending invitation addressed to the current user
+         *     (#16460).
+         *
+         *     Authorization: the caller must be the exact user_id the invitation
+         *     names -- not an owner/participant permission check. Accepting an
+         *     invitation is what makes you a participant; you are not one yet, so
+         *     _ensure_permission's VIEWER floor would refuse you.
+         */
+        post: operations["respond_to_invitation_api_sessions__session_id__invitations_respond_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/telegram/webhook": {
         parameters: {
             query?: never;
@@ -2930,8 +3005,6 @@ export interface paths {
          *
          *     Returns telemetry opt-in/opt-out status and whether the first-run
          *     prompt has been shown.
-         *
-         *     Requires authentication.
          */
         get: operations["get_telemetry_settings_api_settings_telemetry_get"];
         put?: never;
@@ -48644,8 +48717,10 @@ export interface paths {
          * Verbatim Search
          * @description Search verbatim conversation chunks.
          *
-         *     Returns chunks ranked by cosine similarity.  When ``session_id`` is
-         *     provided, only chunks from that session are considered.
+         *     Returns chunks ranked by cosine similarity, scoped to the caller's own
+         *     chunks (#16701 -- this route has no admin bypass; an admin-wide search
+         *     would need its own explicit admin API). When ``session_id`` is provided,
+         *     results are additionally restricted to that session.
          *
          *     Args:
          *         q: Free-text query.
@@ -48679,9 +48754,9 @@ export interface paths {
          * Delete Session Verbatim
          * @description Delete all verbatim chunks for a session.
          *
-         *     Used for user opt-out and retention enforcement.  The caller must be
-         *     authenticated; in production the middleware additionally enforces that
-         *     users can only delete their own sessions.
+         *     Used for user opt-out and retention enforcement. Caller must own the
+         *     session (#16701: this docstring previously claimed a production
+         *     middleware enforced that; nothing in this file did).
          *
          *     Args:
          *         session_id: Session whose verbatim chunks to remove.
@@ -63801,6 +63876,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * CollabEventResponse
+         * @description One persisted collaboration event (#16460).
+         */
+        CollabEventResponse: {
+            /** Id */
+            id: string;
+            /** Session Id */
+            session_id: string;
+            /** Kind */
+            kind: string;
+            /** User Id */
+            user_id: string | null;
+            /** Username */
+            username: string | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * CollabInviteRequest
          * @description Request to invite user to session.
          */
@@ -77587,6 +77686,32 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * InvitationRespondRequest
+         * @description Request body for POST /{session_id}/invitations/respond (#16460).
+         */
+        InvitationRespondRequest: {
+            /** Accept */
+            accept: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * InvitationRespondResponse
+         * @description Response for POST /{session_id}/invitations/respond (#16460).
+         */
+        InvitationRespondResponse: {
+            /** Success */
+            success: boolean;
+            /** Session Id */
+            session_id: string;
+            /** Accepted */
+            accepted: boolean;
+            /** Permission */
+            permission?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * IssueCreateRequest
          * @description Request to create a new issue/card/task.
          */
@@ -84631,6 +84756,16 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * MyInvitationsResponse
+         * @description Response for GET /invitations/mine (#16460).
+         */
+        MyInvitationsResponse: {
+            /** Invitations */
+            invitations: components["schemas"]["PendingInvitationResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * NLCodeExplanationResponse
          * @description Response for POST /explain.
          */
@@ -86874,6 +87009,24 @@ export interface components {
             }[];
             /** Count */
             count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PendingInvitationResponse
+         * @description One pending invitation, as returned by GET /invitations/mine (#16460).
+         */
+        PendingInvitationResponse: {
+            /** Session Id */
+            session_id: string;
+            /** From User Id */
+            from_user_id: string;
+            /** Permission */
+            permission: string;
+            /** Invited At */
+            invited_at: string;
+            /** Expires At */
+            expires_at?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -93917,6 +94070,20 @@ export interface components {
              * @default normal
              */
             reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SessionEventsResponse
+         * @description List-recent response for GET /{session_id}/events (#16460).
+         */
+        SessionEventsResponse: {
+            /** Session Id */
+            session_id: string;
+            /** Events */
+            events: components["schemas"]["CollabEventResponse"][];
+            /** Has More */
+            has_more: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -106925,6 +107092,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionPresenceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_events_api_sessions__session_id__events_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description ISO timestamp cursor; returns events strictly before it */
+                before?: string | null;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionEventsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_invitations_api_sessions_invitations_mine_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyInvitationsResponse"];
+                };
+            };
+        };
+    };
+    respond_to_invitation_api_sessions__session_id__invitations_respond_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationRespondRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationRespondResponse"];
                 };
             };
             /** @description Validation Error */
