@@ -40,25 +40,6 @@ export interface SessionParticipantsResponse {
   total_count: number
 }
 
-export interface SessionInviteResponse {
-  success: boolean
-  session_id: string
-  invited_user_id: string
-  permission: string
-}
-
-export interface SessionRemoveResponse {
-  success: boolean
-  session_id: string
-  removed_user_id: string
-}
-
-export interface SessionShareSecretResponse {
-  success: boolean
-  secret_id: string
-  shared_with_count: number
-}
-
 export interface SessionPresenceResponse {
   session_id: string
   online_users: string[]
