@@ -126,16 +126,18 @@ def _production_files(root: Path) -> list[str]:
     return [rel for rel in tracked if _is_production(rel)]
 
 
-#: MEASURED 2026-09-14 against this tree: 2558 production files by this guard's own filter
-#: (2359 autobot-backend, 195 autobot_shared, 4 infra MCP); the hand-rolled 2000 it replaces
-#: sat 22% below. `growth=250` (~10%) absorbs ordinary additions, since most feature work
-#: adds production modules. That band cannot see a small root vanish, so
-#: `test_every_scan_root_is_reached` checks each root separately. `skips=0`: every
-#: discovered file is parsed, and an unparseable one fails the scan loudly.
+#: MEASURED 2026-09-14 against this tree: 2555 production files by this guard's own filter
+#: (2356 autobot-backend, 195 autobot_shared, 4 infra MCP) -- #16466 retired
+#: browser_tracking.py/file_tracking.py/terminal_tracking.py/knowledge/activity_types.py as
+#: dead code, dropping autobot-backend's count by 3 net of other merged growth. `growth=250`
+#: (~10%) absorbs ordinary additions, since most feature work adds production modules. That
+#: band cannot see a small root vanish, so `test_every_scan_root_is_reached` checks each root
+#: separately. `skips=0`: every discovered file is parsed, and an unparseable one fails the
+#: scan loudly.
 REACH = declare(
     "kb-read-visibility-production-sweep",
     discover=_production_files,
-    floor=2558,
+    floor=2555,
     growth=250,
     skips=0,
     what="production python files",
