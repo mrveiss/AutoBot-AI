@@ -105,11 +105,11 @@ control:
   agent-company), Codebase Analytics, the Transcriber, and more
 - **Complete Data Privacy** — full data control, no external dependencies, runs entirely
   on your hardware, no vendor lock-in
-- **Governance-Ready Architecture** — audit logging, retention policies, and RBAC built
-  for GDPR/SOC2/ISO27001 today, on an architecture (self-hosted data, a provider-agnostic
-  LLM gateway, human-oversight-capable governance) that maps cleanly onto EU AI Act and
-  ISO/IEC 42001 (AI management systems) obligations. See
-  [EU AI Act & Governance Fit](docs/architecture/EU_AI_GOVERNANCE.md) for
+- **Governance-Ready Architecture** — audit logging, MFA, a secrets vault, retention
+  policies, and RBAC built for GDPR/SOC2/ISO27001 today, on an architecture (self-hosted
+  data, a provider-agnostic LLM gateway, human-oversight-capable governance) that maps
+  cleanly onto EU AI Act, NIS2, and ISO/IEC 42001 (AI management systems) obligations. See
+  [EU AI Act, NIS2 & Governance Fit](docs/architecture/EU_AI_GOVERNANCE.md) for
   what's covered and what's still a gap — no compliance certification is claimed.
 
 → Browse everything in the [Capability Catalog](docs/features/CATALOG.md).

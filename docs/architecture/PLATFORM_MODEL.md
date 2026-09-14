@@ -178,21 +178,23 @@ See **[AutoBot LLC](../llc/_index.md)** for the module overview and the
 
 ---
 
-## Governance, EU AI Act & ISO 42001/14001 Fit
+## Governance, EU AI Act, NIS2 & ISO 42001/14001 Fit
 
-AutoBot's governance primitives (RBAC, review gates, budgets, audit logging, retention
-policies — see `autobot-backend/security/enterprise/compliance_manager.py`) were built for
+AutoBot's governance primitives (RBAC, MFA, a secrets vault, review gates, budgets, audit
+logging, retention policies, and verified backup/restore — see
+`autobot-backend/security/enterprise/compliance_manager.py`,
+`autobot_shared/secrets_vault.py`, `autobot-slm-backend/services/backup.py`) were built for
 GDPR/SOC2/ISO27001. The same architecture — self-hosted data, a provider-agnostic LLM
 gateway, and human-oversight-capable governance — maps onto the EU AI Act's data-governance
-and human-oversight expectations, and onto ISO/IEC 42001's AI-management-system expectations,
-more directly than a third-party SaaS API can. The fit is narrower and structural-only for
-ISO 14001 (environmental management) — who controls the hardware/energy variables, not a
-measured environmental benefit.
+and human-oversight expectations, NIS2's Article 21 security measures, and ISO/IEC 42001's
+AI-management-system expectations, more directly than a third-party SaaS API can. The fit is
+narrower and structural-only for ISO 14001 (environmental management) — who controls the
+hardware/energy variables, not a measured environmental benefit.
 
 **This is not a compliance certification.** No risk-tier classifier, technical-
 documentation generator, Art.-12-shaped log schema, AI risk register, or environmental
 telemetry exists yet. See
-[EU AI Act & Governance Fit](EU_AI_GOVERNANCE.md) for exactly what's covered today and
+[EU AI Act, NIS2 & Governance Fit](EU_AI_GOVERNANCE.md) for exactly what's covered today and
 what's still a gap.
 
 ---
@@ -203,5 +205,5 @@ what's still a gap.
 - [Distributed Architecture](DISTRIBUTED_ARCHITECTURE.md) — multi-node deployment
 - [SSOT Configuration](SSOT_CONFIGURATION_ARCHITECTURE.md) — single source of truth
 - [AutoBot LLC](../llc/_index.md) — the flagship module
-- [EU AI Act & Governance Fit](EU_AI_GOVERNANCE.md) — governance architecture vs. EU AI Act obligations
+- [EU AI Act, NIS2 & Governance Fit](EU_AI_GOVERNANCE.md) — governance architecture vs. EU AI Act, NIS2 and ISO obligations
 - [Glossary](../GLOSSARY.md) — terminology, including SLM and LLC

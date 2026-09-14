@@ -11,21 +11,24 @@ aliases:
   - ISO 42001
   - ISO 14001
   - ISO/IEC 42001
+  - NIS2
+  - NIS 2
 status: current
 ---
 
-# EU AI Act & Governance Fit
+# EU AI Act, NIS2 & Governance Fit
 
 > **Freshness:** current — 2026-09-14, filed under #16733. Describes what governance
 > infrastructure exists in the codebase today and what does not. Not legal advice, and not a
 > compliance certification — deployers remain responsible for classifying their own use case
-> and meeting the obligations that follow from that classification. ISO 42001 and ISO 14001
-> sections added the same day, same rule: cite what exists, state what doesn't, claim no
+> and meeting the obligations that follow from that classification. ISO 42001, ISO 14001, and
+> NIS2 sections added the same day, same rule: cite what exists, state what doesn't, claim no
 > certification.
 
 This document states plainly what AutoBot's architecture already supports toward EU AI Act
 (Regulation (EU) 2024/1689) governance obligations, and what it does not, and does the same for
-two ISO management-system standards that come up in the same conversations — ISO/IEC 42001 (AI
+NIS2 (Directive (EU) 2022/2555) and two ISO management-system standards that come up in the same
+conversations — ISO/IEC 42001 (AI
 management systems) and ISO 14001 (environmental management). Every claim below cites the file
 it is based on. Where nothing exists yet, that is stated as a gap, not implied as done.
 
@@ -101,15 +104,46 @@ it sits idle, and AutoBot does not measure or claim either way.
 no reporting feature of any kind toward an EMS. An operator pursuing ISO 14001 alignment would
 need to instrument that themselves; nothing here does it for them.
 
+## NIS2 (Directive (EU) 2022/2555) fit
+
+NIS2 sets cybersecurity risk-management obligations for "essential" and "important" entities
+across the EU. It is a directive, not an ISO standard — the standard most commonly used to
+demonstrate its Article 21(2) security measures is ISO/IEC 27001 (an ISMS), usually alongside
+ISO/IEC 27005 (risk management) and ISO/IEC 27002 (the control catalogue). AutoBot's own
+governance code already targets ISO 27001 (see the compliance manager cited throughout this
+doc), which is the same lever NIS2 compliance typically pulls.
+
+| NIS2 Art. 21(2) measure | What exists today | Evidence |
+|---|---|---|
+| (a) risk analysis & information-system security policies | A maintained threat model | `docs/developer/THREAT_MODEL.md` |
+| (b) incident handling | Audit logging via the same compliance manager cited above | `autobot-backend/security/enterprise/compliance_manager.py` |
+| (c) business continuity, backup and disaster recovery | Real backup/restore automation with a verified-restore playbook, not just a backup step | `autobot-slm-backend/services/backup.py`, `autobot-slm-backend/ansible/verify-backup-restore.yml` |
+| (d) supply chain security | Automated dependency vulnerability scanning | `.github/dependabot.yml` |
+| (h) policies and procedures on cryptography and encryption | A canonical secrets vault with envelope encryption (wrapped DEKs) and RBAC-checked access resolution | `autobot_shared/secrets_vault.py` |
+| (i) human resources security, access control, asset management | RBAC + user management, same primitives as elsewhere in this doc | `autobot_shared/user_management/` |
+| (j) multi-factor authentication | Real MFA — a dedicated model and an `mfa_enabled` field, not a placeholder | `autobot_shared/user_management/models/user.py` (`UserMFA`, `mfa_enabled`), `autobot-backend/api/user_management/users.py` |
+
+**What's missing:**
+- **No public vulnerability-disclosure policy.** There is no `SECURITY.md` at the AutoBot-AI
+  repo root today — a real, currently-absent piece of the coordinated-disclosure expectation
+  under (b)/(e).
+- **No incident-reporting workflow mapped to NIS2's specific timeline** (24-hour early warning,
+  72-hour notification, one-month final report to a CSIRT/competent authority). That is an
+  organizational process obligation, not a code feature, and none is documented here.
+- **No NIS2 applicability determination.** Whether an AutoBot *operator* even qualifies as an
+  "essential" or "important" entity depends on their own sector and size, not on AutoBot — this
+  doc cannot and does not answer that for anyone.
+
 ## Bottom line
 
-AutoBot's existing GDPR-oriented governance code and its self-hosted, provider-agnostic
-architecture make EU AI Act and ISO 42001 governance evidence easier to produce than a
+AutoBot's existing GDPR/ISO-27001-oriented governance code and its self-hosted, provider-agnostic
+architecture make EU AI Act, ISO 42001, and NIS2 governance evidence easier to produce than a
 third-party SaaS AI integration would — because the operator controls the whole stack and
-already has audit, retention, and RBAC primitives to build on. The ISO 14001 fit is weaker and
-structural only (who controls the hardware/energy variables), not a measured environmental
-benefit. None of this makes AutoBot, or any deployment built on it, compliant or certified by
-itself. Classifying a specific use case and closing the gaps above remains the deployer's job.
+already has audit, retention, RBAC, MFA, secrets, and backup/restore primitives to build on. The
+ISO 14001 fit is weaker and structural only (who controls the hardware/energy variables), not a
+measured environmental benefit. None of this makes AutoBot, or any deployment built on it,
+compliant or certified by itself. Classifying a specific use case, running an NIS2 applicability
+assessment, and closing the gaps above remain the deployer's job.
 
 ---
 
