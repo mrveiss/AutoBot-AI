@@ -17,9 +17,9 @@ counts when it assigns ``AUTOBOT_REDIS_PASSWORD=`` a value that neither starts w
 written to another variable name, or kept in a non-``.sh`` script. Those are the
 declared blind spots.
 
-**Measured 2026-09-14:** 2 literal assignments on ``main``, in
-``ansible/deploy-hybrid.sh:151`` and ``ansible/deploy-native.sh:175``, both removed by
-#16686. The target population is the empty set.
+**Measured 2026-09-14:** 2 literal assignments on ``main``, one in the ``update_backend_config``
+heredoc of each of ``ansible/deploy-hybrid.sh`` and ``ansible/deploy-native.sh``, both removed
+by #16686. The target population is the empty set.
 """
 
 from __future__ import annotations
