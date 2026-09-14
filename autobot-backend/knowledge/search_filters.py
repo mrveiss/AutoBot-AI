@@ -64,11 +64,13 @@ async def build_chromadb_permission_filter(
             }
         )
 
-    # Condition 4: Group-level (check if user belongs to ANY of the fact's groups)
-    # Note: ChromaDB doesn't support array intersection, so we can't directly filter
-    # group facts. We'll filter these in post-processing.
-
-    # Condition 5: Explicitly shared (also requires post-processing)
+    # Conditions 4-6: group-level and shared facts, and facts readable by access level
+    # alone, cannot be decided by a ChromaDB where (membership lives in list metadata).
+    # Admit them here and let filter_search_results_by_permission's check_access make the
+    # exact call: a pre-filter narrower than check_access silently drops facts the user
+    # may read, and the post-filter can only remove results, never add them (#16662).
+    conditions.append({"visibility": {"$in": ["shared", "group"]}})
+    conditions.append({"access_level": {"$in": ["general", "autobot"]}})
 
     # Build final filter
     if len(conditions) > 1:
@@ -88,6 +90,7 @@ async def filter_search_results_by_permission(
     user_org_id: str | None = None,
     user_group_ids: List[str] | None = None,
     ownership_manager=None,
+    is_admin: bool = False,
 ) -> List[Dict]:
     """Filter search results to only include facts user has access to.
 
@@ -100,13 +103,16 @@ async def filter_search_results_by_permission(
         user_org_id: User's organization ID
         user_group_ids: List of group IDs user belongs to
         ownership_manager: KnowledgeOwnership instance for access checks
+        is_admin: Explicit admin read (#16662). Only explicit read APIs pass it,
+            never chat grounding.
 
     Returns:
-        Filtered list of results user has access to
+        Filtered list of results user has access to -- empty when there is no
+        ownership manager, since then no access decision can be made (#16662)
     """
     if not ownership_manager:
-        logger.warning("No ownership manager provided for permission filtering")
-        return results
+        logger.error("No ownership manager for permission filtering; returning no results (#16662)")
+        return []
 
     user_group_ids = user_group_ids or []
     filtered_results = []
@@ -126,6 +132,7 @@ async def filter_search_results_by_permission(
             fact_metadata=metadata,
             user_org_id=user_org_id,
             user_group_ids=user_group_ids,
+            is_admin=is_admin,
         )
 
         if has_access:
@@ -147,7 +154,8 @@ async def augment_search_request_with_permissions(
     user_org_id: str | None = None,
     user_group_ids: List[str] | None = None,
     original_where: Dict | None = None,
-) -> Dict:
+    is_admin: bool = False,
+) -> Dict | None:
     """Augment a search request with permission-based metadata filters.
 
     Issue #679: Combines user's original where clause with permission filters.
@@ -158,10 +166,14 @@ async def augment_search_request_with_permissions(
         user_org_id: User's organization ID
         user_group_ids: List of group IDs user belongs to
         original_where: Original where clause from user request
+        is_admin: Explicit admin read (#16662): no permission narrowing, so the
+            post-filter's admin decision is not pre-empted. Never chat grounding.
 
     Returns:
         Combined where clause with permission filters
     """
+    if is_admin:
+        return original_where
     # Build permission filter
     permission_filter = await build_chromadb_permission_filter(
         user_id=user_id, user_org_id=user_org_id, user_group_ids=user_group_ids
