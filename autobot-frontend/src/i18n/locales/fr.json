@@ -6385,12 +6385,12 @@
       "youStatus": "Your status"
     },
     "panel": {
-      "title": "Collaboration",
+      "title": "Espace collaboratif",
       "invite": "Inviter",
       "closePanel": "Fermer le panneau",
       "tabParticipants": "Participants",
       "tabActivity": "Activité",
-      "tabNotifications": "Notifications"
+      "tabNotifications": "Alertes"
     }
   },
   "research": {
