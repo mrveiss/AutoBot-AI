@@ -160,3 +160,46 @@ class TestNoMethodLevelBreaker:
             path.name for path in sorted(providers_dir.glob("*.py")) if pattern.search(path.read_text(encoding="utf-8"))
         ]
         assert not offenders, f"method-level breaker on _chat_completion_impl in: {offenders}"
+
+
+class TestAttemptProgress:
+    """#15950 AC4: every attempt reports progress to its claimed run, not only the last.
+
+    The backoff handler waits up to its cap plus jitter between rate-limited
+    attempts. Reported once after the whole retry loop, a run waiting out its
+    provider could go silent for several waits and be marked stalled while
+    doing exactly what it should.
+    """
+
+    async def test_a_retried_call_reports_progress_for_each_attempt(self, monkeypatch):
+        from . import base_provider
+        from .optimization.rate_limiter import RateLimitConfig, RateLimitHandler
+
+        reports: List[str] = []
+        monkeypatch.setattr(base_provider, "record_progress", lambda: reports.append("progress"))
+        no_wait = RateLimitConfig(max_retries=2, base_delay=0.0, max_delay=0.0, jitter_factor=0.0)
+        monkeypatch.setattr(base_provider, "get_backoff_handler", lambda: RateLimitHandler(config=no_wait))
+        provider = _ScriptedProvider(
+            "cbtest-progress", [_err("cbtest-progress", "429 too many requests"), _ok("cbtest-progress")]
+        )
+
+        response = await provider.chat_completion(_request())
+
+        assert response.content == "ok" and provider.impl_calls == 2, "the rate-limited attempt was not retried"
+        assert reports == ["progress", "progress"], "an attempt went by without reporting progress"
+
+    async def test_a_breaker_rejected_attempt_still_reports_progress(self, monkeypatch):
+        """Failing fast on an open breaker is an attempt that ended, and the run behind it is working."""
+        from types import SimpleNamespace
+
+        from . import base_provider
+
+        reports: List[str] = []
+        monkeypatch.setattr(base_provider, "record_progress", lambda: reports.append("progress"))
+        provider = _ScriptedProvider("cbtest-progress-open", [])
+        monkeypatch.setattr(provider, "_completion_circuit_breaker", lambda: SimpleNamespace(is_rejecting=True))
+
+        response = await provider.chat_completion(_request())
+
+        assert "circuit breaker open" in response.error and provider.impl_calls == 0
+        assert reports == ["progress"], "a breaker-rejected attempt went by without reporting progress"

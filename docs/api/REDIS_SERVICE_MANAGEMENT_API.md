@@ -21,7 +21,7 @@
 
 ## Overview
 
-The Redis Service Management API provides comprehensive control over the Redis service running on VM3 (<database-ip>:6379) within AutoBot's distributed infrastructure. This API enables:
+The Redis Service Management API provides comprehensive control over the Redis service running on the database role (<database-ip>:6379) within AutoBot's distributed, role-based infrastructure. This API enables:
 
 - **Service Control**: Start, stop, restart Redis service
 - **Health Monitoring**: Real-time health checks and status reporting

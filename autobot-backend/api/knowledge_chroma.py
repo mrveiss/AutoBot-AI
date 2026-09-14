@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from auth_middleware import get_current_user
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from utils.async_chromadb_client import get_async_chromadb_client
@@ -130,7 +130,7 @@ class SearchResponse(BaseModel):
     error_code_prefix="CHROMA",
 )
 async def list_collections(
-    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_admin_permission),
 ) -> CollectionListResponse:
     """
     List all ChromaDB collections with metadata.
@@ -139,7 +139,7 @@ async def list_collections(
     in the ChromaDB instance.
 
     Args:
-        current_user: Authenticated user (injected by auth middleware)
+        _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
 
     Returns:
         CollectionListResponse with list of collections and their metadata
@@ -186,14 +186,14 @@ async def list_collections(
 )
 async def get_collection_detail(
     name: str,
-    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_admin_permission),
 ) -> CollectionDetailResponse:
     """
     Get detailed metadata for a specific collection.
 
     Args:
         name: Collection name
-        current_user: Authenticated user (injected by auth middleware)
+        _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
 
     Returns:
         CollectionDetailResponse with collection metadata
@@ -239,7 +239,7 @@ async def list_documents(
     name: str,
     limit: int = Query(100, ge=1, le=1000, description="Maximum results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
-    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_admin_permission),
 ) -> DocumentListResponse:
     """
     List documents in a collection with pagination.
@@ -248,7 +248,7 @@ async def list_documents(
         name: Collection name
         limit: Maximum number of documents to return (1-1000)
         offset: Number of documents to skip for pagination
-        current_user: Authenticated user (injected by auth middleware)
+        _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
 
     Returns:
         DocumentListResponse with document data (ids, documents, metadatas, embeddings)
@@ -316,7 +316,7 @@ async def list_documents(
 async def search_collection(
     name: str,
     request: SearchRequest,
-    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_admin_permission),
 ) -> SearchResponse:
     """
     Perform similarity search on a collection using query text.
@@ -327,7 +327,7 @@ async def search_collection(
     Args:
         name: Collection name
         request: Search parameters (query, n_results, where filter)
-        current_user: Authenticated user (injected by auth middleware)
+        _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
 
     Returns:
         SearchResponse with matching documents and similarity scores

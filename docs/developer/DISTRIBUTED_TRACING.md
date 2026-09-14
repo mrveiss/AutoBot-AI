@@ -6,7 +6,7 @@
 
 **Issue:** #697 - Implement OpenTelemetry Distributed Tracing
 
-This document describes the OpenTelemetry distributed tracing implementation across AutoBot's 6-VM infrastructure.
+This document describes the OpenTelemetry distributed tracing implementation across AutoBot's distributed, role-based infrastructure — Docker, a single VM, or however many machines a deployment scales to.
 
 ## Overview
 
@@ -21,14 +21,14 @@ OpenTelemetry provides end-to-end request tracing across all AutoBot services, e
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │   Frontend      │────▶│   Backend       │────▶│   Redis         │
-│  (VM1: .21)     │     │  (Main: .20)    │     │  (VM3: .23)     │
+│    role         │     │  (Main / role)  │     │  (Database role)│
 └─────────────────┘     └────────┬────────┘     └─────────────────┘
                                  │
                     ┌────────────┼────────────┐
                     ▼            ▼            ▼
               ┌──────────┐ ┌──────────┐ ┌──────────┐
               │ AI Stack │ │ NPU Wrkr │ │ Browser  │
-              │(VM4:.24) │ │(VM2:.22) │ │(VM5:.25) │
+              │  role    │ │  role    │ │  role    │
               └──────────┘ └──────────┘ └──────────┘
                     │
                     ▼
@@ -218,7 +218,7 @@ async with TracedHttpClient() as client:
 
 ### Jaeger UI
 
-1. Start Jaeger on the Redis VM (VM3):
+1. Start Jaeger on the database role (Redis):
    ```bash
    docker run -d --name jaeger \
      -e COLLECTOR_OTLP_ENABLED=true \

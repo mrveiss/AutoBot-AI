@@ -224,7 +224,7 @@ class TestClaudeCliResolution:
     async def test_invoke_uses_configured_path_over_path(self, tmp_path) -> None:
         """A configured override resolves even when a different `claude` is on PATH."""
         configured = tmp_path / "claude"
-        configured.write_text("#!/bin/sh\n")
+        await asyncio.to_thread(configured.write_text, "#!/bin/sh\n")
         configured.chmod(0o755)
 
         adapter = ClaudeCodeAdapter()
@@ -546,32 +546,21 @@ class TestClaudeCliResolution:
 
 @pytest.mark.asyncio
 class TestCancel:
-    async def test_cancel_sends_sigterm(self) -> None:
+    async def test_cancel_without_recorded_identity_never_signals(self) -> None:
+        """PR#16284 review: no create_time recorded (no state file) means
+        cancel() can only probe -- it never signals, and never raises."""
         adapter = ClaudeCodeAdapter()
 
         with tempfile.TemporaryDirectory() as td:
             with (
-                patch("os.kill", side_effect=[None, ProcessLookupError()]),
+                patch("os.kill") as mock_kill,
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),
             ):
                 await adapter.cancel(_agent_cfg(agent_id="a1", output_dir=td), "5678/session-q")
 
-        # First kill call should have been SIGTERM
-        # (second is the probing kill(pid, 0) which raised ProcessLookupError)
-
-    async def test_cancel_already_dead_does_not_raise(self) -> None:
-        adapter = ClaudeCodeAdapter()
-
-        with tempfile.TemporaryDirectory() as td:
-            with (
-                patch("os.kill", side_effect=ProcessLookupError()),
-                patch(
-                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
-                ),
-            ):
-                await adapter.cancel(_agent_cfg(agent_id="a2", output_dir=td), "9999/session-r")
+        mock_kill.assert_not_called()
 
     async def test_cancel_clears_redis_session(self) -> None:
         """ClaudeCodeAdapter-specific: _post_cancel clears the Redis resume session."""
@@ -588,7 +577,7 @@ class TestCancel:
                     return_value=fake_redis,
                 ),
             ):
-                await adapter.cancel(_agent_cfg(agent_id="agent-clear", output_dir=td), "1/session-s")
+                await adapter.cancel(_agent_cfg(agent_id="agent-clear", output_dir=td), "918273/session-s")
 
         fake_redis.delete.assert_awaited_once()
         key_arg = fake_redis.delete.call_args[0][0]

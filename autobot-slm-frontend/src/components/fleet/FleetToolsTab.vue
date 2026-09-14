@@ -14,13 +14,14 @@
  * Health Check, Service Manager) that overlap with NodeCard/Panel functionality.
  */
 
-import { ref, computed } from 'vue'
-import { useFleetStore } from '@/stores/fleet'
-import { slmApiClient } from '@/utils/ApiClient'
-import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
+import { useI18n } from 'vue-i18n'
 import { useNodeServices } from '@/composables/useNodeServices'
+import { useFleetTools } from '@/composables/useFleetTools'
 
-const fleetStore = useFleetStore()
+// #15665: every user-visible string goes through i18n -- the same keys ToolsView
+// uses, since this tab was extracted from it. The tool logic both offer lives in
+// useFleetTools rather than in a second copy here.
+const { t } = useI18n()
 
 // Tool definitions - reduced to 3 unique tools per Issue #737
 // Removed: network-test (use NodeCard "Test"), health-check (use NodeLifecyclePanel),
@@ -28,161 +29,57 @@ const fleetStore = useFleetStore()
 const tools = [
   {
     id: 'log-viewer',
-    name: 'Service Logs',
-    description: 'View service logs from nodes via journalctl',
+    name: t('toolsView.logViewer'),
+    description: t('toolsView.logViewerDescription'),
     icon: 'document',
     available: true,
   },
   {
     id: 'redis-cli',
-    name: 'Redis CLI',
-    description: 'Execute Redis commands on the cluster',
+    name: t('toolsView.redisCli'),
+    description: t('toolsView.redisCliDescription'),
     icon: 'database',
     available: true,
   },
   {
     id: 'ansible-runner',
-    name: 'Command Runner',
-    description: 'Run shell commands on nodes',
+    name: t('fleet.fleetToolsTab.commandRunner'),
+    description: t('fleet.fleetToolsTab.commandRunnerDescription'),
     icon: 'terminal',
     available: true,
   },
 ]
 
-const activeTool = ref<string | null>(null)
-const loading = ref(false)
-const error = ref<string | null>(null)
-const result = ref<string | null>(null)
-
-// Tool-specific state
-const selectedNode = ref<string>('')
-const selectedService = ref<string>('')
-const redisCommand = ref<string>('PING')
-const shellCommand = ref<string>('uptime')
-const logLines = ref<number>(100)
+const {
+  activeTool,
+  loading,
+  error,
+  result,
+  selectedNode,
+  selectedService,
+  redisCommand,
+  shellCommand,
+  logLines,
+  nodes,
+  selectTool,
+  closeTool,
+  requireInput,
+  runTool,
+  runRedisCommand,
+  runShellCommand,
+} = useFleetTools()
 
 // Node services composable for log viewer (Issue #737)
 const nodeServices = useNodeServices(selectedNode)
 
-// Available nodes for selection
-const nodes = computed(() => fleetStore.nodeList)
-
-// Selected node details
-const selectedNodeDetails = computed(() => {
-  if (!selectedNode.value) return null
-  return nodes.value.find(n => n.node_id === selectedNode.value) || null
-})
-
-function selectTool(toolId: string): void {
-  activeTool.value = toolId
-  error.value = null
-  result.value = null
-}
-
-function closeTool(): void {
-  activeTool.value = null
-  error.value = null
-  result.value = null
-}
-
-// Log viewer using useNodeServices composable (Issue #737)
+// Log viewer using useNodeServices composable (Issue #737). A failed fetch
+// rethrows (#15620), so runTool shows it instead of "No logs available".
 async function getServiceLogs(): Promise<void> {
-  if (!selectedNode.value || !selectedService.value) {
-    error.value = 'Please select a node and service'
-    return
-  }
-
-  loading.value = true
-  error.value = null
-  result.value = null
-
-  try {
-    const logs = await nodeServices.getLogs(selectedService.value, logLines.value)
-    result.value = logs || 'No logs available'
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to fetch logs'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function runRedisCommand(): Promise<void> {
-  if (!redisCommand.value.trim()) {
-    error.value = 'Please enter a Redis command'
-    return
-  }
-
-  loading.value = true
-  error.value = null
-  result.value = null
-
-  try {
-    // Use the Redis node if available, otherwise use first available node
-    const redisNode = nodes.value.find(n => n.roles?.includes('redis'))
-    const targetNode = redisNode || (selectedNode.value ? selectedNodeDetails.value : null)
-
-    if (!targetNode) {
-      throw new Error('No node selected and no Redis node found')
-    }
-
-    // Execute via SSH
-    // `rawRequest` keeps the `err.detail` body this panel renders; the client
-    // adds the base URL, the bearer, the 401 handler and a timeout.
-    // `getAuthHeaders()` returned `{}` whenever the store's `token` ref was
-    // null, and that ref is seeded from storage once at store construction —
-    // so a token that landed later (another tab, another store instance) left
-    // the command dispatched with no credential. `/exec` runs over SSH, so it
-    // takes the long remote-exec budget, not the 30s default (#13140).
-    const response = await slmApiClient.rawRequest(`/nodes/${targetNode.node_id}/exec`, {
-      method: 'POST',
-      timeout: REMOTE_EXEC_TIMEOUT_MS,
-      body: { command: `redis-cli ${redisCommand.value}` },
-    })
-
-    if (!response.ok) {
-      const err = await response.json()
-      throw new Error(err.detail || 'Redis command failed')
-    }
-
-    const data = await response.json()
-    result.value = `Redis Response:\n\n${data.output || data.stdout || 'No output'}`
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Redis command failed'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function runShellCommand(): Promise<void> {
-  if (!selectedNode.value || !shellCommand.value.trim()) {
-    error.value = 'Please select a node and enter a command'
-    return
-  }
-
-  loading.value = true
-  error.value = null
-  result.value = null
-
-  try {
-    const response = await slmApiClient.rawRequest(`/nodes/${selectedNode.value}/exec`, {
-      method: 'POST',
-      timeout: REMOTE_EXEC_TIMEOUT_MS,
-      body: { command: shellCommand.value },
-    })
-
-    if (!response.ok) {
-      const err = await response.json()
-      throw new Error(err.detail || 'Command execution failed')
-    }
-
-    const data = await response.json()
-    result.value = `Command Output:\n\n${data.output || data.stdout || 'No output'}\n\n` +
-      (data.stderr ? `Stderr:\n${data.stderr}` : '')
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Command execution failed'
-  } finally {
-    loading.value = false
-  }
+  if (!requireInput(!!selectedNode.value && !!selectedService.value, 'toolsView.pleaseSelectANodeAndService')) return
+  await runTool(
+    async () => (await nodeServices.getLogs(selectedService.value, logLines.value)) || t('toolsView.noLogsAvailable'),
+    'toolsView.failedToFetchLogs',
+  )
 }
 </script>
 

@@ -184,7 +184,7 @@ Issue #753: User preference management interface
 
             <!-- #10551: Provider subscription / OAuth sign-in affordance -->
             <div class="provider-auth-section">
-              <h3 class="provider-auth-heading">Provider sign-in (subscription-based)</h3>
+              <h3 class="provider-auth-heading">{{ $t('settings.providerAuth.heading') }}</h3>
               <p class="provider-auth-desc">
                 {{ $t('settings.providerAuthDesc') }}
               </p>
@@ -202,7 +202,7 @@ Issue #753: User preference management interface
                   :scope="p.scope"
                 >
                   <template #apikey>
-                    <p class="apikey-hint">Enter your API key in the wizard above.</p>
+                    <p class="apikey-hint">{{ $t('settings.providerAuth.apiKeyHint') }}</p>
                   </template>
                 </ProviderOAuthConnect>
               </div>

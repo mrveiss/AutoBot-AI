@@ -598,7 +598,7 @@ class FactsMixin(FactProjectionMixin):
 
         # Issue #688: Track ownership indexes for user-based access control
         owner_id = metadata.get("owner_id") or metadata.get("user_id")
-        if getattr(self, "ownership_manager", None):  # #16685: None until initialised
+        if getattr(self, "ownership_manager", None):  # #16685: the base sets it to None
             await index_ownership(self.ownership_manager, fact_id, metadata)  # #16663 org/group, #16693 SYSTEM
         elif owner_id:
             # Issue #689: Fallback simple tracking when ownership manager
@@ -1179,7 +1179,7 @@ class FactsMixin(FactProjectionMixin):
         await asyncio.to_thread(self.redis_client.delete, "fact:origin:session:%s" % fact_id)
 
         # Issue #688: Clean up ownership indexes
-        if hasattr(self, "ownership_manager"):
+        if getattr(self, "ownership_manager", None):  # #16685: None when not initialised -- skip, never crash
             await self.ownership_manager.cleanup_ownership_indexes(fact_id, metadata)
 
     async def _delete_fact_from_vector_store(self, fact_id: str) -> None:
