@@ -270,9 +270,20 @@ _EXTRA_SERVICE_MODULES = (
 for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES))):
     _stub(_m)
 
+# #16722: the stub must look like a package. In importlib mode, pytest imports a
+# test module's parent first and re-imports it from disk whenever the object in
+# sys.modules has no __path__ (_pytest.pathlib._import_module_using_spec), so a
+# bare stub let collecting ANY test under services/ run the real
+# services/__init__.py over it. The leak guard then blamed whichever such test
+# happened to be collected first, which differs between CI shards and pre-push.
+# With the real directory as __path__, pytest keeps the stub, and an unstubbed
+# submodule still loads from its real file, as it did once the real package
+# had taken over.
+sys.modules["services"].__path__ = [str(Path(__file__).parent / "services")]
+
 # ── services.* modules that must be REAL, not stubs ──────────────────────────
-# ``services`` itself is a MagicMock, not a package, so a normal import cannot
-# traverse it — each of these is loaded from its file spec and re-bound onto
+# ``services`` itself is a MagicMock, not the real package, so its attributes
+# are stubs — each of these is loaded from its file spec and re-bound onto
 # the parent stub so ``patch("services.x.Y")`` resolves to the same object.
 #
 # Each entry earns its place by a failure that a MagicMock made invisible:
