@@ -7,7 +7,13 @@ import type {
   ChatSession,
   WorkflowApproval
 } from '@/types/api'
-import type { UserResponse, TeamResponse } from '@/types/api-contract'
+import type {
+  UserResponse,
+  TeamResponse,
+  SessionInviteResponse,
+  SessionRemoveResponse,
+  SessionShareSecretResponse
+} from '@/types/api-contract'
 import apiClient from '@/utils/ApiClient'
 import type { RequestOptions } from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
@@ -105,9 +111,40 @@ class ApiService {
     return this.delete(`${getApiBase()}/chats/${chatId}`)
   }
 
-  // Session Collaboration API (Issue #3986)
+  // Session Collaboration API (Issue #3986; #16443 added the remaining
+  // api/collaboration.py endpoints -- invite/remove/share). Presence itself
+  // rides the /ws/sessions/{id}/presence WebSocket only (useSessionCollaboration.ts),
+  // not a REST call -- there is no presence-fetch method here to keep in sync.
   async getSessionParticipants(sessionId: string): Promise<SessionParticipantsResponse> {
     return this.get<SessionParticipantsResponse>(`${getApiBase()}/sessions/${sessionId}/participants`)
+  }
+
+  async inviteToSession(
+    sessionId: string,
+    userId: string,
+    permission: 'editor' | 'viewer'
+  ): Promise<SessionInviteResponse> {
+    return this.post<SessionInviteResponse>(`${getApiBase()}/sessions/${sessionId}/invite`, {
+      user_id: userId,
+      permission
+    })
+  }
+
+  async removeFromSession(sessionId: string, userId: string): Promise<SessionRemoveResponse> {
+    return this.post<SessionRemoveResponse>(`${getApiBase()}/sessions/${sessionId}/remove`, {
+      user_id: userId
+    })
+  }
+
+  async shareSecretWithSession(
+    sessionId: string,
+    secretId: string,
+    participantIds?: string[]
+  ): Promise<SessionShareSecretResponse> {
+    return this.post<SessionShareSecretResponse>(`${getApiBase()}/sessions/${sessionId}/secrets/share`, {
+      secret_id: secretId,
+      participant_ids: participantIds ?? null
+    })
   }
 
   // Workflow API
@@ -166,18 +203,11 @@ class ApiService {
     })
   }
 
-  // Settings API
-  async getSettings(): Promise<ApiResponse> {
-    return this.get(`${getApiBase()}/settings/`)
-  }
-
-  async updateSettings(settings: Record<string, unknown>): Promise<ApiResponse> {
-    return this.post(`${getApiBase()}/settings/`, settings)
-  }
-
-  async saveSettings(settings: Record<string, unknown>): Promise<ApiResponse> {
-    return this.updateSettings(settings)
-  }
+  // Settings API: getSettings/updateSettings/saveSettings removed for #16465
+  // -- zero real callers (only the now-removed useSettingsApi and this
+  // file's own integration test referenced them). Superseded by
+  // utils/ApiClient.ts's getSettings()/saveSettings(), already live via
+  // AgentSettingsPanel.vue and BatchApiService.ts.
 
   // System API
   async getSystemStatus(): Promise<ApiResponse> {
