@@ -461,7 +461,7 @@ async def _preserve_single_fact(
     """Preserve a single fact with bounded concurrency."""
     async with semaphore:
         try:
-            fact = await knowledge_base.get_fact(fact_id)
+            fact = await asyncio.to_thread(knowledge_base.get_fact, fact_id)  # #16670: synchronous
             if not fact:
                 return {"status": "error", "fact_id": fact_id, "error": "not_found"}
 
@@ -475,8 +475,8 @@ async def _preserve_single_fact(
             metadata["preserved_at"] = preserve_time
             metadata["preserved_from_deletion"] = True
 
-            success = await knowledge_base.update_fact(fact_id=fact_id, metadata=metadata)
-            if success:
+            result = await knowledge_base.update_fact(fact_id=fact_id, metadata=metadata)
+            if result.get("status") == "success":  # #16670: a failed update is a (truthy) dict too
                 return {"status": "success", "fact_id": fact_id}
             else:
                 return {"status": "error", "fact_id": fact_id, "error": "update_failed"}

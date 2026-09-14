@@ -172,10 +172,18 @@ def _called_name(call: ast.Call) -> str | None:
     return call.func.attr if isinstance(call.func, ast.Attribute) else getattr(call.func, "id", None)
 
 
+#: Calls that run their first argument on a worker thread: ``asyncio.to_thread(kb.get_fact, fid)``
+#: is a ``kb.get_fact`` read (#16670 moved the synchronous ``get_fact`` behind it).
+THREAD_OFFLOADS = frozenset({"asyncio.to_thread", "to_thread"})
+
+
 def _is_kb_read(call: ast.Call) -> bool:
-    if not isinstance(call.func, ast.Attribute):
+    func = call.func
+    if _dotted(func) in THREAD_OFFLOADS and call.args:
+        func = call.args[0]
+    if not isinstance(func, ast.Attribute):
         return False
-    receiver, method = _dotted(call.func.value), call.func.attr
+    receiver, method = _dotted(func.value), func.attr
     return (method in READ_METHODS and receiver in KB_RECEIVERS) or (
         method in RAG_METHODS and receiver in RAG_RECEIVERS
     )
@@ -223,6 +231,12 @@ def test_every_scan_root_is_reached():
     examined = REACH.examined(REPO_ROOT)
     unreached = [root for root in SCAN_ROOTS if not any(rel.startswith(root) for rel in examined)]
     assert not unreached, f"no production file examined under {unreached} -- did a root move?"
+
+
+def test_a_read_offloaded_to_a_thread_is_still_a_read():
+    """Moving a sync read behind ``asyncio.to_thread`` must not hide it from the guard (#16670)."""
+    src = "import asyncio\nasync def f(kb, fid):\n    return await asyncio.to_thread(kb.get_fact, fid)\n"
+    assert kb_reads(src) == [("f", 3, False)]
 
 
 def test_every_unfiltered_kb_read_is_allowlisted():
