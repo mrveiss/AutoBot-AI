@@ -142,16 +142,20 @@ def _credentials(token: str) -> HTTPAuthorizationCredentials:
 
 
 @pytest.fixture(autouse=True)
-def _stub_jti_denylist_check():
+def _stub_revocation_checks():
     """services.auth is loaded for REAL here (see module docstring), so
-    decode_token_async's jti check reaches the real
-    token_denylist.is_jti_revoked, which needs Redis -- and #16387 made that
-    check fail CLOSED (raise) when Redis cannot answer, which CI's no-Redis
+    decode_token_async's two revocation checks reach the real
+    token_denylist.is_jti_revoked and password_epoch.is_token_revoked_by_
+    password_change, which both need Redis -- and #16387 / #16411 made them
+    fail CLOSED (raise) when Redis cannot answer, which CI's no-Redis
     environment cannot. These tests are about the admin-permission gate, not
-    the denylist itself (#16413's own tests cover that), so every minted
-    token's jti is simply "not revoked" here.
+    revocation itself (test_token_denylist.py and password_epoch_test.py cover
+    that), so every minted token is simply "not revoked" here.
     """
-    with patch.object(_auth_mod, "is_jti_revoked", AsyncMock(return_value=False)):
+    with (
+        patch.object(_auth_mod, "is_jti_revoked", AsyncMock(return_value=False)),
+        patch.object(_auth_mod, "is_token_revoked_by_password_change", AsyncMock(return_value=False)),
+    ):
         yield
 
 
