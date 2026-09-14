@@ -10,8 +10,9 @@ visibility entirely. The suite runs against an ``auth_middleware`` stub
 caller. So, like ``tests/api/test_knowledge_cognition_auth_regression.py``, these tests
 key ``dependency_overrides`` off the name this router bound at import. If a route loses
 its ``Depends(check_admin_permission)``, the override can't reach it, the refusal below
-never comes back, and the test fails. The real gate's non-admin 403 is
-``auth_middleware.check_admin_permission``'s own contract (``raise_auth_error("AUTH_0003")``).
+never comes back, and the test fails. The last test loads the REAL ``check_admin_permission``
+(``tests.conftest.load_real_auth_middleware``, the same approach as ``tests/api/test_router_auth_16375.py``)
+and fakes only the identity the request carries. That drives its role logic end to end.
 """
 
 from __future__ import annotations
@@ -65,3 +66,22 @@ def test_an_admin_passes_the_gate():
         response = _client(lambda: True).get("/knowledge/chroma/collections")
 
     assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("user", "expected"),
+    [(None, 401), ({"username": "u", "role": "user"}, 403), ({"username": "a", "role": "admin"}, 200)],
+)
+def test_the_real_admin_gate_refuses_non_admins(monkeypatch, user, expected):
+    from types import SimpleNamespace
+
+    from tests.conftest import load_real_auth_middleware
+
+    real = load_real_auth_middleware()
+    monkeypatch.setattr(real, "get_auth_middleware", lambda: SimpleNamespace(get_user_from_request=lambda _r: user))
+    client = AsyncMock()
+    client.list_collections = AsyncMock(return_value=[])
+    with patch("api.knowledge_chroma.get_async_chromadb_client", AsyncMock(return_value=client)):
+        response = _client(real.check_admin_permission).get("/knowledge/chroma/collections")
+
+    assert response.status_code == expected
