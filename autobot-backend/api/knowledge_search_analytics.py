@@ -18,9 +18,9 @@ Endpoints:
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.schemas_knowledge import ExpandQueryResponse, RecordClickResponse, SearchAnalyticsResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from knowledge.schemas import ExpandQueryResponse, RecordClickResponse, SearchAnalyticsResponse
 
 router = APIRouter(tags=["knowledge-search"], dependencies=[Depends(get_current_user)])
 

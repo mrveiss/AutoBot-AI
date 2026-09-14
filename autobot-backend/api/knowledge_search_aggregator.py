@@ -19,6 +19,7 @@ Endpoints:
 """
 
 import asyncio
+import json
 from typing import Any, Dict, List, Set
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -105,6 +106,20 @@ async def _expand_fact_relations(
             _process_incoming_relation(rel, fact_id, related_ids, results)
 
 
+def _decode_fact_metadata(raw_fact: Dict[str, Any]) -> Dict[str, Any]:
+    """knowledge/facts.py hset()s "metadata" as a JSON *string* (#16665 review:
+    wrapping it un-decoded read every fact as owner_id=None, denying everyone
+    including the owner)."""
+    raw = raw_fact.get("metadata")
+    if not isinstance(raw, str):
+        return raw if isinstance(raw, dict) else {}
+    try:
+        decoded = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return decoded if isinstance(decoded, dict) else {}
+
+
 async def _related_fact_is_accessible(
     related_fact: Dict[str, Any] | None,
     ownership_manager,
@@ -118,7 +133,7 @@ async def _related_fact_is_accessible(
     if not related_fact:
         return False
     filtered = await filter_search_results_by_permission(
-        [{"id": related_fact.get("id"), "metadata": related_fact}],
+        [{"id": related_fact.get("id"), "metadata": _decode_fact_metadata(related_fact)}],
         user_id=user_id,
         user_org_id=user_org_id,
         user_group_ids=user_group_ids,
@@ -635,13 +650,12 @@ async def _get_facts_for_graph(
     this function already returned) are filtered to what *user_id* may see.
     """
     if category_filter:
-        # get_facts_in_category returns flat fact dicts (owner_id/visibility
-        # at the top level, no nested "metadata"), unlike kb.search()'s
-        # results -- add the "metadata" view filter_search_results_by_permission
-        # expects without disturbing the flat fields _create_fact_node reads.
+        # get_facts_in_category's facts carry metadata JSON-encoded, unlike
+        # kb.search()'s already-decoded results -- _decode_fact_metadata fixes
+        # the shape before filtering (#16665 review).
         result = await kb.get_facts_in_category(category_id=category_filter, include_descendants=True, limit=max_facts)
         raw_facts = result.get("facts", []) if result.get("success") else []
-        facts = [{**fact, "metadata": fact} for fact in raw_facts]
+        facts = [{**fact, "metadata": _decode_fact_metadata(fact)} for fact in raw_facts]
     else:
         # Search for recent facts
         # Issue #13009: exclude quarantined research facts (#12622).
