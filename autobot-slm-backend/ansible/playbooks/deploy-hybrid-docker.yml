@@ -179,7 +179,7 @@
 
     - name: Test Redis connectivity
       shell: |
-        docker exec {{ container_name }} redis-cli --no-auth-warning --user {{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default' }} -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }} ping
+        docker exec {{ container_name }} redis-cli --no-auth-warning --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) | quote }} ping
       register: redis_test
 
     - name: Display Redis status

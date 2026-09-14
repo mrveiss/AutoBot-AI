@@ -142,8 +142,9 @@ update_backend_config() {
     local slm_secrets=/etc/autobot/slm-secrets.env
     local redis_password="${AUTOBOT_REDIS_PASSWORD:-}" redis_username="${AUTOBOT_REDIS_USERNAME:-}"
     if [ -z "$redis_password" ] && [ -r "$slm_secrets" ]; then
-        redis_password=$(grep -oP '^AUTOBOT_REDIS_PASSWORD=\K.*' "$slm_secrets" | head -n1)
-        redis_username=${redis_username:-$(grep -oP '^AUTOBOT_REDIS_USERNAME=\K.*' "$slm_secrets" | head -n1)}
+        # `|| true`: under pipefail a missing key would abort the deploy (as read_redis_password.yml guards)
+        redis_password=$(grep -oP '^AUTOBOT_REDIS_PASSWORD=\K.*' "$slm_secrets" | head -n1 || true)
+        redis_username=${redis_username:-$(grep -oP '^AUTOBOT_REDIS_USERNAME=\K.*' "$slm_secrets" | head -n1 || true)}
     fi
     if [ -n "$redis_password" ]; then redis_username=${redis_username:-default}; fi
 

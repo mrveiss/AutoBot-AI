@@ -54,7 +54,9 @@ _SAMPLE = "bootstrap-sample-value-16657"  # pragma: allowlist secret
 def test_calling_the_bootstrap_endpoint_returns_no_redis_password(monkeypatch):
     """#16657 AC1: the unauthenticated endpoint itself, called over HTTP, carries no Redis password.
 
-    Unlike the AST checks above, this drives the real router and the real response builders.
+    Unlike the AST checks above, this drives the real router over HTTP. Today's builders never
+    read ``config.redis.password``, so the sample is a forward guard: a builder that re-adds a
+    credential sourced from the config would fail here.
     """
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

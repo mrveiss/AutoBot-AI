@@ -18,6 +18,7 @@ string-matched against its source.
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 
 import pytest
@@ -35,6 +36,7 @@ def _render(text: str, **ctx) -> str:
     """Render *text*; ``lookup('env', NAME)`` reads from ``ctx['_env']``."""
     env = jinja2.Environment()
     env.globals["lookup"] = lambda _kind, name: ctx.get("_env", {}).get(name, "")
+    env.filters["quote"] = shlex.quote  # Ansible's shell-quoting filter, used on the redis-cli arguments
     return env.from_string(text).render(**ctx)
 
 
