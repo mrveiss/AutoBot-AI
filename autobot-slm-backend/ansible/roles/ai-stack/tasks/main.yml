@@ -31,6 +31,24 @@
     group: root
   tags: ['ai', 'config']
 
+# #16627 (P1b of #13568): the AI stack's Redis client (autobot_shared, via
+# REDIS_* in this env file) authenticates as `default` with the SLM-generated
+# password while the server stays nopass. Adopted only when no password is set,
+# and always with the username -- a password alone is refused by nopass.
+- name: "AI Stack | Read the SLM-generated Redis credential (#16627)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/read_redis_password.yml
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Adopt the SLM-generated Redis credential when none is set (#16627)"
+  ansible.builtin.set_fact:
+    ai_redis_password: "{{ _redis_password_read }}"
+    ai_redis_username: "{{ ai_redis_username | default('', true) or _redis_username_read }}"
+  when:
+    - (_redis_password_read | default('') | trim) | length > 0
+    - (ai_redis_password | default('') | trim) | length == 0
+  no_log: true
+  tags: ['ai', 'config']
+
 - name: "AI Stack | Deploy /etc/autobot/autobot-ai-stack.env"
   ansible.builtin.template:
     src: ai-stack.env.j2
