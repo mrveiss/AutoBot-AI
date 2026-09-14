@@ -21,10 +21,10 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.schemas_knowledge import KnowledgeDocumentationSearchResponse, KnowledgeDocumentationStatsResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from knowledge.schemas import KnowledgeDocumentationSearchResponse, KnowledgeDocumentationStatsResponse
 
 logger = get_logger(__name__)
 
