@@ -1895,10 +1895,11 @@ async def _run_lint_scan(job_id: str, chunks: list[dict]) -> None:
 
 
 async def _fetch_all_chunks(kb) -> list[dict]:
-    """Fetch all KB chunks as dicts with a 'text' key."""
+    """Fetch all KB chunks as dicts with a 'text' key.
+    #16707: kb.chroma_collection was never real; this is search.py's handle."""
 
     def _load():
-        results = kb.chroma_collection.get(include=["documents", "metadatas"])
+        results = kb.vector_store._collection.get(include=["documents", "metadatas"])
         docs = results.get("documents") or []
         metas = results.get("metadatas") or [{}] * len(docs)
         return [{"text": d, "metadata": m} for d, m in zip(docs, metas)]

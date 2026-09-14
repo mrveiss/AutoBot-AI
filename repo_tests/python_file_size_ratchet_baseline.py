@@ -114,7 +114,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/knowledge_categories.py": 674,
     "autobot-backend/api/knowledge_collections.py": 726,
     "autobot-backend/api/knowledge_connectors.py": 929,
-    "autobot-backend/api/knowledge_maintenance.py": 1979,
+    "autobot-backend/api/knowledge_maintenance.py": 1980,  # #16707: real collection handle
     "autobot-backend/api/knowledge_mcp.py": 1455,
     "autobot-backend/api/knowledge_population.py": 1546,
     "autobot-backend/api/knowledge_rag.py": 672,
