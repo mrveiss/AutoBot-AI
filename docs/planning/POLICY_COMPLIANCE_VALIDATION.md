@@ -4,6 +4,8 @@
 **Validator**: Final validation before implementation approval
 **Policy**: "No Temporary Fixes" - ZERO feature flags, ZERO workarounds
 
+> **Historical record:** this document reflects the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; the counts below describe that one install.
+
 ---
 
 ## Fix #1: Database Initialization

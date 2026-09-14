@@ -34,7 +34,13 @@ from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus, get_adapter
-from .subprocess_support import probe_pid, render_context_markdown, terminate_pid
+from .subprocess_support import (
+    check_output_stall,
+    probe_pid,
+    probe_pid_identity,
+    render_context_markdown,
+    terminate_pid,
+)
 
 logger = get_logger(__name__)
 
@@ -42,6 +48,16 @@ SIGTERM_GRACE_SECONDS = 10
 ADAPTER_TIMEOUT_SECONDS = 3600  # per-adapter default (preserves current behavior)
 DEFAULT_TIMEOUT_SECONDS = 3600  # fallback when a state file omits timeout_seconds
 DEFAULT_OUTPUT_DIR = "/tmp"  # nosec B108  # test/controlled code uses tmpdir intentionally
+
+# GH#13099: a hung-but-alive process is indistinguishable from a working one
+# without inspecting output. Both the Claude Code and Copilot CLIs stream their
+# JSONL/text output line-buffered, so a healthy run produces bytes quickly and
+# keeps producing them; a single long tool call (a build, a test suite) is the
+# one legitimate quiet stretch, so the stall window is generous enough to
+# outlast that without false-positiving, while still recovering a wedged slot
+# in a fraction of the 3600s overall timeout.
+FIRST_OUTPUT_DEADLINE_SECONDS = 120  # no output at all this long after spawn -> never started
+STALL_DEADLINE_SECONDS = 600  # no NEW output this long after that -> stopped mid-run
 
 # Per-user CLI install locations that a systemd service account's PATH typically
 # does NOT include (GH#12478). Checked, in order, after a bare `shutil.which()`
@@ -234,6 +250,54 @@ def resolve_timeout(cfg: dict) -> int:
     return ADAPTER_TIMEOUT_SECONDS
 
 
+def resolve_first_output_deadline(cfg: dict, default: int = FIRST_OUTPUT_DEADLINE_SECONDS) -> int:
+    """Resolve the first-output deadline via the same 3-tier hierarchy (GH#13099):
+
+    1. per-agent override (``adapter_config.first_output_deadline_seconds``)
+    2. global env var ``AUTOBOT_LLC_FIRST_OUTPUT_DEADLINE_SECONDS``
+    3. *default* — :data:`FIRST_OUTPUT_DEADLINE_SECONDS` unless the caller
+       passes its own (PR#16284 review, #13099 AC4): a CLI whose output
+       buffering is unverified or known to write only at exit needs a longer
+       one, not the verified-streaming default.
+    """
+    if "first_output_deadline_seconds" in cfg:
+        return int(cfg["first_output_deadline_seconds"])
+    global_default = os.getenv("AUTOBOT_LLC_FIRST_OUTPUT_DEADLINE_SECONDS")
+    if global_default:
+        return int(global_default)
+    return default
+
+
+def resolve_stall_deadline(cfg: dict, default: int = STALL_DEADLINE_SECONDS) -> int:
+    """Resolve the stall deadline via the same 3-tier hierarchy (GH#13099):
+
+    1. per-agent override (``adapter_config.stall_deadline_seconds``)
+    2. global env var ``AUTOBOT_LLC_STALL_DEADLINE_SECONDS``
+    3. *default* — :data:`STALL_DEADLINE_SECONDS` unless the caller passes
+       its own (PR#16284 review, #13099 AC4), for the same reason.
+    """
+    if "stall_deadline_seconds" in cfg:
+        return int(cfg["stall_deadline_seconds"])
+    global_default = os.getenv("AUTOBOT_LLC_STALL_DEADLINE_SECONDS")
+    if global_default:
+        return int(global_default)
+    return default
+
+
+def _stall_reason(state: dict, started_at: float) -> Optional[str]:
+    """GH#13099: the run's stall/first-output failure reason, or None if healthy.
+
+    ``output_file`` is absent from state files written before this field
+    existed; such a run is simply not checked rather than treated as stalled.
+    """
+    output_file = state.get("output_file")
+    if not output_file:
+        return None
+    first_output = state.get("first_output_deadline_seconds", FIRST_OUTPUT_DEADLINE_SECONDS)
+    stall = state.get("stall_deadline_seconds", STALL_DEADLINE_SECONDS)
+    return check_output_stall(output_file, started_at, first_output, stall)
+
+
 class SubprocessLifecycleAdapter:
     """Common invoke-wrapper / status / cancel lifecycle for CLI subprocess adapters."""
 
@@ -323,15 +387,31 @@ class SubprocessLifecycleAdapter:
             return probe_pid(pid)
 
         pid: int = state["pid"]
+        create_time: Optional[float] = state.get("create_time")
         timeout_sec: float = state.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)
         started_at: float = state.get("started_at", 0.0)
+
+        # PR#16284 review: identity-verified liveness FIRST. A dead (or
+        # PID-reused) process is judged by its exit/output, never as stalled
+        # or timed out — that reorder let a normally-completed run, polled
+        # long after its last write, get reported "stalled" and risked
+        # signalling whatever unrelated process now holds that PID.
+        liveness = probe_pid_identity(pid, create_time)
+        if liveness.status is not LLCRunStatus.RUNNING:
+            return liveness
 
         if time.time() - started_at > timeout_sec:
             logger.warning("%s: run_id %s timed out (%ss)", self._LOG_NAME, run_id, timeout_sec)
             await self.cancel(agent_config, run_id)
             return AdapterRunStatus(status=LLCRunStatus.TIMEOUT)
 
-        return probe_pid(pid)
+        stall_reason = _stall_reason(state, started_at)
+        if stall_reason is not None:
+            logger.warning("%s: run_id %s %s", self._LOG_NAME, run_id, stall_reason)
+            await self.cancel(agent_config, run_id)
+            return AdapterRunStatus(status=LLCRunStatus.FAILED, error=stall_reason)
+
+        return liveness
 
     # Cancel ----------------------------------------------------------------
     async def cancel(self, agent_config: dict, run_id: str) -> None:
@@ -350,11 +430,14 @@ class SubprocessLifecycleAdapter:
             logger.error("%s.cancel: unparseable run_id %r", self._LOG_NAME, run_id)
             return
 
-        # terminate_pid returns True when the process was already gone
-        # (SIGTERM raised ProcessLookupError); we still continue to
-        # _post_cancel and state-file cleanup regardless — the process
-        # must be fully cleaned up whether or not it was already dead.
-        await terminate_pid(pid, SIGTERM_GRACE_SECONDS, self._LOG_NAME)
+        # PR#16284 review: terminate_pid verifies pid still owns the state's
+        # recorded create_time before signalling anything — None (no state,
+        # or a pre-GH#13097 state file) means it will only probe, never
+        # signal. We still continue to _post_cancel and state-file cleanup
+        # regardless — the run must be fully cleaned up either way.
+        state = self._load_state(self._state_path(output_dir, run_id), output_dir)
+        create_time = state.get("create_time") if state else None
+        await terminate_pid(pid, SIGTERM_GRACE_SECONDS, self._LOG_NAME, create_time)
 
         await self._post_cancel(agent_config, run_id)
 
@@ -389,7 +472,11 @@ __all__ = [
     "ADAPTER_TIMEOUT_SECONDS",
     "DEFAULT_TIMEOUT_SECONDS",
     "DEFAULT_OUTPUT_DIR",
+    "FIRST_OUTPUT_DEADLINE_SECONDS",
+    "STALL_DEADLINE_SECONDS",
     "resolve_timeout",
+    "resolve_first_output_deadline",
+    "resolve_stall_deadline",
     "resolve_cli_binary",
     "is_subprocess_adapter",
     "adapter_transcript_helpers",

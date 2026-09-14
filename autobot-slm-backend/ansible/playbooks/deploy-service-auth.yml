@@ -5,7 +5,7 @@
 # Author: mrveiss
 #
 # Service Authentication Deployment Playbook
-# Deploys service keys and configures enforcement across the 6-VM fleet
+# Deploys service keys and configures enforcement across the fleet, one host per role
 #
 # Usage:
 #   Full deployment:

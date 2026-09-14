@@ -83,7 +83,27 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # summary through sys.stdout instead of print(). MEASURED, not inferred: this test on
 # #16558's head (python-suite shard 11/12, job 103601998828) reported 317 against 322,
 # and the diff removes exactly 5 print() lines and adds none. A FIX, not a population change.
-_KNOWN_REPO_VIOLATIONS = 317
+# 310 since #16318: pipeline-scripts/generate_env_docs.py and
+# check_env_var_registry.py are CLI tools whose stdout/stderr IS their
+# interface, the same #1082 allowance `scripts/` entry points and tools/lint/
+# already carry -- their 7 print() call sites (2 multi-line, counted once
+# each) now carry `# noqa: print` rather than a logger conversion. Diff verified
+# to touch neither #16263's nor #16540's files, so the two chains combine cleanly:
+# 317 - 7 = 310. Computed at 2d-vehicle assembly, not independently re-measured on
+# the combined tree -- the vehicle's own CI run is that measurement.
+# 308 since #16526/#16527: services/llm_service.py's module docstring carries a
+# "Usage example::" block showing the REPL-style calls a caller would type
+# (`print(response.content)`, `print(chunk, end="", flush=True)`) -- this hook
+# scans line-by-line and cannot see that both sit inside a triple-quoted
+# docstring, so it flagged them as real print() calls. Both now carry
+# `# noqa: print`, same fix class as the #16263 entry above. MEASURED: running
+# `bash pre-commit-no-print-console autobot-backend/services/llm_service.py`
+# alone reports 0 violations post-fix (was 2), and no other tracked file
+# changed in that PR's diff. Verified this PR's own diff never touches
+# generate_report.py/generate_env_docs.py/check_env_var_registry.py (it only
+# appeared to in a base-drift diff, not a real edit), so 310 - 2 = 308 combines
+# cleanly with the chain above. Computed at 2d-vehicle assembly.
+_KNOWN_REPO_VIOLATIONS = 308
 
 
 def _test_git_env() -> dict[str, str]:

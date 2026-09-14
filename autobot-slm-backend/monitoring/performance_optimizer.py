@@ -4,7 +4,7 @@
 """
 AutoBot Performance Optimizer
 Automated performance optimization system that analyzes metrics and applies optimizations
-for the distributed AutoBot system across 6 VMs.
+for AutoBot's distributed, role-based system.
 """
 
 import asyncio

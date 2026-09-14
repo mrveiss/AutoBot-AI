@@ -5,7 +5,7 @@
 # Author: mrveiss
 """
 Service Discovery System for AutoBot Distributed Architecture
-Provides dynamic service resolution and health monitoring across 6 VMs
+Provides dynamic service resolution and health monitoring across AutoBot's roles
 
 Wiring status (#9893): This is an available library API for dynamic service
 discovery. It is intentionally NOT wired into the production inter-service path,
@@ -131,7 +131,7 @@ class ServiceDiscovery:
         # Lock for thread-safe access to services dictionary
         self._lock = asyncio.Lock()
 
-        # Service definitions for AutoBot's 6-VM architecture
+        # Service definitions for AutoBot's roles (role-based, count-agnostic — ADR-010)
         self._init_default_services()
 
     def _get_service_config_with_fallback(
@@ -152,7 +152,7 @@ class ServiceDiscovery:
         return host, port
 
     def _register_frontend_service(self, services_config: dict, system_defaults: dict) -> None:
-        """Register VM1: Frontend (Web Interface) service."""
+        """Register the frontend role's Web Interface service."""
         host, port = self._get_service_config_with_fallback(
             "frontend", services_config.get("frontend", {}), system_defaults
         )
@@ -167,7 +167,7 @@ class ServiceDiscovery:
         )
 
     def _register_npu_worker_service(self, services_config: dict, system_defaults: dict) -> None:
-        """Register VM2: NPU Worker (AI Hardware Acceleration) service."""
+        """Register the NPU worker role's Hardware Acceleration service."""
         host, port = self._get_service_config_with_fallback(
             "npu_worker", services_config.get("npu_worker", {}), system_defaults
         )
@@ -182,7 +182,7 @@ class ServiceDiscovery:
         )
 
     def _register_redis_service(self, redis_config: dict, system_defaults: dict) -> None:
-        """Register VM3: Redis (Data Layer) service."""
+        """Register the database role's Redis Data Layer service."""
         redis_host = redis_config.get("host")
         redis_port = redis_config.get("port")
         if not redis_host or not redis_port:
@@ -200,7 +200,7 @@ class ServiceDiscovery:
         )
 
     def _register_ai_stack_service(self, services_config: dict, system_defaults: dict) -> None:
-        """Register VM4: AI Stack (AI Processing) service."""
+        """Register the AI Stack role's AI Processing service."""
         host, port = self._get_service_config_with_fallback(
             "ai_stack", services_config.get("ai_stack", {}), system_defaults
         )
@@ -215,7 +215,7 @@ class ServiceDiscovery:
         )
 
     def _register_browser_service(self, services_config: dict, system_defaults: dict) -> None:
-        """Register VM5: Browser Service (Playwright Automation)."""
+        """Register the browser role's Playwright Automation service."""
         host, port = self._get_service_config_with_fallback(
             "browser_service",
             services_config.get("browser_service", {}),

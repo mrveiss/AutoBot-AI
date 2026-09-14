@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Generate the AUTOBOT_* env-var reference table in docs/developer/CLAUDE_RULES.md.
+"""Generate the AUTOBOT_* env-var reference table in docs/developer/ENV_VARS.md.
 
 Reads the registry from autobot_shared/env_registry.py, builds a sorted
 Markdown table, and rewrites the section bounded by:
 
     <!-- BEGIN_AUTOGEN_ENV_DOCS -->
     <!-- END_AUTOGEN_ENV_DOCS -->
+
+The table has its own file and no count line. A count every env-var PR rewrote,
+in a rules doc every PR touches, made any two such PRs conflict (#16317).
 
 Run from the repository root:
 
@@ -27,7 +30,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from autobot_shared.env_registry import REGISTRY, EnvVarSpec  # noqa: E402
 
-DOCS_PATH = REPO_ROOT / "docs" / "developer" / "CLAUDE_RULES.md"
+DOCS_PATH = REPO_ROOT / "docs" / "developer" / "ENV_VARS.md"
 
 BEGIN_MARKER = "<!-- BEGIN_AUTOGEN_ENV_DOCS -->"
 END_MARKER = "<!-- END_AUTOGEN_ENV_DOCS -->"
@@ -66,8 +69,7 @@ def build_table(registry: dict) -> str:
 
     header = "| Name | Component | Type | Default | Description |\n" "|---|---|---|---|---|"
     table_body = "\n".join(rows)
-    count_note = f"\n\n*{len(registry)} variables registered as of last generation.*\n"
-    return f"{header}\n{table_body}{count_note}"
+    return f"{header}\n{table_body}\n"
 
 
 def rewrite_docs(docs_path: Path, table: str) -> None:
@@ -91,21 +93,22 @@ def rewrite_docs(docs_path: Path, table: str) -> None:
 
 def main() -> int:
     if not DOCS_PATH.exists():
-        print(f"ERROR: {DOCS_PATH} not found.", file=sys.stderr)
+        # CLI tool: stdout/stderr is its interface (#1082 allows `# noqa: print` here).
+        print(f"ERROR: {DOCS_PATH} not found.", file=sys.stderr)  # noqa: print
         return 1
 
     if not REGISTRY:
-        print("ERROR: REGISTRY is empty — nothing to generate.", file=sys.stderr)
+        print("ERROR: REGISTRY is empty — nothing to generate.", file=sys.stderr)  # noqa: print
         return 1
 
     table = build_table(REGISTRY)
     try:
         rewrite_docs(DOCS_PATH, table)
     except ValueError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        print(f"ERROR: {exc}", file=sys.stderr)  # noqa: print
         return 1
 
-    print(f"Generated env-var docs for {len(REGISTRY)} variables into {DOCS_PATH}")
+    print(f"Generated env-var docs for {len(REGISTRY)} variables into {DOCS_PATH}")  # noqa: print
     return 0
 
 

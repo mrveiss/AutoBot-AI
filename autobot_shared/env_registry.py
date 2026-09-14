@@ -76,6 +76,7 @@ from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_ai  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
+from autobot_shared import env_registry_llc  # noqa: E402,F401
 from autobot_shared import env_registry_logging  # noqa: E402,F401
 from autobot_shared import env_registry_slm  # noqa: E402,F401
 from autobot_shared import env_registry_terminal  # noqa: E402,F401
@@ -987,18 +988,6 @@ register_env_var(
             "After this the reply can no longer be tied to a request and resolves nothing."
         ),
         component="approvals",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL",
-        type=int,
-        default=86400,
-        description=(
-            "Cache lifetime in seconds for a human-to-agent handoff brief " "(llc/services/handoff.py). One day."
-        ),
-        component="orchestrator",
     )
 )
 

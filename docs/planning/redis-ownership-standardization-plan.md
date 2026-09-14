@@ -14,14 +14,14 @@
 
 **Rationale:**
 - Systemd service already configured for `User=autobot` (zero changes needed)
-- Maintains AutoBot architectural consistency across all 5 VMs
+- Maintains AutoBot architectural consistency across every deployment machine
 - Lowest migration risk (no service restart required for most changes)
 - Simplest implementation path
 
 **Scope:**
 - **Files Affected:** 5 configuration and script files
-- **Directories Affected:** 2 Redis directories on VM3 (<database-ip>)
-- **Infrastructure:** Distributed VM setup (main + 5 VMs)
+- **Directories Affected:** 2 Redis directories on the database role (<database-ip>)
+- **Infrastructure:** Distributed, role-based deployment — Docker, one VM, or however many machines the operator scales to
 
 ---
 
