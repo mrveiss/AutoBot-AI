@@ -25,6 +25,15 @@
 - name: Install system dependencies
   include_tasks: system_packages.yml
 
+# #16641: makes python_interpreter_binary available to every pip task below
+# that sets virtualenv_command: (python_env.yml, python_deps.yml,
+# openvino.yml, playwright.yml) -- python_env.yml's own
+# ensure_venv_version call only checks/removes a wrong-version venv, it
+# never derives that fact.
+- name: Install target Python interpreter
+  include_role:
+    name: python_interpreter
+
 - name: Set up Python environment
   include_tasks: python_env.yml
 
