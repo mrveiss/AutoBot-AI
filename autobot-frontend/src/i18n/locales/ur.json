@@ -5016,6 +5016,14 @@
       "roleEditor": "Editor",
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
+    },
+    "panel": {
+      "title": "تعاون",
+      "invite": "مدعو کریں",
+      "closePanel": "پینل بند کریں",
+      "tabParticipants": "شرکاء",
+      "tabActivity": "سرگرمی",
+      "tabNotifications": "اطلاعات"
     }
   },
   "chat": {
@@ -5826,6 +5834,7 @@
       "osMacOS": "macOS",
       "sshKey": "SSH Key / Private Key",
       "edit": "Edit",
+      "share": "اشتراک کریں",
       "sshKeyPlaceholder": "Paste SSH private key here...",
       "noExpiry": "No expiry",
       "authPassword": "Password",
@@ -7253,19 +7262,13 @@
       "revokeSuccess": "Secret revoked successfully"
     },
     "share": {
-      "expiresIn": "Access expires in",
       "secretLabel": "Secret",
-      "expire1Week": "1 week",
       "title": "Share Secret",
       "shareSecret": "Share Secret",
-      "expire1Hour": "1 hour",
       "cancel": "Cancel",
       "sharing": "Sharing...",
-      "expire24Hours": "24 hours",
       "noParticipants": "No participants in session",
-      "shareWithParticipants": "Share with participants",
-      "expireNever": "Never",
-      "expire6Hours": "6 hours"
+      "shareWithParticipants": "Share with participants"
     },
     "auditLog": {
       "copy": "Copy",

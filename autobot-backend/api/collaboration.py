@@ -27,6 +27,7 @@ from api.schemas_workflows import SessionPresenceResponse, SessionShareSecretRes
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 from user_management.database import get_async_session
 
@@ -357,6 +358,29 @@ async def share_secret_with_session(
         await db.commit()
 
         logger.info(f"User shared secret with {len(recipient_ids)} participants in session {session_id}")
+
+        # #16443: notify connected participants live, over the same presence
+        # WebSocket they're already on. id/name/sharer ONLY -- never the
+        # secret's value, which this handler never reads in the first place.
+        from websocket.presence import presence_manager
+
+        await presence_manager.broadcast_to_session(
+            session_id,
+            {
+                "type": "user_message",
+                "user_id": str(user_id),
+                "payload": {
+                    "kind": "secret_shared",
+                    "secret_id": str(secret_id),
+                    "secret_name": secret.name,
+                    "secret_type": secret.type,
+                    "shared_by": str(user_id),
+                    "shared_by_username": current_user.get("username", ""),
+                    "session_id": session_id,
+                },
+                "timestamp": utc_timestamp(),
+            },
+        )
 
         return {
             "success": True,

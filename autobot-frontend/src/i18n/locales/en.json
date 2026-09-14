@@ -6390,6 +6390,14 @@
       "unknownTab": "Unknown tab",
       "you": "You",
       "youStatus": "Your status"
+    },
+    "panel": {
+      "title": "Collaboration",
+      "invite": "Invite",
+      "closePanel": "Close panel",
+      "tabParticipants": "Participants",
+      "tabActivity": "Activity",
+      "tabNotifications": "Notifications"
     }
   },
   "research": {
@@ -6522,12 +6530,6 @@
       "secretLabel": "Secret",
       "shareWithParticipants": "Share with participants",
       "noParticipants": "No participants in session",
-      "expiresIn": "Access expires in",
-      "expire1Hour": "1 hour",
-      "expire6Hours": "6 hours",
-      "expire24Hours": "24 hours",
-      "expire1Week": "1 week",
-      "expireNever": "Never",
       "cancel": "Cancel",
       "sharing": "Sharing...",
       "shareSecret": "Share Secret"
@@ -6608,6 +6610,7 @@
       "cancel": "Cancel",
       "saving": "Saving...",
       "edit": "Edit",
+      "share": "Share",
       "delete": "Delete",
       "duplicate": "Duplicate",
       "transfer": "Transfer",
