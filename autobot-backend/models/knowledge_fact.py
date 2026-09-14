@@ -22,7 +22,7 @@ as the durable copy.
 
 import uuid
 
-from sqlalchemy import Column, DateTime, Index, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from user_management.models.base import Base
@@ -55,6 +55,11 @@ class KnowledgeFact(Base):
     #: reconciler as a **record of an observation**, never read as the authority
     #: for whether a vector exists -- rule 3, and the exact drift #12733 hit.
     vector_seen_at = Column(DateTime(timezone=True), nullable=True)
+
+    #: Set by migration 20260914_092 on every fact that had no owner and no visibility
+    #: at deploy: the #16693 backfill's frozen candidate set. Cleared once the backfill
+    #: has decided the fact. No write path sets it, so a fact stored later never is one.
+    visibility_backfill_candidate = Column(Boolean, nullable=True)
 
     __table_args__ = (Index("ix_knowledge_facts_owner_session", "owner_id", "source_session_id"),)
 
