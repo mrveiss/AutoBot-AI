@@ -36,80 +36,12 @@ sys.path.insert(0, str(shared_root))
 sys.path.insert(0, str(backend_root))
 
 
-def _make_pkg_stub(name: str) -> types.ModuleType:
-    """Create a minimal package stub that Python's import machinery accepts.
-
-    A bare MagicMock() cannot serve as a package because the importer
-    requires ``__path__`` to be set for submodule resolution (e.g. when the
-    code does ``from sqlalchemy.dialects.postgresql import ARRAY``).  We
-    create a real ModuleType with ``__path__ = []`` so the dotted import chain
-    succeeds while leaving every attribute access as a MagicMock via
-    ``__getattr__``.
-    """
-    mod = types.ModuleType(name)
-    mod.__path__ = []  # marks this as a package to the import system
-    mod.__package__ = name
-    mock_attr = MagicMock()
-
-    def _getattr(attr: str) -> MagicMock:  # noqa: ANN001
-        return mock_attr
-
-    mod.__getattr__ = _getattr  # type: ignore[attr-defined]
-    mod.pytest_plugins = []  # prevent MagicMock __getattr__ leaking into pytest plugin scan
-    # Prevent _get_first_non_fixture_func from picking up MagicMock as setup/teardown hooks
-    mod.setUpModule = None  # type: ignore[attr-defined]
-    mod.setup_module = None  # type: ignore[attr-defined]
-    mod.tearDownModule = None  # type: ignore[attr-defined]
-    mod.teardown_module = None  # type: ignore[attr-defined]
-    sys.modules[name] = mod
-    return mod
-
-
-def _real_load_and_bind(name: str, path: Path) -> None:
-    """Real-load module *name* from *path*, overwriting any stub, and ALWAYS
-    bind it as an attribute on its parent package module (#11661 — merged
-    ``_load_real_mod`` + ``_real_load_service``).
-
-    The parent bind is load-bearing (#11532/#11618): ``unittest.mock.patch``
-    resolves ``"pkg.mod.NAME"`` via ``getattr(sys.modules["pkg"], "mod")``.
-    When ``pkg`` is a MagicMock package stub, its catch-all ``__getattr__``
-    returns a mock singleton, so without the setattr patch() silently patches
-    the wrong object while the real module's globals stay untouched (inert
-    patch).  Falls back to a package stub if the real file can't be loaded in
-    this environment.
-    """
-    import importlib.util as _rlb_ilu
-
-    # #12839: never re-execute a module that is ALREADY real-loaded from this
-    # same file. Re-executing builds a second set of class objects and swaps
-    # them into sys.modules, while every module that imported the first set
-    # keeps referencing it — so `isinstance(x, Cls)` fails against an object
-    # whose repr says it IS a Cls. That is what broke test_claim_classifier:
-    # services.claim_classifier imported .knowledge_grounding_models at
-    # collection, then _real_load_light_services re-executed the same file.
-    # Re-execution is only needed to replace a *stub*, so an already-real module
-    # is left alone and only the parent bind below is (re)applied.
-    _existing = sys.modules.get(name)
-    if _existing is not None and getattr(_existing, "__file__", None) == str(path):
-        parent, _, child = name.rpartition(".")
-        if parent and parent in sys.modules:
-            setattr(sys.modules[parent], child, _existing)
-        return
-
-    spec = _rlb_ilu.spec_from_file_location(name, str(path))
-    if not spec or not spec.loader:
-        return
-    mod = _rlb_ilu.module_from_spec(spec)
-    sys.modules[name] = mod
-    try:
-        spec.loader.exec_module(mod)
-    except Exception:
-        sys.modules[name] = _make_pkg_stub(name)
-        return
-    parent, _, child = name.rpartition(".")
-    if parent and parent in sys.modules:
-        setattr(sys.modules[parent], child, mod)
-
+# #16483: both moved to testkit/module_stubs.py — reusable, not conftest-specific
+# (78 call sites across this file alone), and it keeps this file under the
+# file-size ratchet without a raised ceiling every time a new module needs
+# real-loading before its dependent imports it.
+from testkit.module_stubs import make_pkg_stub as _make_pkg_stub
+from testkit.module_stubs import real_load_and_bind as _real_load_and_bind
 
 # Stub chromadb before it is imported. chromadb hangs at import time on
 # machines without a local Chroma server (it fires gRPC keep-alive probes via
@@ -647,6 +579,11 @@ if "llm_shared" not in sys.modules:
     # so base_provider (and then provider_registry) load real.
     _real_load_and_bind("llm_shared.cross_worker_rate_limiter", _llm_root / "cross_worker_rate_limiter.py")
     _real_load_and_bind("llm_shared.observability", _llm_root / "observability" / "__init__.py")
+    # #15026: quota headroom store — rate_limit_backoff imports it at module
+    # level (`from .quota_headroom import get_quota_headroom_store`) to persist
+    # what it already parses; light dep (autobot_shared.env_utils/
+    # logging_manager/singleton_factory only), load real before rate_limit_backoff.
+    _real_load_and_bind("llm_shared.quota_headroom", _llm_root / "quota_headroom.py")
     _real_load_and_bind("llm_shared.rate_limit_backoff", _llm_root / "rate_limit_backoff.py")
     # #11541: pre-request cumulative token budget gate — base_provider imports it
     # at module level (`from .token_budget import get_token_budget_gate`); light

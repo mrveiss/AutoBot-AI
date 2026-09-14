@@ -111,6 +111,7 @@ conflict when their rows sort next to each other.
 | `AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL` | orchestrator | int | `86400` | Cache lifetime in seconds for a human-to-agent handoff brief (llc/services/handoff.py). One day. |
 | `AUTOBOT_LLC_STALL_DEADLINE_SECONDS` | orchestrator | int | `600` | Seconds of silence in an LLC CLI agent's output file, after its first byte, before the run is killed as stalled rather than left to burn out the full run timeout (GH#13099). Both CLIs stream output line-buffered, so a healthy run keeps producing it; the one legitimate quiet stretch is a single long tool call (a build, a test suite), which 600s (10 min) outlasts without a false positive. |
 | `AUTOBOT_LLM_MAX_RETRY_AFTER_SECONDS` | ai | float | `30.0` | Cap applied to a provider's `Retry-After`. Without it a provider advertising a long back-off would stall a request for that whole period (services/llm_service.py). |
+| `AUTOBOT_LLM_QUOTA_HEADROOM_TTL_SECONDS` | ai | int | `3600` | Seconds a recorded provider rate-limit headroom reading stays valid before it expires. |
 | `AUTOBOT_LLM_TOKEN_BUDGET_PER_RUN` | ai | int | `0` | Cumulative token ceiling (input plus output) for one run. Zero disables the gate, which is the shipped default (#11541). |
 | `AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS` | ai | int | `86400` | Seconds a run's cumulative token counter survives in Redis, bounding memory for abandoned sessions. Refreshed on every increment. |
 | `AUTOBOT_LOGS_BACKUP_DIR` | logging | str | `'backup'` | Directory where rotated log archives are written. |
