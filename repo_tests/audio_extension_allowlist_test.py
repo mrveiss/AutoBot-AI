@@ -111,14 +111,18 @@ def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
 #: 5450, not 5824: the guard's `completed()` bound is a hard floor with no
 #: skips/growth allowance (unlike `verify_floor`'s examined-vs-floor check),
 #: and the pre-push hook's own actual run of THIS guard reported
-#: `completed 5497` against that same 5824 discovered -- 327 files this
-#: parse-and-check-for-a-4th-literal sweep cannot complete (unparseable /
-#: no set-of-string-literals), a bigger gap than the 262 measured when
-#: skips=300 was set. Setting floor above 5497 would fail every honest run
-#: outright, which the first version of this fix did. 5450 leaves a small
-#: margin below the measured 5497 for ordinary skip-count fluctuation while
-#: using most of the slack `verify_floor` allows (5824-5450=374, within
-#: skips=300+growth=400=700). `skips`/`growth` themselves are unchanged.
+#: `completed 5497` against that same 5824 discovered -- 327 files short.
+#: Corrected (e5 review): that gap is NOT unparseable files -- `test_no_
+#: fourth_literal_copy_exists`'s own loop `continue`s past the canonical
+#: file and everything under `repo_tests/` by design before it ever reads a
+#: file, which is most of the gap; a genuinely unparseable file fails the
+#: test outright via its own `assert not unparsed`, not a silent skip.
+#: Setting floor above 5497 would fail every honest run outright, which the
+#: first version of this fix did. 5450 leaves a small margin below the
+#: measured 5497 for ordinary population fluctuation while using most of
+#: the slack `verify_floor` allows (5824-5450=374, within
+#: skips=300+growth=400=700). `skips`/`growth` themselves are unchanged --
+#: #16724 tracks re-measuring this floor from CI's own log post-merge.
 REACH = declare(
     "audio-extension-allowlist",
     discover=_tracked_python_files,
