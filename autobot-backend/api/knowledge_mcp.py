@@ -28,6 +28,7 @@ from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.model_constants import ModelConstants
 from dependencies import get_config
+from knowledge.ownership_index import drop_ownership_unless_admin
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.schemas.mcp import (
     DocumentAddRequest,
@@ -44,7 +45,10 @@ from knowledge.schemas.mcp import (
     McpToolsResponse,
     McpVectorSimilarityResponse,
 )
+from knowledge_base import KnowledgeBase
 from services.mcp_bridge_manifest import MCPBridgeManifest
+from type_defs.common import Metadata
+from utils.service_registry import get_service_url
 
 MANIFEST = MCPBridgeManifest(
     name="knowledge_mcp",
@@ -53,9 +57,6 @@ MANIFEST = MCPBridgeManifest(
     features=["search", "add_documents", "vector_similarity", "statistics"],
     endpoint="/api/knowledge/mcp/tools",
 )
-from knowledge_base import KnowledgeBase
-from type_defs.common import Metadata
-from utils.service_registry import get_service_url
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
@@ -503,17 +504,14 @@ async def mcp_add_to_knowledge_base(
     request: DocumentAddRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """MCP tool: Add document to knowledge base.
-
-    Issue #744: Requires authenticated user.
-    """
+    """MCP tool: add a document; any signed-in user (#744), but only admins set its ownership (#16663)."""
     try:
         kb = get_knowledge_base()
 
         # Create document
         doc_id = await kb.add_document(
             content=request.content,
-            metadata=request.metadata or {},
+            metadata=drop_ownership_unless_admin(request.metadata, current_user.get("role")),
             source=request.source,
         )
 

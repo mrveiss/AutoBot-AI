@@ -667,7 +667,7 @@ class AutoBotMCPServer:
         from knowledge._composed import get_knowledge_base
 
         kb = await get_knowledge_base()
-        doc = await kb.get_fact(doc_id)
+        doc = await asyncio.to_thread(kb.get_fact, doc_id)  # #16670: get_fact is synchronous
         if doc is None:
             return {"error": "Document not found", "doc_id": doc_id}
         return doc
