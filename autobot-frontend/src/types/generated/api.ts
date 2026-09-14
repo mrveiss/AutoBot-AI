@@ -12936,9 +12936,7 @@ export interface paths {
         put?: never;
         /**
          * Mcp Add To Knowledge Base
-         * @description MCP tool: Add document to knowledge base.
-         *
-         *     Issue #744: Requires authenticated user.
+         * @description MCP tool: add a document; any signed-in user (#744), but only admins set its ownership (#16663).
          */
         post: operations["mcp_add_to_knowledge_base_api_knowledge_mcp_add_to_knowledge_base_post"];
         delete?: never;

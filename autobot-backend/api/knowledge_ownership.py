@@ -10,6 +10,8 @@ Handles user ownership, visibility, and sharing for knowledge base facts.
 Issue #688: User ownership model for chat-derived knowledge
 """
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_knowledge import (
@@ -61,7 +63,7 @@ async def _get_fact_with_ownership(kb, fact_id: str, user_id: str):
     Raises:
         HTTPException: 404 if not found, 403 if no access
     """
-    fact = await kb.get_fact(fact_id)
+    fact = await asyncio.to_thread(kb.get_fact, fact_id)  # #16670: get_fact is synchronous
     if not fact:
         raise HTTPException(status_code=404, detail="Fact not found")
 
@@ -132,8 +134,10 @@ async def share_fact(
     metadata = fact.get("metadata", {})
     updated_metadata = await kb.ownership_manager.share_fact(fact_id, request_body.user_ids, metadata)
 
-    # Save updated metadata
-    await kb.update_fact(fact_id=fact_id, metadata=updated_metadata)
+    # Save updated metadata; a failed write is not a successful share (#16663)
+    result = await kb.update_fact(fact_id=fact_id, metadata=updated_metadata)
+    if result.get("status") != "success":
+        raise HTTPException(status_code=500, detail="Failed to update sharing")
 
     return {
         "success": True,
@@ -193,8 +197,10 @@ async def unshare_fact(
     metadata = fact.get("metadata", {})
     updated_metadata = await kb.ownership_manager.unshare_fact(fact_id, [user_id_to_remove], metadata)
 
-    # Save updated metadata
-    await kb.update_fact(fact_id=fact_id, metadata=updated_metadata)
+    # Save updated metadata; a failed write is not a successful share (#16663)
+    result = await kb.update_fact(fact_id=fact_id, metadata=updated_metadata)
+    if result.get("status") != "success":
+        raise HTTPException(status_code=500, detail="Failed to update sharing")
 
     return {
         "success": True,
@@ -248,8 +254,10 @@ async def update_fact_visibility(
     metadata = fact.get("metadata", {})
     metadata["visibility"] = request_body.visibility
 
-    # Save updated metadata
-    await kb.update_fact(fact_id=fact_id, metadata=metadata)
+    # Save updated metadata; update_fact also moves the fact between the ownership indexes (#16663)
+    result = await kb.update_fact(fact_id=fact_id, metadata=metadata)
+    if result.get("status") != "success":
+        raise HTTPException(status_code=500, detail="Failed to update visibility")
 
     return {
         "success": True,
@@ -281,7 +289,7 @@ async def _fetch_fact_details(
     """
     facts = []
     for fact_id in all_fact_ids[:limit]:
-        fact = await kb.get_fact(fact_id)
+        fact = await asyncio.to_thread(kb.get_fact, fact_id)
         if fact:
             facts.append(
                 {
@@ -393,7 +401,7 @@ async def get_shared_facts(
     # Fetch fact details
     facts = []
     for fact_id in shared_fact_ids:
-        fact = await kb.get_fact(fact_id)
+        fact = await asyncio.to_thread(kb.get_fact, fact_id)
         if fact:
             facts.append(
                 {
