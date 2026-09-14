@@ -124,6 +124,23 @@ async def _build_scoped_search_response(
     }
 
 
+async def _scoped_search_results(search_request, request: Request, current_user, is_admin: bool) -> dict:
+    """Permission-filtered search shared by /scoped and /rag/scoped (#16662).
+
+    *is_admin* is always the caller's decision, never derived here: /scoped passes the caller's
+    role, /rag/scoped passes False.
+    """
+    kb, user_id, user_org_id, user_group_ids = await _resolve_search_context(
+        request, current_user, search_request.query
+    )
+    results = await _execute_permission_filtered_search(
+        kb, search_request, user_id, user_org_id, user_group_ids, is_admin=is_admin
+    )
+    return await _build_scoped_search_response(
+        results, search_request, user_id, user_org_id, user_group_ids, kb.ownership_manager, is_admin=is_admin
+    )
+
+
 @router.post("/scoped", response_model=KnowledgeScopedSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -150,19 +167,9 @@ async def scoped_search(
         Filtered search results respecting user's access permissions
     """
     try:
-        kb, user_id, user_org_id, user_group_ids = await _resolve_search_context(
-            request, current_user, search_request.query
-        )
-        # #16662: plain scoped search is an explicit read API, so an admin reads every fact here;
-        # the RAG route keeps the default -- synthesis is chat-like, and chat gets no bypass (#16654)
+        # #16662: plain scoped search is an explicit read API, so an admin reads every fact here
         role = current_user.get("role") if isinstance(current_user, dict) else getattr(current_user, "role", None)
-        is_admin = is_admin_role(role)
-        results = await _execute_permission_filtered_search(
-            kb, search_request, user_id, user_org_id, user_group_ids, is_admin=is_admin
-        )
-        return await _build_scoped_search_response(
-            results, search_request, user_id, user_org_id, user_group_ids, kb.ownership_manager, is_admin=is_admin
-        )
+        return await _scoped_search_results(search_request, request, current_user, is_admin=is_admin_role(role))
 
     except HTTPException:
         # Deliberate status codes (503 "knowledge base not available",
@@ -258,7 +265,9 @@ async def scoped_rag_search(
         )
 
         # Get accessible facts via permission-filtered search
-        scoped_results = await scoped_search(search_request=search_request, request=request, current_user=current_user)
+        # #16662: never the admin bypass -- RAG synthesis is chat-like, and an admin's chat gets none (#16654).
+        # Calling the /scoped route here would inherit its role-derived bypass.
+        scoped_results = await _scoped_search_results(search_request, request, current_user, is_admin=False)
         accessible_facts = scoped_results["results"]
 
         # Synthesize RAG response (Issue #1088: uses helper)

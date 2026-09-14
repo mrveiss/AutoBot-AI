@@ -16,7 +16,10 @@ includes every chat, agent, RAG and grounding path.
 ``autobot_shared/``, tests excluded. A call counts when it is ``<x>.check_access(...)``,
 ``check_access(...)``, or the same for the other :data:`GATED_HELPERS`, and it
 passes an ``is_admin=`` keyword. It cannot see the flag passed positionally, through
-``**kwargs``, or through a renamed alias. Those are the declared blind spots, and the
+``**kwargs``, or through a renamed alias; and it is file-granular, so a chat-like path that
+reaches an explicit API's function indirectly is invisible to it. ``/rag/scoped`` once did
+exactly that (it called the ``/scoped`` route), and is now pinned by a behavioural test instead
+(``api/kb_explicit_admin_reads_16662_test.py``). Those are the declared blind spots, and the
 known-positive test below shows that the keyword form is detected.
 """
 

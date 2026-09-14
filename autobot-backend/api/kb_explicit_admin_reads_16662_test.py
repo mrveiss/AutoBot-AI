@@ -91,3 +91,25 @@ async def test_scoped_search_keeps_another_users_private_fact_only_for_an_admin(
     )
 
     assert response["total_results"] == kept
+
+
+@pytest.mark.asyncio
+async def test_an_admins_rag_scoped_search_gets_no_bypass():
+    """#16654: RAG synthesis is chat-like, so even an admin's /rag/scoped stays scope-filtered."""
+    from api import knowledge_search_scoped as mod
+
+    kb = MagicMock()
+    kb.ownership_manager = KnowledgeOwnership(redis_client=object())
+    kb.search = AsyncMock(return_value=[{"id": "f1", "content": "c", "metadata": dict(_PRIVATE)}])
+    synthesize = AsyncMock(return_value={"answer": "x"})
+    request = SimpleNamespace(query="q", top_k=5, mode="auto")
+    with (
+        patch.object(mod, "get_or_create_knowledge_base", AsyncMock(return_value=kb)),
+        patch.object(mod, "_synthesize_rag_response", synthesize),
+    ):
+        await mod.scoped_rag_search(
+            search_request=request, request=MagicMock(), current_user={"user_id": "admin-1", "role": "admin"}
+        )
+
+    assert kb.search.await_args.kwargs["filters"] is not None  # the pre-filter still narrows
+    assert synthesize.await_args.kwargs["accessible_facts"] == []  # another user's private fact never reaches it
