@@ -35,6 +35,13 @@ _COLLECTION_NAME = "autobot_verbatim"
 _DEFAULT_LIMIT = 10
 _DEFAULT_RETENTION_DAYS: int = 90  # override via memory.verbatim.retention_days config
 
+#: Issue #16701: search()'s user_id is required precisely so a caller can't
+#: get every user's chunks by omitting an argument. The one legitimate
+#: unscoped caller (mcp/autobot_server.py's memory.verbatim_search -- the
+#: stdio MCP transport has no per-user identity at all, tracked as #16727)
+#: must say so explicitly by passing this sentinel, not None or "".
+UNSCOPED_ALL_USERS = "__unscoped_all_users__"
+
 # B1 (#12555): optional MemPalace-style symbolic "drawer" index. An inverted
 # term -> chunk_id index in Redis lets an entity/keyword query resolve candidate
 # chunks in one lookup and rank them lexically, skipping the ANN embed+search on
@@ -284,6 +291,7 @@ class VerbatimStore:
     async def search_symbolic(
         self,
         query: str,
+        user_id: str,
         session_filter: str | None = None,
         limit: int = _DEFAULT_LIMIT,
     ) -> List[Dict[str, Any]] | None:
@@ -293,6 +301,10 @@ class VerbatimStore:
         ranks by query-term overlap blended with recency. Returns ``None`` (not
         ``[]``) when the index is disabled, the query has no salient terms, or no
         candidate matched — so the caller can fall back to semantic ``search``.
+
+        Issue #16701: ``user_id`` is required for the same reason as ``search``'s
+        -- the term index has no per-user structure, so scoping happens when
+        candidates are fetched and ranked (:meth:`_rank_symbolic_candidates`).
         """
         if not _SYMBOLIC_INDEX_ENABLED:
             return None
@@ -319,10 +331,10 @@ class VerbatimStore:
                 _SYM_MAX_CANDIDATES,
             )
             return None
-        return await self._rank_symbolic_candidates(candidate_ids, terms, session_filter, limit)
+        return await self._rank_symbolic_candidates(candidate_ids, terms, user_id, session_filter, limit)
 
     async def _rank_symbolic_candidates(
-        self, candidate_ids: List[str], query_terms: set, session_filter: str | None, limit: int
+        self, candidate_ids: List[str], query_terms: set, user_id: str, session_filter: str | None, limit: int
     ) -> List[Dict[str, Any]]:
         """Fetch candidate chunks and rank by term-overlap blended with recency."""
         collection = await self._get_collection()
@@ -334,6 +346,8 @@ class VerbatimStore:
         ranked: List[Dict[str, Any]] = []
         for cid, doc, meta in zip(ids, docs, metas):
             meta = meta or {}
+            if user_id != UNSCOPED_ALL_USERS and meta.get("user_id") != user_id:
+                continue
             if session_filter and meta.get("session_id") != session_filter:
                 continue
             doc_terms = _extract_terms(doc)
@@ -352,19 +366,30 @@ class VerbatimStore:
     async def search(
         self,
         query: str,
+        user_id: str,
         session_filter: str | None = None,
         limit: int = _DEFAULT_LIMIT,
     ) -> List[Dict[str, Any]]:
         """Search verbatim chunks via ChromaDB's built-in vector + BM25 path.
 
-        When ``session_filter`` is provided, results are restricted to that
-        session.  ChromaDB ``query_texts`` triggers its internal embedding +
-        ANN search; callers that need BM25 re-ranking should apply it on the
-        returned list.
+        When ``session_filter`` is provided, results are additionally
+        restricted to that session.  ChromaDB ``query_texts`` triggers its
+        internal embedding + ANN search; callers that need BM25 re-ranking
+        should apply it on the returned list.
+
+        Issue #16701: ``user_id`` is required, not optional -- results are
+        restricted to chunks stored with that ``metadata.user_id``, the same
+        ``where`` filter ``memory/transparency.py``'s ``_list_verbatim``
+        already applies, in the ChromaDB query itself, not a post-filter.
+        Requiring it (rather than defaulting to unscoped) means a caller
+        cannot get every user's chunks by simply omitting an argument; the
+        one legitimate unscoped caller passes :data:`UNSCOPED_ALL_USERS`
+        explicitly (see its docstring for why).
 
         Args:
             query: Free-text search query.
-            session_filter: Optional session_id to scope results.
+            user_id: The caller's user_id, or :data:`UNSCOPED_ALL_USERS`.
+            session_filter: Optional session_id to further scope results.
             limit: Maximum number of chunks to return.
 
         Returns:
@@ -375,9 +400,16 @@ class VerbatimStore:
         if limit <= 0:
             raise ValueError("limit must be positive")
 
-        where: Dict[str, Any] | None = None
+        where_conditions: List[Dict[str, Any]] = []
         if session_filter:
-            where = {"session_id": {"$eq": session_filter}}
+            where_conditions.append({"session_id": {"$eq": session_filter}})
+        if user_id != UNSCOPED_ALL_USERS:
+            where_conditions.append({"user_id": {"$eq": user_id}})
+        where: Dict[str, Any] | None = None
+        if len(where_conditions) == 1:
+            where = where_conditions[0]
+        elif len(where_conditions) > 1:
+            where = {"$and": where_conditions}
 
         collection = await self._get_collection()
         try:

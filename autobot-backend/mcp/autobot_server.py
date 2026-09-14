@@ -832,11 +832,11 @@ class AutoBotMCPServer:
 
     async def _memory_verbatim_search(self, query: str, session_filter: str | None = None) -> Any:
         from api.schemas_knowledge import MemoryVerbatimSearchRequest
-        from memory.verbatim_store import VerbatimStore
+        from memory.verbatim_store import UNSCOPED_ALL_USERS, VerbatimStore
 
         args = MemoryVerbatimSearchRequest(query=query, session_filter=session_filter)
         store = VerbatimStore()
-        results = await store.search(args.query, session_filter=args.session_filter)
+        results = await store.search(args.query, user_id=UNSCOPED_ALL_USERS, session_filter=args.session_filter)
         return {"results": results, "count": len(results)}
 
     # ------------------------------------------------------------------
