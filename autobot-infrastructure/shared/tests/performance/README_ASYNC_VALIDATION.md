@@ -20,14 +20,14 @@ python tests/performance/test_async_baseline.py
 - ✅ Chat response time with 50 concurrent users
 - ✅ Redis operations throughput (100 concurrent ops)
 - ✅ Mixed file I/O + Redis workloads
-- ✅ Cross-VM latency (6-VM distributed architecture)
+- ✅ Cross-role latency (distributed, role-based architecture)
 - ✅ Event loop blocking detection
 - ✅ P50, P95, P99 latency percentiles
 
 **Baseline Expectations (Current Synchronous Code):**
 - Chat response: 10-50s with event loop blocking
 - Redis ops: Limited by synchronous client (~100 ops/sec)
-- Cross-VM: Network latency dominant
+- Cross-role: Network latency dominant
 - File I/O: Blocking on large transcript files
 
 ###Phase 2: Post-Async Validation (AFTER Tasks 2.1-2.4 Complete)
@@ -101,22 +101,24 @@ python tests/performance/compare_async_results.py \
 - **BEFORE**: Sequential I/O operations
 - **AFTER**: Parallel I/O with `aiofiles` and async Redis
 
-### 4. Cross-VM Latency (6-VM Architecture)
+### 4. Cross-Role Latency (Distributed, Role-Based Architecture)
 
 **What It Tests:**
-- Inter-VM communication performance
+- Inter-role communication performance
 - Network latency across distributed services
 - Service health check responsiveness
 
-**Measured VMs:**
-- Frontend (172.16.168.21)
-- NPU Worker (172.16.168.22)
-- Redis (172.16.168.23)
-- AI Stack (172.16.168.24)
-- Browser (172.16.168.25)
+**Measured Roles:**
+- Frontend (<frontend-ip>)
+- NPU Worker (<npu-ip>)
+- Database - Redis (<database-ip>)
+- AI Stack (<aiml-ip>)
+- Browser (<browser-ip>)
+
+Roles may be co-located on one machine or split across any number the deployment scales to.
 
 **Target:**
-- <100ms P95 latency across all VMs
+- <100ms P95 latency across all roles
 
 ## Performance Metrics Captured
 
@@ -288,7 +290,7 @@ python -m asyncio --debug tests/performance/test_async_baseline.py
 ### Low Throughput Issues
 ```bash
 # Check Redis connection pooling
-redis-cli -h 172.16.168.23 INFO clients
+redis-cli -h <database-ip> INFO clients
 
 # Check file descriptor limits
 ulimit -n  # Should be >1024 for high concurrency

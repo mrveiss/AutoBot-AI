@@ -125,6 +125,10 @@ class Permission(str, Enum):
     MCP_DESKTOP_READ = "mcp.desktop.read"
     MCP_DESKTOP_CONTROL = "mcp.desktop.control"
 
+    # #11542: gates every tool an admin-configured external MCP server exposes
+    # to chat. Rationale: docs/developer/AUTHENTICATION_RBAC.md.
+    MCP_EXTERNAL = "mcp.external"
+
     # === Batch Jobs ===
     BATCH_VIEW = "batch.view"
     BATCH_CREATE = "batch.create"
@@ -329,6 +333,7 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.MCP_READ,
         Permission.MCP_EXECUTE,
         Permission.MCP_MANAGE,
+        Permission.MCP_EXTERNAL,
         Permission.BATCH_VIEW,
         Permission.BATCH_CREATE,
         Permission.BATCH_EXECUTE,

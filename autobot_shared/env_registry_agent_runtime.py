@@ -269,6 +269,24 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_WORK_CLAIM_STALL_INTERVALS",
+        type=int,
+        default=3,
+        description=(
+            "How many renewal intervals a run may go without reporting progress before its work claims "
+            "stop being renewed and lapse (#15950). Progress is reported by every LLM attempt, tool SDK "
+            "executions and write sites, so a slow run that keeps working keeps its claim and only silence "
+            "lets one lapse. The effective window is never shorter than twice AUTOBOT_LLM_REQUEST_TIMEOUT "
+            "plus the longest LLM backoff wait and rate-limit token wait, the longest a working call can go "
+            "before an attempt ends."
+        ),
+        component="orchestration",
+        range=(2, 100),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_WORK_CLAIM_WAIT_TTL_S",
         type=int,
         default=900,
