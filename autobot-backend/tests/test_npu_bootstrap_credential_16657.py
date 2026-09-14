@@ -45,3 +45,31 @@ def test_the_unauthenticated_bootstrap_returns_no_redis_credential():
 def test_the_pair_and_repair_pushes_send_the_username_with_the_password():
     for function_name in ("_build_pairing_config", "_generate_repair_bootstrap_config"):
         assert {"username", "password"} <= _redis_block(function_name), function_name
+
+
+#: A stand-in, not a credential; the point is only that it never appears in a response.
+_SAMPLE = "bootstrap-sample-value-16657"  # pragma: allowlist secret
+
+
+def test_calling_the_bootstrap_endpoint_returns_no_redis_password(monkeypatch):
+    """#16657 AC1: the unauthenticated endpoint itself, called over HTTP, carries no Redis password.
+
+    Unlike the AST checks above, this drives the real router and the real response builders.
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from api.npu_workers import router
+    from autobot_shared.ssot_config import config
+
+    monkeypatch.setattr(config.redis, "password", _SAMPLE)
+    app = FastAPI()
+    app.include_router(router)
+
+    response = TestClient(app).post(
+        "/npu/workers/bootstrap", json={"worker_id": "auto", "platform": "windows", "url": "http://worker:8081"}
+    )
+
+    assert response.status_code == 200
+    assert _SAMPLE not in response.text
+    assert "password" not in response.json()["config"]["redis"]

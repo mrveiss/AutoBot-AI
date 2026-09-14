@@ -154,7 +154,45 @@ def test_deploy_playbook_redis_cli_sends_the_user_first(playbook, count):
     assert len(lines) == count, f"{playbook}: expected {count} authenticated redis-cli call(s), found {len(lines)}"
     env = {"AUTOBOT_REDIS_PASSWORD": _PW}
     for line in lines:
-        assert "--user" not in _render(line, _env=env)
-        rendered = _render(line, _env={**env, "AUTOBOT_REDIS_USERNAME": "default"})
-        assert "default" in rendered
-        assert rendered.index("--user") < rendered.rindex("-a")
+        # #16678: with no username configured the password still travels with `default`
+        bare = _render(line, _env=env)
+        assert "default" in bare[bare.index("--user") : bare.rindex("-a")]
+        custom = _render(line, _env={**env, "AUTOBOT_REDIS_USERNAME": "svc"})
+        assert "svc" in custom[custom.index("--user") : custom.rindex("-a")]
+
+
+def _playbook_username_env_lines(playbook: str) -> list[str]:
+    text = (_ANSIBLE / "playbooks" / playbook).read_text(encoding="utf-8")
+    return [line for line in text.splitlines() if "REDIS_USERNAME=" in line]
+
+
+@pytest.mark.parametrize(("playbook", "count"), [("deploy-native-services.yml", 3), ("deploy-hybrid-docker.yml", 1)])
+def test_deploy_playbook_units_get_default_with_a_password_and_nothing_without(playbook, count):
+    """#16678: a unit's REDIS_USERNAME is `default` alongside a password, and empty when there is none."""
+    lines = _playbook_username_env_lines(playbook)
+    assert len(lines) == count, f"{playbook}: expected {count} REDIS_USERNAME line(s), found {len(lines)}"
+    for line in lines:
+        assert "REDIS_USERNAME=default" in _render(line, _env={"AUTOBOT_REDIS_PASSWORD": _PW})
+        configured = {"AUTOBOT_REDIS_PASSWORD": _PW, "AUTOBOT_REDIS_USERNAME": "svc"}
+        assert "REDIS_USERNAME=svc" in _render(line, _env=configured)
+        assert re.search(r"REDIS_USERNAME=(\"|$)", _render(line, _env={}).strip())
+
+
+@pytest.mark.parametrize(
+    ("ctx", "expected"),
+    [
+        ({"ai_redis_password": _PW}, "REDIS_USERNAME=default"),
+        ({"ai_redis_password": _PW, "ai_redis_username": "svc"}, "REDIS_USERNAME=svc"),
+        ({"ai_redis_password": ""}, None),
+    ],
+)
+def test_ai_stack_env_sends_a_username_whenever_it_sends_a_password(ctx, expected):
+    """#16678: the ai-stack env pairs its Redis password with a username, `default` unless configured."""
+    lines = (_ANSIBLE / "roles" / "ai-stack" / "templates" / "ai-stack.env.j2").read_text(encoding="utf-8").splitlines()
+    start = lines.index("# Redis")
+    end = next(i for i in range(start, len(lines)) if lines[i] == "{% endif %}")  # the password block's close
+    out = _render("\n".join(lines[start : end + 1]), ai_redis_host="h", ai_redis_port=6379, **ctx)
+    if expected is None:
+        assert "REDIS_USERNAME" not in out and "REDIS_PASSWORD" not in out
+    else:
+        assert expected in out.splitlines()
