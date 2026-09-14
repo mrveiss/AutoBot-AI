@@ -60,13 +60,13 @@ def as_user():
 
 @pytest.mark.parametrize(("method", "path", "body"), _ROUTES)
 def test_a_signed_in_non_admin_gets_403(as_user, method, path, body):
-    response = getattr(as_user({"username": "u", "role": "user"}), method)(path, json=body)
+    response = as_user({"username": "u", "role": "user"}).request(method.upper(), path, json=body)
     assert response.status_code == 403
 
 
 @pytest.mark.parametrize(("method", "path", "body"), _ROUTES)
 def test_an_unauthenticated_caller_gets_401(as_user, method, path, body):
-    response = getattr(as_user(None), method)(path, json=body)
+    response = as_user(None).request(method.upper(), path, json=body)
     assert response.status_code == 401
 
 
