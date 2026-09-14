@@ -33,6 +33,7 @@
 - name: Install target Python interpreter
   include_role:
     name: python_interpreter
+    public: true  # #16750: role defaults (python_interpreter_binary) must reach pip tasks below/elsewhere in this play
 
 - name: Set up Python environment
   include_tasks: python_env.yml
