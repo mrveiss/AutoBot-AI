@@ -3,7 +3,8 @@
 **Research Date:** 2025-10-04
 **Target Hardware:** Intel Core Ultra NPU (Meteor Lake/Lunar Lake)
 **OpenVINO Version:** 2024.x / 2025.x
-**Context:** AutoBot distributed VM architecture optimization
+**Context:** AutoBot distributed, role-based architecture optimization
+**Related Issue:** #15194 (role-based architecture, not a fixed VM count)
 
 ---
 
@@ -323,12 +324,12 @@ pip install numpy>=1.24.0
 
 **Current Architecture:**
 ```
-WSL2 Main (<backend-ip>)
-  ├── VM1 Frontend (<frontend-ip>)
-  ├── VM2 NPU Worker (<npu-ip>)  ← Currently in VM
-  ├── VM3 Redis (<database-ip>)
-  ├── VM4 AI Stack (<aiml-ip>)
-  └── VM5 Browser (<browser-ip>)
+WSL2 Main / Control (<backend-ip>)
+  ├── Frontend role (<frontend-ip>)
+  ├── NPU Worker role (<npu-ip>)  ← Currently on its own machine
+  ├── Database role - Redis (<database-ip>)
+  ├── AI Stack role (<aiml-ip>)
+  └── Browser role (<browser-ip>)
 ```
 
 **Required Architecture with Windows NPU:**
@@ -336,15 +337,15 @@ WSL2 Main (<backend-ip>)
 Windows Host (192.168.x.x or localhost)
   └── NPU Worker Native (Port 8082)
         ↑ HTTP
-WSL2 Main (<backend-ip>)
-  ├── VM1 Frontend (<frontend-ip>)
-  ├── VM3 Redis (<database-ip>)
-  ├── VM4 AI Stack (<aiml-ip>)
-  └── VM5 Browser (<browser-ip>)
+WSL2 Main / Control (<backend-ip>)
+  ├── Frontend role (<frontend-ip>)
+  ├── Database role - Redis (<database-ip>)
+  ├── AI Stack role (<aiml-ip>)
+  └── Browser role (<browser-ip>)
 ```
 
 **Changes Required:**
-1. Remove VM2 NPU Worker from WSL2 VMs
+1. Remove the NPU Worker role from WSL2 machines
 2. Install Python + OpenVINO on Windows host
 3. Configure Windows firewall for port 8082
 4. Update backend to connect to Windows host IP
@@ -642,7 +643,7 @@ profiling_info = infer_request.get_profiling_info()
 ### 8.5 Rollback Plan
 
 **If migration fails:**
-1. Keep VM2 NPU worker (<npu-ip>) as CPU-only fallback
+1. Keep the NPU worker role (<npu-ip>) as CPU-only fallback
 2. Backend can detect NPU unavailability and fall back to CPU
 3. No data loss risk (stateless worker)
 
@@ -711,7 +712,7 @@ profiling_info = infer_request.get_profiling_info()
 ### 10.2 Alternative: CPU-Only in WSL2
 
 **If NPU migration too complex:**
-- Keep current VM2 architecture
+- Keep current NPU worker role architecture
 - Use CPU-only OpenVINO inference
 - Accept 3-5x slower inference
 - Simpler architecture maintenance

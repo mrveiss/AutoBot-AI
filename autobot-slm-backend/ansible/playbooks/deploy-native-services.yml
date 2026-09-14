@@ -184,7 +184,8 @@
         - '8002'  # RedisInsight
 
     - name: Test Redis connectivity
-      shell: redis-cli {% if autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) %}--user {{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }} {% endif %}-a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }} ping
+      # #16678: the username always travels with the password -- a nopass server refuses AUTH <pw> alone
+      shell: redis-cli --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) | quote }} ping
       register: redis_test
 
     - name: Display Redis status
@@ -425,11 +426,24 @@
     # /opt/autobot/src, but it was the ONLY thing applying the shared pins on
     # this play, and roles/npu-worker states the constraints at the task. One
     # shape on both paths, so a reader of either sees the pins being applied.
+    # #15733: the manifest opens with `-e ../autobot_shared`, which pip
+    # resolves against the CWD, not the file it is written in. Without
+    # `chdir` this ran from the remote user's home rather than
+    # `{{ deployed_src_root }}/autobot-npu-worker`, and the install was
+    # refused -- the same failure shape roles/npu-worker/tasks/main.yml hit.
+    #
+    # #16641: `virtualenv_python:` alone only applies when
+    # `virtualenv_command:` names the standalone `virtualenv` tool -- it is
+    # silently ignored for `-m venv`, and without either, pip falls back to
+    # shelling out to `virtualenv` itself, absent from these hosts.
+    # `virtualenv_command:` below matches the interpreter the "Create Python
+    # virtual environment for NPU Worker" task above already targets.
     - name: Install NPU Worker dependencies from its manifest
       pip:
         requirements: "{{ deployed_src_root }}/autobot-npu-worker/requirements.txt"
         virtualenv: "{{ npu_venv }}"
-        virtualenv_python: python3.14
+        virtualenv_command: "python3.14 -m venv"
+        chdir: "{{ deployed_src_root }}/autobot-npu-worker"
         extra_args: "--timeout 120 -c {{ deployed_src_root }}/constraints/shared.txt"
       become_user: autobot-service
       environment:
@@ -677,7 +691,7 @@
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
-          Environment="REDIS_USERNAME={{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }}"
+          Environment="REDIS_USERNAME={{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') if autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) else '' }}"
           Environment="OLLAMA_HOST=http://localhost:11434"
           Restart=always
           RestartSec=3
@@ -703,7 +717,7 @@
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
-          Environment="REDIS_USERNAME={{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }}"
+          Environment="REDIS_USERNAME={{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') if autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) else '' }}"
           Environment="DEVICE=CPU"
           Restart=always
           RestartSec=3
@@ -795,7 +809,7 @@
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
-          Environment="REDIS_USERNAME={{ autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) }}"
+          Environment="REDIS_USERNAME={{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') if autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) else '' }}"
           Restart=always
           RestartSec=3
 

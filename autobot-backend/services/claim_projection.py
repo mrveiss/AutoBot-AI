@@ -50,6 +50,8 @@ from autobot_shared.coordination.work_claims import (
     ClaimConflict,
     ClaimMode,
     Scope,
+    claim_payload,
+    conflict_payload,
     list_claims,
     release,
     try_acquire,
@@ -71,26 +73,6 @@ def _channel(agent_id: str) -> str:
     """The agent's own channel. `global` subscribers receive it too -- see the
     module docstring; that fan-out is why nothing here publishes twice."""
     return f"agent:{agent_id}"
-
-
-def claim_payload(claim: Claim) -> dict[str, Any]:
-    """The wire shape of a held scope.
-
-    Every field is already user-facing. Scope paths are repo-relative by
-    construction -- `Scope.parse` rejects an empty leading segment, so an
-    absolute path like `/opt/autobot/x` cannot become a scope in the first
-    place, and no internal filesystem path can reach a payload through here.
-    """
-    return {
-        "scope": claim.scope,
-        "kind": claim.parsed_scope.kind,
-        "agent_id": claim.agent_id,
-        "task_id": claim.task_id,
-        "mode": claim.mode,
-        "intent": claim.intent,
-        "acquired_at": claim.acquired_at,
-        "expires_at": claim.expires_at,
-    }
 
 
 async def publish_acquired(claim: Claim) -> None:
@@ -115,13 +97,7 @@ async def publish_conflict(conflict: ClaimConflict, *, agent_id: str, task_id: s
     pick different work. The holder is already working and needs no interruption
     from a request it never saw.
     """
-    payload = {
-        "requested": conflict.requested,
-        "agent_id": agent_id,
-        "task_id": task_id,
-        "holder": claim_payload(conflict.holder),
-        "reason": str(conflict),
-    }
+    payload = {**conflict_payload(conflict), "agent_id": agent_id, "task_id": task_id}
     await publish_event(_channel(agent_id), CONFLICT, payload, persist=PersistStrategy.MEMORY)
 
 

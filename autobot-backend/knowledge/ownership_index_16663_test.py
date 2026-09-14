@@ -22,6 +22,7 @@ from knowledge.ownership_index import (
     drop_ownership_unless_admin,
     index_ownership,
     ownership_changed,
+    refuses_platform_wide,
     reindex_ownership,
 )
 
@@ -203,3 +204,20 @@ async def test_ingestion_files_the_fact_under_its_organization_and_group():
 
     assert "f1" in store.sets["org:kb:facts:o1"]
     assert "f1" in store.sets["group:kb:facts:g1"]
+
+
+@pytest.mark.parametrize(
+    ("metadata", "role", "refused"),
+    [
+        ({"visibility": "public"}, "user", True),
+        ({"visibility": " PUBLIC "}, "user", True),
+        ({"access_level": "Autobot"}, "user", True),
+        ({"visibility": "system"}, None, True),
+        ({"access_level": "general"}, "user", True),
+        ({"visibility": "system"}, "admin", False),
+        ({"visibility": "private"}, "user", False),
+        (None, "user", False),
+    ],
+)
+def test_only_a_non_admins_platform_wide_request_is_refused(metadata, role, refused):
+    assert refuses_platform_wide(metadata, role) is refused

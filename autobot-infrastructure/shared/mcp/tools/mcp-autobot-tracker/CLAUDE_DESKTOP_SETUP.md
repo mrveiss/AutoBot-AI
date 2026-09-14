@@ -53,7 +53,7 @@ Use the get_unfinished_tasks tool to show me the highest priority items needing 
 
 Then use get_insights to identify patterns in the issues we're tracking.
 
-Finally, use system_health_check to verify all VMs are healthy.
+Finally, use system_health_check to verify all deployment machines are healthy.
 ```
 
 ## ✅ System Status
@@ -61,7 +61,7 @@ Finally, use system_health_check to verify all VMs are healthy.
 The MCP tracker is now monitoring:
 - **96 tasks** across **4 conversation sessions**
 - **69 errors** with correlation analysis
-- **6 VMs** with real-time health monitoring
+- **All deployment machines** with real-time health monitoring
 - **Background processes** for continuous analysis
 
 🎉 **Your AutoBot system now has comprehensive conversation tracking and proactive task management!**

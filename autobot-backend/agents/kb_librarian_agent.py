@@ -11,7 +11,7 @@ acting like a helpful librarian that finds relevant information before answering
 import asyncio
 from typing import Any, Dict, List
 
-from agents.scope_enforcement import scope_segment
+from agents.scope_enforcement import require_held, scope_segment
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
@@ -145,6 +145,8 @@ class KBLibrarianAgent(StandardizedAgent):
         content = request.payload["content"]
         title = request.payload["title"]
         source = request.payload.get("source")
+        # Refused if this run's claim lapsed; warned if its dispatcher held none (#15950 AC6, #16269).
+        require_held(self.declared_scopes(request), site="kb_librarian.add_knowledge")
         await self.add_new_knowledge(content, title, source=source)
         return {"status": "success", "title": title}
 

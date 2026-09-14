@@ -166,12 +166,15 @@ def test_the_role_clients_send_the_client_credential_and_the_server_is_untouched
     assert "redis_client_password" not in server
 
 
-def test_the_ai_stack_env_renders_the_username_only_with_the_password():
+def test_the_ai_stack_env_renders_a_username_whenever_it_renders_the_password():
+    """#16678: the username always travels with the password -- `default` unless one is configured."""
     text = (_ROLES / "ai-stack" / "templates" / "ai-stack.env.j2").read_text(encoding="utf-8")
-    block = re.search(r"\{% if ai_redis_password \| length > 0 %\}.*?\{% endif %\}\n\{% endif %\}", text, re.S)
+    block = re.search(r"\{% if ai_redis_password \| length > 0 %\}.*?\{% endif %\}", text, re.S)
     assert block, "the Redis credential block moved"
-    both = _render(block.group(0), ai_redis_password=_PW, ai_redis_username="default")
-    assert f"REDIS_PASSWORD={_PW}" in both and "REDIS_USERNAME=default" in both
+    both = _render(block.group(0), ai_redis_password=_PW, ai_redis_username="svc")
+    assert f"REDIS_PASSWORD={_PW}" in both and "REDIS_USERNAME=svc" in both
+    alone = _render(block.group(0), ai_redis_password=_PW, ai_redis_username="")
+    assert f"REDIS_PASSWORD={_PW}" in alone and "REDIS_USERNAME=default" in alone
     assert _render(block.group(0), ai_redis_password="", ai_redis_username="default").strip() == ""
 
 

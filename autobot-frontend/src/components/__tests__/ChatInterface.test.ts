@@ -35,11 +35,9 @@ vi.setConfig({ testTimeout: 20_000 })
 
 // Mock BatchApiService - the primary initialization path for ChatInterface
 const mockInitializeChatInterface = vi.fn()
-const mockLoadChatInitData = vi.fn()
 vi.mock('@/services/BatchApiService', () => ({
   default: {
     initializeChatInterface: (...args: unknown[]) => mockInitializeChatInterface(...args),
-    loadChatInitData: (...args: unknown[]) => mockLoadChatInitData(...args),
   },
   BatchApiService: vi.fn(),
 }))
@@ -241,7 +239,6 @@ describe('ChatInterface', () => {
     mockInitializeChatInterface.mockResolvedValue({
       chat_sessions: { data: [] },
       system_health: { data: { status: 'healthy' } },
-      settings: { data: {} },
     })
   })
 
@@ -292,7 +289,6 @@ describe('ChatInterface', () => {
       mockInitializeChatInterface.mockResolvedValue({
         chat_sessions: { data: mockChatSessions },
         system_health: { data: { status: 'healthy' } },
-        settings: { data: {} },
       })
 
       renderComponent(ChatInterface, { pinia: true, router: true })
@@ -338,7 +334,6 @@ describe('ChatInterface', () => {
       mockInitializeChatInterface.mockResolvedValue({
         chat_sessions: { data: mockChatSessions },
         system_health: { data: { status: 'healthy' } },
-        settings: { data: {} },
       })
 
       renderComponent(ChatInterface, { pinia: true, router: true })
@@ -353,7 +348,6 @@ describe('ChatInterface', () => {
       mockInitializeChatInterface.mockResolvedValue({
         chat_sessions: { data: mockChatSessions },
         system_health: { data: { status: 'healthy' } },
-        settings: { data: {} },
       })
 
       renderComponent(ChatInterface, { pinia: true, router: true })
@@ -540,7 +534,6 @@ describe('ChatInterface', () => {
       mockInitializeChatInterface.mockResolvedValue({
         chat_sessions: { data: [] },
         system_health: { data: { status: 'healthy' } },
-        settings: { data: {} },
       })
 
       renderComponent(ChatInterface, { pinia: true, router: true })
@@ -573,7 +566,6 @@ describe('ChatInterface', () => {
       mockInitializeChatInterface.mockResolvedValue({
         chat_sessions: { data: mockChatSessions },
         system_health: { data: { status: 'healthy' } },
-        settings: { data: {} },
       })
 
       renderComponent(ChatInterface, { pinia: true, router: true })
@@ -599,7 +591,6 @@ describe('ChatInterface', () => {
       mockInitializeChatInterface.mockResolvedValue({
         chat_sessions: { data: [] },
         system_health: { data: { status: 'healthy' } },
-        settings: { data: {} },
       })
 
       const { container } = renderComponent(ChatInterface, { pinia: true, router: true })

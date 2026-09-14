@@ -859,7 +859,6 @@
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-slm-backend/requirements.txt
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-slm-backend/venv/bin/pip
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-slm-frontend
-1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/{_CONSTRAINTS_SOURCE_SUBDIR}/
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/{component}/
 1|other|autobot-slm-backend/api/code_sync.py|'/opt/autobot/{component}
 1|other|autobot-slm-backend/api/code_sync.py|100
@@ -1246,8 +1245,8 @@
 2|other|autobot-slm-backend/ansible/roles/dependency_patching/tasks/update-system.yml|300
 2|other|autobot-slm-backend/ansible/roles/monitoring/tasks/grafana.yml|https://apt.grafana.com/gpg.key
 2|other|autobot-slm-backend/ansible/roles/time_sync/tasks/main.yml|120
-2|other|autobot-slm-backend/api/code_sync.py|30
-2|other|autobot-slm-backend/api/code_sync.py|300
+1|other|autobot-slm-backend/api/code_sync.py|30
+1|other|autobot-slm-backend/api/code_sync.py|300
 2|other|autobot-slm-backend/api/code_sync.py|60
 2|other|autobot-slm-backend/migrations/migrate_system_secrets_to_vault.py|"postgresql://"
 2|other|autobot-slm-backend/services/backup.py|300

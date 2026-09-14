@@ -293,3 +293,80 @@ register_env_var(
         component="slm",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_POST_SYNC_TIMEOUT_S",
+        type=float,
+        default=120.0,
+        description=(
+            "Timeout, in seconds, for the one-shot pricing refresh a code-sync "
+            "of autobot-backend runs immediately after install/update. A "
+            "refresh that does not finish within it is recorded as timed out "
+            "and the sync proceeds regardless — prices stay unknown until the "
+            "next refresh (autobot-slm-backend/api/_pricing_post_sync.py, #16231)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SYNC_GIT_TIMEOUT_S",
+        type=float,
+        default=30.0,
+        description=(
+            "Timeout, in seconds, for a single git subprocess (`rev-parse`, "
+            "`diff --name-status`) during the builtin updater's git-aware "
+            "deletion pass. Raising it tolerates a slower repository; lowering "
+            "it fails a wedged git process sooner rather than stalling a sync "
+            "(autobot-slm-backend/services/sync_deletions.py, #16310)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONSTRAINTS_RSYNC_TIMEOUT_S",
+        type=float,
+        default=30.0,
+        description=(
+            "Timeout, in seconds, for the top-level constraints/ rsync a "
+            "backend component sync runs before pip so a requirements.txt "
+            "`-c ../constraints/shared.txt` reference resolves "
+            "(autobot-slm-backend/api/code_sync_paths.py, #16713)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ROOT_REQS_CP_TIMEOUT_S",
+        type=float,
+        default=10.0,
+        description=(
+            "Timeout, in seconds, for copying a single top-level repo-root "
+            "file (e.g. requirements.txt) a backend component sync runs before "
+            "pip so a `-r ../requirements.txt` reference resolves "
+            "(autobot-slm-backend/api/code_sync_paths.py, #16713)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ALEMBIC_UPGRADE_TIMEOUT_S",
+        type=float,
+        default=300.0,
+        description=(
+            "Timeout, in seconds, for `alembic upgrade heads` during a "
+            "component's post-sync migration step. Raising it tolerates a "
+            "slower migration; lowering it fails a wedged migration sooner "
+            "(autobot-slm-backend/api/code_sync_paths.py, #11255, #16713)."
+        ),
+        component="slm",
+    )
+)

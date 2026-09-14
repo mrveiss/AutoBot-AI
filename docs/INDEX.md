@@ -85,7 +85,7 @@ cssclasses:
 | [Architecture Overview](architecture/README.md) | System architecture |
 | [Agent System Architecture](architecture/AGENT_SYSTEM_ARCHITECTURE.md) | Agent design |
 | [Memory Graph Architecture](architecture/AUTOBOT_MEMORY_GRAPH_ARCHITECTURE.md) | Knowledge graph |
-| [Distributed Architecture](architecture/DISTRIBUTED_6VM_ARCHITECTURE.md) | Multi-VM design |
+| [Distributed Architecture](architecture/DISTRIBUTED_ARCHITECTURE.md) | Role-based distributed design |
 | [Communication Architecture](architecture/COMMUNICATION_ARCHITECTURE.md) | Service communication |
 | [Monitoring Architecture](architecture/MONITORING_ARCHITECTURE.md) | System monitoring |
 | [SSOT Configuration](architecture/SSOT_CONFIGURATION_ARCHITECTURE.md) | Single source of truth |
