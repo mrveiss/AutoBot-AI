@@ -83,7 +83,15 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # summary through sys.stdout instead of print(). MEASURED, not inferred: this test on
 # #16558's head (python-suite shard 11/12, job 103601998828) reported 317 against 322,
 # and the diff removes exactly 5 print() lines and adds none. A FIX, not a population change.
-_KNOWN_REPO_VIOLATIONS = 317
+# 310 since #16318: pipeline-scripts/generate_env_docs.py and
+# check_env_var_registry.py are CLI tools whose stdout/stderr IS their
+# interface, the same #1082 allowance `scripts/` entry points and tools/lint/
+# already carry -- their 7 print() call sites (2 multi-line, counted once
+# each) now carry `# noqa: print` rather than a logger conversion. Diff verified
+# to touch neither #16263's nor #16540's files, so the two chains combine cleanly:
+# 317 - 7 = 310. Computed at 2d-vehicle assembly, not independently re-measured on
+# the combined tree -- the vehicle's own CI run is that measurement.
+_KNOWN_REPO_VIOLATIONS = 310
 
 
 def _test_git_env() -> dict[str, str]:
