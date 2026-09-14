@@ -290,7 +290,7 @@ async def test_server_validates_redis_token():
     """_validate_redis_token returns scopes for a valid Redis-backed token."""
     import time
 
-    from mcp.autobot_server import AutoBotMCPServer
+    from mcp_server.autobot_server import AutoBotMCPServer
 
     secret = "c" * 64
     record = json.dumps(
@@ -313,7 +313,7 @@ async def test_server_validates_redis_token():
     redis_mock.set = AsyncMock()
 
     server = AutoBotMCPServer()
-    with patch("mcp.autobot_server.get_async_redis_client", new=AsyncMock(return_value=redis_mock)):
+    with patch("mcp_server.autobot_server.get_async_redis_client", new=AsyncMock(return_value=redis_mock)):
         scopes = await server._validate_redis_token(f"{secret}:kb,memory")
 
     assert scopes is not None
@@ -325,7 +325,7 @@ async def test_server_redis_token_updates_last_used():
     """_validate_redis_token writes last_used timestamp back to Redis."""
     import time
 
-    from mcp.autobot_server import AutoBotMCPServer
+    from mcp_server.autobot_server import AutoBotMCPServer
 
     secret = "d" * 64
     record = json.dumps(
@@ -348,7 +348,7 @@ async def test_server_redis_token_updates_last_used():
     redis_mock.set = AsyncMock()
 
     server = AutoBotMCPServer()
-    with patch("mcp.autobot_server.get_async_redis_client", new=AsyncMock(return_value=redis_mock)):
+    with patch("mcp_server.autobot_server.get_async_redis_client", new=AsyncMock(return_value=redis_mock)):
         await server._validate_redis_token(f"{secret}:agents")
 
     redis_mock.set.assert_called_once()
@@ -362,13 +362,13 @@ async def test_server_redis_token_updates_last_used():
 @pytest.mark.asyncio
 async def test_server_redis_token_missing_returns_none():
     """_validate_redis_token returns None when secret not in Redis."""
-    from mcp.autobot_server import AutoBotMCPServer
+    from mcp_server.autobot_server import AutoBotMCPServer
 
     redis_mock = AsyncMock()
     redis_mock.get = AsyncMock(return_value=None)
 
     server = AutoBotMCPServer()
-    with patch("mcp.autobot_server.get_async_redis_client", new=AsyncMock(return_value=redis_mock)):
+    with patch("mcp_server.autobot_server.get_async_redis_client", new=AsyncMock(return_value=redis_mock)):
         scopes = await server._validate_redis_token("nosecret:kb")
 
     assert scopes is None
@@ -379,7 +379,7 @@ async def test_handle_request_falls_back_to_redis_token():
     """handle_request accepts a Redis-backed token when static token fails."""
     import time
 
-    from mcp.autobot_server import AutoBotMCPServer
+    from mcp_server.autobot_server import AutoBotMCPServer
 
     secret = "e" * 64
     record = json.dumps(
@@ -403,7 +403,7 @@ async def test_handle_request_falls_back_to_redis_token():
 
     server = AutoBotMCPServer()
     with (
-        patch("mcp.autobot_server.get_async_redis_client", new=AsyncMock(return_value=redis_mock)),
+        patch("mcp_server.autobot_server.get_async_redis_client", new=AsyncMock(return_value=redis_mock)),
         patch.object(server, "_kb_list_categories", new=AsyncMock(return_value={"tree": []})),
     ):
         # Token is NOT in env var — static validation fails; Redis validation succeeds

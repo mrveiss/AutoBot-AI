@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from memory import verbatim_store
-from memory.verbatim_store import VerbatimStore, _recency_factor
+from memory.verbatim_store import UNSCOPED_ALL_USERS, VerbatimStore, _recency_factor
 
 
 def _make_collection(items: List[Dict[str, Any]]) -> MagicMock:
@@ -85,7 +85,7 @@ async def test_search_recent_beats_equally_similar_stale(monkeypatch):
             {"id": "fresh", "text": "new", "distance": 0.1, "timestamp": now.isoformat()},
         ]
     )
-    results = await store.search("q")
+    results = await store.search("q", user_id=UNSCOPED_ALL_USERS)
     assert [r["id"] for r in results] == ["fresh", "stale"]
     assert results[0]["score"] > results[1]["score"]
 
@@ -101,7 +101,7 @@ async def test_search_weight_zero_preserves_semantic_order(monkeypatch):
             {"id": "farther_new", "text": "b", "distance": 0.4, "timestamp": now.isoformat()},
         ]
     )
-    results = await store.search("q")
+    results = await store.search("q", user_id=UNSCOPED_ALL_USERS)
     # Weight 0 → pure semantic: the closer (lower distance) chunk stays first.
     assert [r["id"] for r in results] == ["closer_old", "farther_new"]
     assert results[0]["score"] == pytest.approx(0.9)
