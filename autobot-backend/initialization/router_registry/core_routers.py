@@ -68,6 +68,8 @@ from api.knowledge_population import router as knowledge_population_router
 from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.knowledge_search import router as knowledge_search_router
 from api.knowledge_search_aggregator import router as knowledge_search_aggregator_router
+from api.knowledge_search_analytics import router as knowledge_search_analytics_router
+from api.knowledge_search_documentation import router as knowledge_search_documentation_router
 from api.knowledge_search_scoped import router as knowledge_search_scoped_router
 from api.knowledge_suggestions import router as knowledge_suggestions_router
 from api.knowledge_sync_queue import router as knowledge_sync_queue_router  # Issue #4453
@@ -207,6 +209,12 @@ def _get_core_knowledge_routers() -> list:
             "/knowledge_base",
             ["knowledge-search"],
             "knowledge_search",
+        ),
+        (
+            knowledge_search_analytics_router,
+            "/knowledge_base",
+            ["knowledge-search"],
+            "knowledge_search_analytics",
         ),
         (
             knowledge_search_scoped_router,
@@ -357,6 +365,12 @@ def _get_knowledge_feature_routers() -> list:
             "/knowledge_base",
             ["knowledge-multi-source", "knowledge-search"],
             "knowledge_search_aggregator",
+        ),
+        (
+            knowledge_search_documentation_router,
+            "/knowledge_base",
+            ["knowledge-multi-source"],
+            "knowledge_search_documentation",
         ),
         # #11072: knowledge_vectorization is NOT registered here — api/knowledge.py
         # already includes it into knowledge_router (mounted at /knowledge_base),

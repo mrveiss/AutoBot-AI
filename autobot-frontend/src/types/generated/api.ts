@@ -6270,57 +6270,11 @@ export interface paths {
          *     - Formatted context string
          *     - Source citations
          *     - Metadata about retrieved content
+         *
+         *     #16665: every fact entering the context is filtered to what the calling
+         *     user may see -- this feeds an LLM prompt, not just a display list.
          */
         post: operations["get_llm_context_api_knowledge_base_multi_source_context_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/multi-source/documentation/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Search Documentation
-         * @description Search indexed AutoBot documentation.
-         *
-         *     Issue #250: Direct endpoint for documentation search.
-         *
-         *     Args:
-         *         query: Search query
-         *         n_results: Maximum results to return
-         *         score_threshold: Minimum relevance score (0-1)
-         */
-        get: operations["search_documentation_api_knowledge_base_multi_source_documentation_search_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/multi-source/documentation/stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Documentation Stats
-         * @description Get statistics about indexed documentation.
-         *
-         *     Returns document count and indexing status.
-         */
-        get: operations["documentation_stats_api_knowledge_base_multi_source_documentation_stats_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10122,6 +10076,55 @@ export interface paths {
          *         Statistics dictionary
          */
         get: operations["get_stats_api_knowledge_base_api_kb_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/multi-source/documentation/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Documentation
+         * @description Search indexed AutoBot documentation.
+         *
+         *     Issue #250: Direct endpoint for documentation search.
+         *
+         *     Args:
+         *         query: Search query
+         *         n_results: Maximum results to return
+         *         score_threshold: Minimum relevance score (0-1)
+         */
+        get: operations["search_documentation_api_knowledge_base_multi_source_documentation_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/multi-source/documentation/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation Stats
+         * @description Get statistics about indexed documentation.
+         *
+         *     Returns document count and indexing status.
+         */
+        get: operations["documentation_stats_api_knowledge_base_multi_source_documentation_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -112373,59 +112376,6 @@ export interface operations {
             };
         };
     };
-    search_documentation_api_knowledge_base_multi_source_documentation_search_get: {
-        parameters: {
-            query: {
-                query: string;
-                n_results?: number;
-                score_threshold?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KnowledgeDocumentationSearchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    documentation_stats_api_knowledge_base_multi_source_documentation_stats_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KnowledgeDocumentationStatsResponse"];
-                };
-            };
-        };
-    };
     get_multi_source_graph_simple_api_knowledge_base_multi_source_graph_get: {
         parameters: {
             query?: {
@@ -116951,6 +116901,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_documentation_api_knowledge_base_multi_source_documentation_search_get: {
+        parameters: {
+            query: {
+                query: string;
+                n_results?: number;
+                score_threshold?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDocumentationSearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    documentation_stats_api_knowledge_base_multi_source_documentation_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDocumentationStatsResponse"];
                 };
             };
         };
