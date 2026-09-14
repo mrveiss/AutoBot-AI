@@ -37,8 +37,8 @@ reportlab>=5.0.1    # PDF export for transcripts
 
 # AI/ML
 openai>=2.54.0
-anthropic>=1.4.0,<2.0.0              # Issue #15016: call sites fixed for the 1.x messages.create()/.stream() signature (temperature/top_p/top_k removed, routed via extra_body); capped so the next major requires a deliberate bump, not a silent break
-boto3>=1.43.91                       # GH#9010: AWS Bedrock provider
+anthropic>=1.5.0,<2.0.0              # Issue #15016: call sites fixed for the 1.x messages.create()/.stream() signature (temperature/top_p/top_k removed, routed via extra_body); capped so the next major requires a deliberate bump, not a silent break
+boto3>=1.43.92                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=7.36.1,<8.0.0            # cap/floor rationale lives in ../requirements.txt (#15070, #4061); this file `-r`-includes it and pip resolves the intersection, so the two lines MUST stay identical — enforced by tools/lint/check_requirements_pin_parity.py
 sentence-transformers>=6.0.1
@@ -94,7 +94,7 @@ pywebpush>=2.5.0        # VAPID/RFC8291 browser push delivery
 # spaCy moved to the optional requirements-nlp.txt extra (#9825): its build deps
 # (thinc/blis) have no py3.14 wheels yet, so it is not in the default 3.14 image.
 # entity_extractor falls back to the LLM extraction path when spaCy is absent.
-scikit-learn>=1.9.0           # Issue #2027: RAPTOR clustering
+scikit-learn>=1.9.1           # Issue #2027: RAPTOR clustering
 
 # Live Canvas export (MVA-359)
 bleach>=6.4.0           # HTML sanitization for canvas HTML/PDF export (XSS prevention — security-critical)
