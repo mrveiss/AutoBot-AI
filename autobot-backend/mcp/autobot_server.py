@@ -51,6 +51,7 @@ from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
+from knowledge.search_filters import filter_non_private_results, is_non_private, non_private_where
 from mcp.auth_throttle import UNKNOWN_IP, get_pre_auth_throttle
 from services.run_jwt import validate_run_jwt
 
@@ -660,7 +661,7 @@ class AutoBotMCPServer:
         from knowledge._composed import get_knowledge_base
 
         kb = await get_knowledge_base()
-        results = await kb.search(query, top_k=limit, filters=filters)
+        results = filter_non_private_results(await kb.search(query, top_k=limit, filters=non_private_where(filters)))
         return {"results": results, "count": len(results)}
 
     async def _kb_get_document(self, doc_id: str) -> Any:
@@ -668,7 +669,7 @@ class AutoBotMCPServer:
 
         kb = await get_knowledge_base()
         doc = await asyncio.to_thread(kb.get_fact, doc_id)  # #16670: get_fact is synchronous
-        if doc is None:
+        if doc is None or not is_non_private(doc.get("metadata")):  # #16666: a private fact is not disclosed
             return {"error": "Document not found", "doc_id": doc_id}
         return doc
 
@@ -676,8 +677,7 @@ class AutoBotMCPServer:
         from knowledge._composed import get_knowledge_base
 
         kb = await get_knowledge_base()
-        result = await kb.get_category_tree()
-        return result
+        return await kb.get_category_tree()
 
     async def _kb_list_tags(self) -> Any:
         from knowledge._composed import get_knowledge_base
