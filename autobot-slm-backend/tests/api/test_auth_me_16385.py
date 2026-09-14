@@ -187,26 +187,53 @@ class _FakeDenylistRedis:
         return 0
 
 
-def _get_me(headers: dict | None = None):
-    """Dispatch GET /api/auth/me with the jti denylist given a working fake
-    Redis, and the password-epoch check's Redis patched to fail open.
+class _FakeEpochRedis:
+    """A working Redis stand-in for the password-epoch store (#16411).
+
+    #16411 made the epoch check fail CLOSED like the denylist: an absent client
+    now raises rather than reporting "not revoked". So the REAL helper gets a
+    Redis that answers -- with no marker by default, or with the marker a test
+    sets to place the token before or after a password change.
+    """
+
+    def __init__(self, marker: str | None = None, error: Exception | None = None) -> None:
+        self._marker = marker
+        self._error = error
+
+    async def get(self, _key: str) -> str | None:
+        if self._error is not None:
+            raise self._error
+        return self._marker
+
+
+def _get_me(
+    headers: dict | None = None,
+    epoch_marker: str | None = None,
+    epoch_error: Exception | None = None,
+    epoch_client_present: bool = True,
+):
+    """Dispatch GET /api/auth/me with both revocation checks given a working
+    fake Redis.
 
     For a valid HS256 token, get_current_user's decode path consults the jti
-    denylist (services.token_denylist.is_jti_revoked, fail-CLOSED since
-    #16387 -- needs a real answer, not an absent client) and the password-epoch
-    revocation check (autobot_shared...password_epoch.is_token_revoked_by_
-    password_change, which still fails open when Redis is unavailable --
-    #11443, #12924). Patching password-epoch's get_async_redis_client to
-    return None exercises that fail-open path deterministically, without a
-    real network call racing or timing out.
+    denylist (services.token_denylist.is_jti_revoked, fail-CLOSED since #16387)
+    and the password-epoch check (autobot_shared...password_epoch.is_token_
+    revoked_by_password_change, fail-CLOSED since #16411). Both need a Redis
+    that answers, not an absent client, and each fake answers deterministically
+    without a real network call racing or timing out. *epoch_marker* is the
+    stored password-change epoch the real epoch check reads (None: no change);
+    *epoch_error* makes that read raise, and *epoch_client_present=False*
+    leaves the epoch check with no Redis client at all (#16659).
     """
     from fastapi.testclient import TestClient
 
     import autobot_shared.user_management.password_epoch as password_epoch_mod
 
+    epoch_client = _FakeEpochRedis(epoch_marker, epoch_error) if epoch_client_present else None
+    epoch_redis = AsyncMock(return_value=epoch_client)
     with (
         patch.object(_dl_mod, "get_async_redis_client", AsyncMock(return_value=_FakeDenylistRedis())),
-        patch.object(password_epoch_mod, "get_async_redis_client", AsyncMock(return_value=None)),
+        patch.object(password_epoch_mod, "get_async_redis_client", epoch_redis),
         TestClient(app) as client,
     ):
         return client.get("/api/auth/me", headers=headers or {})
@@ -218,6 +245,36 @@ class TestAuthMeValidToken:
         resp = _get_me(headers={"Authorization": f"Bearer {token}"})
         assert 200 <= resp.status_code < 300, resp.text
         assert resp.json() == {"username": "testuser", "is_admin": False, "user_type": "slm_admin"}
+
+
+class TestAuthMePasswordEpoch:
+    """The REAL password-epoch check end to end through GET /api/auth/me (#16411).
+
+    The no-marker case is TestAuthMeValidToken; these place the token's iat
+    before and after a stored password-change epoch.
+    """
+
+    def test_token_issued_before_the_password_change_gets_401(self):
+        token = _mint_token(iat=1000)
+        resp = _get_me(headers={"Authorization": f"Bearer {token}"}, epoch_marker="2000")
+        assert resp.status_code == 401, resp.text
+
+    def test_token_issued_after_the_password_change_returns_2xx(self):
+        token = _mint_token(iat=2000)
+        resp = _get_me(headers={"Authorization": f"Bearer {token}"}, epoch_marker="1000")
+        assert 200 <= resp.status_code < 300, resp.text
+
+    def test_a_redis_error_on_the_epoch_read_gets_401(self):
+        """#16659: a real store error inside get_password_epoch denies the token."""
+        token = _mint_token()
+        resp = _get_me(headers={"Authorization": f"Bearer {token}"}, epoch_error=ConnectionError("redis refused"))
+        assert resp.status_code == 401, resp.text
+
+    def test_no_epoch_redis_client_gets_401(self):
+        """#16659: with no Redis client the epoch check cannot run, so the token is denied."""
+        token = _mint_token()
+        resp = _get_me(headers={"Authorization": f"Bearer {token}"}, epoch_client_present=False)
+        assert resp.status_code == 401, resp.text
 
 
 class TestAuthMeMissingOrInvalidToken:
