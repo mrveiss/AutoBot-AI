@@ -21,13 +21,12 @@ failed the browser-service venv with:
 tool, so an unrelated ``virtualenv_command:`` (or none at all) makes
 ``virtualenv_python:`` dead configuration.
 
-This is a ratchet, not an absolute (#16641's own acceptance criteria: "a
-guard test fails on any NEW pip task" -- not on the tree as found). Thirteen
-sites predate this guard, in roles this change does not otherwise touch
-(``roles/backend``, ``roles/dependency_patching``,
-``roles/redis/tasks/chromadb.yml`` -- fenced off a concurrent edit at filing
-time -- and ``roles/slm_manager``); ``KNOWN_MISSING`` names them so a new
-site cannot hide behind the same silence, and shrinks as each is fixed.
+Absolute, not a ratchet: every pip task under ``autobot-slm-backend/ansible/``
+that sets ``virtualenv:`` was swept and given a ``virtualenv_command:`` in
+the same change that added this guard, including the ones a task-role sweep
+would have left out of scope (``roles/backend``, ``roles/dependency_patching``,
+``roles/redis/tasks/chromadb.yml``, ``roles/slm_manager``). There is no
+baseline of exceptions to widen -- a new offender is always a new defect.
 """
 
 from __future__ import annotations
@@ -46,63 +45,6 @@ _PIP_MODULE_KEYS = ("pip", "ansible.builtin.pip")
 #: never findings. 29 measured 2026-09-14; well above the population any one
 #: role could hide behind if the walk broke.
 _MIN_VENV_PIP_TASKS = 20
-
-#: Sites this guard already knew about at filing time, with a reason each is
-#: not fixed HERE rather than a promise it never will be. Shrink-only, the
-#: same contract as `ansible_manifest_resolution.MULTI_SOURCE_VENVS`: an
-#: entry that stops matching a real offender fails just as loudly as a new,
-#: unrecorded one.
-KNOWN_MISSING: dict[tuple[str, str], str] = {
-    ("roles/backend/tasks/main.yml", "Upgrade pip"): "roles/backend, untouched here -- filed as #16718",
-    (
-        "roles/backend/tasks/main.yml",
-        "Install autobot_shared as editable package",
-    ): "roles/backend, untouched here -- filed as #16718",
-    (
-        "roles/backend/tasks/main.yml",
-        "Install filtered backend requirements",
-    ): "roles/backend, untouched here -- filed as #16718",
-    (
-        "roles/backend/tasks/main.yml",
-        "Backend | Install CUDA torch requirements (requirements-gpu-torch.txt) (#15162)",
-    ): "roles/backend, untouched here -- filed as #16718",
-    (
-        "roles/backend/tasks/main.yml",
-        "Backend | Remove CPU-only faiss before installing the GPU build (#15163)",
-    ): "roles/backend, untouched here -- filed as #16718",
-    (
-        "roles/backend/tasks/main.yml",
-        "Backend | Install GPU faiss requirements (requirements-gpu-faiss.txt) (#15163)",
-    ): "roles/backend, untouched here -- filed as #16718",
-    (
-        "roles/backend/tasks/main.yml",
-        "Backend | Install GPU/vLLM requirements (requirements-gpu.txt) (#10288)",
-    ): "roles/backend, untouched here -- filed as #16718",
-    (
-        "roles/backend/tasks/main.yml",
-        "Reinstall autobot_shared to pick up ssot_config fixes",
-    ): "roles/backend, untouched here -- filed as #16718",
-    (
-        "roles/dependency_patching/tasks/update-venv.yml",
-        "Upgrade pip first (if needed)",
-    ): "roles/dependency_patching, untouched here -- filed as #16718",
-    (
-        "roles/dependency_patching/tasks/update-venv.yml",
-        "Install security updates",
-    ): "roles/dependency_patching, untouched here -- filed as #16718",
-    (
-        "roles/redis/tasks/chromadb.yml",
-        "ChromaDB | Upgrade pip in venv",
-    ): "roles/redis/** was fenced off a concurrent edit at filing time",
-    (
-        "roles/redis/tasks/chromadb.yml",
-        "ChromaDB | Install chromadb package",
-    ): "roles/redis/** was fenced off a concurrent edit at filing time",
-    (
-        "roles/slm_manager/tasks/main.yml",
-        "SLM | Install Python requirements",
-    ): "roles/slm_manager, untouched here -- filed as #16718",
-}
 
 
 def _pip_venv_tasks() -> list[tuple[str, str, bool]]:
@@ -140,21 +82,12 @@ def test_the_sweep_reaches_the_venv_pip_tasks_it_claims_to() -> None:
     )
 
 
-def test_no_new_pip_task_creates_a_venv_via_the_virtualenv_executable() -> None:
+def test_no_pip_task_creates_a_venv_via_the_virtualenv_executable() -> None:
     """A pip task with `virtualenv:` must also say how to create it (#16641)."""
-    offenders = {(where, name) for where, name, has_command in _pip_venv_tasks() if not has_command}
-    unrecorded = sorted(offenders - set(KNOWN_MISSING))
-    assert not unrecorded, (
+    offenders = sorted((where, name) for where, name, has_command in _pip_venv_tasks() if not has_command)
+    assert not offenders, (
         "these pip tasks set virtualenv: with no virtualenv_command:, so pip falls back to the "
         "standalone `virtualenv` executable -- absent from this fleet, only `python3 -m venv` is "
         'installed (#16641). Set virtualenv_command: "{{ python_interpreter_binary }} -m venv" '
-        "(or the role's equivalent literal), or add the (file, task name) pair to KNOWN_MISSING "
-        "with a reason:\n  " + "\n  ".join(f"{where}: {name}" for where, name in unrecorded)
-    )
-
-    stale = sorted(set(KNOWN_MISSING) - offenders)
-    assert not stale, (
-        "KNOWN_MISSING names a (file, task name) pair that is no longer missing "
-        "virtualenv_command: — the fix landed and the record did not. Delete it:\n  "
-        + "\n  ".join(f"{where}: {name}" for where, name in stale)
+        "(or the role's equivalent literal):\n  " + "\n  ".join(f"{where}: {name}" for where, name in offenders)
     )

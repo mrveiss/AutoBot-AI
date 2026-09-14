@@ -855,6 +855,11 @@
       name: pip
       state: latest
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: without this, pip falls back to shelling out to the
+      # standalone `virtualenv` executable, absent from these hosts --
+      # matches the interpreter "Create Python 3.14 virtual environment via
+      # deadsnakes" above already targets.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -865,6 +870,8 @@
       name: "{{ backend_install_dir }}/autobot_shared"
       editable: true
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -899,6 +906,8 @@
     ansible.builtin.pip:
       requirements: "/tmp/requirements-filtered.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -937,6 +946,8 @@
     ansible.builtin.pip:
       requirements: "{{ code_source_dir }}/requirements-gpu-torch.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -959,6 +970,8 @@
       name: faiss-cpu
       state: absent
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     when: backend_gpu_available | default(false) | bool
 
@@ -966,6 +979,8 @@
     ansible.builtin.pip:
       requirements: "{{ code_source_dir }}/requirements-gpu-faiss.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -980,6 +995,8 @@
     ansible.builtin.pip:
       requirements: "{{ code_source_dir }}/requirements-gpu.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -1035,6 +1052,8 @@
       virtualenv: "{{ backend_code_dir }}/venv"
       state: forcereinstall
       extra_args: "--no-deps"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
