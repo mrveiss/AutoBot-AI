@@ -14,7 +14,7 @@ status: current
 
 # The AutoBot Platform Model
 
-> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+> **Freshness:** current — 2026-09-14. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim. Why/How/What and Governance sections added under #16733.
 
 > **Your data. Your AI.**
 >
@@ -161,6 +161,36 @@ See **[AutoBot LLC](../llc/_index.md)** for the module overview and the
 - **Ownership, end to end.** Core, management layer, and modules all run on
   infrastructure you control. Your data. Your AI.
 
+## Why, How, What
+
+- **Why.** Private AI you trust with your business knowledge shouldn't require handing
+  that knowledge — or control of the intelligence itself — to someone else's server.
+  AutoBot exists so private AI can be owned like infrastructure, not rented like a
+  subscription.
+- **How.** By keeping what must stay stable separate from what gets built on top: the
+  Core owns memory and a provider-agnostic LLM gateway (fallback across cloud and
+  self-hosted models, so no single vendor owns your AI); the SLM absorbs the actual
+  operational pain of running that infrastructure; Modules inherit both instead of
+  rebuilding them, so a new capability stays small.
+- **What.** A self-hosted AI platform you install on your own hardware: chat, a private
+  RAG knowledge base, a fleet-management dashboard, and installable modules — AutoBot
+  LLC, Codebase Analytics, Transcriber. Apache-2.0, no subscription.
+
+---
+
+## Governance & EU AI Act Fit
+
+AutoBot's governance primitives (RBAC, review gates, budgets, audit logging, retention
+policies — see `autobot-backend/security/enterprise/compliance_manager.py`) were built for
+GDPR/SOC2/ISO27001. The same architecture — self-hosted data, a provider-agnostic LLM
+gateway, and human-oversight-capable governance — maps onto the EU AI Act's data-governance
+and human-oversight expectations more directly than a third-party SaaS API can.
+
+**This is not a compliance certification.** No risk-tier classifier, technical-
+documentation generator, or Art.-12-shaped log schema exists yet. See
+[EU AI Act & Governance Fit](EU_AI_GOVERNANCE.md) for exactly what's covered today and
+what's still a gap.
+
 ---
 
 ## Related
@@ -169,4 +199,5 @@ See **[AutoBot LLC](../llc/_index.md)** for the module overview and the
 - [Distributed Architecture](DISTRIBUTED_ARCHITECTURE.md) — multi-node deployment
 - [SSOT Configuration](SSOT_CONFIGURATION_ARCHITECTURE.md) — single source of truth
 - [AutoBot LLC](../llc/_index.md) — the flagship module
+- [EU AI Act & Governance Fit](EU_AI_GOVERNANCE.md) — governance architecture vs. EU AI Act obligations
 - [Glossary](../GLOSSARY.md) — terminology, including SLM and LLC
