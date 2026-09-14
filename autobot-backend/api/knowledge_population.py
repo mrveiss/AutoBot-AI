@@ -29,6 +29,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
+from knowledge.ingestion_visibility import INGESTED_DOCUMENT_VISIBILITY
 from knowledge.schemas.population import (
     JobStatusResponse,
     PopulateManPagesResponse,
@@ -86,6 +87,7 @@ def _get_command_metadata(cmd_info: dict) -> dict:
         "category": "commands",
         "command": cmd_info["command"],
         "type": "system_command",
+        "visibility": INGESTED_DOCUMENT_VISIBILITY,  # #16693: reference docs for every signed-in user
     }
 
 
@@ -470,6 +472,7 @@ def _get_man_page_metadata(command: str) -> dict:
         "category": "manpages",
         "command": command,
         "type": "manual_page",
+        "visibility": INGESTED_DOCUMENT_VISIBILITY,
     }
 
 
@@ -785,6 +788,7 @@ def _get_doc_metadata(doc_file: str, file_path, category: str) -> dict:
         "filename": doc_file,
         "type": f"{category}_documentation",
         "file_path": str(file_path),
+        "visibility": INGESTED_DOCUMENT_VISIBILITY,
     }
 
 
@@ -905,6 +909,7 @@ async def _store_system_config(kb_to_use) -> bool:
             "source": "autobot_docs_population",
             "category": "configuration",
             "type": "system_configuration",
+            "visibility": INGESTED_DOCUMENT_VISIBILITY,
         }
 
         if hasattr(kb_to_use, "store_fact"):
@@ -1058,10 +1063,7 @@ async def _index_autobot_docs_background(task_id: str, force_reindex: bool):
         if not await indexer.initialize():
             logger.error("[%s] Indexer initialization failed", task_id)
             elapsed = time.time() - start_time
-            await TaskStatusManager.fail_task(
-                task_id=task_id,
-                error_message="Indexer initialization failed",
-            )
+            await TaskStatusManager.fail_task(task_id=task_id, error_message="Indexer initialization failed")
             return
 
         # Update status: starting indexing
@@ -1098,10 +1100,7 @@ async def _index_autobot_docs_background(task_id: str, force_reindex: bool):
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error("[%s] Background indexing failed: %s", task_id, e)
-        await TaskStatusManager.fail_task(
-            task_id=task_id,
-            error_message=str(e),
-        )
+        await TaskStatusManager.fail_task(task_id=task_id, error_message=str(e))
 
 
 @router.get("/populate_autobot_docs/status/{task_id}", response_model=TaskStatusResponse)

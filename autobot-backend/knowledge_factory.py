@@ -69,9 +69,21 @@ def _adopt_legacy_facts(kb) -> None:
     before #15663 is still Redis-only and the durable system of record is a
     promise about future writes. Fire-and-forget: a slow scan must not delay the
     knowledge base, and a failure leaves the facts exactly where they already were.
+    The ownerless-document visibility backfill (#16693) follows it.
     """
     if kb is not None and hasattr(kb, "adopt_legacy_facts"):
-        fire_and_forget(kb.adopt_legacy_facts(), name="kb-adopt-legacy-facts")
+        fire_and_forget(_adopt_then_backfill(kb), name="kb-adopt-legacy-facts")
+
+
+async def _adopt_then_backfill(kb) -> None:
+    """Adopt Redis-only facts, then make ownerless ingested documents explicitly SYSTEM (#16693).
+
+    In that order because the backfill walks the durable rows: a fact still only in
+    Redis would be missed. The builtin updater restarts the backend after an update, so
+    this is how the backfill ships; a second run finds nothing left to change.
+    """
+    await kb.adopt_legacy_facts()
+    await kb.backfill_document_visibility()
 
 
 async def _create_new_knowledge_base(app: FastAPI):

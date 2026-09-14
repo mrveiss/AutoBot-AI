@@ -34,6 +34,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from collections import Counter, defaultdict
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
@@ -253,3 +254,61 @@ class FactProjectionMixin:
         self._schedule_bm25_refresh()
         logger.info("Rebuilt Redis projections for %d facts from knowledge_facts", rebuilt)
         return {"status": "success", "rebuilt": rebuilt}
+
+    async def backfill_document_visibility(self, batch_size: int = 500) -> Dict[str, Any]:
+        """Make every ownerless ingested document explicitly SYSTEM (#16693).
+
+        A fact with no owner and no visibility grounds every user's chat today, and once
+        #16664 scopes grounding it would ground no one's. Owner decision (2026-09-14):
+        ingested documents keep that reach, now explicit and auditable, and every other
+        ownerless fact stays private. :mod:`knowledge.ingestion_visibility` decides which.
+
+        Only facts that migration 20260914_092 marked at deploy are candidates. A fact
+        stored later can't be promoted by imitating an ingestion marker, because new
+        ingestion writes its visibility itself. Each change goes through :meth:`update_fact`,
+        so the row, the Redis projection, ChromaDB and ``kb:system:facts`` move together.
+        Each carries a ``visibility_backfill`` tag so it can be found and reversed.
+        Idempotent: a changed fact has a visibility, so a second run no longer selects it.
+        """
+        # Lazy: see the module docstring on why fact_store is not imported at module scope.
+        from knowledge import fact_store
+
+        candidates = fact_store.backfill_candidates()
+        found = await fact_store.count_facts(*candidates)
+        logger.info("Visibility backfill (#16693): %d legacy facts have no owner and no visibility", found)
+        tally: Dict[str, Counter] = defaultdict(Counter)
+        async for batch in fact_store.iter_facts(batch_size=batch_size, where=candidates):
+            for fact in batch:
+                outcome, label = await self._backfill_one_document(fact["fact_id"], fact["metadata"])
+                tally[outcome][label] += 1
+        report = {"status": "success", "found": found, **{o: dict(tally[o]) for o in _BACKFILL_OUTCOMES}}
+        (logger.warning if tally["updated"] or tally["failed"] else logger.info)(
+            "Visibility backfill (#16693): %s", report
+        )
+        return report
+
+    async def _backfill_one_document(self, fact_id: str, row_metadata: Dict[str, Any]) -> tuple[str, str]:
+        """Backfill one candidate. Returns ``(outcome, label)``; see :data:`_BACKFILL_OUTCOMES`."""
+        from knowledge.ingestion_visibility import BACKFILL_MARK, system_backfill_class
+
+        kind = system_backfill_class(row_metadata)
+        if kind is None:
+            return "kept_private", _provenance_label(row_metadata)
+        # update_fact merges onto the copy it reads, not onto this row, so the copy is
+        # checked too: drift between them must never make an owned or scoped fact SYSTEM.
+        current = await self._read_fact_for_write(fact_id)
+        if current is None or system_backfill_class(current[1]) != kind:
+            return "skipped", kind
+        result = await self.update_fact(fact_id, metadata=dict(BACKFILL_MARK))
+        return ("updated" if result.get("status") == "success" else "failed"), kind
+
+
+#: What the backfill did with a candidate. ``updated`` and ``failed`` count by ingestion
+#: class. ``kept_private`` counts by ``source_type/category``, as the owner asked on #16693.
+#: ``skipped`` is a fact that vanished, or whose Redis copy no longer qualifies.
+_BACKFILL_OUTCOMES = ("updated", "failed", "skipped", "kept_private")
+
+
+def _provenance_label(metadata: Dict[str, Any]) -> str:
+    """``source_type/category`` for the backfill report."""
+    return f"{metadata.get('source_type') or '-'}/{metadata.get('category') or '-'}"
