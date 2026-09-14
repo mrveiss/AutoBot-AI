@@ -598,8 +598,8 @@ class FactsMixin(FactProjectionMixin):
 
         # Issue #688: Track ownership indexes for user-based access control
         owner_id = metadata.get("owner_id") or metadata.get("user_id")
-        if getattr(self, "ownership_manager", None) and owner_id:  # #16685: the base sets it to None
-            await index_ownership(self.ownership_manager, fact_id, metadata)  # #16663: org/group too
+        if getattr(self, "ownership_manager", None):  # #16685: the base sets it to None
+            await index_ownership(self.ownership_manager, fact_id, metadata)  # #16663 org/group, #16693 SYSTEM
         elif owner_id:
             # Issue #689: Fallback simple tracking when ownership manager
             # is not initialized

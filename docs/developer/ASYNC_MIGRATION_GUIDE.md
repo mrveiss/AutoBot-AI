@@ -468,7 +468,12 @@ async def test_store_fact_timeout():
 
 @pytest.mark.asyncio
 async def test_get_fact_by_id():
-    """Test fact retrieval by ID"""
+    """Test fact retrieval by ID.
+
+    get_fact(fact_id) is synchronous (a single hgetall, no pipelining to
+    gain from) -- offload it with asyncio.to_thread rather than calling it
+    directly from async code.
+    """
     kb = KnowledgeBase()
 
     # Store fact
@@ -476,10 +481,10 @@ async def test_get_fact_by_id():
     fact_id = store_result["fact_id"]
 
     # Retrieve fact
-    facts = await kb.get_fact(fact_id=fact_id)
-    assert len(facts) == 1
-    assert facts[0]["content"] == "Test fact"
-    assert facts[0]["metadata"]["key"] == "value"
+    fact = await asyncio.to_thread(kb.get_fact, fact_id=fact_id)
+    assert fact is not None
+    assert fact["content"] == "Test fact"
+    assert fact["metadata"]["key"] == "value"
 
 @pytest.mark.asyncio
 async def test_concurrent_operations():
@@ -517,11 +522,11 @@ async def test_full_knowledge_base_workflow():
         assert result["status"] == "success"
 
     # Retrieve all facts
-    all_facts = await kb.get_fact()
+    all_facts = await kb.get_all_facts()
     assert len(all_facts) >= 5
 
     # Search for specific fact
-    search_results = await kb.get_fact(query="Integration test")
+    search_results = await kb.search(query="Integration test")
     assert len(search_results) >= 5
 
 @pytest.mark.asyncio

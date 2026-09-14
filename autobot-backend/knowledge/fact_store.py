@@ -21,10 +21,10 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, AsyncIterator, Dict, List, Sequence
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import select, tuple_, update
+from sqlalchemy import func, select, tuple_, update
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.store_authority import Store, system_of_record
@@ -118,7 +118,45 @@ async def fact_id_for_unique_key(unique_key: str) -> str | None:
         return found.scalar_one_or_none()
 
 
-async def iter_facts(batch_size: int = 500) -> AsyncIterator[List[Dict[str, Any]]]:
+def backfill_candidates() -> tuple:
+    """Rows the #16693 backfill may change: flagged by its migration, still unowned and unset.
+
+    Only migration 20260914_092 sets the flag, so a fact stored after deploy is never a
+    candidate, whatever its metadata imitates. ``->>`` is NULL when a key is absent or
+    holds JSON null.
+    """
+    return (
+        KnowledgeFact.visibility_backfill_candidate.is_(True),
+        KnowledgeFact.owner_id.is_(None),
+        KnowledgeFact.metadata_json["visibility"].astext.is_(None),
+    )
+
+
+async def clear_backfill_candidates(fact_ids: Sequence[str]) -> None:
+    """Drop the backfill flag from *fact_ids*, which the backfill has decided for good.
+
+    Row-only by design: the flag lives in this column and nowhere else, so clearing it
+    moves no projection out of step.
+    """
+    if not fact_ids:
+        return
+    factory = get_async_session_factory()
+    async with factory() as session:
+        await session.execute(
+            update(KnowledgeFact).where(KnowledgeFact.id.in_(list(fact_ids))).values(visibility_backfill_candidate=None)
+        )
+        await session.commit()
+
+
+async def count_facts(*conditions) -> int:
+    """How many recorded facts satisfy every one of *conditions*."""
+    factory = get_async_session_factory()
+    async with factory() as session:
+        found = await session.execute(select(func.count()).select_from(KnowledgeFact).where(*conditions))
+        return int(found.scalar_one())
+
+
+async def iter_facts(batch_size: int = 500, *, where: tuple = ()) -> AsyncIterator[List[Dict[str, Any]]]:
     """Every fact recorded when iteration began, oldest first, a batch at a time.
 
     Keyset-paged on ``(created_at, id)`` under a captured ceiling, not on ``id``
@@ -130,14 +168,15 @@ async def iter_facts(batch_size: int = 500) -> AsyncIterator[List[Dict[str, Any]
     ``created_at`` supplies the order and the ceiling excludes anything created
     after the walk started, which needs no chasing: a fact created now is
     projected by its own write path. ``id`` breaks ties so two rows sharing a
-    timestamp cannot hide each other.
+    timestamp cannot hide each other. *where* narrows the walk to rows satisfying every
+    clause in it, such as :func:`backfill_candidates`.
     """
     factory = get_async_session_factory()
     ceiling = datetime.now(tz=timezone.utc)
     after: tuple[datetime, str] | None = None
     while True:
         async with factory() as session:
-            query = select(KnowledgeFact).where(KnowledgeFact.created_at <= ceiling)
+            query = select(KnowledgeFact).where(KnowledgeFact.created_at <= ceiling, *where)
             if after is not None:
                 query = query.where(tuple_(KnowledgeFact.created_at, KnowledgeFact.id) > after)
             rows = await session.execute(query.order_by(KnowledgeFact.created_at, KnowledgeFact.id).limit(batch_size))
