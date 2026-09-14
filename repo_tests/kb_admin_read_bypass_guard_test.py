@@ -43,11 +43,17 @@ GATED_HELPERS = frozenset(
 
 #: Explicit, admin-aware read APIs (owner decision on #16654). Adding a file here needs
 #: that decision, not convenience: a chat or grounding path must never appear.
+#: knowledge_search.py and knowledge_search_aggregator.py added 2026-09-14 (#16745): the
+#: owner ruled the canonical search and multi-source aggregation routes are themselves
+#: explicit, caller-driven read APIs -- not a chat/agent/RAG hop -- so #16691's is_admin
+#: bypass there is the intended #16654 behaviour, same category as the three files below.
 EXPLICIT_READ_APIS = frozenset(
     {
         "autobot-backend/api/knowledge_ownership.py",
         "autobot-backend/api/knowledge_collaboration.py",
         "autobot-backend/api/knowledge_search_scoped.py",
+        "autobot-backend/api/knowledge_search.py",
+        "autobot-backend/api/knowledge_search_aggregator.py",
     }
 )
 #: The helper that forwards its own ``is_admin`` parameter to ``check_access``.
