@@ -209,7 +209,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/code_intelligence/vue_analyzer.py": 613,
     "autobot-backend/command_manual_manager.py": 908,
     "autobot-backend/computer_vision/screen_analyzer.py": 662,
-    "autobot-backend/conftest.py": 1575,  # #15026: real-load llm_shared.quota_headroom
+    "autobot-backend/conftest.py": 1507,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 640,
