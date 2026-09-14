@@ -650,7 +650,9 @@
       "running": "Running...",
       "selectANode": "-- Select a node --",
       "selectNode": "Select Node",
-      "serviceName": "Service Name"
+      "serviceName": "Service Name",
+      "commandRunner": "Command Runner",
+      "commandRunnerDescription": "Run shell commands on nodes"
     },
     "loadBalancingView": {
       "autoRebalance": "Auto-rebalance",
