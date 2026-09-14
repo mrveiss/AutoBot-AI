@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from memory.verbatim_store import VerbatimStore
+from memory.verbatim_store import UNSCOPED_ALL_USERS, VerbatimStore
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -34,6 +34,12 @@ def _make_collection(stored: List[Dict[str, Any]] | None = None) -> MagicMock:
     collection.add = AsyncMock()
     collection.delete = AsyncMock()
 
+    def _conditions(where):
+        """Normalize a flat {field: {"$eq": v}} or {"$and": [...]} where clause."""
+        if not where:
+            return []
+        return where["$and"] if "$and" in where else [where]
+
     async def _query(
         query_texts=None,
         n_results=10,
@@ -41,16 +47,25 @@ def _make_collection(stored: List[Dict[str, Any]] | None = None) -> MagicMock:
         include=None,
     ):
         items = stored
-        if where and "$eq" in str(where):
-            # Simple session_id filter emulation
-            sid = where.get("session_id", {}).get("$eq")
-            if sid:
-                items = [i for i in stored if i.get("session_id") == sid]
+        for cond in _conditions(where):
+            for field, op in cond.items():
+                val = op.get("$eq")
+                if val is not None:
+                    items = [i for i in items if i.get(field) == val]
         limit = min(n_results, len(items))
         return {
             "ids": [[i["id"] for i in items[:limit]]],
             "documents": [[i["text"] for i in items[:limit]]],
-            "metadatas": [[{"session_id": i.get("session_id", ""), "role": i.get("role", "")} for i in items[:limit]]],
+            "metadatas": [
+                [
+                    {
+                        "session_id": i.get("session_id", ""),
+                        "role": i.get("role", ""),
+                        "user_id": i.get("user_id", ""),
+                    }
+                    for i in items[:limit]
+                ]
+            ],
             "distances": [[0.1 * j for j in range(limit)]],
         }
 
@@ -169,7 +184,7 @@ async def test_search_returns_results():
     col = _make_collection(_STORED)
     store = await _store_with_collection(col)
 
-    results = await store.search("reset system")
+    results = await store.search("reset system", user_id=UNSCOPED_ALL_USERS)
 
     assert len(results) >= 1
     assert all("text" in r and "score" in r and "id" in r for r in results)
@@ -180,7 +195,7 @@ async def test_search_session_filter():
     col = _make_collection(_STORED)
     store = await _store_with_collection(col)
 
-    results = await store.search("weather", session_filter="s2")
+    results = await store.search("weather", user_id=UNSCOPED_ALL_USERS, session_filter="s2")
 
     # All returned results should be from session s2
     assert all(r["metadata"]["session_id"] == "s2" for r in results)
@@ -191,7 +206,7 @@ async def test_search_empty_query_returns_empty():
     col = _make_collection(_STORED)
     store = await _store_with_collection(col)
 
-    results = await store.search("")
+    results = await store.search("", user_id=UNSCOPED_ALL_USERS)
     assert results == []
 
 
@@ -201,7 +216,82 @@ async def test_search_invalid_limit_raises():
     store = await _store_with_collection(col)
 
     with pytest.raises(ValueError, match="limit must be positive"):
-        await store.search("query", limit=0)
+        await store.search("query", user_id=UNSCOPED_ALL_USERS, limit=0)
+
+
+# ---------------------------------------------------------------------------
+# Tests: search() user_id scoping (#16701)
+# ---------------------------------------------------------------------------
+
+_STORED_TWO_USERS = [
+    {"id": "a1", "text": "reset the system", "session_id": "s1", "role": "user", "user_id": "user-a"},
+    {"id": "b1", "text": "reset the router", "session_id": "s2", "role": "user", "user_id": "user-b"},
+]
+
+
+@pytest.mark.asyncio
+async def test_search_never_returns_another_users_chunks():
+    col = _make_collection(_STORED_TWO_USERS)
+    store = await _store_with_collection(col)
+
+    results = await store.search("reset", user_id="user-a")
+
+    assert [r["id"] for r in results] == ["a1"], f"user-a's search must not see user-b's chunk: {results}"
+
+
+@pytest.mark.asyncio
+async def test_search_is_symmetric_for_the_other_user():
+    col = _make_collection(_STORED_TWO_USERS)
+    store = await _store_with_collection(col)
+
+    results = await store.search("reset", user_id="user-b")
+
+    assert [r["id"] for r in results] == ["b1"], f"user-b's search must not see user-a's chunk: {results}"
+
+
+@pytest.mark.asyncio
+async def test_search_combines_user_and_session_scope():
+    col = _make_collection(_STORED_TWO_USERS)
+    store = await _store_with_collection(col)
+
+    # Right user, wrong session: no match.
+    assert await store.search("reset", user_id="user-a", session_filter="s2") == []
+
+
+# ---------------------------------------------------------------------------
+# Tests: the old string-typed sentinel value is not a bypass (#16732 review)
+# ---------------------------------------------------------------------------
+
+_OLD_SENTINEL_TEXT = "__unscoped_all_users__"  # what UNSCOPED_ALL_USERS used to be
+
+
+@pytest.mark.asyncio
+async def test_a_user_literally_named_after_the_old_sentinel_text_stays_scoped():
+    """A user_id/username equal to the OLD sentinel string must not unlock
+    every user's chunks -- it is just an ordinary (if unlucky) string now,
+    compared with `is`, never `==`, against the real sentinel object."""
+    stored = _STORED_TWO_USERS + [
+        {
+            "id": "c1",
+            "text": "reset my own thing",
+            "session_id": "s3",
+            "role": "user",
+            "user_id": _OLD_SENTINEL_TEXT,
+        }
+    ]
+    col = _make_collection(stored)
+    store = await _store_with_collection(col)
+
+    results = await store.search("reset", user_id=_OLD_SENTINEL_TEXT)
+
+    assert [r["id"] for r in results] == ["c1"], (
+        f"a user named after the old sentinel text must see only their own chunk, not " f"user-a's/user-b's: {results}"
+    )
+
+
+def test_old_sentinel_text_is_not_the_real_sentinel():
+    assert _OLD_SENTINEL_TEXT != UNSCOPED_ALL_USERS
+    assert _OLD_SENTINEL_TEXT is not UNSCOPED_ALL_USERS
 
 
 # ---------------------------------------------------------------------------

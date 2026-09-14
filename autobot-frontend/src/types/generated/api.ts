@@ -48717,8 +48717,10 @@ export interface paths {
          * Verbatim Search
          * @description Search verbatim conversation chunks.
          *
-         *     Returns chunks ranked by cosine similarity.  When ``session_id`` is
-         *     provided, only chunks from that session are considered.
+         *     Returns chunks ranked by cosine similarity, scoped to the caller's own
+         *     chunks (#16701 -- this route has no admin bypass; an admin-wide search
+         *     would need its own explicit admin API). When ``session_id`` is provided,
+         *     results are additionally restricted to that session.
          *
          *     Args:
          *         q: Free-text query.
@@ -48752,9 +48754,9 @@ export interface paths {
          * Delete Session Verbatim
          * @description Delete all verbatim chunks for a session.
          *
-         *     Used for user opt-out and retention enforcement.  The caller must be
-         *     authenticated; in production the middleware additionally enforces that
-         *     users can only delete their own sessions.
+         *     Used for user opt-out and retention enforcement. Caller must own the
+         *     session (#16701: this docstring previously claimed a production
+         *     middleware enforced that; nothing in this file did).
          *
          *     Args:
          *         session_id: Session whose verbatim chunks to remove.
