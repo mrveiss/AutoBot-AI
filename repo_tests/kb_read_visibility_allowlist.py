@@ -21,6 +21,10 @@ from __future__ import annotations
 _T2 = "TRACKED_GAP #16664: puts KB content into a chat, agent or RAG path without the user's scope"
 _T3 = "TRACKED_GAP #16665: returns KB facts to an API caller without the caller's scope"
 _T4 = "TRACKED_GAP #16666: MCP knowledge access with no user identity (owner: non-private facts only)"
+_SCOPED_ADMIN_ROUTER = (
+    "SCOPED: route requires Depends(check_admin_permission) (403 for non-admins), and "
+    "check_access already grants admins unconditional read (#16665)"
+)
 
 ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/advanced_rag_optimizer.py", "AdvancedRAGOptimizer._perform_semantic_search"): _T2,
@@ -34,9 +38,9 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/ai_hardware_accelerator.py", "AIHardwareAccelerator._gpu_semantic_search"): _T2,
     ("autobot-backend/api/agent.py", "_enhance_context_with_kb"): _T2,
     ("autobot-backend/api/agent.py", "comprehensive_research_task"): _T2,
-    ("autobot-backend/api/ai_stack_integration.py", "chat"): _T3,
-    ("autobot-backend/api/ai_stack_integration.py", "knowledge_search"): _T3,
-    ("autobot-backend/api/ai_stack_integration.py", "rag_query"): _T3,
+    ("autobot-backend/api/ai_stack_integration.py", "chat"): _SCOPED_ADMIN_ROUTER,
+    ("autobot-backend/api/ai_stack_integration.py", "knowledge_search"): _SCOPED_ADMIN_ROUTER,
+    ("autobot-backend/api/ai_stack_integration.py", "rag_query"): _SCOPED_ADMIN_ROUTER,
     ("autobot-backend/api/chat.py", "_enhance_with_knowledge_base"): _T2,
     ("autobot-backend/api/chat.py", "process_chat_message"): _T2,
     ("autobot-backend/api/chat_knowledge.py", "_preserve_single_fact"): _T2,
@@ -47,8 +51,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ): "TRACKED_GAP #16671: session fact sharing reads facts through an unwired kb_manager",
     ("autobot-backend/api/knowledge.py", "_get_or_compute_category_counts"): _T3,
     ("autobot-backend/api/knowledge.py", "search_man_pages"): _T3,
-    ("autobot-backend/api/knowledge_ai_stack.py", "_search_local_knowledge_base"): _T3,
-    ("autobot-backend/api/knowledge_ai_stack.py", "rag_search"): _T3,
     ("autobot-backend/api/knowledge_categories.py", "get_facts_in_category"): _T3,
     ("autobot-backend/api/knowledge_collections.py", "export_collection"): _T3,
     ("autobot-backend/api/knowledge_collections.py", "get_facts_in_collection"): _T3,
@@ -66,7 +68,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-backend/api/knowledge_ownership.py",
         "get_shared_facts",
     ): "SCOPED: the fact ids come from the caller's own ownership index (#688)",
-    ("autobot-backend/api/knowledge_rag.py", "advanced_search"): _T3,
     ("autobot-backend/api/knowledge_relations.py", "get_fact_relations"): _T3,
     ("autobot-backend/api/knowledge_relations.py", "hybrid_search"): _T3,
     ("autobot-backend/api/knowledge_relations.py", "traverse_relations"): _T3,
@@ -82,9 +83,23 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/api/knowledge_tags.py", "get_facts_by_tag"): _T3,
     ("autobot-backend/api/knowledge_tags.py", "search_facts_by_tags"): _T3,
     ("autobot-backend/api/knowledge_verification.py", "list_pending_verification"): _T3,
-    ("autobot-backend/api/memory_lifecycle.py", "_reinforcement_section"): _T3,
+    (
+        "autobot-backend/api/memory_lifecycle.py",
+        "_reinforcement_section",
+    ): (
+        "SCOPED: route requires Depends(check_admin_permission), and its own _slim() "
+        "helper strips every fact field except fact_id/quality_score/access_count/"
+        "last_accessed before it reaches the response -- fact content never leaves (#16665)"
+    ),
     ("autobot-backend/async_chat_workflow.py", "AsyncChatWorkflow._execute_kb_search"): _T2,
-    ("autobot-backend/knowledge/adapters/okf_adapter.py", "OKFAdapter.export_from_kb"): _T3,
+    (
+        "autobot-backend/knowledge/adapters/okf_adapter.py",
+        "OKFAdapter.export_from_kb",
+    ): (
+        "NOT_USER_FACING: no caller anywhere in the tree besides its own test and the "
+        "module-level export_to_okf() re-export, which is itself uncalled outside tests "
+        "(#16665) -- not reachable from any route, CLI entry point, or scheduled task"
+    ),
     ("autobot-backend/knowledge/search_components/agentic_search.py", "AgenticSearchTool._simple_search"): _T2,
     ("autobot-backend/knowledge/search_components/agentic_search.py", "AgenticSearchTool.iterative_search"): _T2,
     (
@@ -134,4 +149,4 @@ ALLOWLIST: dict[tuple[str, str], str] = {
 }
 
 #: Ceiling on ALLOWLIST: lower it with every entry removed, never raise it.
-MAX_ALLOWLISTED = 84
+MAX_ALLOWLISTED = 81

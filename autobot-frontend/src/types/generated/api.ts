@@ -5941,6 +5941,9 @@ export interface paths {
          *
          *     Issue #281: Refactored from 144 lines to use extracted helper methods.
          *     Issue #744: Requires authenticated user.
+         *     Issue #16665: local KB results are scoped to the caller before use, including
+         *     as RAG context -- an unfiltered fact would otherwise reach both the response
+         *     and the RAG synthesis prompt.
          *
          *     This endpoint provides superior search results by combining:
          *     - Local knowledge base semantic search
@@ -5971,33 +5974,10 @@ export interface paths {
          *     understanding and context-aware response generation.
          *
          *     Issue #744: Requires authenticated user.
+         *     Issue #16665: locally-retrieved documents are scoped to the caller before
+         *     being used as RAG context.
          */
         post: operations["rag_search_api_knowledge_base_ai_stack_search_rag_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/ai-stack/extract": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Extract Knowledge
-         * @description Extract structured knowledge from content using AI Stack capabilities.
-         *
-         *     This endpoint uses AI Stack's knowledge extraction agent to identify
-         *     and structure knowledge from various content types.
-         *
-         *     Issue #744: Requires authenticated user.
-         */
-        post: operations["extract_knowledge_api_knowledge_base_ai_stack_extract_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6766,6 +6746,9 @@ export interface paths {
          *
          *     Issue #281: Refactored from 144 lines to use extracted helper methods.
          *     Issue #744: Requires authenticated user.
+         *     Issue #16665: local KB results are scoped to the caller before use, including
+         *     as RAG context -- an unfiltered fact would otherwise reach both the response
+         *     and the RAG synthesis prompt.
          *
          *     This endpoint provides superior search results by combining:
          *     - Local knowledge base semantic search
@@ -9636,33 +9619,10 @@ export interface paths {
          *     understanding and context-aware response generation.
          *
          *     Issue #744: Requires authenticated user.
+         *     Issue #16665: locally-retrieved documents are scoped to the caller before
+         *     being used as RAG context.
          */
         post: operations["rag_search_api_knowledge_base_search_rag_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/extract": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Extract Knowledge
-         * @description Extract structured knowledge from content using AI Stack capabilities.
-         *
-         *     This endpoint uses AI Stack's knowledge extraction agent to identify
-         *     and structure knowledge from various content types.
-         *
-         *     Issue #744: Requires authenticated user.
-         */
-        post: operations["extract_knowledge_api_knowledge_base_extract_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9760,6 +9720,31 @@ export interface paths {
         get: operations["knowledge_health_api_knowledge_base_health_status_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Knowledge
+         * @description Extract structured knowledge from content using AI Stack capabilities.
+         *
+         *     This endpoint uses AI Stack's knowledge extraction agent to identify
+         *     and structure knowledge from various content types.
+         *
+         *     Issue #744: Requires authenticated user.
+         */
+        post: operations["extract_knowledge_api_knowledge_base_extract_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -45358,6 +45343,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/rag/loop/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Loop Status
+         * @description Get autonomous improvement loop status.
+         *
+         *     Returns last run time, variants tested, winner, current baseline config,
+         *     and any variant pending human approval.
+         *
+         *     Issue #4680.
+         */
+        get: operations["get_loop_status_api_knowledge_base_rag_loop_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/rag/loop/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Loop Variant
+         * @description Promote the pending staging variant to production RAGConfig.
+         *
+         *     The autonomous loop stores a "pending approval" variant when the improvement
+         *     margin is below the auto-promotion threshold.  This endpoint applies it.
+         *
+         *     Returns 409 if no variant is pending.
+         *
+         *     Issue #4680.
+         */
+        post: operations["approve_loop_variant_api_knowledge_base_rag_loop_approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/rag/loop/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Loop Variant
+         * @description Discard the pending staging variant without applying it to production RAGConfig.
+         *
+         *     The autonomous loop stores a "pending approval" variant when the improvement
+         *     margin is below the auto-promotion threshold.  This endpoint clears it.
+         *
+         *     Returns 409 if no variant is pending.
+         *
+         *     Issue #4916.
+         */
+        post: operations["reject_loop_variant_api_knowledge_base_rag_loop_reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/rag/advanced_search": {
         parameters: {
             query?: never;
@@ -45373,6 +45437,7 @@ export interface paths {
          *
          *     Issue #620: Refactored to use extracted helper methods.
          *     Issue #744: Requires authenticated user.
+         *     Issue #16665: returned results are scoped to the caller.
          *
          *     **Parameters:**
          *     - **query**: Search query string
@@ -45463,85 +45528,6 @@ export interface paths {
          */
         put: operations["update_rag_configuration_api_knowledge_base_rag_config_rag_put"];
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/rag/loop/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Loop Status
-         * @description Get autonomous improvement loop status.
-         *
-         *     Returns last run time, variants tested, winner, current baseline config,
-         *     and any variant pending human approval.
-         *
-         *     Issue #4680.
-         */
-        get: operations["get_loop_status_api_knowledge_base_rag_loop_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/rag/loop/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Approve Loop Variant
-         * @description Promote the pending staging variant to production RAGConfig.
-         *
-         *     The autonomous loop stores a "pending approval" variant when the improvement
-         *     margin is below the auto-promotion threshold.  This endpoint applies it.
-         *
-         *     Returns 409 if no variant is pending.
-         *
-         *     Issue #4680.
-         */
-        post: operations["approve_loop_variant_api_knowledge_base_rag_loop_approve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/rag/loop/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reject Loop Variant
-         * @description Discard the pending staging variant without applying it to production RAGConfig.
-         *
-         *     The autonomous loop stores a "pending approval" variant when the improvement
-         *     margin is below the auto-promotion threshold.  This endpoint clears it.
-         *
-         *     Returns 409 if no variant is pending.
-         *
-         *     Issue #4916.
-         */
-        post: operations["reject_loop_variant_api_knowledge_base_rag_loop_reject_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -111862,39 +111848,6 @@ export interface operations {
             };
         };
     };
-    extract_knowledge_api_knowledge_base_ai_stack_extract_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AIStackKnowledgeExtractionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackKnowledgeExtractData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     analyze_documents_api_knowledge_base_ai_stack_analyze_documents_post: {
         parameters: {
             query?: never;
@@ -116378,39 +116331,6 @@ export interface operations {
             };
         };
     };
-    extract_knowledge_api_knowledge_base_extract_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AIStackKnowledgeExtractionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackKnowledgeExtractData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     analyze_documents_api_knowledge_base_analyze_documents_post: {
         parameters: {
             query?: never;
@@ -116523,6 +116443,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_AIStackHealthStatusData_"];
+                };
+            };
+        };
+    };
+    extract_knowledge_api_knowledge_base_extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIStackKnowledgeExtractionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_AIStackKnowledgeExtractData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -163129,6 +163082,66 @@ export interface operations {
             };
         };
     };
+    get_loop_status_api_knowledge_base_rag_loop_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoopStatusResponse"];
+                };
+            };
+        };
+    };
+    approve_loop_variant_api_knowledge_base_rag_loop_approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoopApproveResponse"];
+                };
+            };
+        };
+    };
+    reject_loop_variant_api_knowledge_base_rag_loop_reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoopRejectResponse"];
+                };
+            };
+        };
+    };
     advanced_search_api_knowledge_base_rag_advanced_search_post: {
         parameters: {
             query?: never;
@@ -163244,66 +163257,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_loop_status_api_knowledge_base_rag_loop_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoopStatusResponse"];
-                };
-            };
-        };
-    };
-    approve_loop_variant_api_knowledge_base_rag_loop_approve_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoopApproveResponse"];
-                };
-            };
-        };
-    };
-    reject_loop_variant_api_knowledge_base_rag_loop_reject_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoopRejectResponse"];
                 };
             };
         };
