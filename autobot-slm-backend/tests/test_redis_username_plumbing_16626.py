@@ -60,7 +60,8 @@ def test_redis_role_readiness_ping_sends_the_user_first():
     task = _task(
         _ANSIBLE / "roles" / "redis" / "tasks" / "main.yml", "Redis | Wait for Redis to be ready (retry-based)"
     )
-    ctx = {"redis_port": 6379, "redis_password": _PW}
+    # #16627: the ping authenticates as the role's client, whose credential defaults to redis_password.
+    ctx = {"redis_port": 6379, "redis_client_password": _PW}
     assert "--user" not in _render(task["command"], redis_username="", **ctx)
     rendered = _render(task["command"], redis_username="default", **ctx)
     assert rendered.index("--user default") < rendered.index(f"-a {_PW}")

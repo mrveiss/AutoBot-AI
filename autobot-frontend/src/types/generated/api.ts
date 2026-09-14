@@ -44558,7 +44558,7 @@ export interface paths {
          *
          *     Returns:
          *         Configuration for the worker including:
-         *             - redis: Redis connection details (host, port, password, db)
+         *             - redis: Redis connection details (host, port, db; no credential, #16657)
          *             - backend: Backend connection details
          *             - models: Model configuration
          *             - logging: Logging configuration
