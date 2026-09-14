@@ -39,19 +39,20 @@ PLATFORM_WIDE_ACCESS = ("general", "autobot")
 def requests_platform_wide(metadata: Optional[Dict[str, Any]]) -> bool:
     """Whether *metadata* asks for a platform-wide reach: SYSTEM/PUBLIC, or a general/autobot access level."""
     meta = metadata or {}
-    return meta.get("visibility") in PLATFORM_WIDE_VISIBILITY or meta.get("access_level") in PLATFORM_WIDE_ACCESS
+    return (
+        _norm(meta.get("visibility")) in PLATFORM_WIDE_VISIBILITY
+        or _norm(meta.get("access_level")) in PLATFORM_WIDE_ACCESS
+    )
+
+
+def _norm(value: Any) -> Any:
+    """``" PUBLIC "`` asks for ``public`` too: compare the value the way a lenient reader would."""
+    return value.strip().lower() if isinstance(value, str) else value
 
 
 def refuses_platform_wide(metadata: Optional[Dict[str, Any]], caller_role: Optional[str]) -> bool:
     """True when a non-admin asks for a platform-wide reach -- a route answers that with 403 (#16663)."""
     return requests_platform_wide(metadata) and not is_admin_role(caller_role)
-
-
-def drop_owner_fields_unless_admin(metadata: Optional[Dict[str, Any]], caller_role: Optional[str]) -> Dict[str, Any]:
-    """*metadata* without ``owner_id``/``user_id`` unless an admin sent it: no one files a fact under another name."""
-    if is_admin_role(caller_role):
-        return dict(metadata or {})
-    return {key: value for key, value in (metadata or {}).items() if key not in _OWNER_KEYS}
 
 
 def drop_ownership_unless_admin(metadata: Optional[Dict[str, Any]], caller_role: Optional[str]) -> Dict[str, Any]:

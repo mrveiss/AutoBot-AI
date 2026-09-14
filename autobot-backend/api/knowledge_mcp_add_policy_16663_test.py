@@ -31,7 +31,10 @@ async def _add(metadata: dict, role: str):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("metadata", [{"visibility": "public"}, {"visibility": "system"}, {"access_level": "general"}])
+@pytest.mark.parametrize(
+    "metadata",
+    [{"visibility": "public"}, {"visibility": "system"}, {"access_level": "general"}, {"visibility": " PUBLIC "}],
+)
 async def test_a_non_admin_asking_for_platform_wide_reach_gets_403(metadata):
     from api import knowledge_mcp as mod
 
@@ -55,8 +58,17 @@ async def test_an_admin_stores_a_system_fact_as_asked():
 
 
 @pytest.mark.asyncio
-async def test_a_non_admin_keeps_their_metadata_but_not_an_owner_field():
-    response, kb = await _add({"visibility": "private", "owner_id": "someone-else", "title": "t"}, "user")
+async def test_a_non_admin_cannot_file_a_fact_into_another_org_group_or_share():
+    """Cross-tenant regression: org, group and share fields never reach storage from a non-admin."""
+    sent = {
+        "title": "t",
+        "visibility": "organization",
+        "organization_id": "another-org",
+        "group_ids": ["their-group"],
+        "shared_with": ["someone"],
+        "owner_id": "someone-else",
+    }
+    response, kb = await _add(sent, "user")
 
     assert response["success"] is True
-    assert kb.add_document.await_args.kwargs["metadata"] == {"visibility": "private", "title": "t"}
+    assert kb.add_document.await_args.kwargs["metadata"] == {"title": "t"}

@@ -28,7 +28,7 @@ from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.model_constants import ModelConstants
 from dependencies import get_config
-from knowledge.ownership_index import drop_owner_fields_unless_admin, refuses_platform_wide
+from knowledge.ownership_index import drop_ownership_unless_admin, refuses_platform_wide
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.schemas.mcp import (
     DocumentAddRequest,
@@ -504,14 +504,14 @@ async def mcp_add_to_knowledge_base(
     request: DocumentAddRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """MCP tool: add a document (#744); platform-wide reach is admin-only, and no one sets the owner (#16663)."""
+    """MCP tool: add a document (#744); only admins set who owns or sees it -- platform-wide asks get 403 (#16663)."""
     if refuses_platform_wide(request.metadata, current_user.get("role")):  # before the try: it swallows errors
         raise HTTPException(status_code=403, detail="Only admins can make knowledge visible to every signed-in user")
     try:
         kb = get_knowledge_base()
         doc_id = await kb.add_document(
             content=request.content,
-            metadata=drop_owner_fields_unless_admin(request.metadata, current_user.get("role")),
+            metadata=drop_ownership_unless_admin(request.metadata, current_user.get("role")),
             source=request.source,
         )
         return {"success": True, "document_id": doc_id, "message": "Document added successfully"}

@@ -19,7 +19,6 @@ import pytest
 from knowledge.facts import FactsMixin
 from knowledge.ownership import KnowledgeOwnership, VisibilityLevel
 from knowledge.ownership_index import (
-    drop_owner_fields_unless_admin,
     drop_ownership_unless_admin,
     index_ownership,
     ownership_changed,
@@ -211,6 +210,8 @@ async def test_ingestion_files_the_fact_under_its_organization_and_group():
     ("metadata", "role", "refused"),
     [
         ({"visibility": "public"}, "user", True),
+        ({"visibility": " PUBLIC "}, "user", True),
+        ({"access_level": "Autobot"}, "user", True),
         ({"visibility": "system"}, None, True),
         ({"access_level": "general"}, "user", True),
         ({"visibility": "system"}, "admin", False),
@@ -220,13 +221,3 @@ async def test_ingestion_files_the_fact_under_its_organization_and_group():
 )
 def test_only_a_non_admins_platform_wide_request_is_refused(metadata, role, refused):
     assert refuses_platform_wide(metadata, role) is refused
-
-
-def test_a_non_admin_loses_only_the_owner_fields():
-    sent = {"title": "t", "owner_id": "u2", "user_id": "u2", "visibility": "private", "shared_with": ["u3"]}
-    assert drop_owner_fields_unless_admin(sent, "user") == {
-        "title": "t",
-        "visibility": "private",
-        "shared_with": ["u3"],
-    }
-    assert drop_owner_fields_unless_admin(sent, "admin") == sent
