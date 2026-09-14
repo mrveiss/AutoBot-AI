@@ -1,3 +1,10 @@
 # Task queue and agent communication
 celery==5.6.3
 kombu==5.6.2
+
+# MCP protocol for skill subprocesses (Issue #731). Floor mirrored from
+# autobot-backend/requirements.txt, not pinned exact -- #16449's
+# import-mcp-resolves-to-the-real-SDK guard needs the real package
+# installed, and requirements_ci_drift_baseline.txt's "mcp" exemption
+# assumed no CI-scoped test imported it directly, which stopped being true.
+mcp>=2.1.1

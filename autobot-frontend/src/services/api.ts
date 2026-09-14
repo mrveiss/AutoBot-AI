@@ -12,7 +12,12 @@ import type {
   TeamResponse,
   SessionInviteResponse,
   SessionRemoveResponse,
-  SessionShareSecretResponse
+  SessionShareSecretResponse,
+  SessionPresenceResponse,
+  SessionEventsResponse,
+  PendingInvitationResponse,
+  MyInvitationsResponse,
+  InvitationRespondResponse
 } from '@/types/api-contract'
 import apiClient from '@/utils/ApiClient'
 import type { RequestOptions } from '@/utils/ApiClient'
@@ -21,6 +26,14 @@ import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for ApiService
 const logger = createLogger('ApiService')
+
+// #16460: re-exported so `useSessionCollaboration.ts` (and any other existing
+// importer) can keep pulling this from the service module rather than reaching
+// into `@/types/api-contract` directly.
+export type { PendingInvitationResponse }
+
+// #16460: matches the backend's own GET /sessions/{id}/events default (api/collaboration_events.py).
+const DEFAULT_SESSION_EVENTS_LIMIT = 50
 
 // Session collaboration response types
 export interface ParticipantResponse {
@@ -36,6 +49,12 @@ export interface SessionParticipantsResponse {
   participants: ParticipantResponse[]
   total_count: number
 }
+
+// #16460: SessionPresenceResponse, CollabEventResponse, SessionEventsResponse,
+// PendingInvitationResponse, MyInvitationsResponse and InvitationRespondResponse
+// are aliased from the generated contract in @/types/api-contract (imported
+// above) rather than hand-typed here -- same approach already used for
+// SessionInviteResponse/SessionRemoveResponse/SessionShareSecretResponse.
 
 class ApiService {
   private client: typeof apiClient
@@ -112,9 +131,7 @@ class ApiService {
   }
 
   // Session Collaboration API (Issue #3986; #16443 added the remaining
-  // api/collaboration.py endpoints -- invite/remove/share). Presence itself
-  // rides the /ws/sessions/{id}/presence WebSocket only (useSessionCollaboration.ts),
-  // not a REST call -- there is no presence-fetch method here to keep in sync.
+  // api/collaboration.py endpoints -- invite/remove/share/presence)
   async getSessionParticipants(sessionId: string): Promise<SessionParticipantsResponse> {
     return this.get<SessionParticipantsResponse>(`${getApiBase()}/sessions/${sessionId}/participants`)
   }
@@ -144,6 +161,30 @@ class ApiService {
     return this.post<SessionShareSecretResponse>(`${getApiBase()}/sessions/${sessionId}/secrets/share`, {
       secret_id: secretId,
       participant_ids: participantIds ?? null
+    })
+  }
+
+  async getSessionPresence(sessionId: string): Promise<SessionPresenceResponse> {
+    return this.get<SessionPresenceResponse>(`${getApiBase()}/sessions/${sessionId}/presence`)
+  }
+
+  async getSessionEvents(
+    sessionId: string,
+    limit: number = DEFAULT_SESSION_EVENTS_LIMIT,
+    before?: string
+  ): Promise<SessionEventsResponse> {
+    return this.get<SessionEventsResponse>(`${getApiBase()}/sessions/${sessionId}/events`, {
+      params: { limit, before }
+    })
+  }
+
+  async getMyInvitations(): Promise<MyInvitationsResponse> {
+    return this.get<MyInvitationsResponse>(`${getApiBase()}/sessions/invitations/mine`)
+  }
+
+  async respondToInvitation(sessionId: string, accept: boolean): Promise<InvitationRespondResponse> {
+    return this.post<InvitationRespondResponse>(`${getApiBase()}/sessions/${sessionId}/invitations/respond`, {
+      accept
     })
   }
 

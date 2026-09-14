@@ -30,9 +30,8 @@ Rate limiting:
     Pre-auth (#13268): failed authentications are counted per client IP *and*
     against an endpoint-wide ceiling before any validation work runs, so the
     secret cannot be brute-forced unmetered and failed attempts cannot be used
-    as a Redis amplifier.  See mcp/auth_throttle.py.
-    Post-auth: in-memory token bucket per token prefix.
-    Both reject with JSON-RPC error code -32029.
+    as a Redis amplifier.  See mcp_server/auth_throttle.py.
+    Post-auth: in-memory token bucket per token prefix. Both reject with -32029.
 
 Observability:
     Every tool call is logged at INFO level with token-prefix, tool name,
@@ -51,7 +50,9 @@ from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
-from mcp.auth_throttle import UNKNOWN_IP, get_pre_auth_throttle
+from autobot_shared.ssot_constants import QueryDefaults
+from knowledge.search_filters import filter_non_private_results, is_non_private, non_private_where
+from mcp_server.auth_throttle import UNKNOWN_IP, get_pre_auth_throttle
 from services.run_jwt import validate_run_jwt
 
 logger = get_logger(__name__)
@@ -655,12 +656,12 @@ class AutoBotMCPServer:
         self,
         query: str,
         filters: Dict[str, Any] | None = None,
-        limit: int = 10,
+        limit: int = QueryDefaults.DEFAULT_SEARCH_LIMIT,
     ) -> Any:
         from knowledge._composed import get_knowledge_base
 
         kb = await get_knowledge_base()
-        results = await kb.search(query, top_k=limit, filters=filters)
+        results = filter_non_private_results(await kb.search(query, top_k=limit, filters=non_private_where(filters)))
         return {"results": results, "count": len(results)}
 
     async def _kb_get_document(self, doc_id: str) -> Any:
@@ -668,7 +669,7 @@ class AutoBotMCPServer:
 
         kb = await get_knowledge_base()
         doc = await asyncio.to_thread(kb.get_fact, doc_id)  # #16670: get_fact is synchronous
-        if doc is None:
+        if doc is None or not is_non_private(doc.get("metadata")):  # #16666: a private fact is not disclosed
             return {"error": "Document not found", "doc_id": doc_id}
         return doc
 
@@ -676,8 +677,7 @@ class AutoBotMCPServer:
         from knowledge._composed import get_knowledge_base
 
         kb = await get_knowledge_base()
-        result = await kb.get_category_tree()
-        return result
+        return await kb.get_category_tree()
 
     async def _kb_list_tags(self) -> Any:
         from knowledge._composed import get_knowledge_base
@@ -832,11 +832,11 @@ class AutoBotMCPServer:
 
     async def _memory_verbatim_search(self, query: str, session_filter: str | None = None) -> Any:
         from api.schemas_knowledge import MemoryVerbatimSearchRequest
-        from memory.verbatim_store import VerbatimStore
+        from memory.verbatim_store import UNSCOPED_ALL_USERS, VerbatimStore
 
         args = MemoryVerbatimSearchRequest(query=query, session_filter=session_filter)
         store = VerbatimStore()
-        results = await store.search(args.query, session_filter=args.session_filter)
+        results = await store.search(args.query, user_id=UNSCOPED_ALL_USERS, session_filter=args.session_filter)
         return {"results": results, "count": len(results)}
 
     # ------------------------------------------------------------------
