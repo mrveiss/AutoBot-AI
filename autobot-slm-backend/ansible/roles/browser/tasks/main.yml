@@ -124,14 +124,15 @@
   become: true
   tags: ['browser', 'packages']
 
-# Installed into the worker's own venv, not system-wide (#15417). Each of these
-# already has a declared home -- playwright in autobot-browser-worker/requirements.txt,
-# fastapi and uvicorn in the backend's -- and a second unpinned copy on the system
-# interpreter can satisfy `state: present` with a version below those floors.
-# fastapi's floor exists for a security reason (starlette >=0.52.1), so an unpinned
-# duplicate is not merely untidy. Constraints applied for the same reason every other
-# pip site applies them: without them a transitive pin can drag numpy below its floor
-# and force an unbuildable sdist (#14447).
+# Installed into the worker's own venv, not system-wide (#15417). playwright,
+# playwright-stealth, fastapi and uvicorn are declared in
+# autobot-browser-worker/requirements.txt (#15660), and a second unpinned copy
+# on the system interpreter can satisfy `state: present` with a version below
+# those floors. fastapi's floor exists for a security reason (starlette
+# >=0.52.1), so an unpinned duplicate is not merely untidy. Constraints
+# applied for the same reason every other pip site applies them: without them
+# a transitive pin can drag numpy below its floor and force an unbuildable
+# sdist (#14447).
 #
 # #15601 decision -- this site now honours `code_source_dir` rather than
 # deriving the path from `autobot.base_dir` alone. It was the odd one of four:
@@ -141,16 +142,39 @@
 # default. Two paths for one checkout is a worse failure than the literal the
 # other three were fixed for, because it goes wrong silently. All four pip
 # constraint sites are now one shape: override first, SSOT-derived fallback.
+#
+# #16641: needs the target interpreter installed and python_interpreter_binary
+# set before the pip task below references it.
+- name: "Browser | Install target Python interpreter"
+  ansible.builtin.include_role:
+    name: python_interpreter
+  tags: ['browser', 'packages']
+
+# #15684: this used to restate the four packages as a `name:` list here while
+# update-all-nodes.yml installed autobot-browser-worker/requirements.txt --
+# the SAME venv -- into it, so what a node ended up running depended on which
+# entry point ran last (#15671's class of bug). Reading the manifest here too,
+# rather than retyping it, makes both entry points agree by construction --
+# the shape roles/npu-worker already uses.
+#
+# #16641: `virtualenv:` alone made pip shell out to the standalone
+# `virtualenv` executable, which these hosts do not have -- only the stdlib's
+# `venv` module does. `virtualenv_command` creates it with that instead,
+# using the interpreter this role now installs above (replaces the bare
+# `virtualenv_python: python3.14` this carried, which only ever applied to
+# the `virtualenv` tool this role never actually used).
+#
+# #15733: the manifest opens with `-e ../autobot_shared`, which pip resolves
+# against the CWD, not the file it is written in. `chdir` anchors that to the
+# manifest's own directory -- the deployed component root the sync task above
+# already refreshed, so no worker code sync order changes.
 - name: "Browser | Install Playwright and FastAPI dependencies via pip"
   pip:
-    name:
-      - playwright>=1.62.0
-      - playwright-stealth
-      - uvicorn>=0.52.4
-      - fastapi>=0.141.1
+    requirements: "{{ browser_install_dir }}/requirements.txt"
     state: present
     virtualenv: "{{ browser_install_dir }}/venv"
-    virtualenv_python: python3.14
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
+    chdir: "{{ browser_install_dir }}"
     extra_args: "-c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt"
   become: true
   environment:

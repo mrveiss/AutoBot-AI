@@ -6270,57 +6270,11 @@ export interface paths {
          *     - Formatted context string
          *     - Source citations
          *     - Metadata about retrieved content
+         *
+         *     #16665: every fact entering the context is filtered to what the calling
+         *     user may see -- this feeds an LLM prompt, not just a display list.
          */
         post: operations["get_llm_context_api_knowledge_base_multi_source_context_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/multi-source/documentation/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Search Documentation
-         * @description Search indexed AutoBot documentation.
-         *
-         *     Issue #250: Direct endpoint for documentation search.
-         *
-         *     Args:
-         *         query: Search query
-         *         n_results: Maximum results to return
-         *         score_threshold: Minimum relevance score (0-1)
-         */
-        get: operations["search_documentation_api_knowledge_base_multi_source_documentation_search_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/multi-source/documentation/stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Documentation Stats
-         * @description Get statistics about indexed documentation.
-         *
-         *     Returns document count and indexing status.
-         */
-        get: operations["documentation_stats_api_knowledge_base_multi_source_documentation_stats_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6657,7 +6611,7 @@ export interface paths {
          *     in the ChromaDB instance.
          *
          *     Args:
-         *         current_user: Authenticated user (injected by auth middleware)
+         *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
          *         CollectionListResponse with list of collections and their metadata
@@ -6687,7 +6641,7 @@ export interface paths {
          *
          *     Args:
          *         name: Collection name
-         *         current_user: Authenticated user (injected by auth middleware)
+         *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
          *         CollectionDetailResponse with collection metadata
@@ -6719,7 +6673,7 @@ export interface paths {
          *         name: Collection name
          *         limit: Maximum number of documents to return (1-1000)
          *         offset: Number of documents to skip for pagination
-         *         current_user: Authenticated user (injected by auth middleware)
+         *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
          *         DocumentListResponse with document data (ids, documents, metadatas, embeddings)
@@ -6755,7 +6709,7 @@ export interface paths {
          *     Args:
          *         name: Collection name
          *         request: Search parameters (query, n_results, where filter)
-         *         current_user: Authenticated user (injected by auth middleware)
+         *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
          *         SearchResponse with matching documents and similarity scores
@@ -10130,6 +10084,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/multi-source/documentation/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Documentation
+         * @description Search indexed AutoBot documentation.
+         *
+         *     Issue #250: Direct endpoint for documentation search.
+         *
+         *     Args:
+         *         query: Search query
+         *         n_results: Maximum results to return
+         *         score_threshold: Minimum relevance score (0-1)
+         */
+        get: operations["search_documentation_api_knowledge_base_multi_source_documentation_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/multi-source/documentation/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation Stats
+         * @description Get statistics about indexed documentation.
+         *
+         *     Returns document count and indexing status.
+         */
+        get: operations["documentation_stats_api_knowledge_base_multi_source_documentation_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge/sync-queue": {
         parameters: {
             query?: never;
@@ -12936,7 +12939,7 @@ export interface paths {
         put?: never;
         /**
          * Mcp Add To Knowledge Base
-         * @description MCP tool: add a document; any signed-in user (#744), but only admins set its ownership (#16663).
+         * @description MCP tool: add a document (#744); only admins set who owns or sees it -- platform-wide asks get 403 (#16663).
          */
         post: operations["mcp_add_to_knowledge_base_api_knowledge_mcp_add_to_knowledge_base_post"];
         delete?: never;
@@ -112373,59 +112376,6 @@ export interface operations {
             };
         };
     };
-    search_documentation_api_knowledge_base_multi_source_documentation_search_get: {
-        parameters: {
-            query: {
-                query: string;
-                n_results?: number;
-                score_threshold?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KnowledgeDocumentationSearchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    documentation_stats_api_knowledge_base_multi_source_documentation_stats_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KnowledgeDocumentationStatsResponse"];
-                };
-            };
-        };
-    };
     get_multi_source_graph_simple_api_knowledge_base_multi_source_graph_get: {
         parameters: {
             query?: {
@@ -116951,6 +116901,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_documentation_api_knowledge_base_multi_source_documentation_search_get: {
+        parameters: {
+            query: {
+                query: string;
+                n_results?: number;
+                score_threshold?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDocumentationSearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    documentation_stats_api_knowledge_base_multi_source_documentation_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDocumentationStatsResponse"];
                 };
             };
         };

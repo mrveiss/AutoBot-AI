@@ -108,18 +108,18 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/git_mcp.py": 1357,
     "autobot-backend/api/http_client_mcp.py": 963,
     "autobot-backend/api/ide_integration.py": 928,
-    "autobot-backend/api/knowledge.py": 3477,
+    "autobot-backend/api/knowledge.py": 3420,
     "autobot-backend/api/knowledge_ai_stack.py": 712,
     "autobot-backend/api/knowledge_api_integration_test.py": 623,
     "autobot-backend/api/knowledge_categories.py": 674,
     "autobot-backend/api/knowledge_collections.py": 726,
     "autobot-backend/api/knowledge_connectors.py": 929,
     "autobot-backend/api/knowledge_maintenance.py": 1987,
-    "autobot-backend/api/knowledge_mcp.py": 1460,
+    "autobot-backend/api/knowledge_mcp.py": 1455,
     "autobot-backend/api/knowledge_population.py": 1547,
     "autobot-backend/api/knowledge_rag.py": 672,
-    "autobot-backend/api/knowledge_search.py": 851,  # #16507: +auth dep
-    "autobot-backend/api/knowledge_search_aggregator.py": 967,  # #16507: +auth dep
+    "autobot-backend/api/knowledge_search.py": 820,  # #16665: analytics endpoints moved out
+    "autobot-backend/api/knowledge_search_aggregator.py": 951,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1704,
     "autobot-backend/api/knowledge_vectorization_test.py": 601,
@@ -208,7 +208,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/code_intelligence/vue_analyzer.py": 613,
     "autobot-backend/command_manual_manager.py": 908,
     "autobot-backend/computer_vision/screen_analyzer.py": 662,
-    "autobot-backend/conftest.py": 1568,
+    "autobot-backend/conftest.py": 1505,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 640,
