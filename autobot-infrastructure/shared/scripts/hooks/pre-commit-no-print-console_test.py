@@ -91,7 +91,19 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # to touch neither #16263's nor #16540's files, so the two chains combine cleanly:
 # 317 - 7 = 310. Computed at 2d-vehicle assembly, not independently re-measured on
 # the combined tree -- the vehicle's own CI run is that measurement.
-_KNOWN_REPO_VIOLATIONS = 310
+# 308 since #16526/#16527: services/llm_service.py's module docstring carries a
+# "Usage example::" block showing the REPL-style calls a caller would type
+# (`print(response.content)`, `print(chunk, end="", flush=True)`) -- this hook
+# scans line-by-line and cannot see that both sit inside a triple-quoted
+# docstring, so it flagged them as real print() calls. Both now carry
+# `# noqa: print`, same fix class as the #16263 entry above. MEASURED: running
+# `bash pre-commit-no-print-console autobot-backend/services/llm_service.py`
+# alone reports 0 violations post-fix (was 2), and no other tracked file
+# changed in that PR's diff. Verified this PR's own diff never touches
+# generate_report.py/generate_env_docs.py/check_env_var_registry.py (it only
+# appeared to in a base-drift diff, not a real edit), so 310 - 2 = 308 combines
+# cleanly with the chain above. Computed at 2d-vehicle assembly.
+_KNOWN_REPO_VIOLATIONS = 308
 
 
 def _test_git_env() -> dict[str, str]:
