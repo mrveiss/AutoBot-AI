@@ -67,18 +67,25 @@ async def _deploy_constraints_dir(source_root: str, steps: List[str]) -> None:
     when the file was absent.
 
     *source_root* must resolve inside the code_source root (CodeQL
-    py/path-injection, #16713) — raises ValueError otherwise, rather than
-    rsyncing from wherever it actually points. ``_get_code_source_root()``
-    stays on ``api.code_sync``'s single source of truth for that root, but the
-    import is lazy: a module-level import back into ``code_sync`` would be
-    circular (``code_sync`` imports this module at its own top level).
+    py/path-injection, #16713) — refuses and returns otherwise, rather than
+    rsyncing from wherever it actually points. Neither caller (the sync
+    endpoint nor the async job runner) wraps this call, so raising here would
+    surface as an unhandled 500 or a path in an operator-visible job record
+    (#16713 review) instead of the same graceful refusal the other three
+    containment checks in this split give (log server-side, note the refusal
+    in *steps*, return). ``_get_code_source_root()`` stays on
+    ``api.code_sync``'s single source of truth for that root, but the import
+    is lazy: a module-level import back into ``code_sync`` would be circular
+    (``code_sync`` imports this module at its own top level).
     """
     from api.code_sync import _get_code_source_root, _get_deploy_base
 
     root = os.path.realpath(str(_get_code_source_root()))
     src = os.path.realpath(f"{source_root}/{_CONSTRAINTS_SOURCE_SUBDIR}/")
     if not src.startswith(root + os.sep):
-        raise ValueError(f"constraints: source root resolves outside the code_source root {root!r}")
+        logger.error("code-sync: constraints source root resolves outside the code_source root: %s", src)
+        steps.append("constraints: refusing a source root outside the code_source root")
+        return
     dst = str(_get_deploy_base() / _CONSTRAINTS_SOURCE_SUBDIR) + "/"
     if not Path(src).exists():
         steps.append(f"constraints: source {src} not found — skipped")
@@ -113,8 +120,10 @@ async def _deploy_repo_root_requirements(source_root: str, steps: List[str]) -> 
     Skips gracefully when the source file is absent (non-fatal).
 
     Each copied *src* must resolve inside the code_source root (CodeQL
-    py/path-injection, #16713) — raises ValueError otherwise. Both lookups are
-    lazy for the same circular-import reason as ``_deploy_constraints_dir``.
+    py/path-injection, #16713) — refuses and skips that file otherwise, for
+    the same unwrapped-caller reason ``_deploy_constraints_dir`` does not
+    raise (#16713 review). Both lookups are lazy for the same circular-import
+    reason as ``_deploy_constraints_dir``.
     """
     from api.code_sync import _get_code_source_root, _get_deploy_base
 
@@ -123,7 +132,9 @@ async def _deploy_repo_root_requirements(source_root: str, steps: List[str]) -> 
     for filename in _REPO_ROOT_REQUIREMENT_FILES:
         src = os.path.realpath(str(Path(source_root) / filename))
         if not src.startswith(source_root_resolved + os.sep):
-            raise ValueError(f"root-reqs: {filename!r} resolves outside the code_source root {source_root_resolved!r}")
+            logger.error("code-sync: root-reqs %r resolves outside the code_source root: %s", filename, src)
+            steps.append(f"root-reqs: refusing {filename!r} outside the code_source root")
+            continue
         src_path = Path(src)
         dst = base / filename
         if not src_path.exists():

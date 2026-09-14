@@ -30,8 +30,6 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 # ---------------------------------------------------------------------------
 # #12572: import api.code_sync via the shared helper — see
 # test_code_sync_deploy_bugs.py's header for the full rationale.
@@ -130,11 +128,11 @@ def test_deploy_constraints_dir_refuses_traversal_before_filesystem_access(tmp_p
         patch("pathlib.Path.exists") as mock_exists,
         patch("asyncio.create_subprocess_exec") as mock_exec,
     ):
-        with pytest.raises(ValueError, match="resolves outside"):
-            _run(_deploy_constraints_dir(str(outside / ".." / ".." / "etc"), steps))
+        _run(_deploy_constraints_dir(str(outside / ".." / ".." / "etc"), steps))
 
     mock_exists.assert_not_called()
     mock_exec.assert_not_called()
+    assert any("refusing" in s for s in steps), steps
 
 
 # ---------------------------------------------------------------------------
@@ -223,11 +221,11 @@ def test_deploy_repo_root_requirements_refuses_traversal_before_filesystem_acces
         patch("pathlib.Path.exists") as mock_exists,
         patch("asyncio.create_subprocess_exec") as mock_exec,
     ):
-        with pytest.raises(ValueError, match="resolves outside"):
-            _run(_deploy_repo_root_requirements(str(tmp_path / ".." / "etc"), steps))
+        _run(_deploy_repo_root_requirements(str(tmp_path / ".." / "etc"), steps))
 
     mock_exists.assert_not_called()
     mock_exec.assert_not_called()
+    assert any("refusing" in s for s in steps), steps
 
 
 # ---------------------------------------------------------------------------

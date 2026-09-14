@@ -2788,16 +2788,16 @@ async def _ensure_autobot_shared_symlink(component: str, steps: List[str]) -> No
         steps.append(f"symlink: {shared_target} not found — skipped")
         return
     link_path = base / component / "autobot_shared"
-    # CodeQL py/path-injection (#16713): the containment check is inlined here,
-    # in the same scope as the unlink()/symlink_to() sinks below, rather than
-    # delegated to a helper — CodeQL only recognises a guard as a sanitiser for
-    # a value used in the scope the guard itself runs in (#16229 review).
-    resolved_link = os.path.realpath(str(link_path))
+    # CodeQL py/path-injection (#16713): resolves the PARENT only -- realpath()
+    # on the whole path would follow an existing symlink to its target, and
+    # rebinding from THAT would unlink/replace the target, not the link.
+    resolved_link = os.path.join(os.path.realpath(str(link_path.parent)), link_path.name)
     resolved_base = os.path.realpath(str(base))
     if not resolved_link.startswith(resolved_base + os.sep):
         logger.error("drift resolve: symlink path outside deploy base for %s: %s", component, resolved_link)
         steps.append(f"symlink: refusing a path outside the deploy base for {component}")
         return
+    link_path = Path(resolved_link)
     try:
         if link_path.is_symlink() and link_path.resolve() == shared_target.resolve():
             steps.append(f"symlink: {link_path} already correct")
