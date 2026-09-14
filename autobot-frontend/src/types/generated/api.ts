@@ -12916,7 +12916,7 @@ export interface paths {
         put?: never;
         /**
          * Mcp Add To Knowledge Base
-         * @description MCP tool: add a document; any signed-in user (#744), but only admins set its ownership (#16663).
+         * @description MCP tool: add a document (#744); only admins set who owns or sees it -- platform-wide asks get 403 (#16663).
          */
         post: operations["mcp_add_to_knowledge_base_api_knowledge_mcp_add_to_knowledge_base_post"];
         delete?: never;
