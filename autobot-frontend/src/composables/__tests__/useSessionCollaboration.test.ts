@@ -39,11 +39,17 @@ vi.mock('@/utils/buildAuthenticatedWsUrl', () => ({
 
 const inviteToSession = vi.fn()
 const shareSecretWithSession = vi.fn()
+const getSessionEvents = vi.fn()
+const getMyInvitations = vi.fn()
+const respondToInvitation = vi.fn()
 
 vi.mock('@/services/api', () => ({
   apiService: {
     inviteToSession: (...args: unknown[]) => inviteToSession(...args),
-    shareSecretWithSession: (...args: unknown[]) => shareSecretWithSession(...args)
+    shareSecretWithSession: (...args: unknown[]) => shareSecretWithSession(...args),
+    getSessionEvents: (...args: unknown[]) => getSessionEvents(...args),
+    getMyInvitations: (...args: unknown[]) => getMyInvitations(...args),
+    respondToInvitation: (...args: unknown[]) => respondToInvitation(...args)
   }
 }))
 
@@ -57,6 +63,9 @@ describe('useSessionCollaboration (#16443)', () => {
     MockWebSocket.clearInstances()
     inviteToSession.mockReset().mockResolvedValue({ success: true })
     shareSecretWithSession.mockReset().mockResolvedValue({ success: true })
+    getSessionEvents.mockReset().mockResolvedValue({ session_id: 'session-1', events: [], has_more: false })
+    getMyInvitations.mockReset().mockResolvedValue({ invitations: [] })
+    respondToInvitation.mockReset().mockResolvedValue({ success: true, session_id: 'session-1', accepted: true, permission: 'viewer' })
   })
 
   afterEach(() => {
@@ -207,5 +216,84 @@ describe('useSessionCollaboration (#16443)', () => {
 
     expect(result).toBe(true)
     expect(shareSecretWithSession).toHaveBeenCalledWith('session-1', 'sec-1', ['user-a', 'user-b'])
+  })
+
+  it('backfills recentCollaboratorActivities and secretNotifications from GET .../events on join (#16460)', async () => {
+    getSessionEvents.mockResolvedValue({
+      session_id: 'session-1',
+      has_more: false,
+      events: [
+        {
+          id: 'evt-2',
+          session_id: 'session-1',
+          kind: 'secret_shared',
+          user_id: 'someone-else',
+          username: 'alice',
+          payload: {
+            secret_id: 'sec-1',
+            secret_name: 'prod-db-password', // pragma: allowlist secret
+            secret_type: 'password', // pragma: allowlist secret
+            shared_by: 'someone-else',
+            shared_by_username: 'alice'
+          },
+          timestamp: '2026-09-12T10:01:00Z'
+        },
+        {
+          id: 'evt-1',
+          session_id: 'session-1',
+          kind: 'activity',
+          user_id: 'someone-else',
+          username: 'alice',
+          payload: { activity: { type: 'terminal', content: 'ls', timestamp: '2026-09-12T10:00:00Z' } },
+          timestamp: '2026-09-12T10:00:00Z'
+        }
+      ]
+    })
+
+    const { joinSession, recentCollaboratorActivities, secretNotifications } = useSessionCollaboration()
+    joinSession('session-1')
+    await vi.advanceTimersByTimeAsync(20)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(getSessionEvents).toHaveBeenCalledWith('session-1')
+    expect(recentCollaboratorActivities.value).toHaveLength(1)
+    expect(recentCollaboratorActivities.value[0].userId).toBe('someone-else')
+    expect(secretNotifications.value).toHaveLength(1)
+    expect(secretNotifications.value[0].secretId).toBe('sec-1')
+  })
+
+  it('refreshPendingInvitations populates pendingInvitations from GET /sessions/invitations/mine (#16460)', async () => {
+    getMyInvitations.mockResolvedValue({
+      invitations: [
+        { session_id: 'session-9', from_user_id: 'owner-9', permission: 'viewer', invited_at: '2026-09-12T00:00:00Z', expires_at: null }
+      ]
+    })
+
+    const { refreshPendingInvitations, pendingInvitations } = useSessionCollaboration()
+    await refreshPendingInvitations()
+
+    expect(pendingInvitations.value).toHaveLength(1)
+    expect(pendingInvitations.value[0].sessionId).toBe('session-9')
+    expect(pendingInvitations.value[0].fromUserId).toBe('owner-9')
+  })
+
+  it('respondToInvitation calls REST and drops the invitation from pendingInvitations on success (#16460)', async () => {
+    getMyInvitations.mockResolvedValue({
+      invitations: [
+        { session_id: 'session-9', from_user_id: 'owner-9', permission: 'viewer', invited_at: '2026-09-12T00:00:00Z', expires_at: null }
+      ]
+    })
+    respondToInvitation.mockResolvedValue({ success: true, session_id: 'session-9', accepted: true, permission: 'viewer' })
+
+    const { refreshPendingInvitations, respondToInvitation: respond, pendingInvitations } = useSessionCollaboration()
+    await refreshPendingInvitations()
+    expect(pendingInvitations.value).toHaveLength(1)
+
+    const result = await respond('session-9', true)
+
+    expect(result).toBe(true)
+    expect(respondToInvitation).toHaveBeenCalledWith('session-9', true)
+    expect(pendingInvitations.value).toHaveLength(0)
   })
 })
