@@ -2535,6 +2535,7 @@
       "allTypes": "All Types",
       "typeLabel": "Type:",
       "manageTab": "Manage",
+      "watchFoldersTab": "תיקיות במעקב",
       "confirmDeleteSelected": "Delete {count} selected entries?"
     },
     "systemKnowledge": {
@@ -2930,9 +2931,6 @@
       "mcpResourcesAriaLabel": "Browse MCP Resources",
       "vectorStore": "Vector Store",
       "vectorStoreAriaLabel": "Browse the vector store",
-      "automationGroup": "Automation",
-      "watchFolders": "Watch Folders",
-      "watchFoldersAriaLabel": "Watch Folders",
       "browser": "דפדפן",
       "browserAriaLabel": "עיון, חיפוש ועריכת מסמכי ידע",
       "systemDocs": "מסמכי מערכת",
@@ -3504,7 +3502,39 @@
       }
     },
     "watchFolders": {
-      "confirmDelete": "Are you sure you want to delete this watch folder?"
+      "confirmDelete": "Are you sure you want to delete this watch folder?",
+      "description": "קבצים חדשים מתיקיות במעקב נקלטים אוטומטית למאגר הידע שלך.",
+      "addButton": "הוספת תיקייה במעקב",
+      "dialogTitle": "הוספת תיקייה במעקב",
+      "folderPathLabel": "נתיב התיקייה *",
+      "folderPathPlaceholder": "/mnt/watch",
+      "collectionLabel": "אוסף",
+      "collectionPlaceholder": "default",
+      "categoryLabel": "קטגוריה",
+      "categoryPlaceholder": "uploads",
+      "fileTypesLabel": "סוגי קבצים",
+      "recursiveLabel": "מעקב אחר תיקיות משנה באופן רקורסיבי",
+      "enabledLabel": "התחל מעקב מיידית",
+      "tagsLabel": "תגיות (מופרדות בפסיקים)",
+      "tagsPlaceholder": "tag1, tag2",
+      "statsTotalFolders": "סך התיקיות",
+      "statsActive": "פעילות",
+      "statsFilesIngested": "קבצים שנקלטו",
+      "statsErrors": "שגיאות",
+      "emptyTitle": "לא הוגדרו תיקיות במעקב",
+      "emptyHint": "הוסף תיקייה במעקב כדי לקלוט קבצים אוטומטית למאגר הידע שלך.",
+      "statusWatching": "במעקב",
+      "statusPaused": "מושהה",
+      "detailCollection": "אוסף:",
+      "detailCategory": "קטגוריה:",
+      "detailFileTypes": "סוגי קבצים:",
+      "detailRecursive": "רקורסיבי:",
+      "detailTags": "תגיות:",
+      "statFilesIngested": "קבצים שנקלטו:",
+      "lastChange": "שינוי אחרון:",
+      "never": "לעולם לא",
+      "pause": "השהה",
+      "resume": "המשך"
     },
     "graphPath": {
       "title": "נתיב חיבור",
@@ -3837,7 +3867,52 @@
       "contextMenuZoomToNode": "התמקד בצומת",
       "contextMenuFitSelection": "התאם תצוגה לבחירה",
       "contextMenuDeleteSelection": "מחק {count} צמתים נבחרים",
-      "contextMenuOpenWorkflow": "פתח את זרימת העבודה המקושרת"
+      "contextMenuOpenWorkflow": "פתח את זרימת העבודה המקושרת",
+      "jsonPath": "JSONPath",
+      "branchTrue": "✓ אמת",
+      "branchFalse": "✗ שקר",
+      "casePlaceholder": "מקרה {n}",
+      "removeCase": "הסרת מקרה {n}",
+      "targetLabel": "יעד:",
+      "targetVnc": "VNC",
+      "targetWeb": "אינטרנט",
+      "includeOcr": "OCR",
+      "includeElements": "רכיבים",
+      "elementTypePlaceholder": "סוג רכיב (לחצן, שדה קלט...)",
+      "textMatchPlaceholder": "טקסט להתאמה",
+      "singleClick": "לחיצה בודדת",
+      "doubleClick": "לחיצה כפולה",
+      "rightClick": "לחיצה ימנית",
+      "textToTypePlaceholder": "טקסט להקלדה",
+      "clearFirst": "ניקוי תחילה",
+      "ocrHint": "מחלץ את כל הטקסט מהמסך",
+      "waitElementPlaceholder": "רכיב להמתנה",
+      "timeoutPlaceholder": "זמן קצוב (ms)"
+    },
+    "builder": {
+      "created": "תהליך העבודה נוצר בהצלחה",
+      "createFailed": "יצירת תהליך העבודה נכשלה",
+      "planApproved": "התוכנית אושרה, תהליך העבודה מתחיל...",
+      "planApproveFailed": "אישור התוכנית נכשל",
+      "planRejected": "התוכנית נדחתה",
+      "unsupportedNodes": "סוגי צמתים אלה עדיין אינם נתמכים ולא ייכללו: {types}",
+      "addStepFirst": "יש להוסיף לפחות שלב אחד לפני השמירה",
+      "saved": "תהליך העבודה \"{name}\" נשמר",
+      "saveFailed": "שמירת תהליך העבודה נכשלה",
+      "templateEmpty": "בתבנית אין שלבים לטעינה",
+      "templateLoaded": "התבנית \"{name}\" נטענה לקנבס",
+      "templateStarted": "תהליך העבודה \"{name}\" התחיל",
+      "templateRunFailed": "הפעלת \"{name}\" נכשלה",
+      "started": "תהליך העבודה התחיל",
+      "paused": "תהליך העבודה הושהה",
+      "resumed": "תהליך העבודה חודש",
+      "cancelled": "תהליך העבודה בוטל",
+      "stepApproved": "השלב אושר",
+      "stepSkipped": "השלב דולג",
+      "rerunNotFound": "לא נמצא תהליך עבודה להפעלה חוזרת",
+      "rerunning": "מפעיל מחדש את \"{name}\"",
+      "rerunFailed": "ההפעלה החוזרת של תהליך העבודה נכשלה",
+      "notificationsSaved": "הגדרות ההתראות נשמרו"
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
@@ -4456,31 +4531,6 @@
       "releaseFailed": "Failed to release control: {error}"
     }
   },
-  "redis": {
-    "title": "Redis Service",
-    "stopWarning": "WARNING: This action will affect system functionality. Only administrators can stop the service.",
-    "stopTitle": "Stop Redis Service",
-    "restartMsg": "This will temporarily interrupt Redis service. Active connections will be dropped.",
-    "manualInterventionTitle": "Manual Intervention Required:",
-    "lastCheck": "Last check:",
-    "restartTitle": "Restart Redis Service",
-    "memory": "Memory",
-    "restart": "Restart",
-    "stopMsg": "This will stop Redis service completely. All dependent services will be affected.",
-    "enabled": "Enabled:",
-    "recommendations": "Recommendations",
-    "pid": "PID",
-    "recentRecoveries": "Recent Recoveries:",
-    "processing": "Processing...",
-    "healthStatus": "Health Status",
-    "stop": "Stop",
-    "manualInterventionMsg": "Auto-recovery has failed. Please check service logs.",
-    "connections": "Connections",
-    "uptime": "Uptime",
-    "restartWarning": "All connected clients will be disconnected during restart.",
-    "autoRecoveryStatus": "Auto-Recovery Status",
-    "start": "Start"
-  },
   "charts": {
     "callGraph": {
       "controls": {
@@ -5016,6 +5066,14 @@
       "roleEditor": "Editor",
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
+    },
+    "panel": {
+      "title": "שיתוף פעולה",
+      "invite": "הזמן",
+      "closePanel": "סגור פאנל",
+      "tabParticipants": "משתתפים",
+      "tabActivity": "פעילות",
+      "tabNotifications": "התראות"
     }
   },
   "chat": {
@@ -5826,6 +5884,7 @@
       "osMacOS": "macOS",
       "sshKey": "SSH Key / Private Key",
       "edit": "Edit",
+      "share": "שיתוף",
       "sshKeyPlaceholder": "Paste SSH private key here...",
       "noExpiry": "No expiry",
       "authPassword": "Password",
@@ -6806,7 +6865,31 @@
     "notifications": "התראות",
     "mobileDevices": "מכשירים ניידים",
     "privacy": "פרטיות",
-    "providerAuthDesc": "התחבר לספקים באמצעות המנוי הקיים שלך במקום מפתח API בתשלום. האסימונים נשמרים באופן מאובטח בכספת הסודות של AutoBot."
+    "providerAuthDesc": "התחבר לספקים באמצעות המנוי הקיים שלך במקום מפתח API בתשלום. האסימונים נשמרים באופן מאובטח בכספת הסודות של AutoBot.",
+    "providerAuth": {
+      "heading": "התחברות לספק (מבוססת מינוי)",
+      "apiKeyHint": "הזינו את מפתח ה-API באשף שלמעלה.",
+      "apiKeyTab": "מפתח API",
+      "signInWith": "התחברות באמצעות {provider}",
+      "connected": "מחובר",
+      "expiresAt": "— פג תוקף ב-{date}",
+      "notConnected": "לא מחובר",
+      "disconnect": "ניתוק",
+      "connecting": "מתחבר...",
+      "connectDeviceCode": "התחברות באמצעות קוד מכשיר",
+      "deviceInstruction": "היכנסו אל {url} והזינו את הקוד:",
+      "checking": "בודק...",
+      "approvedButton": "אישרתי",
+      "oauthDescription": "אימות באמצעות המינוי הקיים שלך ב-{provider}.",
+      "noApiKeyRequired": "אין צורך במפתח API.",
+      "redirecting": "מפנה...",
+      "disconnectFailed": "הניתוק נכשל",
+      "redirectNeedsCallback": "זרימת OAuth עם הפניה בדפדפן דורשת הגדרת callback בצד השרת. בסביבות ללא ממשק יש להשתמש בקוד מכשיר.",
+      "deviceNotConfigured": "אימות מכשיר אינו מוגדר עבור ספק זה",
+      "deviceInitFailed": "הפעלת זרימת המכשיר נכשלה",
+      "stillWaiting": "עדיין ממתין לאישור — נסו שוב בעוד רגע.",
+      "pollFailed": "הבדיקה נכשלה"
+    }
   },
   "visualizations": {
     "systemArchitecture": {
@@ -7253,19 +7336,13 @@
       "revokeSuccess": "Secret revoked successfully"
     },
     "share": {
-      "expiresIn": "Access expires in",
       "secretLabel": "Secret",
-      "expire1Week": "1 week",
       "title": "Share Secret",
       "shareSecret": "Share Secret",
-      "expire1Hour": "1 hour",
       "cancel": "Cancel",
       "sharing": "Sharing...",
-      "expire24Hours": "24 hours",
       "noParticipants": "No participants in session",
-      "shareWithParticipants": "Share with participants",
-      "expireNever": "Never",
-      "expire6Hours": "6 hours"
+      "shareWithParticipants": "Share with participants"
     },
     "auditLog": {
       "copy": "Copy",

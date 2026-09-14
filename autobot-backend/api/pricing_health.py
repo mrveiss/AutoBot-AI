@@ -28,6 +28,7 @@ async def _pricing_health_probe(request: Request | None) -> ComponentHealth:
 
         store = PricingRedisStore()
         status = await store.get_refresh_status()
+        crosscheck = await store.get_crosscheck()
 
         if not status:
             return ComponentHealth(
@@ -62,6 +63,9 @@ async def _pricing_health_probe(request: Request | None) -> ComponentHealth:
         else:
             probe_status = "ok"
             detail = f"{len(status)} provider(s) refreshed successfully"
+        if crosscheck:  # #16229: how many models the catalogues were actually compared on
+            compared, disagreed = crosscheck.get("compared", 0), len(crosscheck.get("disagreed", []))
+            detail += f"; cross-check compared {compared}, disagreed {disagreed}"
 
         return ComponentHealth(
             name=KnownProbes.PRICING,

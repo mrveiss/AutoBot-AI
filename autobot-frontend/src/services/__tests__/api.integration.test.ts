@@ -8,7 +8,6 @@ import {
   createMockChatMessage,
   createMockChatSession,
   createMockWorkflow,
-  createMockSettings,
 } from '../../test/utils/test-utils'
 
 // #9693: reuse the shared MSW server from integration-setup.ts — a second
@@ -227,64 +226,9 @@ describe('API Service Integration Tests', () => {
     })
   })
 
-  describe('Settings API Integration', () => {
-    it('retrieves settings successfully', async () => {
-      const mockSettings = createMockSettings()
-
-      // apiService.getSettings hits /api/settings/
-      server.use(
-        http.get(`${API_BASE}/api/settings/`, () => {
-          return HttpResponse.json(
-            createMockApiResponse({ settings: mockSettings })
-          )
-        })
-      )
-
-      const result = await apiService.getSettings()
-
-      expect(result.success).toBe(true)
-      expect(result.data.settings.chat.auto_scroll).toBe(true)
-      expect(result.data.settings.backend.host).toBe('localhost')
-    })
-
-    it('saves settings successfully', async () => {
-      const settingsToSave = createMockSettings({
-        chat: { auto_scroll: false, max_messages: 200 }
-      })
-
-      // apiService.saveSettings (via updateSettings) posts to /api/settings/
-      server.use(
-        http.post(`${API_BASE}/api/settings/`, () => {
-          return HttpResponse.json(
-            createMockApiResponse({
-              settings: settingsToSave,
-              saved: true,
-            })
-          )
-        })
-      )
-
-      const result = await apiService.saveSettings(settingsToSave)
-
-      expect(result.success).toBe(true)
-      expect(result.data.saved).toBe(true)
-    })
-
-    it('handles settings validation errors', async () => {
-      server.use(
-        http.post(`${API_BASE}/api/settings/`, () => {
-          return new HttpResponse(null, {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' }
-          })
-        })
-      )
-
-      await expect(
-        apiService.saveSettings({ invalid: 'settings' })
-      ).rejects.toThrow()
-    })
-  })
+  // #16465: apiService.getSettings/updateSettings/saveSettings removed --
+  // zero real callers, superseded by utils/ApiClient.ts. The "Settings API
+  // Integration" tests that used to live here went with them.
 
   describe('System API Integration', () => {
     it('retrieves system health', async () => {

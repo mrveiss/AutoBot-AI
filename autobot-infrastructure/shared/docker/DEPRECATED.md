@@ -10,20 +10,24 @@
 
 The contents of this directory are **DEPRECATED** and **NOT USED** in the current AutoBot deployment.
 
-All services now run **natively via systemd** on their respective VMs, not in Docker containers.
+All services now run **natively via systemd** on their respective machines, not in Docker containers.
 
 ---
 
 ## Current Service Deployment
 
-| Service | VM | IP | Deployment Method |
-|---------|-----|-----|-------------------|
-| Backend | Main Host | ${AUTOBOT_*_HOST}.20 | systemd: `autobot-backend.service` |
-| AI Stack | VM4 | ${AUTOBOT_*_HOST}.24 | systemd: `autobot-ai-stack.service` |
-| NPU Worker | VM2 | ${AUTOBOT_*_HOST}.22 | systemd: `autobot-npu-worker.service` |
-| Redis Stack | VM3 | ${AUTOBOT_*_HOST}.23 | systemd: `redis-stack-server.service` |
-| Frontend | VM1 | ${AUTOBOT_*_HOST}.21 | systemd or Vite dev server |
-| Browser | VM5 | ${AUTOBOT_*_HOST}.25 | systemd: Playwright service |
+| Service | Role | IP | Deployment Method |
+|---------|------|-----|-------------------|
+| Backend | Main / control host | ${AUTOBOT_*_HOST}.20 | systemd: `autobot-backend.service` |
+| AI Stack | AI/ML | ${AUTOBOT_*_HOST}.24 | systemd: `autobot-ai-stack.service` |
+| NPU Worker | AI/ML (NPU worker) | ${AUTOBOT_*_HOST}.22 | systemd: `autobot-npu-worker.service` |
+| Redis Stack | Database | ${AUTOBOT_*_HOST}.23 | systemd: `redis-stack-server.service` |
+| Frontend | Frontend | ${AUTOBOT_*_HOST}.21 | systemd or Vite dev server |
+| Browser | Browser | ${AUTOBOT_*_HOST}.25 | systemd: Playwright service |
+
+> This is one install's historical layout, recorded when this directory was deprecated. AutoBot's
+> architecture is role-based and count-agnostic — a deployment may run in Docker, on one VM, or
+> scaled across any number of machines.
 
 ---
 
