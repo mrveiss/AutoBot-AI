@@ -109,19 +109,19 @@
         </div>
 
         <div v-if="folder.stats" class="folder-stats">
-          <div class="stat-item">
-            <span class="stat-label">{{ $t('knowledge.watchFolders.statFilesIngested') }}</span>
-            <span class="stat-value">{{ folder.stats.files_ingested }}</span>
+          <div class="detail-row">
+            <span class="detail-label">{{ $t('knowledge.watchFolders.statFilesIngested') }}</span>
+            <span class="detail-value">{{ folder.stats.files_ingested }}</span>
           </div>
-          <div class="stat-item">
-            <span class="stat-label">{{ $t('knowledge.watchFolders.lastChange') }}</span>
-            <span class="stat-value">
+          <div class="detail-row">
+            <span class="detail-label">{{ $t('knowledge.watchFolders.lastChange') }}</span>
+            <span class="detail-value">
               {{ folder.stats.last_change ? formatDate(folder.stats.last_change) : $t('knowledge.watchFolders.never') }}
             </span>
           </div>
-          <div v-if="folder.stats.errors > 0" class="stat-item">
-            <span class="stat-label">{{ $t('knowledge.watchFolders.statsErrors') }}</span>
-            <span class="stat-value stat-error">{{ folder.stats.errors }}</span>
+          <div v-if="folder.stats.errors > 0" class="detail-row">
+            <span class="detail-label">{{ $t('knowledge.watchFolders.statsErrors') }}</span>
+            <span class="detail-value stat-error">{{ folder.stats.errors }}</span>
           </div>
         </div>
 
@@ -372,25 +372,8 @@ onMounted(async () => {
   margin-bottom: var(--spacing-6);
 }
 
-.stat-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-5);
-}
-
-.stat-label {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  margin-bottom: var(--spacing-2);
-}
-
-.stat-value {
-  font-size: var(--text-2xl);
-  font-weight: var(--font-bold);
-  color: var(--text-primary);
-}
-
+/* .stat-card / .stat-label / .stat-value are the shared classes from
+   assets/css/components.css — no local override needed. */
 .stat-error {
   color: var(--color-danger);
 }
@@ -539,21 +522,18 @@ onMounted(async () => {
   margin-bottom: var(--spacing-4);
 }
 
-.detail-row,
-.stat-item {
+.detail-row {
   display: flex;
   justify-content: space-between;
   padding: var(--spacing-2) 0;
   font-size: var(--text-sm);
 }
 
-.detail-label,
-.stat-label {
+.detail-label {
   color: var(--text-secondary);
 }
 
-.detail-value,
-.stat-value {
+.detail-value {
   color: var(--text-primary);
   font-weight: var(--font-medium);
 }
