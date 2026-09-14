@@ -14,7 +14,6 @@ import type {
   SessionRemoveResponse,
   SessionShareSecretResponse,
   SessionPresenceResponse,
-  CollabEventResponse,
   SessionEventsResponse,
   PendingInvitationResponse,
   MyInvitationsResponse,
