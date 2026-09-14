@@ -45,7 +45,7 @@ We have roughly 40 tools. [`tools/tool_registry.py:849-894`](../../autobot-backe
 returns a flat list of ~25 registry tools plus `BROWSER_TOOL_NAMES`;
 [`chat_workflow/tool_handler.py:495`](../../autobot-backend/chat_workflow/tool_handler.py#L495)
 holds a static `_BUILTIN_TOOL_SCHEMAS`; the MCP manifest
-([`mcp/autobot_server.py:560-570`](../../autobot-backend/mcp/autobot_server.py#L560-L570)) returns
+([`mcp/autobot_server.py:560-570`](../../autobot-backend/mcp_server/autobot_server.py#L560-L570)) returns
 all tools filtered by token scope. The whole manifest fits in context with room to spare.
 
 Adopting search-then-execute would buy nothing and cost an extra LLM round trip before every tool
@@ -258,7 +258,7 @@ Recorded so none of these get "fixed" toward the reference implementation.
 3. **Auth is a different class of system.** The reference is admin token plus runtime tokens,
    single operator, no multi-user RBAC. We have full user management, SSO/SCIM, per-user RBAC,
    run-JWT scopes mapped to tool prefixes
-   ([`autobot_server.py:72-79`](../../autobot-backend/mcp/autobot_server.py#L72-L79)), pre-auth
+   ([`autobot_server.py:72-79`](../../autobot-backend/mcp_server/autobot_server.py#L72-L79)), pre-auth
    throttling per client IP plus an endpoint-wide ceiling (#13268), constant-time comparison, and a
    no-default-credential policy that fails fatally rather than authenticating everyone (#13266).
 4. **The secrets layer is mature.** `models/secret.py` carries owner, org, scope, team ids,

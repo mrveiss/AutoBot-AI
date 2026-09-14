@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from autobot_shared.ssot_config import config
-from mcp.autobot_server import AutoBotMCPServer, _stdio_bearer_token
+from mcp_server.autobot_server import AutoBotMCPServer, _stdio_bearer_token
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -90,7 +90,7 @@ async def test_kb_list_categories():
     fake_kb.get_category_tree = AsyncMock(return_value={"tree": [{"id": "cat1", "name": "General"}]})
 
     with patch(
-        "mcp.autobot_server.AutoBotMCPServer._kb_list_categories",
+        "mcp_server.autobot_server.AutoBotMCPServer._kb_list_categories",
         new=AsyncMock(return_value={"tree": [{"id": "cat1", "name": "General"}]}),
     ):
         resp = await server.handle_request(
@@ -268,7 +268,7 @@ _FAKE_AGENT_CLAIMS = {
 async def test_run_jwt_correct_scope_passes():
     """Agent with mcp:knowledge JWT can call kb.* tools."""
     server = make_server()
-    with patch("mcp.autobot_server.validate_run_jwt", new=AsyncMock(return_value=_FAKE_KB_CLAIMS)):
+    with patch("mcp_server.autobot_server.validate_run_jwt", new=AsyncMock(return_value=_FAKE_KB_CLAIMS)):
         with patch.object(server, "_kb_list_categories", new=AsyncMock(return_value={"tree": []})):
             resp = await server.handle_request(
                 "tools/call",
@@ -282,7 +282,7 @@ async def test_run_jwt_correct_scope_passes():
 async def test_run_jwt_insufficient_scope_returns_403():
     """Agent with mcp:knowledge JWT cannot call agents.* tools — returns -32003."""
     server = make_server()
-    with patch("mcp.autobot_server.validate_run_jwt", new=AsyncMock(return_value=_FAKE_KB_CLAIMS)):
+    with patch("mcp_server.autobot_server.validate_run_jwt", new=AsyncMock(return_value=_FAKE_KB_CLAIMS)):
         resp = await server.handle_request(
             "tools/call",
             {"name": "agents.list", "arguments": {}, "run_jwt": "fake.jwt.token"},
@@ -299,7 +299,7 @@ async def test_run_jwt_invalid_token_returns_401():
     from autobot_shared.auth.jwt_core import JWTDecodeError
 
     server = make_server()
-    with patch("mcp.autobot_server.validate_run_jwt", new=AsyncMock(side_effect=JWTDecodeError("bad sig"))):
+    with patch("mcp_server.autobot_server.validate_run_jwt", new=AsyncMock(side_effect=JWTDecodeError("bad sig"))):
         resp = await server.handle_request(
             "tools/call",
             {"name": "kb.list_categories", "arguments": {}, "run_jwt": "invalid.token.value"},
@@ -313,7 +313,7 @@ async def test_run_jwt_invalid_token_returns_401():
 async def test_run_jwt_agent_invoke_scope_grants_agents_tools():
     """Agent with agent:invoke JWT can call agents.list."""
     server = make_server()
-    with patch("mcp.autobot_server.validate_run_jwt", new=AsyncMock(return_value=_FAKE_AGENT_CLAIMS)):
+    with patch("mcp_server.autobot_server.validate_run_jwt", new=AsyncMock(return_value=_FAKE_AGENT_CLAIMS)):
         resp = await server.handle_request(
             "tools/call",
             {"name": "agents.list", "arguments": {}, "run_jwt": "fake.jwt.token2"},
@@ -464,7 +464,7 @@ async def test_memory_path_dispatches_end_to_end():
     server = make_server()
 
     with patch(
-        "mcp.autobot_server.AutoBotMCPServer._memory_path",
+        "mcp_server.autobot_server.AutoBotMCPServer._memory_path",
         new=AsyncMock(return_value={"found": True, "hops": 1, "path": [{"relation": "CAUSED"}]}),
     ):
         resp = await server.handle_request(

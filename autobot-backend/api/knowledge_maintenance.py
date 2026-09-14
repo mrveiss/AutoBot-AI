@@ -40,6 +40,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
+from knowledge.ingestion_visibility import INGESTED_DOCUMENT_VISIBILITY
 
 # Import Pydantic models from dedicated module
 from knowledge.schemas import (
@@ -508,17 +509,7 @@ def _add_vectorization_detail(results: dict, doc_id: str, command: str, status: 
 
 
 def _build_document_metadata(doc_change: dict, machine_id: str, content_size: int) -> dict:
-    """
-    Build metadata dict for knowledge base document. Issue #620.
-
-    Args:
-        doc_change: Document change info
-        machine_id: Machine identifier
-        content_size: Size of content
-
-    Returns:
-        Metadata dictionary
-    """
+    """Metadata for a man page synced from a machine (#620): an ingested document, so SYSTEM (#16693)."""
     return {
         "category": "system/manpages",
         "title": f"man {doc_change.get('command')}",
@@ -528,6 +519,7 @@ def _build_document_metadata(doc_change: dict, machine_id: str, content_size: in
         "document_id": doc_change.get("document_id"),
         "change_type": doc_change.get("change_type"),
         "content_size": content_size,
+        "visibility": INGESTED_DOCUMENT_VISIBILITY,
     }
 
 
