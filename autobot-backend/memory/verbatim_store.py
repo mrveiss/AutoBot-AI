@@ -35,12 +35,31 @@ _COLLECTION_NAME = "autobot_verbatim"
 _DEFAULT_LIMIT = 10
 _DEFAULT_RETENTION_DAYS: int = 90  # override via memory.verbatim.retention_days config
 
+
+class _UnscopedAllUsersSentinel:
+    """Type of :data:`UNSCOPED_ALL_USERS` -- deliberately not ``str``.
+
+    #16732 review: the sentinel was originally the plain string
+    ``"__unscoped_all_users__"``, compared with ``==``. A caller's
+    ``user_id`` falls back to their username when a token carries no
+    ``user_id`` claim, and usernames are validated against
+    ``^[a-zA-Z0-9_]+$`` -- a string the old sentinel text satisfies. A user
+    actually named ``__unscoped_all_users__`` would have matched the
+    sentinel and searched every user's chunks. A non-``str`` singleton,
+    compared by identity (``is``), can never equal a string any caller
+    supplies, however it is spelled.
+    """
+
+    def __repr__(self) -> str:
+        return "UNSCOPED_ALL_USERS"
+
+
 #: Issue #16701: search()'s user_id is required precisely so a caller can't
 #: get every user's chunks by omitting an argument. The one legitimate
 #: unscoped caller (mcp/autobot_server.py's memory.verbatim_search -- the
 #: stdio MCP transport has no per-user identity at all, tracked as #16727)
 #: must say so explicitly by passing this sentinel, not None or "".
-UNSCOPED_ALL_USERS = "__unscoped_all_users__"
+UNSCOPED_ALL_USERS = _UnscopedAllUsersSentinel()
 
 # B1 (#12555): optional MemPalace-style symbolic "drawer" index. An inverted
 # term -> chunk_id index in Redis lets an entity/keyword query resolve candidate
@@ -291,7 +310,7 @@ class VerbatimStore:
     async def search_symbolic(
         self,
         query: str,
-        user_id: str,
+        user_id: "str | _UnscopedAllUsersSentinel",
         session_filter: str | None = None,
         limit: int = _DEFAULT_LIMIT,
     ) -> List[Dict[str, Any]] | None:
@@ -334,7 +353,12 @@ class VerbatimStore:
         return await self._rank_symbolic_candidates(candidate_ids, terms, user_id, session_filter, limit)
 
     async def _rank_symbolic_candidates(
-        self, candidate_ids: List[str], query_terms: set, user_id: str, session_filter: str | None, limit: int
+        self,
+        candidate_ids: List[str],
+        query_terms: set,
+        user_id: "str | _UnscopedAllUsersSentinel",
+        session_filter: str | None,
+        limit: int,
     ) -> List[Dict[str, Any]]:
         """Fetch candidate chunks and rank by term-overlap blended with recency."""
         collection = await self._get_collection()
@@ -346,7 +370,7 @@ class VerbatimStore:
         ranked: List[Dict[str, Any]] = []
         for cid, doc, meta in zip(ids, docs, metas):
             meta = meta or {}
-            if user_id != UNSCOPED_ALL_USERS and meta.get("user_id") != user_id:
+            if user_id is not UNSCOPED_ALL_USERS and meta.get("user_id") != user_id:
                 continue
             if session_filter and meta.get("session_id") != session_filter:
                 continue
@@ -366,7 +390,7 @@ class VerbatimStore:
     async def search(
         self,
         query: str,
-        user_id: str,
+        user_id: "str | _UnscopedAllUsersSentinel",
         session_filter: str | None = None,
         limit: int = _DEFAULT_LIMIT,
     ) -> List[Dict[str, Any]]:
@@ -403,7 +427,7 @@ class VerbatimStore:
         where_conditions: List[Dict[str, Any]] = []
         if session_filter:
             where_conditions.append({"session_id": {"$eq": session_filter}})
-        if user_id != UNSCOPED_ALL_USERS:
+        if user_id is not UNSCOPED_ALL_USERS:
             where_conditions.append({"user_id": {"$eq": user_id}})
         where: Dict[str, Any] | None = None
         if len(where_conditions) == 1:

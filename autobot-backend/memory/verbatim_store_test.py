@@ -259,6 +259,42 @@ async def test_search_combines_user_and_session_scope():
 
 
 # ---------------------------------------------------------------------------
+# Tests: the old string-typed sentinel value is not a bypass (#16732 review)
+# ---------------------------------------------------------------------------
+
+_OLD_SENTINEL_TEXT = "__unscoped_all_users__"  # what UNSCOPED_ALL_USERS used to be
+
+
+@pytest.mark.asyncio
+async def test_a_user_literally_named_after_the_old_sentinel_text_stays_scoped():
+    """A user_id/username equal to the OLD sentinel string must not unlock
+    every user's chunks -- it is just an ordinary (if unlucky) string now,
+    compared with `is`, never `==`, against the real sentinel object."""
+    stored = _STORED_TWO_USERS + [
+        {
+            "id": "c1",
+            "text": "reset my own thing",
+            "session_id": "s3",
+            "role": "user",
+            "user_id": _OLD_SENTINEL_TEXT,
+        }
+    ]
+    col = _make_collection(stored)
+    store = await _store_with_collection(col)
+
+    results = await store.search("reset", user_id=_OLD_SENTINEL_TEXT)
+
+    assert [r["id"] for r in results] == ["c1"], (
+        f"a user named after the old sentinel text must see only their own chunk, not " f"user-a's/user-b's: {results}"
+    )
+
+
+def test_old_sentinel_text_is_not_the_real_sentinel():
+    assert _OLD_SENTINEL_TEXT != UNSCOPED_ALL_USERS
+    assert _OLD_SENTINEL_TEXT is not UNSCOPED_ALL_USERS
+
+
+# ---------------------------------------------------------------------------
 # Tests: delete_session
 # ---------------------------------------------------------------------------
 
