@@ -12,8 +12,15 @@ Integrates with ChromaDB metadata and ownership system.
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 logger = get_logger(__name__)
+
+#: What an MCP token caller may read (owner decision on #16654): platform-wide facts only,
+#: by visibility or by access level. Never private, shared, group or organisation facts.
+NON_PRIVATE_VISIBILITY = ("system", "public")
+NON_PRIVATE_ACCESS = ("general", "autobot")
 
 
 async def build_chromadb_permission_filter(
@@ -212,3 +219,36 @@ def extract_user_context_from_request(current_user) -> tuple:
         user_group_ids = [str(m.team_id) for m in current_user.team_memberships if m.team and not m.team.is_deleted]
 
     return user_id, user_org_id, user_group_ids
+
+
+def non_private_where(caller_where: Dict | None = None) -> Dict:
+    """A ChromaDB ``where`` for an MCP token caller: non-private, unquarantined facts (#16666).
+
+    The caller's own filter is AND-ed in, never substituted, so it can only narrow what the
+    token reads. A caller asking for ``{"visibility": "private"}`` still gets nothing private.
+    """
+    platform_wide = {
+        "$or": [
+            {"visibility": {"$in": list(NON_PRIVATE_VISIBILITY)}},
+            {"access_level": {"$in": list(NON_PRIVATE_ACCESS)}},
+        ]
+    }
+    return {"$and": [platform_wide, RESEARCH_QUARANTINE_FILTER, *([caller_where] if caller_where else [])]}
+
+
+def is_non_private(metadata: Dict | None) -> bool:
+    """Whether an MCP token caller may read a fact with *metadata* (#16666)."""
+    metadata = metadata or {}
+    platform_wide = (
+        metadata.get("visibility") in NON_PRIVATE_VISIBILITY or metadata.get("access_level") in NON_PRIVATE_ACCESS
+    )
+    return platform_wide and metadata.get("collection") != config.research_quarantine_collection
+
+
+def filter_non_private_results(results: List[Dict] | None) -> List[Dict]:
+    """*results* without any fact an MCP token caller may not read (#16666).
+
+    Defence in depth behind :func:`non_private_where`: ``KB.search`` drops its ``where`` on
+    the enhanced path, and this post-filter holds whatever the pre-filter did.
+    """
+    return [r for r in results or [] if is_non_private(r.get("metadata"))]

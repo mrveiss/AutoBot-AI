@@ -82,12 +82,16 @@ async def test_a_failed_preserve_write_is_not_reported_as_success():
 
 @pytest.mark.asyncio
 async def test_the_mcp_get_document_tool_returns_the_fact():
+    """A platform-wide fact: a token caller reads non-private facts only (#16666)."""
     from mcp.autobot_server import AutoBotMCPServer
 
-    with patch("knowledge._composed.get_knowledge_base", AsyncMock(return_value=_kb())):
+    system_fact = {**_FACT, "metadata": {"visibility": "system"}}
+    kb = _kb()
+    kb.get_fact.return_value = system_fact
+    with patch("knowledge._composed.get_knowledge_base", AsyncMock(return_value=kb)):
         doc = await AutoBotMCPServer()._kb_get_document("f1")
 
-    assert doc == _FACT
+    assert doc == system_fact
 
 
 @pytest.mark.asyncio
