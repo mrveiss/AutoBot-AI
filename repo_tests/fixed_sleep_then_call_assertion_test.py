@@ -70,6 +70,14 @@ _EXEMPT_SITES: dict[tuple[str, str], int] = {
         "TestEmbeddingCache.test_ttl_expiration",
     ): 1,  # TTL expiry via time.time() is the subject; no injectable clock
     (
+        "autobot-backend/llc/adapters/tests/test_stall_watchdog_13099.py",
+        "TestStallKillsWholeGroup.test_continuous_output_is_not_killed",
+    ): 1,  # survival across a timed window of steady output is the subject
+    (
+        "autobot-backend/llc/adapters/tests/test_stall_watchdog_13099.py",
+        "TestStallKillsWholeGroup.test_legitimately_quiet_within_deadline_is_not_killed",
+    ): 1,  # a quiet child surviving a window inside its stall deadline is the subject
+    (
         "autobot-backend/multimodal_processor/multimodal_integration_test.py",
         "TestMultiModalWorkflowIntegration.test_realtime_multimodal_stream",
     ): 1,  # paces the simulated stream; excluded from every timing assert below
