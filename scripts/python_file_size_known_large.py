@@ -110,7 +110,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_collections.py": 726,
     "autobot-backend/api/knowledge_connectors.py": 929,
     "autobot-backend/api/knowledge_maintenance.py": 1987,
-    "autobot-backend/api/knowledge_mcp.py": 1460,
+    "autobot-backend/api/knowledge_mcp.py": 1455,
     "autobot-backend/api/knowledge_population.py": 1547,
     "autobot-backend/api/knowledge_rag.py": 672,
     "autobot-backend/api/knowledge_search.py": 820,  # #16665: analytics endpoints moved out
