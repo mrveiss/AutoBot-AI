@@ -120,7 +120,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/knowledge_population.py": 1547,
     "autobot-backend/api/knowledge_rag.py": 672,
     "autobot-backend/api/knowledge_search.py": 820,  # #16665: analytics endpoints moved out
-    "autobot-backend/api/knowledge_search_aggregator.py": 967,  # #16507: +auth dep
+    "autobot-backend/api/knowledge_search_aggregator.py": 937,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1704,
     "autobot-backend/api/knowledge_vectorization_test.py": 601,

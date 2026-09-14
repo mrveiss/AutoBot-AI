@@ -70,12 +70,15 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/api/knowledge_relations.py", "get_fact_relations"): _T3,
     ("autobot-backend/api/knowledge_relations.py", "hybrid_search"): _T3,
     ("autobot-backend/api/knowledge_relations.py", "traverse_relations"): _T3,
-    ("autobot-backend/api/knowledge_search_aggregator.py", "_expand_fact_relations"): _T3,
-    ("autobot-backend/api/knowledge_search_aggregator.py", "_get_fact_relations_for_graph"): _T3,
-    ("autobot-backend/api/knowledge_search_aggregator.py", "_get_facts_for_graph"): _T3,
-    ("autobot-backend/api/knowledge_search_aggregator.py", "_process_relations_for_citations"): _T3,
-    ("autobot-backend/api/knowledge_search_aggregator.py", "_search_facts"): _T3,
-    ("autobot-backend/api/knowledge_search_aggregator.py", "get_llm_context"): _T3,
+    (
+        "autobot-backend/api/knowledge_search_aggregator.py",
+        "_get_fact_relations_for_graph",
+    ): (
+        "SCOPED: fact_ids come from _get_facts_for_graph's already-filtered output "
+        "(#16665), and both ends of every returned edge are re-checked against that "
+        "same fact_ids set -- include_fact_details=False means no fact content is "
+        "ever fetched here"
+    ),
     ("autobot-backend/api/knowledge_tags.py", "get_facts_by_tag"): _T3,
     ("autobot-backend/api/knowledge_tags.py", "search_facts_by_tags"): _T3,
     ("autobot-backend/api/knowledge_verification.py", "list_pending_verification"): _T3,
@@ -131,4 +134,4 @@ ALLOWLIST: dict[tuple[str, str], str] = {
 }
 
 #: Ceiling on ALLOWLIST: lower it with every entry removed, never raise it.
-MAX_ALLOWLISTED = 81
+MAX_ALLOWLISTED = 76
