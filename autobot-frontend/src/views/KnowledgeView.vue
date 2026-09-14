@@ -87,8 +87,9 @@
           <span>{{ $t('knowledge.views.mcpResources') }}</span>
         </router-link>
 
-        <!-- #8999: ChromaDB / vector-store explorer -->
+        <!-- #8999: ChromaDB / vector-store explorer; admin-only (#16666) -->
         <router-link
+          v-if="userStore.isAdmin"
           to="/knowledge/vector-store"
           class="category-item"
           :class="{ active: $route.name === 'knowledge-vector-store' }"
@@ -252,8 +253,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useUserStore } from '@/stores/useUserStore'
 
 const STORAGE_KEY = 'knowledge-sidebar-mobile-open'
+// #16666: the vector-store explorer is admin-only on the backend, so only admins see its link
+const userStore = useUserStore()
 
 const showMobileSidebar = ref(false)
 

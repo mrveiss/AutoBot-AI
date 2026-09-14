@@ -246,7 +246,9 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/components/knowledge/ChromaDBExplorer.vue'),
         meta: {
           title: 'Vector Store',
-          parent: 'knowledge'
+          parent: 'knowledge',
+          // #16666: raw collection access bypasses fact visibility, so the backend is admin-only
+          admin: true
         }
       },
       {
