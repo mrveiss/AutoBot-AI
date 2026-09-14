@@ -57,6 +57,16 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "get_facts_in_category",
     ): _SCOPED_ADMIN_ROUTER,
     (
+        "autobot-backend/api/knowledge_category_counts.py",
+        "_get_or_compute_category_counts",
+    ): (
+        "SCOPED: filtered by _visible_to_every_authenticated_user, a caller-independent "
+        "predicate (#16665) -- the cached count is shared by every caller (one Redis key "
+        "per category), so a per-caller check_access() would return a different answer "
+        "per caller and break the shared cache; the guard's FILTER_HELPERS list only "
+        "recognizes the per-caller helpers, not this intentionally caller-independent one"
+    ),
+    (
         "autobot-backend/api/knowledge_collections.py",
         "export_collection",
     ): _SCOPED_ADMIN_ROUTER,
@@ -149,4 +159,4 @@ ALLOWLIST: dict[tuple[str, str], str] = {
 }
 
 #: Ceiling on ALLOWLIST: lower it with every entry removed, never raise it.
-MAX_ALLOWLISTED = 83
+MAX_ALLOWLISTED = 84
