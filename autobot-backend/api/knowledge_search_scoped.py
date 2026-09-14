@@ -16,6 +16,7 @@ from api.schemas_knowledge import (
     ScopedSearchRequest,
 )
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.search_filters import (
@@ -60,7 +61,7 @@ async def _resolve_search_context(request: Request, current_user: User, query: s
 
 
 async def _execute_permission_filtered_search(
-    kb, search_request: ScopedSearchRequest, user_id, user_org_id, user_group_ids
+    kb, search_request: ScopedSearchRequest, user_id, user_org_id, user_group_ids, is_admin: bool = False
 ):
     """Helper for scoped_search. Ref: #1088.
 
@@ -72,6 +73,7 @@ async def _execute_permission_filtered_search(
         user_id=user_id,
         user_org_id=user_org_id,
         user_group_ids=user_group_ids,
+        is_admin=is_admin,  # #16662: an admin's explicit search is not narrowed to their own scope
     )
 
     if not hasattr(kb, "search"):
@@ -91,6 +93,7 @@ async def _build_scoped_search_response(
     user_org_id,
     user_group_ids,
     ownership_manager,
+    is_admin: bool = False,
 ) -> dict:
     """Helper for scoped_search. Ref: #1088.
 
@@ -102,6 +105,7 @@ async def _build_scoped_search_response(
         user_org_id=user_org_id,
         user_group_ids=user_group_ids,
         ownership_manager=ownership_manager,
+        is_admin=is_admin,
     )
 
     logger.info(
@@ -118,6 +122,23 @@ async def _build_scoped_search_response(
         "user_id": user_id,
         "filtered_by_permissions": True,
     }
+
+
+async def _scoped_search_results(search_request, request: Request, current_user, is_admin: bool) -> dict:
+    """Permission-filtered search shared by /scoped and /rag/scoped (#16662).
+
+    *is_admin* is always the caller's decision, never derived here: /scoped passes the caller's
+    role, /rag/scoped passes False.
+    """
+    kb, user_id, user_org_id, user_group_ids = await _resolve_search_context(
+        request, current_user, search_request.query
+    )
+    results = await _execute_permission_filtered_search(
+        kb, search_request, user_id, user_org_id, user_group_ids, is_admin=is_admin
+    )
+    return await _build_scoped_search_response(
+        results, search_request, user_id, user_org_id, user_group_ids, kb.ownership_manager, is_admin=is_admin
+    )
 
 
 @router.post("/scoped", response_model=KnowledgeScopedSearchResponse)
@@ -146,18 +167,9 @@ async def scoped_search(
         Filtered search results respecting user's access permissions
     """
     try:
-        kb, user_id, user_org_id, user_group_ids = await _resolve_search_context(
-            request, current_user, search_request.query
-        )
-        results = await _execute_permission_filtered_search(kb, search_request, user_id, user_org_id, user_group_ids)
-        return await _build_scoped_search_response(
-            results,
-            search_request,
-            user_id,
-            user_org_id,
-            user_group_ids,
-            kb.ownership_manager,
-        )
+        # #16662: plain scoped search is an explicit read API, so an admin reads every fact here
+        role = current_user.get("role") if isinstance(current_user, dict) else getattr(current_user, "role", None)
+        return await _scoped_search_results(search_request, request, current_user, is_admin=is_admin_role(role))
 
     except HTTPException:
         # Deliberate status codes (503 "knowledge base not available",
@@ -253,7 +265,9 @@ async def scoped_rag_search(
         )
 
         # Get accessible facts via permission-filtered search
-        scoped_results = await scoped_search(search_request=search_request, request=request, current_user=current_user)
+        # #16662: never the admin bypass -- RAG synthesis is chat-like, and an admin's chat gets none (#16654).
+        # Calling the /scoped route here would inherit its role-derived bypass.
+        scoped_results = await _scoped_search_results(search_request, request, current_user, is_admin=False)
         accessible_facts = scoped_results["results"]
 
         # Synthesize RAG response (Issue #1088: uses helper)

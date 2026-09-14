@@ -378,10 +378,15 @@
   changed_when: true
   tags: ['slm', 'backend']
 
+# #16641: without this, pip falls back to shelling out to the standalone
+# `virtualenv` executable, absent from these hosts -- matches the
+# interpreter the earlier `python3.14 -m venv {{ slm_backend_dir }}/venv`
+# task in this file already targets.
 - name: "SLM | Install Python requirements"
   ansible.builtin.pip:
     requirements: "{{ slm_backend_dir }}/requirements.txt"
     virtualenv: "{{ slm_backend_dir }}/venv"
+    virtualenv_command: "python3.14 -m venv"
     state: present
   become_user: "{{ slm_user }}"
   environment:
