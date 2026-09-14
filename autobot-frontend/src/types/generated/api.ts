@@ -6657,7 +6657,7 @@ export interface paths {
          *     in the ChromaDB instance.
          *
          *     Args:
-         *         current_user: Authenticated user (injected by auth middleware)
+         *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
          *         CollectionListResponse with list of collections and their metadata
@@ -6687,7 +6687,7 @@ export interface paths {
          *
          *     Args:
          *         name: Collection name
-         *         current_user: Authenticated user (injected by auth middleware)
+         *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
          *         CollectionDetailResponse with collection metadata
@@ -6719,7 +6719,7 @@ export interface paths {
          *         name: Collection name
          *         limit: Maximum number of documents to return (1-1000)
          *         offset: Number of documents to skip for pagination
-         *         current_user: Authenticated user (injected by auth middleware)
+         *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
          *         DocumentListResponse with document data (ids, documents, metadatas, embeddings)
@@ -6755,7 +6755,7 @@ export interface paths {
          *     Args:
          *         name: Collection name
          *         request: Search parameters (query, n_results, where filter)
-         *         current_user: Authenticated user (injected by auth middleware)
+         *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
          *         SearchResponse with matching documents and similarity scores
