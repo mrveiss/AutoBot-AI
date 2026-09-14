@@ -754,8 +754,6 @@ async def get_telemetry_settings():
 
     Returns telemetry opt-in/opt-out status and whether the first-run
     prompt has been shown.
-
-    Requires authentication.
     """
     from autobot_shared.ssot_config import config
 
