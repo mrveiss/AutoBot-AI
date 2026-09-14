@@ -21,6 +21,10 @@ from __future__ import annotations
 _T2 = "TRACKED_GAP #16664: puts KB content into a chat, agent or RAG path without the user's scope"
 _T3 = "TRACKED_GAP #16665: returns KB facts to an API caller without the caller's scope"
 _T4 = "TRACKED_GAP #16666: MCP knowledge access with no user identity (owner: non-private facts only)"
+_SCOPED_ADMIN_ROUTER = (
+    "SCOPED: route requires Depends(check_admin_permission) (403 for non-admins), and "
+    "check_access already grants admins unconditional read (#16665)"
+)
 
 ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/advanced_rag_optimizer.py", "AdvancedRAGOptimizer._perform_semantic_search"): _T2,
@@ -45,19 +49,27 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-backend/api/chat_sessions.py",
         "get_share_preview",
     ): "TRACKED_GAP #16671: session fact sharing reads facts through an unwired kb_manager",
-    ("autobot-backend/api/knowledge.py", "_get_or_compute_category_counts"): _T3,
-    ("autobot-backend/api/knowledge.py", "search_man_pages"): _T3,
+    ("autobot-backend/api/knowledge.py", "search_man_pages"): _SCOPED_ADMIN_ROUTER,
     ("autobot-backend/api/knowledge_ai_stack.py", "_search_local_knowledge_base"): _T3,
     ("autobot-backend/api/knowledge_ai_stack.py", "rag_search"): _T3,
-    ("autobot-backend/api/knowledge_categories.py", "get_facts_in_category"): _T3,
-    ("autobot-backend/api/knowledge_collections.py", "export_collection"): _T3,
-    ("autobot-backend/api/knowledge_collections.py", "get_facts_in_collection"): _T3,
+    (
+        "autobot-backend/api/knowledge_categories.py",
+        "get_facts_in_category",
+    ): _SCOPED_ADMIN_ROUTER,
+    (
+        "autobot-backend/api/knowledge_collections.py",
+        "export_collection",
+    ): _SCOPED_ADMIN_ROUTER,
+    (
+        "autobot-backend/api/knowledge_collections.py",
+        "get_facts_in_collection",
+    ): _SCOPED_ADMIN_ROUTER,
     ("autobot-backend/api/knowledge_mcp.py", "mcp_langchain_qa_chain"): _T3,
     ("autobot-backend/api/knowledge_mcp.py", "mcp_search_knowledge_base"): _T3,
     ("autobot-backend/api/knowledge_mcp.py", "mcp_summarize_knowledge_topic"): _T3,
     ("autobot-backend/api/knowledge_mcp.py", "mcp_vector_similarity_search"): _T3,
     ("autobot-backend/api/knowledge_mcp.py", "read_kb_resource"): _T3,
-    ("autobot-backend/api/knowledge_metadata.py", "search_by_metadata"): _T3,
+    ("autobot-backend/api/knowledge_metadata.py", "search_by_metadata"): _SCOPED_ADMIN_ROUTER,
     (
         "autobot-backend/api/knowledge_ownership.py",
         "_fetch_fact_details",
@@ -67,9 +79,9 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "get_shared_facts",
     ): "SCOPED: the fact ids come from the caller's own ownership index (#688)",
     ("autobot-backend/api/knowledge_rag.py", "advanced_search"): _T3,
-    ("autobot-backend/api/knowledge_relations.py", "get_fact_relations"): _T3,
-    ("autobot-backend/api/knowledge_relations.py", "hybrid_search"): _T3,
-    ("autobot-backend/api/knowledge_relations.py", "traverse_relations"): _T3,
+    ("autobot-backend/api/knowledge_relations.py", "get_fact_relations"): _SCOPED_ADMIN_ROUTER,
+    ("autobot-backend/api/knowledge_relations.py", "hybrid_search"): _SCOPED_ADMIN_ROUTER,
+    ("autobot-backend/api/knowledge_relations.py", "traverse_relations"): _SCOPED_ADMIN_ROUTER,
     ("autobot-backend/api/knowledge_search.py", "_aistack_search"): _T3,
     ("autobot-backend/api/knowledge_search.py", "_execute_kb_search"): _T3,
     ("autobot-backend/api/knowledge_search.py", "_search_with_all_queries"): _T3,
@@ -79,9 +91,12 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/api/knowledge_search_aggregator.py", "_process_relations_for_citations"): _T3,
     ("autobot-backend/api/knowledge_search_aggregator.py", "_search_facts"): _T3,
     ("autobot-backend/api/knowledge_search_aggregator.py", "get_llm_context"): _T3,
-    ("autobot-backend/api/knowledge_tags.py", "get_facts_by_tag"): _T3,
-    ("autobot-backend/api/knowledge_tags.py", "search_facts_by_tags"): _T3,
-    ("autobot-backend/api/knowledge_verification.py", "list_pending_verification"): _T3,
+    ("autobot-backend/api/knowledge_tags.py", "get_facts_by_tag"): _SCOPED_ADMIN_ROUTER,
+    ("autobot-backend/api/knowledge_tags.py", "search_facts_by_tags"): _SCOPED_ADMIN_ROUTER,
+    (
+        "autobot-backend/api/knowledge_verification.py",
+        "list_pending_verification",
+    ): _SCOPED_ADMIN_ROUTER,
     ("autobot-backend/api/memory_lifecycle.py", "_reinforcement_section"): _T3,
     ("autobot-backend/async_chat_workflow.py", "AsyncChatWorkflow._execute_kb_search"): _T2,
     ("autobot-backend/knowledge/adapters/okf_adapter.py", "OKFAdapter.export_from_kb"): _T3,
@@ -134,4 +149,4 @@ ALLOWLIST: dict[tuple[str, str], str] = {
 }
 
 #: Ceiling on ALLOWLIST: lower it with every entry removed, never raise it.
-MAX_ALLOWLISTED = 84
+MAX_ALLOWLISTED = 83
