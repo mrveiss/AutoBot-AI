@@ -70,9 +70,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/api/knowledge_relations.py", "get_fact_relations"): _T3,
     ("autobot-backend/api/knowledge_relations.py", "hybrid_search"): _T3,
     ("autobot-backend/api/knowledge_relations.py", "traverse_relations"): _T3,
-    ("autobot-backend/api/knowledge_search.py", "_aistack_search"): _T3,
-    ("autobot-backend/api/knowledge_search.py", "_execute_kb_search"): _T3,
-    ("autobot-backend/api/knowledge_search.py", "_search_with_all_queries"): _T3,
     ("autobot-backend/api/knowledge_search_aggregator.py", "_expand_fact_relations"): _T3,
     ("autobot-backend/api/knowledge_search_aggregator.py", "_get_fact_relations_for_graph"): _T3,
     ("autobot-backend/api/knowledge_search_aggregator.py", "_get_facts_for_graph"): _T3,
@@ -134,4 +131,4 @@ ALLOWLIST: dict[tuple[str, str], str] = {
 }
 
 #: Ceiling on ALLOWLIST: lower it with every entry removed, never raise it.
-MAX_ALLOWLISTED = 84
+MAX_ALLOWLISTED = 81
