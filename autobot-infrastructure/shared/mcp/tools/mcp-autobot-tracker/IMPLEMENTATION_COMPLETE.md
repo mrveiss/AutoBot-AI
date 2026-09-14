@@ -4,6 +4,8 @@
 **Status:** ✅ PRODUCTION READY  
 **Success Rate:** 100% (All tests and validations passing)
 
+> **Historical record:** this report reflects the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; the counts and addresses below describe that one install.
+
 ---
 
 ## 🏆 MISSION ACCOMPLISHED SUMMARY
@@ -34,12 +36,12 @@ The MCP AutoBot Tracker has been **successfully implemented and deployed** with 
 
 ### **Infrastructure Health Status**
 ```
-✅ VM1 Frontend (172.16.168.21): HEALTHY
-✅ VM2 NPU Worker (172.16.168.22): HEALTHY  
-✅ VM3 Redis (172.16.168.23): HEALTHY
-✅ VM4 AI Stack (172.16.168.24): HEALTHY
-✅ VM5 Browser (172.16.168.25): HEALTHY
-✅ VM0 Backend (172.16.168.20): HEALTHY
+✅ Frontend role (<frontend-ip>): HEALTHY
+✅ NPU worker role (<npu-ip>): HEALTHY
+✅ Database role - Redis (<database-ip>): HEALTHY
+✅ AI Stack role (<aiml-ip>): HEALTHY
+✅ Browser role (<browser-ip>): HEALTHY
+✅ Backend / control role (<backend-ip>): HEALTHY
 ```
 
 ---

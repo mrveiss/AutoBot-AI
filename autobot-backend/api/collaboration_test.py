@@ -393,3 +393,52 @@ async def test_share_secret_not_found(mock_db, session_id, owner_id, current_use
             await share_secret_with_session(session_id, share, mock_db, current_user_owner)
 
         assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_share_secret_broadcasts_id_name_and_sharer_only(
+    mock_db, session_id, owner_id, collaborator_id, current_user_owner
+):
+    """#16443: connected participants are notified live -- but the broadcast
+    payload must never carry the secret's value, only its id/name/sharer.
+    This handler never reads encrypted_value in the first place; this test
+    pins that no future edit adds it (or any other secret-value-shaped key)
+    to the payload."""
+    secret_id = uuid.uuid4()
+    secret = Secret(
+        id=secret_id,
+        owner_id=owner_id,
+        name="prod-db-password",
+        type=SecretType.API_KEY.value,
+        scope=SecretScope.USER.value,
+        encrypted_value="super-secret-encrypted-bytes",
+    )
+
+    collab = SessionCollaboration(session_id=session_id, owner_id=owner_id)
+    collab.add_collaborator(collaborator_id, PermissionLevel.EDITOR)
+
+    share = ShareSecretRequest(secret_id=str(secret_id))
+
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = secret
+    mock_db.execute = AsyncMock(return_value=mock_result)
+
+    with (
+        patch("api.collaboration._ensure_permission", return_value=collab),
+        patch("websocket.presence.presence_manager.broadcast_to_session", new=AsyncMock()) as mock_broadcast,
+    ):
+        await share_secret_with_session(session_id, share, mock_db, current_user_owner)
+
+    mock_broadcast.assert_awaited_once()
+    broadcast_session_id, message = mock_broadcast.await_args.args
+    assert broadcast_session_id == session_id
+    payload = message["payload"]
+
+    assert payload["secret_id"] == str(secret_id)
+    assert payload["secret_name"] == "prod-db-password"  # pragma: allowlist secret
+    assert payload["shared_by"] == str(owner_id)
+
+    forbidden_keys = {"value", "encrypted_value", "secret_value", "plaintext"}
+    assert not forbidden_keys & payload.keys(), f"secret value leaked into broadcast payload: {payload}"
+    serialized = str(payload)
+    assert "super-secret-encrypted-bytes" not in serialized

@@ -24,12 +24,6 @@ from api.knowledge_chroma import (
 
 
 @pytest.fixture
-def mock_current_user():
-    """Mock authenticated user."""
-    return {"email": "test@example.com", "role": "user"}
-
-
-@pytest.fixture
 def mock_chroma_client():
     """Mock AsyncChromaClient."""
     client = AsyncMock()
@@ -53,12 +47,12 @@ def mock_chroma_collection():
 
 
 @pytest.mark.asyncio
-async def test_list_collections_success(mock_current_user, mock_chroma_client, mock_chroma_collection):
+async def test_list_collections_success(mock_chroma_client, mock_chroma_collection):
     """Test successful listing of all collections."""
     mock_chroma_client.get_collection = AsyncMock(return_value=mock_chroma_collection)
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
-        response = await list_collections(current_user=mock_current_user)
+        response = await list_collections(_=True)
 
     assert response.success is True
     assert len(response.data) == 2
@@ -68,7 +62,7 @@ async def test_list_collections_success(mock_current_user, mock_chroma_client, m
 
 
 @pytest.mark.asyncio
-async def test_list_collections_partial_failure(mock_current_user, mock_chroma_client):
+async def test_list_collections_partial_failure(mock_chroma_client):
     """Test listing collections when one collection fails to load."""
     # First collection succeeds, second fails
     good_collection = AsyncMock()
@@ -84,7 +78,7 @@ async def test_list_collections_partial_failure(mock_current_user, mock_chroma_c
     mock_chroma_client.get_collection = AsyncMock(side_effect=get_collection_side_effect)
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
-        response = await list_collections(current_user=mock_current_user)
+        response = await list_collections(_=True)
 
     # Should still return data with partial results
     assert response.success is True
@@ -97,11 +91,11 @@ async def test_list_collections_partial_failure(mock_current_user, mock_chroma_c
 
 
 @pytest.mark.asyncio
-async def test_list_collections_connection_error(mock_current_user):
+async def test_list_collections_connection_error():
     """Test handling of ChromaDB connection failure."""
     with patch("api.knowledge_chroma.get_async_chromadb_client", side_effect=Exception("Connection failed")):
         with pytest.raises(HTTPException) as exc_info:
-            await list_collections(current_user=mock_current_user)
+            await list_collections(_=True)
 
     assert exc_info.value.status_code == 500
     assert "ChromaDB connection error" in exc_info.value.detail
@@ -113,12 +107,12 @@ async def test_list_collections_connection_error(mock_current_user):
 
 
 @pytest.mark.asyncio
-async def test_get_collection_detail_success(mock_current_user, mock_chroma_client, mock_chroma_collection):
+async def test_get_collection_detail_success(mock_chroma_client, mock_chroma_collection):
     """Test successful retrieval of collection details."""
     mock_chroma_client.get_collection = AsyncMock(return_value=mock_chroma_collection)
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
-        response = await get_collection_detail(name="test_collection", current_user=mock_current_user)
+        response = await get_collection_detail(name="test_collection", _=True)
 
     assert response.success is True
     assert response.data.name == "test_collection"
@@ -128,26 +122,26 @@ async def test_get_collection_detail_success(mock_current_user, mock_chroma_clie
 
 
 @pytest.mark.asyncio
-async def test_get_collection_detail_not_found(mock_current_user, mock_chroma_client):
+async def test_get_collection_detail_not_found(mock_chroma_client):
     """Test 404 when collection doesn't exist."""
     mock_chroma_client.get_collection = AsyncMock(side_effect=ValueError("Collection not found"))
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         with pytest.raises(HTTPException) as exc_info:
-            await get_collection_detail(name="nonexistent", current_user=mock_current_user)
+            await get_collection_detail(name="nonexistent", _=True)
 
     assert exc_info.value.status_code == 404
     assert "not found" in exc_info.value.detail
 
 
 @pytest.mark.asyncio
-async def test_get_collection_detail_connection_error(mock_current_user, mock_chroma_client):
+async def test_get_collection_detail_connection_error(mock_chroma_client):
     """Test 500 on ChromaDB connection error."""
     mock_chroma_client.get_collection = AsyncMock(side_effect=Exception("Connection lost"))
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         with pytest.raises(HTTPException) as exc_info:
-            await get_collection_detail(name="test_collection", current_user=mock_current_user)
+            await get_collection_detail(name="test_collection", _=True)
 
     assert exc_info.value.status_code == 500
     assert "ChromaDB error" in exc_info.value.detail
@@ -159,7 +153,7 @@ async def test_get_collection_detail_connection_error(mock_current_user, mock_ch
 
 
 @pytest.mark.asyncio
-async def test_list_documents_success(mock_current_user, mock_chroma_client, mock_chroma_collection):
+async def test_list_documents_success(mock_chroma_client, mock_chroma_collection):
     """Test successful listing of documents with pagination."""
     mock_chroma_collection.get = AsyncMock(
         return_value={
@@ -177,7 +171,7 @@ async def test_list_documents_success(mock_current_user, mock_chroma_client, moc
             name="test_collection",
             limit=100,
             offset=0,
-            current_user=mock_current_user,
+            _=True,
         )
 
     assert response.success is True
@@ -194,7 +188,7 @@ async def test_list_documents_success(mock_current_user, mock_chroma_client, moc
 
 
 @pytest.mark.asyncio
-async def test_list_documents_pagination(mock_current_user, mock_chroma_client, mock_chroma_collection):
+async def test_list_documents_pagination(mock_chroma_client, mock_chroma_collection):
     """Test pagination parameters are correctly passed."""
     mock_chroma_collection.get = AsyncMock(
         return_value={
@@ -208,11 +202,11 @@ async def test_list_documents_pagination(mock_current_user, mock_chroma_client, 
     mock_chroma_client.get_collection = AsyncMock(return_value=mock_chroma_collection)
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
-        response = await list_documents(
+        await list_documents(
             name="test_collection",
             limit=50,
             offset=100,
-            current_user=mock_current_user,
+            _=True,
         )
 
     # Verify pagination was used
@@ -222,7 +216,7 @@ async def test_list_documents_pagination(mock_current_user, mock_chroma_client, 
 
 
 @pytest.mark.asyncio
-async def test_list_documents_empty_collection(mock_current_user, mock_chroma_client, mock_chroma_collection):
+async def test_list_documents_empty_collection(mock_chroma_client, mock_chroma_collection):
     """Test listing documents from empty collection."""
     mock_chroma_collection.get = AsyncMock(
         return_value={
@@ -239,7 +233,7 @@ async def test_list_documents_empty_collection(mock_current_user, mock_chroma_cl
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         response = await list_documents(
             name="empty_collection",
-            current_user=mock_current_user,
+            _=True,
         )
 
     assert response.success is True
@@ -249,13 +243,13 @@ async def test_list_documents_empty_collection(mock_current_user, mock_chroma_cl
 
 
 @pytest.mark.asyncio
-async def test_list_documents_not_found(mock_current_user, mock_chroma_client):
+async def test_list_documents_not_found(mock_chroma_client):
     """Test 404 when collection doesn't exist."""
     mock_chroma_client.get_collection = AsyncMock(side_effect=ValueError("Not found"))
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         with pytest.raises(HTTPException) as exc_info:
-            await list_documents(name="nonexistent", current_user=mock_current_user)
+            await list_documents(name="nonexistent", _=True)
 
     assert exc_info.value.status_code == 404
 
@@ -266,7 +260,7 @@ async def test_list_documents_not_found(mock_current_user, mock_chroma_client):
 
 
 @pytest.mark.asyncio
-async def test_search_collection_success(mock_current_user, mock_chroma_client, mock_chroma_collection):
+async def test_search_collection_success(mock_chroma_client, mock_chroma_collection):
     """Test successful similarity search."""
     mock_chroma_collection.query = AsyncMock(
         return_value={
@@ -285,7 +279,7 @@ async def test_search_collection_success(mock_current_user, mock_chroma_client, 
         response = await search_collection(
             name="test_collection",
             request=search_req,
-            current_user=mock_current_user,
+            _=True,
         )
 
     assert response.success is True
@@ -303,7 +297,7 @@ async def test_search_collection_success(mock_current_user, mock_chroma_client, 
 
 
 @pytest.mark.asyncio
-async def test_search_collection_with_filter(mock_current_user, mock_chroma_client, mock_chroma_collection):
+async def test_search_collection_with_filter(mock_chroma_client, mock_chroma_collection):
     """Test search with metadata filter."""
     mock_chroma_collection.query = AsyncMock(
         return_value={
@@ -319,10 +313,10 @@ async def test_search_collection_with_filter(mock_current_user, mock_chroma_clie
     search_req = SearchRequest(query="test", n_results=5, where={"category": "tech"})
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
-        response = await search_collection(
+        await search_collection(
             name="test_collection",
             request=search_req,
-            current_user=mock_current_user,
+            _=True,
         )
 
     # Verify filter was passed
@@ -331,7 +325,7 @@ async def test_search_collection_with_filter(mock_current_user, mock_chroma_clie
 
 
 @pytest.mark.asyncio
-async def test_search_collection_empty_query(mock_current_user, mock_chroma_client):
+async def test_search_collection_empty_query(mock_chroma_client):
     """Test 400 error for empty query."""
     search_req = SearchRequest(query="", n_results=10)
 
@@ -340,7 +334,7 @@ async def test_search_collection_empty_query(mock_current_user, mock_chroma_clie
             await search_collection(
                 name="test_collection",
                 request=search_req,
-                current_user=mock_current_user,
+                _=True,
             )
 
     assert exc_info.value.status_code == 400
@@ -348,7 +342,7 @@ async def test_search_collection_empty_query(mock_current_user, mock_chroma_clie
 
 
 @pytest.mark.asyncio
-async def test_search_collection_whitespace_query(mock_current_user, mock_chroma_client):
+async def test_search_collection_whitespace_query(mock_chroma_client):
     """Test 400 error for whitespace-only query."""
     search_req = SearchRequest(query="   ", n_results=10)
 
@@ -357,14 +351,14 @@ async def test_search_collection_whitespace_query(mock_current_user, mock_chroma
             await search_collection(
                 name="test_collection",
                 request=search_req,
-                current_user=mock_current_user,
+                _=True,
             )
 
     assert exc_info.value.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_search_collection_no_results(mock_current_user, mock_chroma_client, mock_chroma_collection):
+async def test_search_collection_no_results(mock_chroma_client, mock_chroma_collection):
     """Test search returning no results."""
     mock_chroma_collection.query = AsyncMock(
         return_value={
@@ -383,7 +377,7 @@ async def test_search_collection_no_results(mock_current_user, mock_chroma_clien
         response = await search_collection(
             name="test_collection",
             request=search_req,
-            current_user=mock_current_user,
+            _=True,
         )
 
     assert response.success is True
@@ -391,7 +385,7 @@ async def test_search_collection_no_results(mock_current_user, mock_chroma_clien
 
 
 @pytest.mark.asyncio
-async def test_search_collection_not_found(mock_current_user, mock_chroma_client):
+async def test_search_collection_not_found(mock_chroma_client):
     """Test 404 when collection doesn't exist."""
     mock_chroma_client.get_collection = AsyncMock(side_effect=ValueError("Not found"))
 
@@ -402,7 +396,7 @@ async def test_search_collection_not_found(mock_current_user, mock_chroma_client
             await search_collection(
                 name="nonexistent",
                 request=search_req,
-                current_user=mock_current_user,
+                _=True,
             )
 
     assert exc_info.value.status_code == 404

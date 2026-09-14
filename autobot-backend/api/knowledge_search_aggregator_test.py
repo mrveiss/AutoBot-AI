@@ -22,6 +22,12 @@ from api.knowledge_search_aggregator import _get_facts_for_graph, _search_facts,
 from api.schemas_knowledge import ContextRequest
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
+# #16665 added user_id/user_org_id/user_group_ids/is_admin params for
+# fact-visibility filtering; these tests pass placeholder values since an
+# empty kb.search() result has nothing for the filter to act on.
+_USER_ID = "u1"
+_CURRENT_USER = {"user_id": _USER_ID, "role": "user"}
+
 
 @pytest.mark.asyncio
 async def test_search_facts_applies_quarantine_filter():
@@ -29,7 +35,7 @@ async def test_search_facts_applies_quarantine_filter():
     mock_kb.search.return_value = {"results": []}
     result: dict = {"sources_searched": []}
 
-    await _search_facts(mock_kb, "what is autobot", 5, result)
+    await _search_facts(mock_kb, "what is autobot", 5, result, _USER_ID, None, [], False)
 
     mock_kb.search.assert_called_once_with("what is autobot", top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
 
@@ -39,7 +45,15 @@ async def test_get_facts_for_graph_applies_quarantine_filter():
     mock_kb = AsyncMock()
     mock_kb.search.return_value = {"results": []}
 
-    await _get_facts_for_graph(mock_kb, category_filter=None, max_facts=25)
+    await _get_facts_for_graph(
+        mock_kb,
+        category_filter=None,
+        max_facts=25,
+        user_id=_USER_ID,
+        user_org_id=None,
+        user_group_ids=[],
+        is_admin=False,
+    )
 
     mock_kb.search.assert_called_once_with("*", top_k=25, filters=RESEARCH_QUARANTINE_FILTER)
 
@@ -56,6 +70,6 @@ async def test_get_llm_context_applies_quarantine_filter():
         "api.knowledge_search_aggregator.get_or_create_knowledge_base",
         AsyncMock(return_value=mock_kb),
     ):
-        await get_llm_context(req, body)
+        await get_llm_context(req, body, current_user=_CURRENT_USER)
 
     mock_kb.search.assert_called_once_with("what is autobot", top_k=5, filters=RESEARCH_QUARANTINE_FILTER)

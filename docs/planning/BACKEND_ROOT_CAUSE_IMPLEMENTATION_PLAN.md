@@ -4,6 +4,8 @@
 **Policy Compliance**: ZERO feature flags, ZERO temporary fixes, ZERO workarounds
 **Total Timeline**: 5.5 days (parallel execution) / 8 days (sequential)
 
+> **Historical record:** this plan targets the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; the counts and addresses below describe that one install.
+
 ---
 
 ## Executive Summary
@@ -610,7 +612,7 @@ If agents must work sequentially:
 
 ### VM Update Matrix
 
-| Fix | VM1 (Frontend) | VM2 (NPU) | VM3 (Redis) | VM4 (AI) | VM5 (Browser) | Main |
+| Fix | Frontend | NPU | Redis | AI | Browser | Main |
 |-----|----------------|-----------|-------------|----------|---------------|------|
 | #1  | - | - | - | - | - | ✅ |
 | #2  | - | - | - | - | - | ✅ |

@@ -16,10 +16,20 @@
       >
         <Icon name="edit" class="mr-2" />{{ $t('knowledge.entries.manageTab') }}
       </BaseButton>
+      <BaseButton
+        variant="ghost"
+        @click="manageTab = 'watchFolders'"
+        :class="['manage-tab-btn', { active: manageTab === 'watchFolders' }]"
+      >
+        <Icon name="folder" class="mr-2" />{{ $t('knowledge.entries.watchFoldersTab') }}
+      </BaseButton>
     </div>
 
     <!-- Upload Tab Content -->
     <KnowledgeUpload v-if="manageTab === 'upload'" />
+
+    <!-- Watch Folders Tab Content -->
+    <WatchFoldersPanel v-if="manageTab === 'watchFolders'" />
 
     <!-- Manage Tab Content -->
     <div v-if="manageTab === 'manage'" class="entries-content">
@@ -412,12 +422,14 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import KnowledgeUpload from './KnowledgeUpload.vue'
+import WatchFoldersPanel from './WatchFoldersPanel.vue'
 import BulkActionsToolbar from '@/components/knowledge/BulkActionsToolbar.vue'
 import BulkEditModal from '@/components/knowledge/modals/BulkEditModal.vue'
 import type { BulkEditMode, BulkEditEntry } from '@/components/knowledge/modals/BulkEditModal.vue'
@@ -441,9 +453,17 @@ const { confirm } = useConfirmDialog()
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
+const route = useRoute()
 
-// Manage tab state
-const manageTab = ref<'upload' | 'manage'>('upload')
+// Manage tab state — initialized from ?tab= so /knowledge/manage?tab=watchFolders
+// (the redirect target for the retired /knowledge/watch-folders route) opens
+// directly on the right tab.
+type ManageTab = 'upload' | 'manage' | 'watchFolders'
+const validManageTabs: ManageTab[] = ['upload', 'manage', 'watchFolders']
+const initialManageTab = validManageTabs.includes(route.query.tab as ManageTab)
+  ? (route.query.tab as ManageTab)
+  : 'upload'
+const manageTab = ref<ManageTab>(initialManageTab)
 
 // Search and filter state
 const searchQuery = ref('')

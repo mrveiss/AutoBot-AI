@@ -120,9 +120,13 @@ _SPECIFIER = re.compile(r"^(==|>=|<=|~=|!=|>|<)")
 # Floors, not censuses: they measure how far the walk REACHES, never how much it
 # finds. Fixing a divergence must never trip one -- only a parser that has quietly
 # stopped matching the files it claims to read.
-_MIN_ANSIBLE_DOCUMENTS = 250  # 329 parsed on 2026-09-04
-_MIN_PIP_SITES = 15  # 17 carry at least one name: entry
-_MIN_ANSIBLE_DECLARATIONS = 95  # 107, versioned and bare together
+_MIN_ANSIBLE_DOCUMENTS = 250  # 329 parsed on 2026-09-04, 338 on 2026-09-14
+_MIN_PIP_SITES = 15  # 17 carried at least one name: entry; 16 after #15684 (roles/browser moved to requirements:)
+# 80, not 95: #15684 deleted roles/ai-stack's fallback `name:` list (19 packages)
+# and moved roles/browser's four-package list to `requirements:` (4 packages) --
+# both REDUCE the population a correct walk finds, the direction this floor
+# must never mistake for the walk having broken. 85 measured 2026-09-14.
+_MIN_ANSIBLE_DECLARATIONS = 80  # 107 before #15684, 85 after
 _MIN_REQUIREMENT_FILES = 30  # 34
 _MIN_REQUIREMENT_PACKAGES = 140  # 162
 # The resolver's own reach (#15629). `_MIN_DERIVED_BINDINGS` counts the venvs the
@@ -137,7 +141,10 @@ _MIN_REQUIREMENT_PACKAGES = 140  # 162
 # (`{{ backend_code_dir }}/venv`), whose defining role is outside the scope
 # the walk reaches -- recorded rather than papered over.
 _MIN_DERIVED_BINDINGS = 5  # 6
-_MIN_SITES_WITH_A_MANIFEST = 11  # 12 of 17; 2 are host-wide, 3 have no manifest
+# 11 of 16 after #15684 (was 12 of 17): roles/browser/tasks/main.yml no longer
+# has a name:-bearing declaration to resolve, so it dropped out of both counts
+# together rather than becoming an unresolved site.
+_MIN_SITES_WITH_A_MANIFEST = 11  # 11 of 16; 2 are host-wide, 3 have no manifest
 # `provisioning_shapes()` reads the same tree for HOW a venv is filled rather
 # than from WHICH manifest, and it is the only input to the multi-source record
 # below. A walk that stopped matching pip tasks would derive one shape per venv,
@@ -382,7 +389,17 @@ def test_the_walk_reaches_the_manifests_it_claims_to_read() -> None:
 
 
 def test_the_pre_15623_ai_stack_floors_are_a_regression_case() -> None:
-    """The two floors #15623 raised by hand: flagged then, silent now (#15629)."""
+    """The two floors #15623 raised by hand: flagged then, on FROZEN data (#15629).
+
+    Pinned against the frozen pre-#15623 snapshot only, not the live tree:
+    #15684 deleted the fallback `name:` list this scenario lived in (the state
+    it fell back FOR -- requirements-ai.txt absent -- turned out unreachable,
+    since the role deploys that file unconditionally before ever checking),
+    rather than fixing its two floors to agree a second time. The historical
+    comparison still proves the thing #15629 changed: the same specifier read
+    as agreement against the pre-#15623 UNION and as divergence against the
+    manifest roles/ai-stack actually provisions.
+    """
     for package, specifier in _PRE_15623_FLOORS:
         assert not _contradicts(specifier, _PRE_15623_UNION[package]), (
             f"{package}{specifier} must read as agreement against the pre-#15623 UNION — "
@@ -391,14 +408,22 @@ def test_the_pre_15623_ai_stack_floors_are_a_regression_case() -> None:
         assert _contradicts(
             specifier, _PRE_15623_AI_MANIFEST[package]
         ), f"{package}{specifier} must diverge from the manifest roles/ai-stack provisions"
-    entry = resolution.SITE_MANIFESTS[_AI_STACK_SITE]
-    stated = _manifest_specifiers(entry.manifests)
+
+
+def test_the_ai_stack_fallback_list_stays_gone() -> None:
+    """The live half of the #15623 scenario: the site itself, not just its floors (#15684).
+
+    Deleting the fallback list is a STRONGER fix than raising its floors to
+    agree -- it cannot drift out of agreement again because there is nothing
+    left to restate. This fails the moment a `name:` declaration bearing a
+    specifier reappears at this site, regardless of what it says.
+    """
     live = [d for d in ansible_declarations()[0] if d.site == _AI_STACK_SITE and d.specifier]
-    named = {d.package for d in live}
-    assert {"fastapi", "uvicorn"} <= named, f"the ai-stack list no longer versions both: {sorted(named)}"
-    assert not [
-        d for d in live if _contradicts(d.specifier, stated.get(d.package))
-    ], "roles/ai-stack has drifted from its own manifest again"
+    assert not live, (
+        f"roles/ai-stack/tasks/main.yml restates a versioned package by name again: "
+        f"{sorted(d.package for d in live)} -- #15684 deleted this venv's inline fallback list "
+        "so it would have nothing left to drift out of agreement with its manifest"
+    )
 
 
 def test_no_constrained_package_carries_a_version_in_ansible() -> None:

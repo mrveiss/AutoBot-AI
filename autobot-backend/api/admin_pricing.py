@@ -2,29 +2,23 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Admin API: manual pricing override and refresh status (GH#6480).
+"""Admin API: manual pricing override, refresh status, and refresh-now (GH#6480, #16231).
 
 Endpoints:
   PUT  /api/admin/pricing/{provider}/{model}  — emergency override
   DELETE /api/admin/pricing/{provider}/{model} — remove override
   GET  /api/admin/pricing/status              — refresh status per provider
+  POST /api/admin/pricing/refresh             — refresh now, on demand (#16231)
 """
 
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
 
+from api.schemas_pricing import PricingOverrideRequest
 from auth_rbac import require_role
 
 router = APIRouter(prefix="/admin")
-
-
-class PricingOverrideRequest(BaseModel):
-    input_per_1m: float = Field(..., gt=0, description="Input cost per 1M tokens (USD)")
-    output_per_1m: float = Field(..., gt=0, description="Output cost per 1M tokens (USD)")
-    cache_read_per_1m: float = Field(0.0, ge=0)
-    cache_write_per_1m: float = Field(0.0, ge=0)
 
 
 @router.put("/pricing/{provider}/{model}")
@@ -34,7 +28,7 @@ async def override_model_pricing(
     body: PricingOverrideRequest,
     _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> dict:
-    """Write an emergency pricing override directly to Redis."""
+    """Store an emergency pricing override; it outranks the refreshed price until removed."""
     from autobot_shared.logging_manager import get_logger
     from llm_shared.pricing.redis_store import PricingRedisStore
     from llm_shared.pricing.sources import ModelPricing
@@ -49,9 +43,10 @@ async def override_model_pricing(
         cache_read_per_1m=body.cache_read_per_1m,
         cache_write_per_1m=body.cache_write_per_1m,
         updated_at=datetime.now(tz=timezone.utc),
+        source="override",
     )
     store = PricingRedisStore()
-    ok = await store.set(pricing)
+    ok = await store.set_override(pricing)
     logger.info(
         "admin pricing override: provider=%s model=%s input=%.4f output=%.4f success=%s",
         provider,
@@ -74,11 +69,11 @@ async def delete_model_pricing_override(
     model: str,
     _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> dict:
-    """Remove a pricing override from Redis (next refresh will re-populate)."""
+    """Remove a pricing override; the refreshed price applies again."""
     from llm_shared.pricing.redis_store import PricingRedisStore
 
     store = PricingRedisStore()
-    deleted = await store.delete(provider, model)
+    deleted = await store.delete_override(model)
     return {"provider": provider, "model": model, "deleted": deleted}
 
 
@@ -90,3 +85,11 @@ async def get_pricing_refresh_status(_admin: bool = Depends(require_role("admin"
     store = PricingRedisStore()
     status = await store.get_refresh_status()
     return {"providers": status}
+
+
+@router.post("/pricing/refresh")
+async def refresh_pricing_now(_admin: bool = Depends(require_role("admin", "superadmin"))) -> dict:
+    """Refresh pricing on demand and report the per-source result (#16231)."""
+    from services.pricing_refresh import refresh_all
+
+    return await refresh_all()

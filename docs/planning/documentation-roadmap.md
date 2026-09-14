@@ -123,15 +123,15 @@ Documented all Redis data structures across 4 databases:
 
 **Location**: [docs/operations/scaling-strategy.md](operations/scaling-strategy.md)
 
-Created comprehensive scaling playbooks for all 5 VM types:
+Created comprehensive scaling playbooks for every deployment role:
 
-| VM | Vertical Scaling | Horizontal Scaling |
+| Role | Vertical Scaling | Horizontal Scaling |
 |----|------------------|-------------------|
-| Frontend (VM1) | CPU/RAM increase | Load balancer + replicas |
-| NPU Worker (VM2) | NPU hardware upgrade | Multiple NPU workers |
-| Redis (VM3) | RAM increase | Redis Cluster |
-| AI Stack (VM4) | GPU addition, RAM | Multiple Ollama instances |
-| Browser (VM5) | CPU/RAM increase | Browser pool |
+| Frontend | CPU/RAM increase | Load balancer + replicas |
+| NPU Worker | NPU hardware upgrade | Multiple NPU workers |
+| Redis | RAM increase | Redis Cluster |
+| AI Stack | GPU addition, RAM | Multiple Ollama instances |
+| Browser | CPU/RAM increase | Browser pool |
 
 **Includes**:
 - Current resource allocations
@@ -162,7 +162,7 @@ Implemented a changelog system tracking all documentation changes:
 | Data flow visualization coverage for critical paths | 100% | ✅ 8 diagrams |
 | All 4 Redis databases fully documented | 100% | ✅ Complete |
 | All failure scenarios covered in DR procedures | 100% | ✅ 7 scenarios |
-| Scaling playbooks for all 5 VM types | 100% | ✅ Complete |
+| Scaling playbooks for every deployment role | 100% | ✅ Complete |
 | Documentation versioning operational | Yes | ✅ CHANGELOG.md |
 | Developer onboarding time | <30 min | ✅ Maintained |
 
