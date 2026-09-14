@@ -67,8 +67,8 @@ async def _get_fact_with_ownership(kb, fact_id: str, user_id: str):
 
     # Check access
     if not kb.ownership_manager:
-        # If ownership manager not initialized, allow access (backward compat)
-        return fact
+        # #16662: without the ownership manager no access decision can be made -- deny.
+        raise HTTPException(status_code=503, detail="Ownership management not available")
 
     metadata = fact.get("metadata", {})
     has_access = await kb.ownership_manager.check_access(fact_id, user_id, metadata)
