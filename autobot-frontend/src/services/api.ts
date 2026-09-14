@@ -12,7 +12,13 @@ import type {
   TeamResponse,
   SessionInviteResponse,
   SessionRemoveResponse,
-  SessionShareSecretResponse
+  SessionShareSecretResponse,
+  SessionPresenceResponse,
+  CollabEventResponse,
+  SessionEventsResponse,
+  PendingInvitationResponse,
+  MyInvitationsResponse,
+  InvitationRespondResponse
 } from '@/types/api-contract'
 import apiClient from '@/utils/ApiClient'
 import type { RequestOptions } from '@/utils/ApiClient'
@@ -21,6 +27,11 @@ import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for ApiService
 const logger = createLogger('ApiService')
+
+// #16460: re-exported so `useSessionCollaboration.ts` (and any other existing
+// importer) can keep pulling this from the service module rather than reaching
+// into `@/types/api-contract` directly.
+export type { PendingInvitationResponse }
 
 // #16460: matches the backend's own GET /sessions/{id}/events default (api/collaboration_events.py).
 const DEFAULT_SESSION_EVENTS_LIMIT = 50
@@ -40,47 +51,11 @@ export interface SessionParticipantsResponse {
   total_count: number
 }
 
-export interface SessionPresenceResponse {
-  session_id: string
-  online_users: string[]
-  count: number
-}
-
-// #16460: persisted collaboration history + invitation list/respond
-export interface CollabEventResponse {
-  id: string
-  session_id: string
-  kind: string
-  user_id: string | null
-  username: string | null
-  payload: Record<string, unknown>
-  timestamp: string
-}
-
-export interface SessionEventsResponse {
-  session_id: string
-  events: CollabEventResponse[]
-  has_more: boolean
-}
-
-export interface PendingInvitationResponse {
-  session_id: string
-  from_user_id: string
-  permission: string
-  invited_at: string
-  expires_at: string | null
-}
-
-export interface MyInvitationsResponse {
-  invitations: PendingInvitationResponse[]
-}
-
-export interface InvitationRespondResponse {
-  success: boolean
-  session_id: string
-  accepted: boolean
-  permission: string | null
-}
+// #16460: SessionPresenceResponse, CollabEventResponse, SessionEventsResponse,
+// PendingInvitationResponse, MyInvitationsResponse and InvitationRespondResponse
+// are aliased from the generated contract in @/types/api-contract (imported
+// above) rather than hand-typed here -- same approach already used for
+// SessionInviteResponse/SessionRemoveResponse/SessionShareSecretResponse.
 
 class ApiService {
   private client: typeof apiClient

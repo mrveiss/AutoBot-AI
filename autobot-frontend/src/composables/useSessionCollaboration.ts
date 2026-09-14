@@ -499,7 +499,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
         fromUserId: inv.from_user_id,
         permission: inv.permission,
         invitedAt: inv.invited_at,
-        expiresAt: inv.expires_at
+        expiresAt: inv.expires_at ?? null
       }))
     } catch (error) {
       logger.error('Failed to refresh pending invitations:', error)
