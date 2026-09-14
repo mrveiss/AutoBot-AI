@@ -147,7 +147,9 @@ MIN_READS_FOUND = 40
 #: 17 it newly sees are each classified in ALLOWLIST. That is a measured expansion, not new debt.
 #: Then 101 -> 103: the review widened it to reads behind ``asyncio.to_thread`` and through a local
 #: aliasing a KB handle (``SearchMixin._query_chromadb``, ``FactsMixin._find_duplicate``; both IMPL).
-UNFILTERED_READ_CEILING = 103
+#: Then 103 -> 97 (#16691, #16706): several routes reclassified from TRACKED_GAP to SCOPED once
+#: their admin gate or caller-independent filter was confirmed -- a measured shrink, not new debt.
+UNFILTERED_READ_CEILING = 97
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
