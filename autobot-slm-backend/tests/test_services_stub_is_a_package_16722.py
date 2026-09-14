@@ -30,6 +30,21 @@ def test_the_services_stub_is_a_package_pointing_at_the_real_directory():
     assert stub.__path__ == [str(_SLM_ROOT / "services")]
 
 
+def test_pytest_sets_up_the_services_package_with_the_stub_in_place(pytestconfig):
+    """Package.setup imports services/__init__.py through importtestmodule.
+
+    importlib mode returns the stub already in sys.modules, and pytest then reads
+    pytest_plugins and the xunit module hooks off it. On a bare MagicMock, the invented
+    pytest_plugins was a UsageError: #16728's first CI run, on services/slm_unit_refresh_test.py.
+    """
+    from _pytest.python import importtestmodule
+
+    stub = sys.modules["services"]
+    assert importtestmodule(_SLM_ROOT / "services" / "__init__.py", pytestconfig) is stub
+    for hook in ("setUpModule", "setup_module", "tearDownModule", "teardown_module"):
+        assert getattr(stub, hook) is None, hook
+
+
 def _import_inner_test(tmp_path: Path, stub: MagicMock) -> object:
     """Have pytest import ``<pkg>/inner_test.py`` with *stub* as the parent; returns the parent after."""
     pkg = tmp_path / "stubbed_pkg_16722"

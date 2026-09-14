@@ -280,6 +280,13 @@ for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_M
 # submodule still loads from its real file, as it did once the real package
 # had taken over.
 sys.modules["services"].__path__ = [str(Path(__file__).parent / "services")]
+# Collecting services/ then runs Package.setup, which imports services/__init__.py;
+# importlib mode returns the existing sys.modules entry, so pytest reads its
+# package-module attributes off this stub. A MagicMock invents them, and a mock
+# pytest_plugins is a UsageError, so each gets what a plain module without it gives.
+sys.modules["services"].pytest_plugins = []
+for _hook in ("setUpModule", "setup_module", "tearDownModule", "teardown_module"):
+    setattr(sys.modules["services"], _hook, None)
 
 # ── services.* modules that must be REAL, not stubs ──────────────────────────
 # ``services`` itself is a MagicMock, not the real package, so its attributes
