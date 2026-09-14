@@ -31,8 +31,7 @@ Rate limiting:
     against an endpoint-wide ceiling before any validation work runs, so the
     secret cannot be brute-forced unmetered and failed attempts cannot be used
     as a Redis amplifier.  See mcp_server/auth_throttle.py.
-    Post-auth: in-memory token bucket per token prefix.
-    Both reject with JSON-RPC error code -32029.
+    Post-auth: in-memory token bucket per token prefix. Both reject with -32029.
 
 Observability:
     Every tool call is logged at INFO level with token-prefix, tool name,
