@@ -195,6 +195,33 @@ class TestGetSecretDualRead:
             with pytest.raises(PermissionError):
                 await _get_secret_dual_read("s3", chat_id="chat-b")
 
+    @pytest.mark.asyncio
+    async def test_falls_back_to_connector_store_when_neither_earlier_store_has_it(self):
+        """#16428: the third fallback, after the unified store and the legacy file."""
+        from api.secrets import _get_secret_dual_read
+
+        bridged = {
+            "id": "s4",
+            "secret_type": "connector_api_key",  # pragma: allowlist secret
+            "scope": "user",
+            "created_by": "owner-9",
+        }
+        connector_svc = MagicMock()
+        connector_svc.get_secret = MagicMock(return_value=bridged)
+        with (
+            patch("api.secrets.load_imported_json_secret", AsyncMock(return_value=None)),
+            patch("api.secrets.secrets_manager") as legacy,
+            patch("api.secrets.get_secrets_service", return_value=connector_svc),
+        ):
+            legacy.get_secret = MagicMock(return_value=None)
+            result = await _get_secret_dual_read("s4", chat_id=None, owner_id="owner-9")
+
+        assert result["id"] == "s4"
+        assert result["type"] == "connector_api_key"
+        assert "secret_type" not in result
+        assert result["value"] is None
+        connector_svc.get_secret.assert_called_once_with(secret_id="s4", include_value=False, accessed_by="owner-9")
+
 
 # ---------------------------------------------------------------------------
 # #14974 — the wildcard must not be advertised where it is refused
