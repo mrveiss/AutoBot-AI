@@ -157,6 +157,68 @@ Verdict: **adopt-with-conditions**, and only after the server-side VAD gap below
 closed — speculating off a placeholder VAD has nothing real to gate on. Effort:
 moderate.
 
+**4. A declarative scenario + LLM-judge behavioral eval framework, with verdict caching.**
+Applies to `autobot-backend/eval/` (`store.py`, `runner.py`), `autobot-backend/rlm/evaluator.py`.
+Already-exists audit: AutoBot's `eval/` is a golden-trajectory regression harness —
+`store.py:5-19` stores a captured real run as a fixed JSON fixture
+(`eval/golden/*.json`); `runner.py:70-110` `TrajectoryReplayer.replay_one` replays a
+golden's single-turn input, checks tools deterministically, then scores the reply
+through `rlm/evaluator.py:53-80` `ResponseQualityEvaluator`, which is LLM-as-*self*-judge
+but returns a 0.0-1.0 numeric score parsed from a fixed `SCORE/CRITIQUE/HINT` prompt
+(`_EVAL_PROMPT`, line 25) — not a yes/no/continue verdict against an arbitrary
+natural-language criterion, and not a multi-turn scripted-or-persona conversation.
+Grepped `cache`/`hash` in `eval/*.py` and `rlm/evaluator.py` — no matches: every
+replay re-pays for a fresh judge call. Grepped `persona`/`scenario` across the
+repo's YAML — no test-scenario hits.
+Visible benefit: a declarative scenario file (scripted turns *or* an LLM-played
+persona with a goal) plus a yes/no/continue judge would let AutoBot write new
+behavioral regression cases without writing Python, and cover multi-turn goal-directed
+conversations the single-turn golden-trajectory harness cannot express at all.
+Hidden cost: a second eval framework running alongside the existing golden-trajectory
+one is itself a fragmentation risk (see AutoBot's own "consolidate, never fork" rule)
+unless the golden-trajectory harness is explicitly scoped as the fixture format underneath
+a new scenario layer, not replaced by it; judge-verdict caching needs a correctness
+story (cache invalidation when the criterion or model changes) or it silently goes stale.
+Verdict: **adopt-with-conditions** — the multi-turn scripted/persona conversation
+and yes/no/continue-against-arbitrary-criterion pieces are the real gap; the numeric
+self-score evaluator AutoBot already has can stay for what it's good at (fixture
+regression) rather than being replaced wholesale.
+Effort: significant (new scenario format, judge, and caching layer; not a small wiring job).
+
+**5. A canonical LLM context/tool schema with one adapter per provider, replacing
+duplicated per-provider formatting.**
+Applies to `autobot-backend/llm_shared/providers/anthropic.py`,
+`llm_shared/providers/vertexai.py`, `llm_shared/providers/bedrock.py`,
+`llm_shared/providers/mistral.py`, `llm_shared/providers/openai_compatible.py`,
+`llm_shared/providers/ollama.py`, `llm_shared/models.py`.
+Already-exists audit: `llm_shared/models.py:101-107,143-164` defines a provider-agnostic
+`ToolDefinition`/`LLMRequest` shape (messages as raw `List[Dict[str,str]]`, no owning
+formatter). `llm_shared/adapters/` (`openai_adapter.py`, `anthropic_adapter.py`,
+`base.py`) looked like the formatter layer but is actually a health-check/diagnostic
+wrapper for `api/adapters.py` (`execute()`, `test_environment()`, `list_models()`) —
+not message/tool-format conversion. The actual conversion is inlined and duplicated
+per provider: `anthropic.py:334-342` `_split_messages()` / `:360-367` `_apply_tools()`
+is re-implemented near-verbatim in `vertexai.py:299-307` `_split_messages_for_anthropic()`
+for the Claude-on-Vertex path, `vertexai.py:196-208` builds a separate Gemini role/parts
+mapping, and `bedrock.py:213`, `mistral.py:126`, `openai_compatible.py:161`,
+`ollama.py:129` each independently build their own OpenAI-function-style tool schema
+from the same `ToolDefinition`.
+Visible benefit: one adapter class per provider, converting from the canonical shape,
+would remove the literal duplication (Anthropic's split-message logic exists in two
+files today) and give every new provider one conversion routine to write instead of
+rediscovering message-splitting and tool-schema-building from scratch.
+Hidden cost: this touches every provider's request-building path — a refactor of
+load-bearing code across 6+ files, not a localized change; needs to land provider-by-provider
+to keep any one PR reviewable, and needs regression coverage per provider before
+and after, since context/tool formatting bugs are silent (wrong output, not an
+exception) until a model complains.
+Verdict: **adopt-with-conditions** — the underlying duplication (`vertexai.py`
+re-implementing `anthropic.py`'s split-message logic) is itself a defect independent
+of any external comparison, but the fix belongs in AutoBot's own terms (one canonical
+context + per-provider adapter, in the shape `llm_shared/` already gestures at with
+`ToolDefinition`/`LLMRequest`) rather than importing the source's `LLMContext` type.
+Effort: significant.
+
 ### What We Already Do Better
 
 - **LLM provider failover.** AutoBot's circuit breaker
@@ -197,6 +259,12 @@ moderate.
 4. **No typed LLM error-category taxonomy.** See adoption #2.
 5. **No speculative eager-end-of-turn inference.** See adoption #3 — lowest priority,
    gated on gap 1.
+6. **No multi-turn scenario/persona eval framework; only single-turn golden-trajectory
+   regression, and no judge-verdict caching.** See adoption #4.
+7. **Per-provider LLM message/tool-schema formatting is duplicated, not centralized** —
+   `vertexai.py` re-implements `anthropic.py`'s split-message logic rather than sharing
+   it. See adoption #5. This is a defect in its own right (duplication AutoBot's own
+   conventions call out), independently of the external comparison that surfaced it.
 
 ### Specific Code/Files Affected
 
@@ -206,12 +274,17 @@ moderate.
 | `autobot-backend/llm_shared/base_provider.py`, `llm_shared/provider_degradation.py` | Add an additive error-category taxonomy alongside the existing breaker/degradation signals |
 | `autobot-backend/voice_processing/speech_recognition.py:365-383` | Replace the placeholder `_detect_speech_segments()` with real server-side VAD (prerequisite, not itself a source-derived item) |
 | `autobot-backend/api/voice_stream.py` | Extend barge-in cancel plumbing with a speculation gate, once VAD is real |
+| `autobot-backend/eval/`, `autobot-backend/rlm/evaluator.py` | Add a scripted/persona scenario format + yes/no/continue judge + verdict cache, layered over the existing golden-trajectory fixture harness rather than replacing it |
+| `autobot-backend/llm_shared/providers/anthropic.py`, `vertexai.py`, `bedrock.py`, `mistral.py`, `openai_compatible.py`, `ollama.py`, `llm_shared/models.py` | Consolidate duplicated per-provider message/tool-schema formatting into one adapter per provider, converting from the existing `ToolDefinition`/`LLMRequest` canonical shape |
 | `autobot_shared/message_bus.py` | Candidate consolidation point if AutoBot chooses to unify its 5 pub/sub implementations (own issue, not a direct adoption) |
 
 ## Status
 
-Phase 1 (source analysis) and Phase 2 (AutoBot comparison) complete. Issues filed for
-the three confirmed gaps: #16805 (interrupt-on-new-message for text chat), #16806
-(typed LLM error-category taxonomy), #16807 (placeholder server-side VAD). The
-speculative eager-end-of-turn adoption was not filed — it is gated on #16807 landing
-first and was left as a documented opportunity above rather than a standalone issue.
+Phase 1 (source analysis) and Phase 2 (AutoBot comparison) complete, extended with a
+second comparison pass covering behavioral evals and per-provider LLM formatting.
+Issues filed for the first three confirmed gaps: #16805 (interrupt-on-new-message for
+text chat), #16806 (typed LLM error-category taxonomy), #16807 (placeholder
+server-side VAD). Not yet filed: the scenario/persona eval framework (adoption #4)
+and the duplicated per-provider message/tool-schema formatting (adoption #5) —
+pending user go-ahead. The speculative eager-end-of-turn adoption (#3) was not filed
+either — it is gated on #16807 landing first.
