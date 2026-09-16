@@ -1,7 +1,7 @@
 # Handoff: issue-16784-16785-document-format-gaps
 status: partial
 pr: #16790
-base_at_push: c6af9cf0dbd0fef5f1a991ace7b882aa66fee906
+base_at_push: c6af9cf0d
 gates: pre-commit=PASS on every commit | pre-push=PASS (document_extractors_16785_test.py) | file-size ratchet=PASS | CI: 0 failures at head 327d092cf, some checks still pending at handoff — not polled further, per this repo's "never wait on CI" rule
 needs_rebase_before_merge: no (just refreshed against current origin/main via merge, not rebase, to keep any future review stamp valid as a merge-commit re-read)
 remaining:
