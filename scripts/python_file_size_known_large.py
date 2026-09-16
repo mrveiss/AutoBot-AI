@@ -103,7 +103,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/git_mcp.py": 1357,
     "autobot-backend/api/http_client_mcp.py": 963,
     "autobot-backend/api/ide_integration.py": 928,
-    "autobot-backend/api/knowledge.py": 3414,
+    "autobot-backend/api/knowledge.py": 3412,  # #16775 dropped a dead import os
     "autobot-backend/api/knowledge_ai_stack.py": 712,
     "autobot-backend/api/knowledge_api_integration_test.py": 623,
     "autobot-backend/api/knowledge_categories.py": 674,
