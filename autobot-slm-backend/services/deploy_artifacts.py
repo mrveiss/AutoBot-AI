@@ -74,23 +74,26 @@ ARTIFACT_FILE_GLOBS: tuple[str, ...] = ("*.pyc", "*.log")
 # (roles/slm_manager/tasks/main.yml's `delete: true` sync did exactly this).
 SYNC_DELETIONS_MARKER = ".autobot_sync_deletions_commit"
 
-# #16717: the SLM frontend's staged-release layout (#15610) -- one
-# `<prefix><build-id>/` directory per build, `current`/`previous` symlinks,
-# and the pre-#15610 `dist`/`dist.previous` directories. Defined here, the
-# dependency-free base module, and imported by services/slm_frontend_build.py
-# (the module that WRITES this layout) rather than the reverse, so this
-# module — already what drift_checker's rsync excludes and both drift walks
-# derive their build/deploy-artifact vocabulary from (#11459) — never has to
-# import slm_frontend_build's asyncio/subprocess/build machinery just to
-# protect four strings from a forced resync. A forced "resync from source"
-# is a delete-style rsync with no tracked counterpart for any of these paths
-# to survive against; before this, deleting them took the live SLM frontend
-# and its rollback down together with no earlier bundle to fall back to.
+# #16717: the SLM frontend's staged-release layout (#15610), defined here
+# (imported by slm_frontend_build.py, which WRITES it) so a forced resync
+# can never delete a live bundle for want of an exclude.
 SLM_FRONTEND_BUILD_PREFIX = "dist-"
 SLM_FRONTEND_CURRENT_LINK = "current"
 SLM_FRONTEND_PREVIOUS_LINK = "previous"
 SLM_FRONTEND_LEGACY_DIR = "dist"
 SLM_FRONTEND_LEGACY_PREVIOUS_DIR = "dist.previous"
+_SLM_FRONTEND_RELEASE_NAMES = frozenset(
+    {SLM_FRONTEND_CURRENT_LINK, SLM_FRONTEND_PREVIOUS_LINK, SLM_FRONTEND_LEGACY_DIR}
+)
+SLM_FRONTEND_RELEASE_EXCLUDES = _SLM_FRONTEND_RELEASE_NAMES | frozenset({f"{SLM_FRONTEND_BUILD_PREFIX}*"})
+
+
+def is_release_artifact(component: str, top_level_name: str) -> bool:
+    """True when ``top_level_name`` is component's staged-release name/prefix (#16717)."""
+    return component == "autobot-slm-frontend" and (
+        top_level_name in _SLM_FRONTEND_RELEASE_NAMES or top_level_name.startswith(SLM_FRONTEND_BUILD_PREFIX)
+    )
+
 
 HOST_STATE_EXCLUDES: tuple[str, ...] = (
     ".env",  # systemd EnvironmentFile (#2824, #9970) -- service will not start without it

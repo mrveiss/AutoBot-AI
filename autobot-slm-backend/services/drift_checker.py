@@ -18,14 +18,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from autobot_shared.time_utils import utc_timestamp
-from services.deploy_artifacts import (
-    ARTIFACT_DIR_SUFFIXES,
-    ARTIFACT_DIRS,
-    SLM_FRONTEND_BUILD_PREFIX,
-    SLM_FRONTEND_CURRENT_LINK,
-    SLM_FRONTEND_LEGACY_DIR,
-    SLM_FRONTEND_PREVIOUS_LINK,
-)
+from services import deploy_artifacts
 from services.git_tracker import DEFAULT_REPO_PATH
 
 logger = logging.getLogger(__name__)
@@ -227,8 +220,8 @@ _NONSTANDARD_COMPONENT_PATHS: dict[str, tuple[str, str]] = {
 # code_sync rsync excludes never disagree about what is an artifact — the
 # divergence that let ``*.egg-info`` be drift-skipped (#11440) yet still
 # rsync-churned. See services/deploy_artifacts.py for the shared definitions.
-_SKIP_DIRS = set(ARTIFACT_DIRS)
-_SKIP_DIR_SUFFIXES: tuple[str, ...] = ARTIFACT_DIR_SUFFIXES
+_SKIP_DIRS = set(deploy_artifacts.ARTIFACT_DIRS)
+_SKIP_DIR_SUFFIXES: tuple[str, ...] = deploy_artifacts.ARTIFACT_DIR_SUFFIXES
 
 # Paths that are deployment-generated and never present in the git source tree.
 # Exact-match paths and prefix patterns are checked against the POSIX relative
@@ -251,8 +244,7 @@ _EXPECTED_DRIFT_PREFIXES: tuple[str, ...] = ("autobot_shared/",)
 # Per-component entries that exist ONLY in the deployed tree — the deployment or
 # the running service creates them and source has no counterpart (#13851).
 # Unlike ``_EXPECTED_DRIFT_EXACT`` these are scoped to the component whose tree
-# they sit in, because the same relative path under a different component would
-# be ordinary source.
+# they sit in, because the same relative path under a different component would be ordinary source.
 #
 # Every entry is protected from the delete-style resolve as well as skipped by
 # the drift walk (see ``deploy_only_entries``) — the two disagreeing is what let
@@ -275,23 +267,8 @@ _EXPECTED_DRIFT_PREFIXES: tuple[str, ...] = ("autobot_shared/",)
 _DEPLOY_ONLY_ENTRIES: dict[str, frozenset[str]] = {
     "autobot-backend": frozenset({"config/npu_workers.yaml", "autobot_shared"}),
     "autobot-slm-backend": frozenset({"autobot_shared"}),
+    "autobot-slm-frontend": deploy_artifacts.SLM_FRONTEND_RELEASE_EXCLUDES,  # #16717
 }
-
-
-# (exact release-artifact names, per-build directory prefix) for the SLM
-# frontend's staged-release layout (#16717): current/previous are the served
-# symlink and its rollback, dist is the pre-#15610 served directory, and
-# dist-<build-id> (the prefix) is one directory per build. Sourced from
-# services/deploy_artifacts.py -- the same dependency-free module this file's
-# other build/deploy-artifact vocabulary already comes from (#11459) -- not
-# restated here, so a resync and the module that owns the layout
-# (services/slm_frontend_build.py, which imports the same constants) can
-# never disagree about what it is called.
-_SLM_FRONTEND_RELEASE_NAMES = frozenset(
-    {SLM_FRONTEND_CURRENT_LINK, SLM_FRONTEND_PREVIOUS_LINK, SLM_FRONTEND_LEGACY_DIR}
-)
-_SLM_FRONTEND_RELEASE_PREFIX = SLM_FRONTEND_BUILD_PREFIX
-
 
 # Individual files inside an otherwise-1:1 component tree that are deployed as a
 # *rendered* Jinja2 template (#13851). Maps component -> {deployed rel path ->
@@ -318,9 +295,8 @@ _RENDERED_FILES: dict[str, dict[str, str]] = {
 def _deployed_relpath(component: str) -> str:
     """Deployed path of *component* relative to the deployed root.
 
-    Mirrors ``services.deployed_dir_resolver._resolve_deployed_dir`` without
-    the root prefix so
-    ownership between component trees can be reasoned about (#13851).
+    Mirrors ``services.deployed_dir_resolver._resolve_deployed_dir`` without the
+    root prefix so ownership between component trees can be reasoned about (#13851).
     """
     override = _NONSTANDARD_COMPONENT_PATHS.get(component)
     return override[1] if override else component
@@ -333,8 +309,7 @@ def owned_subtrees(component: str) -> frozenset[str]:
     deployed target is ``<root>/autobot-backend/plugins`` — so the backend's own
     drift walk found 17 plugin files, looked for them under
     ``code_source/autobot-backend/plugins/`` where they have never existed, and
-    reported them as drift. They were perfectly in sync with their real source
-    (#13851).
+    reported them as drift. They were perfectly in sync with their real source (#13851).
 
     A file owned by another component is that component's business: it must not
     count as drift for the component whose tree it happens to sit in, and it must
@@ -368,17 +343,8 @@ def deploy_only_entries(component: str) -> frozenset[str]:
     not delete ``npu-worker.py`` (its source is a .j2 in the role, not a file in
     the component tree), while the walk must still compare it — see
     ``_rendered_file_drift``.
-
-    ``autobot-slm-frontend`` additionally carries its staged-release names
-    and a ``<prefix>*`` glob for its per-build directories (#16717) — a
-    plain rsync exclude pattern, not a literal path, but this function's
-    return values only ever reach the rsync ``--exclude`` chokepoint
-    (``api/code_sync.py::_rsync_exclude_args``), which is glob-safe.
     """
-    entries = _DEPLOY_ONLY_ENTRIES.get(component, frozenset()) | frozenset(_RENDERED_FILES.get(component, {}))
-    if component == "autobot-slm-frontend":
-        entries |= _SLM_FRONTEND_RELEASE_NAMES | frozenset({f"{_SLM_FRONTEND_RELEASE_PREFIX}*"})
-    return entries
+    return _DEPLOY_ONLY_ENTRIES.get(component, frozenset()) | frozenset(_RENDERED_FILES.get(component, {}))
 
 
 def _is_expected_drift(
@@ -417,14 +383,8 @@ def _is_expected_drift(
     # still compare (#13851).
     if rel_path in _DEPLOY_ONLY_ENTRIES.get(component, frozenset()):
         return True
-    if component == "autobot-slm-frontend":
-        # Release artifacts (#16717): current/previous/dist are exact
-        # top-level names; dist-<build-id> is a prefix, one new directory
-        # per build, so only a startswith check catches every one ever
-        # built, not just the ones retention happened to keep.
-        top_level = rel_path.split("/", 1)[0]
-        if top_level in _SLM_FRONTEND_RELEASE_NAMES or top_level.startswith(_SLM_FRONTEND_RELEASE_PREFIX):
-            return True
+    if deploy_artifacts.is_release_artifact(component, rel_path.split("/", 1)[0]):  # #16717
+        return True
     if owned is None:
         raise ValueError("owned_subtrees must be supplied when component is given (#13851)")
     return any(rel_path == sub or rel_path.startswith(sub + "/") for sub in owned)

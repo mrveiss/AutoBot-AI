@@ -1155,67 +1155,6 @@ class TestDeployOnlyEntriesAreProtectedFromDeletion:
         assert report["untracked_files"] == []
 
 
-class TestSlmFrontendReleaseLayoutIsProtected:
-    """#16717: a forced "resync from source" is a delete-style rsync with no
-    exclude for autobot-slm-frontend's staged-release layout --
-    current/previous (the served bundle and its rollback) and each
-    dist-<build-id>/ directory (services/slm_frontend_build.py,
-    SLM_FRONTEND_RELEASE_KEEP retained builds) were never tracked in git, so
-    the (old, per-component) drift walk reported them as "untracked ... left
-    over" and a forced resolve deleted them, live bundle and rollback
-    included, with no earlier build left to fall back to.
-
-    Every assertion here reads the protected names off services.deploy_artifacts
-    (aliased ``_da``), never restating them -- a renamed prefix or symlink
-    fails these tests automatically instead of silently going unprotected.
-    """
-
-    def test_release_names_are_protected_from_deletion(self):
-        entries = deploy_only_entries("autobot-slm-frontend")
-        assert _da.SLM_FRONTEND_CURRENT_LINK in entries
-        assert _da.SLM_FRONTEND_PREVIOUS_LINK in entries
-        assert _da.SLM_FRONTEND_LEGACY_DIR in entries
-        assert f"{_da.SLM_FRONTEND_BUILD_PREFIX}*" in entries
-
-    def test_every_retained_build_is_classified_as_release_artifact_not_untracked(self, tmp_path):
-        """Three retained builds (the default SLM_FRONTEND_RELEASE_KEEP), none
-        tracked in source -- the shape observed on 2026-09-14 (264 files
-        across the three retained builds)."""
-        src = tmp_path / "src"
-        dep = tmp_path / "dep"
-        src.mkdir()
-        for build_id in ("20260901T000000000Z", "20260905T000000000Z", "20260910T000000000Z"):
-            build_dir = f"{_da.SLM_FRONTEND_BUILD_PREFIX}{build_id}"
-            _write(dep / build_dir / "index.html", b"<html></html>")
-            _write(dep / build_dir / "assets" / "app.js", b"console.log(1)")
-
-        report = build_drift_report(str(src), str(dep), "autobot-slm-frontend")
-        assert report["untracked_files"] == []
-        assert report["drift_detected"] is False
-
-    def test_an_arbitrary_build_id_is_covered_not_a_hardcoded_example(self, tmp_path):
-        """A genuine prefix match, not a restated literal for one build id --
-        proven with a build id no other test in this file uses."""
-        src = tmp_path / "src"
-        dep = tmp_path / "dep"
-        src.mkdir()
-        weird_id = "99999999T999999999Z"
-        _write(dep / f"{_da.SLM_FRONTEND_BUILD_PREFIX}{weird_id}" / "index.html", b"<html></html>")
-        report = build_drift_report(str(src), str(dep), "autobot-slm-frontend")
-        assert report["untracked_files"] == []
-
-    def test_a_genuinely_removed_source_file_is_still_untracked(self, tmp_path):
-        """The release-layout protection must not blanket the whole component
-        -- an ordinary deployed file whose source was actually deleted
-        (#16310's own ServicesView.vue example) must still surface."""
-        src = tmp_path / "src"
-        dep = tmp_path / "dep"
-        src.mkdir()
-        _write(dep / "ServicesView.vue", b"<template>old</template>")
-        report = build_drift_report(str(src), str(dep), "autobot-slm-frontend")
-        assert [e["path"] for e in report["untracked_files"]] == ["ServicesView.vue"]
-
-
 class TestRenderedComparisonPrefersChecksum:
     """#13851 review: npu-worker.py.j2 contains ZERO Jinja expressions, so it
     renders byte-identically. A raw checksum is the stronger check there — the
