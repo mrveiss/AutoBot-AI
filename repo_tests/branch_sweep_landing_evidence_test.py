@@ -240,10 +240,10 @@ def test_landing_evidence_helpers_are_defined() -> None:
 
 
 def test_archival_prefixes_cover_the_known_archives() -> None:
-    """``rescued/*`` (#14078) and ``release/changelog-*`` (#15167) hold the only
+    """``rescued/*`` (#14078) and ``changelog-*`` (#15167, renamed in #16563) hold the only
     copy of work that must never be reported as stranded or swept."""
     text = _GUARD_LIB.read_text(encoding="utf-8")
-    for prefix in ("rescued/", "release/changelog-"):
+    for prefix in ("rescued/", "changelog-"):
         assert prefix in text, (
             f"{prefix!r} dropped from BRANCH_ARCHIVAL_PREFIXES -- those branches "
             "hold the only copy of rescued (#14078) or released-changelog (#15167) "
