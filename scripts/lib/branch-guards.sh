@@ -116,10 +116,10 @@ merged_pr_for_issue() {
 
 # Branch-name prefixes that are archival records rather than lines of work, and
 # so are never reported as stranded. `rescued/stash-*` are point-in-time
-# snapshots of rescued working trees (#14078); `release/changelog-*` hold the
+# snapshots of rescued working trees (#14078); `changelog-*` hold the
 # only copy of released changelog content (#15167). Override via the
 # BRANCH_ARCHIVAL_PREFIXES environment variable (space separated).
-BRANCH_ARCHIVAL_PREFIXES="${BRANCH_ARCHIVAL_PREFIXES:-rescued/ release/changelog-}"
+BRANCH_ARCHIVAL_PREFIXES="${BRANCH_ARCHIVAL_PREFIXES:-rescued/ changelog-}"
 
 # Added lines shorter than this are ignored when counting content presence:
 # `}`, `else:` and bare imports match somewhere in almost any file and would
