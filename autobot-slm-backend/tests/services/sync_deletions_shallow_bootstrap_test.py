@@ -22,15 +22,30 @@ real, disposable git repository rather than a mock.
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import subprocess
 import sys
 import types
 from pathlib import Path
+from unittest.mock import patch
 
 from autobot_shared.paths import scrubbed_git_env
 
 _SERVICES_DIR = Path(__file__).parent.parent.parent / "services"
+
+# Captured at import time, before any per-test hook can patch it (#13312):
+# tests/api/conftest.py's pytest_runtest_call hookwrapper blocks
+# asyncio.create_subprocess_exec process-wide for the whole session once that
+# conftest is loaded -- not just for tests/api/ -- so a shard that also
+# collects tests/api/ files blocks the real git calls these tests exist to
+# make. Same bypass as tests/api/test_resolve_deletion_guard_13851.py's
+# real_rsync().
+_REAL_SUBPROCESS_EXEC = asyncio.create_subprocess_exec
+
+
+def _real_git():
+    return patch.object(asyncio, "create_subprocess_exec", _REAL_SUBPROCESS_EXEC)
 
 
 def _real_load(name: str, path: Path):
@@ -125,7 +140,8 @@ async def test_bootstrap_refuses_to_run_on_a_shallow_clone(tmp_path) -> None:
     clone = tmp_path / "clone"
     _shallow_clone(origin, clone)
 
-    plan = await compute_bootstrap_plan(str(clone / "comp"), str(clone), commit_b, present_paths=["gone.py"])
+    with _real_git():
+        plan = await compute_bootstrap_plan(str(clone / "comp"), str(clone), commit_b, present_paths=["gone.py"])
 
     assert plan.delete == [], "a refused plan must not also claim something is safe to delete"
     assert plan.error, "a shallow clone must fail loudly, not silently plan an empty bootstrap"
@@ -147,7 +163,8 @@ async def test_bootstrap_runs_normally_on_the_same_history_once_unshallowed(tmp_
     _shallow_clone(origin, clone)
     subprocess.run(["git", "-C", str(clone), "fetch", "--unshallow"], check=True, env=_GIT_ENV, capture_output=True)
 
-    plan = await compute_bootstrap_plan(str(clone / "comp"), str(clone), commit_b, present_paths=["gone.py"])
+    with _real_git():
+        plan = await compute_bootstrap_plan(str(clone / "comp"), str(clone), commit_b, present_paths=["gone.py"])
 
     assert plan.error is None
     assert plan.delete == ["gone.py"]
@@ -163,7 +180,8 @@ async def test_a_non_shallow_repo_is_unaffected_by_the_guard(tmp_path) -> None:
     (repo / "comp" / "gone.py").unlink()
     commit_b = _commit_all(repo, "delete gone.py")
 
-    plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_b, present_paths=["gone.py"])
+    with _real_git():
+        plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_b, present_paths=["gone.py"])
 
     assert plan.error is None
     assert plan.delete == ["gone.py"]
