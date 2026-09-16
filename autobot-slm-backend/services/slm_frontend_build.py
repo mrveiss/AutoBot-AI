@@ -33,6 +33,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from autobot_shared.env_utils import env_float, env_int_clamped
+from services.deploy_artifacts import (
+    SLM_FRONTEND_BUILD_PREFIX as BUILD_PREFIX,
+    SLM_FRONTEND_CURRENT_LINK as CURRENT_LINK,
+    SLM_FRONTEND_LEGACY_DIR as LEGACY_DIR,
+    SLM_FRONTEND_LEGACY_PREVIOUS_DIR as LEGACY_PREVIOUS_DIR,
+    SLM_FRONTEND_PREVIOUS_LINK as PREVIOUS_LINK,
+)
 from services.deployed_dir_resolver import get_release_component_dir
 
 logger = logging.getLogger(__name__)
@@ -54,19 +61,19 @@ _NPM_TIMEOUT_SECONDS = env_float("SLM_FRONTEND_NPM_TIMEOUT_SECONDS", 300)
 # `dist-<build-id>/` per build, `current` the served symlink, `previous` the
 # rollback target. `dist` is the pre-#15610 served directory — never written
 # here, only adopted as the first `current` on a node that has not published
-# under this layout yet.
-_BUILD_PREFIX = "dist-"
-_CURRENT_LINK = "current"
-_PREVIOUS_LINK = "previous"
-_LEGACY_DIR = "dist"
-
-# The pre-#15610 rollback target: a real directory copy, not a symlink. The
-# `dist-<id>/` pruner in _prune_old_builds never matches it (no `dist-`
-# prefix), so it survived every publish since the symlink layout landed
-# (#16310). Removed only once BOTH `current` and `previous` are the new
-# symlinks -- i.e. this node has published at least twice under #15610 and
-# nothing can still be pointing a rollback at the legacy directory.
-_LEGACY_PREVIOUS_DIR = "dist.previous"
+# under this layout yet. `dist.previous` is the pre-#15610 rollback target: a
+# real directory copy, not a symlink. The `dist-<id>/` pruner in
+# _prune_old_builds never matches it (no `dist-` prefix), so it survived
+# every publish since the symlink layout landed (#16310).
+#
+# Defined in services/deploy_artifacts.py, not here, and imported (above):
+# that is the dependency-free vocabulary module services/drift_checker.py's
+# rsync excludes AND both drift walks already derive their build/deploy-
+# artifact patterns from (#11459) — this module is the one place that WRITES
+# the layout, but must not be the one place other modules import it FROM, or
+# protecting it from a forced resync (#16717) would need drift_checker to
+# import this module's asyncio/subprocess/build machinery just to read four
+# strings.
 
 # How many build directories survive a publish. Bounded, or the disk grows by
 # one bundle per self-sync forever. Env-backed for the same reason the timeouts
@@ -116,11 +123,11 @@ def _seed_current_from_legacy_dist(root: Path) -> None:
     read, including when the build that follows fails. That is the #15557
     invariant — a failed build leaves the previous bundle serving.
     """
-    current = root / _CURRENT_LINK
+    current = root / CURRENT_LINK
     if current.is_symlink() or current.exists():
         return
-    if (root / _LEGACY_DIR).is_dir():
-        current.symlink_to(_LEGACY_DIR)
+    if (root / LEGACY_DIR).is_dir():
+        current.symlink_to(LEGACY_DIR)
 
 
 def _prune_old_builds(root: Path) -> None:
@@ -131,9 +138,9 @@ def _prune_old_builds(root: Path) -> None:
     at an older bundle, and deleting the bundle being served is the outage this
     module exists to prevent.
     """
-    reachable = {os.readlink(root / name) for name in (_CURRENT_LINK, _PREVIOUS_LINK) if (root / name).is_symlink()}
+    reachable = {os.readlink(root / name) for name in (CURRENT_LINK, PREVIOUS_LINK) if (root / name).is_symlink()}
     builds = sorted(
-        (p.name for p in root.iterdir() if p.name.startswith(_BUILD_PREFIX) and p.is_dir() and not p.is_symlink()),
+        (p.name for p in root.iterdir() if p.name.startswith(BUILD_PREFIX) and p.is_dir() and not p.is_symlink()),
         reverse=True,
     )
     for name in builds[_RELEASE_KEEP:]:
@@ -153,16 +160,16 @@ def _remove_legacy_previous(root: Path) -> None:
     remove because nothing under the current or #15610 layouts can still
     resolve a rollback to it.
     """
-    if not (root / _CURRENT_LINK).is_symlink() or not (root / _PREVIOUS_LINK).is_symlink():
+    if not (root / CURRENT_LINK).is_symlink() or not (root / PREVIOUS_LINK).is_symlink():
         return
-    legacy = root / _LEGACY_PREVIOUS_DIR
+    legacy = root / LEGACY_PREVIOUS_DIR
     if not legacy.is_dir() or legacy.is_symlink():
         return
     try:
         shutil.rmtree(legacy)
-        logger.info("SLM self-sync: removed legacy %s (#16310)", _LEGACY_PREVIOUS_DIR)
+        logger.info("SLM self-sync: removed legacy %s (#16310)", LEGACY_PREVIOUS_DIR)
     except OSError as exc:
-        logger.warning("SLM self-sync: could not remove legacy %s: %s", _LEGACY_PREVIOUS_DIR, exc)
+        logger.warning("SLM self-sync: could not remove legacy %s: %s", LEGACY_PREVIOUS_DIR, exc)
 
 
 async def _chown_slm_frontend(frontend_dir: str) -> None:
@@ -216,7 +223,7 @@ async def _npm_build_slm(frontend_dir: str, build_id: str) -> bool:
         "build:slm",
         "--",
         "--outDir",
-        f"{_BUILD_PREFIX}{build_id}",
+        f"{BUILD_PREFIX}{build_id}",
         "--emptyOutDir",
         cwd=frontend_dir,
         stdout=asyncio.subprocess.PIPE,
@@ -242,17 +249,17 @@ async def _publish_build(frontend_dir: str, build_id: str) -> bool:
     to be. The publish itself is one rename(2) (#15610).
     """
     root = Path(frontend_dir)
-    built_index = root / f"{_BUILD_PREFIX}{build_id}" / "index.html"
+    built_index = root / f"{BUILD_PREFIX}{build_id}" / "index.html"
     if not built_index.is_file() or built_index.stat().st_size == 0:
         logger.error("SLM self-sync: build has no index.html — refusing to publish (#15462)")
         return False
 
     def _swap() -> None:
-        current = root / _CURRENT_LINK
+        current = root / CURRENT_LINK
         replaced = os.readlink(current) if current.is_symlink() else ""
-        _flip(root, _CURRENT_LINK, f"{_BUILD_PREFIX}{build_id}")
+        _flip(root, CURRENT_LINK, f"{BUILD_PREFIX}{build_id}")
         if replaced:
-            _flip(root, _PREVIOUS_LINK, replaced)
+            _flip(root, PREVIOUS_LINK, replaced)
         _prune_old_builds(root)
         _remove_legacy_previous(root)
 

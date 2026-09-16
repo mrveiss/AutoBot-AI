@@ -18,7 +18,14 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from autobot_shared.time_utils import utc_timestamp
-from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
+from services.deploy_artifacts import (
+    ARTIFACT_DIR_SUFFIXES,
+    ARTIFACT_DIRS,
+    SLM_FRONTEND_BUILD_PREFIX,
+    SLM_FRONTEND_CURRENT_LINK,
+    SLM_FRONTEND_LEGACY_DIR,
+    SLM_FRONTEND_PREVIOUS_LINK,
+)
 from services.git_tracker import DEFAULT_REPO_PATH
 
 logger = logging.getLogger(__name__)
@@ -270,6 +277,20 @@ _DEPLOY_ONLY_ENTRIES: dict[str, frozenset[str]] = {
     "autobot-slm-backend": frozenset({"autobot_shared"}),
 }
 
+
+# (exact release-artifact names, per-build directory prefix) for the SLM
+# frontend's staged-release layout (#16717): current/previous are the served
+# symlink and its rollback, dist is the pre-#15610 served directory, and
+# dist-<build-id> (the prefix) is one directory per build. Sourced from
+# services/deploy_artifacts.py -- the same dependency-free module this file's
+# other build/deploy-artifact vocabulary already comes from (#11459) -- not
+# restated here, so a resync and the module that owns the layout
+# (services/slm_frontend_build.py, which imports the same constants) can
+# never disagree about what it is called.
+_SLM_FRONTEND_RELEASE_NAMES = frozenset({SLM_FRONTEND_CURRENT_LINK, SLM_FRONTEND_PREVIOUS_LINK, SLM_FRONTEND_LEGACY_DIR})
+_SLM_FRONTEND_RELEASE_PREFIX = SLM_FRONTEND_BUILD_PREFIX
+
+
 # Individual files inside an otherwise-1:1 component tree that are deployed as a
 # *rendered* Jinja2 template (#13851). Maps component -> {deployed rel path ->
 # template path relative to the repo root}.
@@ -345,8 +366,17 @@ def deploy_only_entries(component: str) -> frozenset[str]:
     not delete ``npu-worker.py`` (its source is a .j2 in the role, not a file in
     the component tree), while the walk must still compare it — see
     ``_rendered_file_drift``.
+
+    ``autobot-slm-frontend`` additionally carries its staged-release names
+    and a ``<prefix>*`` glob for its per-build directories (#16717) — a
+    plain rsync exclude pattern, not a literal path, but this function's
+    return values only ever reach the rsync ``--exclude`` chokepoint
+    (``api/code_sync.py::_rsync_exclude_args``), which is glob-safe.
     """
-    return _DEPLOY_ONLY_ENTRIES.get(component, frozenset()) | frozenset(_RENDERED_FILES.get(component, {}))
+    entries = _DEPLOY_ONLY_ENTRIES.get(component, frozenset()) | frozenset(_RENDERED_FILES.get(component, {}))
+    if component == "autobot-slm-frontend":
+        entries |= _SLM_FRONTEND_RELEASE_NAMES | frozenset({f"{_SLM_FRONTEND_RELEASE_PREFIX}*"})
+    return entries
 
 
 def _is_expected_drift(
@@ -385,6 +415,14 @@ def _is_expected_drift(
     # still compare (#13851).
     if rel_path in _DEPLOY_ONLY_ENTRIES.get(component, frozenset()):
         return True
+    if component == "autobot-slm-frontend":
+        # Release artifacts (#16717): current/previous/dist are exact
+        # top-level names; dist-<build-id> is a prefix, one new directory
+        # per build, so only a startswith check catches every one ever
+        # built, not just the ones retention happened to keep.
+        top_level = rel_path.split("/", 1)[0]
+        if top_level in _SLM_FRONTEND_RELEASE_NAMES or top_level.startswith(_SLM_FRONTEND_RELEASE_PREFIX):
+            return True
     if owned is None:
         raise ValueError("owned_subtrees must be supplied when component is given (#13851)")
     return any(rel_path == sub or rel_path.startswith(sub + "/") for sub in owned)

@@ -74,6 +74,24 @@ ARTIFACT_FILE_GLOBS: tuple[str, ...] = ("*.pyc", "*.log")
 # (roles/slm_manager/tasks/main.yml's `delete: true` sync did exactly this).
 SYNC_DELETIONS_MARKER = ".autobot_sync_deletions_commit"
 
+# #16717: the SLM frontend's staged-release layout (#15610) -- one
+# `<prefix><build-id>/` directory per build, `current`/`previous` symlinks,
+# and the pre-#15610 `dist`/`dist.previous` directories. Defined here, the
+# dependency-free base module, and imported by services/slm_frontend_build.py
+# (the module that WRITES this layout) rather than the reverse, so this
+# module — already what drift_checker's rsync excludes and both drift walks
+# derive their build/deploy-artifact vocabulary from (#11459) — never has to
+# import slm_frontend_build's asyncio/subprocess/build machinery just to
+# protect four strings from a forced resync. A forced "resync from source"
+# is a delete-style rsync with no tracked counterpart for any of these paths
+# to survive against; before this, deleting them took the live SLM frontend
+# and its rollback down together with no earlier bundle to fall back to.
+SLM_FRONTEND_BUILD_PREFIX = "dist-"
+SLM_FRONTEND_CURRENT_LINK = "current"
+SLM_FRONTEND_PREVIOUS_LINK = "previous"
+SLM_FRONTEND_LEGACY_DIR = "dist"
+SLM_FRONTEND_LEGACY_PREVIOUS_DIR = "dist.previous"
+
 HOST_STATE_EXCLUDES: tuple[str, ...] = (
     ".env",  # systemd EnvironmentFile (#2824, #9970) -- service will not start without it
     ".env.*",  # .env.production and siblings; the exact `.env` pattern never matched them
