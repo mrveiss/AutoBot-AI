@@ -763,6 +763,9 @@ def audit_baseline(
     }
 
 
+from dead_surface import report_dead_surface  # noqa: E402
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--openapi", help="openapi.json path or URL (authoritative mode)")
@@ -875,12 +878,7 @@ def main() -> int:
 
     if args.dead_surface:
         fe_norm = set(fe)
-        dead = [b for b in sorted(backend) if not any(matches(f, {b}) for f in fe_norm)]
-        print(f"\n== BACKEND PATHS WITH NO FRONTEND CONSUMER: {len(dead)} ==")
-        for d in dead[:100]:
-            print(f"  {d}")
-        if len(dead) > 100:
-            print(f"  ... and {len(dead) - 100} more")
+        report_dead_surface([b for b in sorted(backend) if not any(matches(f, {b}) for f in fe_norm)])
 
     rc = 0
     if args.fail_on_unwired:
