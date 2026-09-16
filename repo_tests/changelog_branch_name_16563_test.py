@@ -1,3 +1,7 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
 """The changelog branch name must carry no slash, and the sweep must know it (#16563).
 
 `release/changelog-${VERSION}` was unpushable from the moment a branch named
