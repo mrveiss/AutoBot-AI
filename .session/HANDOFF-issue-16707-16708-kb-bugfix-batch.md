@@ -1,7 +1,7 @@
 # Handoff: issue-16707-16708-kb-bugfix-batch
 status: complete
 pr: #16778
-base_at_push: c6af9cf0dbd0fef5f1a991ace7b882aa66fee906
+base_at_push: c6af9cf0d
 gates: pre-commit=PASS on every commit | pre-push=PASS (knowledge_maintenance_fetch_all_chunks_16707_test.py, knowledge_search_aggregator_relations_16708_test.py, knowledge_search_aggregator_test.py) | file-size ratchet=PASS (--audit-ceilings clean, 5533 files scanned, 488 grandfathered, all at size) | CI: 0 failures at head e6e8a9867 | review: approved by autobot-ai-4b at 50b20ef7e (predates the main-refresh merge commit; re-read of the merge, not a fresh review, was the intent of merging rather than rebasing)
 needs_rebase_before_merge: no — base_at_push equals current origin/main tip as of this handoff
 remaining:
