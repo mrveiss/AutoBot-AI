@@ -513,7 +513,7 @@ class IncrementalKnowledgeSync:
                 "character_count": len(chunk.content),
                 "gpu_optimized": True,
             }
-            result = await self.kb.store_fact(chunk_text, chunk_metadata)
+            result = await self.kb.store_fact(chunk_text, {**chunk_metadata, "ingest_route": "incremental_sync"})
             if result["status"] == "success":
                 fact_ids.append(result["fact_id"])
             else:

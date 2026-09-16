@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.fact_projection import FactProjectionMixin
+from knowledge.ingest_sanitize import sanitize_fact_content
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 
 if TYPE_CHECKING:
@@ -288,11 +289,10 @@ def _env_float_safe(name: str, default: float) -> float:
     return val if val == val else default  # reject NaN
 
 
-# A3 (#12554): fact-lane consolidation thresholds. Conservative by design — see
-# consolidate_facts for the full no-data-loss reasoning. A fact is prunable only
-# if it is UNPROTECTED, low-quality, never recalled since instrumentation began
-# (access_count == 0, A1 #12552), created AFTER the instrumentation epoch (so a
-# 0 count is meaningful, not "predates A1"), and aged past the floor.
+# A3 (#12554): fact-lane consolidation thresholds. Conservative by design — see consolidate_facts for the full no-
+# data-loss reasoning. A fact is prunable only if it is UNPROTECTED, low-quality, never recalled since instrumentation
+# began (access_count == 0, A1 #12552), created AFTER the instrumentation epoch (so a 0 count is meaningful, not
+# "predates A1"), and aged past the floor.
 _FACTS_PRUNE_QUALITY_FLOOR: float = _env_float_safe("AUTOBOT_FACTS_PRUNE_QUALITY_FLOOR", 0.1)
 _FACTS_PRUNE_MAX_AGE_DAYS: int = _env_int("AUTOBOT_FACTS_PRUNE_MAX_AGE_DAYS", 180)
 _FACTS_PRUNE_SCAN_LIMIT: int = _env_int("AUTOBOT_FACTS_PRUNE_SCAN_LIMIT", 5000)
@@ -700,10 +700,9 @@ class FactsMixin(FactProjectionMixin):
         # ChromaVectorStore.add() expects nodes with embeddings already set
         embedding = await _generate_embedding_with_npu_fallback(content, max_attempts=max_attempts)
 
-        # Issue #12312: An empty embedding means generation failed upstream (backend
-        # blip, timeout). Do NOT silently drop the vector and log success — record a
-        # queryable, retriable failure so the background reconciler backfills it once
-        # the backend recovers.
+        # Issue #12312: an empty embedding means generation failed upstream (backend blip, timeout). Do NOT
+        # silently drop the vector and log success — record a queryable, retriable failure so the background
+        # reconciler backfills it once the backend recovers.
         if not embedding:
             await self._record_failed_vectorization(fact_id, "embedding generation returned an empty result")
             return
@@ -775,9 +774,10 @@ class FactsMixin(FactProjectionMixin):
     async def store_fact(self, content: str, metadata: Dict[str, Any] = None, fact_id: str = None) -> Dict[str, Any]:
         """Store a new fact in Redis and vectorize it (Issue #398: refactored)."""
         self.ensure_initialized()
+        content, metadata = sanitize_fact_content(content, metadata)  # #16770: the KB write chokepoint
 
         if not content or not content.strip():
-            return {"status": "error", "message": "Empty content provided"}
+            return {"status": "error", "message": "Empty content, or nothing left after injection sanitizing"}
 
         try:
             fact_id = fact_id or str(uuid.uuid4())
@@ -1117,6 +1117,7 @@ class FactsMixin(FactProjectionMixin):
             previous = dict(current_metadata)  # #16663: the indexes the fact is filed under now
 
             if content is not None:
+                content, _ = sanitize_fact_content(content, current_metadata)  # keeps the fact's own route
                 # Issue #1375: Refresh dedup key + fingerprint on content change
                 await self._refresh_content_hash(fact_id, decoded.get("content", ""), content)
                 decoded["content"] = content
@@ -1127,8 +1128,7 @@ class FactsMixin(FactProjectionMixin):
                 current_metadata.update(metadata)
             current_metadata["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
-            # #15663: the durable row first, then the projection. An update that
-            # only reached Redis is an update the next restart can undo.
+            # #15663: durable row first, then projection — an update that only reached Redis is one a restart undoes.
             if not await self._durable_update_or_adopt(fact_id, decoded["content"], current_metadata):
                 return {"status": "error", "message": "Fact not found"}
             await asyncio.to_thread(

@@ -683,7 +683,7 @@ class OKFAdapter:
             content = fact["content"]
             metadata = fact["metadata"]
             try:
-                result = await self._kb.store_fact(content, metadata, fact_id)
+                result = await self._kb.store_fact(content, {**metadata, "ingest_route": "okf_import"}, fact_id)
                 status = result.get("status")
                 if status == "success":
                     stored += 1
