@@ -477,9 +477,9 @@ async def test_bootstrap_adds_zero_candidates_for_a_venv_full_of_files(tmp_path,
 
     assert plan.delete == []
     assert not any("venv" in p for p in plan.delete)
-    # Exactly two git calls (ls-tree + log --diff-filter=A) -- never one per
-    # file, regardless of len(present_paths).
-    assert len(calls) == 2, f"expected 2 git calls (bounded), got {len(calls)}"
+    # Exactly three git calls (#16310: is-shallow-repository + ls-tree +
+    # log --diff-filter=A) -- never one per file, regardless of len(present_paths).
+    assert len(calls) == 3, f"expected 3 git calls (bounded), got {len(calls)}"
 
 
 async def test_bootstrap_makes_a_bounded_number_of_git_calls_regardless_of_file_count(tmp_path, monkeypatch) -> None:
@@ -506,4 +506,100 @@ async def test_bootstrap_makes_a_bounded_number_of_git_calls_regardless_of_file_
     plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_b, present_paths=present_paths)
 
     assert plan.delete == []  # all 25 present files are still tracked at commit_b
-    assert len(calls) == 2, f"expected 2 git calls regardless of {len(present_paths)} files, got {len(calls)}"
+    # #16310: +1 for the is-shallow-repository check.
+    assert len(calls) == 3, f"expected 3 git calls regardless of {len(present_paths)} files, got {len(calls)}"
+
+
+# ---------------------------------------------------------------------------
+# compute_bootstrap_plan on a shallow clone (#16310): update-all-nodes.yml's
+# pre-flight checkout used `depth: 1`, so the bootstrap's own `git log
+# --diff-filter=AR` saw only the one commit the shallow fetch kept and
+# reported "nothing to delete" -- an empty, error-free plan that still got
+# the marker written, permanently locking the target into diff-mode from a
+# baseline missing years of real deletions.
+# ---------------------------------------------------------------------------
+
+
+def _shallow_clone(source: Path, dest: Path) -> None:
+    """A REAL shallow clone (git itself decides what --depth 1 keeps), not a
+    hand-rolled fixture pretending to be one -- the guard being tested calls
+    git's own ``rev-parse --is-shallow-repository``, so the test fixture must
+    produce whatever answer git itself gives on the real thing."""
+    subprocess.run(
+        ["git", "clone", "-q", "--depth", "1", "--branch", "main", f"file://{source}", str(dest)],
+        check=True,
+        env=_GIT_ENV,
+    )
+
+
+async def test_bootstrap_refuses_to_run_on_a_shallow_clone(tmp_path) -> None:
+    origin = tmp_path / "origin"
+    _init_repo(origin)
+    _write(origin / "comp" / "gone.py")
+    _commit_all(origin, "seed")
+    (origin / "comp" / "gone.py").unlink()
+    commit_b = _commit_all(origin, "delete gone.py")
+
+    clone = tmp_path / "clone"
+    _shallow_clone(origin, clone)
+
+    plan = await compute_bootstrap_plan(str(clone / "comp"), str(clone), commit_b, present_paths=["gone.py"])
+
+    assert plan.delete == [], "a refused plan must not also claim something is safe to delete"
+    assert plan.error, "a shallow clone must fail loudly, not silently plan an empty bootstrap"
+    assert "shallow" in plan.error.lower()
+
+
+async def test_bootstrap_runs_normally_on_the_same_history_once_unshallowed(tmp_path) -> None:
+    """Control: the SAME clone, made full-depth, plans correctly -- proves the
+    refusal above is really about shallowness, not something else about a
+    cloned (vs. directly-committed-to) repository."""
+    origin = tmp_path / "origin"
+    _init_repo(origin)
+    _write(origin / "comp" / "gone.py")
+    _commit_all(origin, "seed")
+    (origin / "comp" / "gone.py").unlink()
+    commit_b = _commit_all(origin, "delete gone.py")
+
+    clone = tmp_path / "clone"
+    _shallow_clone(origin, clone)
+    subprocess.run(["git", "-C", str(clone), "fetch", "--unshallow"], check=True, env=_GIT_ENV, capture_output=True)
+
+    plan = await compute_bootstrap_plan(str(clone / "comp"), str(clone), commit_b, present_paths=["gone.py"])
+
+    assert plan.error is None
+    assert plan.delete == ["gone.py"]
+
+
+async def test_a_non_shallow_repo_is_unaffected_by_the_guard(tmp_path) -> None:
+    """Control: an ordinary (non-cloned) repo -- every other bootstrap test in
+    this file -- must never be refused by this guard."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo / "comp" / "gone.py")
+    _commit_all(repo, "seed")
+    (repo / "comp" / "gone.py").unlink()
+    commit_b = _commit_all(repo, "delete gone.py")
+
+    plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_b, present_paths=["gone.py"])
+
+    assert plan.error is None
+    assert plan.delete == ["gone.py"]
+
+
+def test_update_all_nodes_playbook_clones_code_source_at_full_depth() -> None:
+    """The other half of the fix (#16310): even with the guard above, a
+    permanently-shallow pre-flight checkout would refuse bootstrap on EVERY
+    run forever, never actually cleaning up a target. The clone itself must
+    not ask for `depth:`, matching pre-flight-code-sync.yml and
+    provision-fleet-roles.yml, which already clone the same repo in full."""
+    import yaml
+
+    playbook_path = Path(__file__).resolve().parents[2] / "ansible" / "playbooks" / "update-all-nodes.yml"
+    playbook = yaml.safe_load(playbook_path.read_text(encoding="utf-8"))
+
+    tasks = [t for play in playbook for t in play.get("tasks", [])]
+    clone_tasks = [t for t in tasks if isinstance(t.get("git"), dict) and t["git"].get("dest") == "{{ git_repo_root }}"]
+    assert clone_tasks, "the code_source pre-flight clone task is no longer named/shaped as expected"
+    for task in clone_tasks:
+        assert "depth" not in task["git"], f"{task.get('name')}: shallow clone breaks sync_deletions bootstrap (#16310)"
