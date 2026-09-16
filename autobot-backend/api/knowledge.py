@@ -1088,8 +1088,6 @@ def _extract_file_content(filename: str, file_content: bytes) -> "tuple[str, Ext
     Raises:
         HTTPException: If file cannot be parsed or library is missing
     """
-    import os
-
     ext = verified_upload_extension(filename, file_content)  # #16773: the bytes outrank the name
 
     if ext in OFFICE_EXTENSIONS:
