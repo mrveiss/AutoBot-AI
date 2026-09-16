@@ -73,9 +73,7 @@ async def firewall_filter_doc_results(results: List[Dict[str, Any]], query: str)
     firewall = get_content_firewall()
     safe_results = []
     for result in results:
-        verdict = await firewall.inspect(
-            result.get("content", ""), source=ContentSource.RAG, context_label=query[:80]
-        )
+        verdict = await firewall.inspect(result.get("content", ""), source=ContentSource.RAG, context_label=query[:80])
         if verdict.blocked:
             logger.warning(
                 "Doc-search result dropped by content firewall (risk=%s, source=%s)",
