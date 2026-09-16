@@ -1968,14 +1968,6 @@ export interface paths {
          * @description Get online participants (WebSocket presence tracking).
          *
          *     Requires: VIEWER permission
-         *
-         *     #16580: the line above said so and nothing enforced it. Every sibling in
-         *     this module calls ``_ensure_permission`` -- OWNER for invite/remove, EDITOR
-         *     for secret sharing, VIEWER for participants -- and this one depended on
-         *     ``get_current_user`` alone, so any signed-in user could list the online
-         *     users of any session id. #16455 closed the same gap on the WebSocket route;
-         *     this is the REST read.
-         *
          *     Returns list of currently connected user IDs.
          */
         get: operations["get_presence_api_sessions__session_id__presence_get"];

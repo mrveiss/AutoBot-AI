@@ -461,16 +461,20 @@ async def get_presence(
     Get online participants (WebSocket presence tracking).
 
     Requires: VIEWER permission
-
-    #16580: the line above said so and nothing enforced it. Every sibling in
-    this module calls ``_ensure_permission`` -- OWNER for invite/remove, EDITOR
-    for secret sharing, VIEWER for participants -- and this one depended on
-    ``get_current_user`` alone, so any signed-in user could list the online
-    users of any session id. #16455 closed the same gap on the WebSocket route;
-    this is the REST read.
-
     Returns list of currently connected user IDs.
     """
+    # #16580: the line above said so and nothing enforced it. Every sibling in
+    # this module calls ``_ensure_permission`` -- OWNER for invite/remove, EDITOR
+    # for secret sharing, VIEWER for participants -- and this one depended on
+    # ``get_current_user`` alone, so any signed-in user could list the online users
+    # of any session id. #16455 closed the same gap on the WebSocket route; this is
+    # the REST read.
+    #
+    # A comment, not the docstring: FastAPI publishes a route's docstring as the
+    # OpenAPI `description`, so it reaches autobot-frontend/src/types/generated/
+    # api.ts and anything served from the schema. An endpoint description is
+    # client-facing documentation and is no place to narrate a fixed access-control
+    # defect. Caught when the generated-types bot committed this prose into api.ts.
     try:
         user_id = uuid.UUID(current_user.get("user_id"))
 
