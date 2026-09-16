@@ -36,6 +36,7 @@ from knowledge.search_components.reranking import (
     compute_blended_score,
     set_reranking_active,
 )
+from rag_content_firewall import firewall_filter_search_results
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("advanced_rag_optimizer")
@@ -61,6 +62,11 @@ class SearchResult:
     source_path: str
     chunk_index: int = 0
     rerank_score: float | None = None
+    # #16771: `content` stays clean for citations/UI; a prompt builder must
+    # read `firewall_safe_content` (delimited) instead once it is set.
+    firewall_safe_content: str | None = None
+    firewall_action: str | None = None
+    firewall_risk: str | None = None
 
 
 @dataclass
@@ -826,6 +832,9 @@ class AdvancedRAGOptimizer:
             effective_min_score = min_score if min_score > 0.0 else self._default_min_score
             optimized_results = self._apply_relevance_floor(optimized_results, effective_min_score)
 
+            # #16771: shared choke point for get_optimized_context() and the chat path.
+            optimized_results = await firewall_filter_search_results(optimized_results, query)
+
             metrics.final_results_count = len(optimized_results)
             metrics.total_time = time.time() - start_time
             metrics.gpu_acceleration_used = True  # Semantic chunker uses GPU
@@ -1001,7 +1010,8 @@ class AdvancedRAGOptimizer:
             if result.chunk_index > 0:
                 source_info += f" (section {result.chunk_index + 1})"
 
-            context_entry = f"{source_info}\nContent: {result.content}\n"
+            safe_content = result.firewall_safe_content or result.content  # #16771
+            context_entry = f"{source_info}\nContent: {safe_content}\n"
             entry_length = len(context_entry)
 
             if current_length + entry_length > max_context_length and context_parts:
@@ -1041,21 +1051,11 @@ class AdvancedRAGOptimizer:
             if not results:
                 return "No relevant information found.", metrics
 
+            # #10552/#16771: results are pre-inspected by advanced_search(); no separate pass here.
             query_context = self._analyze_query_context(query)
             context_parts = self._build_context_parts(results, max_context_length, query_context)
             header = self._build_context_header(query, context_parts, query_context)
             final_context = header + "\n---\n".join(context_parts)
-
-            # #10552: inspect assembled RAG context through the content firewall
-            from security.content_firewall import ContentSource, get_content_firewall
-
-            fw_verdict = await get_content_firewall().inspect(
-                final_context, source=ContentSource.RAG, context_label=query[:80]
-            )
-            if fw_verdict.blocked:
-                logger.warning("RAG context blocked by content firewall (risk=%s)", fw_verdict.risk.value)
-                return "[RAG context blocked by content firewall]", metrics
-            final_context = fw_verdict.content
 
             logger.info(
                 "Optimized context generated: %s characters from %s sources",

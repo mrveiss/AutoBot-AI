@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Tuple
 from advanced_rag_optimizer import SearchResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import config
+from rag_content_firewall import firewall_filter_doc_results
 from services.rag_service import RAGService
 
 from .context_enhancer import get_context_enhancer
@@ -79,7 +80,10 @@ async def budget_grounded_context(
     from context_window_manager import ContextWindowManager
     from services.memory.compression import ContextCompressionService
 
-    raw_context = build_grounded_context([r.get("content", "") for r in kb_results if r.get("content")])
+    def _prompt_text(r: Dict[str, Any]) -> str:  # #16771: delimited if firewalled, else clean
+        return r.get("firewall_safe_content") or r.get("content", "")
+
+    raw_context = build_grounded_context([_prompt_text(r) for r in kb_results if r.get("content")])
     if not raw_context:
         return "", []
 
@@ -99,7 +103,7 @@ async def budget_grounded_context(
     trimmed = await svc.compress_kb_results(kb_results, max_tokens=max_kb_tokens)
     if not trimmed:
         return "", []
-    compressed = build_grounded_context([r.get("content", "") for r in trimmed if r.get("content")])
+    compressed = build_grounded_context([_prompt_text(r) for r in trimmed if r.get("content")])
     logger.info(
         "[#10837] KB compressed: %d → %d results (%d tokens)",
         len(kb_results),
@@ -349,7 +353,7 @@ class ChatKnowledgeService:
         # labels and grounding instruction stay identical to the compression
         # rebuild path in llm_handler. N aligns with the rank in
         # format_citations() that the frontend displays.
-        return build_grounded_context([fact.content for fact in facts])
+        return build_grounded_context([fact.firewall_safe_content or fact.content for fact in facts])  # #16771
 
     def format_citations(self, facts: List[SearchResult]) -> List[Dict]:
         """
@@ -373,6 +377,7 @@ class ChatKnowledgeService:
             citation = {
                 "id": fact.metadata.get("id", f"citation_{i}"),
                 "content": fact.content.strip(),
+                "firewall_safe_content": fact.firewall_safe_content or fact.content,  # #16771: prompt-only
                 "score": round(score, 3),
                 "source": fact.source_path,
                 "rank": i,
@@ -684,18 +689,20 @@ class ChatKnowledgeService:
         # Issue #1261, #10658: Search indexed documentation (autobot_docs) and
         # label each chunk as [Source N] continuing from KB source numbering so
         # citation indices are contiguous and the frontend can resolve them.
-        doc_results = self._retrieve_raw_doc_results(query)
+        doc_results = await self._retrieve_raw_doc_results(query)
         if doc_results:
             kb_count = len(citations)
             doc_lines: List[str] = []
             for offset, result in enumerate(doc_results, 1):
                 source_n = kb_count + offset
                 content = result.get("content", "").strip()
-                doc_lines.append(f"[Source {source_n}] {content}")
+                safe_content = result.get("firewall_safe_content") or content  # #16771: prompt line only
+                doc_lines.append(f"[Source {source_n}] {safe_content}")
                 citations.append(
                     {
                         "id": f"doc_{offset}",
                         "content": content,
+                        "firewall_safe_content": safe_content,
                         "score": result.get("score", 0.0),
                         "source": result.get("file_path", ""),
                         "title": result.get("section", ""),
@@ -762,7 +769,7 @@ class ChatKnowledgeService:
             logger.warning("[Doc Search] Failed: %s", e)
             return ""
 
-    def _retrieve_raw_doc_results(
+    async def _retrieve_raw_doc_results(
         self, query: str, n_results: int = 3, score_threshold: float = 0.3
     ) -> List[Dict[str, Any]]:
         """Return raw doc-search results without pre-formatting (#10658).
@@ -775,18 +782,11 @@ class ChatKnowledgeService:
         try:
             if not self.doc_searcher.is_documentation_query(query):
                 return []
-            results = self.doc_searcher.search(
-                query=query,
-                n_results=n_results,
-                score_threshold=score_threshold,
-            )
-            if results:
-                logger.info(
-                    "[Doc Search] Retrieved %d raw documentation chunks for: '%s...'",
-                    len(results),
-                    query[:50],
-                )
-            return results
+            results = self.doc_searcher.search(query=query, n_results=n_results, score_threshold=score_threshold)
+            if not results:
+                return []
+            logger.info("[Doc Search] Retrieved %d raw documentation chunks for: '%s...'", len(results), query[:50])
+            return await firewall_filter_doc_results(results, query)  # own pass: a 2nd retrieval path (#16771)
         except Exception as e:
             logger.warning("[Doc Search] Raw retrieval failed: %s", e)
             return []
