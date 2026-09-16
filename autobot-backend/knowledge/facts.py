@@ -1117,7 +1117,7 @@ class FactsMixin(FactProjectionMixin):
             previous = dict(current_metadata)  # #16663: the indexes the fact is filed under now
 
             if content is not None:
-                content, _ = sanitize_fact_content(content, metadata if metadata is not None else current_metadata)
+                content, _ = sanitize_fact_content(content, current_metadata)  # keeps the fact's own route
                 # Issue #1375: Refresh dedup key + fingerprint on content change
                 await self._refresh_content_hash(fact_id, decoded.get("content", ""), content)
                 decoded["content"] = content

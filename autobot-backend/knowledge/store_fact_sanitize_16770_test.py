@@ -134,3 +134,38 @@ async def test_the_agent_store_fact_tool_is_covered_end_to_end():
     assert out["status"] == "success"
     assert f"[ESCAPED:{_IGNORE}]" in persisted["content"]
     assert persisted["metadata"][INJECTION_ROUTE] == "agent_tool"
+
+
+@pytest.mark.asyncio
+async def test_update_fact_sanitizes_replacement_content_without_losing_the_route():
+    """The second ingress: update_fact replaces content, and used to store it unread.
+
+    The route must stay the one that wrote the fact. Sanitizing against the caller's
+    partial metadata would stamp "unspecified" onto it and then overwrite the stored
+    label on the merge below — a metadata edit would erase a connector's provenance.
+    """
+    kb = FactsFakeKB()
+    stored_metadata = {INJECTION_ROUTE: "connector:confluence-1", "title": "old"}
+    written: dict = {}
+
+    async def _durable(fact_id, content, metadata):
+        written.update(content=content, metadata=metadata)
+        return True
+
+    with (
+        patch.object(
+            FactsFakeKB,
+            "_read_fact_for_write",
+            new=AsyncMock(return_value=({"content": "old", "timestamp": ""}, stored_metadata)),
+        ),
+        patch.object(FactsFakeKB, "_refresh_content_hash", new=AsyncMock()),
+        patch.object(FactsFakeKB, "_durable_update_or_adopt", new=AsyncMock(side_effect=_durable)),
+        patch("knowledge.facts.asyncio.to_thread", new=AsyncMock()),
+    ):
+        result = await kb.update_fact("f1", content=f"Revised. {_IGNORE}.", metadata={"title": "new"})
+
+    assert result["status"] == "success"
+    assert f"[ESCAPED:{_IGNORE}]" in written["content"]
+    assert written["metadata"][INJECTION_ROUTE] == "connector:confluence-1"
+    assert written["metadata"][INJECTION_SANITIZED] is True
+    assert written["metadata"]["title"] == "new", "the caller's own metadata still applies"
