@@ -37,6 +37,8 @@ Research reports covering hardware integration, system conflicts, and technology
 
 | [[community-prompt-and-skill-registry]] | prompts.chat + `f/awesome-chatgpt-prompts` — source analysis and AutoBot comparison. Sources and the three mechanism-bearing skills are named at operator instruction. Corpus has **zero** self-correcting entries; nothing in the source's loop design is ahead of ours (6 axes, `file:line` evidence in-doc). Four adoptions + three defects filed as umbrella #16108 (children #16110–#16116); #16105 filed by a peer |
 | [[llm-gateway-signal-driven-routing]] | Signal-driven LLM gateway/router vs AutoBot — 5 adoptable gaps (2 trivial: wire already-built prompt compressor + concurrency cap), no PII/injection scan on main chat path, no RAG grounding check, dead duplicate semantic cache found (#16524 (children #16526–#16533)) |
+| [[document-to-markdown-conversion-pipeline]] | Document-to-markdown conversion utility — source analysis; priority-ordered chain-of-responsibility dispatch, offline multi-strategy format detection, entry-point plugin system. AutoBot comparison not started |
+| [[streaming-voice-agent-pipeline-architecture]] | Streaming voice-agent pipeline framework vs AutoBot — our provider failover (circuit breaker + cross-worker degradation) already beats theirs; 3 gaps filed: no interrupt-on-new-message in text chat (#16805), no typed LLM error taxonomy (#16806), placeholder server-side VAD (#16807); pub/sub found fragmented across 5 implementations |
 
 ## Related Sections
 
