@@ -49,16 +49,24 @@ onMounted(() => {
       @click="toggleDropdown"
     >
       <Icon name="bell" />
-      <span v-if="pendingInvitations.length > 0" class="invitation-badge">
+      <span
+        v-if="pendingInvitations.length > 0"
+        class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-medium leading-none"
+      >
         {{ pendingInvitations.length }}
       </span>
     </button>
 
-    <div v-if="showDropdown" class="invitation-dropdown" role="dialog" :aria-label="t('collaboration.invitations.bellTitle')">
+    <div
+      v-if="showDropdown"
+      class="absolute right-0 top-full mt-1 w-80 max-h-96 overflow-y-auto rounded-lg border border-autobot-border bg-autobot-bg-card shadow-lg z-[var(--z-dropdown)]"
+      role="dialog"
+      :aria-label="t('collaboration.invitations.bellTitle')"
+    >
       <div class="flex items-center justify-between px-3 py-2 border-b border-autobot-border">
         <span class="text-sm font-semibold text-autobot-text-primary">{{ t('collaboration.invitations.bellTitle') }}</span>
         <button
-          class="action-btn"
+          class="w-6 h-6 flex items-center justify-center rounded transition-colors text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary"
           :aria-label="t('collaboration.panel.closePanel')"
           @click="showDropdown = false"
         >
@@ -69,18 +77,3 @@ onMounted(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-.invitation-badge {
-  @apply absolute -top-1 -right-1 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-medium leading-none;
-}
-
-.invitation-dropdown {
-  @apply absolute right-0 top-full mt-1 w-80 max-h-96 overflow-y-auto rounded-lg border border-autobot-border bg-autobot-bg-card shadow-lg;
-  z-index: 40;
-}
-
-.action-btn {
-  @apply w-6 h-6 flex items-center justify-center rounded transition-colors text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary;
-}
-</style>

@@ -11,15 +11,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { ref } from 'vue'
 import en from '@/i18n/locales/en.json'
 import PendingInvitationsBell from '../PendingInvitationsBell.vue'
 
 const refreshPendingInvitations = vi.fn()
 const respondToInvitation = vi.fn()
 
-const pendingInvitations = {
-  value: [] as Array<{ sessionId: string; fromUserId: string; permission: string; invitedAt: string; expiresAt: string | null }>
-}
+// A real ref, not a plain { value } object: PendingInvitationsBell.vue and
+// the PendingInvitations.vue it renders both rely on Vue's automatic
+// ref-unwrapping in templates, which only applies to genuine refs.
+const pendingInvitations = ref<Array<{ sessionId: string; fromUserId: string; permission: string; invitedAt: string; expiresAt: string | null }>>([])
 
 vi.mock('@/composables/useSessionCollaboration', () => ({
   useSessionCollaboration: () => ({

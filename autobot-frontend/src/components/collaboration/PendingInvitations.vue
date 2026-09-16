@@ -82,71 +82,45 @@ onMounted(async () => {
     </div>
 
     <div v-else class="space-y-2 p-2">
-      <TransitionGroup name="invitation">
-        <div
-          v-for="invitation in pendingInvitations"
-          :key="invitation.sessionId"
-          class="invitation-item rounded-lg p-3 bg-autobot-bg-tertiary/50 border border-autobot-border"
-        >
-          <div class="flex items-center justify-between gap-2 mb-2">
-            <span class="text-sm font-medium text-autobot-text-primary truncate">
-              {{ $t('collaboration.invitations.sessionLabel', { id: invitation.sessionId }) }}
-            </span>
-            <span class="px-2 py-0.5 text-xs rounded border bg-blue-500/20 text-blue-400 border-blue-500/30 shrink-0">
-              {{ getPermissionLabel(invitation.permission) }}
-            </span>
-          </div>
-          <div class="text-xs text-autobot-text-muted mb-2">
-            {{ $t('collaboration.invitations.invitedAt', { time: formatInvitedAt(invitation.invitedAt) }) }}
-          </div>
-          <div
-            v-if="respondErrorSessionIds.has(invitation.sessionId)"
-            class="text-xs text-red-400 mb-2"
-          >
-            {{ $t('collaboration.invitations.respondError') }}
-          </div>
-          <div class="flex items-center gap-2">
-            <button
-              class="flex-1 px-2 py-1 text-xs rounded bg-green-500 hover:bg-green-600 text-white transition-colors disabled:opacity-50"
-              :disabled="respondingSessionIds.has(invitation.sessionId)"
-              @click="respond(invitation.sessionId, true)"
-            >
-              {{ $t('collaboration.invitations.accept') }}
-            </button>
-            <button
-              class="flex-1 px-2 py-1 text-xs rounded bg-autobot-bg-tertiary hover:bg-red-500/10 hover:text-red-400 text-autobot-text-secondary transition-colors disabled:opacity-50"
-              :disabled="respondingSessionIds.has(invitation.sessionId)"
-              @click="respond(invitation.sessionId, false)"
-            >
-              {{ $t('collaboration.invitations.decline') }}
-            </button>
-          </div>
+      <div
+        v-for="invitation in pendingInvitations"
+        :key="invitation.sessionId"
+        class="rounded-lg p-3 bg-autobot-bg-tertiary/50 border border-autobot-border"
+      >
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <span class="text-sm font-medium text-autobot-text-primary truncate">
+            {{ $t('collaboration.invitations.sessionLabel', { id: invitation.sessionId }) }}
+          </span>
+          <span class="px-2 py-0.5 text-xs rounded border bg-blue-500/20 text-blue-400 border-blue-500/30 shrink-0">
+            {{ getPermissionLabel(invitation.permission) }}
+          </span>
         </div>
-      </TransitionGroup>
+        <div class="text-xs text-autobot-text-muted mb-2">
+          {{ $t('collaboration.invitations.invitedAt', { time: formatInvitedAt(invitation.invitedAt) }) }}
+        </div>
+        <div
+          v-if="respondErrorSessionIds.has(invitation.sessionId)"
+          class="text-xs text-red-400 mb-2"
+        >
+          {{ $t('collaboration.invitations.respondError') }}
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            class="flex-1 px-2 py-1 text-xs rounded bg-green-500 hover:bg-green-600 text-white transition-colors disabled:opacity-50"
+            :disabled="respondingSessionIds.has(invitation.sessionId)"
+            @click="respond(invitation.sessionId, true)"
+          >
+            {{ $t('collaboration.invitations.accept') }}
+          </button>
+          <button
+            class="flex-1 px-2 py-1 text-xs rounded bg-autobot-bg-tertiary hover:bg-red-500/10 hover:text-red-400 text-autobot-text-secondary transition-colors disabled:opacity-50"
+            :disabled="respondingSessionIds.has(invitation.sessionId)"
+            @click="respond(invitation.sessionId, false)"
+          >
+            {{ $t('collaboration.invitations.decline') }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.invitation-enter-active {
-  transition: all var(--duration-300) var(--ease-out);
-}
-
-.invitation-leave-active {
-  transition: all var(--duration-200) var(--ease-in);
-}
-
-.invitation-enter-from {
-  opacity: 0;
-  transform: translateY(-10px);
-}
-
-.invitation-leave-to {
-  opacity: 0;
-  transform: translateX(20px);
-}
-
-.invitation-move {
-  transition: transform var(--duration-300) var(--ease-out);
-}
-</style>
