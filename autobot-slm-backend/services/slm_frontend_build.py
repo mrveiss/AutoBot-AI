@@ -33,11 +33,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from autobot_shared.env_utils import env_float, env_int_clamped
-from services.deploy_artifacts import SLM_FRONTEND_BUILD_PREFIX as BUILD_PREFIX
-from services.deploy_artifacts import SLM_FRONTEND_CURRENT_LINK as CURRENT_LINK
-from services.deploy_artifacts import SLM_FRONTEND_LEGACY_DIR as LEGACY_DIR
-from services.deploy_artifacts import SLM_FRONTEND_LEGACY_PREVIOUS_DIR as LEGACY_PREVIOUS_DIR
-from services.deploy_artifacts import SLM_FRONTEND_PREVIOUS_LINK as PREVIOUS_LINK
+from services.deploy_artifacts import SLM_FRONTEND_BUILD_PREFIX as _BUILD_PREFIX
+from services.deploy_artifacts import SLM_FRONTEND_CURRENT_LINK as _CURRENT_LINK
+from services.deploy_artifacts import SLM_FRONTEND_LEGACY_DIR as _LEGACY_DIR
+from services.deploy_artifacts import SLM_FRONTEND_LEGACY_PREVIOUS_DIR as _LEGACY_PREVIOUS_DIR
+from services.deploy_artifacts import SLM_FRONTEND_PREVIOUS_LINK as _PREVIOUS_LINK
 from services.deployed_dir_resolver import get_release_component_dir
 
 logger = logging.getLogger(__name__)
@@ -121,11 +121,11 @@ def _seed_current_from_legacy_dist(root: Path) -> None:
     read, including when the build that follows fails. That is the #15557
     invariant — a failed build leaves the previous bundle serving.
     """
-    current = root / CURRENT_LINK
+    current = root / _CURRENT_LINK
     if current.is_symlink() or current.exists():
         return
-    if (root / LEGACY_DIR).is_dir():
-        current.symlink_to(LEGACY_DIR)
+    if (root / _LEGACY_DIR).is_dir():
+        current.symlink_to(_LEGACY_DIR)
 
 
 def _prune_old_builds(root: Path) -> None:
@@ -136,9 +136,9 @@ def _prune_old_builds(root: Path) -> None:
     at an older bundle, and deleting the bundle being served is the outage this
     module exists to prevent.
     """
-    reachable = {os.readlink(root / name) for name in (CURRENT_LINK, PREVIOUS_LINK) if (root / name).is_symlink()}
+    reachable = {os.readlink(root / name) for name in (_CURRENT_LINK, _PREVIOUS_LINK) if (root / name).is_symlink()}
     builds = sorted(
-        (p.name for p in root.iterdir() if p.name.startswith(BUILD_PREFIX) and p.is_dir() and not p.is_symlink()),
+        (p.name for p in root.iterdir() if p.name.startswith(_BUILD_PREFIX) and p.is_dir() and not p.is_symlink()),
         reverse=True,
     )
     for name in builds[_RELEASE_KEEP:]:
@@ -158,16 +158,16 @@ def _remove_legacy_previous(root: Path) -> None:
     remove because nothing under the current or #15610 layouts can still
     resolve a rollback to it.
     """
-    if not (root / CURRENT_LINK).is_symlink() or not (root / PREVIOUS_LINK).is_symlink():
+    if not (root / _CURRENT_LINK).is_symlink() or not (root / _PREVIOUS_LINK).is_symlink():
         return
-    legacy = root / LEGACY_PREVIOUS_DIR
+    legacy = root / _LEGACY_PREVIOUS_DIR
     if not legacy.is_dir() or legacy.is_symlink():
         return
     try:
         shutil.rmtree(legacy)
-        logger.info("SLM self-sync: removed legacy %s (#16310)", LEGACY_PREVIOUS_DIR)
+        logger.info("SLM self-sync: removed legacy %s (#16310)", _LEGACY_PREVIOUS_DIR)
     except OSError as exc:
-        logger.warning("SLM self-sync: could not remove legacy %s: %s", LEGACY_PREVIOUS_DIR, exc)
+        logger.warning("SLM self-sync: could not remove legacy %s: %s", _LEGACY_PREVIOUS_DIR, exc)
 
 
 async def _chown_slm_frontend(frontend_dir: str) -> None:
@@ -221,7 +221,7 @@ async def _npm_build_slm(frontend_dir: str, build_id: str) -> bool:
         "build:slm",
         "--",
         "--outDir",
-        f"{BUILD_PREFIX}{build_id}",
+        f"{_BUILD_PREFIX}{build_id}",
         "--emptyOutDir",
         cwd=frontend_dir,
         stdout=asyncio.subprocess.PIPE,
@@ -247,17 +247,17 @@ async def _publish_build(frontend_dir: str, build_id: str) -> bool:
     to be. The publish itself is one rename(2) (#15610).
     """
     root = Path(frontend_dir)
-    built_index = root / f"{BUILD_PREFIX}{build_id}" / "index.html"
+    built_index = root / f"{_BUILD_PREFIX}{build_id}" / "index.html"
     if not built_index.is_file() or built_index.stat().st_size == 0:
         logger.error("SLM self-sync: build has no index.html — refusing to publish (#15462)")
         return False
 
     def _swap() -> None:
-        current = root / CURRENT_LINK
+        current = root / _CURRENT_LINK
         replaced = os.readlink(current) if current.is_symlink() else ""
-        _flip(root, CURRENT_LINK, f"{BUILD_PREFIX}{build_id}")
+        _flip(root, _CURRENT_LINK, f"{_BUILD_PREFIX}{build_id}")
         if replaced:
-            _flip(root, PREVIOUS_LINK, replaced)
+            _flip(root, _PREVIOUS_LINK, replaced)
         _prune_old_builds(root)
         _remove_legacy_previous(root)
 
