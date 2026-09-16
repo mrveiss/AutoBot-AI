@@ -325,3 +325,21 @@ class DocumentParser:
 
 # Singleton instance
 document_parser = DocumentParser()
+
+
+def parse_document_text(file_path: Path) -> Tuple[str, Dict[str, any]]:
+    """Parse *file_path* synchronously, for a caller already off the event loop (#16775).
+
+    :meth:`DocumentParser.extract_text` is the async entry point and hands the work to a
+    thread. The KB upload route is already inside ``asyncio.to_thread``, so it needs the
+    same dispatch without a second thread hop or a nested loop -- and without a second
+    copy of the parser table, which is how the two routes drifted apart before (#14333).
+
+    Raises:
+        ValueError: no supported format, by content or by name.
+    """
+    parser = DocumentParser()
+    candidates = parser._candidate_extensions(file_path)
+    if not candidates:
+        raise ValueError(f"Unsupported document format: {file_path.suffix.lower()}")
+    return parser._extract_text_sync(file_path, candidates)
