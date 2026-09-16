@@ -282,9 +282,9 @@ Effort: significant.
 
 Phase 1 (source analysis) and Phase 2 (AutoBot comparison) complete, extended with a
 second comparison pass covering behavioral evals and per-provider LLM formatting.
-Issues filed for the first three confirmed gaps: #16805 (interrupt-on-new-message for
+Issues filed for five of the six confirmed gaps: #16805 (interrupt-on-new-message for
 text chat), #16806 (typed LLM error-category taxonomy), #16807 (placeholder
-server-side VAD). Not yet filed: the scenario/persona eval framework (adoption #4)
-and the duplicated per-provider message/tool-schema formatting (adoption #5) —
-pending user go-ahead. The speculative eager-end-of-turn adoption (#3) was not filed
-either — it is gated on #16807 landing first.
+server-side VAD), #16814 (scenario/persona eval framework, adoption #4), #16815
+(duplicated per-provider message/tool-schema formatting, adoption #5). The
+speculative eager-end-of-turn adoption (#3) was not filed — it is gated on #16807
+landing first.
