@@ -53,7 +53,7 @@ from api.code_sync import (  # noqa: E402
 _SLM_IP = "192.0.2.10"
 _SLM_NODE_ID = "slm-node-1"
 _STAGE_NAMES = ("github_fetch", "code_source_pull", "slm_self_update", "fleet_nodes")
-_BROWSER_FAILURE = "browser-service: Failed to find required executable \"virtualenv\""
+_BROWSER_FAILURE = 'browser-service: Failed to find required executable "virtualenv"'
 _NPU_FAILURE = "npu-worker: pip rejects ../autobot_shared as an editable requirement (#15733)"
 
 

@@ -287,7 +287,9 @@ _DEPLOY_ONLY_ENTRIES: dict[str, frozenset[str]] = {
 # restated here, so a resync and the module that owns the layout
 # (services/slm_frontend_build.py, which imports the same constants) can
 # never disagree about what it is called.
-_SLM_FRONTEND_RELEASE_NAMES = frozenset({SLM_FRONTEND_CURRENT_LINK, SLM_FRONTEND_PREVIOUS_LINK, SLM_FRONTEND_LEGACY_DIR})
+_SLM_FRONTEND_RELEASE_NAMES = frozenset(
+    {SLM_FRONTEND_CURRENT_LINK, SLM_FRONTEND_PREVIOUS_LINK, SLM_FRONTEND_LEGACY_DIR}
+)
 _SLM_FRONTEND_RELEASE_PREFIX = SLM_FRONTEND_BUILD_PREFIX
 
 
