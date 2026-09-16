@@ -244,16 +244,44 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.check.outputs.version }}
         run: |
-          BRANCH="release/changelog-${VERSION}"
+          # #16563: the branch name carries no slash. A ref cannot be both a file
+          # and a directory, so "release/changelog-${VERSION}" became unpushable
+          # the moment a branch named "release" existed — every run since the
+          # 2026-09-12 rename failed here with "directory file conflict". A flat
+          # name cannot collide with a branch name that is a prefix of it.
+          BRANCH="changelog-${VERSION}"
           # HEAD holds the changelog commit (made in the commit step). Push it to
           # a dedicated branch and open/refresh a PR to release.
           git push origin "HEAD:refs/heads/${BRANCH}" --force
+
+          # #15167: whether this workflow may open the PR is a REPOSITORY setting
+          # — "Allow GitHub Actions to create and approve pull requests", stored
+          # as `can_approve_pull_request_reviews`. It is currently false, so
+          # `gh pr create` fails with "GitHub Actions is not permitted to create
+          # or approve pull requests", and no `permissions:` block can grant it.
+          # Nor can the setting be read from here to decide in advance: that needs
+          # admin rights, and `administration` is not a workflow permission scope
+          # at all — actionlint rejects it outright. So attempt the creation and
+          # classify what comes back, rather than probing a setting this token can
+          # never see. The branch above is pushed first, so the changelog is never
+          # lost and the run never fails at this step.
+          MANUAL="Open it by hand: gh pr create --base release --head ${BRANCH} --title \"chore(release): changelog for ${VERSION}\""
           if gh pr view "${BRANCH}" --json state --jq '.state' 2>/dev/null | grep -q OPEN; then
             echo "Changelog PR for ${BRANCH} already open."
           else
-            gh pr create --base release --head "${BRANCH}" \
+            if ! CREATE_ERR="$(gh pr create --base release --head "${BRANCH}" \
               --title "chore(release): changelog for ${VERSION}" \
-              --body "Automated changelog for release ${VERSION}. Merging lands the CHANGELOG.md history and per-version file on release (#10845). The tag and GitHub Release for ${VERSION} are already published."
+              --body "Automated changelog for release ${VERSION}. Merging lands the CHANGELOG.md history and per-version file on release (#10845). The tag and GitHub Release for ${VERSION} are already published." 2>&1)"; then
+              case "${CREATE_ERR}" in
+                *"not permitted to create or approve pull requests"*)
+                  echo "::notice::Changelog is on branch ${BRANCH}. This repository does not allow Actions to open pull requests — the setting is \"Allow GitHub Actions to create and approve pull requests\" (#15167). ${MANUAL} Enabling it restores the automatic path with no code change."
+                  ;;
+                *)
+                  echo "::warning::Changelog is on branch ${BRANCH}, but opening its PR failed for a reason other than the known permission block: ${CREATE_ERR}. ${MANUAL}"
+                  ;;
+              esac
+              exit 0
+            fi
           fi
           # Land automatically once required checks pass; non-fatal if the token
           # cannot enable auto-merge (the PR stays open for a manual merge).
