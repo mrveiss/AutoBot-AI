@@ -39,6 +39,7 @@ import numpy as np
 from autobot_shared.logging_manager import get_logger
 from media.document.extraction import DocumentExtractionError, extract_docx, extract_pdf
 from media.document.provenance import TABLE_SECTION_MARKER, render_tables, render_text_and_tables
+from media.document.zip_formats import SUFFIX_BY_FORMAT, sniff_zip_format
 
 logger = get_logger(__name__)
 
@@ -266,6 +267,13 @@ class DocumentExtractor:
         """
         file_path = Path(file_path)
         suffix = file_path.suffix.lower()
+
+        # #16773: a ZIP-based document's own members outrank a wrong name. Only the route
+        # changes here; each parser still reads the file itself.
+        verified = SUFFIX_BY_FORMAT.get(await asyncio.to_thread(sniff_zip_format, file_path) or "")
+        if verified and verified != suffix:
+            logger.info("Routing %s as %s: its content disagrees with its name", file_path.name, verified)
+            suffix = verified
 
         # Route based on file extension
         if suffix in DocumentExtractor.SUPPORTED_FORMATS["pdf"]:
