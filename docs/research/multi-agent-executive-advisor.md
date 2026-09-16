@@ -210,10 +210,12 @@ where that maps onto the reference work's single-hidden-persona design.
   could reuse `llc/services/role_assignment.py` to pick from whichever
   roles were actually consulted this turn, mirroring the source's
   "consulted-first, fallback pair" reviewer selection.
-- Already-exists audit: `grep -ril "critique|self.review|quality_judge|revision.pass|second.opinion" chat_workflow/ llc/` → only `review_gate.py` /
-  `findings_verify.py`, both **per-work-item** human/cross-vendor approval
-  gates (bug triage, findings), not a response-level critique-and-revise
-  pass on ordinary chat turns. No equivalent exists for the latter.
+- Already-exists audit: `grep -rilE "critique|self.review|quality_judge|revision.pass|second.opinion" chat_workflow/ llc/` →
+  `llc/models/review_gate.py`, `llc/api/review_gate_policies.py`,
+  `llc/services/review_gate.py`, and `llc/services/findings_verify.py`, all
+  **per-work-item** human/cross-vendor approval gates (bug triage, findings),
+  not a response-level critique-and-revise pass on ordinary chat turns. No
+  equivalent exists for the latter.
 - Visible benefit: a cheap, bounded quality gate directly on-theme for
   "CEO as employee" — other role-holders (a CFO- or GC-equivalent agent)
   sanity-checking the CEO's answer before it ships, the way a real executive
@@ -348,8 +350,9 @@ state (board/budget/goal) or writes its result back to `llc/kb/decision_log.py`.
 Neither #14409 nor #14617 (a Backlog decision issue about drafting
 workflows *from documents*, a different question) covers (b). "Company OS"
 and "workflow" are explicit v0.13.0 milestone capability areas, so this
-finding lands on ground already being worked — see filed issues below for
-how they're scoped against the pre-existing work.
+finding lands on ground already being worked — no new issue is filed for it
+here; see the Verdict below for how it's scoped against the pre-existing
+work.
 
 **What we already do better:** the source's 18 workflows are each bespoke
 `WorkflowBase` Python subclasses (one class per deliverable). AutoBot's
