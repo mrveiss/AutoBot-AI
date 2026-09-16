@@ -78,9 +78,16 @@ async def get_infrastructure_hosts(
 
     Issue #1310: Fleet/system hosts removed — they belong in SLM only.
     Only hosts explicitly added by the user via Secrets are returned.
-    Issue #16426: admin-only — connection metadata (host, ports, username)
-    for every host, not just the caller's own.
+    Requires: admin permission.
     """
+    # #16426: admin-only because this returns connection metadata -- host, ports,
+    # username, os, capabilities -- for every host, not just the caller's own.
+    #
+    # Deliberately a comment and not part of the docstring: FastAPI publishes a
+    # route's docstring as the OpenAPI `description`, which reaches
+    # autobot-frontend/src/types/generated/api.ts and anything served from the
+    # schema. An endpoint description is client-facing documentation, so it is no
+    # place to narrate the access-control defect this route used to have (#16827).
     try:
         hosts = _load_secrets_hosts()
     except SecretsStoreUnavailable as exc:
@@ -109,8 +116,11 @@ async def delete_infrastructure_host(
     ``infrastructure_host``; deleting the host removes its Secrets entry.
     Mirrors the GET read-shim — the host id IS the secret id. Returns 404
     when no matching infrastructure host exists.
-    Issue #16426: admin-only — any authenticated user could delete any host.
+    Requires: admin permission.
     """
+    # #16426: admin-only. The previous dependency was `get_current_user`, which
+    # gated on being signed in and nothing else. See the GET route above for why
+    # this rationale is a comment rather than docstring text (#16827).
     if not any(h["id"] == host_id for h in _load_secrets_hosts()):
         raise HTTPException(status_code=404, detail="Infrastructure host not found")
 
