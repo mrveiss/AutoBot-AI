@@ -302,3 +302,12 @@ time — not assumed to match), but the "install via pasted Compose YAML with
 zero review" path is already usable today, on both platforms, the moment the
 compose variant exists.
 
+A third, vendor-built NAS line (this one branded specifically around edge
+AI-capable storage hardware) confirms the same pattern a third time: its
+built-in container environment has a first-class Docker Compose mode where a
+user pastes a Compose YAML into a "create application" screen, gets it
+validated inline, and deploys — again with no catalog review step at all.
+Three independent platforms in this category, three arrivals at the same
+"any Compose file, pasted directly, works" door. The generalization holds;
+this isn't one platform's quirk.
+
