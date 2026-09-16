@@ -1,3 +1,7 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
 """The dead-surface split must stay a split (#16816).
 
 `--dead-surface` has existed for the life of the script and CI never asked for it,
@@ -11,9 +15,7 @@ subtotal, so the mode cannot regress to an undifferentiated total.
 import importlib.util
 from pathlib import Path
 
-_SPEC = importlib.util.spec_from_file_location(
-    "audit_api_wiring", Path(__file__).resolve().parents[0] / "audit_api_wiring.py"
-)
+_SPEC = importlib.util.spec_from_file_location("dead_surface", Path(__file__).resolve().parents[0] / "dead_surface.py")
 audit = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(audit)
 
