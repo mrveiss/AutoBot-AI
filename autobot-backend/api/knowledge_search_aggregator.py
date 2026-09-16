@@ -39,6 +39,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.relations import relations_by_direction
 from knowledge.search_filters import (
     extract_user_context_from_request,
     filter_search_results_by_permission,
@@ -50,13 +51,7 @@ logger = get_logger(__name__)
 
 # Issue #336: Extracted helper for processing relation results
 def _process_outgoing_relation(rel: Dict[str, Any], fact_id: str, related_ids: Set[str], results: List[Dict]) -> None:
-    """Process a single outgoing relation (Issue #336 - extracted helper).
-
-    #16708: a relation item carries "to"/"type", never "target_id"/
-    "relation_type" -- those keys never existed on the real shape
-    RelationsMixin.get_fact_relations() returns, so every dedup check here
-    always missed too.
-    """
+    """Process a single outgoing relation (Issue #336 - extracted helper). Keys are "to"/"type" (#16708)."""
     if rel.get("target_fact"):
         target = rel["target_fact"]
         target["source"] = "graph_relation"
@@ -79,16 +74,6 @@ def _process_incoming_relation(rel: Dict[str, Any], fact_id: str, related_ids: S
             related_ids.add(rel.get("from"))
 
 
-def _relations_by_direction(relations: List[Dict[str, Any]], direction: str) -> List[Dict[str, Any]]:
-    """Filter a flat relations list to one direction (#16708).
-
-    RelationsMixin.get_fact_relations() has always returned one flat
-    "relations" list with each item's own "direction" field -- never
-    separate "outgoing"/"incoming" keys, which every caller below assumed.
-    """
-    return [rel for rel in relations if rel.get("direction") == direction]
-
-
 async def _expand_fact_relations(
     kb: Any,
     fact_id: str,
@@ -109,16 +94,13 @@ async def _expand_fact_relations(
     relations = await kb.get_fact_relations(fact_id, direction="both", include_fact_details=True)
     if not relations.get("success"):
         return
-    # #16708: the flat list, partitioned by each item's own "direction" --
-    # "outgoing"/"incoming" were never top-level keys on this result.
-    flat = relations.get("relations", [])
     ownership_manager = getattr(kb, "ownership_manager", None)
-    for rel in _relations_by_direction(flat, "outgoing"):
+    for rel in relations_by_direction(relations.get("relations", []), "outgoing"):  # #16708
         if await _related_fact_is_accessible(
             rel.get("target_fact"), ownership_manager, user_id, user_org_id, user_group_ids, is_admin
         ):
             _process_outgoing_relation(rel, fact_id, related_ids, results)
-    for rel in _relations_by_direction(flat, "incoming"):
+    for rel in relations_by_direction(relations.get("relations", []), "incoming"):
         if await _related_fact_is_accessible(
             rel.get("source_fact"), ownership_manager, user_id, user_org_id, user_group_ids, is_admin
         ):
@@ -229,15 +211,11 @@ async def _process_relations_for_citations(
             continue
 
         relations = await kb.get_fact_relations(fact_id, direction="outgoing", include_fact_details=True)
-        # #16708: the result has always been a flat "relations" list -- the
-        # direction="outgoing" call already scoped it to outgoing items,
-        # there is no separate "outgoing" key to read.
-        outgoing = relations.get("relations", []) if relations.get("success") else []
-        if not outgoing:
+        if not (relations.get("success") and relations.get("relations")):  # #16708: real key is "relations"
             continue
 
         context_parts.append("## Related Information\n")
-        for rel in outgoing[:2]:
+        for rel in relations["relations"][:2]:
             if await _related_fact_is_accessible(
                 rel.get("target_fact"), ownership_manager, user_id, user_org_id, user_group_ids, is_admin
             ):
@@ -439,8 +417,7 @@ async def stats(req: Request):
         },
     }
 
-    # Knowledge base stats
-    # Issue #379: Parallelize independent KB stats calls with asyncio.gather()
+    # Knowledge base stats -- Issue #379: parallelize independent KB stats calls with asyncio.gather()
     if kb is not None:
         try:
             kb_stats, rel_stats = await asyncio.gather(
@@ -709,12 +686,7 @@ async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relati
             if not result.get("success"):
                 continue
 
-            # #16708: flat "relations" list, partitioned by "direction" --
-            # "outgoing" was never a top-level key. Per-item keys are
-            # "to"/"type" (never "target_id"/"relation_type"); "strength"
-            # has never existed on this shape, hence the default only.
-            outgoing = _relations_by_direction(result.get("relations", []), "outgoing")
-            for rel in outgoing[:5]:  # Limit per fact
+            for rel in relations_by_direction(result.get("relations", []), "outgoing")[:5]:  # #16708, limit per fact
                 target_id = rel.get("to")
                 if not target_id or target_id not in fact_ids:
                     continue

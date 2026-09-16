@@ -114,12 +114,12 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/knowledge_categories.py": 674,
     "autobot-backend/api/knowledge_collections.py": 726,
     "autobot-backend/api/knowledge_connectors.py": 929,
-    "autobot-backend/api/knowledge_maintenance.py": 1980,  # #16707: real collection handle
+    "autobot-backend/api/knowledge_maintenance.py": 1979,
     "autobot-backend/api/knowledge_mcp.py": 1455,
     "autobot-backend/api/knowledge_population.py": 1546,
     "autobot-backend/api/knowledge_rag.py": 672,
     "autobot-backend/api/knowledge_search.py": 820,  # #16665: analytics endpoints moved out
-    "autobot-backend/api/knowledge_search_aggregator.py": 979,  # #16708: relation-shape fix + partition helper
+    "autobot-backend/api/knowledge_search_aggregator.py": 951,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1704,
     "autobot-backend/api/knowledge_vectorization_test.py": 601,
