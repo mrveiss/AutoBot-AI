@@ -33,13 +33,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from autobot_shared.env_utils import env_float, env_int_clamped
-from services.deploy_artifacts import (
-    SLM_FRONTEND_BUILD_PREFIX as BUILD_PREFIX,
-    SLM_FRONTEND_CURRENT_LINK as CURRENT_LINK,
-    SLM_FRONTEND_LEGACY_DIR as LEGACY_DIR,
-    SLM_FRONTEND_LEGACY_PREVIOUS_DIR as LEGACY_PREVIOUS_DIR,
-    SLM_FRONTEND_PREVIOUS_LINK as PREVIOUS_LINK,
-)
+from services.deploy_artifacts import SLM_FRONTEND_BUILD_PREFIX as BUILD_PREFIX
+from services.deploy_artifacts import SLM_FRONTEND_CURRENT_LINK as CURRENT_LINK
+from services.deploy_artifacts import SLM_FRONTEND_LEGACY_DIR as LEGACY_DIR
+from services.deploy_artifacts import SLM_FRONTEND_LEGACY_PREVIOUS_DIR as LEGACY_PREVIOUS_DIR
+from services.deploy_artifacts import SLM_FRONTEND_PREVIOUS_LINK as PREVIOUS_LINK
 from services.deployed_dir_resolver import get_release_component_dir
 
 logger = logging.getLogger(__name__)
