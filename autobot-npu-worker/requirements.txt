@@ -1,3 +1,10 @@
+# #15733: relative to THIS file, not to the cwd the installer runs from --
+# every ansible task that installs this manifest sets chdir to this file's
+# own directory (repo_tests/pip_relative_editable_needs_chdir_test.py fails
+# a task that installs a relative-editable manifest without one). Decision:
+# stays relative -- an absolute path here would have to be rendered from
+# the deploy-time SSOT into a file every component ships, and a real
+# distribution is a bigger move than this manifest owns.
 -e ../autobot_shared
 
 # NPU/AI

@@ -87,11 +87,11 @@ BASELINE = {
     # `.vue` components carrying their own <style> rules. Target is a small
     # number of shared stylesheets, not 381 components each with a private
     # copy of the design system.
-    "components_declaring_styles": 381,
+    "components_declaring_styles": 380,  # #16245: RedisServiceControl.vue removed
     # Distinct class names declared anywhere in the frontend.
-    "distinct_class_names": 5623,
+    "distinct_class_names": 5617,  # #16245: recounted at the rebased tree, combined with #16596's cuts
     # Total CSS rule declarations.
-    "css_rule_declarations": 9405,
+    "css_rule_declarations": 9388,  # #16696: recounted at the merged tree
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
     "button_definition_files": 101,
@@ -104,7 +104,7 @@ BASELINE = {
     "date_format_approaches": 4,
     # Hardcoded `z-index: <number>` declarations, i.e. stacking order decided
     # per file rather than by a scale.
-    "hardcoded_zindex_declarations": 52,
+    "hardcoded_zindex_declarations": 51,
 }
 
 # Families worth pinning individually, so a regression in one cannot hide
@@ -149,7 +149,7 @@ FAMILY_BASELINE = {
     "spinner": 4,
     "table": 18,
     "input": 18,
-    "dialog": 13,
+    "dialog": 11,
     "tab": 11,
     "label": 8,
     "grid": 4,

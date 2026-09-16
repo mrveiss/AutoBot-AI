@@ -246,7 +246,9 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/components/knowledge/ChromaDBExplorer.vue'),
         meta: {
           title: 'Vector Store',
-          parent: 'knowledge'
+          parent: 'knowledge',
+          // #16666: raw collection access bypasses fact visibility, so the backend is admin-only
+          admin: true
         }
       },
       {
@@ -368,13 +370,10 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // Watch Folders moved under Manage as a tab (owner request, 2026-09-14):
+        // it belongs beside Upload/Manage, not as a standalone top-level page.
         path: 'watch-folders',
-        name: 'knowledge-watch-folders',
-        component: () => import('@/views/knowledge/WatchFoldersView.vue'),
-        meta: {
-          title: 'Watch Folders',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/manage?tab=watchFolders'
       }
     ]
   },
@@ -1018,6 +1017,20 @@ export const routes: RouteRecordRaw[] = [
         meta: {
           title: 'LLM API Keys',
           description: 'Manage virtual LLM API keys with per-key budgets',
+          requiresAuth: true,
+          admin: true,
+          hideInNav: true
+        }
+      },
+      // Issue #16429: SecretAuditLog.vue wired in — GET /api/audit/logs is
+      // admin-only (api/audit.py), matching the llm-keys tab's gate above.
+      {
+        path: 'audit-log',
+        name: 'secrets-audit-log',
+        component: () => import('@/views/secrets/AuditLogView.vue'),
+        meta: {
+          title: 'Secret Audit Log',
+          description: 'Audit trail of secret access, creation, and deletion',
           requiresAuth: true,
           admin: true,
           hideInNav: true

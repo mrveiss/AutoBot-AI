@@ -854,7 +854,7 @@ class TestClaudeCodeAdapterNoResume:
 
         with (
             patch("llc.adapters.claude_code_adapter._resolve_claude_cli", return_value="/usr/bin/claude"),
-            patch("llc.adapters.claude_code_adapter.asyncio.create_subprocess_exec") as mock_exec,
+            patch("llc.adapters.claude_code_adapter.spawn_with_workspace_retry") as mock_exec,
             patch("builtins.open", create=True),
             patch("llc.adapters.claude_code_adapter.os.makedirs"),
             patch.object(adapter, "_build_prompt", return_value="prompt text"),
@@ -863,7 +863,7 @@ class TestClaudeCodeAdapterNoResume:
         ):
             mock_proc = MagicMock()
             mock_proc.pid = 999
-            mock_exec.return_value = mock_proc
+            mock_exec.return_value = (mock_proc, None)
             try:
                 await adapter._invoke(agent_config, context)
             except Exception:
@@ -893,7 +893,7 @@ class TestClaudeCodeAdapterNoResume:
 
         with (
             patch("llc.adapters.claude_code_adapter._resolve_claude_cli", return_value="/usr/bin/claude"),
-            patch("llc.adapters.claude_code_adapter.asyncio.create_subprocess_exec") as mock_exec,
+            patch("llc.adapters.claude_code_adapter.spawn_with_workspace_retry") as mock_exec,
             patch("builtins.open", create=True),
             patch("llc.adapters.claude_code_adapter.os.makedirs"),
             patch.object(adapter, "_build_prompt", return_value="prompt text"),
@@ -902,7 +902,7 @@ class TestClaudeCodeAdapterNoResume:
         ):
             mock_proc = MagicMock()
             mock_proc.pid = 999
-            mock_exec.return_value = mock_proc
+            mock_exec.return_value = (mock_proc, None)
             try:
                 await adapter._invoke(agent_config, context)
             except Exception:

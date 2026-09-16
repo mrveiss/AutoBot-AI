@@ -1,8 +1,12 @@
 # ADR-001: Distributed 6-VM Architecture
 
+> **Superseded by [ADR-010](010-role-separation-count-agnostic-placement.md).** The 6-VM count
+> below was one operator's install, not a platform invariant; role separation is the surviving
+> decision. Kept verbatim as the historical record of what was decided in 2025.
+
 ## Status
 
-**Status**: Accepted
+**Status**: Superseded by ADR-010
 
 ## Date
 

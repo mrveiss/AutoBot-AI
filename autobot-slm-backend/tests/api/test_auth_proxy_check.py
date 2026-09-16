@@ -44,7 +44,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -139,6 +139,24 @@ def _credentials(token: str) -> HTTPAuthorizationCredentials:
 # /api/auth/proxy-check depends on (#16374 round 3) -- admin/non-admin/
 # superadmin/invalid/missing, real JWT round-trip.
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _stub_revocation_checks():
+    """services.auth is loaded for REAL here (see module docstring), so
+    decode_token_async's two revocation checks reach the real
+    token_denylist.is_jti_revoked and password_epoch.is_token_revoked_by_
+    password_change, which both need Redis -- and #16387 / #16411 made them
+    fail CLOSED (raise) when Redis cannot answer, which CI's no-Redis
+    environment cannot. These tests are about the admin-permission gate, not
+    revocation itself (test_token_denylist.py and password_epoch_test.py cover
+    that), so every minted token is simply "not revoked" here.
+    """
+    with (
+        patch.object(_auth_mod, "is_jti_revoked", AsyncMock(return_value=False)),
+        patch.object(_auth_mod, "is_token_revoked_by_password_change", AsyncMock(return_value=False)),
+    ):
+        yield
 
 
 class TestProxyCheckGate:

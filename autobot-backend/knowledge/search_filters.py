@@ -12,8 +12,15 @@ Integrates with ChromaDB metadata and ownership system.
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 logger = get_logger(__name__)
+
+#: What an MCP token caller may read (owner decision on #16654): platform-wide facts only,
+#: by visibility or by access level. Never private, shared, group or organisation facts.
+NON_PRIVATE_VISIBILITY = ("system", "public")
+NON_PRIVATE_ACCESS = ("general", "autobot")
 
 
 async def build_chromadb_permission_filter(
@@ -64,11 +71,13 @@ async def build_chromadb_permission_filter(
             }
         )
 
-    # Condition 4: Group-level (check if user belongs to ANY of the fact's groups)
-    # Note: ChromaDB doesn't support array intersection, so we can't directly filter
-    # group facts. We'll filter these in post-processing.
-
-    # Condition 5: Explicitly shared (also requires post-processing)
+    # Conditions 4-6: group-level and shared facts, and facts readable by access level
+    # alone, cannot be decided by a ChromaDB where (membership lives in list metadata).
+    # Admit them here and let filter_search_results_by_permission's check_access make the
+    # exact call: a pre-filter narrower than check_access silently drops facts the user
+    # may read, and the post-filter can only remove results, never add them (#16662).
+    conditions.append({"visibility": {"$in": ["shared", "group"]}})
+    conditions.append({"access_level": {"$in": ["general", "autobot"]}})
 
     # Build final filter
     if len(conditions) > 1:
@@ -88,6 +97,7 @@ async def filter_search_results_by_permission(
     user_org_id: str | None = None,
     user_group_ids: List[str] | None = None,
     ownership_manager=None,
+    is_admin: bool = False,
 ) -> List[Dict]:
     """Filter search results to only include facts user has access to.
 
@@ -100,13 +110,16 @@ async def filter_search_results_by_permission(
         user_org_id: User's organization ID
         user_group_ids: List of group IDs user belongs to
         ownership_manager: KnowledgeOwnership instance for access checks
+        is_admin: Explicit admin read (#16662). Only explicit read APIs pass it,
+            never chat grounding.
 
     Returns:
-        Filtered list of results user has access to
+        Filtered list of results user has access to -- empty when there is no
+        ownership manager, since then no access decision can be made (#16662)
     """
     if not ownership_manager:
-        logger.warning("No ownership manager provided for permission filtering")
-        return results
+        logger.error("No ownership manager for permission filtering; returning no results (#16662)")
+        return []
 
     user_group_ids = user_group_ids or []
     filtered_results = []
@@ -126,6 +139,7 @@ async def filter_search_results_by_permission(
             fact_metadata=metadata,
             user_org_id=user_org_id,
             user_group_ids=user_group_ids,
+            is_admin=is_admin,
         )
 
         if has_access:
@@ -147,7 +161,8 @@ async def augment_search_request_with_permissions(
     user_org_id: str | None = None,
     user_group_ids: List[str] | None = None,
     original_where: Dict | None = None,
-) -> Dict:
+    is_admin: bool = False,
+) -> Dict | None:
     """Augment a search request with permission-based metadata filters.
 
     Issue #679: Combines user's original where clause with permission filters.
@@ -158,10 +173,14 @@ async def augment_search_request_with_permissions(
         user_org_id: User's organization ID
         user_group_ids: List of group IDs user belongs to
         original_where: Original where clause from user request
+        is_admin: Explicit admin read (#16662): no permission narrowing, so the
+            post-filter's admin decision is not pre-empted. Never chat grounding.
 
     Returns:
         Combined where clause with permission filters
     """
+    if is_admin:
+        return original_where
     # Build permission filter
     permission_filter = await build_chromadb_permission_filter(
         user_id=user_id, user_org_id=user_org_id, user_group_ids=user_group_ids
@@ -200,3 +219,36 @@ def extract_user_context_from_request(current_user) -> tuple:
         user_group_ids = [str(m.team_id) for m in current_user.team_memberships if m.team and not m.team.is_deleted]
 
     return user_id, user_org_id, user_group_ids
+
+
+def non_private_where(caller_where: Dict | None = None) -> Dict:
+    """A ChromaDB ``where`` for an MCP token caller: non-private, unquarantined facts (#16666).
+
+    The caller's own filter is AND-ed in, never substituted, so it can only narrow what the
+    token reads. A caller asking for ``{"visibility": "private"}`` still gets nothing private.
+    """
+    platform_wide = {
+        "$or": [
+            {"visibility": {"$in": list(NON_PRIVATE_VISIBILITY)}},
+            {"access_level": {"$in": list(NON_PRIVATE_ACCESS)}},
+        ]
+    }
+    return {"$and": [platform_wide, RESEARCH_QUARANTINE_FILTER, *([caller_where] if caller_where else [])]}
+
+
+def is_non_private(metadata: Dict | None) -> bool:
+    """Whether an MCP token caller may read a fact with *metadata* (#16666)."""
+    metadata = metadata or {}
+    platform_wide = (
+        metadata.get("visibility") in NON_PRIVATE_VISIBILITY or metadata.get("access_level") in NON_PRIVATE_ACCESS
+    )
+    return platform_wide and metadata.get("collection") != config.research_quarantine_collection
+
+
+def filter_non_private_results(results: List[Dict] | None) -> List[Dict]:
+    """*results* without any fact an MCP token caller may not read (#16666).
+
+    Defence in depth behind :func:`non_private_where`: ``KB.search`` drops its ``where`` on
+    the enhanced path, and this post-filter holds whatever the pre-filter did.
+    """
+    return [r for r in results or [] if is_non_private(r.get("metadata"))]

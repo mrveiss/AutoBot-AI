@@ -29,7 +29,7 @@ Intel NPUs (Neural Processing Units) offer an alternative:
 
 ## Decision
 
-We create a dedicated NPU Worker VM (VM2: <npu-ip>) that:
+We create a dedicated NPU worker role (`aiml` / `npu_workers` — see [VM_ROLES.md](../architecture/VM_ROLES.md)), placed on whichever host has the NPU hardware, that:
 1. Has direct hardware passthrough to the Intel NPU
 2. Runs OpenVINO for model optimization
 3. Exposes an HTTP API for AI inference requests
@@ -83,7 +83,7 @@ The main backend routes appropriate workloads to the NPU worker.
 
 - `scripts/utilities/npu_worker_design.py` - NPU worker architecture design
 - `backend/services/npu_client.py` - Client for NPU worker API
-- VM2 runs the NPU worker service on port 8081
+- The NPU worker role's host runs the NPU worker service on port 8081
 
 ### Architecture
 
@@ -145,7 +145,8 @@ optimum-cli export openvino \
 
 ## Related ADRs
 
-- [ADR-001](001-distributed-vm-architecture.md) - NPU worker is VM2 in distributed architecture
+- [ADR-001](001-distributed-vm-architecture.md) - historical: NPU worker was VM2 in that install
+- [ADR-010](010-role-separation-count-agnostic-placement.md) - NPU worker occupies its own role, placed where the hardware is, independent of host count
 
 ---
 

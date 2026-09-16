@@ -22,23 +22,41 @@ Design notes
 - Key lookup is by ``kid`` JWT header field.  On an unknown ``kid``, the cache
   is refreshed once (handles key rotation) before giving up.
 - JWKS-unreachable returns ``None`` — the caller falls back to HS256 or raises
-  401.  This module never raises to the caller; all errors are logged + None.
+  401.  Verification failures (bad signature, expired, unknown kid, revoked
+  jti) are logged + None, never raised.  The one exception (#16412): when the
+  RS256 jti-revocation check itself cannot run because Redis errored,
+  ``verify_authority_token`` raises ``HTTPException`` (401) instead of
+  returning None -- see its docstring.
 - The async HTTP fetch uses ``httpx.AsyncClient`` (already in requirements.txt);
   no new dependency is introduced.
 - The cache TTL is read from ``config.settings`` (``jwks_cache_ttl_seconds``),
   defaulting to 3600 s.  The authority base URL is ``settings.authority_base_url``.
 """
 
+import asyncio
 import json
 import logging
 import time
 from typing import Any, Dict, Optional
 
 import httpx
+from fastapi import HTTPException, status
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, _peek_alg, decode_jwt
 
+try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
+    from redis.exceptions import RedisError as _RedisError
+except ImportError:  # pragma: no cover - redis is a hard dep in deployments
+    _RedisError = ConnectionError  # type: ignore[assignment,misc]
+
 logger = logging.getLogger(__name__)
+
+# #16412: the narrow set of failure modes the RS256 revocation-check Redis
+# call can raise -- mirrors auth.py's ``_REVOCATION_CHECK_FAILURES`` (#16387).
+# Deliberately NOT `except Exception`: a check that cannot run must be told
+# apart from a genuine "not revoked" answer, and a blanket catch would also
+# swallow real bugs and relabel them as Redis outages.
+_REVOCATION_CHECK_FAILURES = (asyncio.TimeoutError, ConnectionError, OSError, _RedisError)
 
 # ---------------------------------------------------------------------------
 # Internal cache — module-level singleton (never use mutable default args)
@@ -156,11 +174,54 @@ def _normalize_claims(payload: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+async def _rs256_jti_is_revoked(jti: str, *, context: str) -> bool:
+    """Check the cross-service RS256 denylist for *jti*, failing CLOSED.
+
+    Shared by ``verify_authority_token``'s cache-hit and full-verify call
+    sites (#16412) so the fail-closed decision -- and its narrow exception
+    handling -- lives in exactly one place.
+
+    Args:
+        jti: The RS256 authority token's jti claim.
+        context: Short label for the log line ("cache hit" or "full verify").
+
+    Returns:
+        True if the jti is confirmed revoked.
+
+    Raises:
+        HTTPException: 401 (matching ``get_current_user``'s normal
+            invalid-token response) when the check itself could not run
+            because Redis errored -- "could not check" must not be read as
+            "not revoked".
+    """
+    from services.rs256_denylist import is_rs256_jti_revoked  # noqa: PLC0415
+
+    try:
+        return await is_rs256_jti_revoked(str(jti))
+    except _REVOCATION_CHECK_FAILURES as exc:
+        # #16412: fail CLOSED (mirrors #16387's HS256 shape). The RS256
+        # denylist is the only record of a logged-out or revoked authority
+        # token; if Redis cannot answer, the token is denied rather than
+        # honoured, whether or not its claims are already cached.
+        logger.error(
+            "verify_authority_token: rs256 denylist check failed (%s, %s); denying token",
+            context,
+            exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+
 async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
     """Verify an RS256 authority token via cached JWKS and return normalized claims.
 
-    On any failure (JWKS unreachable, bad signature, expired, algorithm mismatch,
-    or revoked jti) returns ``None`` — never raises.
+    On most failures (JWKS unreachable, bad signature, expired, algorithm
+    mismatch, or a confirmed-revoked jti) returns ``None`` rather than
+    raising.  The one exception is a jti-revocation check that could not run
+    at all (Redis error) -- see Raises below.
 
     Caching (D1 #10158)
     -------------------
@@ -172,7 +233,8 @@ async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
     ----------------------------------
     After signature verification, the token's ``jti`` is checked against the
     shared RS256 denylist (``auth:rs256:jti:denylist:*``).  Revoked tokens are
-    rejected even if the signature is otherwise valid.
+    rejected even if the signature is otherwise valid.  This check runs on
+    BOTH the cache-hit and full-verify paths.
 
     Key-rotation refresh
     --------------------
@@ -184,6 +246,13 @@ async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
 
     Returns:
         Normalized claims dict, or ``None`` on verification failure.
+
+    Raises:
+        HTTPException: 401 (matching ``get_current_user``'s normal
+            invalid-token response) when the jti-revocation check itself
+            cannot run -- ``is_rs256_jti_revoked`` raised because Redis
+            errored. Fail CLOSED (#16412, mirrors #16387): the caller must
+            not treat "could not check" as "not revoked".
     """
     # D1 (#10158): check OIDC token claim cache before expensive JWKS verify
     from services.oidc_token_cache import cache_claims, get_cached_claims  # noqa: PLC0415
@@ -193,15 +262,9 @@ async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
         # Security (#10278): a cache hit must STILL honour revocation — otherwise a
         # revoked-but-cached token would bypass the denylist until the cache TTL expires.
         cached_jti = cached.get("jti")
-        if cached_jti:
-            from services.rs256_denylist import is_rs256_jti_revoked  # noqa: PLC0415
-
-            try:
-                if await is_rs256_jti_revoked(str(cached_jti)):
-                    logger.warning("verify_authority_token: cached jti=%r is revoked — rejecting", cached_jti)
-                    return None
-            except Exception:  # fail-open on Redis down (matches the full-verify path)
-                logger.warning("rs256 denylist check failed on cache hit; failing open", exc_info=True)
+        if cached_jti and await _rs256_jti_is_revoked(cached_jti, context="cache hit"):
+            logger.warning("verify_authority_token: cached jti=%r is revoked — rejecting", cached_jti)
+            return None
         logger.debug("verify_authority_token: cache hit (sub=%r)", cached.get("sub"))
         return cached
 
@@ -254,17 +317,12 @@ async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
         logger.warning("Authority RS256 token invalid (kid=%r): %s", token_kid, exc)
         return None
 
-    # #10278: check cross-service RS256 jti denylist (fail-open on Redis down)
+    # #10278: check cross-service RS256 jti denylist; fail CLOSED on Redis
+    # down (#16412, mirrors #16387's HS256 shape).
     jti = payload.get("jti")
-    if jti:
-        from services.rs256_denylist import is_rs256_jti_revoked  # noqa: PLC0415
-
-        try:
-            if await is_rs256_jti_revoked(str(jti)):
-                logger.warning("Authority RS256 token rejected: jti=%r is revoked", jti)
-                return None
-        except Exception:
-            logger.warning("rs256 denylist check failed; failing open", exc_info=True)
+    if jti and await _rs256_jti_is_revoked(jti, context="full verify"):
+        logger.warning("Authority RS256 token rejected: jti=%r is revoked", jti)
+        return None
 
     claims = _normalize_claims(payload)
 

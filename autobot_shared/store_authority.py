@@ -126,6 +126,46 @@ STORE_AUTHORITY: dict[str, Concept] = {
         write_sites=("autobot-backend/api/mobile_devices.py",),
         rebuilt_by="desktop_mobile_devices rows are the credential; nothing else stores one.",
     ),
+    "session_collaboration": Concept(
+        name="session_collaboration",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=("autobot-backend/api/collaboration.py",),
+        rebuilt_by="session_collaborations rows (owner/collaborators/invitations) are the "
+        "record; nothing else stores a copy. #16464 ported the table into the canonical "
+        "Alembic chain -- it existed only in an orphaned, never-applied migration before.",
+    ),
+    "collaboration_event_history": Concept(
+        name="collaboration_event_history",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=(
+            "autobot-backend/api/collaboration.py",
+            "autobot-backend/websocket/presence.py",
+        ),
+        rebuilt_by="collaboration_events rows are the record; nothing else stores a copy. "
+        "The live broadcast relay (websocket/presence.py) and the REST share-secret "
+        "endpoint both persist here in addition to broadcasting, so a client that "
+        "reconnects sees the same events it would have seen live (#16460).",
+    ),
+    "activity_audit_trail": Concept(
+        name="activity_audit_trail",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=(
+            "autobot-backend/utils/activity_tracker.py",
+            "autobot-backend/integrations/desktop_tracking.py",
+        ),
+        rebuilt_by="terminal_activities/file_activities/browser_activities/"
+        "desktop_activities/secret_usage rows are the audit record; nothing else stores a "
+        "copy. #16464 ported all five tables into the canonical Alembic chain -- same "
+        "orphaned-migration gap as session_collaboration, above. #16466 retired the "
+        "terminal/file/browser/secret-usage writer code as dead (zero callers anywhere; "
+        "#873's own acceptance checklist for those three was never completed, and nothing "
+        "reads them either) -- only desktop_activities receives real rows today. The other "
+        "four tables stay, empty, for the cascade-delete-safety reason #16464 fixed, "
+        "independent of whether anything writes to them.",
+    ),
     "verbatim_memory": Concept(
         name="verbatim_memory",
         system_of_record=Store.CHROMADB,

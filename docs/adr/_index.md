@@ -13,7 +13,7 @@ aliases:
 | [README](README.md) | ADR overview |
 | [template](template.md) | ADR template |
 | [decisions](decisions.md) | All decisions log |
-| [001-distributed-vm-architecture](001-distributed-vm-architecture.md) | Distributed VM architecture |
+| [001-distributed-vm-architecture](001-distributed-vm-architecture.md) | Distributed VM architecture (historical; superseded by 010) |
 | [002-redis-database-separation](002-redis-database-separation.md) | Redis database separation |
 | [003-npu-integration-strategy](003-npu-integration-strategy.md) | NPU integration strategy |
 | [004-chat-workflow-architecture](004-chat-workflow-architecture.md) | Chat workflow architecture |
@@ -21,3 +21,5 @@ aliases:
 | [006-skill-bound-planning](006-skill-bound-planning.md) | Skill-bound planning via skill_router at plan time |
 | [007-connector-oauth-token-storage](007-connector-oauth-token-storage.md) | Connector credentials must use SecretsService, not raw Redis |
 | [008-frontend-shared-code-boundary](008-frontend-shared-code-boundary.md) | Shared FE code is drawn at backend knowledge; one client per (app, backend) |
+| [009-canonical-browser-interface](009-canonical-browser-interface.md) | One canonical browser interface, with execution backends behind it |
+| [010-role-separation-count-agnostic-placement](010-role-separation-count-agnostic-placement.md) | Roles are the invariant; host count is a deployment choice (supersedes 001) |

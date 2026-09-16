@@ -28,6 +28,7 @@ from api.schemas_knowledge import (
     UpdatePermissionsRequest,
 )
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
@@ -107,13 +108,16 @@ def _apply_visibility_to_metadata(
     metadata: Dict,
     permissions_request: "UpdatePermissionsRequest",
     user_org_id: str | None,
+    caller_role: str | None = None,
 ) -> Dict:
-    """Helper for update_knowledge_permissions. Ref: #1088."""
+    """Helper for update_knowledge_permissions (#1088); SYSTEM/PUBLIC are admin-only (#16663)."""
+    platform_wide = (VisibilityLevel.SYSTEM, VisibilityLevel.PUBLIC)
+    if permissions_request.visibility in platform_wide and not is_admin_role(caller_role):
+        raise HTTPException(status_code=403, detail="Only admins can make knowledge visible to every signed-in user")
     if permissions_request.visibility == VisibilityLevel.ORGANIZATION:
         if not user_org_id:
             raise HTTPException(
-                status_code=403,
-                detail="Cannot create organization knowledge without organization membership",
+                status_code=403, detail="Cannot create organization knowledge without organization membership"
             )
         permissions_request.organization_id = user_org_id
 
@@ -123,32 +127,15 @@ def _apply_visibility_to_metadata(
     return metadata
 
 
-async def _persist_permissions_update(
-    fact_id: str,
-    user_id: str,
-    metadata: Dict,
-    permissions_request: "UpdatePermissionsRequest",
-    old_visibility: str,
-    ownership_manager,
-    redis,
-) -> None:
-    """Helper for update_knowledge_permissions. Ref: #1088."""
-    await ownership_manager.set_owner(
-        fact_id=fact_id,
-        owner_id=user_id,
-        visibility=permissions_request.visibility,
-        source_type=metadata.get("source_type", "manual"),
-        shared_with=metadata.get("shared_with", []),
-        organization_id=permissions_request.organization_id,
-        group_ids=permissions_request.group_ids or [],
-    )
-    await redis.hset(f"fact:{fact_id}", "metadata", json.dumps(metadata))
-    logger.info(
-        "Updated fact %s permissions: %s -> %s",
-        fact_id,
-        old_visibility,
-        permissions_request.visibility,
-    )
+async def _write_fact_metadata(kb, fact_id: str, metadata: Dict) -> None:
+    """Write through update_fact: durable row, Redis, ChromaDB and the ownership indexes together (#16663).
+
+    A bare ``hset`` left the durable row and ChromaDB -- whose metadata the search pre-filter
+    reads -- on the old visibility and sharing.
+    """
+    result = await kb.update_fact(fact_id=fact_id, metadata=metadata)
+    if result.get("status") != "success":
+        raise HTTPException(status_code=500, detail="Failed to update the fact's permissions")
 
 
 async def _fetch_fact_metadata(fact_id: str, redis) -> Dict:
@@ -168,14 +155,16 @@ async def _check_fact_access(
     user_org_id: str | None,
     user_group_ids: List[str],
     ownership_manager,
+    is_admin: bool = False,
 ) -> bool:
-    """Check whether a user has access to a fact. Ref: #1088."""
+    """Check whether a user has access to a fact (#1088); an admin reads any fact here (#16662)."""
     return await ownership_manager.check_access(
         fact_id=fact_id,
         user_id=user_id,
         fact_metadata=metadata,
         user_org_id=user_org_id,
         user_group_ids=user_group_ids,
+        is_admin=is_admin,
     )
 
 
@@ -305,10 +294,7 @@ async def get_organization_knowledge(
     # Verify user belongs to organization
     _, user_org_id, _ = extract_user_context_from_request(current_user)
     if user_org_id != organization_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to access this organization's knowledge",
-        )
+        raise HTTPException(status_code=403, detail="Not authorized to access this organization's knowledge")
 
     try:
         fact_ids = await kb.ownership_manager.get_organization_facts(
@@ -418,7 +404,7 @@ async def share_knowledge(
             fact_metadata=metadata,
         )
 
-        await kb.redis().hset(f"fact:{fact_id}", "metadata", json.dumps(updated_metadata))
+        await _write_fact_metadata(kb, fact_id, updated_metadata)
 
         logger.info(
             "Shared fact %s with %d users and %d groups",
@@ -483,7 +469,7 @@ async def unshare_knowledge(
             fact_id, entity_id, entity_type, metadata, kb.ownership_manager
         )
 
-        await kb.redis().hset(f"fact:{fact_id}", "metadata", json.dumps(updated_metadata))
+        await _write_fact_metadata(kb, fact_id, updated_metadata)
 
         logger.info("Unshared fact %s from %s %s", fact_id, entity_type, entity_id)
 
@@ -538,20 +524,12 @@ async def update_knowledge_permissions(
         user_id, user_org_id, _ = extract_user_context_from_request(current_user)
         metadata = await _fetch_and_verify_owner(fact_id, user_id, kb.redis())
 
-        # Apply visibility changes and org-level guard to metadata dict
+        # Apply visibility changes, and the org-level and admin-only guards, to metadata dict
         old_visibility = metadata.get("visibility")
-        metadata = _apply_visibility_to_metadata(metadata, permissions_request, user_org_id)
+        metadata = _apply_visibility_to_metadata(metadata, permissions_request, user_org_id, current_user.get("role"))
 
-        # Persist Redis index updates, metadata key, and log
-        await _persist_permissions_update(
-            fact_id=fact_id,
-            user_id=user_id,
-            metadata=metadata,
-            permissions_request=permissions_request,
-            old_visibility=old_visibility,
-            ownership_manager=kb.ownership_manager,
-            redis=kb.redis(),
-        )
+        await _write_fact_metadata(kb, fact_id, metadata)
+        logger.info("Updated fact %s permissions: %s -> %s", fact_id, old_visibility, permissions_request.visibility)
 
         return {
             "success": True,
@@ -603,6 +581,7 @@ async def get_knowledge_access_info(fact_id: str, request: Request, current_user
             user_org_id=user_org_id,
             user_group_ids=user_group_ids,
             ownership_manager=kb.ownership_manager,
+            is_admin=is_admin_role(current_user.get("role")),  # #16662: an explicit read API
         )
         if not has_access:
             raise HTTPException(status_code=403, detail="Access denied")

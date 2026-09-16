@@ -144,6 +144,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/hook_decision_exit_codes_15956_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/one_git_enumeration_15926_test.py",
+            "repo_tests/redis_password_literal_guard_test.py",
             "repo_tests/shell_lib_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
             "repo_tests/slm_frontend_shell_publish_test.py",
@@ -175,6 +176,9 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/ansible_inventory_mapping_renders_anywhere_test.py",
             "repo_tests/ansible_manifest_resolution.py",
             "repo_tests/ansible_pip_isolation_test.py",
+            "repo_tests/ansible_pip_venv_creation_test.py",
+            "repo_tests/ansible_python_interpreter_binary_scope_16750_test.py",
+            "repo_tests/ansible_shared_tasks_code_source_dir_default_16750_test.py",
             "repo_tests/documented_playbook_invocations_test.py",
             "repo_tests/frontend_duplicate_typecheck_compile_guard_test.py",
             "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
@@ -186,6 +190,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/python_interpreter_role_rename_test.py",
             "repo_tests/required_context_complements_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
+            "repo_tests/sync_deletions_ansible_wiring_16310_test.py",
             "repo_tests/test_agent_venv_isolation_14278.py",
             "repo_tests/test_ci_import_smoke_paths_14252.py",
             "repo_tests/test_deploy_constraint_rewrite_14272.py",
@@ -224,12 +229,24 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
     ".github/workflows/*.yaml": (
-        {"repo_tests/python_version_declaration_drift_test.py"},
+        {
+            "repo_tests/python_version_declaration_drift_test.py",
+            "repo_tests/workflow_rc_capture_test.py",
+        },
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
     ".github/workflows/*.yml": (
-        {"repo_tests/comment_line_number_citations_test.py", "repo_tests/python_version_declaration_drift_test.py"},
+        {
+            "repo_tests/comment_line_number_citations_test.py",
+            "repo_tests/python_version_declaration_drift_test.py",
+            "repo_tests/workflow_rc_capture_test.py",
+        },
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
+    ),
+    "libs/autobot-sdk-ts/src/resources/*.ts": (
+        {"repo_tests/sdk_ts_request_contract_test.py"},
+        "reads the TS SDK's own resource-method source to check it against the backend's routes (#15528, "
+        "#16495); `libs/` is outside the python filter's trees",
     ),
     "scripts/lib/*.sh": (
         {"repo_tests/comment_line_number_citations_test.py"},

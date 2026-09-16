@@ -42,3 +42,4 @@ def test_config_stub_redis_config_has_no_attribute_error():
     assert "host" in result
     assert "port" in result
     assert "password" in result
+    assert "username" in result  # #16626: optional ACL username

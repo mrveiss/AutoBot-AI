@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """
 AutoBot Performance Monitor
-Comprehensive performance monitoring system for the 6-VM distributed architecture.
+Comprehensive performance monitoring system for AutoBot's distributed, role-based architecture.
 Tracks resource utilization, API response times, database performance, and hardware acceleration.
 
 Issue #396: Converted blocking subprocess.run to asyncio.create_subprocess_exec.
