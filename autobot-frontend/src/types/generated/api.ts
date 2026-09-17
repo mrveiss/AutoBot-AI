@@ -257,6 +257,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/resource-grants/repair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Repair Resource Grant
+         * @description Grant access to a resource that `is_visible()` denies to everyone.
+         *
+         *     The one in-app remedy for #15779's orphan class: an admin explicitly
+         *     grants a user or group access, which `is_visible()` honors unconditionally
+         *     ahead of any scope rule -- no owner or scope key on the resource itself
+         *     needs to change.
+         */
+        post: operations["repair_resource_grant_api_admin_resource_grants_repair_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/retention-policies": {
         parameters: {
             query?: never;
@@ -90387,6 +90412,41 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** RepairGrantRequest */
+        RepairGrantRequest: {
+            /** Resource Type */
+            resource_type: string;
+            /** Resource Id */
+            resource_id: string;
+            /** Grantee Type */
+            grantee_type: string;
+            /** Grantee Id */
+            grantee_id: string;
+            /**
+             * Permission
+             * @default use
+             */
+            permission: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RepairGrantResponse */
+        RepairGrantResponse: {
+            /** Id */
+            id: string;
+            /** Resource Type */
+            resource_type: string;
+            /** Resource Id */
+            resource_id: string;
+            /** Grantee Type */
+            grantee_type: string;
+            /** Grantee Id */
+            grantee_id: string;
+            /** Permission */
+            permission: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * RepoType
          * @enum {string}
@@ -104423,6 +104483,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    repair_resource_grant_api_admin_resource_grants_repair_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepairGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepairGrantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
