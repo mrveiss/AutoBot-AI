@@ -1251,15 +1251,9 @@ async def provision_fleet(
             "error": None,
         }
 
-    logger.info(
-        "Starting fleet provisioning (nodes: %s)",
-        request.node_ids or "all",
-    )
+    logger.info("Starting fleet provisioning (nodes: %s)", request.node_ids or "all")
 
-    fire_and_forget(
-        _run_provisioning_task(request.node_ids),
-        name=f"fleet-provisioning:{request.node_ids or 'all'}",
-    )
+    fire_and_forget(_run_provisioning_task(request.node_ids), name="fleet-provisioning")
 
     return {
         "status": "started",

@@ -491,11 +491,7 @@ async def execute_playbook(
     )
     _executions[execution_id] = execution
 
-    # Start execution in background
-    fire_and_forget(
-        _run_playbook(execution_id, playbook, request.variables, request.limit_hosts),
-        name=f"infrastructure-playbook:{execution_id}",
-    )
+    fire_and_forget(_run_playbook(execution_id, playbook, request.variables, request.limit_hosts), name=execution_id)
 
     logger.info(
         "Infrastructure playbook execution started: %s (%s) by %s",
