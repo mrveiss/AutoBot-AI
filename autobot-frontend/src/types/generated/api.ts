@@ -41392,6 +41392,14 @@ export interface paths {
          * @description Emergency stop for all autonomous operations
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #16843: request_takeover was never given affected_tasks, so it
+         *     always defaulted to an empty list and the "stop" paused nothing while
+         *     still reporting success. Enumerate what's actually running right now
+         *     and report what was found, so an empty result means "nothing was
+         *     running" rather than silently meaning nothing was ever checked. This
+         *     marks tasks paused for audit/visibility; it does not yet interrupt
+         *     in-flight execution -- no code path currently checks paused-task state
+         *     before continuing work, which is the still-open question on #16843.
          */
         post: operations["emergency_system_stop_api_advanced_control_system_emergency_stop_post"];
         delete?: never;
@@ -54807,6 +54815,8 @@ export interface components {
             message: string;
             /** Takeover Request Id */
             takeover_request_id: string;
+            /** Tasks Paused */
+            tasks_paused: string[];
         } & {
             [key: string]: unknown;
         };
