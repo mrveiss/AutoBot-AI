@@ -11,6 +11,17 @@ repository declares ``runs-on: ubuntu-latest``, so the self-hosted pool serves n
 job at all — an operator sent to look at it finds one runner offline, which looks
 like the answer and is not.
 
+**Why the contention message names a pool and two counts.** The branch this
+covers used to publish *"N run(s) queued over Mm behind a busy queue"*. That is
+true and an operator can act on none of it: it does not say which pool is the
+limit, and the watchdog's whole failure here was naming the wrong one. The
+replacement states that HOSTED concurrency is saturated and how far over it the
+queue is, so the next reader is not sent to the self-hosted pool again.
+
+Kept here rather than beside the code deliberately: `ci_dispatch_watchdog.py`
+sits at its recorded size ceiling, and reasoning belongs somewhere it can be
+written in full rather than compressed until it stops explaining anything.
+
 `run_requires_self_hosted` is the filter that keeps the outage verdict honest.
 These tests pin it from both directions, because a filter that suppressed
 everything would pass a one-sided test while hiding a genuine outage.

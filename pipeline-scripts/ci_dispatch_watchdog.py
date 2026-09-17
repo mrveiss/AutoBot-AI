@@ -663,25 +663,13 @@ def classify_dispatch(
                     f"with no runner available: {names}"
                 ),
             )
-        # Contention, not an outage — still never green, because the head is
-        # demonstrably not verified yet.
-        #
-        # #16309: name the counts. "behind a busy queue" is true and tells an
-        # operator nothing they can act on; the actionable fact is that HOSTED
-        # concurrency is the limit, and how far over it we are. The watchdog's
-        # whole failure in #16309 was pointing at the self-hosted pool — which
-        # serves no job in this repository — while hosted saturation was the
-        # real cause, so the replacement message has to say which pool.
+        # Contention, not an outage — still never green. #16309: name the pool and
+        # the counts; reasoning in ci_dispatch_watchdog_test.py's module docstring.
         names = ", ".join(sorted({str(run.get("name", "?")) for run in starved})[:3])
         queued_now = sum(1 for run in runs if str(run.get("status") or "") in STUCK_QUEUE_STATUSES)
         running_now = sum(1 for run in runs if str(run.get("status") or "") == "in_progress")
-        return (
-            "pending",
-            _truncate(
-                f"hosted-runner concurrency saturated ({queued_now} queued, {running_now} running); "
-                f"{len(starved)} run(s) queued over {stall_minutes}m: {names}"
-            ),
-        )
+        saturated = f"hosted-runner concurrency saturated ({queued_now} queued, {running_now} running)"
+        return ("pending", _truncate(f"{saturated}; {len(starved)} run(s) queued over {stall_minutes}m: {names}"))
 
     if not runs:
         waited = age_minutes(head_pushed_at, now)
