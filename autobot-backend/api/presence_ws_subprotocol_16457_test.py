@@ -29,7 +29,9 @@ def _fake_ws(*, protocols: str = "bearer, sometoken") -> AsyncMock:
     ws.accept = AsyncMock()
     ws.close = AsyncMock()
     ws.headers = MagicMock()
-    ws.headers.get = MagicMock(side_effect=lambda key, default="": protocols if key == "sec-websocket-protocol" else default)
+    ws.headers.get = MagicMock(
+        side_effect=lambda key, default="": protocols if key == "sec-websocket-protocol" else default
+    )
     return ws
 
 

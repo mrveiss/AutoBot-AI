@@ -44,7 +44,11 @@ export class MockWebSocket {
   }
 
   private _dispatch(type: string, event: Event) {
-    for (const entry of [...(this._listeners[type] ?? [])]) {
+    // Snapshot before iterating: a listener added by another listener's
+    // callback during this dispatch must not fire for the current event,
+    // matching real EventTarget semantics -- addEventListener above mutates
+    // the array in place, so iterating it directly would pick that up.
+    for (const entry of Array.from(this._listeners[type] ?? [])) {
       entry.fn(event)
       if (entry.once) {
         this._listeners[type] = this._listeners[type].filter((l) => l !== entry)

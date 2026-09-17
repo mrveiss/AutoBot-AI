@@ -221,7 +221,9 @@ async def test_handler_echoes_bearer_subprotocol_when_offered(protocols: str, ex
     ws.send_json = AsyncMock()
     ws.send_text = AsyncMock()
     ws.headers = MagicMock()
-    ws.headers.get = MagicMock(side_effect=lambda key, default="": protocols if key == "sec-websocket-protocol" else default)
+    ws.headers.get = MagicMock(
+        side_effect=lambda key, default="": protocols if key == "sec-websocket-protocol" else default
+    )
 
     from fastapi import WebSocketDisconnect
 

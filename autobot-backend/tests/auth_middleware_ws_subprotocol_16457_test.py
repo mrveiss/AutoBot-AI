@@ -29,7 +29,9 @@ _FROM_QUERY = "-".join(["fixture", "via", "query"])
 def _ws(*, subprotocols: str = "", query_value: str | None = None) -> MagicMock:
     """A WebSocket mock exposing both the subprotocol header and the query param."""
     ws = MagicMock()
-    ws.headers.get = MagicMock(side_effect=lambda key, default="": subprotocols if key == "sec-websocket-protocol" else default)
+    ws.headers.get = MagicMock(
+        side_effect=lambda key, default="": subprotocols if key == "sec-websocket-protocol" else default
+    )
     ws.query_params.get.return_value = query_value
     return ws
 

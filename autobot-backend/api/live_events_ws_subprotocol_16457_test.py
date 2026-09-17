@@ -30,7 +30,9 @@ def _fake_ws(*, protocols: str = "", client_state=WebSocketState.DISCONNECTED) -
     ws.close = AsyncMock()
     ws.send_json = AsyncMock()
     ws.headers = MagicMock()
-    ws.headers.get = MagicMock(side_effect=lambda key, default="": protocols if key == "sec-websocket-protocol" else default)
+    ws.headers.get = MagicMock(
+        side_effect=lambda key, default="": protocols if key == "sec-websocket-protocol" else default
+    )
     ws.client_state = client_state
     ws.client = "test-client"
     return ws
