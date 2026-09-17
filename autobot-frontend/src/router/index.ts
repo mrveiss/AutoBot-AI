@@ -222,7 +222,7 @@ export const routes: RouteRecordRaw[] = [
         // Issue #1256: Observable Research Panel — live browser collaboration
         path: 'research',
         name: 'knowledge-research',
-        component: () => import('@/components/knowledge/KnowledgeResearchPanel.vue'),
+        component: () => import('@/components/knowledge/KnowledgeResearchTabs.vue'),
         meta: {
           title: 'Research',
           parent: 'knowledge'
@@ -260,23 +260,21 @@ export const routes: RouteRecordRaw[] = [
       },
       {
         // Issue #3850: web research settings UI
+        // #16900: folded into the Research surface as a tab. Kept as a
+        // redirect rather than deleted — the same treatment
+        // /knowledge/watch-folders and /knowledge/connectors got — so
+        // existing links and bookmarks survive.
         path: 'web-research-settings',
-        name: 'knowledge-web-research-settings',
-        component: () => import('@/components/knowledge/WebResearchSettings.vue'),
-        meta: {
-          title: 'Web Research Settings',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/research?tab=settings'
       },
       {
         // MVA-344: 4-tab web research panel (Fetch Page / Crawl Site / Find Pages / Get Data)
+        // #16900: folded into the Research surface as a tab. Kept as a
+        // redirect rather than deleted — the same treatment
+        // /knowledge/watch-folders and /knowledge/connectors got — so
+        // existing links and bookmarks survive.
         path: 'web-research',
-        name: 'knowledge-web-research',
-        component: () => import('@/components/knowledge/WebResearchPanel.vue'),
-        meta: {
-          title: 'Web Research',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/research?tab=webTools'
       },
       {
         path: 'manpages',
