@@ -169,6 +169,7 @@ class RedactedReprMixin:
 # Content-scanning companion (#13708)
 # ---------------------------------------------------------------------------
 
+
 #: One detected credential-shaped span in free text: which rule matched, where,
 #: and how confident the rule is. Structured so a caller can quarantine or log
 #: instead of only ever getting back a mangled string with no explanation.
