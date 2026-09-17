@@ -25,8 +25,14 @@ from header_safe_secret import HeaderUnsafeSecret, require_header_safe
 
 # Distinctive so a substring check cannot pass by accident, and shaped like the
 # real failure: a token with a stray character from a bad paste or a truncation.
-LEAKY = "ghp_AaBbCcDd1234567890EeFfGg"
-GOOD = "ghp_0123456789abcdefghijklmnopqrstuvwx"
+#
+# Fabricated, never issued, and shaped like a GitHub PAT on purpose -- a fixture
+# that did not look like the real thing would not exercise the header check. The
+# allowlist pragmas are what detect-secrets reads; without them the whole-tree
+# scan reports two Base64HighEntropyString findings that are not in the audited
+# baseline, and every PR carrying this file fails Secret Detection (#16444).
+LEAKY = "ghp_AaBbCcDd1234567890EeFfGg"  # pragma: allowlist secret
+GOOD = "ghp_0123456789abcdefghijklmnopqrstuvwx"  # pragma: allowlist secret
 
 MALFORMED = {
     "newline": f"{LEAKY}\nX-Injected: 1",
