@@ -23,8 +23,8 @@ import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from autobot_shared.async_compat import fire_and_forget
 from api.websocket import ws_manager
+from autobot_shared.async_compat import fire_and_forget
 from config import settings
 from services.ansible_secrets import fetch_deploy_secrets
 from services.auth import get_current_user
