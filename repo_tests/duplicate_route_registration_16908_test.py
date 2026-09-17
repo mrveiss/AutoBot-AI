@@ -114,10 +114,20 @@ def _scan_duplicates() -> dict[tuple[str, str], list[str]]:
     from autobot_shared.api_routing.router_routes import effective_routes
 
     registered = _load_registered_routers()
-    assert len(registered) > 200, (
-        f"only {len(registered)} router registrations found -- load_core_routers()/"
-        "load_optional_routers() population collapsed (a broken import, an empty "
-        "tree); a guard silently sweeping nothing is worse than not running "
+    # Floor, not a loose sanity threshold: load_core_routers()/load_optional_
+    # routers() already swallow a per-module import failure internally (each
+    # load_X_routers() helper catches and logs, so a broken module is simply
+    # absent from the returned list rather than raising) -- the same silent-
+    # drop shape #16917's `if module:` has. 273 is today's real count,
+    # cross-checked once against an independent by-hand sweep of registry
+    # entries (273/273). Only ever raise this floor when the real count
+    # grows past it; never lower it to make a regression pass.
+    assert len(registered) >= 273, (
+        f"only {len(registered)} router registrations found, below the known "
+        "floor of 273 -- load_core_routers()/load_optional_routers() population "
+        "shrank (a module that used to import cleanly is now silently absent, "
+        "or the tree genuinely lost routers); a guard silently sweeping fewer "
+        "modules than it used to is worse than not running "
         "(see MEASUREMENT_DISCIPLINE.md)"
     )
 
