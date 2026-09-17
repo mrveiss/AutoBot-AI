@@ -41,13 +41,14 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     # --- provider credential. Same classification IRREDUCIBLE_KEYS documents for
     # --- autobot_internal_api_key in autobot-slm-backend/services/system_secrets_vault.py.
     ("autobot-backend/agents/base_agent.py", "mcp_token"): f"{_AUTH_BOOTSTRAP}: internal MCP server shared secret",
-    ("autobot-backend/mcp/autobot_server.py", "mcp_token"): f"{_AUTH_BOOTSTRAP}: internal MCP server shared secret",
+    (
+        "autobot-backend/mcp_server/autobot_server.py",
+        "mcp_token",
+    ): f"{_AUTH_BOOTSTRAP}: internal MCP server shared secret",
     ("autobot-backend/services/execution/claude_code_backend.py", "mcp_token"): (
         f"{_AUTH_BOOTSTRAP}: internal MCP server shared secret"
     ),
-    ("autobot-backend/auth_middleware.py", "jwt_secret"): (
-        f"{_AUTH_BOOTSTRAP}: platform user-session signing key"
-    ),
+    ("autobot-backend/auth_middleware.py", "jwt_secret"): (f"{_AUTH_BOOTSTRAP}: platform user-session signing key"),
     ("autobot-backend/services/slm_client.py", "jwt_secret"): (
         f"{_AUTH_BOOTSTRAP}: platform user-session signing key, reused to mint SLM service JWTs"
     ),
@@ -84,11 +85,12 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     # --- same class as the Postgres password above -- the app's own storage
     # --- layer must be reachable before anything, including the vault, can start.
     ("autobot-backend/api/npu_workers.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
-    ("autobot-backend/celery_app.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
     ("autobot-backend/config/__init__.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
     ("autobot-backend/config/defaults.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
     ("autobot-backend/config/service_config.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
     ("autobot-backend/knowledge/base.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
+    ("autobot-slm-backend/services/redis_cli_auth.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
+    ("autobot-slm-backend/services/replication.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
     ("autobot-backend/utils/async_chromadb_client.py", "chromadb_auth_token"): (
         f"{_AUTH_BOOTSTRAP}: internal ChromaDB data-layer service credential"
     ),

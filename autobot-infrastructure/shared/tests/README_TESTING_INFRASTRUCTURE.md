@@ -2,18 +2,21 @@
 
 ## Overview
 
-This comprehensive testing infrastructure validates all AutoBot Phase 9 features and ensures production readiness across the distributed VM architecture. The testing suite covers functional testing, performance validation, integration testing, monitoring verification, and CI/CD pipeline integration.
+This comprehensive testing infrastructure validates all AutoBot Phase 9 features and ensures production readiness across AutoBot's distributed, role-based architecture — Docker, a single VM, or however many machines a deployment scales to. The testing suite covers functional testing, performance validation, integration testing, monitoring verification, and CI/CD pipeline integration.
 
 ## Architecture Tested
 
-**Distributed VM Infrastructure:**
-- **Main Machine (WSL)**: `172.16.168.20:8001` - Backend API
-- **VM1 Frontend**: `172.16.168.21:5173` - Vue 3 Web Interface  
-- **VM2 NPU Worker**: `172.16.168.22:8081` - Intel NPU AI Acceleration
-- **VM3 Redis**: `172.16.168.23:6379` - Data Layer (11 databases)
-- **VM4 AI Stack**: `172.16.168.24:8080` - AI Processing Pipeline
-- **VM5 Browser**: `172.16.168.25:3000` - Playwright Web Automation
+**Distributed, Role-Based Infrastructure:**
+- **Main / Control (`<backend-ip>:8001`)**: Backend API
+- **Frontend role (`<frontend-ip>:5173`)**: Vue 3 Web Interface
+- **NPU Worker role (`<npu-ip>:8081`)**: Intel NPU AI Acceleration
+- **Database role (`<database-ip>:6379`)**: Redis - Data Layer (11 databases)
+- **AI Stack role (`<aiml-ip>:8080`)**: AI Processing Pipeline
+- **Browser role (`<browser-ip>:3000`)**: Playwright Web Automation
 - **Local Services**: Ollama LLM (127.0.0.1:11434), VNC Desktop (127.0.0.1:6080)
+
+Each role can be co-located on one machine (Docker or a single VM) or split onto its own
+machine — there is no fixed count.
 
 ## Test Suite Components
 
@@ -21,7 +24,7 @@ This comprehensive testing infrastructure validates all AutoBot Phase 9 features
 **File**: `tests/phase9_comprehensive_test_suite.py`
 
 Tests all core Phase 9 features:
-- ✅ **Distributed VM Architecture Connectivity** (6-VM communication validation)
+- ✅ **Distributed, Role-Based Architecture Connectivity** (cross-role communication validation)
 - ✅ **Backend API Comprehensive Validation** (518+ endpoints testing)
 - ✅ **ConsolidatedChatWorkflow System** (Hot reload, caching, multi-agent coordination)
 - ✅ **Knowledge Base Integration** (13,383 vectors, semantic search)
@@ -226,7 +229,7 @@ python tests/integration/test_distributed_system_integration.py
 **Backend Connectivity Issues:**
 ```bash
 # Check backend health
-curl http://172.16.168.20:8001/api/health
+curl http://<backend-ip>:8001/api/health
 
 # Verify service status
 docker compose ps
@@ -234,10 +237,10 @@ docker compose ps
 
 **Distributed System Communication:**
 ```bash
-# Test VM connectivity
-ping 172.16.168.21  # Frontend
-ping 172.16.168.23  # Redis
-ping 172.16.168.24  # AI Stack
+# Test connectivity to each role's machine
+ping <frontend-ip>  # Frontend
+ping <database-ip>  # Redis
+ping <aiml-ip>       # AI Stack
 ```
 
 **Performance Test Failures:**
@@ -255,10 +258,10 @@ htop
 **Knowledge Base Integration:**
 ```bash
 # Verify knowledge base statistics
-curl http://172.16.168.20:8001/api/knowledge_base/stats/basic
+curl http://<backend-ip>:8001/api/knowledge_base/stats/basic
 
 # Test search functionality
-curl -X POST http://172.16.168.20:8001/api/knowledge_base/search \
+curl -X POST http://<backend-ip>:8001/api/knowledge_base/search \
   -H "Content-Type: application/json" \
   -d '{"query": "test search", "limit": 5}'
 ```

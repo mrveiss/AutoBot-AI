@@ -83,6 +83,17 @@ class ManifestService(BaseModel):
     exec_start: str | None = Field(default=None, description="Override ExecStart command")
     user: str | None = Field(default=None, description="Override service user (default: autobot-<role>)")
     environment_file: str | None = Field(default=None, description="Override environment file path")
+    #: #16025: which `role_registry.DEFAULT_ROLES` name(s) this service belongs
+    #: to, when that is narrower than -- or different from -- the manifest's own
+    #: `role`. A manifest that models one independently-deployable unit (e.g.
+    #: `autobot-database`) can still back several separately-assignable SLM
+    #: registry roles (`redis`, `postgres`, `chromadb`); one manifest service
+    #: can also back more than one hardware-variant registry role (`ollama`
+    #: backs both `autobot-llm-cpu` and `autobot-llm-gpu`). Empty means the
+    #: service is reached only through its manifest's own `role` (the direct
+    #: match in `role_registry._find_role_manifest`), never through this
+    #: narrower lookup.
+    slm_roles: List[str] = Field(default_factory=list)
 
 
 class ManifestPort(BaseModel):

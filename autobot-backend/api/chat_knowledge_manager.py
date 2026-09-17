@@ -41,6 +41,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 from constants.threshold_constants import CategoryDefaults
+from knowledge.ownership_index import drop_ownership_unless_admin
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
@@ -326,7 +327,8 @@ class ChatKnowledgeManager:
                 # Issue #547: Include source_session_id for orphan cleanup
                 # Issue #688: Include ownership metadata for chat-derived facts
                 metadata = {
-                    **item.get("metadata", {}),
+                    # #16663: the stored item is caller-sent and this path has no caller role
+                    **drop_ownership_unless_admin(item.get("metadata", {}), None),
                     "source": f"chat_{chat_id}",
                     "source_session_id": chat_id,  # Issue #547: Track source session
                     "original_id": knowledge_id,

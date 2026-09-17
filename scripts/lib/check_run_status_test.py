@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,7 @@ from check_run_status import (  # noqa: E402
     check_run_status,
     latest_per_name,
     latest_runs,
+    pending_ages,
     rank,
     split_by_state,
 )
@@ -286,3 +288,40 @@ def test_latest_runs_accepts_the_context_key_as_well_as_name() -> None:
 def test_latest_runs_drops_an_entry_with_no_identifying_key() -> None:
     """An unnamed run cannot be grouped, and must not become a nameless winner."""
     assert latest_runs([{"conclusion": "failure"}]) == []
+
+
+def _iso(seconds_ago: float) -> str:
+    return (datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_a_running_context_reports_how_long_it_has_been_pending() -> None:
+    """#16126: the signal a bare reported/not-green state throws away.
+
+    Nine minutes pending while the repo is still scheduling is fresh; thirty
+    minutes with nothing else moving is stuck -- indistinguishable without this.
+    """
+    runs = [_run("watchdog", _iso(600), None, status="in_progress")]
+    ages = pending_ages(runs)
+    assert "watchdog" in ages
+    assert 590 <= ages["watchdog"] <= 620, ages["watchdog"]
+
+
+def test_a_finished_context_carries_no_age() -> None:
+    """A completed run's `started_at` is real but stale -- it must not be reported as pending."""
+    runs = [_run("ci", _iso(3600), "success")]
+    assert pending_ages(runs) == {}
+
+
+def test_only_the_newest_observation_is_measured() -> None:
+    """Mirrors latest_runs: a superseded pending observation must not win over a finished one."""
+    runs = [
+        _run("code-quality", _iso(1800), None, status="in_progress"),
+        _run("code-quality", _iso(60), "success"),
+    ]
+    assert pending_ages(runs) == {}
+
+
+def test_an_unparseable_timestamp_is_omitted_not_raised() -> None:
+    """A malformed timestamp must not crash a caller that is only trying to triage."""
+    runs = [_run("flaky-source", "not-a-timestamp", None, status="queued")]
+    assert pending_ages(runs) == {}

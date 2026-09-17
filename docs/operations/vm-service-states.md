@@ -4,16 +4,16 @@
 **Issue**: #432
 **Last Updated**: 2025-12-23
 
-This document describes the expected states of VM services in the AutoBot infrastructure,
+This document describes the expected states of AutoBot's services across its role-based infrastructure,
 including graceful degradation behavior and how to manage service availability.
 
 ---
 
 ## Overview
 
-AutoBot uses a distributed VM infrastructure with 5 VMs plus the main WSL machine. Not all
-services need to be running at all times - the system is designed to gracefully handle
-offline services through circuit breakers and intelligent log suppression.
+AutoBot uses a distributed, role-based infrastructure — Docker, a single VM, or however many machines a
+deployment scales to. Not all services need to be running at all times - the system is designed to gracefully
+handle offline services through circuit breakers and intelligent log suppression.
 
 ---
 
@@ -21,22 +21,22 @@ offline services through circuit breakers and intelligent log suppression.
 
 ### Critical Services (Required for Core Functionality)
 
-| Service | VM | IP:Port | Description |
+| Service | Role | IP:Port | Description |
 |---------|-----|---------|-------------|
-| **Backend API** | Main (WSL) | <backend-ip>:8443 | Core backend - must always be running |
-| **Redis** | VM3 | <database-ip>:6379 | Data layer - required for caching, sessions, queues |
+| **Backend API** | Main / Control (WSL) | <backend-ip>:8443 | Core backend - must always be running |
+| **Redis** | Database | <database-ip>:6379 | Data layer - required for caching, sessions, queues |
 
 **If these are offline**: System will not function properly. Immediate attention required.
 
 ### Optional Services (Enhanced Features)
 
-| Service | VM | IP:Port | Description | When Offline |
+| Service | Role | IP:Port | Description | When Offline |
 |---------|-----|---------|-------------|--------------|
-| **Frontend** | VM1 | <frontend-ip>:5173 | Web interface | Use backend API directly |
-| **NPU Worker** | VM2 | <npu-ip>:8081 | Hardware AI acceleration | Falls back to CPU inference |
-| **AI Stack** | VM4 | <aiml-ip>:8080 | AI processing stack | Limited AI features |
-| **Ollama** | VM4 | <aiml-ip>:11434 | Local LLM inference | Uses fallback LLM providers |
-| **Browser Automation** | VM5 | <browser-ip>:3000 | Playwright automation | Web scraping unavailable |
+| **Frontend** | Frontend | <frontend-ip>:5173 | Web interface | Use backend API directly |
+| **NPU Worker** | AI/ML (NPU worker) | <npu-ip>:8081 | Hardware AI acceleration | Falls back to CPU inference |
+| **AI Stack** | AI/ML | <aiml-ip>:8080 | AI processing stack | Limited AI features |
+| **Ollama** | AI/ML | <aiml-ip>:11434 | Local LLM inference | Uses fallback LLM providers |
+| **Browser Automation** | Browser | <browser-ip>:3000 | Playwright automation | Web scraping unavailable |
 
 **If these are offline**: System continues with reduced functionality. Non-urgent.
 
@@ -67,7 +67,7 @@ In production, all services should ideally be running:
 
 ## Service States
 
-The VM service registry tracks the following states:
+The service registry tracks the following states:
 
 | State | Description | Log Behavior |
 |-------|-------------|--------------|
@@ -95,28 +95,28 @@ intelligent log suppression:
 
 ```
 # First failure
-WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081
+WARNING: service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081
 
 # Second failure
-WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081
+WARNING: service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081
 
 # Third failure
-WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081
+WARNING: service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081
 
 # Fourth failure (suppression begins)
-WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081
+WARNING: service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081
 
 # Next 60 seconds of failures: no logs
 
 # After 60 seconds
-WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081 (47 similar errors suppressed)
+WARNING: service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081 (47 similar errors suppressed)
 ```
 
 ---
 
 ## Circuit Breaker Integration
 
-Each VM service has a dedicated circuit breaker that:
+Each service has a dedicated circuit breaker that:
 
 1. **Tracks failures**: Opens after 5 consecutive failures
 2. **Prevents hammering**: Stops health checks to failing service
@@ -203,7 +203,7 @@ curl http://localhost:8001/api/vm-services/critical
 
 ### Service Won't Come Online
 
-1. **Check VM is running**: `ssh autobot@<node-ip> "hostname"`
+1. **Check the host is running**: `ssh autobot@<node-ip> "hostname"`
 2. **Check service is started**: SSH in and check service status
 3. **Check port is listening**: `netstat -tlnp | grep <port>`
 4. **Check firewall rules**: Ensure port is accessible

@@ -58,8 +58,8 @@ slm_self_update_socket_mode: "0660"
 # ==========================================================
 slm_tls_cert: "{{ slm_certs_dir }}/server-cert.pem"
 slm_tls_key: "{{ slm_certs_dir }}/server-key.pem"
-slm_tls_days: 365
-slm_tls_subject: "/C=US/ST=State/L=City/O=AutoBot/CN={{ ansible_host }}"
+# slm_tls_days / slm_tls_subject retired (#16020): generation is now the
+# shared _shared/tasks/ensure_node_tls_cert.yml, which owns those values.
 
 # ==========================================================
 # Nginx Configuration
@@ -171,6 +171,13 @@ grafana_health_check_delay: 5          # Seconds between retries
 # and the backend env template. Empty here means "generate one" -- set it in
 # group_vars/vault only to pin a specific value, never commit a real one.
 chromadb_auth_token: ""
+
+# #16627 (P1b of #13568): the Redis credential, written into slm-secrets.env and read
+# back by every consumer. Empty password means "generate one"; set it in
+# group_vars/vault only to pin a value, never commit a real one. The username is
+# the ACL user the password is sent as -- `default` while the server stays nopass.
+slm_redis_password: ""
+slm_redis_username: default
 
 # #13307: where the SLM writes backups. Must match config.py's `backup_dir`
 # default (and SLM_BACKUP_DIR if that is set) — the service creates the path at

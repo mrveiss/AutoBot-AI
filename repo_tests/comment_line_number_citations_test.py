@@ -124,16 +124,24 @@ _SELF = "repo_tests/comment_line_number_citations_test.py"
 #: This list may shrink. It must never grow.
 _BASELINE = frozenset(
     {
-        ("autobot-slm-backend/ansible/roles/_shared/tasks/clean_wrong_node_dir.yml", "lib/ansible/plugins/action/set_fact.py:54"),
+        (
+            "autobot-slm-backend/ansible/roles/_shared/tasks/clean_wrong_node_dir.yml",
+            "lib/ansible/plugins/action/set_fact.py:54",
+        ),
         ("autobot-slm-backend/ansible/roles/slm_manager/tasks/service_units.yml", "bind_self_update_socket.yml:32"),
         ("autobot-slm-backend/ansible/roles/slm_manager/tasks/service_units.yml", "main.yml:673"),
         ("repo_tests/bare_default_route_dependency_guard_test.py", "api/knowledge.py:2035"),
-        ("repo_tests/bare_default_route_dependency_guard_test.py", "repo_tests/with_error_handling_single_definition_test.py:134"),
-        ("repo_tests/credential_vault_resolution_guard_test.py", "initialization/lifespan.py:1353"),
+        (
+            "repo_tests/bare_default_route_dependency_guard_test.py",
+            "repo_tests/with_error_handling_single_definition_test.py:134",
+        ),
         ("repo_tests/deployment_script_imports_resolve_test.py", "test_startup_coordinator.sh:15"),
         ("repo_tests/first_party_symbols_bound_test.py", "api/heartbeat.py:38"),
         ("repo_tests/first_party_symbols_bound_test.py", "autobot-backend/models/settings.py:24"),
-        ("repo_tests/fixture_fixed_path_teardown_guard_test.py", "api/codebase_analytics/endpoints/report_scoping_test.py:384"),
+        (
+            "repo_tests/fixture_fixed_path_teardown_guard_test.py",
+            "api/codebase_analytics/endpoints/report_scoping_test.py:384",
+        ),
         ("repo_tests/fixture_fixed_path_teardown_guard_test.py", "services/knowledge/code_graph_provenance_test.py:95"),
         ("repo_tests/frontend_duplicate_typecheck_compile_guard_test.py", "frontend-test.yml:132"),
         ("repo_tests/sdk_response_model_contract_test.py", "api/agent_config.py:1024"),
@@ -142,13 +150,22 @@ _BASELINE = frozenset(
         ("repo_tests/severity_literal_shape_guard_test.py", "autobot_shared/env_drift_detector.py:55"),
         ("repo_tests/slm_self_update_socket_activation_order_test.py", "main.yml:673"),
         ("repo_tests/test_ci_import_smoke_paths_14252.py", "verify-generated-types.yml:216"),
-        ("repo_tests/test_module_path_anchors_15181_test.py", "autobot-backend/tests/unit/test_agents_status_pg_optional.py:54"),
+        (
+            "repo_tests/test_module_path_anchors_15181_test.py",
+            "autobot-backend/tests/unit/test_agents_status_pg_optional.py:54",
+        ),
         ("repo_tests/test_module_path_anchors_15181_test.py", "scripts/test_first_remediation.py:32"),
         ("repo_tests/test_module_path_anchors_15181_test.py", "test_agents_status_pg_optional.py:54"),
         ("repo_tests/transformers_resume_download_guard_test.py", "llm_shared/optimization/hf_quantizer.py:97"),
-        ("repo_tests/unprefixed_placeholder_string_test.py", "autobot-backend/api/codebase_analytics/config_duplication_detector.py:510"),
+        (
+            "repo_tests/unprefixed_placeholder_string_test.py",
+            "autobot-backend/api/codebase_analytics/config_duplication_detector.py:510",
+        ),
         ("repo_tests/with_error_handling_single_definition_test.py", "repo_tests/lint/canonical/test_context.py:76"),
-        ("repo_tests/with_error_handling_single_definition_test.py", "scripts/check_ansible_file_references_test.py:40"),
+        (
+            "repo_tests/with_error_handling_single_definition_test.py",
+            "scripts/check_ansible_file_references_test.py:40",
+        ),
     }
 )
 
@@ -253,7 +270,9 @@ def test_the_scan_can_see_inside_docstrings() -> None:
         (rel, number, cite)
         for rel, number, cite in _scan()
         if rel.endswith(".py")
-        and not (line := (_ROOT / rel).read_text(encoding="utf-8", errors="replace").splitlines()[number - 1]).strip().startswith("#")
+        and not (line := (_ROOT / rel).read_text(encoding="utf-8", errors="replace").splitlines()[number - 1])
+        .strip()
+        .startswith("#")
         and '"""' not in line
     ]
     assert deep, (

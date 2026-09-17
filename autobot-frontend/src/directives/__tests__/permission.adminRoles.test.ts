@@ -49,6 +49,6 @@ describe('v-permission and administrative roles (#14937)', () => {
   })
 
   it('still shows the signed-out set when nobody is signed in', () => {
-    expect(renderWith(null, 'chat:use').style.display).not.toBe('none')
+    expect(renderWith(null, 'knowledge.read').style.display).not.toBe('none')
   })
 })

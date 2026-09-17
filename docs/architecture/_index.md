@@ -25,8 +25,7 @@ dated `> **Freshness:**` marker.
 | [README](README.md) | Architecture overview |
 | [INDEX](INDEX.md) | Code-vectorization sub-index (historical) |
 | [VISUAL_ARCHITECTURE](VISUAL_ARCHITECTURE.md) | Visual architecture diagram |
-| [DISTRIBUTED_6VM_ARCHITECTURE](DISTRIBUTED_6VM_ARCHITECTURE.md) | 6-VM distributed deployment (historical completion record) |
-| [DISTRIBUTED_ARCHITECTURE](DISTRIBUTED_ARCHITECTURE.md) | Distributed architecture |
+| [DISTRIBUTED_ARCHITECTURE](DISTRIBUTED_ARCHITECTURE.md) | Canonical, count-free distributed architecture (roles, not VM count) |
 | [VM_ROLES](VM_ROLES.md) | VM role definitions — services, ports, Ansible groups |
 | [NETWORK_TOPOLOGY](NETWORK_TOPOLOGY.md) | Network topology |
 | [data-flows](data-flows.md) | Data flow diagrams |
@@ -138,6 +137,7 @@ Kubernetes migration strategy moved to [`docs/planning/Kubernetes_Migration_Stra
 
 | Was here | Now at | Kind |
 | --- | --- | --- |
+| `DISTRIBUTED_6VM_ARCHITECTURE.md` | [`docs/archives/DISTRIBUTED_6VM_SETUP_20250912.md`](../archives/DISTRIBUTED_6VM_SETUP_20250912.md) | historical completion record (#15194) |
 | `BACKEND_CRITICAL_ISSUES_ARCHITECTURAL_ANALYSIS.md` | [`docs/analysis/ANA_backend-critical-issues-architectural-2025-10-05.md`](../analysis/ANA_backend-critical-issues-architectural-2025-10-05.md) | analysis |
 | `CONFIG_CONSOLIDATION_ANALYSIS.md` | [`docs/analysis/ANA_config-consolidation-2025-11-17.md`](../analysis/ANA_config-consolidation-2025-11-17.md) | analysis |
 | `TERMINAL_CONSOLIDATION_ANALYSIS.md` | [`docs/analysis/ANA_terminal-consolidation-2025-11-09.md`](../analysis/ANA_terminal-consolidation-2025-11-09.md) | analysis |
@@ -158,9 +158,11 @@ Kubernetes migration strategy moved to [`docs/planning/Kubernetes_Migration_Stra
 
 ## Not relocated despite a completion/assessment shape (open decisions, see #15190/#15191)
 
-`KB-ASYNC-014-COMPLETION-SUMMARY.md`, `MEMORY_GRAPH_CHAT_INTEGRATION.md`, `VECTOR_STORE_MIGRATION.md`
-and `DISTRIBUTED_6VM_ARCHITECTURE.md` are completion records; relocating them out of this folder is
-#15191's scope (the changelog/completion-record overload), not #15192's. `FRONTEND_ARCHITECTURE_ASSESSMENT.md`,
+`KB-ASYNC-014-COMPLETION-SUMMARY.md`, `MEMORY_GRAPH_CHAT_INTEGRATION.md` and `VECTOR_STORE_MIGRATION.md`
+are completion records; relocating them out of this folder is #15191's scope (the
+changelog/completion-record overload), not #15192's. `DISTRIBUTED_6VM_ARCHITECTURE.md` was
+relocated to `docs/archives/` under #15194 (fixed VM count), ahead of #15191's general sweep.
+`FRONTEND_ARCHITECTURE_ASSESSMENT.md`,
 `TERMINAL_INTEGRATION_ARCHITECTURE_VALIDATION.md` and `agent-belief-state-benchmark.md` have an
 open `*_ASSESSMENT.md`/validation-record classification question recorded on #15190 that has not been
 settled — left in place rather than guessed at.

@@ -36,6 +36,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from api.ws_security import enforce_ws_origin
+from auth_middleware import authenticate_websocket
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -323,6 +324,14 @@ async def _cleanup_ws_tasks(
 async def voice_stream_ws(websocket: WebSocket) -> None:
     """Full-duplex voice conversation WebSocket (#1031, #1319)."""
     if not await enforce_ws_origin(websocket):
+        return
+    # #15745: matches api/websockets.py's convention (#2818) -- authenticate
+    # before accepting, but accept-then-close on rejection so the client gets
+    # a real close frame (code + reason) rather than an HTTP 403 (#12366).
+    user = await authenticate_websocket(websocket)
+    if user is None:
+        await websocket.accept()
+        await websocket.close(code=4001, reason="Authentication required")
         return
     await websocket.accept()
     logger.info("Voice stream WebSocket connected")

@@ -1272,7 +1272,7 @@ sudo systemctl restart autobot-backend
 # Step 2.3: Remove deprecated function
 # Delete check_file_permissions() function (lines 123-180)
 
-# Step 2.4: Sync to VM4 (AI Stack - Backend)
+# Step 2.4: Sync to the AI/ML role (AI Stack - Backend)
 ./scripts/utilities/sync-to-vm.sh ai-stack autobot-backend/api/files.py /home/autobot/autobot-backend/api/
 
 # Step 2.5: Restart backend
@@ -1318,7 +1318,7 @@ curl https://<backend-ip>:8443/api/files/view?path=test.txt \
 # Modify: autobot-frontend/src/router/index.ts
 # (Use code from section 3.5)
 
-# Step 4.5: Sync to VM1 (Frontend)
+# Step 4.5: Sync to the frontend role
 ./scripts/utilities/sync-to-vm.sh frontend autobot-frontend/src/ /home/autobot/autobot-frontend/src/
 
 # Step 4.6: Rebuild frontend
@@ -1652,7 +1652,7 @@ Security Team
 # Update files.py
 vim autobot-backend/api/files.py
 
-# Sync to VM4
+# Sync to the AI/ML role
 ./scripts/utilities/sync-to-vm.sh ai-stack autobot-backend/api/files.py /home/autobot/autobot-backend/api/
 
 # Restart backend
@@ -1664,7 +1664,7 @@ ssh -i ~/.ssh/autobot_key autobot@<aiml-ip> "supervisorctl restart autobot-backe
 # Update ApiClient
 vim autobot-frontend/autobot-backend/utils/ApiClient.ts
 
-# Sync to VM1
+# Sync to the frontend role
 ./scripts/utilities/sync-to-vm.sh frontend autobot-frontend/src/ /home/autobot/autobot-frontend/src/
 
 # Rebuild and restart

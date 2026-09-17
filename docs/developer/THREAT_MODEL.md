@@ -29,10 +29,9 @@ known base · `resolve_within_sandbox` (:288) the file-management sandbox ·
   refusals (absolute, `..`, drive qualifier) are defence in depth only; replacing it is a smell (#15786).
 - The validated string is the string used. Validating `user_path` then opening something
   rebuilt from the original input is a finding.
-- `resolve_within_sandbox` forbids **any** `..`, `~`, leading `/`, or
-  `SANDBOX_INVALID_PATH_CHARACTERS` (:45) — in-bounds or not. `''`, `'/'`, `'//'` legitimately
-  address the sandbox root and return it unchanged (#11823); a diff that makes them raise
-  again breaks root listing.
+- `resolve_within_sandbox` forbids **any** `..`, `~`, leading `/`, or `SANDBOX_INVALID_PATH_CHARACTERS` (:45)
+  — in-bounds or not. `''`, `'/'`, `'//'` legitimately address the sandbox root and return it unchanged
+  (#11823); a diff that makes them raise again breaks root listing.
 
 **Known bypass shapes:** double percent-encoding (`%252e%252e`), Unicode confusables
 (`﹒﹒`, `‥`), null byte via encoding, symlink pointing out of the root, a `MagicMock`
@@ -53,17 +52,15 @@ the one read-side gate · `validate_ownership` (:613).
   construction is never an ownership check; the metadata comparison is.
 - Owner identity is `metadata.owner` = **username**, never a user id. A diff comparing
   against `user_id` is comparing the wrong field.
-- Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent
-  Redis record means "not cached", never "unowned" — `_owner_when_cache_is_empty` (:539) asks
-  disk first and rehydrates **for the real owner, never for the caller** (#14018).
+- Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent Redis record means
+  "not cached", never "unowned" — `_owner_when_cache_is_empty` (:539) asks disk first and rehydrates **for the real owner, never for the caller** (#14018).
 - Undetermined enforcement policy degrades, in
   [`security/enforcement_mode.py`](../../autobot-backend/security/enforcement_mode.py), to
   `DEGRADED_ENFORCEMENT_MODE` (:53) and never to `disabled`: checks still run and violations
   are still recorded (#14010). A new `except` that returns `"disabled"` is a fail-open.
-- A resolution that degraded stays marked `degraded` (:73), so a `log_only` decision record
-  says which of the two `log_only` states produced it (#15159). It marks the record only —
-  `log_only` is allow-and-audit in both, deliberately. A degraded route reporting the chosen
-  `reason` is a finding.
+- A resolution that degraded stays marked `degraded` (:73), so a `log_only` decision record says
+  which of the two `log_only` states produced it (#15159). It marks the record only — `log_only` is
+  allow-and-audit in both, deliberately. A degraded route reporting the chosen `reason` is a finding.
 - Only two legitimate fast-path bypasses exist, in
   [`security/session_ownership.py`](../../autobot-backend/security/session_ownership.py) —
   `_resolve_fast_paths` (:480): global auth disabled, and enforcement explicitly `disabled`.
@@ -80,22 +77,19 @@ the one read-side gate · `validate_ownership` (:613).
 **Canonical enforcement:** every route in
 [`autobot-backend/plugin_manager.py`](../../autobot-backend/plugin_manager.py) carries a
 `Depends` on [`auth_middleware.py`](../../autobot-backend/auth_middleware.py)
-`check_admin_permission` (:972).
+`check_admin_permission` (:967).
 Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-backend/archive_safety.py)
 — `validate_zip_metadata` (:27), `safe_extract` (:58), `MAX_UPLOAD_BYTES` (:19).
 
 **Invariants**
 - A plugin route without `Depends(check_admin_permission)` is remote code execution.
   This is the single highest-severity shape in this subsystem — check it first.
-- Extraction goes through `archive_safety`; [`plugin_install.py`](../../autobot-backend/plugin_install.py)
-  only re-exports `_validate_zip_metadata` and `_safe_extract`.
-  A local `zf.extractall` reintroduces zip-slip and symlink escape.
-- Names match `_NAME_PATTERN` (:36) before any filesystem touch; the target is claimed by
-  `_claim_install_target` (:107) via `mkdir(exist_ok=False)`, which — with the per-name
-  `_install_locks` — is what makes the collision check TOCTOU-free.
-- Git installs: scheme restricted to http(s), `--` before the URL, `protocol.file.allow=never`,
-  no submodule recursion, ref matched against `_GIT_REF_PATTERN` (:39), which rejects a leading `-` and any `..`.
-  Dropping any one of these is a finding on its own.
+- Extraction goes through `archive_safety`; [`plugin_install.py`](../../autobot-backend/plugin_install.py) only
+  re-exports `_validate_zip_metadata` and `_safe_extract`. A local `zf.extractall` reintroduces zip-slip and symlink escape.
+- Names match `_NAME_PATTERN` (:36) before any filesystem touch; the target is claimed by `_claim_install_target` (:107)
+  via `mkdir(exist_ok=False)`, which — with the per-name `_install_locks` — is what makes the collision check TOCTOU-free.
+- Git installs: scheme restricted to http(s), `--` before the URL, `protocol.file.allow=never`, no submodule recursion,
+  ref matched against `_GIT_REF_PATTERN` (:39), rejecting a leading `-` or `..`. Dropping any one is a finding on its own.
 - `PluginRegistry._plugins` and `HookRegistry` are process-wide singletons that do not dedupe —
   a load path re-initialising a live plugin double-registers its callbacks (#14000).
 
@@ -104,13 +98,11 @@ Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-back
 **Boundary:** plaintext lives only inside the store's own methods. Anything crossing out — a
 response, a log line, an issue, a PR comment — is already redacted.
 
-**Canonical enforcement:** [`encryption_service.py`](../../autobot-backend/encryption_service.py)
-AES-GCM + PBKDF2 for data at rest · [`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py)
-`encrypt_field`/`decrypt_field` for single columns ·
-[`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py)
-`ConnectorCredentialStore` (:178) for connector/OAuth creds, ownership via `_require_owner` (:604) ·
-[`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:959)
-for service-to-service.
+**Canonical enforcement:** [`encryption_service.py`](../../autobot-backend/encryption_service.py) AES-GCM + PBKDF2 for data at rest ·
+[`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns ·
+[`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py) `ConnectorCredentialStore` (:178) for connector/OAuth creds, ownership via `_require_owner` (:604) ·
+[`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:954) for service-to-service ·
+[`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:121) for SLM token revocation.
 
 **Invariants**
 - No parallel crypto path. A diff introducing its own `Fernet(...)` or `AESGCM(...)` instead
@@ -125,6 +117,14 @@ for service-to-service.
   Exception text counts; a boto3 `ClientError` carries the account number in an ARN (#15324).
 - Keys come from SSOT config, never a literal. A default value for an encryption key is a
   finding even when production overrides it via env var.
+- SLM token revocation fails CLOSED (#16387, owner decision): when the HS256 jti-denylist check
+  (`is_jti_revoked` (:132) in [`token_denylist.py`](../../autobot-slm-backend/services/token_denylist.py)) or the password-epoch check can't run because Redis errored,
+  `decode_token_async` denies the token (401) instead of reading "could not check" as "not revoked" — a Redis outage takes SLM login down, including the backend admin path reached through the proxy (#16374).
+- The RS256 authority-token path fails CLOSED the same way (#16412): [`rs256_denylist.py`](../../autobot-slm-backend/services/rs256_denylist.py)
+  `is_rs256_jti_revoked` (:91) raises on a Redis error rather than reporting "not revoked"; its caller
+  [`jwks_verifier.py`](../../autobot-slm-backend/services/jwks_verifier.py) `verify_authority_token` (:218) denies the token (401) at both call sites; the write side stays best-effort.
+- The shared password-epoch helper fails CLOSED in both services (#16411, #16422, owner decisions): a Redis error, or a non-integer stored
+  marker or `iat`, raises `RevocationCheckUnavailable` (a `ConnectionError`), which the SLM denies as above and [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401; an `except` reading it as "not revoked" is a fail-open.
 
 ## Cross-cutting
 

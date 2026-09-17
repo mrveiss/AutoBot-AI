@@ -423,12 +423,12 @@ class SearchMixin:
             kwargs["where"] = where
         try:
             return await asyncio.to_thread(chroma_collection.query, **kwargs)
-        except (ValueError, Exception) as exc:
-            # ChromaDB raises ValueError when where filter matches fewer docs
-            # than n_results. Fall back to unfiltered search.
-            logger.warning("ChromaDB where filter failed (%s), retrying without filter", exc)
-            kwargs.pop("where", None)
-            return await asyncio.to_thread(chroma_collection.query, **kwargs)
+        except Exception as exc:
+            if not where:  # nothing to lose: retry the same query once
+                logger.warning("ChromaDB query failed (%s), retrying once", exc)
+                return await asyncio.to_thread(chroma_collection.query, **kwargs)
+            logger.warning("ChromaDB filtered query failed (%s); no results, never an unfiltered retry (#16662)", exc)
+            return {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
 
     def _deduplicate_results(self, results_data: Dict[str, Any], similarity_top_k: int) -> List[Dict[str, Any]]:
         """Deduplicate and format ChromaDB results. Issue #281: Extracted helper."""

@@ -130,6 +130,12 @@ python:
   # green while the guard that reads it never runs.
   - '.github/workflows/sync-main-to-release.yml'
   - 'autobot-frontend/package.json'
+  # #15749: `frontend_reduced_motion_guard_test.py` reads these two by literal
+  # path to assert the reduced-motion wiring holds. Without an entry here, a
+  # change confined to either is exactly the change that skips the suite
+  # guarding it -- #15900's coverage checker caught both.
+  - 'autobot-frontend/src/embed/embed-styles.ts'
+  - 'autobot-frontend/src/main.ts'
   - 'install.sh'
   # #15983: `ansible_core_pin_frozen_15983_test.py` reads this pin to assert the
   # dependabot freeze holds. Without an entry here, editing the pin is exactly the
@@ -156,3 +162,15 @@ python:
   # backend_gpu_faiss_gating_test.py both read this manifest; without an entry
   # here, a change confined to it skips both guards.
   - 'requirements-gpu-faiss.txt'
+  # #15151: `configuration_guide_env_vars_test.py` asserts every AUTOBOT_* name
+  # this guide documents is either registered in env_registry.REGISTRY or listed
+  # in _KNOWN_GAPS naming the issue tracking it. Without an entry here, a change
+  # confined to the guide -- documenting a name that resolves to nothing -- skips
+  # the guard written to catch exactly that.
+  - 'docs/guides/CONFIGURATION_GUIDE.md'
+  # #16427: `secretsmanager_template_names_match_vault_registry_16427_test.py`
+  # reads this component's `credentialTemplates` array by concrete literal, to
+  # assert its provider names still match the vault registry. Without an entry
+  # here, a change confined to this one file skips the guard that exists to
+  # catch exactly that drift.
+  - 'autobot-frontend/src/components/security/SecretsManager.vue'

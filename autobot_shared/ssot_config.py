@@ -45,6 +45,7 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import ClassVar, Dict, FrozenSet, List
+from urllib.parse import quote
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -161,15 +162,15 @@ class RedactedSettings(RedactedReprMixin, BaseSettings):
 
 class VMConfig(RedactedSettings):
     """
-    VM IP address configuration.
+    Service host configuration, resolved per role.
 
-    Supports the 6-VM distributed architecture:
-    - Main (WSL) - Backend API + VNC Desktop
-    - Frontend (VM1) - Web interface
-    - NPU Worker (VM2) - Hardware AI acceleration
-    - Redis (VM3) - Data layer
-    - AI Stack (VM4) - AI processing
-    - Browser (VM5) - Web automation
+    Role-based, count-agnostic placement (ADR-010): co-located or split hosts.
+    - Main (backend role) - Backend API + VNC Desktop
+    - Frontend (frontend role) - Web interface
+    - NPU Worker (aiml role) - Hardware AI acceleration
+    - Redis (database role) - Data layer
+    - AI Stack (aiml role) - AI processing
+    - Browser (browser role) - Web automation
     """
 
     model_config = SettingsConfigDict(
@@ -273,17 +274,17 @@ class LLMConfig(RedactedSettings):
     # Default provider for all models (can be overridden per-model)
     provider: str = Field(default="ollama", alias="AUTOBOT_LLM_PROVIDER")
 
-    # LLM cost-efficiency toggles (#10597)
-    # Prompt caching is a pure cost win → default on.  Chat tiered routing
-    # downgrades models by complexity (precision-sensitive) → default off until
-    # validated via knowledge/rag_benchmarks.py.
+    # LLM cost-efficiency toggles (#10597). Chat tiered routing downgrades models by
+    # complexity (precision-sensitive) so it defaults off until validated via
+    # knowledge/rag_benchmarks.py; the rest are pure cost wins, default on.
     llm_prompt_cache_default: bool = Field(default=True, alias="AUTOBOT_LLM_PROMPT_CACHE_DEFAULT")
     chat_tiered_routing: bool = Field(default=False, alias="AUTOBOT_CHAT_TIERED_ROUTING")
-    # Response cache for chat(): only near-deterministic, safely-reusable
-    # requests are cached (low temperature, no tools/structured-output/thinking).
-    # Above this temperature responses must vary, so they are never cached.
+    # Response cache for chat(): only near-deterministic, safely-reusable requests are cached.
     llm_response_cache: bool = Field(default=True, alias="AUTOBOT_LLM_RESPONSE_CACHE")
     llm_cache_max_temperature: float = Field(default=0.3, alias="AUTOBOT_LLM_CACHE_MAX_TEMPERATURE")
+    # Extractive prompt compression on chat()/stream() (#16526) — pure token-cost win, default on.
+    llm_prompt_compression_enabled: bool = Field(default=True, alias="AUTOBOT_LLM_PROMPT_COMPRESSION_ENABLED")
+    llm_prompt_compression_min_chars: int = Field(default=100, alias="AUTOBOT_LLM_PROMPT_COMPRESSION_MIN_CHARS")
 
     # Cross-vendor second-opinion verifier tier (#12618). A second LLM call on a
     # genuinely distinct provider doubles spend on the verification path, so this
@@ -759,6 +760,7 @@ class RedisConfig(RedactedSettings):
 
     # Security
     password: str | None = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
+    username: str | None = Field(default=None, alias="AUTOBOT_REDIS_USERNAME")  # ACL user (#16626)
 
 
 class CacheCoordinatorConfig(RedactedSettings):
@@ -2547,15 +2549,13 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def redis_url_with_auth(self) -> str:
-        """Get the full Redis URL with password if configured."""
-        if self.tls.redis_tls_enabled:
-            scheme = "rediss"
-            port = self.tls.redis_tls_port
-        else:
-            scheme = "redis"
-            port = self.port.redis
+        """Get the full Redis URL with credentials if configured (URL-encoded)."""
+        tls = self.tls.redis_tls_enabled
+        scheme, port = ("rediss", self.tls.redis_tls_port) if tls else ("redis", self.port.redis)
         if self.redis.password:
-            return f"{scheme}://:{self.redis.password}@{self.vm.redis}:{port}"
+            # #16626: userinfo carries the ACL username when set; unset keeps ":<password>"
+            userinfo = f"{quote(self.redis.username or '', safe='')}:{quote(self.redis.password, safe='')}"
+            return f"{scheme}://{userinfo}@{self.vm.redis}:{port}"
         return f"{scheme}://{self.vm.redis}:{port}"
 
     @property

@@ -19,7 +19,7 @@ Endpoints:
 - POST /facts/{fact_id}/auto-apply - Auto-apply suggestions to fact
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_knowledge import (
     AutoApplySuggestionsRequest,
@@ -33,13 +33,17 @@ from api.schemas_knowledge import (
     SuggestCategoriesRequest,
     SuggestTagsRequest,
 )
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge import get_knowledge_base
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["knowledge-suggestions"])
+# #15745: every route here reads or writes knowledge-base suggestions
+# (including auto-apply, a write) with no auth dependency anywhere in the
+# file. Router-level login gate, matching agent_org.py's convention.
+router = APIRouter(tags=["knowledge-suggestions"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/suggestions/tags", response_model=KnowledgeSuggestionsTagsResponse)

@@ -19,7 +19,7 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-echo -e "${GREEN}🏗️  AutoBot Distributed 6-VM Architecture${NC}"
+echo -e "${GREEN}🏗️  AutoBot Distributed, Role-Based Architecture${NC}"
 echo -e "${BLUE}Main WSL Coordinator: ${AUTOBOT_BACKEND_HOST:-localhost}${NC}"
 echo "=================================================="
 
@@ -65,7 +65,7 @@ echo "  Ollama LLM:          http://${AUTOBOT_OLLAMA_HOST:-127.0.0.1}:${AUTOBOT_
 
 echo ""
 echo -e "${CYAN}📋 Architecture Summary:${NC}"
-echo "✅ 6-VM Distributed Architecture Active"
+echo "✅ Distributed, Role-Based Architecture Active"
 echo "✅ All Remote Services Connected"
 echo "✅ Backend Coordinator Running on WSL"
 echo "✅ Distributed Redis Integration Working"

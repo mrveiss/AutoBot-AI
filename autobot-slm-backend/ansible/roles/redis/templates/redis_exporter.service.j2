@@ -30,8 +30,14 @@ ExecStart=/opt/redis_exporter/redis_exporter \
   --redis.addr=redis://127.0.0.1:{{ redis_port }} \
   --web.listen-address=:{{ redis_exporter_port }} \
   --web.telemetry-path=/metrics
-{% if redis_password is defined and redis_password %}
-Environment="REDIS_PASSWORD={{ redis_password }}"
+{# #16627: the exporter is a client -- it sends the client credential, which is #}
+{# redis_password unless the SLM-generated one was adopted (tasks/main.yml). #}
+{% if redis_client_password is defined and redis_client_password %}
+Environment="REDIS_PASSWORD={{ redis_client_password }}"
+{% endif %}
+{# #16626: ACL username, sent with REDIS_PASSWORD as AUTH <user> <password> #}
+{% if redis_username is defined and redis_username %}
+Environment="REDIS_USER={{ redis_username }}"
 {% endif %}
 Restart=on-failure
 RestartSec=5s

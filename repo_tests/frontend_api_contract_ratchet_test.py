@@ -74,10 +74,18 @@ _BASELINES = {
         "clients": 8,
         "raw_fetch": 17,
         "axios": 0,
+        # #16460: three duplicates from the +9 were dropped, then the remaining
+        # six hand-typed invitation list/respond and activity/notification history
+        # response shapes were replaced with `components['schemas'][...]` aliases
+        # in api-contract.ts -- back to main's contract-derived approach, so the
+        # baseline returns to 187 rather than staying raised.
         "responses": 187,
         # #15455: raised for the four typed detail fetches #15429 added. Same
         # limitation — this counts assertions, and a correct new call is one.
-        "inline_generics": 564,
+        # #16245: SettingsPanel.vue's unrendered /system/health/detailed loader was
+        # removed with its two `apiClient.get<...>` calls; recounted at the rebased
+        # tree, combined with the other cuts already on main.
+        "inline_generics": 562,
     },
     "autobot-slm-frontend": {
         "clients": 1,

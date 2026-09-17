@@ -167,6 +167,44 @@ for _m in [
 ]:
     _stub(_m)
 
+# #16025: role_registry.seed_default_roles() now filters each DEFAULT_ROLES
+# entry through `Role.__table__.columns` before writing it. `__table__` is a
+# dunder-shaped name Mock's __getattr__ refuses to auto-vivify (it raises
+# AttributeError rather than fake a magic method it does not implement), so
+# a bare MagicMock cannot even reach that attribute, let alone stand in for
+# it. Set `__table__` directly -- a plain attribute assignment, not a nested
+# get-then-set through the Mock -- to a real object carrying the real Role
+# model's column names, so the filter is exercised against something that
+# behaves like the real table would. Registered under sys.modules (not just
+# a local variable) so test_role_registry.py's own, separately-built Role
+# stub -- it evicts this whole models.database stub and builds a fresh one,
+# see its module docstring -- can reuse the same column set instead of a
+# second literal that can drift from this one.
+_role_columns_mod = types.ModuleType("_role_cols")
+_role_columns_mod.COLUMNS = frozenset(
+    {
+        "id",
+        "name",
+        "display_name",
+        "sync_type",
+        "source_paths",
+        "target_path",
+        "systemd_service",
+        "auto_restart",
+        "health_check_port",
+        "health_check_path",
+        "pre_sync_cmd",
+        "post_sync_cmd",
+        "required",
+        "degraded_without",
+        "ansible_playbook",
+        "created_at",
+        "updated_at",
+    }
+)
+sys.modules["_role_cols"] = _role_columns_mod
+sys.modules["models.database"].Role.__table__ = types.SimpleNamespace(columns=_role_columns_mod.COLUMNS)
+
 # #13139: models/schemas_secrets.py must be REAL, not stubbed. It carries
 # response_model classes, and FastAPI rejects a MagicMock as a response field
 # ("Invalid args for response field!") the moment a test builds the app. It
@@ -226,6 +264,16 @@ _EXTRA_SERVICE_MODULES = (
     "services.service_restart",
     "services.tls_credentials",
     "services.vnc_credentials",
+    # #16310: api/full_tree_drift.py imports this at module scope, and
+    # api/code_sync.py imports api/full_tree_drift.py unconditionally at the
+    # bottom of the file to register its route -- so every test collecting
+    # api.code_sync needs services.full_tree_drift resolvable, even though the
+    # AST scan above (which only reads code_sync.py/setup_wizard.py directly)
+    # never sees it. Its own real coroutines are exercised by
+    # tests/services/full_tree_drift_test.py's self-contained real-load
+    # (#16310 review round 10: moved out of services/ itself, see that
+    # file's module docstring), not here.
+    "services.full_tree_drift",
 )
 
 # Parent package first so each child stub binds onto it (see _stub docstring).
