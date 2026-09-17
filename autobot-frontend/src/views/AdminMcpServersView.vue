@@ -412,6 +412,12 @@ onMounted(load)
   padding: var(--spacing-6);
 }
 
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
 .field-row.two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;

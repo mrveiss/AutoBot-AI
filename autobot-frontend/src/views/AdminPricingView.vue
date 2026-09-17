@@ -287,6 +287,13 @@ onMounted(load)
   gap: var(--spacing-4);
 }
 
+.provider-card {
+  padding: var(--spacing-4);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+}
+
 .provider-name {
   font-weight: var(--font-semibold);
   text-transform: capitalize;
