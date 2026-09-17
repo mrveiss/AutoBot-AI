@@ -91,8 +91,12 @@ printf 'in-flight work, never committed\n' >>"$DIRTY_WT/tracked.txt"
 printf 'in-flight work on the main tree, never committed\n' >>"$THIS_REPO/tracked.txt"
 
 mkdir -p "$THIS_REPO/.claude/hooks"
+# Every sibling the hook loads at runtime. A file missing here does not fail
+# loudly: `invokes` falls back to the unconditional verdict, so the guard keeps
+# working and only the #14144 allow cases break — which reads as "the scanner is
+# wrong" rather than "the scanner is absent". preflight() proves it below.
 cp "$SOURCE_DIR/block-dangerous-commands.sh" "$SOURCE_DIR/git_invocation_parse.py" \
-  "$SOURCE_DIR/git_shell_tokenize.py" \
+  "$SOURCE_DIR/git_shell_tokenize.py" "$SOURCE_DIR/command_position_scan.py" \
   "$THIS_REPO/.claude/hooks/" || { echo "FATAL: could not stage the hook"; exit 1; }
 HOOK="$THIS_REPO/.claude/hooks/block-dangerous-commands.sh"
 
@@ -109,6 +113,16 @@ preflight() {
   echo "  sandbox common-dir: $common"
   echo "  sandbox git-dir:    $gitdir"
   records=$(python3 "$THIS_REPO/.claude/hooks/git_invocation_parse.py" "git checkout some-branch" | tr '\037' '|')
+  # #14144's scanner, proven the same way and for the same reason. Absent, it
+  # cannot report an invocation, `invokes` keeps the unconditional verdict, and
+  # every non-git guard silently returns to matching quoted prose.
+  local positions
+  positions=$(python3 "$THIS_REPO/.claude/hooks/command_position_scan.py" "ls -la | grep foo" 2>&1 | tr '\037' '|' | tr '\n' ';')
+  echo "  command-position scan: [$positions]"
+  case "$positions" in
+    *"ls|-la"*grep*) : ;;
+    *) echo "FATAL: command_position_scan.py did not report the two invocations in a known-good command — refusing to report clean"; exit 1 ;;
+  esac
   echo "  parser records for a real branch switch: [$records]"
   if [ -z "$records" ]; then
     echo "FATAL: the parser reports nothing for a real invocation — the suite cannot test the guard"
