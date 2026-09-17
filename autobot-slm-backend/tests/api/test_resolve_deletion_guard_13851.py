@@ -404,3 +404,74 @@ def test_unpatched_backend_excludes_carry_the_shared_symlink(real_deployment_map
         assert "--exclude=/autobot_shared" in args, component
     assert "--exclude=/npu-worker.py" in code_sync._rsync_exclude_args([], "autobot-npu-worker")
     assert "--exclude=/plugins/" in code_sync._rsync_exclude_args([], "autobot-backend")
+
+
+# ---------------------------------------------------------------------------
+# SLM frontend release layout (#16717): a forced "resync from source" ran a
+# delete-style rsync against a component whose own live bundle (`current`),
+# rollback (`previous`) and per-build directories (`dist-<build-id>/`) were
+# never tracked in git and had no exclude covering them. Deleting them left
+# the SLM UI erroring until a rebuild completed, with no earlier bundle to
+# fall back to if that rebuild also failed.
+# ---------------------------------------------------------------------------
+
+
+def test_slm_frontend_excludes_carry_the_release_layout(real_deployment_map) -> None:
+    """The real map, reached through the real accessor -- same rationale as
+    test_unpatched_backend_excludes_carry_the_shared_symlink above. Compares
+    against services.deploy_artifacts's own constants, not restated
+    literals, so this test tracks a renamed prefix/symlink automatically
+    instead of silently passing on a stale copy."""
+    from services import deploy_artifacts as da
+
+    args = code_sync._rsync_exclude_args([], "autobot-slm-frontend")
+    assert f"--exclude=/{da.SLM_FRONTEND_CURRENT_LINK}" in args
+    assert f"--exclude=/{da.SLM_FRONTEND_PREVIOUS_LINK}" in args
+    assert f"--exclude=/{da.SLM_FRONTEND_LEGACY_DIR}" in args
+    assert f"--exclude=/{da.SLM_FRONTEND_BUILD_PREFIX}*" in args
+
+
+@_needs_rsync
+def test_slm_frontend_preview_is_clean_with_a_live_bundle_current_and_previous(tmp_path, real_deployment_map) -> None:
+    """The exact shape #16717 was filed over: three retained builds
+    (slm_frontend_release_keep: 3), `current`/`previous` symlinks pointing at
+    two of them, none of it tracked in source. A forced or unforced resync's
+    dry run must report zero deletions across all of it, live bundle and
+    rollback included."""
+    from services import deploy_artifacts as da
+
+    src = tmp_path / "src"
+    dep = tmp_path / "dep"
+    src.mkdir()
+
+    build_a = f"{da.SLM_FRONTEND_BUILD_PREFIX}20260901T000000000Z"
+    build_b = f"{da.SLM_FRONTEND_BUILD_PREFIX}20260905T000000000Z"
+    build_c = f"{da.SLM_FRONTEND_BUILD_PREFIX}20260910T000000000Z"
+    for build in (build_a, build_b, build_c):
+        _write(dep / build / "index.html", b"<html>built</html>")
+        _write(dep / build / "assets" / "app.js", b"console.log(1)")
+    (dep / da.SLM_FRONTEND_CURRENT_LINK).symlink_to(build_c)
+    (dep / da.SLM_FRONTEND_PREVIOUS_LINK).symlink_to(build_b)
+
+    cmd = _rsync_local_cmd(str(tmp_path), "autobot-slm-frontend", [], source_dir=str(src), dest_dir=str(dep))
+    with real_rsync():
+        ok, deletions, _ = _run(_preview_rsync_deletions(cmd))
+    assert (ok, deletions) == (True, [])
+    assert (dep / da.SLM_FRONTEND_CURRENT_LINK).is_symlink(), "the served bundle must survive the preview"
+    assert (dep / da.SLM_FRONTEND_PREVIOUS_LINK).is_symlink(), "the rollback must survive the preview"
+
+
+@_needs_rsync
+def test_slm_frontend_a_genuinely_removed_source_file_is_still_reported(tmp_path, real_deployment_map) -> None:
+    """The release-layout protection must not blanket the whole component --
+    an ordinary deployed file whose source was actually deleted (#16310's own
+    ServicesView.vue example) is exactly what a resync should still remove."""
+    src = tmp_path / "src"
+    dep = tmp_path / "dep"
+    src.mkdir()
+    _write(dep / "ServicesView.vue", b"<template>old</template>")
+
+    cmd = _rsync_local_cmd(str(tmp_path), "autobot-slm-frontend", [], source_dir=str(src), dest_dir=str(dep))
+    with real_rsync():
+        ok, deletions, _ = _run(_preview_rsync_deletions(cmd))
+    assert (ok, deletions) == (True, ["ServicesView.vue"])
