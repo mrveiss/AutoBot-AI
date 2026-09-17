@@ -133,6 +133,10 @@ def main(argv: list[str] | None = None) -> int:
         except OSError as exc:
             logger.error("::error::could not read %s: %s", path, exc)
             return 1
+        # No --actor: exemption() also keys on "dependabot[bot]", and --file has
+        # nothing to fill that from. Deliberate, not an oversight -- dependabot
+        # never runs a local hook or hand-authors a --file body, so the one
+        # exemption this mode cannot express is also the one it never needs to.
         ok = validate(body, branch=args.branch, title=args.title)
 
     return 0 if ok else 1
