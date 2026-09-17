@@ -454,6 +454,7 @@ async def share_secret_with_session(
 )
 async def get_presence(
     session_id: str,
+    db: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -462,7 +463,24 @@ async def get_presence(
     Requires: VIEWER permission
     Returns list of currently connected user IDs.
     """
+    # #16580: the line above said so and nothing enforced it. Every sibling in
+    # this module calls ``_ensure_permission`` -- OWNER for invite/remove, EDITOR
+    # for secret sharing, VIEWER for participants -- and this one depended on
+    # ``get_current_user`` alone, so any signed-in user could list the online users
+    # of any session id. #16455 closed the same gap on the WebSocket route; this is
+    # the REST read.
+    #
+    # A comment, not the docstring: FastAPI publishes a route's docstring as the
+    # OpenAPI `description`, so it reaches autobot-frontend/src/types/generated/
+    # api.ts and anything served from the schema. An endpoint description is
+    # client-facing documentation and is no place to narrate a fixed access-control
+    # defect. Caught when the generated-types bot committed this prose into api.ts.
     try:
+        user_id = uuid.UUID(current_user.get("user_id"))
+
+        # Ensure caller has at least viewer access, exactly as get_participants does
+        await _ensure_permission(session_id, user_id, PermissionLevel.VIEWER, db)
+
         # Import presence manager (to be implemented)
         from websocket.presence import presence_manager
 
@@ -474,6 +492,18 @@ async def get_presence(
             "count": len(online_users),
         }
 
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid request",
+        )
+    except HTTPException:
+        # #16580: load-bearing, and the reason the check is not a one-line add.
+        # The generic handler below catches Exception, and HTTPException is one --
+        # so without this clause the 403 _ensure_permission raises would be
+        # swallowed and re-reported as a 500. The gate would look closed and
+        # every refusal would arrive as a server error.
+        raise
     except Exception as e:
         logger.error(f"Error getting presence: {e}")
         raise HTTPException(
