@@ -217,9 +217,14 @@ def test_queued_run_behind_a_busy_pool_is_pending_not_failure(watchdog):
     runs = [_run(status="queued", conclusion=None, created_at=_ts(45), name="Unit & Integration Tests")]
     state, description = watchdog.classify_dispatch(runs, _ts(45), NOW, 10, 30, True)
     assert state == "pending"
-    # "busy queue", not "busy runner pool" (#14364): this branch now also covers
-    # a GitHub-hosted backlog, which no runner pool is responsible for.
-    assert "busy queue" in description
+    # Not "busy runner pool" (#14364): this branch also covers a GitHub-hosted
+    # backlog, which no self-hosted pool is responsible for. #16309 kept that
+    # ruling and finished it -- the bare "busy queue" wording named no limit an
+    # operator could act on, so the message now names the saturated pool and its
+    # counts. The negative assertion is the half #14364 actually decided: the
+    # self-hosted pool must not be implicated for a hosted backlog.
+    assert "hosted-runner concurrency saturated" in description
+    assert "self-hosted" not in description
 
 
 def test_a_busy_queue_is_still_never_success(watchdog):
