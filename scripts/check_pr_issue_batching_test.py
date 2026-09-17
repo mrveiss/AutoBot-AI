@@ -324,3 +324,72 @@ class TestOnlyDeliveryCountsAsBatching:
         ok, message = check("## What Changed\nnothing linked here\n")
         assert ok
         assert "pr-issue-validation" in message
+
+
+class TestAClosesNothingPrIsNotToldItDeliversOne:
+    """#16855: the gate stated a count of one where the count was zero.
+
+    `RATIONALE_HINT` opens "This PR delivers exactly one issue". Printed with
+    `_mention_note` for a `Refs`-only body, the output said both that one issue
+    was delivered and that the only issue named was not a delivered one, so the
+    true number -- zero -- appeared nowhere. Observed on #16834.
+
+    These assert the wording only. Whether such a PR should need a rationale at
+    all is open on #16855; the verdict tests below pin that this change did not
+    quietly answer it.
+    """
+
+    REFS_ONLY = "Refs #16803\n"
+
+    def test_the_failure_does_not_claim_one_delivered_issue(self) -> None:
+        ok, message = check(self.REFS_ONLY)
+        assert not ok
+        assert "delivers exactly one issue" not in message
+
+    def test_the_failure_says_the_pr_closes_nothing(self) -> None:
+        _, message = check(self.REFS_ONLY)
+        assert "closes no issue" in message
+
+    def test_the_failure_names_the_issue_it_does_link(self) -> None:
+        """Without the number the author cannot tell which link was discounted."""
+        _, message = check(self.REFS_ONLY)
+        assert "#16803" in message
+
+    def test_the_two_failure_texts_are_not_the_same(self) -> None:
+        """The guard against collapsing them again -- the #16793 shape.
+
+        A closes-one PR and a closes-nothing PR want different sentences; if
+        these ever return the same text, one of the two is lying about a count.
+        """
+        closes_nothing = check(self.REFS_ONLY)[1]
+        closes_one = check(ONE)[1]
+        assert closes_nothing != closes_one
+
+    def test_a_closing_pr_still_gets_the_unchanged_hint(self) -> None:
+        assert check(ONE)[1] == RATIONALE_HINT
+
+    def test_the_hint_forms_are_still_offered_to_both(self) -> None:
+        """Rewording must not cost the author the how-to-fix half."""
+        for body in (self.REFS_ONLY, ONE):
+            message = check(body)[1]
+            assert "Single-issue rationale: <why" in message
+            assert "## Single-issue rationale" in message
+
+
+class TestTheVerdictIsUnchangedByTheRewording:
+    """#16855 changed wording, not policy. The open question -- whether a PR
+    that closes nothing should need a rationale -- stays open, so every verdict
+    here must match the behaviour before the change."""
+
+    def test_a_closes_nothing_pr_with_no_rationale_still_fails(self) -> None:
+        assert not check("Refs #16803\n")[0]
+
+    def test_a_closes_nothing_pr_with_a_rationale_still_passes(self) -> None:
+        body = "Refs #16803\nSingle-issue rationale: docs only, delivers nothing\n"
+        assert check(body)[0]
+
+    def test_a_batched_pr_is_still_batched(self) -> None:
+        assert check(TWO)[0]
+
+    def test_a_body_with_no_link_is_still_the_other_gate_s_problem(self) -> None:
+        assert check("## What Changed\nnothing linked\n")[0]
