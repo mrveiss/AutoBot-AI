@@ -32,17 +32,28 @@ name: self-hosted-runner-health
 
 on:
   schedule:
-    # DORMANT ON THIS BRANCH. GitHub dispatches `schedule` from the DEFAULT
-    # branch, and the copy of this file living there is the pre-#13045 version
-    # that queries the `/actions/runners` administration endpoint GITHUB_TOKEN
-    # cannot read — which is why the scheduled runs are still failing every 30
-    # minutes. The half-hourly cron starts exercising THIS probe on promotion.
+    # LIVE (#14444). This block used to read "DORMANT ON THIS BRANCH", on the
+    # reasoning that GitHub dispatches `schedule` from the default branch and
+    # the default branch carried the pre-#13045 version querying the
+    # `/actions/runners` endpoint GITHUB_TOKEN cannot read. The 2026-09-12
+    # rename made `main` the default branch, so that copy IS this file and the
+    # cron now dispatches this probe. Measured on 2026-09-17: the last 20 runs
+    # were green, four of them `schedule`-dispatched.
+    #
+    # The stale note mattered more than a wrong comment usually does — it said
+    # the probe was inert and failing, so a reader deciding whether to retire it
+    # would have been deciding about a check that is in fact running and green.
+    #
+    # GitHub throttles `schedule` on busy repositories, so the observed gap runs
+    # to hours rather than the half hour asked for here. The cron stays at 30
+    # minutes because it is a ceiling, not a promise: the push trigger below is
+    # what gives this probe its dependable cadence.
     - cron: "*/30 * * * *"
   workflow_dispatch:
-  # Live coverage in the meantime. One short ubuntu-latest job per push to the
-  # integration branch, which is where the code that could wedge the runner
-  # lands. Without this the repaired probe would sit unexecuted behind the same
-  # default-branch registration wall that has kept the broken one running.
+  # One short ubuntu-latest job per push to the integration branch, which is
+  # where the code that could wedge CI lands. This is the trigger that carries
+  # the probe in practice — 16 of the last 20 runs — and it is what kept the
+  # repaired probe exercised through the period the cron could not reach it.
   push:
     branches: [main]
 
@@ -53,7 +64,12 @@ permissions:
 jobs:
   check:
     # ubuntu-latest, never the self-hosted pool: a runner-outage detector that
-    # queues behind the outage it is meant to report cannot report it.
+    # queues behind the outage it is meant to report cannot report it. Since the
+    # migration there is no self-hosted pool at all — all 107 `runs-on:`
+    # declarations across the 65 workflows are `ubuntu-latest` — so what the
+    # probe below actually watches is hosted-runner saturation, which #14364
+    # repointed it at. The workflow keeps its original name so its run history
+    # stays continuous; #14444 holds the rename question.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
