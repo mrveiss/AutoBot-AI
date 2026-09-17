@@ -221,6 +221,24 @@ def _bootstrap_candidates(present_paths: list[str], ever_added: set[str], tracke
     return [rel for rel in present_paths if not _is_artifact_path(rel) and rel in ever_added and rel not in tracked_now]
 
 
+async def _is_shallow_repository(repo_root: str) -> bool:
+    """True when *repo_root* is a shallow git clone (#16310).
+
+    A bootstrap plan computed against a shallow clone is not merely
+    incomplete, it is silently WRONG: :func:`_ever_added_paths` runs
+    ``git log --diff-filter=AR`` over the whole history, and a shallow fetch
+    only kept the one commit ``update-all-nodes.yml``'s pre-flight checkout
+    asked for -- so "ever added" collapses to "added in that one commit",
+    the bootstrap finds almost nothing to delete, and returns a plan with no
+    ``error`` set. Nothing about an empty, error-free plan looks like a
+    problem, so the caller (``ansible/roles/_shared/tasks/sync_deletions.yml``)
+    wrote the marker anyway -- permanently locking the target into diff-mode
+    from a baseline that was missing years of deletions.
+    """
+    output, rc = await run_git(repo_root, "rev-parse", "--is-shallow-repository")
+    return rc == 0 and output.strip() == "true"
+
+
 async def compute_bootstrap_plan(
     source_dir: str, repo_root: str, new_commit: str, present_paths: list[str]
 ) -> DeletionPlan:
@@ -231,7 +249,23 @@ async def compute_bootstrap_plan(
     filesystem, so it cannot enumerate them itself. Exactly two git calls
     total, never one per file: every path tracked at *new_commit*, and every
     path git has ever added or renamed something into.
+
+    Refuses to run at all on a shallow clone (#16310): an ``error`` plan
+    routes through the caller's existing block/rescue, which does NOT write
+    the marker, so the next run retries once the clone is full-depth --
+    the same "fail loudly instead of succeeding empty" contract
+    :func:`compute_deletion_plan` already has for an unknown previous
+    commit.
     """
+    if await _is_shallow_repository(repo_root):
+        return DeletionPlan(
+            error=(
+                f"{repo_root} is a shallow git clone -- a bootstrap plan computed against it "
+                "would silently miss almost every file actually deleted from source (#16310); "
+                "unshallow the clone (or keep code_source at full depth) and retry"
+            )
+        )
+
     pathspec_prefix = component_pathspec(repo_root, source_dir)
     tracked_now = await _tracked_paths_at_commit(repo_root, new_commit, pathspec_prefix)
     if tracked_now is None:
