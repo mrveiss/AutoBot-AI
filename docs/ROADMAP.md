@@ -5,7 +5,7 @@ nav_order: 4
 
 **Project Start**: July 2025
 **Current Status**: Active Development - See [docs/system-state.md](system-state.md) for current status
-**Last Updated**: July 22, 2026
+**Last Updated**: September 16, 2026
 **Canonical Source**: This is the single authoritative project roadmap (rolling; formerly `ROADMAP_2025.md`)
 
 > **Note**: Previous roadmap files have been archived to `docs/archive/`. This document consolidates all roadmap variants and provides accurate implementation status based on actual codebase verification.
@@ -16,20 +16,37 @@ nav_order: 4
 
 AutoBot has evolved into a **comprehensive autonomous AI platform** through intensive development. This roadmap consolidates information from all previous roadmap variants and provides verified implementation status.
 
-### Verified Implementation (snapshot: December 2025)
+### Verified Implementation (snapshot: 2026-09-16)
 
-> These counts are a December 2025 codebase snapshot and have grown since (e.g. the
-> `autobot-backend/agents/` directory now holds 60+ agents and the frontend 360+ Vue
-> components). Treat the table as a point-in-time baseline, not a live count.
+> Every count below was measured against the tree on the date given, and the
+> **How counted** column is the command that produced it — so any row can be
+> re-derived rather than taken on trust. The previous table was a December 2025
+> snapshot that had drifted badly (components 260 -> 372, agents "40+" -> 61) and
+> cited `autobot-backend/llm_interface_pkg/providers/`, a path that no longer
+> exists. Counts drift; the method should not.
 
-| Metric | Verified Count | Source |
-|--------|----------------|--------|
-| **Specialized Agents** | 40+ agents | `autobot-backend/agents/` directory |
-| **API Endpoints** | 1,092 routes | 257 modules in `autobot-backend/api/` |
-| **Vue Components** | 260 components | `autobot-frontend/src/components/` |
-| **MCP Bridges** | 16 bridges (6 external + 10 backend) | `autobot-backend/api/*_mcp.py` |
-| **Redis Databases** | 12 databases | `autobot-infrastructure/shared/config/redis-databases.yaml` |
-| **LLM Providers** | 8 provider types + adapter registry | `autobot-backend/llm_interface_pkg/providers/` |
+| Metric | Count | How counted |
+|--------|-------|-------------|
+| **Specialized agents** | 61 | `.py` under `autobot-backend/agents/`, excluding `__init__` and tests |
+| **API route modules** | 323 | `autobot-backend/api/*.py`, excluding tests |
+| **Route decorators** | 2,446 | `@router.{get,post,put,delete,patch,websocket}` across `autobot-backend/` |
+| **Database models** | 75 (36 of them in `llc/`) | `class X(Base)` across `autobot-backend/` |
+| **Services** | 84 | `*_service.py` under `autobot-backend/` |
+| **Alembic migrations** | 97 | files in `autobot-backend/migrations/versions/` |
+| **Vue components** | 372 | `.vue` under `autobot-frontend/src/components/` |
+| **Vue views** | 78 | `.vue` under `autobot-frontend/src/views/` |
+| **i18n locales** | 11 | `.json` under `autobot-frontend/src/i18n/locales/` |
+| **LLM provider backends** | 16, across 21 modules | `autobot-backend/llm_shared/providers/` (the rest are shared helpers) |
+| **MCP bridges** | 11 | `autobot-backend/api/*_mcp.py` |
+| **Redis databases** | 15 | `db:` keys in `autobot-infrastructure/shared/config/redis-databases.yaml` |
+| **Scheduled (beat) jobs** | 29 | `beat_schedule` entries in `autobot-backend/celery_app.py` |
+| **CI workflows** | 65 | `.github/workflows/*.y{a,}ml` |
+| **Python test files** | 5,612 | `*_test.py` and `test_*.py`, excluding `node_modules` |
+
+The single largest subsystem absent from the phase list below is **Company OS**
+(`autobot-backend/llc/`) — 36 of the 75 database models, with its own scheduler,
+API surface and frontend views. The phases end at 21; this arrived after them and
+is documented in `docs/research/` rather than here.
 
 ---
 
