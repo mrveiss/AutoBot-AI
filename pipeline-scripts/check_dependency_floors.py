@@ -47,11 +47,17 @@ DECLARATION_ROOTS: tuple[str, ...] = (
 #: license to ignore a shortfall, only an exact (name, source file) match.
 #: ``--strict`` treats a listed pair as satisfied; everything else it still
 #: fails on. Each value is the reason a human can act on, not just a marker.
-KNOWN_CROSS_VENV_EXEMPTIONS: Mapping[tuple[str, str], str] = {
-    ("websockets", "autobot-slm-backend/requirements.txt"): (
-        "SLM tests share the backend venv (langgraph-sdk caps websockets<16); " "separate SLM venv is #16394"
-    ),
-}
+#:
+#: Stays empty (#16394). Its one-ever entry -- websockets vs
+#: autobot-slm-backend/requirements.txt, because #13300's ci.yml shared one
+#: venv between the backend and SLM suites -- is gone now that
+#: .github/actions/setup-python-suite/action.yml builds the SLM suite its own
+#: venv from its own requirements.txt, and ci.yml's floor-check steps are each
+#: scoped with --roots to what that venv actually installs. A real cross-venv
+#: mismatch is once again possible in principle, but the fix is a genuinely
+#: separate venv for whichever caller needs it, the way this one now works --
+#: not a new entry here. check_dependency_floors_test.py pins this empty.
+KNOWN_CROSS_VENV_EXEMPTIONS: Mapping[tuple[str, str], str] = {}
 
 MAX_REPORTED = 10
 

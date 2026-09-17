@@ -28,8 +28,10 @@ _SETTING = "PYTEST_FAULTHANDLER_TIMEOUT_S"
 _OVERRIDE_FLAGS = ("-o", "--override-ini")
 _EXPECTED = f"faulthandler_timeout=${_SETTING}"
 
-#: A pytest command line, however the interpreter is spelled.
-_PYTEST_COMMAND = re.compile(r"^(?:python3?\s+-m\s+)?pytest(?:\s|$)")
+#: A pytest command line, however the interpreter is spelled -- bare `pytest`,
+#: `python3? -m pytest`, or (#16394) a shell variable naming a venv's own
+#: interpreter, quoted or not, e.g. `"$SLM_PYTHON" -m pytest`.
+_PYTEST_COMMAND = re.compile(r'^(?:(?:python3?|"?\$\w+"?)\s+-m\s+)?pytest(?:\s|$)')
 
 #: A `faulthandler_timeout` given a number in place, anywhere in the workflow.
 _RESTATED_LITERAL = re.compile(r"faulthandler_timeout\s*=\s*[\"']?\d")
