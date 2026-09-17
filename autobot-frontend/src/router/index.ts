@@ -1181,7 +1181,8 @@ export const routes: RouteRecordRaw[] = [
         path: 'automation',
         name: 'llc-company-automation',
         component: WorkflowBuilderView,
-        meta: { title: 'Workflow Automation', requiresAuth: true, hideInNav: true },
+        // #16901: no longer hidden — it has a Company OS sidebar entry now.
+        meta: { title: 'Workflow Automation', requiresAuth: true },
         children: [
           {
             // Named so vue-router does not warn about an unnamed empty-path
