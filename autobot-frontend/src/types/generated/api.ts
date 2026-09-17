@@ -203,13 +203,13 @@ export interface paths {
         get?: never;
         /**
          * Override Model Pricing
-         * @description Write an emergency pricing override directly to Redis.
+         * @description Store an emergency pricing override; it outranks the refreshed price until removed.
          */
         put: operations["override_model_pricing_api_admin_pricing__provider___model__put"];
         post?: never;
         /**
          * Delete Model Pricing Override
-         * @description Remove a pricing override from Redis (next refresh will re-populate).
+         * @description Remove a pricing override; the refreshed price applies again.
          */
         delete: operations["delete_model_pricing_override_api_admin_pricing__provider___model__delete"];
         options?: never;
@@ -231,6 +231,26 @@ export interface paths {
         get: operations["get_pricing_refresh_status_api_admin_pricing_status_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/pricing/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Pricing Now
+         * @description Refresh pricing on demand and report the per-source result (#16231).
+         */
+        post: operations["refresh_pricing_now_api_admin_pricing_refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1959,6 +1979,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sessions/{session_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Events
+         * @description List recent collaboration events (activity + secret-share notifications)
+         *     for a session, newest first (#16460).
+         *
+         *     Requires: VIEWER permission
+         */
+        get: operations["get_session_events_api_sessions__session_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/invitations/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Invitations
+         * @description List pending collaboration invitations addressed to the current user,
+         *     across every session (#16460).
+         *
+         *     Authorization: identity only, no participant/owner permission check --
+         *     you can only ever see invitations naming your own user_id, and you are
+         *     by definition not yet a participant of a session you're merely invited
+         *     to (that's exactly what accepting the invitation would make you).
+         */
+        get: operations["list_my_invitations_api_sessions_invitations_mine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/invitations/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Respond To Invitation
+         * @description Accept or decline a pending invitation addressed to the current user
+         *     (#16460).
+         *
+         *     Authorization: the caller must be the exact user_id the invitation
+         *     names -- not an owner/participant permission check. Accepting an
+         *     invitation is what makes you a participant; you are not one yet, so
+         *     _ensure_permission's VIEWER floor would refuse you.
+         */
+        post: operations["respond_to_invitation_api_sessions__session_id__invitations_respond_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/telegram/webhook": {
         parameters: {
             query?: never;
@@ -2910,8 +3005,6 @@ export interface paths {
          *
          *     Returns telemetry opt-in/opt-out status and whether the first-run
          *     prompt has been shown.
-         *
-         *     Requires authentication.
          */
         get: operations["get_telemetry_settings_api_settings_telemetry_get"];
         put?: never;
@@ -6250,57 +6343,11 @@ export interface paths {
          *     - Formatted context string
          *     - Source citations
          *     - Metadata about retrieved content
+         *
+         *     #16665: every fact entering the context is filtered to what the calling
+         *     user may see -- this feeds an LLM prompt, not just a display list.
          */
         post: operations["get_llm_context_api_knowledge_base_multi_source_context_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/multi-source/documentation/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Search Documentation
-         * @description Search indexed AutoBot documentation.
-         *
-         *     Issue #250: Direct endpoint for documentation search.
-         *
-         *     Args:
-         *         query: Search query
-         *         n_results: Maximum results to return
-         *         score_threshold: Minimum relevance score (0-1)
-         */
-        get: operations["search_documentation_api_knowledge_base_multi_source_documentation_search_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/multi-source/documentation/stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Documentation Stats
-         * @description Get statistics about indexed documentation.
-         *
-         *     Returns document count and indexing status.
-         */
-        get: operations["documentation_stats_api_knowledge_base_multi_source_documentation_stats_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6637,7 +6684,7 @@ export interface paths {
          *     in the ChromaDB instance.
          *
          *     Args:
-         *         current_user: Authenticated user (injected by auth middleware)
+         *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
          *         CollectionListResponse with list of collections and their metadata
@@ -6667,7 +6714,7 @@ export interface paths {
          *
          *     Args:
          *         name: Collection name
-         *         current_user: Authenticated user (injected by auth middleware)
+         *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
          *         CollectionDetailResponse with collection metadata
@@ -6699,7 +6746,7 @@ export interface paths {
          *         name: Collection name
          *         limit: Maximum number of documents to return (1-1000)
          *         offset: Number of documents to skip for pagination
-         *         current_user: Authenticated user (injected by auth middleware)
+         *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
          *         DocumentListResponse with document data (ids, documents, metadatas, embeddings)
@@ -6735,7 +6782,7 @@ export interface paths {
          *     Args:
          *         name: Collection name
          *         request: Search parameters (query, n_results, where filter)
-         *         current_user: Authenticated user (injected by auth middleware)
+         *         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
          *
          *     Returns:
          *         SearchResponse with matching documents and similarity scores
@@ -10110,6 +10157,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/multi-source/documentation/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Documentation
+         * @description Search indexed AutoBot documentation.
+         *
+         *     Issue #250: Direct endpoint for documentation search.
+         *
+         *     Args:
+         *         query: Search query
+         *         n_results: Maximum results to return
+         *         score_threshold: Minimum relevance score (0-1)
+         */
+        get: operations["search_documentation_api_knowledge_base_multi_source_documentation_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/multi-source/documentation/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation Stats
+         * @description Get statistics about indexed documentation.
+         *
+         *     Returns document count and indexing status.
+         */
+        get: operations["documentation_stats_api_knowledge_base_multi_source_documentation_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge/sync-queue": {
         parameters: {
             query?: never;
@@ -12916,7 +13012,7 @@ export interface paths {
         put?: never;
         /**
          * Mcp Add To Knowledge Base
-         * @description MCP tool: add a document; any signed-in user (#744), but only admins set its ownership (#16663).
+         * @description MCP tool: add a document (#744); only admins set who owns or sees it -- platform-wide asks get 403 (#16663).
          */
         post: operations["mcp_add_to_knowledge_base_api_knowledge_mcp_add_to_knowledge_base_post"];
         delete?: never;
@@ -13907,6 +14003,61 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/external_servers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List External Servers
+         * @description List every configured external MCP server.
+         */
+        get: operations["list_external_servers_api_mcp_external_servers_get"];
+        put?: never;
+        /**
+         * Create External Server
+         * @description Register a new external MCP server. Validates the stdio launcher allowlist and auth schema.
+         */
+        post: operations["create_external_server_api_mcp_external_servers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/external_servers/{server_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get External Server
+         * @description Return one configured external MCP server.
+         */
+        get: operations["get_external_server_api_mcp_external_servers__server_id__get"];
+        /**
+         * Update External Server
+         * @description Update an existing external MCP server. Omitted fields are left unchanged.
+         *
+         *     A new ``credentials`` payload replaces the stored credential (old one
+         *     revoked after the new one is validated and stored, never before).
+         */
+        put: operations["update_external_server_api_mcp_external_servers__server_id__put"];
+        post?: never;
+        /**
+         * Delete External Server
+         * @description Delete an external MCP server and revoke its stored credential, if any.
+         */
+        delete: operations["delete_external_server_api_mcp_external_servers__server_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -35562,7 +35713,7 @@ export interface paths {
          *     - Response time
          *     - Throughput
          *     - Resource utilization
-         *     - Cross-VM load distribution
+         *     - Cross-role load distribution
          */
         post: operations["optimize_system_performance_api_enterprise_performance_optimize_post"];
         delete?: never;
@@ -35580,7 +35731,7 @@ export interface paths {
         };
         /**
          * Get Infrastructure Status
-         * @description Get 6-VM distributed infrastructure status and topology.
+         * @description Get role-based distributed infrastructure status and topology.
          */
         get: operations["get_infrastructure_status_api_enterprise_infrastructure_get"];
         put?: never;
@@ -44767,6 +44918,7 @@ export interface paths {
          *
          *     Issue #1310: Fleet/system hosts removed — they belong in SLM only.
          *     Only hosts explicitly added by the user via Secrets are returned.
+         *     Requires: admin permission.
          */
         get: operations["get_infrastructure_hosts_api_infrastructure_hosts_get"];
         put?: never;
@@ -44795,6 +44947,7 @@ export interface paths {
          *     ``infrastructure_host``; deleting the host removes its Secrets entry.
          *     Mirrors the GET read-shim — the host id IS the secret id. Returns 404
          *     when no matching infrastructure host exists.
+         *     Requires: admin permission.
          */
         delete: operations["delete_infrastructure_host_api_infrastructure_hosts__host_id__delete"];
         options?: never;
@@ -48566,8 +48719,10 @@ export interface paths {
          * Verbatim Search
          * @description Search verbatim conversation chunks.
          *
-         *     Returns chunks ranked by cosine similarity.  When ``session_id`` is
-         *     provided, only chunks from that session are considered.
+         *     Returns chunks ranked by cosine similarity, scoped to the caller's own
+         *     chunks (#16701 -- this route has no admin bypass; an admin-wide search
+         *     would need its own explicit admin API). When ``session_id`` is provided,
+         *     results are additionally restricted to that session.
          *
          *     Args:
          *         q: Free-text query.
@@ -48601,9 +48756,9 @@ export interface paths {
          * Delete Session Verbatim
          * @description Delete all verbatim chunks for a session.
          *
-         *     Used for user opt-out and retention enforcement.  The caller must be
-         *     authenticated; in production the middleware additionally enforces that
-         *     users can only delete their own sessions.
+         *     Used for user opt-out and retention enforcement. Caller must own the
+         *     session (#16701: this docstring previously claimed a production
+         *     middleware enforced that; nothing in this file did).
          *
          *     Args:
          *         session_id: Session whose verbatim chunks to remove.
@@ -63723,6 +63878,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * CollabEventResponse
+         * @description One persisted collaboration event (#16460).
+         */
+        CollabEventResponse: {
+            /** Id */
+            id: string;
+            /** Session Id */
+            session_id: string;
+            /** Kind */
+            kind: string;
+            /** User Id */
+            user_id: string | null;
+            /** Username */
+            username: string | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * CollabInviteRequest
          * @description Request to invite user to session.
          */
@@ -77509,6 +77688,32 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * InvitationRespondRequest
+         * @description Request body for POST /{session_id}/invitations/respond (#16460).
+         */
+        InvitationRespondRequest: {
+            /** Accept */
+            accept: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * InvitationRespondResponse
+         * @description Response for POST /{session_id}/invitations/respond (#16460).
+         */
+        InvitationRespondResponse: {
+            /** Success */
+            success: boolean;
+            /** Session Id */
+            session_id: string;
+            /** Accepted */
+            accepted: boolean;
+            /** Permission */
+            permission?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * IssueCreateRequest
          * @description Request to create a new issue/card/task.
          */
@@ -82198,6 +82403,105 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * MCPServerCreateRequest
+         * @description Admin request to register a new external MCP server.
+         */
+        MCPServerCreateRequest: {
+            /** Name */
+            name: string;
+            /** Transport */
+            transport: string;
+            /** Command */
+            command?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Auth Type */
+            auth_type?: string | null;
+            /** Credentials */
+            credentials?: {
+                [key: string]: string;
+            } | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Allowed Roles */
+            allowed_roles?: string[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * MCPServerListResponse
+         * @description List of configured external MCP servers.
+         */
+        MCPServerListResponse: {
+            /** Servers */
+            servers: components["schemas"]["MCPServerResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * MCPServerResponse
+         * @description Public shape of a configured external MCP server — never carries a secret.
+         */
+        MCPServerResponse: {
+            /** Server Id */
+            server_id: string;
+            /** Name */
+            name: string;
+            /** Transport */
+            transport: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Owner Id */
+            owner_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Command */
+            command?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Auth Type */
+            auth_type?: string | null;
+            /** Allowed Roles */
+            allowed_roles: string[];
+            /**
+             * Has Credential
+             * @description True when a credential is stored, without exposing it
+             */
+            has_credential: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * MCPServerUpdateRequest
+         * @description Admin request to update an existing external MCP server. Omitted fields are unchanged.
+         */
+        MCPServerUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Command */
+            command?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Auth Type */
+            auth_type?: string | null;
+            /** Credentials */
+            credentials?: {
+                [key: string]: string;
+            } | null;
+            /** Allowed Roles */
+            allowed_roles?: string[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * MCPSpanResponse
          * @description Single MCP tool-call span returned by the traces API (Issue #4413).
          */
@@ -84454,6 +84758,16 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * MyInvitationsResponse
+         * @description Response for GET /invitations/mine (#16460).
+         */
+        MyInvitationsResponse: {
+            /** Invitations */
+            invitations: components["schemas"]["PendingInvitationResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * NLCodeExplanationResponse
          * @description Response for POST /explain.
          */
@@ -86697,6 +87011,24 @@ export interface components {
             }[];
             /** Count */
             count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PendingInvitationResponse
+         * @description One pending invitation, as returned by GET /invitations/mine (#16460).
+         */
+        PendingInvitationResponse: {
+            /** Session Id */
+            session_id: string;
+            /** From User Id */
+            from_user_id: string;
+            /** Permission */
+            permission: string;
+            /** Invited At */
+            invited_at: string;
+            /** Expires At */
+            expires_at?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -93740,6 +94072,20 @@ export interface components {
              * @default normal
              */
             reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SessionEventsResponse
+         * @description List-recent response for GET /{session_id}/events (#16460).
+         */
+        SessionEventsResponse: {
+            /** Session Id */
+            session_id: string;
+            /** Events */
+            events: components["schemas"]["CollabEventResponse"][];
+            /** Has More */
+            has_more: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -104059,6 +104405,28 @@ export interface operations {
             };
         };
     };
+    refresh_pricing_now_api_admin_pricing_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     list_retention_policies_api_admin_retention_policies_get: {
         parameters: {
             query?: {
@@ -106726,6 +107094,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionPresenceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_events_api_sessions__session_id__events_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description ISO timestamp cursor; returns events strictly before it */
+                before?: string | null;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionEventsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_invitations_api_sessions_invitations_mine_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyInvitationsResponse"];
+                };
+            };
+        };
+    };
+    respond_to_invitation_api_sessions__session_id__invitations_respond_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationRespondRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationRespondResponse"];
                 };
             };
             /** @description Validation Error */
@@ -112177,59 +112635,6 @@ export interface operations {
             };
         };
     };
-    search_documentation_api_knowledge_base_multi_source_documentation_search_get: {
-        parameters: {
-            query: {
-                query: string;
-                n_results?: number;
-                score_threshold?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KnowledgeDocumentationSearchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    documentation_stats_api_knowledge_base_multi_source_documentation_stats_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KnowledgeDocumentationStatsResponse"];
-                };
-            };
-        };
-    };
     get_multi_source_graph_simple_api_knowledge_base_multi_source_graph_get: {
         parameters: {
             query?: {
@@ -116755,6 +117160,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_documentation_api_knowledge_base_multi_source_documentation_search_get: {
+        parameters: {
+            query: {
+                query: string;
+                n_results?: number;
+                score_threshold?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDocumentationSearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    documentation_stats_api_knowledge_base_multi_source_documentation_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDocumentationStatsResponse"];
                 };
             };
         };
@@ -121718,6 +122176,154 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MCPRegistryInfoResponse"];
+                };
+            };
+        };
+    };
+    list_external_servers_api_mcp_external_servers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServerListResponse"];
+                };
+            };
+        };
+    };
+    create_external_server_api_mcp_external_servers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MCPServerCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_external_server_api_mcp_external_servers__server_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_external_server_api_mcp_external_servers__server_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MCPServerUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_external_server_api_mcp_external_servers__server_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

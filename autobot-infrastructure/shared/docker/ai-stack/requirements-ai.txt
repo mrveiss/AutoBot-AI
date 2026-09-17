@@ -23,7 +23,7 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # ai-stack + npu-worker installs have failed to resolve ever since.
                           # scripts/tokenizers_transformers_range_test.py now fails on a floor
                           # that excludes 0.23.0.
-huggingface-hub>=1.30.0
+huggingface-hub>=1.31.0
 tiktoken>=0.14.0
 
 # Tensor Operations
@@ -70,7 +70,7 @@ protobuf>=7.36.1,<8.0.0           # floor: opentelemetry-exporter-otlp-proto-grp
 googleapis-common-protos>=1.75.3,<2.0.0  # required by opentelemetry-exporter-otlp-proto-grpc~=1.57; needs protobuf>=4.25.8 satisfied by floor above (#4061)
 python-dotenv>=1.2.3
 tenacity>=9.1.4
-tqdm>=4.70.0
+tqdm>=4.70.1
 typing-extensions>=4.16.0
 
 # Logging and Monitoring
@@ -85,7 +85,7 @@ aiosqlite>=0.22.1
 redis>=8.1.0
 
 # Optional: ONNX Runtime for model optimization
-onnxruntime>=1.29.0
+onnxruntime>=1.30.0
 
 # vLLM for high-performance HuggingFace model serving (optional)
 # vllm>=0.7.0
@@ -94,7 +94,7 @@ accelerate>=1.15.0
 
 # Document Processing
 python-docx>=1.2.0
-pypdf>=6.18.0
+pypdf>=6.18.1
 
 # Development and Testing
 pytest>=9.1.1

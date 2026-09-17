@@ -174,6 +174,30 @@ def test_symlink_replaced_when_wrong_target(tmp_path) -> None:
     assert any("restored" in s for s in steps)
 
 
+def test_symlink_written_at_the_realpath_of_a_symlinked_component_dir(tmp_path) -> None:
+    """CodeQL review (#16713): the sink must use realpath(base/component)/"autobot_shared",
+    never a value derived from the tainted link_path itself -- otherwise a component
+    directory reached through a symlink writes to the wrong place, or the containment
+    check's own value diverges from what the sink actually touches."""
+    from unittest.mock import patch
+
+    shared_target = tmp_path / "autobot_shared"
+    shared_target.mkdir()
+    component = "autobot-backend"
+    real_comp_dir = tmp_path / "real-component-location"
+    real_comp_dir.mkdir()
+    (tmp_path / component).symlink_to(real_comp_dir)
+
+    steps: list = []
+    with patch("api.code_sync._get_deploy_base", return_value=tmp_path):
+        _run(_ensure_autobot_shared_symlink(component, steps))
+
+    written = real_comp_dir / "autobot_shared"
+    assert written.is_symlink(), f"expected the symlink at the realpath'd location {written}"
+    assert written.resolve() == shared_target.resolve()
+    assert any("restored" in s for s in steps)
+
+
 def test_symlink_noop_when_already_correct(tmp_path) -> None:
     """No-op (step says 'already correct') when the symlink is already correct."""
     from unittest.mock import patch
@@ -214,6 +238,30 @@ def test_skipped_when_shared_target_missing(tmp_path) -> None:
     with patch("api.code_sync._get_deploy_base", return_value=tmp_path):
         _run(_ensure_autobot_shared_symlink(component, steps))
     assert any("not found" in s for s in steps)
+
+
+def test_symlink_refuses_traversal_before_filesystem_access(tmp_path) -> None:
+    """A component value escaping the deploy base is refused (CodeQL
+    py/path-injection, #16713) before any filesystem call is made — even if
+    it somehow bypassed the _BACKEND_COMPONENTS membership check upstream."""
+    from unittest.mock import patch
+
+    shared_target = tmp_path / "autobot_shared"
+    shared_target.mkdir()
+    malicious = "../../etc"
+
+    steps: list = []
+    with (
+        patch("api.code_sync._get_deploy_base", return_value=tmp_path),
+        patch("api.code_sync._BACKEND_COMPONENTS", frozenset({malicious})),
+        patch("pathlib.Path.unlink") as mock_unlink,
+        patch("pathlib.Path.symlink_to") as mock_symlink_to,
+    ):
+        _run(_ensure_autobot_shared_symlink(malicious, steps))
+
+    mock_unlink.assert_not_called()
+    mock_symlink_to.assert_not_called()
+    assert any("refusing" in s for s in steps), steps
 
 
 # ---------------------------------------------------------------------------

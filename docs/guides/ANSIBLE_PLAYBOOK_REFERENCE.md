@@ -8,7 +8,7 @@
 ```bash
 ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-full.yml
 ```
-**Purpose**: Complete 5-VM infrastructure deployment with Docker to Hyper-V migration
+**Purpose**: Complete role-based infrastructure deployment with Docker to Hyper-V migration (one machine per role in this reference layout; machine count is a deployment choice)
 **Components**: Base system, database, backend, AI/ML, frontend, browser, data migration
 **Timeline**: Full functional deployment with health validation
 
@@ -17,14 +17,14 @@ ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-fu
 ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-development-services.yml
 ```
 **Purpose**: Development environment with hot reload and development workflow
-**Components**: Vite dev server on VM1 (<frontend-ip>:5173) with live reload
+**Components**: Vite dev server on the frontend role (<frontend-ip>:5173) with live reload
 **Use Case**: Daily development work with automatic code refresh
 
 ### 3. **Health Check and Validation**
 ```bash
 ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/health-check.yml
 ```
-**Purpose**: Comprehensive system health validation across all 5 VMs
+**Purpose**: Comprehensive system health validation across every deployment role
 **Checks**: System resources, network connectivity, service health, security status
 **Output**: Detailed health report with integration test results
 
@@ -40,35 +40,37 @@ ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-ba
 ```bash
 ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-database.yml
 ```
-**Purpose**: Redis Stack, data persistence, model storage on VM3 (<database-ip>)
+**Purpose**: Redis Stack, data persistence, model storage on the database role (<database-ip>)
 
 #### Data Migration
 ```bash
 ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/data-migration.yml
 ```
-**Purpose**: Migrate data from Docker containers to VM infrastructure
+**Purpose**: Migrate data from Docker containers to role-based VM infrastructure
 
 #### Hybrid Docker Deployment
 ```bash
 ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-hybrid-docker.yml
 ```
-**Purpose**: Mixed VM + Docker container deployment
+**Purpose**: Mixed VM + Docker container deployment, per role
 
 #### Native Services
 ```bash
 ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-native-services.yml
 ```
-**Purpose**: Services running directly on VMs without containers
+**Purpose**: Services running directly on their role's machine without containers
 
-## VM Infrastructure Mapping
+## Role Infrastructure Mapping
 
-| VM | IP Address | Role | Ansible Group | Primary Services |
-|---|---|---|---|---|
-| VM1 | <frontend-ip> | Frontend | `frontend` | nginx, Vue.js, development server |
-| VM2 | <npu-ip> | NPU Worker | `aiml` | NPU acceleration, Intel OpenVINO |
-| VM3 | <database-ip> | Database | `database` | Redis Stack, RedisInsight |
-| VM4 | <aiml-ip> | AI Stack | `aiml` | AI processing, backend ML |
-| VM5 | <browser-ip> | Browser | `browser` | Playwright, VNC, desktop environment |
+One example layout — each role may be co-located or split onto its own machine:
+
+| IP Address | Role | Ansible Group | Primary Services |
+|---|---|---|---|
+| <frontend-ip> | Frontend | `frontend` | nginx, Vue.js, development server |
+| <npu-ip> | NPU Worker | `aiml` | NPU acceleration, Intel OpenVINO |
+| <database-ip> | Database | `database` | Redis Stack, RedisInsight |
+| <aiml-ip> | AI Stack | `aiml` | AI processing, backend ML |
+| <browser-ip> | Browser | `browser` | Playwright, VNC, desktop environment |
 
 ## Service-Specific Deployment Commands
 
@@ -226,4 +228,4 @@ ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/health-ch
 
 ---
 
-**CRITICAL**: Always prefer Ansible automation over manual SSH commands. This ensures consistency, logging, and proper infrastructure management across all 5 VMs.
+**CRITICAL**: Always prefer Ansible automation over manual SSH commands. This ensures consistency, logging, and proper infrastructure management across every deployment machine.

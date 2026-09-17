@@ -154,26 +154,12 @@ class CacheService {
     }
   }
 
-  async warmup(): Promise<void> {
-    const commonEndpoints = [
-      `${getApiBase()}/system/health`,
-      `${getApiBase()}/settings/`,
-      `${getApiBase()}/knowledge_base/stats`
-    ];
-
-    logger.info('Warming up cache...');
-
-    for (const endpoint of commonEndpoints) {
-      try {
-        const key = `warmup_${endpoint}`;
-        if (!this.get(key)) {
-          this.set(key, { warmedUp: true }, 10 * 1000);
-        }
-      } catch (error) {
-        logger.warn(`Cache warmup failed for ${endpoint}:`, error);
-      }
-    }
-  }
+  // warmup() removed for #16465: zero callers anywhere (main.ts/App.vue never
+  // reference cacheService), and it was never functional in the first place --
+  // it only ever wrote a placeholder `{ warmedUp: true }` into the local
+  // cache under a `warmup_<endpoint>` key, never actually fetching any of
+  // its `commonEndpoints` (one of which, /settings/, is admin-gated since
+  // #16240 and would have failed for non-admins anyway).
 
   createKey(endpoint: string, params: Record<string, string | number | boolean> = {}): string {
     if (Object.keys(params).length === 0) {

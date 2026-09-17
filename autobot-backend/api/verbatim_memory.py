@@ -14,11 +14,12 @@ Endpoints:
 
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
+from security.session_ownership import validate_session_ownership
 
 logger = get_logger(__name__)
 
@@ -48,8 +49,10 @@ async def verbatim_search(
 ) -> Dict[str, Any]:
     """Search verbatim conversation chunks.
 
-    Returns chunks ranked by cosine similarity.  When ``session_id`` is
-    provided, only chunks from that session are considered.
+    Returns chunks ranked by cosine similarity, scoped to the caller's own
+    chunks (#16701 -- this route has no admin bypass; an admin-wide search
+    would need its own explicit admin API). When ``session_id`` is provided,
+    results are additionally restricted to that session.
 
     Args:
         q: Free-text query.
@@ -60,13 +63,16 @@ async def verbatim_search(
         JSON object with ``results`` list, each item having
         ``id``, ``text``, ``score``, and ``metadata`` keys.
     """
-    _require_user(request)
+    user = _require_user(request)
 
+    from knowledge.search_filters import extract_user_context_from_request
     from memory.verbatim_store import get_verbatim_store
 
+    user_id, _, _ = extract_user_context_from_request(user)
     store = await get_verbatim_store()
     results: List[Dict[str, Any]] = await store.search(
         query=q,
+        user_id=user_id,
         session_filter=session_id,
         limit=limit,
     )
@@ -83,12 +89,13 @@ async def verbatim_search(
 async def delete_session_verbatim(
     session_id: str,
     request: Request,
+    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership (#16701)
 ) -> Dict[str, Any]:
     """Delete all verbatim chunks for a session.
 
-    Used for user opt-out and retention enforcement.  The caller must be
-    authenticated; in production the middleware additionally enforces that
-    users can only delete their own sessions.
+    Used for user opt-out and retention enforcement. Caller must own the
+    session (#16701: this docstring previously claimed a production
+    middleware enforced that; nothing in this file did).
 
     Args:
         session_id: Session whose verbatim chunks to remove.
@@ -96,7 +103,7 @@ async def delete_session_verbatim(
     Returns:
         JSON object with ``session_id`` and ``deleted_count``.
     """
-    _require_user(request)
+    del ownership  # dependency raises 401/403 before the handler runs
 
     from memory.verbatim_store import get_verbatim_store
 

@@ -5,6 +5,8 @@
 **Testing Scope:** Production Readiness Validation  
 **Test Environment:** Distributed VM Infrastructure  
 
+> **Historical record:** this report reflects the 6-machine install tested at the time. AutoBot's architecture is role-based and count-agnostic; the addresses and counts below describe that one install.
+
 ---
 
 ## 🎯 Executive Summary
@@ -13,7 +15,7 @@ AutoBot Phase 9 has undergone comprehensive testing and validation across multip
 
 ### Key Findings
 
-- ✅ **Backend API**: Successfully operational on distributed VM (172.16.168.20:8001)
+- ✅ **Backend API**: Successfully operational on the control/backend role (<backend-ip>:8001)
 - ✅ **Infrastructure**: All 6 distributed VM services accessible and responding
 - ✅ **API Endpoints**: All 8 critical endpoints operational with sub-100ms response times
 - ✅ **Router Registry**: 29 routers loaded successfully (28 active, 1 missing)
@@ -48,12 +50,12 @@ All distributed VM services are **fully operational**:
 
 | Service | IP Address | Port | Status | Response Time |
 |---------|------------|------|---------|---------------|
-| Backend API | 172.16.168.20 | 8001 | ✅ Healthy | < 50ms |
-| Redis Database | 172.16.168.23 | 6379 | ✅ Connected | < 3s |
-| Frontend Server | 172.16.168.21 | 5173 | ✅ Running | < 3s |
-| NPU Worker | 172.16.168.22 | 8081 | ✅ Available | < 3s |
-| AI Stack | 172.16.168.24 | 8080 | ✅ Operational | < 3s |
-| Browser Service | 172.16.168.25 | 3000 | ✅ Ready | < 3s |
+| Backend API | <backend-ip> | 8001 | ✅ Healthy | < 50ms |
+| Redis Database | <database-ip> | 6379 | ✅ Connected | < 3s |
+| Frontend Server | <frontend-ip> | 5173 | ✅ Running | < 3s |
+| NPU Worker | <npu-ip> | 8081 | ✅ Available | < 3s |
+| AI Stack | <aiml-ip> | 8080 | ✅ Operational | < 3s |
+| Browser Service | <browser-ip> | 3000 | ✅ Ready | < 3s |
 
 **Infrastructure Score:** 100% (6/6 services accessible)
 
@@ -192,7 +194,7 @@ All distributed VM services are **fully operational**:
 **Response:** `{"status":"healthy","service":"chat","timestamp":1757530709.605365}`
 
 ### ✅ RESOLVED: Backend Not Accessible  
-**Previous Status:** Connection refused on 172.16.168.20:8001  
+**Previous Status:** Connection refused on <backend-ip>:8001  
 **Resolution:** Started backend with proper distributed VM configuration  
 **Current Status:** ✅ Fully operational with Redis and Ollama connected
 

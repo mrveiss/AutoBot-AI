@@ -73,7 +73,8 @@ async def _get_fact_with_ownership(kb, fact_id: str, user_id: str):
         raise HTTPException(status_code=503, detail="Ownership management not available")
 
     metadata = fact.get("metadata", {})
-    has_access = await kb.ownership_manager.check_access(fact_id, user_id, metadata)
+    # #16662: every caller is behind check_admin_permission -- an explicit admin read (owner decision, #16654)
+    has_access = await kb.ownership_manager.check_access(fact_id, user_id, metadata, is_admin=True)
 
     if not has_access:
         raise HTTPException(

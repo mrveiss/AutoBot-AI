@@ -68,12 +68,12 @@ _HEREDOC_PYTHON = re.compile(
 # Applied uniformly, not per-step: a step whose own PYTHONPATH omits
 # `autobot-backend` is still checked against it. That is deliberate (tracking the
 # real PYTHONPATH per step would mean interpreting shell), but it has one known
-# failure direction. `autobot-backend/mcp/` is a first-party package AND `mcp` is
-# a pip distribution; a future step importing `mcp.<submodule>` that exists in
-# the installed package but not in the repo's own would be reported missing here.
-# Nothing does that today. If this test ever fails on a name that is genuinely a
-# third-party package, that is the case — add it to the list below rather than
-# widening the roots.
+# failure direction: a first-party package here sharing a name with a pip
+# distribution shadows the real package for every step importing
+# `<name>.<submodule>` — exactly what `autobot-backend/mcp/` did to the `mcp`
+# SDK until #16449 renamed it. Nothing does that today. If this test ever fails
+# on a name that is genuinely a third-party package, that is the case — add it
+# to the list below rather than widening the roots.
 _IMPORT_ROOTS = ("autobot-backend", "autobot_shared", ".")
 
 # Third-party and stdlib names are resolved by the installed environment, not the
@@ -206,11 +206,7 @@ def test_the_scan_actually_found_inline_programs():
 
 @pytest.mark.parametrize("workflow,code", _inline_programs())
 def test_every_first_party_import_in_a_workflow_step_resolves(workflow, code):
-    missing = [
-        name
-        for name in _imported_names(code)
-        if _is_first_party(name) and not _resolves_in_tree(name)
-    ]
+    missing = [name for name in _imported_names(code) if _is_first_party(name) and not _resolves_in_tree(name)]
 
     assert missing == [], (
         f"{workflow}: imports a module path that does not exist in the tree: {missing}. "
@@ -248,9 +244,7 @@ def test_every_extracted_program_parses():
     an interpreter difference until proven otherwise (#15152; #15091 records the
     same trap in the opposite direction).
     """
-    unparseable = [
-        (workflow, code[:60]) for workflow, code in _inline_programs() if not _parses(code)
-    ]
+    unparseable = [(workflow, code[:60]) for workflow, code in _inline_programs() if not _parses(code)]
 
     assert unparseable == [], (
         f"inline python that the extractor could not parse under python "
@@ -306,4 +300,4 @@ def test_a_single_quoted_program_keeps_its_backslashes():
 def test_an_unreadable_program_raises_rather_than_reporting_no_imports():
     """`_imported_names` must not answer "nothing imported" for "could not read"."""
     with pytest.raises(SyntaxError):
-        _imported_names("import json; print(f\"{d.get(\\\"k\\\")}\")\n")
+        _imported_names('import json; print(f"{d.get(\\"k\\")}")\n')

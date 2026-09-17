@@ -12,10 +12,14 @@ through :func:`reindex_ownership`, which removes the old entries before adding t
 new ones.
 """
 
+import asyncio
 from typing import Any, Dict, Optional
 
 from autobot_shared.auth.permissions import is_admin_role
 from knowledge.ownership import VisibilityLevel
+
+#: Read for every signed-in user (``KnowledgeOwnership.get_system_facts``).
+SYSTEM_FACTS_INDEX = "kb:system:facts"
 
 #: The metadata fields ``set_owner`` indexes a fact by.
 OWNERSHIP_KEYS = ("visibility", "source_type", "shared_with", "organization_id", "group_ids", "access_level")
@@ -31,6 +35,30 @@ def ownership_changed(old: Dict[str, Any], new: Dict[str, Any]) -> bool:
     return any(old.get(key) != new.get(key) for key in OWNERSHIP_KEYS + _OWNER_KEYS)
 
 
+#: Metadata values that give a fact the reach of every signed-in user (owner decision, #16654).
+PLATFORM_WIDE_VISIBILITY = ("system", "public")
+PLATFORM_WIDE_ACCESS = ("general", "autobot")
+
+
+def requests_platform_wide(metadata: Optional[Dict[str, Any]]) -> bool:
+    """Whether *metadata* asks for a platform-wide reach: SYSTEM/PUBLIC, or a general/autobot access level."""
+    meta = metadata or {}
+    return (
+        _norm(meta.get("visibility")) in PLATFORM_WIDE_VISIBILITY
+        or _norm(meta.get("access_level")) in PLATFORM_WIDE_ACCESS
+    )
+
+
+def _norm(value: Any) -> Any:
+    """``" PUBLIC "`` asks for ``public`` too: compare the value the way a lenient reader would."""
+    return value.strip().lower() if isinstance(value, str) else value
+
+
+def refuses_platform_wide(metadata: Optional[Dict[str, Any]], caller_role: Optional[str]) -> bool:
+    """True when a non-admin asks for a platform-wide reach -- a route answers that with 403 (#16663)."""
+    return requests_platform_wide(metadata) and not is_admin_role(caller_role)
+
+
 def drop_ownership_unless_admin(metadata: Optional[Dict[str, Any]], caller_role: Optional[str]) -> Dict[str, Any]:
     """*metadata* as a caller may set it on ingestion: only an admin chooses who owns or sees a fact.
 
@@ -43,10 +71,17 @@ def drop_ownership_unless_admin(metadata: Optional[Dict[str, Any]], caller_role:
 
 
 async def index_ownership(ownership_manager, fact_id: str, metadata: Dict[str, Any]) -> bool:
-    """Add *fact_id* to every index *metadata* names; False when it names no owner."""
+    """Add *fact_id* to every index *metadata* names; False when it names none.
+
+    A fact nobody owns has no owner index, but an ownerless SYSTEM fact, an ingested
+    document (#16693), still belongs in ``kb:system:facts``.
+    """
     owner_id = metadata.get("owner_id") or metadata.get("user_id")
     if not owner_id:
-        return False
+        if metadata.get("visibility") != VisibilityLevel.SYSTEM:
+            return False
+        await asyncio.to_thread(ownership_manager.redis_client.sadd, SYSTEM_FACTS_INDEX, fact_id)
+        return True
     ownership = {key: metadata[key] for key in OWNERSHIP_KEYS if metadata.get(key)}
     await ownership_manager.set_owner(fact_id=fact_id, owner_id=owner_id, **ownership)
     return True

@@ -136,7 +136,7 @@ jobs:
       # covered the lines it executed, and this suite has standing failures.
       - name: Upload shard coverage data
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: coverage-shard-${{ matrix.shard }}
           path: .coverage.shard-${{ matrix.shard }}

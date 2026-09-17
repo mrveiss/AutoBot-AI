@@ -557,11 +557,11 @@ class LLMCostTracker(AsyncRedisClientMixin):
             from llm_shared.pricing.redis_store import PricingRedisStore
 
             store = PricingRedisStore()
-            # Try known providers in order; first hit wins.
-            for provider in ("anthropic", "openai", "google", "deepseek"):
-                cached = await store.get(provider, model_lower)
-                if cached is not None:
-                    return cached.as_legacy_dict()
+            # #16229: an operator's override first, then the live price indexed by bare model
+            # name whatever the provider key (a fixed provider list missed LiteLLM's "gemini").
+            cached = await store.resolve(model_lower)
+            if cached is not None:
+                return cached.as_legacy_dict()
         except Exception as exc:
             logger.debug("_redis_pricing_lookup failed for %r: %s", model_lower, exc)
         return None
