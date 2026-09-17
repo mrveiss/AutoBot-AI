@@ -22,6 +22,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.time_utils import utc_timestamp
 from models.database import (
     CodeStatus,
@@ -642,7 +643,10 @@ async def discover_updates(
         "completed_at": None,
     }
 
-    asyncio.create_task(_run_discover_job(job_id, request.node_ids, request.role))
+    fire_and_forget(
+        _run_discover_job(job_id, request.node_ids, request.role),
+        name=f"update-discover:{job_id}",
+    )
 
     logger.info("Discover job created: %s", job_id)
     return UpdateDiscoverResponse(

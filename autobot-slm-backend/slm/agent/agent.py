@@ -27,6 +27,7 @@ import aiohttp
 from aiohttp import web
 
 from autobot_shared import env_utils, time_utils
+from autobot_shared.async_compat import fire_and_forget
 
 from .health_collector import HealthCollector
 from .heartbeat_payload import build_heartbeat_payload
@@ -490,7 +491,10 @@ class SLMAgent:
             logger.info("Code change notification: %s on %s", commit[:12], branch)
 
             self._process_code_change(commit, branch, message)
-            asyncio.create_task(self._notify_code_change(commit))
+            fire_and_forget(
+                self._notify_code_change(commit),
+                name=f"agent-notify-code-change:{commit[:12]}",
+            )
 
             return web.json_response(
                 {
