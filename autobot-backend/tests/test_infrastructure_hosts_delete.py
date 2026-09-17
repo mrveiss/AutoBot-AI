@@ -30,7 +30,7 @@ async def test_delete_infrastructure_host_removes_matching_secret(_hosts, monkey
         lambda sid, *a, **k: calls.append(sid) or True,
     )
 
-    result = await infra.delete_infrastructure_host(host_id="h9", _user={"sub": "u"})
+    result = await infra.delete_infrastructure_host(host_id="h9", admin_check=True)
 
     assert result == {"status": "success", "id": "h9"}
     assert calls == ["h9"]
@@ -40,7 +40,7 @@ async def test_delete_unknown_host_returns_404(_hosts):
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as exc:
-        await infra.delete_infrastructure_host(host_id="missing", _user={"sub": "u"})
+        await infra.delete_infrastructure_host(host_id="missing", admin_check=True)
 
     assert exc.value.status_code == 404
 
@@ -53,6 +53,6 @@ async def test_delete_404_when_secret_delete_reports_missing(_hosts, monkeypatch
     monkeypatch.setattr(secrets_mod.secrets_manager, "delete_secret", lambda sid, *a, **k: False)
 
     with pytest.raises(HTTPException) as exc:
-        await infra.delete_infrastructure_host(host_id="h9", _user={"sub": "u"})
+        await infra.delete_infrastructure_host(host_id="h9", admin_check=True)
 
     assert exc.value.status_code == 404

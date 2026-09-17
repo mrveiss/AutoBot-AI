@@ -185,7 +185,11 @@ class TestRunSlmStageSkipDecision:
         with (
             patch("api.code_sync.settings") as mock_settings,
             patch("api.code_sync._get_slm_deployed_commit", AsyncMock(return_value=REMOTE_COMMIT)),
-            patch("api.code_sync._resolve_colocated_managed_services", AsyncMock()) as resolve_mock,
+            # #16640: the mock must return an empty list, its real "no
+            # co-located failures" value -- a bare AsyncMock()'s default
+            # (a truthy MagicMock) now reads as a failure and the stage goes
+            # PARTIAL instead of CURRENT.
+            patch("api.code_sync._resolve_colocated_managed_services", AsyncMock(return_value=[])) as resolve_mock,
         ):
             mock_settings.external_url = f"http://{SLM_IP}"
             db_svc = _db_service_mock(slm_node)
