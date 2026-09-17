@@ -15,7 +15,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SystemRepository } from '../SystemRepository'
-import type { AutoBotSettings } from '@/types/models'
 
 vi.mock('@/config/ssot-config', () => ({
   getApiBase: () => '/api'
@@ -319,83 +318,26 @@ describe('SystemRepository shape handling (#5207 audit)', () => {
     })
   })
 
-  // #5214 regressions — AutoBotSettings rewritten to match real backend shape
-  // (message_display/chat/backend/ui/security/logging/knowledge_base/voice_interface/memory/developer)
-  describe('getSettings — returns section-keyed backend shape (#5214)', () => {
-    it('hits /api/settings/ and returns the flat dict (no envelope)', async () => {
-      const payload = {
-        message_display: { show_thoughts: true, show_json: false, show_utility: false, show_planning: true, show_debug: false },
-        chat: { auto_scroll: true, max_messages: 100, message_retention_days: 30 },
-        backend: {
-          api_endpoint: 'http://127.0.0.1:8001',
-          server_host: '0.0.0.0',
-          server_port: 8001,
-          chat_data_dir: 'data/chats',
-          chat_history_file: 'data/chat_history.json',
-          knowledge_base_db: 'data/knowledge_base.db',
-          reliability_stats_file: 'data/reliability_stats.json',
-          audit_log_file: 'data/audit.log',
-          cors_origins: [],
-          timeout: 60,
-          max_retries: 3,
-          streaming: false,
-          llm: {}
-        },
-        ui: { theme: 'dark', font_size: 'medium', language: 'en', animations: true, developer_mode: false },
-        security: { enable_encryption: true, session_timeout_minutes: 30 },
-        logging: { level: 'INFO', log_levels: [], console: true, file: true, max_file_size: 10, log_requests: false, log_sql: false, log_file_path: 'logs/autobot.log' },
-        knowledge_base: { enabled: true, update_frequency_days: 7 },
-        voice_interface: { enabled: false, voice: 'default', speech_rate: 1.0 },
-        memory: {
-          long_term: { enabled: true, retention_days: 365 },
-          short_term: { enabled: true, duration_minutes: 60 },
-          vector_storage: { enabled: true, update_frequency_days: 1 },
-          chromadb: { enabled: true, path: 'data/chromadb', collection_name: 'autobot' },
-          redis: { enabled: true, host: '127.0.0.1', port: 6379 }
-        },
-        developer: { enabled: false, detailed_errors: true, endpoint_suggestions: true, debug_logging: false }
-      }
-      getSpy.mockResolvedValue({ data: payload })
-
-      const result = await repo.getSettings()
-
-      expect(getSpy).toHaveBeenCalledWith(expect.stringContaining('/api/settings/'))
-      expect(result).toEqual(payload)
-      expect(result.message_display.show_thoughts).toBe(true)
-      expect(result.backend.api_endpoint).toBe('http://127.0.0.1:8001')
-      expect(result.memory.chromadb.collection_name).toBe('autobot')
+  // #16465 — settings methods removed (getSettings/updateSettings/
+  // getBackendSettings/saveBackendSettings). Zero call sites anywhere in the
+  // frontend; the plain /settings/ get/save is already served live by
+  // utils/ApiClient.ts. Assert the methods are gone so they can't silently
+  // reappear.
+  describe('settings methods removed (#16465)', () => {
+    it('getSettings is not present on SystemRepository', () => {
+      expect((repo as unknown as Record<string, unknown>).getSettings).toBeUndefined()
     })
 
-    it('returns empty object on null payload', async () => {
-      getSpy.mockResolvedValue({ data: null })
-
-      const result = await repo.getSettings()
-
-      expect(result).toEqual({})
-    })
-  })
-
-  describe('updateSettings — posts partial settings to /api/settings/ (#5214)', () => {
-    it('returns the backend payload verbatim', async () => {
-      const partial = { ui: { theme: 'light', font_size: 'large', language: 'en', animations: false, developer_mode: false } }
-      const response = { ui: partial.ui }
-      postSpy.mockResolvedValue({ data: response })
-
-      const result = await repo.updateSettings(partial as Partial<AutoBotSettings>)
-
-      expect(postSpy).toHaveBeenCalledWith(
-        expect.stringContaining('/api/settings/'),
-        partial
-      )
-      expect(result).toEqual(response)
+    it('updateSettings is not present on SystemRepository', () => {
+      expect((repo as unknown as Record<string, unknown>).updateSettings).toBeUndefined()
     })
 
-    it('returns empty object on null payload', async () => {
-      postSpy.mockResolvedValue({ data: null })
+    it('getBackendSettings is not present on SystemRepository', () => {
+      expect((repo as unknown as Record<string, unknown>).getBackendSettings).toBeUndefined()
+    })
 
-      const result = await repo.updateSettings({})
-
-      expect(result).toEqual({})
+    it('saveBackendSettings is not present on SystemRepository', () => {
+      expect((repo as unknown as Record<string, unknown>).saveBackendSettings).toBeUndefined()
     })
   })
 

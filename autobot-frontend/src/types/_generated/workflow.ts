@@ -176,6 +176,7 @@ export type Permission =
   | 'mcp.metrics.read'
   | 'mcp.desktop.read'
   | 'mcp.desktop.control'
+  | 'mcp.external'
   | 'batch.view'
   | 'batch.create'
   | 'batch.execute'
@@ -225,6 +226,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'mcp.read',
     'mcp.execute',
     'mcp.manage',
+    'mcp.external',
     'batch.view',
     'batch.create',
     'batch.execute',

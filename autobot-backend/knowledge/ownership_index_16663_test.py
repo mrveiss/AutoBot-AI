@@ -22,6 +22,7 @@ from knowledge.ownership_index import (
     drop_ownership_unless_admin,
     index_ownership,
     ownership_changed,
+    refuses_platform_wide,
     reindex_ownership,
 )
 
@@ -76,10 +77,18 @@ async def test_indexing_forwards_org_group_and_access_level():
 
 
 @pytest.mark.asyncio
-async def test_a_fact_without_an_owner_is_not_indexed():
+async def test_a_fact_without_an_owner_gets_no_owner_index():
     manager = AsyncMock()
-    assert not await index_ownership(manager, "f1", {"visibility": "system"})
+    assert not await index_ownership(manager, "f1", {"visibility": "private"})
     manager.set_owner.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_ownerless_system_fact_is_filed_in_the_system_index_only():
+    """#16693: an ingested document nobody owns still reaches every signed-in user."""
+    store = _SetStore()
+    assert await index_ownership(KnowledgeOwnership(store), "f1", {"visibility": VisibilityLevel.SYSTEM})
+    assert store.sets == {_SYSTEM_INDEX: {"f1"}}
 
 
 @pytest.mark.asyncio
@@ -203,3 +212,20 @@ async def test_ingestion_files_the_fact_under_its_organization_and_group():
 
     assert "f1" in store.sets["org:kb:facts:o1"]
     assert "f1" in store.sets["group:kb:facts:g1"]
+
+
+@pytest.mark.parametrize(
+    ("metadata", "role", "refused"),
+    [
+        ({"visibility": "public"}, "user", True),
+        ({"visibility": " PUBLIC "}, "user", True),
+        ({"access_level": "Autobot"}, "user", True),
+        ({"visibility": "system"}, None, True),
+        ({"access_level": "general"}, "user", True),
+        ({"visibility": "system"}, "admin", False),
+        ({"visibility": "private"}, "user", False),
+        (None, "user", False),
+    ],
+)
+def test_only_a_non_admins_platform_wide_request_is_refused(metadata, role, refused):
+    assert refuses_platform_wide(metadata, role) is refused

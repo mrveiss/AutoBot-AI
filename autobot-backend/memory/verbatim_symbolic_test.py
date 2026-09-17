@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import memory.verbatim_store as vs
-from memory.verbatim_store import VerbatimStore, _extract_terms
+from memory.verbatim_store import UNSCOPED_ALL_USERS, VerbatimStore, _extract_terms
 
 
 class _FakePipe:
@@ -94,21 +94,21 @@ def test_extract_terms_drops_stopwords_and_short():
 async def test_search_symbolic_returns_none_when_disabled(monkeypatch):
     monkeypatch.setattr(vs, "_SYMBOLIC_INDEX_ENABLED", False)
     store = VerbatimStore()
-    assert await store.search_symbolic("clientx pricing") is None
+    assert await store.search_symbolic("clientx pricing", user_id=UNSCOPED_ALL_USERS) is None
 
 
 @pytest.mark.asyncio
 async def test_search_symbolic_returns_none_without_terms(monkeypatch, fake_redis):
     monkeypatch.setattr(vs, "_SYMBOLIC_INDEX_ENABLED", True)
     store = VerbatimStore()
-    assert await store.search_symbolic("did we the") is None  # all stopwords/short
+    assert await store.search_symbolic("did we the", user_id=UNSCOPED_ALL_USERS) is None  # all stopwords/short
 
 
 @pytest.mark.asyncio
 async def test_search_symbolic_returns_none_when_no_candidates(monkeypatch, fake_redis):
     monkeypatch.setattr(vs, "_SYMBOLIC_INDEX_ENABLED", True)
     store = VerbatimStore()
-    assert await store.search_symbolic("clientx pricing") is None  # empty index
+    assert await store.search_symbolic("clientx pricing", user_id=UNSCOPED_ALL_USERS) is None  # empty index
 
 
 # ---- index write + search --------------------------------------------------
@@ -136,10 +136,33 @@ async def test_index_and_search_roundtrip(monkeypatch, fake_redis):
     await store._index_symbolic("c1", "We agreed ClientX pricing stays flat")
     await store._index_symbolic("c2", "Unrelated note about lunch")
 
-    results = await store.search_symbolic("ClientX pricing")
+    results = await store.search_symbolic("ClientX pricing", user_id=UNSCOPED_ALL_USERS)
     assert results is not None
     assert results[0]["id"] == "c1"  # highest term overlap
     assert results[0]["score"] > results[-1]["score"]
+
+
+@pytest.mark.asyncio
+async def test_search_symbolic_never_returns_another_users_chunks(monkeypatch, fake_redis):
+    monkeypatch.setattr(vs, "_SYMBOLIC_INDEX_ENABLED", True)
+    collection = MagicMock()
+    collection.get = AsyncMock(
+        return_value={
+            "ids": ["mine", "theirs"],
+            "documents": ["ClientX pricing note", "ClientX pricing note"],
+            "metadatas": [
+                {"session_id": "s1", "user_id": "user-a", "timestamp": "2026-07-25T00:00:00+00:00"},
+                {"session_id": "s1", "user_id": "user-b", "timestamp": "2026-07-25T00:00:00+00:00"},
+            ],
+        }
+    )
+    store = _store_with_collection(collection)
+    await store._index_symbolic("mine", "ClientX pricing note")
+    await store._index_symbolic("theirs", "ClientX pricing note")
+
+    results = await store.search_symbolic("clientx pricing", user_id="user-a")
+
+    assert [r["id"] for r in results] == ["mine"], f"user-a must not see user-b's chunk: {results}"
 
 
 @pytest.mark.asyncio
@@ -155,7 +178,7 @@ async def test_search_symbolic_respects_session_filter(monkeypatch, fake_redis):
     )
     store = _store_with_collection(collection)
     await store._index_symbolic("c1", "ClientX pricing note")
-    results = await store.search_symbolic("clientx pricing", session_filter="s1")
+    results = await store.search_symbolic("clientx pricing", user_id=UNSCOPED_ALL_USERS, session_filter="s1")
     assert results == []  # candidate belongs to a different session
 
 
@@ -170,7 +193,7 @@ async def test_over_broad_query_defers_to_semantic(monkeypatch, fake_redis):
     collection = MagicMock()
     collection.get = AsyncMock()
     store = _store_with_collection(collection)
-    assert await store.search_symbolic("pricing") is None
+    assert await store.search_symbolic("pricing", user_id=UNSCOPED_ALL_USERS) is None
     collection.get.assert_not_awaited()  # never fetched the oversized set
 
 

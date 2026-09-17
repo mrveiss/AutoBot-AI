@@ -68,6 +68,7 @@ finally:
 _resolve_deployed_dir = _ddr._resolve_deployed_dir
 get_live_dir = _ddr.get_live_dir
 get_release_component_dir = _ddr.get_release_component_dir
+deployed_root = _ddr.deployed_root
 ALLOWED_COMPONENTS = _dc.ALLOWED_COMPONENTS
 EXTRA_VISIBILITY_COMPONENTS = _dc.EXTRA_VISIBILITY_COMPONENTS
 _NONSTANDARD_COMPONENT_PATHS = _dc._NONSTANDARD_COMPONENT_PATHS
@@ -184,3 +185,22 @@ class TestNonstandardComponentDeployedPaths:
         with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path)}):
             assert get_live_dir("autobot-npu-worker") == str(tmp_path / "autobot-npu-worker")
             assert get_live_dir("autobot-browser-worker") == str(tmp_path / "autobot-browser-worker")
+
+
+class TestDeployedRoot:
+    def test_reads_the_env_var_live_not_at_import_time(self, tmp_path):
+        """A second call under a different env value must see the new value —
+        proves the root is read at call time, so tests (and #13539's future
+        release flip) can retarget it per-call, never once at import."""
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path / "first")}):
+            first = deployed_root()
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path / "second")}):
+            second = deployed_root()
+        assert first != second
+        assert first == os.path.realpath(str(tmp_path / "first"))
+        assert second == os.path.realpath(str(tmp_path / "second"))
+
+    def test_defaults_to_opt_autobot(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SLM_DEPLOYED_ROOT", None)
+            assert deployed_root() == os.path.realpath("/opt/autobot")

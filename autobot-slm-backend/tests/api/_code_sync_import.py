@@ -39,13 +39,19 @@ from __future__ import annotations
 
 import ast
 import importlib
+import importlib.util
 import sys
 import types
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
+
+if TYPE_CHECKING:
+    import pytest
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 _CODE_SYNC_SRC = _BACKEND_ROOT / "api" / "code_sync.py"
+_DEPLOYED_DIR_RESOLVER_SRC = _BACKEND_ROOT / "services" / "deployed_dir_resolver.py"
 
 
 def _schema_class_names() -> list[str]:
@@ -132,3 +138,40 @@ def import_code_sync() -> types.ModuleType:
             restored.schemas = restored_schemas  # type: ignore[attr-defined]
 
     return module
+
+
+def patch_real_deployed_root(monkeypatch: "pytest.MonkeyPatch", root: "Path | None" = None) -> None:
+    """Swap the stubbed ``services.deployed_dir_resolver`` for the real module (#16236).
+
+    ``api/code_sync.py`` imports ``get_live_dir``/``get_release_component_dir``
+    from ``services.deployed_dir_resolver``, so the root conftest's AST-derived
+    ``services.*`` stubbing (``autobot-slm-backend/conftest.py``) replaces the
+    whole module with a ``MagicMock`` for every test collected here.
+    ``_load_env_file``'s containment guard (``api/_pricing_post_sync.py``,
+    #16229 review) reads its root through that same module's
+    ``deployed_root()`` -- under the stub every call returns a MagicMock, so
+    ``os.path.realpath(deployed_root())`` resolves to a nonsense path built
+    from the mock's repr, and the guard rejects every real candidate no
+    matter what ``SLM_DEPLOYED_ROOT`` is set to (setting the env var has
+    nothing to act on: the stub never reads it).
+
+    A test that needs the guard to run against a real root -- rather than
+    always raising -- needs the genuine function in its place. Loads
+    ``services/deployed_dir_resolver.py`` by file path (the same pattern the
+    root conftest uses for the modules it must real-load, e.g. ``ssh_utils``)
+    and binds it onto both ``sys.modules["services.deployed_dir_resolver"]``
+    and the ``services`` stub's attribute (#9780 -- the two ways of reaching
+    a submodule must converge on the same object), through ``monkeypatch`` so
+    it reverts after the test and never leaks into another one. With *root*, it
+    also points ``SLM_DEPLOYED_ROOT`` there, the pairing every guard-reaching
+    test needs.
+    """
+    spec = importlib.util.spec_from_file_location("services.deployed_dir_resolver", _DEPLOYED_DIR_RESOLVER_SRC)
+    real_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(real_module)  # type: ignore[union-attr]
+    monkeypatch.setitem(sys.modules, "services.deployed_dir_resolver", real_module)
+    services_stub = sys.modules.get("services")
+    if services_stub is not None:
+        monkeypatch.setattr(services_stub, "deployed_dir_resolver", real_module, raising=False)
+    if root is not None:
+        monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(root))

@@ -362,3 +362,38 @@ own merits.
 should show `task` only as a `RESERVED_KINDS` key, never inside `VALID_KINDS`;
 `grep -c 'from services' autobot_shared/coordination/work_claims.py` should be
 `0`.
+
+---
+
+## `utils/ollama_connection_pool.py` — Superseded, Kept In-Tree Pending Removal
+
+**File:** `autobot-backend/utils/ollama_connection_pool.py`
+**Superseded by:** `autobot-backend/llm_shared/base_provider.py` (`BaseProvider._concurrency_semaphore`),
+`autobot_shared/http_client_manager.py` (`HTTPClientManager`)
+**Issue:** #16527
+
+**Reason:** `OllamaConnectionPool` bundled two concerns — bounding concurrent
+Ollama requests (`asyncio.Semaphore` + queue/stats) and pooling the underlying
+HTTP connections — behind its own `acquire_connection()`. Both are now owned
+canonically elsewhere: `HTTPClientManager` already pools TCP connections for
+every outbound call via one `aiohttp.TCPConnector` (`acquire_connection()`
+itself borrows from it through `tracked_session()`, so the pool never owned
+its own connections), and `BaseProvider.__init__` now creates a per-provider
+`asyncio.Semaphore` sized from `LLMSettings.max_concurrent_requests`, which
+bounds Ollama's in-flight requests automatically since `OllamaProvider`
+subclasses `BaseProvider`. The pool's only caller, `llm_shared/adapters/
+ollama_adapter.py::OllamaAdapter`, is registered for diagnostics
+(`api/adapters.py`: `list_adapters`, `test_adapter_environment`,
+`probe_adapters`, `pull_model`) and never sits on the live chat/stream path —
+`services/llm_service.py` calls `OllamaProvider.chat_completion()` directly
+through the registry, so wiring the pool into the adapter would not have
+bounded anything real. Retiring it is explicitly the fix here, not a unilateral
+deletion: it is marked superseded in its module docstring rather than removed,
+pending a dedicated removal PR once the new semaphore has run in production.
+
+**Revisit when:** the new per-provider semaphore has been running in
+production long enough to trust, at which point `utils/ollama_connection_pool.py`
+and `utils/ollama_connection_pool_test.py` can be deleted outright — tracked
+in #16539.
+
+**Grep check:** `grep -rln "OllamaConnectionPool\|get_ollama_pool" autobot-backend/ | grep -v ollama_connection_pool` should show only `llm_shared/adapters/ollama_adapter_test.py` or nothing — no new production caller should appear without updating this entry.

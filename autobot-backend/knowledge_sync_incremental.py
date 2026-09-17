@@ -38,6 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_llm_logger
 from constants.threshold_constants import TimingConstants
+from knowledge.ingestion_visibility import stamp_if_document
 from knowledge_base import KnowledgeBase
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
@@ -473,18 +474,7 @@ class IncrementalKnowledgeSync:
         return content, file_stat
 
     def _create_chunk_base_metadata(self, file_path: Path, relative_path: Path, content: str) -> Dict[str, Any]:
-        """Issue #665: Extracted from _process_file_with_gpu_chunking to reduce function length.
-
-        Create base metadata for chunking.
-
-        Args:
-            file_path: Absolute path to the file.
-            relative_path: Path relative to project root.
-            content: File content string.
-
-        Returns:
-            Dictionary of base metadata.
-        """
+        """Base metadata for a file's chunks (#665); its documentation categories are SYSTEM (#16693)."""
         base_metadata = {
             "source": "project-documentation",
             "relative_path": str(relative_path),
@@ -497,7 +487,7 @@ class IncrementalKnowledgeSync:
         category = self._determine_category(relative_path)
         base_metadata["category"] = category
 
-        return base_metadata
+        return stamp_if_document(base_metadata)
 
     async def _store_chunks_in_knowledge_base(
         self, chunks: List[Any], relative_path: Path, base_metadata: Dict[str, Any]
@@ -523,7 +513,7 @@ class IncrementalKnowledgeSync:
                 "character_count": len(chunk.content),
                 "gpu_optimized": True,
             }
-            result = await self.kb.store_fact(chunk_text, chunk_metadata)
+            result = await self.kb.store_fact(chunk_text, {**chunk_metadata, "ingest_route": "incremental_sync"})
             if result["status"] == "success":
                 fact_ids.append(result["fact_id"])
             else:

@@ -6,13 +6,14 @@
 Distributed Tracing Service with OpenTelemetry (Issue #57, #697)
 
 Provides centralized OpenTelemetry configuration for distributed tracing
-across the 5-VM AutoBot infrastructure (see NetworkConstants for IPs):
-- Main Machine - Backend API
-- VM1 Frontend - Web interface
-- VM2 NPU Worker - Hardware AI acceleration
-- VM3 Redis - Data layer + Jaeger
-- VM4 AI Stack - AI processing
-- VM5 Browser - Web automation
+across AutoBot's roles (role-based, count-agnostic — see NetworkConstants for
+IPs and docs/architecture/VM_ROLES.md for the role definitions):
+- Backend role - Backend API
+- Frontend role - Web interface
+- NPU Worker role - Hardware AI acceleration
+- Database role - Redis data layer + Jaeger
+- AI Stack role - AI processing
+- Browser role - Web automation
 
 Features:
 - Trace context propagation across services

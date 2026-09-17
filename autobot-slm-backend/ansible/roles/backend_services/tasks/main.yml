@@ -34,6 +34,7 @@
 - name: "Backend Services | Install target Python interpreter"
   ansible.builtin.include_role:
     name: python_interpreter
+    public: true  # #16750: role defaults (python_interpreter_binary) must reach the pip task below
 
 - name: "Backend Services | Enforce venv target Python version (env-drift fix)"
   ansible.builtin.include_role:
@@ -43,11 +44,20 @@
     venv_path: /opt/autobot/venv
     venv_python: python3.14
 
+# #16641: `virtualenv_python:` alone only applies when `virtualenv_command:`
+# names the standalone `virtualenv` tool -- it is silently ignored for `-m
+# venv`, and without either, pip fell back to shelling out to `virtualenv`
+# itself, which these hosts do not have. `virtualenv_command:` below replaces
+# it with the stdlib's `venv` module, using the interpreter
+# python_interpreter (included above) already installed.
 - name: Install Python dependencies
   pip:
     requirements: /opt/autobot/app/requirements.txt
     virtualenv: /opt/autobot/venv
-    virtualenv_python: python3.14
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
+    # #15684: constraints/shared.txt applied here too, the same shape every
+    # other pip site in this venv now uses.
+    extra_args: "-c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt"
   become_user: autobot
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
