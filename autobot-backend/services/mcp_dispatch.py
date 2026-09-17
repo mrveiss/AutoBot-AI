@@ -119,6 +119,7 @@ class MCPDispatcher:
                 data = await response.json()
                 tools = data.get("tools", [])
                 self._tool_cache = {tool["name"]: tool for tool in tools}
+                await self._merge_external_tools()
                 self._cache_loaded = True
                 self._cache_timestamp = time.monotonic()
                 logger.info(
@@ -132,6 +133,53 @@ class MCPDispatcher:
         except Exception as exc:
             logger.warning("MCPDispatcher: failed to refresh tool cache: %s", exc)
             return 0
+
+    async def _merge_external_tools(self) -> None:
+        """Merge admin-configured external MCP server tools into the cache (#11542).
+
+        Every entry declares Permission.MCP_EXTERNAL as its required_permission,
+        so _would_deny() and dispatch()'s canonical-RBAC gate cover these
+        exactly like a governed internal bridge's tools — no bypass, no
+        second enforcement path. Independent failure domain from the
+        internal registry fetch above: an external-bridge outage (store
+        down, every server unreachable) merges zero tools and never raises,
+        so it can never block internal tools from loading.
+
+        The internal names already in the cache are passed as reserved
+        (#16458 review): without this, an external server advertising a
+        built-in tool's name would silently overwrite that entry below,
+        so calls meant for the internal tool would route to the external
+        server instead — same name, wrong owner, no error anywhere.
+        """
+        from autobot_shared.auth.permissions import Permission
+        from services.mcp_external_bridge import get_mcp_external_bridge
+
+        internal_names = frozenset(self._tool_cache)
+        try:
+            tools = await get_mcp_external_bridge().list_tools(reserved_names=internal_names)
+        except Exception as exc:
+            logger.warning("MCPDispatcher: external MCP tool discovery failed: %s", exc)
+            return
+
+        for tool in tools:
+            if tool.name in internal_names:
+                # Defence in depth: the bridge is told these names are
+                # reserved and prefixes on collision (services.mcp_aggregation),
+                # but a bridge that somehow still returns a bare, colliding
+                # name must not silently take over the internal entry either.
+                logger.warning(
+                    "MCPDispatcher: external tool %r collides with an internal tool name -- skipped, " "not merged",
+                    tool.name,
+                )
+                continue
+            self._tool_cache[tool.name] = {
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": tool.input_schema.model_dump(exclude_none=True),
+                "bridge": "external",
+                "endpoint": "",
+                "required_permission": Permission.MCP_EXTERNAL.value,
+            }
 
     # ------------------------------------------------------------------
     # Tool lookup
@@ -275,7 +323,7 @@ class MCPDispatcher:
 
         # Issue #3232: emit CoT events around bridge call.
         _cot_start = emit_tool_call(tool_name, arguments, session_id=session_id)
-        result = await self._call_bridge(tool_name, bridge, endpoint, arguments)
+        result = await self._call_bridge(tool_name, bridge, endpoint, arguments, role)
         emit_tool_result(
             tool_name,
             result.get("result", ""),
@@ -316,21 +364,49 @@ class MCPDispatcher:
             )
             return None
 
-    async def _call_bridge(self, tool_name: str, bridge: str, endpoint: str, arguments: dict) -> dict:
+    @staticmethod
+    async def _call_external_bridge(tool_name: str, arguments: dict, role: str) -> dict:
+        """Route a tool call to MCPExternalBridge (#11542) and adapt its result shape.
+
+        MCPExternalBridge.call_tool() applies the owning server's own
+        allowed_roles check before ever connecting — a refusal there comes
+        back as success=False with the reason in result, same as any other
+        bridge failure, not a distinct denial shape.
+        """
+        from services.mcp_external_bridge import get_mcp_external_bridge
+
+        outcome = await get_mcp_external_bridge().call_tool(tool_name, arguments, role=role)
+        return {
+            "success": outcome.success,
+            "result": outcome.result if outcome.success else outcome.error,
+            "bridge": "external",
+        }
+
+    async def _call_bridge(
+        self, tool_name: str, bridge: str, endpoint: str, arguments: dict, role: str = "user"
+    ) -> dict:
         """Execute a tool call against an MCP bridge.
 
         Routes through an isolated subprocess worker when the bridge policy
         requires it (#3229); otherwise falls back to the in-process HTTP path.
+        An admin-configured external MCP server (#11542, bridge == "external")
+        routes to MCPExternalBridge instead — it has no bridge endpoint or
+        isolated-worker policy of its own, and enforces its own per-server
+        allowed_roles check using *role*.
 
         Args:
             tool_name: Name of the tool being called.
             bridge: Bridge identifier (for logging/result metadata).
             endpoint: Full URL path of the tool's bridge endpoint.
             arguments: Arguments to pass to the bridge.
+            role: Caller role, forwarded to MCPExternalBridge's allowed_roles check.
 
         Returns:
             Dict with keys: success, result, bridge.
         """
+        if bridge == "external":
+            return await self._call_external_bridge(tool_name, arguments, role)
+
         # Issue #3229: isolated-worker routing.
         from services.mcp_isolated_runtime import get_isolated_registry
 

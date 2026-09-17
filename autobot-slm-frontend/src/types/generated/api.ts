@@ -1057,6 +1057,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/code-sync/drift/full": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Full Tree Drift
+         * @description Every file under every deployed component, checked in one run (#16310).
+         *
+         *     An empty or unreadable component tree is reported through ``errors``, not
+         *     silently folded into a clean result -- a run that could not look must
+         *     never read the same as a run that looked and found nothing.
+         */
+        get: operations["get_full_tree_drift_api_code_sync_drift_full_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/code-sync/drift/resolve": {
         parameters: {
             query?: never;
@@ -8334,6 +8358,31 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ComponentDriftModel
+         * @description One component's full-tree drift result.
+         */
+        ComponentDriftModel: {
+            /** Compared */
+            compared: number;
+            /** Component */
+            component: string;
+            /** Drifted */
+            drifted: components["schemas"]["FileVerdictModel"][];
+            /** Error */
+            error?: string | null;
+            /** Exclusions */
+            exclusions: {
+                [key: string]: number;
+            };
+            /**
+             * Skipped
+             * @default false
+             */
+            skipped: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ComponentSyncJobStatus
          * @description Status of an async component-resolve job (#11303).
          */
@@ -8910,6 +8959,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * FileVerdictModel
+         * @description One deployed-relative path and the verdict it earned.
+         */
+        FileVerdictModel: {
+            /** Detail */
+            detail?: string | null;
+            /** Path */
+            path: string;
+            /** Verdict */
+            verdict: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * FleetHealthResponse
          * @description Fleet health status response.
          */
@@ -9110,6 +9173,28 @@ export interface components {
              * @default 0
              */
             total_system_updates: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FullTreeDriftReport
+         * @description Every component, every file, one verdict each (#16310).
+         */
+        FullTreeDriftReport: {
+            /** Checked At */
+            checked_at: string;
+            /** Components */
+            components: components["schemas"]["ComponentDriftModel"][];
+            /** Errors */
+            errors: string[];
+            /** Exclusions */
+            exclusions: {
+                [key: string]: number;
+            };
+            /** Total Compared */
+            total_compared: number;
+            /** Total Drift */
+            total_drift: number;
         } & {
             [key: string]: unknown;
         };
@@ -11339,7 +11424,7 @@ export interface components {
              */
             sync_type: string;
             /** Systemd Service */
-            systemd_service?: string | null;
+            systemd_service?: string[] | null;
             /** Target Path */
             target_path: string;
         } & {
@@ -11483,7 +11568,7 @@ export interface components {
             /** Sync Type */
             sync_type?: string | null;
             /** Systemd Service */
-            systemd_service?: string | null;
+            systemd_service?: string[] | null;
             /** Target Path */
             target_path?: string | null;
         } & {
@@ -14062,7 +14147,7 @@ export interface components {
             /** Sync Type */
             sync_type?: string | null;
             /** Systemd Service */
-            systemd_service?: string | null;
+            systemd_service?: string[] | null;
             /** Target Path */
             target_path: string;
         } & {
@@ -16094,6 +16179,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileDriftReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_full_tree_drift_api_code_sync_drift_full_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FullTreeDriftReport"];
                 };
             };
             /** @description Validation Error */

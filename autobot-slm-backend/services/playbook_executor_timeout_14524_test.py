@@ -262,8 +262,8 @@ async def _read_group_pids(pid_dir: Path) -> tuple[int, int]:
         if (pid_dir / "leader.pid").exists() and (pid_dir / "sibling.pid").exists():
             break
         await asyncio.sleep(0.03)
-    leader_pid = int((pid_dir / "leader.pid").read_text().strip())
-    sibling_pid = int((pid_dir / "sibling.pid").read_text().strip())
+    leader_pid = int((await asyncio.to_thread((pid_dir / "leader.pid").read_text, encoding="utf-8")).strip())
+    sibling_pid = int((await asyncio.to_thread((pid_dir / "sibling.pid").read_text, encoding="utf-8")).strip())
     return leader_pid, sibling_pid
 
 
@@ -459,6 +459,30 @@ def test_update_code_source_returns_false_when_fetch_fails(tmp_path):
     executor._run_git = _run_git
 
     assert asyncio.run(executor._update_code_source()) is False
+
+
+def test_update_code_source_fetches_with_prune(tmp_path):
+    """#16610: after the branch rename the checkout kept stale
+    ``origin/release/*`` refs, and a plain ``fetch origin`` then failed to
+    create ``origin/release`` -- which made every detached self-update refuse
+    to run. The fetch must prune stale remote-tracking refs first.
+    """
+    executor = _executor_with_fake_code_source(tmp_path)
+    calls = []
+
+    async def _run_git(_code_source_dir, *args, **_kwargs):
+        calls.append(args)
+        return 0
+
+    async def _noop_log(*_args, **_kwargs):
+        return None
+
+    executor._run_git = _run_git
+    executor._log_updated_head_commit = _noop_log
+
+    assert asyncio.run(executor._update_code_source()) is True
+    assert ("fetch", "--prune", "origin") in calls
+    assert ("fetch", "origin") not in calls
 
 
 def test_update_code_source_returns_false_when_only_checkout_fails(tmp_path):

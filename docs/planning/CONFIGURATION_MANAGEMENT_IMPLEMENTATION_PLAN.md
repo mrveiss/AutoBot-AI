@@ -1151,7 +1151,7 @@ watchdog>=3.0.0  # File system event monitoring
 AUTOBOT_CONFIG_AUTO_RELOAD=true          # Enable hot reload
 AUTOBOT_CONFIG_VALIDATION_ON_STARTUP=true # Validate on startup
 AUTOBOT_CONFIG_DISTRIBUTED_RELOAD=true    # Use Redis for distributed reload
-VM_HOSTNAME=vm1-frontend                  # VM identifier for distributed reload
+VM_HOSTNAME=frontend                      # Role/host identifier for distributed reload
 ```
 
 ### Deployment Checklist
@@ -1259,7 +1259,7 @@ VM_HOSTNAME=vm1-frontend                  # VM identifier for distributed reload
 - [ ] No breaking changes to existing deployments
 - [ ] All tests passing (unit, integration, performance)
 - [ ] Documentation complete
-- [ ] Deployed to all 6 machines (main + 5 VMs)
+- [ ] Deployed to every deployment machine
 
 ---
 

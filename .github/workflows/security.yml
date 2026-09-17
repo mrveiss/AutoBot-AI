@@ -334,7 +334,7 @@ jobs:
         done < <(git ls-files -z '*package-lock.json' | grep -zv node_modules)
 
     - name: Upload Security Reports
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       if: always()
       with:
         name: dependency-security-reports
@@ -425,7 +425,7 @@ jobs:
           autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
 
     - name: Upload Semgrep SARIF to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4.37.9
+      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
       if: always()
       with:
         sarif_file: semgrep.sarif
@@ -458,7 +458,7 @@ jobs:
     # directories, so the repository root was never read.
 
     - name: Upload SAST Reports
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       if: always()
       with:
         name: sast-security-reports
@@ -521,7 +521,7 @@ jobs:
         # shellcheck disable=SC2016
         unaudited="$(jq -r '.results | to_entries[] | .key as $f | .value[]
           | select(.is_secret != false)
-          | "\($f):\(.line_number): \(.type) (is_secret: \(.is_secret // "unaudited"))"' "${committed}")"
+          | "\($f):\(.line_number // "?"): \(.type) (is_secret: \(.is_secret // "unaudited"))"' "${committed}")"
         # Rescan every git-tracked file with the baseline's own plugin and filter
         # settings. This rewrites .secrets.baseline in this disposable checkout
         # only; the verdicts compared below come from the committed copy.
@@ -537,7 +537,7 @@ jobs:
             | {key: "\($f)|\(.type)|\(.hashed_secret)", value: true}] | from_entries) as $audited
           | .results | to_entries[] | .key as $f | .value[]
           | select($audited["\($f)|\(.type)|\(.hashed_secret)"] | not)
-          | "\($f):\(.line_number): \(.type)"' .secrets.baseline)"
+          | "\($f):\(.line_number // "?"): \(.type)"' .secrets.baseline)"
         # A rescan that read nothing reports no new finding, so the comparison
         # above would pass on a scan that never looked. Its count is asserted
         # against the committed baseline and the floor declared in the script,
@@ -684,7 +684,7 @@ jobs:
         } >> security-summary.md
 
     - name: Upload Security Summary
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: security-summary
         path: security-summary.md

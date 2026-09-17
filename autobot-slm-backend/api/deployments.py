@@ -80,6 +80,10 @@ _ROLE_UI_META: Dict[str, Dict] = {
     "redis": {
         "description": "Redis Stack server for data persistence",
         "category": "data",
+        # Binary names, not systemd units (#16060/#16071): Redis Stack ships
+        # redis-server/redis-cli at /opt/redis-stack/bin/. The systemd unit it
+        # runs under is redis-stack-server, tracked separately by
+        # services/role_units.py.
         "tools": ["redis-server", "redis-cli", "redis-sentinel"],
     },
     "ai-stack": {

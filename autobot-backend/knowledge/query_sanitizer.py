@@ -139,6 +139,25 @@ class SanitizerResult:
 # ---------------------------------------------------------------------------
 
 
+_ESCAPE_OPEN = "[ESCAPED:"
+
+
+def _escape_match(match: "re.Match[str]") -> str:
+    """Wrap a matched span, unless an earlier pass already wrapped this exact span.
+
+    #16770: ``store_fact`` sanitizes every KB write, and five call sites sanitize their
+    own text before handing it over. Re-wrapping would nest markers
+    (``[ESCAPED:[ESCAPED:...]]``) and grow the text on every pass, so escaping has to be
+    idempotent. Keeping an already-wrapped span is safe -- it is character-for-character
+    what this rule would produce. STRIP rules still run inside a marker, so invisible
+    characters cannot hide behind a hand-written one.
+    """
+    text = match.string
+    start, end = match.start(), match.end()
+    wrapped = text[max(0, start - len(_ESCAPE_OPEN)) : start] == _ESCAPE_OPEN and text[end : end + 1] == "]"
+    return match.group(0) if wrapped else f"{_ESCAPE_OPEN}{match.group(0)}]"
+
+
 class QuerySanitizer:
     """Applies an ordered list of injection-defence rules to text."""
 
@@ -317,7 +336,7 @@ class QuerySanitizer:
             if rule.action == SanitizerAction.STRIP:
                 sanitized = rule.pattern.sub("", sanitized)
             elif rule.action == SanitizerAction.ESCAPE:
-                sanitized = rule.pattern.sub(lambda m: f"[ESCAPED:{m.group(0)}]", sanitized)
+                sanitized = rule.pattern.sub(_escape_match, sanitized)
             # SanitizerAction.LOG_ONLY: leave sanitized unchanged.
 
         result.sanitized_text = sanitized
@@ -394,9 +413,13 @@ def wrap_untrusted_web_content(text: str, url: str = "") -> str:
 # docs), and dropping them would stop the agent researching the very topic.
 # Downgrading REJECT to ESCAPE keeps the text, visibly neutralises the offending
 # span, and — unlike REJECT, which short-circuits — lets every later rule run.
-_WEB_REJECT_RULES = frozenset(r.name for r in QuerySanitizer._default_rules() if r.action == SanitizerAction.REJECT)
+_REJECT_RULE_NAMES = frozenset(r.name for r in QuerySanitizer._default_rules() if r.action == SanitizerAction.REJECT)
 
-_web_sanitizer = QuerySanitizer(
+#: Shared by fetched pages and by stored documents (#16770). A stored document needs the
+#: downgrade for one more reason than a page: REJECT short-circuits ``apply`` and returns
+#: the text as it stood *before* that rule, so a caller reading ``sanitized_text`` -- every
+#: current one does -- would persist the payload untouched, the later rules never run.
+_escaping_sanitizer = QuerySanitizer(
     [
         (replace(rule, action=SanitizerAction.ESCAPE) if rule.action == SanitizerAction.REJECT else rule)
         for rule in QuerySanitizer._default_rules()
@@ -411,7 +434,7 @@ def sanitize_and_wrap_web_content(text: str, url: str = "") -> str:
     Logs a warning when any injection pattern matched, so a hostile page is
     visible in the logs instead of silently reaching the model.
     """
-    result = _web_sanitizer.apply(text, source=url or "web")
+    result = _escaping_sanitizer.apply(text, source=url or "web")
     body = result.sanitized_text
 
     if result.hits:
@@ -421,7 +444,7 @@ def sanitize_and_wrap_web_content(text: str, url: str = "") -> str:
             result.hits,
         )
 
-    high_confidence = sorted(_WEB_REJECT_RULES & set(result.hits))
+    high_confidence = sorted(_REJECT_RULE_NAMES & set(result.hits))
     if high_confidence:
         body = (
             "[!] This page contains text matching known prompt-injection patterns "
@@ -430,3 +453,14 @@ def sanitize_and_wrap_web_content(text: str, url: str = "") -> str:
         )
 
     return wrap_untrusted_web_content(body, url)
+
+
+def sanitize_for_storage(text: str, source: str = "kb_write") -> SanitizerResult:
+    """Sanitize text on its way into the knowledge base (#16770).
+
+    ``KnowledgeBase.store_fact`` is the caller that matters: the chokepoint every KB
+    writer passes through, so a connector, bulk import or agent tool cannot store an
+    injected document by not knowing about this. *source* labels the writing route in
+    the metrics and the logs.
+    """
+    return _escaping_sanitizer.apply(text, source=source)

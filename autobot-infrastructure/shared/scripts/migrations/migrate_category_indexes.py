@@ -71,6 +71,7 @@ def _connect_to_redis() -> redis.Redis:
     redis_host = os.getenv("AUTOBOT_REDIS_HOST", "localhost")
     redis_port = int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
     redis_password = os.getenv("REDIS_PASSWORD") or os.getenv("AUTOBOT_REDIS_PASSWORD")
+    redis_username = os.getenv("REDIS_USERNAME") or os.getenv("AUTOBOT_REDIS_USERNAME")  # #16626
     redis_db = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
     logger.info("Connecting to Redis at %s:%s (db=%s)", redis_host, redis_port, redis_db)
@@ -80,6 +81,7 @@ def _connect_to_redis() -> redis.Redis:
             host=redis_host,
             port=redis_port,
             password=redis_password,
+            username=redis_username,
             db=redis_db,
             decode_responses=False,
         )

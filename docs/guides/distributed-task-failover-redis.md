@@ -145,9 +145,10 @@ see [Section 3](#3-task-lifecycle) and [Section 5](#5-failover-detection-and-tas
 ---
 
 
-> **Scope:** AutoBot's distributed task execution system across the 6-VM fleet,
-> using Redis-backed queues for task assignment, heartbeat monitoring, and
-> automatic failover when worker nodes become unreachable.
+> **Scope:** AutoBot's distributed task execution system across its role-based fleet —
+> Docker, a single VM, or however many machines a deployment scales to — using
+> Redis-backed queues for task assignment, heartbeat monitoring, and automatic
+> failover when worker nodes become unreachable.
 
 ---
 
@@ -170,15 +171,17 @@ see [Section 3](#3-task-lifecycle) and [Section 5](#5-failover-detection-and-tas
 
 ## 1. Architecture Overview
 
-AutoBot distributes work across a fleet of six virtual machines. A central
-Redis Stack instance on the Redis VM acts as the shared coordination layer
+AutoBot distributes work across a role-based fleet of machines — there is no fixed count; a
+deployment may run in Docker, on one VM, or scale each role onto its own machine. A central
+Redis Stack instance on the database role acts as the shared coordination layer
 for task queues, worker heartbeats, failover state, and result storage.
 
 ### Fleet Topology
 
+One example role layout (roles may be co-located or split across any number of machines):
 ```
                          +---------------------+
-                         |   Redis VM (.23)    |
+                         |   Database role     |
                          |   Redis Stack       |
                          |   Port 6379         |
                          +----------+----------+
@@ -186,15 +189,15 @@ for task queues, worker heartbeats, failover state, and result storage.
            +------------------------+------------------------+
            |                        |                        |
 +----------+----------+  +----------+----------+  +----------+----------+
-|   Main VM (.20)     |  |   NPU VM (.22)      |  |  AI Stack VM (.24) |
-|   Backend API       |  |   OpenVINO Worker   |  |  AI Processing     |
-|   Scheduler         |  |   Port 8081         |  |  TTS Worker (8082) |
-|   Failover Monitor  |  +---------------------+  +---------------------+
+|   Main / Control    |  |   NPU Worker role   |  |  AI Stack role     |
+|   Backend API        |  |   OpenVINO Worker   |  |  AI Processing     |
+|   Scheduler          |  |   Port 8081         |  |  TTS Worker (8082) |
+|   Failover Monitor    |  +---------------------+  +---------------------+
 +---------------------+
            |
 +----------+----------+  +---------------------+  +---------------------+
-|  Frontend VM (.21)  |  |  Browser VM (.25)   |  |  SLM Server (.19)  |
-|  nginx / Vue.js     |  |  Playwright         |  |  Fleet Management  |
+|  Frontend role       |  |  Browser role       |  |  SLM Server         |
+|  nginx / Vue.js      |  |  Playwright         |  |  Fleet Management   |
 +---------------------+  +---------------------+  +---------------------+
 ```
 
@@ -870,7 +873,7 @@ async def deregister_worker(worker_id: str) -> None:
 
 ## 5. Failover Detection and Task Migration
 
-The failover monitor runs on the Main VM (.20) as part of the backend
+The failover monitor runs on the Main / Control role as part of the backend
 process. It periodically checks for workers whose heartbeat keys have
 expired and migrates their orphaned tasks back to the queue.
 
@@ -1166,7 +1169,7 @@ curl -sk -X POST https://<backend-ip>:8443/api/npu/workers/pair \
     -H "Content-Type: application/json" \
     -d '{
         "url": "http://<npu-ip>:8081",
-        "name": "NPU Worker VM22",
+        "name": "NPU Worker Example",
         "platform": "linux",
         "max_concurrent_tasks": 4,
         "priority": 8
@@ -1454,7 +1457,7 @@ This section ties together all components into a production-ready
 AutoBot Distributed Task Manager with Failover
 
 Complete implementation of the distributed task system that:
-- Registers workers across the 6-VM fleet
+- Registers workers across the role-based fleet, however many machines it uses
 - Distributes tasks through priority queues
 - Monitors worker health via heartbeats
 - Automatically migrates tasks from dead workers
@@ -2188,7 +2191,7 @@ via the metrics manager. Key metrics:
 actually alive.
 
 **Possible causes:**
-1. Network partition between worker VM and Redis VM (.23).
+1. Network partition between a worker's machine and the database role (Redis).
 2. Worker's heartbeat coroutine crashed silently.
 3. Redis is overloaded and not processing `SETEX` commands in time.
 

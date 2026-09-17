@@ -11,14 +11,15 @@
  * reaching it there means importing the entire route table.
  *
  * #14770: it also removes a genuine readability trap. The router option is
- * itself named `scrollBehavior`, so an inline call to the imported
- * `scrollBehavior()` resolved to the module import rather than to the method
- * — correct, because object method shorthand creates no binding for its own
- * name, but not something a reader should have to work out.
+ * itself named `scrollBehavior`, and the shared helper used to be too, so an
+ * inline call resolved to the import rather than the method — correct, since
+ * object method shorthand creates no binding for its own name, but not
+ * something a reader should have to work out. #14807 renamed the helper to
+ * `preferredScrollBehavior()`, so the two no longer share a name at all.
  */
 
 import type { RouteLocationNormalized } from 'vue-router'
-import { isReducedMotion } from '@/composables/useReducedMotion'
+import { preferredScrollBehavior } from '@/composables/useReducedMotion'
 
 /** What `vue-router` accepts back from a `scrollBehavior` handler. */
 export type ScrollTarget =
@@ -44,7 +45,7 @@ export function routeScrollBehavior(
 ): ScrollTarget {
   if (savedPosition) return savedPosition
 
-  const behavior: ScrollBehavior = isReducedMotion() ? 'auto' : 'smooth'
+  const behavior = preferredScrollBehavior()
   if (to.hash) return { el: to.hash, behavior }
   return { top: 0, behavior }
 }

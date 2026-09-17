@@ -206,7 +206,7 @@ async def _store_man_pages_to_kb(kb, man_pages: list, delay: float) -> tuple[int
                 items_failed += 1
                 continue
 
-            result = await kb.store_fact(content=content, metadata=metadata)
+            result = await kb.store_fact(content=content, metadata={**metadata, "ingest_route": "man_page_task"})
 
             if result and result.get("status") == "success":
                 items_added += 1
@@ -234,7 +234,7 @@ async def _store_scan_results_to_kb(kb, scan_result: dict) -> tuple:
         try:
             result = await kb.store_fact(
                 content=parsed.get("content", ""),
-                metadata=parsed.get("metadata", {}),
+                metadata={**parsed.get("metadata", {}), "ingest_route": "man_page_scan_task"},
             )
             if result and result.get("status") == "success":
                 items_added += 1

@@ -19,7 +19,7 @@ export interface Role {
   sync_type: string | null
   source_paths: string[]
   target_path: string
-  systemd_service: string | null
+  systemd_service: string[] | null // #16025: a role can own >1 systemd unit
   auto_restart: boolean
   health_check_port: number | null
   health_check_path: string | null
@@ -28,6 +28,20 @@ export interface Role {
   required: boolean
   degraded_without: string[]
   ansible_playbook: string | null
+}
+
+// #16025: systemd_service became a sequence (a role can own >1 unit, e.g. the
+// backend role's autobot-backend + autobot-celery). Both role-management
+// views (RolesView.vue, OrchestrationView.vue) edit it as one comma-separated
+// text field, same as source_paths/degraded_without -- shared here so the
+// array<->text conversion is not reimplemented, and diverging, in each view.
+export function joinSystemdUnits(units: string[] | null | undefined): string {
+  return (units || []).join(', ')
+}
+
+export function parseSystemdUnits(input: string): string[] | null {
+  const units = input.split(',').map((s) => s.trim()).filter(Boolean)
+  return units.length > 0 ? units : null
 }
 
 export interface NodeRoleItem {

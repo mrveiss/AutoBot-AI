@@ -228,6 +228,7 @@ class ServiceConfigMixin:
             "host": ssot.vm.redis,
             "port": ssot.port.redis,
             "password": ssot.redis.password,
+            "username": ssot.redis.username,
             "db": ssot.redis.db_main,
         }
 

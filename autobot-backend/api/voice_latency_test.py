@@ -35,6 +35,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketState
 
+from api.voice import _framed_audio_chunks
 from api.voice import router as voice_router
 from api.voice_stream import _stream_chunks_pipelined
 from services.tts_client import TTSClient
@@ -66,9 +67,15 @@ class _PacedStreamReader:
         out, self._buf = self._buf[:n], self._buf[n:]
         return out
 
+    @property
+    def released(self) -> int:
+        """Chunks handed over so far; the next is released only when the reader asks."""
+        return self._index
+
 
 def _make_worker_http_client(*, serves_stream: bool) -> MagicMock:
     """Pooled-HTTP-client stub standing in for a TTS worker with real timing."""
+    readers: list = []  # one per stream-route request, read by _stream_progress
 
     async def _slow_read() -> bytes:
         await asyncio.sleep(SYNTH_SECONDS)
@@ -81,6 +88,8 @@ def _make_worker_http_client(*, serves_stream: bool) -> MagicMock:
         resp.text = AsyncMock(return_value="Not Found")
         resp.read = AsyncMock(side_effect=_slow_read)
         resp.content = _PacedStreamReader(STREAM_CHUNKS, CHUNK_SECONDS)
+        if streaming:
+            readers.append(resp.content)
         cm = MagicMock()
         cm.__aenter__ = AsyncMock(return_value=resp)
         cm.__aexit__ = AsyncMock(return_value=False)
@@ -88,7 +97,13 @@ def _make_worker_http_client(*, serves_stream: bool) -> MagicMock:
 
     client = MagicMock()
     client.tracked_request = MagicMock(side_effect=_tracked_request)
+    client.stream_readers = readers
     return client
+
+
+def _stream_progress(http_client: MagicMock):
+    """How many chunks the fake worker's stream route has released so far."""
+    return lambda: http_client.stream_readers[-1].released if http_client.stream_readers else 0
 
 
 class _MockSecurityLayer:
@@ -119,13 +134,16 @@ def _make_app() -> FastAPI:
     return app
 
 
-async def _time_to_first_byte(app: FastAPI, payload: dict) -> tuple:
-    """POST /api/voice/synthesize over raw ASGI; return (TTFB seconds, body).
+async def _time_to_first_byte(app: FastAPI, payload: dict, progress=lambda: None) -> tuple:
+    """POST /api/voice/synthesize over raw ASGI; return (TTFB seconds, body, progress at first byte).
 
     Starlette's ``TestClient`` buffers the whole response before returning, so
     it cannot observe time-to-first-byte at all -- driving the ASGI app
     directly is the only way to measure the thing this issue is about, and it
     still exercises the real route, form parsing and StreamingResponse.
+
+    ``progress`` is sampled as each message is sent, so a caller can read how far
+    the fake worker had got when the first audio byte left (#16407).
     """
     encoded = urlencode(payload).encode("utf-8")
     scope = {
@@ -162,49 +180,73 @@ async def _time_to_first_byte(app: FastAPI, payload: dict) -> tuple:
         return {"type": "http.request", "body": encoded, "more_body": False}
 
     async def _send(message):
-        sent.append((time.monotonic() - started, message))
+        sent.append((time.monotonic() - started, progress(), message))
 
     await app(scope, _receive, _send)
 
-    status = next(m["status"] for _, m in sent if m["type"] == "http.response.start")
+    status = next(m["status"] for _, _, m in sent if m["type"] == "http.response.start")
     assert status == 200, f"unexpected status {status}"
     body = b""
-    first_byte_at = None
-    for elapsed, message in sent:
+    first_byte_at = progress_at_first_byte = None
+    for elapsed, seen, message in sent:
         if message["type"] != "http.response.body":
             continue
         piece = message.get("body", b"")
         if piece and first_byte_at is None:
-            first_byte_at = elapsed
+            first_byte_at, progress_at_first_byte = elapsed, seen
         body += piece
-    return first_byte_at, body
+    return first_byte_at, body, progress_at_first_byte
 
 
 @pytest.mark.asyncio
-async def test_streaming_synthesize_reaches_first_audio_far_sooner():
-    """Measured: the streaming route must beat the whole-blob route to first audio.
+async def test_streaming_synthesize_sends_first_audio_after_the_first_chunk():
+    """The streaming route must send first audio while the worker is still producing.
 
     Regression guard for #13215 -- a naive "it called synthesize_stream"
     assertion would still pass if the route buffered the whole utterance
     before responding, which is exactly the defect.
+
+    Judged by how many chunks the fake worker had released when the first audio
+    byte left, not by racing two wall-clock timings: the worker releases a chunk
+    only when the route pulls one, so the count is the same on an idle machine
+    and on a loaded CI runner, where the timing race failed (#16407).
     """
     app = _make_app()
     http_client = _make_worker_http_client(serves_stream=True)
 
     with patch("services.tts_client.get_http_client", return_value=http_client):
         with patch("api.voice.get_tts_client", return_value=TTSClient()):
-            blocking_ttfb, blocking_body = await _time_to_first_byte(app, {"text": "hi", "user_role": "user"})
-            streaming_ttfb, streaming_body = await _time_to_first_byte(
-                app, {"text": "hi", "user_role": "user", "stream": "true"}
+            blocking_ttfb, blocking_body, _ = await _time_to_first_byte(app, {"text": "hi", "user_role": "user"})
+            _, streaming_body, released = await _time_to_first_byte(
+                app, {"text": "hi", "user_role": "user", "stream": "true"}, _stream_progress(http_client)
             )
 
     assert blocking_body == WHOLE_WAV
     assert streaming_body  # framed chunks
     assert blocking_ttfb >= SYNTH_SECONDS * 0.8, f"blocking TTFB {blocking_ttfb:.3f}s -- fake worker not pacing"
-    assert streaming_ttfb < blocking_ttfb / 2, (
-        f"streaming time-to-first-audio {streaming_ttfb:.3f}s is not materially "
-        f"better than blocking {blocking_ttfb:.3f}s"
-    )
+    assert released == 1, f"first audio left only after the worker had produced {released} of {CHUNK_COUNT} chunks"
+
+
+@pytest.mark.asyncio
+async def test_a_route_that_buffers_the_utterance_is_caught():
+    """The contrast: holding every chunk back until the last shows all of them released."""
+    app = _make_app()
+    http_client = _make_worker_http_client(serves_stream=True)
+
+    async def _buffered(*args, **kwargs):
+        chunks = [chunk async for chunk in _framed_audio_chunks(*args, **kwargs)]
+        for chunk in chunks:
+            yield chunk
+
+    with patch("services.tts_client.get_http_client", return_value=http_client):
+        with patch("api.voice.get_tts_client", return_value=TTSClient()):
+            with patch("api.voice._framed_audio_chunks", _buffered):
+                _, body, released = await _time_to_first_byte(
+                    app, {"text": "hi", "user_role": "user", "stream": "true"}, _stream_progress(http_client)
+                )
+
+    assert body  # the buffering route still answers in full
+    assert released == CHUNK_COUNT
 
 
 @pytest.mark.asyncio
@@ -215,7 +257,7 @@ async def test_streaming_response_carries_every_chunk_in_order():
 
     with patch("services.tts_client.get_http_client", return_value=http_client):
         with patch("api.voice.get_tts_client", return_value=TTSClient()):
-            _, body = await _time_to_first_byte(app, {"text": "hi", "user_role": "user", "stream": "true"})
+            _, body, _ = await _time_to_first_byte(app, {"text": "hi", "user_role": "user", "stream": "true"})
 
     decoded, offset = [], 0
     while offset < len(body):
