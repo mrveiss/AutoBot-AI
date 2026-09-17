@@ -25,6 +25,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
 import type { RouteRecordRaw } from 'vue-router'
 import { routes } from '@/router'
 
@@ -37,7 +38,13 @@ const INTENTIONALLY_ABSENT: Record<string, string> = {
 
 const sidebarSource = (): string =>
   readFileSync(
-    fileURLToPath(new URL('../components/llc/LlcSidebar.vue', import.meta.url)),
+    // Resolved with `path`, not `new URL(relative, base)`. The two-argument URL
+    // form throws `TypeError: Invalid URL` under this project's pinned
+    // jsdom 30.0.1 + vitest 5.0.0 (the versions package-lock.json resolves and CI
+    // installs), deterministically and in CI as well as locally. Building from
+    // `import.meta.url` alone is safe because that value is always absolute; it is
+    // only the relative-plus-base pair that breaks.
+    resolve(dirname(fileURLToPath(import.meta.url)), '../components/llc/LlcSidebar.vue'),
     'utf-8',
   )
 
