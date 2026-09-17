@@ -86,9 +86,10 @@ def test_vision_processor_pins_clip_and_blip2_revisions(vision_module):
     with (
         patch(
             "autobot_shared.pinned_model_registry.get_pinned_revision",
-            side_effect=lambda repo_id: {"openai/clip-vit-base-patch32": "1" * 40, "Salesforce/blip2-opt-2.7b": "2" * 40}[
-                repo_id
-            ],
+            side_effect=lambda repo_id: {
+                "openai/clip-vit-base-patch32": "1" * 40,
+                "Salesforce/blip2-opt-2.7b": "2" * 40,
+            }[repo_id],
         ) as mock_get,
         patch("autobot_shared.pinned_model_registry.verify_cached_model") as mock_verify,
     ):

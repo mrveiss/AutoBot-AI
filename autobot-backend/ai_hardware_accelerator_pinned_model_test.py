@@ -59,9 +59,7 @@ def test_initialize_clip_model_passes_the_pinned_revision(aha_module):
 
     with (
         patch.object(aha_module, "_get_torch", return_value=MagicMock(cuda=MagicMock(is_available=lambda: False))),
-        patch(
-            "autobot_shared.pinned_model_registry.get_pinned_revision", return_value="deadbeef" * 5
-        ) as mock_get,
+        patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="deadbeef" * 5) as mock_get,
         patch("autobot_shared.pinned_model_registry.verify_cached_model") as mock_verify,
     ):
         accel._initialize_clip_model(device="cpu")
@@ -80,9 +78,7 @@ def test_initialize_wav2vec_model_passes_the_pinned_revision(aha_module):
 
     with (
         patch.object(aha_module, "_get_torch", return_value=MagicMock(cuda=MagicMock(is_available=lambda: False))),
-        patch(
-            "autobot_shared.pinned_model_registry.get_pinned_revision", return_value="cafebabe" * 5
-        ) as mock_get,
+        patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="cafebabe" * 5) as mock_get,
         patch("autobot_shared.pinned_model_registry.verify_cached_model") as mock_verify,
     ):
         accel._initialize_wav2vec_model(device="cpu")

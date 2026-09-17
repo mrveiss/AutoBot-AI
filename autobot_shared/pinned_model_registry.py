@@ -16,16 +16,9 @@ ceiling to make room -- the same reason ``env_registry_slm.py`` exists as its
 own module instead of growing ``env_registry.py``.
 
 How a pin was obtained (the bump procedure -- do this, don't guess a SHA):
-
-    # 1. Exact commit SHA for the revision to pin:
-    curl -s "https://huggingface.co/api/models/<repo_id>" | python3 -c \
-        'import json,sys; print(json.load(sys.stdin)["sha"])'
-
-    # 2. sha256 of each weight file at that revision, via the raw git-lfs
-    #    pointer (a few hundred bytes -- this does NOT download the real,
-    #    often multi-GB, file):
-    curl -s "https://huggingface.co/<repo_id>/raw/<sha>/<filename>" | \
-        grep "^oid sha256:"
+see ``docs/developer/MODEL_REVISION_PINNING.md``'s "Bump procedure" section
+for the exact commands. Kept in one place rather than duplicated here so the
+two copies can't drift.
 
 Every value in ``_REGISTRY`` below was obtained exactly this way against the
 live HuggingFace API, not guessed or reconstructed -- a fabricated hash here

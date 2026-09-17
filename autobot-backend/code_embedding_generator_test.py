@@ -308,9 +308,7 @@ async def test_load_model_passes_the_pinned_revision_to_from_pretrained():
     sys.modules["transformers"] = fake_transformers
     try:
         with (
-            patch(
-                "autobot_shared.pinned_model_registry.get_pinned_revision", return_value="deadbeef" * 5
-            ) as mock_get,
+            patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="deadbeef" * 5) as mock_get,
             patch("autobot_shared.pinned_model_registry.verify_cached_model") as mock_verify,
         ):
             await gen._load_model()
