@@ -252,13 +252,11 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // #16897: connectors moved into the Manage surface as a tab. The path is
+        // kept as a redirect rather than deleted — the same treatment
+        // /knowledge/watch-folders got — so existing links and bookmarks survive.
         path: 'connectors',
-        name: 'knowledge-connectors',
-        component: () => import('@/components/knowledge/connectors/ConnectorManager.vue'),
-        meta: {
-          title: 'Source Connectors',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/manage?tab=connectors'
       },
       {
         // Issue #3850: web research settings UI
