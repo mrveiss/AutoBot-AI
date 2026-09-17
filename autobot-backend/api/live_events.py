@@ -395,15 +395,21 @@ async def live_events_endpoint(websocket: WebSocket):
     # raw-JWT check was too strict and rejected valid deployments.
     from auth_middleware import authenticate_websocket
 
+    # #16457: echo the client's offered subprotocol on every accept() in this handshake.
+    # RFC 6455 4.2.2 requires the server to choose one of the client's offered
+    # subprotocols, and a browser fails the handshake if none is echoed back.
+    protocols = websocket.headers.get("sec-websocket-protocol", "")
+    subprotocol = "bearer" if protocols.startswith("bearer") else None
+
     user_payload: dict | None = await authenticate_websocket(websocket)
     if _auth_required() and user_payload is None:
         # accept() before close(4001) so clients see a clean close frame
         # instead of a handshake 403 (project WS rule).
-        await websocket.accept()
+        await websocket.accept(subprotocol=subprotocol)
         await websocket.close(code=4001, reason="Unauthorized")
         logger.info("Live events WebSocket rejected: invalid token")
         return
-    await websocket.accept()
+    await websocket.accept(subprotocol=subprotocol)
     logger.info(
         "Live events WebSocket connected: %s (user=%s)",
         websocket.client,

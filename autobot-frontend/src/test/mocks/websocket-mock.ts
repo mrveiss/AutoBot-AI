@@ -6,6 +6,7 @@ import { createMockWebSocketEvent } from '../utils/test-utils'
 // Mock WebSocket class
 export class MockWebSocket {
   public url: string
+  public protocols?: string | string[]
   public readyState: number
   public onopen: ((event: Event) => void) | null = null
   public onclose: ((event: CloseEvent) => void) | null = null
@@ -23,8 +24,9 @@ export class MockWebSocket {
   // Track all instances for testing
   static instances: MockWebSocket[] = []
 
-  constructor(url: string, _protocols?: string | string[]) {
+  constructor(url: string, protocols?: string | string[]) {
     this.url = url
+    this.protocols = protocols
     this.readyState = MockWebSocket.CONNECTING
 
     MockWebSocket.instances.push(this)

@@ -76,6 +76,12 @@ async def session_presence(
     if not await enforce_ws_origin(websocket):
         return
 
+    # #16457: echo the client's offered subprotocol on every accept() below. RFC 6455
+    # 4.2.2 requires the server to choose one of the client's offered subprotocols, and
+    # a browser fails the handshake if none is echoed back.
+    protocols = websocket.headers.get("sec-websocket-protocol", "")
+    subprotocol = "bearer" if protocols.startswith("bearer") else None
+
     # #16455: the caller's identity comes ONLY from a verified JWT, never
     # from client-supplied input -- a prior version trusted a bare `user_id`
     # query param, letting any caller join any session as anyone.
@@ -83,7 +89,7 @@ async def session_presence(
     if user_payload is None or user_payload.get("user_id") is None:
         # accept() before close(4001), matching api/live_events.py's own rule:
         # clients see a clean close frame, not a raw handshake rejection.
-        await websocket.accept()
+        await websocket.accept(subprotocol=subprotocol)
         await websocket.close(code=_WS_CLOSE_UNAUTHENTICATED, reason="Unauthorized")
         logger.info("Presence WS rejected: invalid or missing token, session=%s", session_id)
         return
@@ -91,7 +97,7 @@ async def session_presence(
     try:
         user_id = uuid.UUID(str(user_payload["user_id"]))
     except ValueError:
-        await websocket.accept()
+        await websocket.accept(subprotocol=subprotocol)
         await websocket.close(code=_WS_CLOSE_UNAUTHENTICATED, reason="Unauthorized")
         logger.warning("Presence WS rejected: malformed user_id in token, session=%s", session_id)
         return
@@ -99,7 +105,7 @@ async def session_presence(
     # Authenticated is not authorized: a verified user still must not join a
     # session they aren't a participant of.
     if not await _authorized_participant(session_id, user_id):
-        await websocket.accept()
+        await websocket.accept(subprotocol=subprotocol)
         await websocket.close(code=_WS_CLOSE_POLICY_VIOLATION, reason="Not a session participant")
         logger.info("Presence WS refused: user=%s not a participant of session=%s", user_id, session_id)
         return

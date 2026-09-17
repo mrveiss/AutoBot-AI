@@ -195,13 +195,11 @@ class AuthenticationMiddleware:
 
         # Tier 2: durable file (survives restart and code-sync deploys)
         #
-        # #13162: the existence probe belongs INSIDE the guard. Path.exists()
-        # only swallows "not there" errnos (ENOENT/ENOTDIR/ELOOP) — EACCES
-        # propagates. When the service user cannot traverse the service-keys
-        # directory (e.g. it is mode 0700 and owned by another account) the
-        # PermissionError escaped this function, out of the AuthMiddleware
-        # constructor, and turned every request behind check_admin_permission
-        # into a 500 instead of falling through to the tiers below.
+        # #13162: the existence probe belongs INSIDE the guard. Path.exists() only swallows "not there" errnos
+        # (ENOENT/ENOTDIR/ELOOP) — EACCES propagates. When the service user cannot traverse the service-keys directory
+        # (e.g. it is mode 0700 and owned by another account) the PermissionError escaped this function, out of the
+        # AuthMiddleware constructor, and turned every request behind check_admin_permission into a 500 instead of
+        # falling through to the tiers below.
         try:
             if key_file.exists():
                 pem_private = key_file.read_text(encoding="utf-8")
@@ -308,9 +306,8 @@ class AuthenticationMiddleware:
         Returns default admin user dict when auth is disabled.
         """
         return {
-            # user_id/sub so user endpoints (e.g. /users/me/preferences) resolve
-            # the identity when auth is disabled; without them they 401'd ('User ID
-            # not found in token') → frontend logout → login redirect loop.
+            # user_id/sub so user endpoints (e.g. /users/me/preferences) resolve the identity when auth is disabled;
+            # without them they 401'd ('User ID not found in token') → frontend logout → login redirect loop.
             "user_id": "admin",
             "sub": "admin",
             "username": "admin",
@@ -1056,7 +1053,7 @@ def require_device_jwt(min_scope: str = "read"):
 async def authenticate_websocket(websocket) -> dict | None:
     """Authenticate a WebSocket connection.
 
-    Checks for JWT token in query params. Returns None if unauthenticated.
+    Checks for JWT via Sec-WebSocket-Protocol (preferred) or query param (fallback). None if unauthenticated.
 
     Issue #2818: Add auth before websocket.accept() to reject unauthenticated
     connections at the protocol handshake level.
@@ -1067,8 +1064,11 @@ async def authenticate_websocket(websocket) -> dict | None:
     Returns:
         User dict or None if authentication fails.
     """
-    # Check query param token
-    token = websocket.query_params.get("token")
+    # #16457: prefer Sec-WebSocket-Protocol (['bearer', '<jwt>']) over the query param so the
+    # token never lands in URL access logs/browser history; query stays a fallback during migration.
+    protocols = [p.strip() for p in websocket.headers.get("sec-websocket-protocol", "").split(",")]
+    token = protocols[1] if len(protocols) == 2 and protocols[0] == "bearer" and protocols[1] else None
+    token = token or websocket.query_params.get("token")
     if token:
         try:
             # Use the singleton — a fresh AuthenticationMiddleware() generates a
