@@ -34,8 +34,8 @@ from services.captcha_human_loop import CaptchaResolutionStatus, get_captcha_hum
 # it needs a known user — not admin: the operator who answers a CAPTCHA is not
 # necessarily an administrator, and requiring that would gate the routine case on
 # the rare role.
-router = APIRouter(prefix="/captcha", tags=["captcha"], dependencies=[Depends(get_current_user)])
 from auth_middleware import get_current_user
+router = APIRouter(prefix="/captcha", tags=["captcha"], dependencies=[Depends(get_current_user)])
 
 logger = get_logger(__name__)
 
