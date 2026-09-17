@@ -236,7 +236,12 @@ _NOT_ROLE_GROUPS = frozenset(
 # Hyphenated spellings that no inventory builder emits — either vocabulary.
 # Pre-existing and out of scope here; they are a separate defect from the two
 # vocabularies disagreeing, which is what this change fixes.
-_KNOWN_UNREACHABLE = frozenset({"browser-automation", "npu-worker"})
+#
+# `browser-automation` left this set when Play 7 stopped gating on it (#14288):
+# with its last reference gone the entry was stale, and this file's own note
+# below says why that matters — "a tolerance entry that outlives its reason
+# exempts the next real case silently". The staleness assertion caught it.
+_KNOWN_UNREACHABLE = frozenset({"npu-worker"})
 
 
 def _gated_groups() -> set[str]:
