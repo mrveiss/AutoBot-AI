@@ -65,11 +65,27 @@ _MIMETYPES_GAPS = {
     ".log": "plain-text log; not in Python's mimetypes table",
     ".yaml": "YAML; absent from mimetypes before Python 3.13",
     ".yml": "YAML; absent from mimetypes before Python 3.13",
+    # Executable formats from `files._DANGEROUS_EXTENSIONS`. Real spellings that
+    # Python has no media type for, which is unsurprising -- mimetypes maps what
+    # a browser should DISPLAY, and nothing should ever be served as these.
+    ".app": "macOS application bundle; executable, no media type",
+    ".cmd": "Windows batch script; executable, no media type",
+    ".pif": "Windows program-information file; executable, no media type",
+    ".vbs": "VBScript; executable, no media type",
 }
 
 
-def _allowlist_entries() -> set[str]:
-    """Every extension both modules accept, read from the modules themselves."""
+def _extension_set_entries() -> set[str]:
+    """Every extension in every extension set in both modules, allow AND deny.
+
+    Deny sets are in scope deliberately, and the name says so because the first
+    version of this called them allowlists and was wrong about what it read.
+    ``files._DANGEROUS_EXTENSIONS`` matches ``name.isupper()`` -- a leading
+    underscore does not change that -- and including it is the right outcome,
+    not a leak: a truncated entry in a DENY list is worse than one in an allow
+    list. `.pd` in an allow list refuses a legitimate PDF; `.ex` in a deny list
+    would fail to block `.exe` and say nothing at all.
+    """
     found: set[str] = set()
     for module in (conversation_files, files):
         for name in dir(module):
@@ -85,19 +101,19 @@ def _allowlist_entries() -> set[str]:
     return found
 
 
-def test_the_entry_scan_still_finds_allowlists():
-    """A zero here means the scan drifted, not that the allowlists are empty."""
-    assert _allowlist_entries(), "no extension allowlist found in either module — this guard is blind"
+def test_the_entry_scan_still_finds_the_extension_sets():
+    """A zero here means the scan drifted, not that the sets are empty."""
+    assert _extension_set_entries(), "no extension set found in either module — this guard is blind"
 
 
-def test_every_allowlist_entry_is_a_real_extension():
+def test_every_extension_set_entry_is_a_real_extension():
     """A truncation standing alone has no prefix pair, so only a named list catches it (#16521)."""
     import mimetypes
 
     mimetypes.init()
     known = {e.lower() for e in mimetypes.types_map} | set(_MIMETYPES_GAPS)
-    unknown = sorted(_allowlist_entries() - known)
+    unknown = sorted(_extension_set_entries() - known)
     assert not unknown, (
-        f"allowlist entries that are not real extension spellings: {unknown}. Either the entry is a "
+        f"extension-set entries that are not real spellings: {unknown}. Either the entry is a "
         f"truncation (the #16521 defect) or it is real and belongs in _MIMETYPES_GAPS with a reason."
     )
