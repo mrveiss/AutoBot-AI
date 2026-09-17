@@ -142,4 +142,4 @@ def test_the_two_reported_spellings_are_gone():
     assert "npu-worker" not in targets
     assert "browser-automation" not in targets
     assert "npu_worker" in targets, "the npu-worker cleanup play is gone entirely"
-    assert targets & {"browser_worker", "browser_automation"}, "the browser cleanup play is gone entirely"
+    assert "browser" in targets, "the browser cleanup play is gone entirely"

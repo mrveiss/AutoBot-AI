@@ -286,7 +286,7 @@
 # Play 7: Browser — remove legacy browser-service and wrong-node dirs
 # ---------------------------------------------------------------------------
 - name: "Cleanup: browser-automation (.25)"
-  hosts: browser_worker:browser_automation
+  hosts: browser
   gather_facts: false
   become: true
 
