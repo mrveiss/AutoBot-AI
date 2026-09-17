@@ -272,3 +272,79 @@ def test_emit_utilization_signal_sets_flag():
 
     gen._emit_utilization_signal(npu_present=False, device_used="cpu")
     assert gen.npu_underutilized is False  # no NPU hardware → not underutilized
+
+
+# ---------------------------------------------------------------------------
+# #13034: _load_model resolves and verifies a pinned revision
+# ---------------------------------------------------------------------------
+
+
+def _fake_transformers_module(mock_tokenizer_cls: MagicMock, mock_model_cls: MagicMock):
+    """``transformers`` isn't installed in this environment (heavy ML dep, #13034
+    test only needs its from_pretrained call shape) -- inject a stand-in module,
+    the same technique llc/tests/test_replay.py uses for llm_shared.credential_redaction."""
+    import types
+
+    fake = types.ModuleType("transformers")
+    fake.AutoTokenizer = mock_tokenizer_cls  # type: ignore[attr-defined]
+    fake.AutoModel = mock_model_cls  # type: ignore[attr-defined]
+    return fake
+
+
+@pytest.mark.asyncio
+async def test_load_model_passes_the_pinned_revision_to_from_pretrained():
+    gen = CodeEmbeddingGenerator.__new__(CodeEmbeddingGenerator)
+    gen.model_name = "microsoft/codebert-base"
+    gen.npu_available = False
+    gen.gpu_available = False
+
+    mock_tokenizer_cls = MagicMock()
+    mock_model_cls = MagicMock()
+    fake_transformers = _fake_transformers_module(mock_tokenizer_cls, mock_model_cls)
+
+    import sys
+
+    saved = sys.modules.get("transformers")
+    sys.modules["transformers"] = fake_transformers
+    try:
+        with (
+            patch(
+                "autobot_shared.pinned_model_registry.get_pinned_revision", return_value="deadbeef" * 5
+            ) as mock_get,
+            patch("autobot_shared.pinned_model_registry.verify_cached_model") as mock_verify,
+        ):
+            await gen._load_model()
+    finally:
+        if saved is None:
+            sys.modules.pop("transformers", None)
+        else:
+            sys.modules["transformers"] = saved
+
+    mock_get.assert_called_once_with("microsoft/codebert-base")
+    mock_tokenizer_cls.from_pretrained.assert_called_once_with("microsoft/codebert-base", revision="deadbeef" * 5)
+    mock_model_cls.from_pretrained.assert_called_once_with("microsoft/codebert-base", revision="deadbeef" * 5)
+    mock_verify.assert_called_once_with("microsoft/codebert-base")
+
+
+@pytest.mark.asyncio
+async def test_load_model_propagates_an_unregistered_model_error():
+    """An unpinned model_name must fail loudly, not silently fall back to unpinned loading."""
+    gen = CodeEmbeddingGenerator.__new__(CodeEmbeddingGenerator)
+    gen.model_name = "some-org/not-in-the-registry"
+    gen.npu_available = False
+    gen.gpu_available = False
+
+    fake_transformers = _fake_transformers_module(MagicMock(), MagicMock())
+
+    import sys
+
+    saved = sys.modules.get("transformers")
+    sys.modules["transformers"] = fake_transformers
+    try:
+        with pytest.raises(KeyError, match="not in the pinned-model registry"):
+            await gen._load_model()
+    finally:
+        if saved is None:
+            sys.modules.pop("transformers", None)
+        else:
+            sys.modules["transformers"] = saved
