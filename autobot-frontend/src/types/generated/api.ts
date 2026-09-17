@@ -44918,6 +44918,7 @@ export interface paths {
          *
          *     Issue #1310: Fleet/system hosts removed — they belong in SLM only.
          *     Only hosts explicitly added by the user via Secrets are returned.
+         *     Requires: admin permission.
          */
         get: operations["get_infrastructure_hosts_api_infrastructure_hosts_get"];
         put?: never;
@@ -44946,6 +44947,7 @@ export interface paths {
          *     ``infrastructure_host``; deleting the host removes its Secrets entry.
          *     Mirrors the GET read-shim — the host id IS the secret id. Returns 404
          *     when no matching infrastructure host exists.
+         *     Requires: admin permission.
          */
         delete: operations["delete_infrastructure_host_api_infrastructure_hosts__host_id__delete"];
         options?: never;

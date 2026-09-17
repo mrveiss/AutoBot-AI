@@ -140,6 +140,7 @@ from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 # The release-sync PR's one definition, shared with release_sync_main.py (#16272), reached by path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from header_safe_secret import require_header_safe  # noqa: E402  # #15204
 from release_sync_pull import release_sync_pulls  # noqa: E402
 
 # GitHub returns this message when the *token* lacks `actions: write`.
@@ -185,22 +186,16 @@ DEFAULT_API_ROOT = "https://api.github.com"
 DEFAULT_BASE_BRANCH = "main"
 DEFAULT_GRACE_MINUTES = 10
 DEFAULT_STALL_MINUTES = 45
-# Sized from measurement, not preference. A single base merge parks every run
-# on every open PR, and the run count carried by one head in this repository was
-# measured at 20, 22, 24 and 27 across four PRs on 2026-08-02 — call it 27, the
-# worst observed. Ten open PRs is comfortably above the working queue seen since
-# the PR queue limit was removed and well below the 25 that pr-queue-gate treats
-# as a runaway, so 27 x 10 clears a realistic queue in ONE pass.
-#
-# The old value of 30 was below the cost of a SINGLE merge with two PRs open, so
-# every sweep on a real queue stopped part-way and promised a "next sweep" that
-# the never-firing schedule could not provide. Observed: 30 approved, 0 refused,
-# 4 PRs left parked.
-#
-# It remains a blast-radius guard, and exhausting it is now a hard error rather
-# than a line of log. Worst case it spends 270 of the 1,000/hour GITHUB_TOKEN
-# budget, which is only reached when ten PRs were genuinely just parked — the
-# one moment that spend is worth making.
+# Sized from measurement, not preference. A single base merge parks every run on every open PR, and the run count
+# carried by one head in this repository was measured at 20, 22, 24 and 27 across four PRs on 2026-08-02 — call it 27,
+# the worst observed. Ten open PRs is comfortably above the working queue seen since the PR queue limit was removed
+# and well below the 25 that pr-queue-gate treats as a runaway, so 27 x 10 clears a realistic queue in ONE pass.
+# The old value of 30 was below the cost of a SINGLE merge with two PRs open, so every sweep on a real queue stopped
+# part-way and promised a "next sweep" that the never-firing schedule could not provide. Observed: 30 approved, 0
+# refused, 4 PRs left parked.
+# It remains a blast-radius guard, and exhausting it is now a hard error rather than a line of log. Worst case it
+# spends 270 of the 1,000/hour GITHUB_TOKEN budget, which is only reached when ten PRs were genuinely just parked —
+# the one moment that spend is worth making.
 DEFAULT_MAX_APPROVALS = 270
 DEFAULT_POLL_ATTEMPTS = 3
 DEFAULT_POLL_INTERVAL_SECONDS = 20
@@ -701,7 +696,10 @@ class GitHubApi:
         api_root: str = DEFAULT_API_ROOT,
         timeout: int = DEFAULT_REQUEST_TIMEOUT_SECONDS,
     ) -> None:
-        self.token = token
+        # #15204: validated here as well as in load_config, because this is the
+        # object that hands the value to the HTTP layer. Direct construction --
+        # a test, a future caller -- must not be the path that leaks.
+        self.token = require_header_safe(token, "GITHUB_TOKEN", WatchdogConfigError)
         self.repository = repository
         self.api_root = api_root.rstrip("/")
         self.timeout = timeout
@@ -1392,6 +1390,7 @@ def load_config() -> Dict[str, Any]:
     repository = os.environ.get("GITHUB_REPOSITORY", "").strip()
     if not token:
         raise WatchdogConfigError("GITHUB_TOKEN is required")
+    require_header_safe(token, "GITHUB_TOKEN", WatchdogConfigError)  # #15204: refuse before it can reach a traceback
     if "/" not in repository:
         raise WatchdogConfigError("GITHUB_REPOSITORY must be set to 'owner/repo'")
     return {
@@ -1432,11 +1431,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     try:
         config = load_config()
+        # #15204: inside the handler. Constructing the client validates the
+        # token, and an escape from here is the traceback this guards against.
+        api = GitHubApi(config["token"], config["repository"], config["api_root"])
     except WatchdogConfigError as exc:
         _emit(f"Configuration error: {exc}", err=True)
         return 2
-
-    api = GitHubApi(config["token"], config["repository"], config["api_root"])
     try:
         if args.check == "dispatch":
             return check_dispatch(api, config, dry_run=args.dry_run)
