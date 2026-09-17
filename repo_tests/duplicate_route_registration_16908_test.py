@@ -8,44 +8,70 @@ FastAPI matches routes in registration order: the first module to claim a
 ``(method, path)`` pair serves it, and every later registration at the same
 pair is dead code that reads as a live endpoint. #16908 found four such pairs
 by hand (``core_routers.py``/``feature_routers.py`` parsed for both
-registration-tuple forms) and fixed them; this guard is what stops a fifth.
+registration-tuple forms, 71% coverage) and fixed them; this guard is what
+stops a fifth.
 
-## Population and its cross-check
+## Why this walks real router objects instead of parsing source
 
-Uses ``api/codebase_analytics/api_endpoint_scanner.py::BackendEndpointScanner``
-— the same scanner ``scripts/audit_api_wiring.py``'s STATIC mode and the
-``api-wiring`` blocking CI gate already trust — rather than a fifth private
-router-prefix parser (``repo_tests/router_prefix_convergence_test.py``, #12985,
-exists specifically to stop that pattern from repeating). #16908's own
-inventory, parsing only the two registration-tuple forms by hand, reached 71%
-coverage (249 of 347 router-bearing modules) and reported 4 duplicates; this
-scanner resolves every ``@router.<verb>`` decorator against its module's
-registered prefix, including external/registry-mounted routers, and reports 8.
+The first two candidate designs for this guard both produced confirmed false
+positives, found the hard way rather than assumed away:
 
-Cross-checked once, per ``RATCHET_BASELINES.md`` rule 3 (derive the
-population a second way before trusting a detector's own count): a raw
-``grep -rE "@(router|app)\\.(get|post|put|delete|patch|websocket)\\("`` across
-``autobot-backend`` (excluding test files) finds 2413 decorator occurrences
-against the scanner's ~2296 resolved endpoints -- 95% agreement, not 71%.
+1. A **text-based prefix parser** (``autobot_shared.api_routing.router_prefixes``,
+   the grammar ``scripts/audit_api_wiring.py`` and
+   ``codebase_analytics/api_endpoint_scanner.py`` share, #12985) has a known
+   blind spot: it cannot resolve ``from api.voice import realtime_router as
+   voice_realtime_router``-style import aliases (#16917), so a real duplicate
+   routed through an aliased import is invisible to it.
+2. ``api/codebase_analytics/api_endpoint_scanner.py::BackendEndpointScanner``
+   -- more mature, twice patched for package resolution (#12945/#12956), and
+   what an earlier revision of this guard used -- still mis-resolved two
+   prefixes when checked against source by hand: ``api/system.py``'s
+   ``@router.get("/cache/stats")`` (registered at prefix ``/system``, so it
+   actually serves ``/api/system/cache/stats``) was reported as colliding
+   with ``api/cache_management.py``'s real ``/api/cache/stats``; the same
+   shape misfired on ``api/redis_mcp/router.py``. A hand-written check
+   (independently run by a peer session) made the mirror-image mistake:
+   attributing every route in a file to that file's *first* ``APIRouter(...)``
+   call, which misscored ``llc/api/runs.py``'s ``heartbeat_runs_router``
+   (its own, later, differently-prefixed ``APIRouter``) as if it shared
+   ``router``'s ``/agents`` prefix.
+
+Both are **text re-derivations** of a fact FastAPI itself resolves at
+registration time. This walks the real ``APIRouter`` objects
+``load_core_routers()``/``load_optional_routers()`` return -- the exact same
+objects ``app_factory.py``'s ``_register_routers()`` calls
+``app.include_router()`` on -- via
+``autobot_shared.api_routing.router_routes.effective_routes()`` (the one
+FastAPI-version-safe route traversal, #15093), using each tuple's own
+``prefix`` element rather than re-parsing it from source. It cannot
+mis-resolve a prefix the way a text scanner can, because it never re-derives
+one -- it reads the value the app itself would use.
+
+Verified against both false-positive reports above: this walk reports
+``cache/stats`` and ``mcp/tools`` as NOT colliding (confirmed by hand) and
+``llc/agents`` as NOT colliding (also confirmed by hand, after the peer
+session's parser was corrected) -- exactly the outcome direct source reading
+gives, for all three.
 
 ## Scope boundary
 
-Covers everything ``api/codebase_analytics/api_endpoint_scanner.py`` resolves
-under ``autobot-backend/api/`` plus its ``_external_router_prefixes`` (LLC and
-other registry-mounted routers outside ``api/``). It does **not** claim
-completeness beyond what that scanner resolves -- #16913 (the follow-up this
-guard's baseline references) found one pair (``llc/api/agent_api.py`` vs
-``llc/api/context.py``) that #16908's own by-hand precedence tracing had not
-yet placed under a registration mechanism, so "this guard passes" means "no
-NEW duplicate beyond the known baseline", not "every router in the codebase is
-provably collision-free".
+Covers every router ``load_core_routers()``/``load_optional_routers()``
+return -- 273 registrations, matching an independent peer session's
+by-hand count of registry entries (273/273) per ``RATCHET_BASELINES.md``
+rule 3. It does **not** cover the three routers
+``app_factory.py``'s ``_register_routers()`` mounts directly
+(``api/openai_compat.py``, ``api/anthropic_compat.py``,
+``api/jwks.py::well_known_router``, all under ``/v1`` or ``/.well-known``,
+outside the core/optional-router lists this function reads) -- a genuinely
+different registration mechanism, not an oversight; nothing found so far
+suggests they collide with anything under ``/api``, but this guard makes no
+claim about them.
 """
 
 from __future__ import annotations
 
 import sys
 from collections import defaultdict
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -53,45 +79,80 @@ from repo_tests._paths import repo_root
 
 _BACKEND = repo_root() / "autobot-backend"
 
-# #16913: four duplicates the scanner already finds, not yet resolved -- each
-# needs the same registration-order tracing #16908's body did for its own four
-# rows before it can be fixed, not a guess here. Shrinks by one entry per pair
+# #16913: two duplicates this walk finds, not yet resolved -- each needs the
+# same registration-order tracing #16908's body did for its own four rows
+# before it can be fixed, not a guess here. Shrinks by one entry per pair
 # #16913 resolves, down to empty; test_the_baseline_has_no_stale_entries below
 # fails the moment one stops being a real duplicate, so a fix that forgets to
 # remove its baseline line is caught rather than silently over-exempted.
 KNOWN_DUPLICATE_BASELINE: frozenset[tuple[str, str]] = frozenset(
     {
-        ("GET", "/api/cache/stats"),
         ("GET", "/api/llc/agent/context/{item_id}"),
-        ("GET", "/api/mcp/tools"),
         ("POST", "/api/voice/realtime/tools/call"),
     }
 )
 
 
-def _scan_duplicates() -> dict[tuple[str, str], list[str]]:
-    """{(method, path): [file_path, ...]} for every pair served by >1 module."""
+def _load_registered_routers() -> list[tuple[object, str, str]]:
+    """(router, prefix, name) for every core + optional router.
+
+    Mirrors app_factory.py's _register_routers(): the same two calls, in the
+    same order, over the same tuples -- just without actually mounting them
+    onto a FastAPI() app, which needs no DB/Redis/service dependency this
+    guard would otherwise have to fake.
+    """
     if str(_BACKEND) not in sys.path:
         sys.path.insert(0, str(_BACKEND))
-    from api.codebase_analytics.api_endpoint_scanner import BackendEndpointScanner
+    from initialization.router_registry.core_routers import load_core_routers
+    from initialization.routers import load_optional_routers
 
-    endpoints = BackendEndpointScanner().scan_all_endpoints()
-    assert len(endpoints) > 2000, (
-        f"only {len(endpoints)} endpoints scanned -- the scanner's own population "
-        "collapsed (a broken import, an empty tree); a guard silently sweeping "
-        "nothing is worse than not running (see MEASUREMENT_DISCIPLINE.md)"
+    return [(router, prefix, name) for router, prefix, _tags, name in (*load_core_routers(), *load_optional_routers())]
+
+
+def _scan_duplicates() -> dict[tuple[str, str], list[str]]:
+    """{(method, path): [defining module, ...]} for every pair served by >1 module."""
+    from autobot_shared.api_routing.router_routes import effective_routes
+
+    registered = _load_registered_routers()
+    assert len(registered) > 200, (
+        f"only {len(registered)} router registrations found -- load_core_routers()/"
+        "load_optional_routers() population collapsed (a broken import, an empty "
+        "tree); a guard silently sweeping nothing is worse than not running "
+        "(see MEASUREMENT_DISCIPLINE.md)"
     )
 
     by_path: dict[tuple[str, str], list[str]] = defaultdict(list)
-    for endpoint in endpoints:
-        by_path[(endpoint.method, endpoint.path)].append(endpoint.file_path)
+    incomplete: list[tuple[str, str]] = []
+    for router, prefix, name in registered:
+        for mounted in effective_routes(router):
+            if not mounted.prefix_complete:
+                # A prefix hidden above this route inside the router's own
+                # nested include_router() calls -- effective_routes()'s own
+                # documented limit, not resolvable here. Reported rather than
+                # silently trusted with a possibly-short path.
+                incomplete.append((name, mounted.path))
+                continue
+            endpoint = getattr(mounted.route, "endpoint", None)
+            module_name = getattr(endpoint, "__module__", None) or name
+            full_path = f"/api{prefix}{mounted.path}"
+            methods = mounted.methods or frozenset({"WEBSOCKET"})
+            for method in methods:
+                by_path[(method, full_path)].append(module_name)
 
-    return {key: files for key, files in by_path.items() if len(set(files)) > 1}
+    assert not incomplete, (
+        "these routers have a route whose full mount path could not be "
+        "recovered (an inner include_router() hid its own prefix) -- this "
+        "guard cannot judge whether they collide with anything, which is a "
+        "coverage gap worth its own issue, not a silent pass:\n"
+        + "\n".join(f"  {name}: {path}" for name, path in incomplete)
+    )
+
+    return {key: modules for key, modules in by_path.items() if len(set(modules)) > 1}
 
 
 def test_no_new_duplicate_route_registration():
     duplicates = _scan_duplicates()
-    unbaselined = {key: files for key, files in duplicates.items() if key not in KNOWN_DUPLICATE_BASELINE}
+    unbaselined = {key: modules for key, modules in duplicates.items() if key not in KNOWN_DUPLICATE_BASELINE}
 
     assert not unbaselined, (
         "these (method, path) pairs are registered by more than one module. "
@@ -99,7 +160,7 @@ def test_no_new_duplicate_route_registration():
         "and every later one is dead code that reads as a live endpoint "
         "(#16908):\n"
         + "\n".join(
-            f"  {method} {path}: {sorted(set(files))}" for (method, path), files in sorted(unbaselined.items())
+            f"  {method} {path}: {sorted(set(modules))}" for (method, path), modules in sorted(unbaselined.items())
         )
     )
 
@@ -123,30 +184,44 @@ def test_a_deliberate_duplicate_is_caught_naming_both_modules():
     """Mutation proof (#16908 AC4): fabricate one collision and confirm the
     detector reports it, naming both sides -- not just that *some* assertion
     fails.
+
+    Re-registering scheduler_toggles's own router object a second time is
+    NOT a usable plant: _scan_duplicates() correctly keys on module identity
+    (matching the real defect shape -- two DIFFERENT files claiming one
+    path), so the same object walked twice collapses to one entry via
+    set(modules) and is invisible by design, not by bug. The plant has to be
+    a genuinely different module claiming an existing path.
     """
     if str(_BACKEND) not in sys.path:
         sys.path.insert(0, str(_BACKEND))
-    from api.codebase_analytics.api_endpoint_scanner import BackendEndpointScanner
-    from api.codebase_analytics.models import APIEndpointItem
+    from fastapi import APIRouter
 
-    real_endpoints = BackendEndpointScanner().scan_all_endpoints()
-    planted = APIEndpointItem(
-        method="GET",
-        path="/api/admin/schedulers",
-        file_path="autobot-backend/api/_test_planted_duplicate.py",
-        line_number=1,
-        function_name="_planted",
-    )
+    from initialization import routers as routers_module
+    from initialization.router_registry.core_routers import load_core_routers
 
-    with patch.object(BackendEndpointScanner, "scan_all_endpoints", return_value=[*real_endpoints, planted]):
+    real_core = load_core_routers()
+    target_router, target_prefix, target_tags, target_name = next(t for t in real_core if t[3] == "audit")
+    target_path = next(r.path for r in target_router.routes if getattr(r, "path", None))
+
+    async def _planted_handler():
+        return {}
+
+    _planted_handler.__module__ = "api._test_planted_duplicate"
+    fake_router = APIRouter()
+    fake_router.add_api_route(target_path, _planted_handler, methods=["GET"])
+
+    real_optional = routers_module.load_optional_routers()
+    planted_entry = (fake_router, target_prefix, ["planted"], "_test_planted_duplicate")
+
+    with patch.object(routers_module, "load_optional_routers", return_value=[*real_optional, planted_entry]):
         duplicates = _scan_duplicates()
 
-    key = ("GET", "/api/admin/schedulers")
-    assert key in duplicates, "the planted duplicate was not detected"
-    assert "autobot-backend/api/_test_planted_duplicate.py" in duplicates[key]
-    assert any(
-        f.endswith("scheduler_toggles.py") for f in duplicates[key]
-    ), f"expected the real scheduler_toggles.py registration alongside the plant, got {duplicates[key]}"
+    matches = {key: modules for key, modules in duplicates.items() if "api._test_planted_duplicate" in modules}
+    assert matches, f"the planted duplicate was not detected; found {sorted(duplicates)}"
+    ((key, modules),) = matches.items()
+    assert any(m.endswith(f"api.{target_name}") for m in modules), (
+        f"expected the real {target_name} registration alongside the plant at {key}, got {modules}"
+    )
 
 
 if __name__ == "__main__":
