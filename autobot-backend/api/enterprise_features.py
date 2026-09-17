@@ -70,7 +70,7 @@ def _build_enterprise_feature_details(status: dict) -> dict:
         },
         "cross_vm_load_balancing": {
             "enabled": status["capabilities"]["load_balancing"],
-            "description": "Intelligent load distribution across 6-VM infrastructure",
+            "description": "Intelligent load distribution across role-based infrastructure",
             "impact": "Optimal resource utilization and performance",
         },
         "intelligent_task_routing": {
@@ -94,7 +94,7 @@ def _build_enterprise_feature_details(status: dict) -> dict:
 def _build_production_readiness() -> dict:
     """Build production readiness section. Issue #398: Extracted."""
     return {
-        "scalability": "Multi-VM distributed architecture",
+        "scalability": "Role-based, count-agnostic distributed architecture",
         "reliability": "99.9%+ availability with failover",
         "performance": "Hardware-optimized task routing",
         "monitoring": "Comprehensive health checks",
@@ -109,7 +109,7 @@ def _build_transformation_summary() -> dict:
         "from": "Basic AI assistant with limited capabilities",
         "to": "Enterprise-grade autonomous AI platform",
         "key_improvements": [
-            "Distributed 6-VM architecture for scalability",
+            "Distributed, role-based architecture for scalability",
             "Advanced web research orchestration",
             "Intelligent hardware-aware task routing",
             "Comprehensive monitoring and health checks",
@@ -485,12 +485,12 @@ async def bulk_enable_features(request: BulkFeatureRequest):
 async def _probe_enterprise_features(request=None) -> ComponentHealth:
     """Issue #3333 / #12459: probe registration for the enterprise-feature manager.
 
-    ``EnterpriseFeatureManager`` requires a full 6-VM topology
-    (``AUTOBOT_*_HOST``/``AUTOBOT_*_PORT``) to build its VM map. On a
-    single-node/co-located install that topology is intentionally absent —
-    this is expected, not a failure, and must not force overall
-    system-health to ``down``. A genuinely broken manager (any error other
-    than the topology ``ValueError``) still reports ``down``.
+    ``EnterpriseFeatureManager`` requires every role's host/port
+    (``AUTOBOT_*_HOST``/``AUTOBOT_*_PORT``) to be configured to build its role
+    topology map. On a single-node/co-located install that full set is
+    intentionally absent — this is expected, not a failure, and must not
+    force overall system-health to ``down``. A genuinely broken manager (any
+    error other than the topology ``ValueError``) still reports ``down``.
     """
     try:
         instance = get_enterprise_manager()
@@ -502,7 +502,7 @@ async def _probe_enterprise_features(request=None) -> ComponentHealth:
             return ComponentHealth(
                 name="enterprise_features",
                 status="not_applicable",
-                detail="multi-VM topology not configured (expected on single-node)",
+                detail="full role topology not configured (expected on single-node)",
             )
         return ComponentHealth(
             name="enterprise_features",
@@ -532,7 +532,7 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
     - Response time
     - Throughput
     - Resource utilization
-    - Cross-VM load distribution
+    - Cross-role load distribution
     """
     try:
         manager = get_enterprise_manager()
@@ -567,7 +567,7 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
 )
 async def get_infrastructure_status():
     """
-    Get 6-VM distributed infrastructure status and topology.
+    Get role-based distributed infrastructure status and topology.
     """
     try:
         manager = get_enterprise_manager()

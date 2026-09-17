@@ -70,6 +70,14 @@ _EXEMPT_SITES: dict[tuple[str, str], int] = {
         "TestEmbeddingCache.test_ttl_expiration",
     ): 1,  # TTL expiry via time.time() is the subject; no injectable clock
     (
+        "autobot-backend/llc/adapters/tests/test_stall_watchdog_13099.py",
+        "TestStallKillsWholeGroup.test_continuous_output_is_not_killed",
+    ): 1,  # survival across a timed window of steady output is the subject
+    (
+        "autobot-backend/llc/adapters/tests/test_stall_watchdog_13099.py",
+        "TestStallKillsWholeGroup.test_legitimately_quiet_within_deadline_is_not_killed",
+    ): 1,  # a quiet child surviving a window inside its stall deadline is the subject
+    (
         "autobot-backend/multimodal_processor/multimodal_integration_test.py",
         "TestMultiModalWorkflowIntegration.test_realtime_multimodal_stream",
     ): 1,  # paces the simulated stream; excluded from every timing assert below
@@ -89,6 +97,14 @@ _EXEMPT_SITES: dict[tuple[str, str], int] = {
         "autobot-backend/services/wake_word_detection_test.py",
         "TestCPUProfileBaseline.test_idle_listening_cpu_baseline",
     ): 1,  # sustained-operation CPU baseline; wall time is the subject
+    (
+        "autobot-backend/tests/agents/test_scope_enforcement.py",
+        "test_a_run_that_goes_silent_lapses_and_stops_renewing",
+    ): 1,  # a renewal interval must pass with nothing happening
+    (
+        "autobot-backend/tests/agents/test_scope_enforcement.py",
+        "test_a_run_that_keeps_reporting_progress_keeps_its_claim",
+    ): 1,  # elapsed time past the stall window is the subject
     (
         "autobot-backend/tests/services/test_concurrent_limiter.py",
         "TestDropOldestCallbackInvoked.test_oldest_workflow_is_evicted_not_newest",

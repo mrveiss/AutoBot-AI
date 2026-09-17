@@ -9,7 +9,8 @@ that needs registering goes in its own per-component module instead of
 raising that ceiling. ``env_registry_agent_runtime.py`` holds the sibling
 population sized in the same sweep for the agent-loop/orchestration side;
 this one holds the rest -- chat, sessions, workspaces, memory, notifications,
-auth, tooling, and knowledge indexing.
+auth, tooling, and knowledge indexing. #15151 later added three ``network``
+vars found the same way, from a different reader shape (see below).
 
 These were read through a bare ``int(os.environ.get(...))`` /
 ``float(os.environ.get(...))`` cast until #15710 converted each to
@@ -413,5 +414,136 @@ register_env_var(
             "the session window: a slower, stricter limit for the higher-value surface (#15757)."
         ),
         component="backend",
+    )
+)
+
+# #15151: read via autobot_shared.ssot_config's pydantic Field(alias=...), not
+# os.environ.get/env_utils, so check_env_var_registry.py never saw these three
+# either -- the same visibility gap #15710 (the module docstring above) closed
+# for a different reader shape. docs/guides/CONFIGURATION_GUIDE.md had
+# documented three wrong/dead names for these (AUTOBOT_PLAYWRIGHT_HOST,
+# AUTOBOT_PLAYWRIGHT_API_PORT, AUTOBOT_PLAYWRIGHT_VNC_PORT); the guide is
+# fixed in the same change that adds this registration.
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_SERVICE_HOST",
+        type=str,
+        default="127.0.0.1",
+        description="Hostname or IP of the Playwright/browser automation service (services/playwright_service.py).",
+        component="network",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_SERVICE_PORT",
+        type=int,
+        default=9001,
+        description="Port of the Playwright/browser automation service. 9001, not 3000 -- that's Grafana's (#4052).",
+        component="network",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_VNC_PORT",
+        type=int,
+        default=6080,
+        description="Port of the VNC web interface (novnc), used by the desktop-control/VNC proxy surface.",
+        component="network",
+    )
+)
+
+# Registered here, not beside AUTOBOT_REDIS_PASSWORD in env_registry.py: that
+# module is closed to new entries at its file-size ceiling (see the docstring).
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REDIS_USERNAME",
+        type=str,
+        default=None,
+        description=(
+            "Redis ACL username, sent with the password as AUTH user password "
+            "(omit to keep the password-only AUTH, #16626)."
+        ),
+        component="redis",
+    )
+)
+
+#: Default pricing catalogue URLs, keyed by the variable that overrides each (#16229).
+#: One home for the value: live_sources.py reads it back from REGISTRY, so the code,
+#: the registry and the generated docs table cannot drift apart.
+_PRICING_LITELLM_FILE = "model_prices_and_context_window.json"
+_PRICING_URL_DEFAULTS = {
+    "AUTOBOT_PRICING_LITELLM_URL": "https://raw.githubusercontent.com/BerriAI/litellm/main/" + _PRICING_LITELLM_FILE,
+    "AUTOBOT_PRICING_OPENROUTER_URL": "https://openrouter.ai/api/v1/models",
+}
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_CROSSCHECK_TOLERANCE_PERCENT",
+        type=float,
+        default=10.0,
+        description=(
+            "Percent difference between LiteLLM's and OpenRouter's price for one model above which the "
+            "pricing refresh flags a disagreement. Flagged, never resolved silently (#16229)."
+        ),
+        component="pricing",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_FETCH_TIMEOUT_SECONDS",
+        type=float,
+        default=30.0,
+        description=(
+            "Total timeout, in seconds, for one live pricing catalogue fetch. A timed-out fetch is a failed "
+            "refresh and leaves stored prices to age, never looking fresh (#16229)."
+        ),
+        component="pricing",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_LITELLM_URL",
+        type=str,
+        default=_PRICING_URL_DEFAULTS["AUTOBOT_PRICING_LITELLM_URL"],
+        description=(
+            "URL of LiteLLM's model price map, the primary live pricing catalogue. Fetched public-only "
+            "through the egress guard (#16229)."
+        ),
+        component="pricing",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_OPENROUTER_URL",
+        type=str,
+        default=_PRICING_URL_DEFAULTS["AUTOBOT_PRICING_OPENROUTER_URL"],
+        description=(
+            "URL of OpenRouter's public models API, the cross-check pricing catalogue. Fetched public-only "
+            "through the egress guard (#16229)."
+        ),
+        component="pricing",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_REFRESH_INTERVAL_HOURS",
+        type=int,
+        default=24,
+        description=(
+            "Hours between automatic pricing refreshes: the Celery beat cadence, and the floor under the "
+            "Redis TTL so stored prices can never expire before the next scheduled refresh (#16231)."
+        ),
+        component="pricing",
     )
 )

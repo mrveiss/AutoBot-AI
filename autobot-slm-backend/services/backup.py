@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.security.path_validator import require_path_string
 from config import settings
 from models.database import Backup, BackupStatus, Node
+from services.redis_cli_auth import RedisCliAuth, redis_cli_auth
 from services.role_units import REDIS_UNIT
 
 logger = logging.getLogger(__name__)
@@ -121,18 +122,18 @@ class BackupService:
 
         try:
             # Step 1: Discover Redis configuration (data dir, auth)
-            redis_auth_prefix, rdb_path = await self._discover_redis_config(host, ssh_user, ssh_port)
+            auth, rdb_path = await self._discover_redis_config(host, ssh_user, ssh_port)
 
             # Step 2: Trigger BGSAVE
             logger.info("Starting Redis BGSAVE on %s", host)
-            bgsave_cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"{redis_auth_prefix} redis-cli BGSAVE")
-            success, output = await self._run_command(bgsave_cmd, timeout=30)
+            bgsave_cmd = self._build_ssh_command(host, ssh_user, ssh_port, auth.remote("BGSAVE"))
+            success, output = await self._run_command(bgsave_cmd, timeout=30, stdin=auth.stdin)
             if not success:
                 return await self._fail_backup(db, backup, f"BGSAVE failed: {output}")
 
             # Step 3: Wait for BGSAVE to complete
             logger.info("Waiting for BGSAVE to complete...")
-            await self._wait_for_bgsave(host, ssh_user, ssh_port, redis_auth_prefix)
+            await self._wait_for_bgsave(host, ssh_user, ssh_port, auth)
 
             # Step 4: Get RDB file size and checksum
             size_bytes, checksum = await self._get_remote_file_info(host, ssh_user, ssh_port, rdb_path)
@@ -431,7 +432,7 @@ class BackupService:
         host: str,
         ssh_user: str,
         ssh_port: int,
-        redis_auth_prefix: str = "",
+        auth: RedisCliAuth,
         max_wait: int = 120,
     ) -> bool:
         """Wait for BGSAVE to complete by monitoring LASTSAVE."""
@@ -439,8 +440,8 @@ class BackupService:
         initial_lastsave = None
 
         while (datetime.now(timezone.utc) - start_time).seconds < max_wait:
-            cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"{redis_auth_prefix} redis-cli LASTSAVE")
-            success, output = await self._run_command(cmd, timeout=10)
+            cmd = self._build_ssh_command(host, ssh_user, ssh_port, auth.remote("LASTSAVE"))
+            success, output = await self._run_command(cmd, timeout=10, stdin=auth.stdin)
 
             if success:
                 try:
@@ -482,15 +483,16 @@ class BackupService:
             command,
         ]
 
-    async def _run_command(self, cmd: list, timeout: int = 60) -> Tuple[bool, str]:
-        """Run a command and return (success, output)."""
+    async def _run_command(self, cmd: list, timeout: int = 60, stdin: bytes | None = None) -> Tuple[bool, str]:
+        """Run a command and return (success, output); *stdin* is written to its standard input."""
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
+                stdin=asyncio.subprocess.PIPE if stdin is not None else None,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            stdout, _ = await asyncio.wait_for(process.communicate(input=stdin), timeout=timeout)
             output = stdout.decode("utf-8", errors="replace")
             return process.returncode == 0, output
         except asyncio.TimeoutError:
@@ -514,34 +516,22 @@ class BackupService:
             logger.warning("Checksum calculation failed: %s", e)
             return None
 
-    async def _discover_redis_config(self, host: str, ssh_user: str, ssh_port: int) -> Tuple[str, str]:
-        """Discover Redis authentication prefix and RDB file path.
+    async def _discover_redis_config(self, host: str, ssh_user: str, ssh_port: int) -> Tuple[RedisCliAuth, str]:
+        """Resolve Redis authentication and discover the RDB file path.
 
-        Helper for execute_redis_backup (Issue #665).
+        Helper for execute_redis_backup (Issue #665). The credential comes from its
+        canonical source via redis_cli_auth(), not from grepping the node's
+        /etc/redis/redis.conf, which roles/redis never renders (#16625).
 
-        Returns (redis_auth_prefix, rdb_path).
+        Returns (auth, rdb_path).
         """
-        # Check for Redis authentication
-        redis_auth_prefix = ""
-        auth_cmd = self._build_ssh_command(
-            host,
-            ssh_user,
-            ssh_port,
-            "grep -E '^requirepass' /etc/redis/redis.conf 2>/dev/null | awk '{print $2}'",
-        )
-        success, auth_output = await self._run_command(auth_cmd, timeout=10)
-        redis_password = auth_output.strip() if success else ""
-        if redis_password:
-            redis_auth_prefix = "REDISCLI_AUTH=$(grep -E '^requirepass' /etc/redis/redis.conf " "| awk '{print $2}')"
+        auth = redis_cli_auth()
 
         # Get Redis data directory and filename
         config_cmd = self._build_ssh_command(
-            host,
-            ssh_user,
-            ssh_port,
-            f"{redis_auth_prefix} redis-cli CONFIG GET dir && " f"{redis_auth_prefix} redis-cli CONFIG GET dbfilename",
+            host, ssh_user, ssh_port, auth.remote("CONFIG GET dir", "CONFIG GET dbfilename")
         )
-        success, config_output = await self._run_command(config_cmd, timeout=15)
+        success, config_output = await self._run_command(config_cmd, timeout=15, stdin=auth.stdin)
 
         redis_dir = "/var/lib/redis"
         redis_dbfilename = "dump.rdb"
@@ -555,7 +545,7 @@ class BackupService:
 
         rdb_path = f"{redis_dir}/{redis_dbfilename}"
         logger.info("Redis RDB path discovered: %s", rdb_path)
-        return redis_auth_prefix, rdb_path
+        return auth, rdb_path
 
     async def _get_remote_file_info(
         self, host: str, ssh_user: str, ssh_port: int, rdb_path: str

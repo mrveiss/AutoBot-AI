@@ -56,25 +56,19 @@ class SecretsService:
     def __init__(self, db_path: str = None, encryption_key: str | None = None) -> None:
         """Initialize the secrets service with encryption"""
         if db_path is None:
-            # Canonical data directory (#14081): resolve through ssot_config
-            # directly rather than the legacy utils.paths_manager, which
-            # reads an unset config.yaml "paths" key and silently falls
-            # back to a CWD-relative "data/" -- landing the live secrets DB
-            # outside the subtree the filesystem MCP bridge excludes in
-            # production.
+            # Canonical data directory (#14081): resolve through ssot_config directly rather than the legacy
+            # utils.paths_manager, which reads an unset config.yaml "paths" key and silently falls back to a
+            # CWD-relative "data/" -- landing the live secrets DB outside the subtree the filesystem MCP bridge
+            # excludes in production.
             data_dir = config.path.data_path
             data_dir.mkdir(parents=True, exist_ok=True)
 
-            # One-time migration off the legacy CWD-relative resolver
-            # (#14081 review, #14113): must run before _init_database()
-            # creates a fresh, empty database, or an existing deployment's
-            # real store is silently orphaned. Migrates the FULL
-            # secrets-store file set, not just this class's own db (#14081
-            # review round 5, finding 2): a process that constructs
-            # SecretsService alone (a celery worker, with no SecretsManager
-            # ever running) must still get the shared key moved here, or
-            # _init_encryption below finds no key file and silently mints
-            # an unpersisted one nothing else can ever decrypt.
+            # One-time migration off the legacy CWD-relative resolver (#14081 review, #14113): must run before
+            # _init_database() creates a fresh, empty database, or an existing deployment's real store is silently
+            # orphaned. Migrates the FULL secrets-store file set, not just this class's own db (#14081 review round 5,
+            # finding 2): a process that constructs SecretsService alone (a celery worker, with no SecretsManager ever
+            # running) must still get the shared key moved here, or _init_encryption below finds no key file and
+            # silently mints an unpersisted one nothing else can ever decrypt.
             migrate_legacy_secrets_store(data_dir, ALL_SECRETS_STORE_FILES, "secrets store")
 
             db_path = str(data_dir / "secrets.db")
@@ -183,6 +177,10 @@ class SecretsService:
             "expires_at": row[9],
             "metadata": json.loads(row[10]) if row[10] else {},
             "access_count": row[11],
+            # #16579: _require_owner treats a missing created_by as a denial (#13628's fail-closed rule), and this
+            # mapper never carried the key -- so load(), rotate() and revoke() refused the credential's real owner.
+            # The list path (_row_to_secret_list_item) always mapped it, which is why the column existed unnoticed.
+            "created_by": row[12],
         }
         if include_encrypted:
             secret["_encrypted_value"] = row[4]
@@ -318,10 +316,12 @@ class SecretsService:
         chat_id: str | None,
     ) -> tuple[str | None, List]:
         """Build query and params for get_secret. Returns (query, params) or (None, [])."""
+        # #16579: created_by is APPENDED, not inserted beside the related columns: _row_to_secret_dict reads this
+        # tuple positionally, so a mid-list insert would silently shift nine mappings. Appending leaves them alone.
         base_query = """
             SELECT id, name, description, secret_type, encrypted_value,
                    scope, chat_id, created_at, updated_at, expires_at,
-                   metadata, access_count
+                   metadata, access_count, created_by
             FROM secrets
             WHERE is_active = 1
         """

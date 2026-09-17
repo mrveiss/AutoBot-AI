@@ -24,10 +24,12 @@ import re
 import time
 from typing import TYPE_CHECKING
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
 from .optimization.rate_limiter import RateLimitConfig, RateLimitError, RateLimitHandler, RetryStrategy
+from .quota_headroom import get_quota_headroom_store
 
 if TYPE_CHECKING:
     from .models import LLMResponse
@@ -110,11 +112,42 @@ def raise_if_rate_limited(response: "LLMResponse") -> None:
     """
     is_rl, retry_after = extract_rate_limit_info(response)
     if is_rl:
+        _persist_headroom_from_429(response, retry_after)
         raise RateLimitError(
             f"Provider {response.provider!r} hit rate limit: {response.error}",
             retry_after=retry_after,
             provider=response.provider or "unknown",
         )
+
+
+def _persist_headroom_from_429(response: "LLMResponse", retry_after: float | None) -> None:
+    """Record that *response.provider* is at zero headroom until it resets (#15026).
+
+    GH#8502's raise-and-retry behaviour above is unchanged by this — this is
+    additive telemetry for #15028's future routing decision, scheduled
+    fire-and-forget so a store hiccup can never affect today's retry path.
+    ``window="requests"``: this function only ever has a retry_after/reset
+    marker to go on, and every field it is parsed from
+    (``retry_after``, ``x-ratelimit-reset``, ``x-ratelimit-reset-requests``)
+    names the requests window, never tokens.
+    """
+    if not response.provider:
+        return
+    resets_at = time.time() + retry_after if retry_after is not None else None
+
+    async def _record() -> None:
+        await get_quota_headroom_store().record(
+            response.provider,
+            "requests",
+            remaining=0,
+            resets_at=resets_at,
+            source="rate_limit_backoff:429",
+        )
+
+    try:
+        fire_and_forget(_record(), name="quota-headroom-record")
+    except RuntimeError:
+        logger.debug("quota_headroom: no running loop to persist 429 headroom for %s", response.provider)
 
 
 __all__ = [

@@ -236,18 +236,19 @@ class EmbeddedKnowledgeClient:
             query: Search query text
             top_k: Maximum number of results
             threshold: Minimum similarity score (0.0-1.0)
-            filters: Optional metadata filters
+            filters: Optional metadata filters. They narrow the non-private set and never
+                widen it: a token caller reads non-private facts only (#16654, #16666).
 
         Returns:
             List of SearchResult objects
         """
+        from knowledge.search_filters import filter_non_private_results, non_private_where
+
         kb = await self._ensure_initialized()
 
         try:
-            raw_results = await kb.search(
-                query=query,
-                top_k=top_k,
-                filters=filters,
+            raw_results = filter_non_private_results(
+                await kb.search(query=query, top_k=top_k, filters=non_private_where(filters))
             )
 
             results = []

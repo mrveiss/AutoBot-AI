@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-# Start AutoBot Backend Coordinator for Distributed 6-VM Architecture
+# Start AutoBot Backend Coordinator for a Distributed, Role-Based Architecture
 # This script runs on the main WSL machine (${AUTOBOT_BACKEND_HOST}) as the coordinator
 
 set -e
@@ -30,7 +30,7 @@ NC='\033[0m'
 
 echo -e "${GREEN}🚀 Starting AutoBot Backend Coordinator${NC}"
 echo -e "${BLUE}Coordinator Node: ${AUTOBOT_BACKEND_HOST:-localhost}${NC}"
-echo -e "${CYAN}Architecture: 6-VM Distributed System${NC}"
+echo -e "${CYAN}Architecture: Distributed, Role-Based System${NC}"
 echo ""
 
 # Change to AutoBot directory

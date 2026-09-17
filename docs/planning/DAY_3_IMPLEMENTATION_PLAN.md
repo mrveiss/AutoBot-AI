@@ -5,6 +5,8 @@
 **Objective**: Distribute service authentication keys to all 6 VMs
 **Policy Compliance**: 0/10 violations (maintain full compliance)
 
+> **Historical record:** this plan targets the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; the counts and addresses below describe that one install.
+
 ---
 
 ## Executive Summary
@@ -64,14 +66,14 @@ Unknown Service: 0%
 
 All 6 service keys generated and stored in Redis at `<database-ip>:6379`:
 
-| Service ID | VM | IP Address | Key Location | Purpose |
+| Service ID | Role | IP Address | Key Location | Purpose |
 |------------|-----|-----------|-------------|---------|
-| **main-backend** | Main (WSL) | <backend-ip> | `service:key:main-backend` | Backend API calls to other services |
-| **frontend** | VM1 | <frontend-ip> | `service:key:frontend` | Frontend server-side API calls |
-| **npu-worker** | VM2 | <npu-ip> | `service:key:npu-worker` | NPU worker calls to backend |
-| **redis-stack** | VM3 | <database-ip> | `service:key:redis-stack` | Redis Stack admin operations |
-| **ai-stack** | VM4 | <aiml-ip> | `service:key:ai-stack` | AI/ML service API calls |
-| **browser-service** | VM5 | <browser-ip> | `service:key:browser-service` | Browser automation API calls |
+| **main-backend** | Main / Control (WSL) | <backend-ip> | `service:key:main-backend` | Backend API calls to other services |
+| **frontend** | Frontend | <frontend-ip> | `service:key:frontend` | Frontend server-side API calls |
+| **npu-worker** | NPU Worker | <npu-ip> | `service:key:npu-worker` | NPU worker calls to backend |
+| **redis-stack** | Database | <database-ip> | `service:key:redis-stack` | Redis Stack admin operations |
+| **ai-stack** | AI/ML | <aiml-ip> | `service:key:ai-stack` | AI/ML service API calls |
+| **browser-service** | Browser | <browser-ip> | `service:key:browser-service` | Browser automation API calls |
 
 **Key Properties**:
 - **Format**: 256-bit (64 hex characters)

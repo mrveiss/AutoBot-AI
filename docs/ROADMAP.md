@@ -71,7 +71,7 @@ This section documents key architectural decisions where the original plan was r
 
 | Aspect | Original Plan | Current Implementation |
 |--------|---------------|------------------------|
-| **Deployment** | Single server | Multi-VM distributed fleet |
+| **Deployment** | Single server | Distributed, role-based fleet |
 | **Status** | Evolved | ✅ Production |
 
 **Why We Changed**:
@@ -130,7 +130,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 
 | Aspect | Original Plan | Current Implementation |
 |--------|---------------|------------------------|
-| **Servers** | Multiple dev servers allowed | Single frontend server (VM1 only) |
+| **Servers** | Multiple dev servers allowed | Single frontend server (frontend role only) |
 | **Status** | Replaced | ✅ Mandatory |
 
 **Why We Changed**:
@@ -139,7 +139,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 - WebSocket connections got confused between instances
 - State synchronization issues between multiple frontends
 - Single server ensures consistent user experience
-- All development uses sync-to-VM workflow
+- All development uses sync-to-deployment-machine workflow
 
 ### 6. Redis Database Structure
 
@@ -170,9 +170,9 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 
 - ❌ LangChain → Custom LLM interface (performance + control)
 - ❌ LlamaIndex → Custom RAG with ChromaDB (flexibility + accuracy)
-- ❌ Single server → Multi-VM distributed fleet (scalability + isolation)
+- ❌ Single server → distributed, role-based fleet (scalability + isolation)
 - ❌ TinyLLaMA/Phi-2 → Mistral 7B for all tasks (quality + consistency, pending optimization)
-- ❌ Multiple frontends → Single VM1 frontend (stability)
+- ❌ Multiple frontends → Single frontend role (stability)
 
 ---
 
@@ -197,7 +197,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 | System packages (xvfb, etc.) | ✓ | Partial | ⚠️ 80% |
 | Kex WSL2 check | ✓ | Not needed (VNC instead) | ➖ Deprecated |
 
-**Evolution**: Expanded to support 5-machine distributed infrastructure
+**Evolution**: Expanded to support distributed, role-based infrastructure — Docker, one VM, or scaled to any count
 
 ---
 
@@ -545,7 +545,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 | WSL2 compatibility | ✓ | With Kex VNC | ✅ |
 | Native Kali | ✓ | Working | ✅ |
 | Headless VM | ✓ | Working | ✅ |
-| Distributed VMs | Added | 5-machine cluster | ✅ |
+| Distributed, role-based deployment | Added | Docker, one VM, or scaled by role | ✅ |
 
 ---
 
@@ -553,16 +553,16 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 
 ### ✅ PHASE 15: Distributed Infrastructure (COMPLETE)
 
-**Status**: 5-machine production cluster
+**Status**: Role-based production deployment — one worked example below; machine count is a deployment choice
 
-| VM | IP | Purpose | Status |
+| Role | IP | Purpose | Status |
 |----|-----|---------|--------|
-| Main (WSL) | <backend-ip> | Backend API + VNC | ✅ |
-| VM1 Frontend | <frontend-ip> | Web UI | ✅ |
-| VM2 NPU Worker | <npu-ip> | Hardware AI | ✅ |
-| VM3 Redis | <database-ip> | Data layer | ✅ |
-| VM4 AI Stack | <aiml-ip> | AI processing | ✅ |
-| VM5 Browser | <browser-ip> | Playwright | ✅ |
+| Main / Control (WSL) | <backend-ip> | Backend API + VNC | ✅ |
+| Frontend | <frontend-ip> | Web UI | ✅ |
+| NPU Worker | <npu-ip> | Hardware AI | ✅ |
+| Database (Redis) | <database-ip> | Data layer | ✅ |
+| AI Stack | <aiml-ip> | AI processing | ✅ |
+| Browser | <browser-ip> | Playwright | ✅ |
 
 ---
 
@@ -800,7 +800,7 @@ These features were not in the original 20-phase roadmap but were implemented ba
 
 ### 3. Distributed > Centralized (At Scale)
 
-- 5-machine cluster instead of single server
+- Distributed, role-based deployment instead of a single server
 - Better resource allocation
 - Improved fault tolerance
 - Easier scaling
@@ -823,7 +823,7 @@ These features were not in the original 20-phase roadmap but were implemented ba
 - ✅ 12 Redis databases configured
 - ✅ 8 LLM provider types + adapter registry
 - ✅ 16 MCP bridges active (6 external + 10 backend)
-- ✅ Multi-VM distributed infrastructure
+- ✅ Distributed, role-based infrastructure
 
 ### Feature Completeness
 
@@ -859,7 +859,7 @@ These features were not in the original 20-phase roadmap but were implemented ba
 
 ### Infrastructure
 
-- **Architecture**: Multi-VM distributed fleet
+- **Architecture**: Distributed, role-based fleet
 - **Automation**: Playwright
 - **Desktop**: VNC/noVNC
 - **SSH**: Paramiko
@@ -868,7 +868,7 @@ These features were not in the original 20-phase roadmap but were implemented ba
 
 ## 🏁 Conclusion
 
-AutoBot has achieved **~99% production readiness** with a multi-VM distributed fleet, 40+ specialized agents, 1,092+ API routes, complete knowledge graph pipeline, OpenTelemetry tracing, NPU acceleration, TTS voice output, i18n support, and enterprise security. The original 20-phase roadmap is complete. Remaining work is polish (wake word CPU opt) and deferred infrastructure (Docker Compose).
+AutoBot has achieved **~99% production readiness** with a distributed, role-based fleet, 40+ specialized agents, 1,092+ API routes, complete knowledge graph pipeline, OpenTelemetry tracing, NPU acceleration, TTS voice output, i18n support, and enterprise security. The original 20-phase roadmap is complete. Remaining work is polish (wake word CPU opt) and deferred infrastructure (Docker Compose).
 
 **Current Status**: ✅ **FUNCTIONAL**
 

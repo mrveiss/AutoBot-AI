@@ -140,12 +140,11 @@ SITE_MANIFESTS: dict[tuple[str, str], Resolution] = {
         "the role rsyncs autobot-backend/ to the code dir, filters its manifest into the venv, and "
         "adds the three repo-root GPU manifests on a GPU host (#11134, #15162, #10288, #15163)",
     ),
-    (f"{_ROLES}/browser/tasks/main.yml", "{{ browser_install_dir }}/venv"): Resolution(
-        (BROWSER,),
-        "the role rsyncs autobot-browser-worker/ to the install dir and update-all-nodes.yml "
-        "installs that manifest into this venv, which now declares the web-server floors the "
-        "role states rather than leaving them unanchored (#15660)",
-    ),
+    # #15684: the role's own pip task moved from a `name:` list to reading
+    # autobot-browser-worker/requirements.txt (with chdir, #15733), so it no
+    # longer carries a `name:` and is not a declaration site at all -- both
+    # this role and update-all-nodes.yml now read the manifest, resolved
+    # mechanically by derived_bindings() below, with no table entry needed.
     (f"{_ROLES}/common/tasks/main.yml", "pip3"): Resolution(
         (),
         "bootstraps pip/setuptools/wheel on the system interpreter before any component venv "
@@ -213,21 +212,16 @@ _DISTRIBUTION = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)")
 #: moving `roles/npu-worker`'s two inline lists into the worker's manifest and
 #: installing from it. The three below are #15684.
 MULTI_SOURCE_VENVS: dict[str, str] = {
-    "/opt/autobot/autobot-ai-stack/venv": (
-        "roles/ai-stack installs the filtered requirements-ai manifest (#14272, #14809) and keeps "
-        "a conditional `name:` fallback list for a host where that manifest is absent; the two are "
-        "hand-kept against each other, which is how the fallback's floors drifted until #15623"
-    ),
-    "/opt/autobot/autobot-browser-worker/venv": (
-        "roles/browser installs playwright, playwright-stealth, uvicorn and fastapi as a `name:` "
-        "list while update-all-nodes.yml installs autobot-browser-worker/requirements.txt into the "
-        "same venv; #15660 made the manifest declare all four, so the two agree in text -- but the "
-        "role still restates them, so both sides must be edited together"
-    ),
     "/opt/autobot/venv": (
-        "roles/agent_config/python_deps.yml installs the deployed repo-root manifest and "
-        "roles/backend_services installs /opt/autobot/app/requirements.txt, while "
-        "roles/agent_config's openvino.yml and playwright.yml add bare `name:` lists to the same venv"
+        "#15684 decision, not a backlog note: roles/agent_config/python_deps.yml installs the "
+        "deployed repo-root manifest and roles/backend_services installs "
+        "/opt/autobot/app/requirements.txt (the same manifest, deployed a second way), while "
+        "roles/agent_config's openvino.yml and playwright.yml add bare `name:` lists to the same "
+        "venv. Left multi-source rather than moved: root requirements.txt is `-r`-included by "
+        "autobot-backend/requirements.txt:66, so declaring openvino or playwright there would pull "
+        "an NPU runtime and a headless-browser stack into the backend's venv too, and nothing in "
+        "autobot-backend imports either. ai-stack and the browser worker's venv were the other two "
+        "named at #15684's filing; both are now single-source."
     ),
 }
 

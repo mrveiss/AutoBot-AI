@@ -211,6 +211,24 @@
   no_log: true
   tags: ['backend', 'config']
 
+# #16627 (P1b of #13568): the backend authenticates to Redis as `default` with the
+# SLM-generated password while the server stays nopass. Adopted only when no
+# password is set, so a password a server may already enforce is never replaced,
+# and always together with the username (a password alone is refused by nopass).
+- name: "Backend | Read the SLM-generated Redis credential (#16627)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/read_redis_password.yml
+  tags: ['backend', 'config']
+
+- name: "Backend | Adopt the SLM-generated Redis credential when none is set (#16627)"
+  ansible.builtin.set_fact:
+    backend_redis_password: "{{ _redis_password_read }}"
+    backend_redis_username: "{{ backend_redis_username | default('', true) or _redis_username_read }}"
+  when:
+    - (_redis_password_read | default('') | trim) | length > 0
+    - (backend_redis_password | default('') | trim) | length == 0
+  no_log: true
+  tags: ['backend', 'config']
+
 # #14758: the envelope secret store raised at import on every provisioned
 # deployment because nothing ever wrote its root key, and each consumer swallowed
 # the failure, so an entirely absent store looked like "that secret does not
@@ -552,6 +570,28 @@
       - restart celery
     tags: ['backend', 'deploy']
 
+  # #16310: files deleted from source pile up forever otherwise -- the
+  # synchronize task above never deletes (no `delete: true`), by design, to
+  # protect host state it cannot enumerate itself.
+  - name: "Backend | Delete files removed from source (#16310)"
+    ansible.builtin.include_tasks: ../../_shared/tasks/sync_deletions.yml
+    vars:
+      sync_deletions_label: "Backend"
+      sync_deletions_source_dir: "{{ code_source_dir }}/autobot-backend"
+      sync_deletions_target_dir: "{{ backend_code_dir }}"
+      sync_deletions_owner: "{{ backend_user }}"
+    tags: ['backend', 'deploy']
+
+  # #16310 AC4, moved to its own file (review round 6, reachability): the
+  # update path never runs this main.yml (see npu_workers_cleanup.yml's own
+  # header), so it must also be reachable from PLAY 2 via
+  # `include_role: {name: backend, tasks_from: npu_workers_cleanup}`. This
+  # include covers the provisioning path (site.yml, provision-fleet-roles.yml
+  # Phase 4a run main.yml in full).
+  - name: "Backend | Clean up legacy npu_workers.yaml duplicate (#16310)"
+    ansible.builtin.include_tasks: npu_workers_cleanup.yml
+    tags: ['backend', 'deploy']
+
   - name: "Backend | Fix ownership of backend code dir after sync"
     ansible.builtin.file:
       path: "{{ backend_code_dir }}"
@@ -705,6 +745,7 @@
         - "--exclude=logs"
         - "--exclude=/config/"
         - "--exclude=/.deployed_commit"
+        - "--exclude=/.autobot_sync_deletions_commit"
         - "--exclude=/ansible/enroll.yml"
     tags: ['backend', 'deploy']
 
@@ -837,6 +878,11 @@
       name: pip
       state: latest
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: without this, pip falls back to shelling out to the
+      # standalone `virtualenv` executable, absent from these hosts --
+      # matches the interpreter "Create Python 3.14 virtual environment via
+      # deadsnakes" above already targets.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -847,6 +893,8 @@
       name: "{{ backend_install_dir }}/autobot_shared"
       editable: true
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -881,6 +929,8 @@
     ansible.builtin.pip:
       requirements: "/tmp/requirements-filtered.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -919,6 +969,8 @@
     ansible.builtin.pip:
       requirements: "{{ code_source_dir }}/requirements-gpu-torch.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -941,6 +993,8 @@
       name: faiss-cpu
       state: absent
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     when: backend_gpu_available | default(false) | bool
 
@@ -948,6 +1002,8 @@
     ansible.builtin.pip:
       requirements: "{{ code_source_dir }}/requirements-gpu-faiss.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -962,6 +1018,8 @@
     ansible.builtin.pip:
       requirements: "{{ code_source_dir }}/requirements-gpu.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -1017,6 +1075,8 @@
       virtualenv: "{{ backend_code_dir }}/venv"
       state: forcereinstall
       extra_args: "--no-deps"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -1063,43 +1123,26 @@
     tags: ['backend', 'postgresql']
 
   # ==========================================================
-  # TLS Certificate Generation (Issue #892)
+  # TLS Certificate Generation (Issue #892, consolidated #16020)
   # ==========================================================
-  - name: Create TLS certificate directory
-    ansible.builtin.file:
-      path: /etc/autobot/certs
-      state: directory
-      mode: "0755"
-      owner: root
-      group: root
+  - name: "Backend | Ensure the shared node TLS keypair exists (#16020)"
+    ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
+    tags: ['backend', 'tls']
 
-  - name: Check if TLS certificate exists
-    ansible.builtin.stat:
-      path: /etc/autobot/certs/server-cert.pem
-    register: backend_cert_stat
-
-  - name: Check certificate expiry
-    ansible.builtin.command:
-      cmd: openssl x509 -checkend 604800 -noout -in /etc/autobot/certs/server-cert.pem
-    register: backend_cert_valid
-    changed_when: false
-    # (#2872) Intentional: openssl exits rc=1 when cert expires within the
-    # check window — that is a valid "needs renewal" signal, not an error.
-    failed_when: false
-    when: backend_cert_stat.stat.exists
-
-  - name: Generate self-signed TLS certificate
-    ansible.builtin.command:
-      cmd: >-
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048
-        -keyout /etc/autobot/certs/server-key.pem
-        -out /etc/autobot/certs/server-cert.pem
-        -subj '/C=US/ST=State/L=City/O=AutoBot/CN=autobot-backend'
-    when: >-
-      not backend_cert_stat.stat.exists
-      or (backend_cert_valid.rc | default(1)) != 0
+  # #16020: the shared task has no restart handler of its own -- it also
+  # serves nginx, Redis and PostgreSQL, none of which restart the same way.
+  # Reuses the shared task's own registered vars (the exact condition it used
+  # to decide whether to (re)generate) rather than re-deriving the check, so
+  # backend keeps restarting on a cert rotation as it did before consolidation.
+  - name: "Backend | Flag a cert rotation for the restart handler"
+    ansible.builtin.set_fact:
+      _backend_cert_rotated: "{{ not autobot_node_cert_stat.stat.exists or (autobot_node_cert_valid.rc | default(1)) != 0 }}"
+    changed_when: _backend_cert_rotated
     notify: restart backend
 
+  # #16020: EXISTENCE is consolidated above; ownership stays here, since the
+  # backend process reads the key as backend_user, not root like the shared
+  # task's other consumers (nginx, Redis, PostgreSQL).
   - name: Set certificate key permissions
     ansible.builtin.file:
       path: "{{ item }}"

@@ -26,6 +26,7 @@ every verification call, so ``alg=none`` and cross-algorithm attacks are
 rejected before PyJWT is invoked.
 """
 
+import asyncio
 import logging
 import os
 import secrets
@@ -49,9 +50,21 @@ from services.api_key_authority import legacy_grace_deadline, permission_allowed
 from services.token_denylist import is_jti_revoked
 from user_management.models.user import User
 
+try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
+    from redis.exceptions import RedisError as _RedisError
+except ImportError:  # pragma: no cover - redis is a hard dep in deployments
+    _RedisError = ConnectionError  # type: ignore[assignment,misc]
+
 logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
+
+# #16387: the narrow set of failure modes a revocation-check Redis call can
+# raise -- the client's own error type plus the connection/timeout errors it
+# can surface. Deliberately NOT `except Exception`: a check that cannot run
+# must be told apart from a genuine "not revoked" answer, and a blanket catch
+# would also swallow real bugs and relabel them as Redis outages.
+_REVOCATION_CHECK_FAILURES = (asyncio.TimeoutError, ConnectionError, OSError, _RedisError)
 
 
 class AuthService:
@@ -115,7 +128,14 @@ class AuthService:
         - HS256 → legacy SLM token; verified with ``settings.secret_key``.
         - Any other / ``none`` → rejected (algorithm-confusion guard).
 
-        Returns the normalized claims dict, or ``None`` on any failure.
+        Returns the normalized claims dict, or ``None`` when the token is
+        absent, malformed, expired, or actually revoked.
+
+        Raises ``HTTPException`` (401, matching ``get_current_user``'s normal
+        invalid-token response) when a revocation check itself cannot run --
+        the HS256 jti denylist or the password-epoch check -- because Redis
+        errored. Fail CLOSED (#16387): the caller must not treat "could not
+        check" as "not revoked".
         """
         alg = _peek_alg(token)
 
@@ -131,20 +151,47 @@ class AuthService:
             jti = claims.get("jti")
             if jti:
                 try:
-                    if await is_jti_revoked(jti):
-                        logger.warning("decode_token_async: HS256 token with jti=%r is revoked", jti)
-                        return None
-                except Exception:
-                    logger.warning("jti denylist check failed; failing open", exc_info=True)
+                    revoked = await is_jti_revoked(jti)
+                except _REVOCATION_CHECK_FAILURES as exc:
+                    # #16387: fail CLOSED. The jti denylist is the only record
+                    # of a logged-out or leaked-credential token; if Redis
+                    # cannot answer we cannot tell "not revoked" from
+                    # "unknown", so the token is denied rather than honoured.
+                    # This also gates the backend admin path reached through
+                    # the SLM proxy (#16374) -- a Redis outage takes that path
+                    # down too, which is the accepted trade-off (#16387).
+                    logger.error(
+                        "decode_token_async: jti denylist check failed (%s); denying token",
+                        exc.__class__.__name__,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid or expired token",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    ) from exc
+                if revoked:
+                    logger.warning("decode_token_async: HS256 token with jti=%r is revoked", jti)
+                    return None
 
             # #12924: the jti denylist revokes one token at a time and there is
             # no user->jti index, so it cannot express "every session opened
             # with the old password". The epoch check does that in one lookup.
             try:
-                if await is_token_revoked_by_password_change(claims):
-                    return None
-            except Exception:
-                logger.warning("password-epoch check failed; failing open", exc_info=True)
+                password_revoked = await is_token_revoked_by_password_change(claims)
+            except _REVOCATION_CHECK_FAILURES as exc:
+                # #16387: same fail-closed reasoning as the jti check above --
+                # a token this check cannot clear is denied, not honoured.
+                logger.error(
+                    "decode_token_async: password-epoch check failed (%s); denying token",
+                    exc.__class__.__name__,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired token",
+                    headers={"WWW-Authenticate": "Bearer"},
+                ) from exc
+            if password_revoked:
+                return None
 
             return claims
 

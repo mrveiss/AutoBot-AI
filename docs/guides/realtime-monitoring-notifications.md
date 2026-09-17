@@ -94,7 +94,8 @@ and systemd unit setup, see [Section 6](#6-complete-implementation-example).
 
 
 AutoBot provides a comprehensive real-time monitoring, alerting, and notification
-system that spans the entire 6-VM distributed fleet. This guide covers every layer
+system that spans its entire distributed, role-based fleet -- Docker, a single VM, or
+however many machines a deployment scales to. This guide covers every layer
 of the stack -- from the low-level `SystemMonitor` class that polls hardware metrics
 and stores them in SQLite, through the Prometheus-based alerting pipeline, to the
 WebSocket live-event delivery mechanism that pushes notifications to connected
@@ -131,14 +132,14 @@ cooperating subsystems:
 
 ```
 +---------------------------------------------------------------------+
-|                         Frontend (VM1 .21)                           |
+|                         Frontend role                                |
 |  AdminMonitoringView.vue   WebSocket Client   Grafana Dashboards    |
 +------------------+------------------+------------------+------------+
                    |                  |                  |
           REST API |        WebSocket |       iframe     |
                    v                  v                  v
 +------------------+------------------+------------------+------------+
-|                      Backend (Main .20, port 8443)                  |
+|                      Backend (Main / Control role, port 8443)       |
 |                                                                     |
 |  api/system.py         api/monitoring.py        api/live_events.py  |
 |  GET /health           MonitoringWebSocket      /ws/live            |
@@ -159,8 +160,8 @@ cooperating subsystems:
         systemctl  |      pub/sub     |    scrape        |
                    v                  v                  v
 +------------------+------------------+------------------+------------+
-|  SystemMonitor   |  Redis (VM3 .23) |  Prometheus      |  Grafana   |
-|  (monitoring_    |  channel:        |  AlertManager    |  (.23)     |
+|  SystemMonitor   |  Redis (Database)|  Prometheus      |  Grafana   |
+|  (monitoring_    |  channel:        |  AlertManager    |            |
 |   system.py)     |  system_alerts   |  alertmanager_   |            |
 |  SQLite metrics  |  autobot:live_   |  rules.yml       |            |
 |  database        |  events          |                  |            |
@@ -168,8 +169,8 @@ cooperating subsystems:
                                       |
               +----------+------------+-----------+
               |          |            |           |
-          VM1 .21    VM2 .22     VM3 .23     VM4 .24     VM5 .25
-         Frontend   NPU Worker   Redis      AI Stack    Browser
+           Frontend   NPU Worker   Database    AI Stack    Browser
+             role        role        role        role       role
               |          |            |           |           |
               +----- SLM Agent (health_collector.py) --------+
               |          per-node HealthCollector             |
@@ -589,7 +590,7 @@ curl -sk "https://<backend-ip>:8443/api/error-monitoring/recent?limit=5" | pytho
                 "category": "network",
                 "component": "ai_stack_client",
                 "severity": "high",
-                "message": "Connection refused to AI Stack VM4",
+                "message": "Connection refused to AI Stack role",
                 "trace_id": "abc-123-def"
             }
         ],
@@ -2018,7 +2019,7 @@ curl -sk -X POST \
 
 ### Grafana Dashboard Integration
 
-Prometheus metrics are visualized in Grafana (hosted on the Redis VM .23). Key
+Prometheus metrics are visualized in Grafana (hosted on the database role). Key
 dashboard panels for service monitoring:
 
 ```
@@ -2063,7 +2064,7 @@ curl -sk -H "Authorization: Bearer $TOKEN" \
 ```
 
 **Common causes:**
-- Redis is unreachable: Check `systemctl status redis-server` on VM .23
+- Redis is unreachable: Check `systemctl status redis-server` on the database role
 - Conversation files DB not initialized: Backend startup still in progress
   (takes approximately 6 minutes)
 - Config error: Check `/opt/autobot/.env` for correct SSOT settings
@@ -2163,7 +2164,7 @@ redis-cli -h <database-ip> publish system_alerts '{"type":"test","message":"ping
 ```
 
 **Common causes:**
-- Redis server down on VM .23
+- Redis server down on the database role
 - Network firewall blocking port 6379
 - Wrong Redis database selected (alerts use `database="main"`)
 
@@ -2200,7 +2201,7 @@ journalctl -u autobot-service-monitor --since "10 minutes ago" --no-pager
 **Common causes and fixes:**
 - `ImportError: autobot_shared not found` -- Ensure `PYTHONPATH` in the unit
   file includes `/opt/autobot/autobot_shared`
-- `ConnectionRefusedError` -- Redis on .23 not reachable; the monitor will retry
+- `ConnectionRefusedError` -- Redis (database role) not reachable; the monitor will retry
   on next interval automatically
 - `PermissionError` -- Ensure `ReadWritePaths` includes the reports directory
   and the `autobot` user owns it

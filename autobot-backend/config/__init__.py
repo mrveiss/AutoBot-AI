@@ -85,7 +85,7 @@ class _ConfigStub:
 
         Issue #12748: mirrors the canonical superset shape returned by
         config.service_config.ServiceConfigMixin.get_redis_config() (enabled,
-        host, port, password, db) instead of a hand-rolled subset. Reads the
+        host, port, password, username, db) instead of a hand-rolled subset. Reads the
         already-imported `config` proxy directly (no manager/mixin call) to
         avoid re-entering the circular-import path this stub exists to guard.
         Previously read nonexistent `config.redis_enabled`/`config.redis_db_main`
@@ -98,6 +98,7 @@ class _ConfigStub:
             "host": config.vm.redis,
             "port": int(config.port.redis),
             "password": config.redis.password,
+            "username": config.redis.username,
             "db": int(config.redis.db_main),
         }
 
