@@ -311,6 +311,38 @@ describe('ChatInterface', () => {
       // Sidebar should still render with refresh button available
       expect(screen.getByLabelText('chat.sidebar.refreshList')).toBeInTheDocument()
     })
+
+    // #16274: the init raced a 10s timer that onUnmounted never cancelled, so
+    // an unmounted component still reached its fallback and wrote to the store.
+    // In this suite the rejection landed in a LATER test, after `mockReset: true`
+    // had stripped the mock the fallback calls, surfacing as a crash somewhere
+    // unrelated while this file stayed green (vitest.config.ts:71, #3070).
+    //
+    // Asserted on the fallback never running, not on the timer being cleared:
+    // clearing the handle is the mechanism, and a future rewrite may cancel the
+    // init differently. What must stay true is that nothing after an await runs
+    // once the component is gone.
+    it('does not run the init fallback after the component unmounts', async () => {
+      vi.useFakeTimers()
+      try {
+        // Never settles, so the init is still suspended at its await when the
+        // component goes away — the exact state the timer used to resolve for it.
+        mockInitializeChatInterface.mockImplementation(() => new Promise(() => {}))
+        mockController.loadChatSessions.mockClear()
+
+        const { unmount } = renderComponent(ChatInterface, { pinia: true, router: true })
+        unmount()
+
+        // Past the 10s deadline. Before the fix this rejected into the catch
+        // block and called the fallback; the timer survived unmount, so it fired
+        // regardless of the component being gone.
+        await vi.advanceTimersByTimeAsync(11000)
+
+        expect(mockController.loadChatSessions).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   describe('Chat Management', () => {
