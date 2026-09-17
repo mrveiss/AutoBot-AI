@@ -26,12 +26,12 @@ status nobody acts on is close to what we have today.
 
 import asyncio
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
 from sqlalchemy import select
 
+from autobot_shared.env_utils import env_int
 from llc.models.enums import LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from user_management.database import get_async_session_factory
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 # adapter run observed to date and short enough that an abandoned run is noticed
 # the same working day. Lower it and long legitimate runs get killed; raise it and
 # the failure it exists to catch stays invisible for longer.
-STALL_TIMEOUT_SECONDS = int(os.environ.get("LLC_RUN_STALL_TIMEOUT_SECONDS", str(6 * 60 * 60)))
+STALL_TIMEOUT_SECONDS = env_int("LLC_RUN_STALL_TIMEOUT_SECONDS", 6 * 60 * 60)
 
 #: Statuses a run can sit in while still believed to be alive.
 NON_TERMINAL_STATUSES = (LLCRunStatus.QUEUED.value, LLCRunStatus.RUNNING.value)
