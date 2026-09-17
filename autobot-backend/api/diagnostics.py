@@ -17,7 +17,7 @@ Used for:
 - Debugging (why did this specific task fail?)
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_system import (
     FailureAnalysisRequest,
@@ -29,11 +29,17 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from services.causal_inference_engine import CausalInferenceEngine
 
+from auth_middleware import get_current_user
+
 logger = get_logger(__name__)
 
 # Create router — prefix must NOT include "/api"; the app factory prepends it
 # (#9892: the old "/api/diagnostics" prefix produced /api/api/diagnostics/*).
-router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])
+# #16375: every route needs an authenticated caller, including any added later.
+# Both routes analyse a failure and change nothing, so an authenticated user is
+# the whole requirement — the POST is a POST because it carries an error payload,
+# not because it mutates.
+router = APIRouter(prefix="/diagnostics", tags=["diagnostics"], dependencies=[Depends(get_current_user)])
 
 # Thread-safe singleton via lazy_singleton (#10784)
 get_engine = lazy_singleton(CausalInferenceEngine)

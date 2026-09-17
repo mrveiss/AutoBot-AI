@@ -9,7 +9,7 @@ Metrics API endpoints for workflow performance monitoring
 import asyncio
 from datetime import timedelta
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 # Prometheus query helpers shared from monitoring module (Issue #1283)
 from api.monitoring import _query_prometheus_range
@@ -30,9 +30,15 @@ from autobot_shared.time_utils import now_utc
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
 
+from auth_middleware import check_admin_permission, get_current_user
+
 logger = get_logger(__name__)
 
-router = APIRouter()
+# #16375: every route needs an authenticated caller, including any added later.
+# The two monitoring start/stop routes additionally carry check_admin_permission
+# per route, following api/skills.py (#16368): they switch a system-wide collector
+# on and off for everyone, which is an administrative act rather than a read.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.get("/workflow/{workflow_id}", response_model=MetricsWorkflowResponse)
@@ -200,7 +206,7 @@ async def export_system_metrics(format: str = Query(default="json", description=
     operation="start_system_monitoring",
     error_code_prefix="METRICS",
 )
-async def start_system_monitoring():
+async def start_system_monitoring(_: None = Depends(check_admin_permission)):
     """Start continuous system monitoring"""
     try:
         await system_monitor.start_monitoring()
@@ -221,7 +227,7 @@ async def start_system_monitoring():
     operation="stop_system_monitoring",
     error_code_prefix="METRICS",
 )
-async def stop_system_monitoring():
+async def stop_system_monitoring(_: None = Depends(check_admin_permission)):
     """Stop continuous system monitoring"""
     try:
         await system_monitor.stop_monitoring()

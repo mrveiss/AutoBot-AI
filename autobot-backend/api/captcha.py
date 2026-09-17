@@ -17,7 +17,7 @@ Endpoints:
 Related: Issue #206
 """
 
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
@@ -29,7 +29,14 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from services.captcha_human_loop import CaptchaResolutionStatus, get_captcha_human_loop
 
-router = APIRouter(prefix="/captcha", tags=["captcha"])
+# #16375: every route needs an authenticated caller, including any added later.
+# Resolving or skipping a CAPTCHA acts on a workflow the caller is operating, so
+# it needs a known user — not admin: the operator who answers a CAPTCHA is not
+# necessarily an administrator, and requiring that would gate the routine case on
+# the rare role.
+router = APIRouter(prefix="/captcha", tags=["captcha"], dependencies=[Depends(get_current_user)])
+from auth_middleware import get_current_user
+
 logger = get_logger(__name__)
 
 
