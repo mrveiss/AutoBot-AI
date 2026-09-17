@@ -71,7 +71,7 @@ def pr_fields(ref: str) -> dict[str, str]:
             ["gh", "pr", "view", ref, "--json", "body,author,headRefName,title"],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=DEFAULT_TIMEOUT_SECONDS,
             check=True,
         )
     except FileNotFoundError as exc:
