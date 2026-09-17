@@ -83,3 +83,26 @@ def is_visible(principal: Principal, resource: ResourceDescriptor, has_grant: Gr
     # USER / PRIVATE / SESSION / SHARED / WORKFLOW are private absent
     # ownership or an explicit grant.
     return False
+
+
+def is_unreachable(resource: ResourceDescriptor, has_grant: bool) -> bool:
+    """True if NO principal, however scoped or authenticated, could ever pass
+    `is_visible()` for this resource (#15779) -- an orphan with no in-app
+    remedy, since the fix (assign an owner, add a grant) is gated by the same
+    check that is denying.
+
+    Mirrors `is_visible()`'s own fall-through exactly, but for "any principal"
+    rather than one: SYSTEM/PUBLIC always reach some authenticated principal,
+    ORGANIZATION/GROUP are only unreachable when their own scope key is empty,
+    and everything else (USER/PRIVATE/SESSION/SHARED/WORKFLOW) is unreachable
+    the moment ownership and grants are both absent.
+    """
+    if resource.owner_id is not None or has_grant:
+        return False
+    if resource.scope is ScopeLevel.SYSTEM or resource.scope is ScopeLevel.PUBLIC:
+        return False
+    if resource.scope is ScopeLevel.ORGANIZATION:
+        return resource.company_id is None
+    if resource.scope is ScopeLevel.GROUP:
+        return not resource.effective_group_ids()
+    return True

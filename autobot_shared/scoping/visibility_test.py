@@ -3,7 +3,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 from autobot_shared.scoping.scope_level import ScopeLevel
-from autobot_shared.scoping.visibility import Principal, ResourceDescriptor, is_visible
+from autobot_shared.scoping.visibility import Principal, ResourceDescriptor, is_unreachable, is_visible
 
 
 def _p(user="u1", company="c1", groups=()):
@@ -87,3 +87,42 @@ def test_falsy_owner_id_never_matches():
     """#11290: resources without an owner (knowledge) grant no ownership access."""
     r = ResourceDescriptor(owner_id=None, company_id=None, scope=ScopeLevel.USER)
     assert not is_visible(_p(user="anyone"), r, False)
+
+
+def test_is_unreachable_null_scope_organization_resource():
+    """#15779 AC1's exact reproduction: no owner, no grant, ORGANIZATION with company_id=None."""
+    r = ResourceDescriptor(owner_id=None, company_id=None, scope=ScopeLevel.ORGANIZATION)
+    assert is_unreachable(r, has_grant=False)
+
+
+def test_is_unreachable_false_once_owned_or_granted():
+    r = ResourceDescriptor(owner_id=None, company_id=None, scope=ScopeLevel.ORGANIZATION)
+    assert not is_unreachable(r, has_grant=True)
+    owned = ResourceDescriptor(owner_id="someone", company_id=None, scope=ScopeLevel.ORGANIZATION)
+    assert not is_unreachable(owned, has_grant=False)
+
+
+def test_is_unreachable_organization_with_company_id_is_reachable():
+    """A populated company_id reaches that company's principals -- not an orphan."""
+    r = ResourceDescriptor(owner_id=None, company_id="c1", scope=ScopeLevel.ORGANIZATION)
+    assert not is_unreachable(r, has_grant=False)
+
+
+def test_is_unreachable_group_scope_empty_groups():
+    r = ResourceDescriptor(owner_id=None, company_id=None, scope=ScopeLevel.GROUP)
+    assert is_unreachable(r, has_grant=False)
+    reachable = ResourceDescriptor(owner_id=None, company_id=None, scope=ScopeLevel.GROUP, group_id="g1")
+    assert not is_unreachable(reachable, has_grant=False)
+
+
+def test_is_unreachable_system_public_never_orphaned():
+    """#11290: SYSTEM/PUBLIC always reach some authenticated principal."""
+    for scope in (ScopeLevel.SYSTEM, ScopeLevel.PUBLIC):
+        r = ResourceDescriptor(owner_id=None, company_id=None, scope=scope)
+        assert not is_unreachable(r, has_grant=False)
+
+
+def test_is_unreachable_private_scopes_without_owner_or_grant():
+    for scope in (ScopeLevel.USER, ScopeLevel.PRIVATE, ScopeLevel.SESSION, ScopeLevel.SHARED, ScopeLevel.WORKFLOW):
+        r = ResourceDescriptor(owner_id=None, company_id=None, scope=scope)
+        assert is_unreachable(r, has_grant=False)

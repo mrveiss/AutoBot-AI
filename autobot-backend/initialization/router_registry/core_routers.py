@@ -18,6 +18,7 @@ import content_reach.health  # noqa: F401 — registers KnownProbes.CONTENT_REAC
 from api.adapters import router as adapters_router  # Issue #1403
 from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
+from api.admin_resource_grants import router as admin_resource_grants_router  # #15779
 from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
 from api.admin_schedulers import router as admin_schedulers_router  # GH#6594
 from api.agent import router as agent_router
@@ -133,6 +134,12 @@ def _get_system_routers() -> list:
             "admin_event_logs",
         ),  # Issue #4461
         (admin_pricing_router, "", ["admin", "pricing"], "admin_pricing"),  # GH#6480
+        (
+            admin_resource_grants_router,
+            "",
+            ["admin", "resource-grants"],
+            "admin_resource_grants",
+        ),  # #15779
         (
             admin_retention_policies_router,
             "",
