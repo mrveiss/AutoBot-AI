@@ -291,6 +291,7 @@ class ExternalSkillImporter:
             RuntimeError: On HTTP error, SSRF guard rejection, or unexpected response shape.
         """
         from autobot_shared.security.ssrf_guard import SSRFError, fetch_safe_url  # noqa: PLC0415
+        from autobot_shared.ssot_config import config  # noqa: PLC0415
 
         # #16595: fetch_safe_url builds its pinned connector and calls session.get()
         # in its own scope, which is why CodeQL credits it (as it already does at
@@ -301,7 +302,9 @@ class ExternalSkillImporter:
         query = urlencode({"page": page, "page_size": page_size})
         sep = "&" if urlparse(url).query else "?"
         try:
-            status, body, _content_type = await fetch_safe_url(f"{url}{sep}{query}", timeout=30)
+            status, body, _content_type = await fetch_safe_url(
+                f"{url}{sep}{query}", timeout=config.timeout.default_request
+            )
         except SSRFError as exc:
             raise RuntimeError(f"Catalog URL blocked by SSRF guard: {url} ({exc})") from exc
 
