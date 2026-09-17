@@ -11,13 +11,12 @@ automatically promoted to BUILTIN or TRUSTED.
 """
 
 import asyncio
+import json
 import os
 import re
 import uuid
 from typing import Any
-from urllib.parse import urlparse
-
-import aiohttp
+from urllib.parse import urlencode, urlparse
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
@@ -99,25 +98,6 @@ def _validate_git_ref(ref: str) -> None:
         raise RuntimeError(
             f"Invalid git ref {ref!r}: refs must match [A-Za-z0-9._/-]+ " "and cannot start with '-' or contain '..'"
         )
-
-
-async def _validate_catalog_url(url: str) -> None:
-    """SSRF guard for HTTP skill-catalog URLs (#12278).
-
-    Enforces an http/https scheme, a present hostname, and a publicly routable
-    resolved IP (rejects loopback, RFC1918, link-local/metadata). Delegates the
-    IP-range checks to the shared ``is_public_url_async`` guard so the SSRF rules
-    live in one module. Raises ``RuntimeError`` on any violation.
-    """
-    from autobot_shared.url_safety import is_public_url_async  # noqa: PLC0415
-
-    parsed = urlparse(url)
-    if (parsed.scheme or "").lower() not in ("http", "https"):
-        raise RuntimeError(f"Catalog URL must use http or https scheme: {url!r}")
-    if not parsed.hostname:
-        raise RuntimeError(f"Catalog URL missing hostname: {url!r}")
-    if not await is_public_url_async(url):
-        raise RuntimeError(f"Catalog URL blocked by SSRF guard: {url}")
 
 
 def _ensure_cache_dir() -> str:
@@ -310,26 +290,27 @@ class ExternalSkillImporter:
         Raises:
             RuntimeError: On HTTP error, SSRF guard rejection, or unexpected response shape.
         """
-        from autobot_shared.security.ssrf_guard import SSRFError, pinned_connector  # noqa: PLC0415
+        from autobot_shared.security.ssrf_guard import SSRFError, fetch_safe_url  # noqa: PLC0415
+        from autobot_shared.ssot_config import config  # noqa: PLC0415
 
-        await _validate_catalog_url(url)
-        # Resolve-once + IP-pin so DNS cannot rebind to a private address between
-        # the public-IP check and the socket connect (DNS-rebind TOCTOU).
+        # #16595: fetch_safe_url builds its pinned connector and calls session.get()
+        # in its own scope, which is why CodeQL credits it (as it already does at
+        # its other two call sites) where the previous hand-rolled
+        # _validate_catalog_url() + pinned_connector() pair here did not (same
+        # cross-function-boundary gap #16503 hit for py/path-injection). It also
+        # covers the scheme check pinned_connector() alone never did.
+        query = urlencode({"page": page, "page_size": page_size})
+        sep = "&" if urlparse(url).query else "?"
         try:
-            connector = await pinned_connector(url)
+            status, body, _content_type = await fetch_safe_url(
+                f"{url}{sep}{query}", timeout=config.timeout.default_request
+            )
         except SSRFError as exc:
             raise RuntimeError(f"Catalog URL blocked by SSRF guard: {url} ({exc})") from exc
 
-        params = {"page": page, "page_size": page_size}
-        timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-            # SSRF mitigated: _validate_catalog_url() enforces scheme+public host and
-            # the connector pins the pre-resolved public IP (defeats DNS-rebind);
-            # redirects disabled. codeql[py/full-ssrf] (#12278)
-            async with session.get(url, params=params, allow_redirects=False) as response:
-                if response.status != 200:
-                    raise RuntimeError(f"Catalog fetch failed: HTTP {response.status} from {url}")
-                data = await response.json()
+        if status != 200:
+            raise RuntimeError(f"Catalog fetch failed: HTTP {status} from {url}")
+        data = json.loads(body)
 
         if isinstance(data, list):
             return data
