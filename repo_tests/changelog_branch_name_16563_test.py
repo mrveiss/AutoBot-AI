@@ -61,3 +61,60 @@ def test_the_sweep_recognises_the_changelog_branch_as_archival():
         f"release.yml builds {literal_prefix!r}* but branch-guards.sh archival prefixes are "
         f"{prefixes} — the sweep would treat released changelog branches as abandoned (#16563)."
     )
+
+
+# AC2 of #16563 asks for the general rule, not this file's original special case:
+# no workflow may create a branch whose namespace equals a long-lived branch
+# name. The two tests above pin `release.yml`'s changelog branch specifically —
+# they would not catch a different workflow pushing `main/foo`.
+#
+# Long-lived names are read from the repository rather than hardcoded, so a
+# future rename does not leave this guard asserting against a name nobody uses.
+_LONG_LIVED = ("main", "release", "Dev_new_gui", "develop")
+
+#: Every shape a workflow uses to name a new branch. Each must expose the branch
+#: name as group 1. Missing a shape makes this guard silently narrower, which is
+#: the failure mode it exists to prevent, so `test_the_extractor_still_matches`
+#: pins that the known-good corpus keeps producing hits.
+_BRANCH_EXPRESSIONS = (
+    re.compile(r'^\s*BRANCH="([^"]+)"', re.M),
+    re.compile(r"git checkout -b\s+([A-Za-z0-9._${}/-]+)"),
+    re.compile(r"git push\s+\S+\s+HEAD:refs/heads/([A-Za-z0-9._${}/-]+)"),
+    re.compile(r'-f\s+ref="refs/heads/([^"]+)"'),
+)
+
+
+def _workflow_branch_names() -> list[tuple[str, str]]:
+    """``(workflow filename, branch expression)`` for every branch a workflow creates."""
+    found: list[tuple[str, str]] = []
+    workflows = repo_root() / ".github" / "workflows"
+    for path in sorted(workflows.glob("*.y*ml")):
+        text = path.read_text(encoding="utf-8")
+        for pattern in _BRANCH_EXPRESSIONS:
+            for match in pattern.finditer(text):
+                found.append((path.name, match.group(1)))
+    return found
+
+
+def test_the_extractor_still_matches_something():
+    """A zero here means the patterns drifted, not that no workflow makes a branch.
+
+    Without this, a rename of every branch-creating idiom would make the guard
+    below pass by finding nothing -- the same shape as the defect it guards.
+    """
+    found = _workflow_branch_names()
+    assert found, "no workflow branch expressions matched — the extractor patterns have drifted"
+
+
+def test_no_workflow_creates_a_branch_under_a_long_lived_namespace():
+    """`refs/heads/main` (a file) and `refs/heads/main/foo` (a directory) cannot coexist."""
+    offenders = []
+    for workflow, expression in _workflow_branch_names():
+        prefix = expression.split("/")[0]
+        if "/" in expression and prefix in _LONG_LIVED:
+            offenders.append(f"{workflow}: {expression!r} nests under {prefix!r}")
+    assert not offenders, (
+        "a workflow creates a branch under a long-lived branch's namespace; git cannot hold a ref "
+        "that is both a file and a directory, so the push fails with 'directory file conflict' "
+        "(#16563):\n  " + "\n  ".join(offenders)
+    )
