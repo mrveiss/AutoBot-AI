@@ -24,6 +24,34 @@ export class MockWebSocket {
   // Track all instances for testing
   static instances: MockWebSocket[] = []
 
+  // #16457 review: GlobalWebSocketService._setupConnectionTimeout uses the
+  // EventTarget-style addEventListener/removeEventListener API (with `{ once
+  // }`), not just the onopen/onclose/... properties above -- a real
+  // WebSocket supports both simultaneously, and this mock previously only
+  // implemented one of them.
+  private _listeners: Record<string, Array<{ fn: EventListener; once: boolean }>> = {}
+
+  addEventListener(type: string, listener: EventListener, options?: boolean | AddEventListenerOptions) {
+    const once = typeof options === 'object' && options !== null && options.once === true
+    if (!this._listeners[type]) {
+      this._listeners[type] = []
+    }
+    this._listeners[type].push({ fn: listener, once })
+  }
+
+  removeEventListener(type: string, listener: EventListener) {
+    this._listeners[type] = (this._listeners[type] ?? []).filter((l) => l.fn !== listener)
+  }
+
+  private _dispatch(type: string, event: Event) {
+    for (const entry of [...(this._listeners[type] ?? [])]) {
+      entry.fn(event)
+      if (entry.once) {
+        this._listeners[type] = this._listeners[type].filter((l) => l !== entry)
+      }
+    }
+  }
+
   constructor(url: string, protocols?: string | string[]) {
     this.url = url
     this.protocols = protocols
@@ -34,9 +62,11 @@ export class MockWebSocket {
     // Simulate connection after a short delay
     setTimeout(() => {
       this.readyState = MockWebSocket.OPEN
+      const event = new Event('open')
       if (this.onopen) {
-        this.onopen(new Event('open'))
+        this.onopen(event)
       }
+      this._dispatch('open', event)
     }, 10)
   }
 
@@ -51,11 +81,12 @@ export class MockWebSocket {
   }
 
   public simulateError(error?: string) {
+    const event = new Event('error')
+    ;(event as Event & { error?: string }).error = error || 'Mock WebSocket error'
     if (this.onerror) {
-      const event = new Event('error')
-      ;(event as Event & { error?: string }).error = error || 'Mock WebSocket error'
       this.onerror(event)
     }
+    this._dispatch('error', event)
   }
 
   public simulateClose(code = 1000, reason = '') {
