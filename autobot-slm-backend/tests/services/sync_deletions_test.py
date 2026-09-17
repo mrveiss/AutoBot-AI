@@ -477,9 +477,9 @@ async def test_bootstrap_adds_zero_candidates_for_a_venv_full_of_files(tmp_path,
 
     assert plan.delete == []
     assert not any("venv" in p for p in plan.delete)
-    # Exactly two git calls (ls-tree + log --diff-filter=A) -- never one per
-    # file, regardless of len(present_paths).
-    assert len(calls) == 2, f"expected 2 git calls (bounded), got {len(calls)}"
+    # Exactly three git calls (#16310: is-shallow-repository + ls-tree +
+    # log --diff-filter=A) -- never one per file, regardless of len(present_paths).
+    assert len(calls) == 3, f"expected 3 git calls (bounded), got {len(calls)}"
 
 
 async def test_bootstrap_makes_a_bounded_number_of_git_calls_regardless_of_file_count(tmp_path, monkeypatch) -> None:
@@ -506,4 +506,5 @@ async def test_bootstrap_makes_a_bounded_number_of_git_calls_regardless_of_file_
     plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_b, present_paths=present_paths)
 
     assert plan.delete == []  # all 25 present files are still tracked at commit_b
-    assert len(calls) == 2, f"expected 2 git calls regardless of {len(present_paths)} files, got {len(calls)}"
+    # #16310: +1 for the is-shallow-repository check.
+    assert len(calls) == 3, f"expected 3 git calls regardless of {len(present_paths)} files, got {len(calls)}"

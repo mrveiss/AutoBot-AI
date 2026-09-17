@@ -241,6 +241,11 @@ export type { Role, SyncResult }
  * `'current'` ("already at target commit", C4) was missing from the previous
  * hand-written union even though `CodeSyncView.vue:127` and `:145` already map
  * it, so the type contradicted the view's own rendering.
+ *
+ * `'partial'` (#16640): the C4 fast path, but a co-located component
+ * (browser-service, npu-worker, ...) failed its own deploy — distinct from
+ * `UpdateAllJobStatus`'s `'partial'`, which the fleet-nodes stage sets for a
+ * different reason (a skipped non-operational node).
  */
 export type StageStatus =
   | 'pending'
@@ -249,6 +254,7 @@ export type StageStatus =
   | 'failed'
   | 'skipped'
   | 'current'
+  | 'partial'
 
 /**
  * Update-all job status — mirrors every `job.status = …` site in
