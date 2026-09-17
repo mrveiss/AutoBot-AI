@@ -531,6 +531,7 @@ class AdvancedControlEmergencyStopResponse(SuccessMessageResponse):
     """Response for POST /system/emergency-stop."""
 
     takeover_request_id: str
+    tasks_paused: List[str]
 
 
 class AdvancedControlSystemHealthResponse(BaseModel):

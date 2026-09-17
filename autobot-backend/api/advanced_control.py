@@ -469,21 +469,40 @@ async def emergency_system_stop(
     Emergency stop for all autonomous operations
 
     Issue #744: Requires admin authentication.
+    Issue #16843: request_takeover was never given affected_tasks, so it
+    always defaulted to an empty list and the "stop" paused nothing while
+    still reporting success. Enumerate what's actually running right now
+    and report what was found, so an empty result means "nothing was
+    running" rather than silently meaning nothing was ever checked. This
+    marks tasks paused for audit/visibility; it does not yet interrupt
+    in-flight execution -- no code path currently checks paused-task state
+    before continuing work, which is the still-open question on #16843.
     """
-    # Request emergency takeover
+    affected_task_ids = list(get_task_tracker().get_active_tasks().keys())
+
     request_id = await get_takeover_manager().request_takeover(
         trigger=TakeoverTrigger.CRITICAL_ERROR,
         reason="Emergency stop activated",
         requesting_agent="emergency_system",
+        affected_tasks=affected_task_ids,
         priority=TaskPriority.CRITICAL,
         auto_approve=True,
     )
 
-    logger.warning("Emergency stop activated: %s", request_id)
+    logger.warning(
+        "Emergency stop activated: %s (%d task(s) marked paused)",
+        request_id,
+        len(affected_task_ids),
+    )
     return {
         "success": True,
-        "message": "Emergency stop activated",
+        "message": (
+            f"Emergency stop activated -- {len(affected_task_ids)} task(s) marked paused"
+            if affected_task_ids
+            else "Emergency stop activated -- no autonomous tasks were running"
+        ),
         "takeover_request_id": request_id,
+        "tasks_paused": affected_task_ids,
     }
 
 
