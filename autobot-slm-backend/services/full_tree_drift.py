@@ -43,7 +43,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from autobot_shared.time_utils import utc_timestamp
-from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
+from services.deploy_artifacts import (
+    ARTIFACT_DIR_SUFFIXES,
+    ARTIFACT_DIRS,
+    SLM_FRONTEND_BUILD_PREFIX,
+    SLM_FRONTEND_CURRENT_LINK,
+    SLM_FRONTEND_LEGACY_DIR,
+    SLM_FRONTEND_LEGACY_PREVIOUS_DIR,
+    SLM_FRONTEND_PREVIOUS_LINK,
+)
 from services.deployed_dir_resolver import get_live_dir
 from services.drift_checker import VISIBILITY_COMPONENTS, deploy_only_entries, get_default_source_dir, owned_subtrees
 from services.git_subprocess import component_pathspec, last_commit_for_path, run_git
@@ -55,13 +63,17 @@ from services.host_state_filter import kept_reason
 # the precedent autobot_shared/user_management/password_epoch.py:50-58 sets.
 logger = logging.getLogger(__name__)
 
-# Top-level names the SLM frontend publish step owns (services/
-# slm_frontend_build.py's _BUILD_PREFIX/_CURRENT_LINK/_PREVIOUS_LINK/
-# _LEGACY_DIR, plus the pre-#15610 dist.previous/ this issue also retires):
-# expected release artifacts at ANY retention depth -- the publish step's own
-# SLM_FRONTEND_RELEASE_KEEP pruning is what bounds them, not this check.
-_BUILD_BUNDLE_PREFIX = "dist-"
-_BUILD_BUNDLE_NAMES = frozenset({"current", "previous", "dist", "dist.previous"})
+# Top-level names the SLM frontend publish step owns, sourced from
+# services/deploy_artifacts.py (#16717) rather than restated here -- the same
+# vocabulary services/drift_checker.py's rsync-exclude and legacy-drift-walk
+# protection derives from, so this walk and that one can never disagree
+# about what a release artifact is called. Expected release artifacts at ANY
+# retention depth -- the publish step's own SLM_FRONTEND_RELEASE_KEEP pruning
+# is what bounds them, not this check.
+_BUILD_BUNDLE_PREFIX = SLM_FRONTEND_BUILD_PREFIX
+_BUILD_BUNDLE_NAMES = frozenset(
+    {SLM_FRONTEND_CURRENT_LINK, SLM_FRONTEND_PREVIOUS_LINK, SLM_FRONTEND_LEGACY_DIR, SLM_FRONTEND_LEGACY_PREVIOUS_DIR}
+)
 
 # Drift verdicts. Only the first two are drift; the rest are named exclusions.
 VERDICT_MODIFIED = "modified"

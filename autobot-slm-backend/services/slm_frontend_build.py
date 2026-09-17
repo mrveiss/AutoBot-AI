@@ -33,6 +33,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from autobot_shared.env_utils import env_float, env_int_clamped
+from services.deploy_artifacts import SLM_FRONTEND_BUILD_PREFIX as _BUILD_PREFIX
+from services.deploy_artifacts import SLM_FRONTEND_CURRENT_LINK as _CURRENT_LINK
+from services.deploy_artifacts import SLM_FRONTEND_LEGACY_DIR as _LEGACY_DIR
+from services.deploy_artifacts import SLM_FRONTEND_LEGACY_PREVIOUS_DIR as _LEGACY_PREVIOUS_DIR
+from services.deploy_artifacts import SLM_FRONTEND_PREVIOUS_LINK as _PREVIOUS_LINK
 from services.deployed_dir_resolver import get_release_component_dir
 
 logger = logging.getLogger(__name__)
@@ -54,19 +59,19 @@ _NPM_TIMEOUT_SECONDS = env_float("SLM_FRONTEND_NPM_TIMEOUT_SECONDS", 300)
 # `dist-<build-id>/` per build, `current` the served symlink, `previous` the
 # rollback target. `dist` is the pre-#15610 served directory — never written
 # here, only adopted as the first `current` on a node that has not published
-# under this layout yet.
-_BUILD_PREFIX = "dist-"
-_CURRENT_LINK = "current"
-_PREVIOUS_LINK = "previous"
-_LEGACY_DIR = "dist"
-
-# The pre-#15610 rollback target: a real directory copy, not a symlink. The
-# `dist-<id>/` pruner in _prune_old_builds never matches it (no `dist-`
-# prefix), so it survived every publish since the symlink layout landed
-# (#16310). Removed only once BOTH `current` and `previous` are the new
-# symlinks -- i.e. this node has published at least twice under #15610 and
-# nothing can still be pointing a rollback at the legacy directory.
-_LEGACY_PREVIOUS_DIR = "dist.previous"
+# under this layout yet. `dist.previous` is the pre-#15610 rollback target: a
+# real directory copy, not a symlink. The `dist-<id>/` pruner in
+# _prune_old_builds never matches it (no `dist-` prefix), so it survived
+# every publish since the symlink layout landed (#16310).
+#
+# Defined in services/deploy_artifacts.py, not here, and imported (above):
+# that is the dependency-free vocabulary module services/drift_checker.py's
+# rsync excludes AND both drift walks already derive their build/deploy-
+# artifact patterns from (#11459) — this module is the one place that WRITES
+# the layout, but must not be the one place other modules import it FROM, or
+# protecting it from a forced resync (#16717) would need drift_checker to
+# import this module's asyncio/subprocess/build machinery just to read four
+# strings.
 
 # How many build directories survive a publish. Bounded, or the disk grows by
 # one bundle per self-sync forever. Env-backed for the same reason the timeouts
