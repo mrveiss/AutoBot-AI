@@ -83,14 +83,39 @@ _RATIONALE_HEADING = re.compile(
 # where autobot_shared.logging_manager would pull in config this job does not have.
 logger = logging.getLogger(__name__)
 
-RATIONALE_HINT = (
-    "This PR delivers exactly one issue. Batch same-scope issues into one PR "
-    "(one CI suite per batch, not per issue), or state why this one stands alone "
-    "by adding a line to the PR body:\n\n"
+_RATIONALE_FORMS = (
     "    Single-issue rationale: <why this cannot ride with another issue>\n\n"
     "or as a section, with the reason in the prose beneath it:\n\n"
     "    ## Single-issue rationale\n\n    <why this cannot ride with another issue>"
 )
+
+RATIONALE_HINT = (
+    "This PR delivers exactly one issue. Batch same-scope issues into one PR "
+    "(one CI suite per batch, not per issue), or state why this one stands alone "
+    "by adding a line to the PR body:\n\n" + _RATIONALE_FORMS
+)
+
+
+def _closes_nothing_hint(referenced: set[str]) -> str:
+    """The failure for a PR that closes nothing (#16855).
+
+    ``RATIONALE_HINT`` opens "This PR delivers exactly one issue", which is a
+    count of one where the count is zero. Printed with ``_mention_note`` it said
+    both at once -- one issue delivered, and the only issue named not a delivered
+    one -- leaving the true number stated nowhere. ``_scope`` has carried the
+    right words for this state since #16795, but only the passing path reached
+    them.
+
+    Whether such a PR should need a rationale at all is open on #16855 and
+    deliberately not settled here: this changes the wording, not the verdict.
+    """
+    return (
+        f"This PR closes no issue -- it links {_render(referenced)} with a "
+        "non-closing keyword (refs/references/part of). Only resolves/closes/fixes "
+        "count toward batching, so there is nothing here to batch with. A "
+        "rationale line is still required while the rule stands; add one to the "
+        "PR body:\n\n" + _RATIONALE_FORMS
+    )
 
 
 def _issues_under(body: str, pattern: "re.Pattern[str]") -> set[str]:
@@ -184,6 +209,8 @@ def _rationale_failure(body: str, closing: set[str], referenced: set[str]) -> st
     """
     found, _, terminator = _heading_rationale(body)
     if not found:
+        if not closing:
+            return _closes_nothing_hint(referenced)
         return RATIONALE_HINT + _mention_note(closing, referenced)
     if terminator is not None:
         return (
