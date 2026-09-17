@@ -77,7 +77,6 @@ class MultiModalProcessor:
         if self.use_amp:
             self.logger.info("Mixed precision (AMP) enabled for RTX 4070 optimization")
 
-        # Processing statistics
         self.stats = {
             "total_processed": 0,
             "successful_processed": 0,
@@ -159,14 +158,13 @@ class MultiModalProcessor:
             # Update statistics
             self._update_stats(result)
 
-            # #13688: stamp the owner from the input in one place, so the memory
-            # write is tenant-scoped without touching every ProcessingResult
-            # construction site.
+            # #13688: stamp the owner from the input in one place, so the memory write is tenant-scoped without
+            # touching every ProcessingResult construction site.
             if result.user_id is None:
                 result.user_id = input_data.user_id
 
-            # Store result in memory
-            await self._store_result(result)
+            # #15234: the caller could not tell a persisted result from a dropped one — both claimed success.
+            result.metadata["persisted"] = await self._store_result(result)
 
             return result
 
@@ -273,8 +271,7 @@ class MultiModalProcessor:
             return
 
         try:
-            # Cross-modal attention fusion network
-            # Designed to handle variable number of modalities (1-3)
+            # Cross-modal attention fusion network, designed to handle variable number of modalities (1-3)
             self.fusion_network = nn.Sequential(
                 nn.Linear(1536, 768),  # Max concatenated embeddings (3 * 512)
                 nn.ReLU(),
@@ -524,33 +521,30 @@ class MultiModalProcessor:
         total_time = self.stats["avg_processing_time"] * (self.stats["total_processed"] - 1) + result.processing_time
         self.stats["avg_processing_time"] = total_time / self.stats["total_processed"]
 
-    async def _store_result(self, result: ProcessingResult):
-        """Store processing result in memory"""
+    async def _store_result(self, result: ProcessingResult) -> bool:
+        """Store processing result in memory. Returns whether it was persisted (#15234)."""
+        task_data = {
+            "result_id": result.result_id,
+            "modality": result.modality_type.value,
+            "intent": result.intent.value,
+            "success": result.success,
+            "confidence": result.confidence,
+            "processing_time": result.processing_time,
+        }
+
+        # #10626: store_task() does not exist on MemoryManager; use store_memory() with EXECUTION category instead.
+        from memory.enums import MemoryCategory
+
+        if not result.user_id:
+            # #13688: the plane refuses unowned writes. Say so loudly — the old behaviour was an untenanted row, and
+            # the failure mode this replaces was a swallowed TypeError that silently stopped persisting every result.
+            self.logger.warning(
+                "Not persisting multi-modal result %s: no owner on the input (#13688)",
+                result.result_id,
+            )
+            return False
+
         try:
-            task_data = {
-                "result_id": result.result_id,
-                "modality": result.modality_type.value,
-                "intent": result.intent.value,
-                "success": result.success,
-                "confidence": result.confidence,
-                "processing_time": result.processing_time,
-            }
-
-            # #10626: store_task() does not exist on MemoryManager;
-            # use store_memory() with EXECUTION category instead.
-            from memory.enums import MemoryCategory
-
-            if not result.user_id:
-                # #13688: the plane refuses unowned writes. Say so loudly — the
-                # old behaviour was an untenanted row, and the failure mode this
-                # replaces was a swallowed TypeError that silently stopped
-                # persisting every result.
-                self.logger.warning(
-                    "Not persisting multi-modal result %s: no owner on the input (#13688)",
-                    result.result_id,
-                )
-                return
-
             await self.memory_manager.store_memory(
                 category=MemoryCategory.EXECUTION,
                 content=f"Multi-modal processing: {result.modality_type.value}",
@@ -563,9 +557,15 @@ class MultiModalProcessor:
                     **task_data,
                 },
             )
-
+            return True
+        except ValueError as e:
+            # #15234: the tenancy guard raises ValueError for a scope it refuses (missing, blank, or a stray Mock)
+            # — a security refusal, not a transient failure, logged at error, never folded into the generic warning.
+            self.logger.error("Tenancy refusal storing multi-modal result %s: %s (#15234)", result.result_id, e)
+            return False
         except Exception as e:
             self.logger.warning("Failed to store processing result: %s", e)
+            return False
 
     def _group_inputs_by_modality(self, inputs: List[MultiModalInput]) -> Dict[str, List[MultiModalInput]]:
         """Group inputs by modality type (Issue #315 - extracted method)"""
