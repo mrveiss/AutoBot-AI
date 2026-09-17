@@ -45,29 +45,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from check_pr_issue_batching import check as check_batching  # noqa: E402
 from check_pr_template_sections import report as check_template_sections  # noqa: E402
-import os
 
-#: Fallback when the env var is unset or unparseable.
-_DEFAULT_GH_TIMEOUT_SECONDS = 30
-
-
-def _gh_timeout_seconds() -> int:
-    """Seconds to wait for ``gh pr view``, overridable per environment.
-
-    Not a module-level ``int(os.environ.get(...))``: a bare cast there raises
-    ``ValueError`` at IMPORT on a malformed value, which `repo_tests/
-    env_var_bare_cast_test.py` exists to prevent. A pre-push hook that cannot
-    even be imported because someone exported a typo is worse than one that
-    falls back.
-    """
-    raw = os.environ.get("AUTOBOT_PR_BODY_GH_TIMEOUT_SECONDS")
-    if not raw:
-        return _DEFAULT_GH_TIMEOUT_SECONDS
-    try:
-        return int(raw)
-    except ValueError:
-        return _DEFAULT_GH_TIMEOUT_SECONDS
-
+#: Seconds to wait for `gh pr view`. Named rather than inline, per the repository's
+#: hardcoded-value rule (#694/#14371), and matching the existing convention in
+#: pipeline-scripts/ci_red_cause.py and ci_dispatch_watchdog.py.
+DEFAULT_TIMEOUT_SECONDS = 30
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +71,7 @@ def pr_fields(ref: str) -> dict[str, str]:
             ["gh", "pr", "view", ref, "--json", "body,author,headRefName,title"],
             capture_output=True,
             text=True,
-            timeout=_gh_timeout_seconds(),
+            timeout=30,
             check=True,
         )
     except FileNotFoundError as exc:
