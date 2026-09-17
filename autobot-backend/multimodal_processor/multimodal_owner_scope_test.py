@@ -153,3 +153,64 @@ class TestSystemInitiatedWorkIsPersisted:
 
         store.assert_awaited_once()
         assert store.await_args.kwargs["user_id"] == SYSTEM_OWNER
+
+
+# ---------------------------------------------------------------------------
+# #15234: a swallowed exception made a dropped result indistinguishable from
+# a stored one. The old code had no return statement at all (implicit None
+# on every path), so `is False` -- not merely falsy -- is what the contrast
+# mutation in the last test actually exercises.
+# ---------------------------------------------------------------------------
+
+
+class TestAStorageFailureIsVisibleToTheCaller:
+    @pytest.mark.asyncio
+    async def test_a_generic_store_failure_returns_false_not_none(self, processor):
+        with patch.object(processor.memory_manager, "store_memory", new_callable=AsyncMock) as store:
+            store.side_effect = RuntimeError("redis unavailable")
+            outcome = await processor._store_result(_result(user_id="user-42"))
+
+        assert outcome is False
+
+    @pytest.mark.asyncio
+    async def test_a_successful_store_returns_true(self, processor):
+        with patch.object(processor.memory_manager, "store_memory", new_callable=AsyncMock):
+            outcome = await processor._store_result(_result(user_id="user-42"))
+
+        assert outcome is True
+
+    @pytest.mark.asyncio
+    async def test_process_records_whether_the_result_was_persisted(self):
+        """The property the issue is actually about: process()'s caller, not
+        just _store_result's, can tell a drop from a store."""
+        from multimodal_processor.models import MultiModalInput
+
+        proc = MultiModalProcessor()
+        modal_input = MultiModalInput(
+            input_id="i-1",
+            modality_type=ModalityType.TEXT,
+            intent=ProcessingIntent.DECISION_MAKING,
+            data="hello",
+            user_id="user-7",
+        )
+
+        with patch.object(proc, "_route_to_processor", new_callable=AsyncMock) as route:
+            route.return_value = _result(user_id=None)
+            with patch.object(proc.memory_manager, "store_memory", new_callable=AsyncMock) as store:
+                store.side_effect = RuntimeError("redis unavailable")
+                result = await proc.process(modal_input)
+
+        assert result.metadata["persisted"] is False
+
+    @pytest.mark.asyncio
+    async def test_a_tenancy_rejection_is_logged_as_a_refusal_not_a_generic_warning(self, processor):
+        """#15234: the tenancy guard's ValueError must not read like a Redis blip."""
+        with patch.object(processor.memory_manager, "store_memory", new_callable=AsyncMock) as store:
+            store.side_effect = ValueError("user_id is required — memory queries cannot be unscoped")
+            with patch.object(processor, "logger") as log:
+                outcome = await processor._store_result(_result(user_id="user-42"))
+
+        assert outcome is False
+        log.error.assert_called_once()
+        log.warning.assert_not_called()
+        assert "#15234" in log.error.call_args.args[0]
