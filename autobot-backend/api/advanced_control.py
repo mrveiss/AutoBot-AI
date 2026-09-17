@@ -466,18 +466,24 @@ async def emergency_system_stop(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
-    Emergency stop for all autonomous operations
+    Emergency stop for all autonomous operations.
 
-    Issue #744: Requires admin authentication.
-    Issue #16843: request_takeover was never given affected_tasks, so it
-    always defaulted to an empty list and the "stop" paused nothing while
-    still reporting success. Enumerate what's actually running right now
-    and report what was found, so an empty result means "nothing was
-    running" rather than silently meaning nothing was ever checked. This
-    marks tasks paused for audit/visibility; it does not yet interrupt
-    in-flight execution -- no code path currently checks paused-task state
-    before continuing work, which is the still-open question on #16843.
+    Requires: admin permission.
     """
+    # #16843: request_takeover was never given affected_tasks, so it always
+    # defaulted to an empty list and the "stop" paused nothing while still
+    # reporting success. Enumerate what's actually running right now and
+    # report what was found, so an empty result means "nothing was running"
+    # rather than silently meaning nothing was ever checked. This marks
+    # tasks paused for audit/visibility; it does not yet interrupt in-flight
+    # execution -- no code path currently checks paused-task state before
+    # continuing work, which is the still-open question on #16843.
+    #
+    # Deliberately a comment and not part of the docstring: FastAPI publishes
+    # a route's docstring as the OpenAPI `description`, which reaches
+    # autobot-frontend/src/types/generated/api.ts and anything served from
+    # the schema -- no place to describe how to defeat a safety control
+    # (#16827).
     affected_task_ids = list(get_task_tracker().get_active_tasks().keys())
 
     request_id = await get_takeover_manager().request_takeover(
