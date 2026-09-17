@@ -121,6 +121,22 @@ class TestLogToDict:
         d = _log_to_dict(log, redact_pii=False)
         assert (d["inputs_snapshot"] or {}).get("title") == "my task"
 
+    def test_redact_pii_catches_a_credential_in_free_text_not_just_a_named_key(self):
+        """#13708: closes the gap the module docstring used to document as absent.
+
+        Uses the real llm_shared.credential_redaction, not the fake-module stub
+        test_redact_pii_strips_sensitive_key uses -- this is exactly what the
+        stub was avoiding, and this test exists to prove that path specifically.
+        """
+        password_shaped = "Xy9#mK2!Zq"
+        body = f"Onboarding email: your temporary password is {password_shaped}. Please change it."
+        log = _make_log(inputs_snapshot={"title": "task"}, output_text=body)
+
+        d = _log_to_dict(log, redact_pii=True)
+
+        assert password_shaped not in d["output_text"]
+        assert "Please change it." in d["output_text"]
+
 
 # ---------------------------------------------------------------------------
 # 2. parse_jsonl_events
