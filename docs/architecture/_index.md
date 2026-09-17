@@ -100,6 +100,7 @@ Terminal consolidation analysis moved to [`docs/analysis/ANA_terminal-consolidat
 
 | Document | Description |
 | --- | --- |
+| [CONTROL_PLANE_MAP](CONTROL_PLANE_MAP.md) | Every control layer (auth, tool permissions, egress, secrets, rate limiting, ...), its doc, and the code that enforces it — verified against current code, not inherited from each layer's own doc (#16835) |
 | [MONITORING_ARCHITECTURE](MONITORING_ARCHITECTURE.md) | Monitoring architecture |
 | [Advanced_Monitoring_System](Advanced_Monitoring_System.md) | Advanced monitoring |
 | [SECURITY_ASSESSMENT_WORKFLOW](SECURITY_ASSESSMENT_WORKFLOW.md) | Security assessment workflow |
