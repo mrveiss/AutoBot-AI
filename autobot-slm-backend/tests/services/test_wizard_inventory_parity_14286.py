@@ -233,15 +233,19 @@ _NOT_ROLE_GROUPS = frozenset(
     }
 )
 
-# Hyphenated spellings that no inventory builder emits — either vocabulary.
-# Pre-existing and out of scope here; they are a separate defect from the two
-# vocabularies disagreeing, which is what this change fixes.
+# Empty, and that is the correct state rather than an oversight.
 #
-# `browser-automation` left this set when Play 7 stopped gating on it (#14288):
-# with its last reference gone the entry was stale, and this file's own note
-# below says why that matters — "a tolerance entry that outlives its reason
-# exempts the next real case silently". The staleness assertion caught it.
-_KNOWN_UNREACHABLE = frozenset({"npu-worker"})
+# Both original members left for the same reason: nothing gates on either
+# hyphenated spelling. `browser-automation` went when Play 7 stopped gating on
+# it (#14288); `npu-worker` has not been gated on since the original August
+# commit — the tree's `hosts:` values are `npu`, `npu_worker` and `npu_workers`,
+# never the hyphenated form.
+#
+# Kept as an empty frozenset rather than deleted so the staleness assertion
+# below still has something to assert against, and so a future tolerance entry
+# has an obvious home. This file's own note says why that matters: a tolerance
+# entry that outlives its reason exempts the next real case silently.
+_KNOWN_UNREACHABLE: frozenset[str] = frozenset()
 
 
 def _gated_groups() -> set[str]:
