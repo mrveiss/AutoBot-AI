@@ -6,6 +6,19 @@
 #   sudo apt install sshpass  # Required for password-based SSH connections
 #
 
+-c ../constraints/shared.txt  # single source of truth for shared versions (#10524); pins transitive numpy
+
+# #16394: previously satisfied only by CI's shared backend venv (autobot-backend/
+# requirements.txt's own dependency closure), never declared here. Giving SLM
+# tests their own venv (#16394) surfaced them as real collection failures --
+# tests/test_bi_dashboard.py needs real numpy (no stub) and a jinja2 fallback
+# stub only if the real package is absent; migrations/migrate_system_secrets_
+# to_vault_test.py and user_management/services/sso_e2e_test.py need the real
+# `sqlite+aiosqlite://` SQLAlchemy driver for in-memory async DB tests.
+numpy  # version from constraints/shared.txt
+jinja2>=3.1.2,<4.0.0
+aiosqlite>=0.22.1  # matches autobot-backend/requirements.txt's pin
+
 # Prometheus metrics (Issue #937: shared monitoring implementation)
 prometheus-client>=0.26.0
 
