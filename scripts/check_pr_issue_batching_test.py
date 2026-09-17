@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_pr_issue_batching import (  # noqa: E402
     RATIONALE_HINT,
     check,
+    closing_issues,
     exemption,
     referenced_issues,
     single_issue_rationale,
@@ -29,6 +30,9 @@ from check_pr_issue_batching import (  # noqa: E402
 
 TWO = "Closes #15178, #15173\n"
 ONE = "Closes #15178\n"
+# The shape issue decomposition asks every child PR to write: one delivered
+# issue plus the umbrella it belongs to (#16795).
+UMBRELLA = "Closes #16775\nRefs #16772\n"
 
 
 class TestReferenceCounting:
@@ -257,3 +261,66 @@ class TestTheFailureNamesWhichFailureItIs:
         ok, message = check(ONE + "## Single-issue rationale\n")
         assert not ok
         assert "no prose" in message
+
+
+class TestOnlyDeliveryCountsAsBatching:
+    """`Refs #umbrella` is context, not a second delivered issue (#16795).
+
+    Counting it made the gate exempt exactly the PRs the rule exists to catch,
+    and report them as "Batched" -- so a reviewer reading the green concluded the
+    author had justified standing alone when nobody had been asked. Each case
+    below reddens if the closing/mention split is collapsed back into one set.
+    """
+
+    def test_a_mention_keyword_is_not_a_delivered_issue(self) -> None:
+        for word in ("refs", "references", "part of"):
+            assert closing_issues(f"{word} #42") == set(), word
+            assert referenced_issues(f"{word} #42") == {"42"}, word
+
+    def test_a_closing_keyword_is_both_a_delivery_and_a_reference(self) -> None:
+        for word in ("resolves", "closes", "fixes"):
+            assert closing_issues(f"{word} #42") == {"42"}, word
+            assert referenced_issues(f"{word} #42") == {"42"}, word
+
+    def test_the_umbrella_shape_now_needs_a_rationale(self) -> None:
+        """#16788's exact body shape, which passed with nothing asked of it."""
+        assert referenced_issues(UMBRELLA) == {"16775", "16772"}
+        assert closing_issues(UMBRELLA) == {"16775"}
+        ok, message = check(UMBRELLA)
+        assert not ok, message
+        assert "Single-issue rationale:" in message
+
+    def test_the_umbrella_shape_passes_once_the_reason_is_given(self) -> None:
+        ok, message = check(UMBRELLA + "Single-issue rationale: the allowlist is a separate risk\n")
+        assert ok, message
+        assert "separate risk" in message
+
+    def test_the_failure_says_why_the_umbrella_did_not_count(self) -> None:
+        """Without this the author sees "one issue" on a body naming two."""
+        message = check(UMBRELLA)[1]
+        assert "#16772" in message, "the mention that did not count is not named"
+        assert "non-closing keyword" in message
+        assert "resolves/closes/fixes" in message
+
+    def test_a_real_batch_still_passes_with_no_rationale(self) -> None:
+        ok, message = check(TWO)
+        assert ok, message
+        assert "closes 2 issues" in message
+
+    def test_the_passing_message_never_calls_a_single_issue_pr_batched(self) -> None:
+        """The defect was the message as much as the verdict."""
+        message = check(UMBRELLA + "Single-issue rationale: stands alone\n")[1]
+        assert "Batched" not in message
+        assert "#16772" not in message, "the umbrella is not something this PR delivers"
+
+    def test_mentions_alone_never_add_up_to_a_batch(self) -> None:
+        """Two `Refs` deliver nothing, so the rule still applies."""
+        body = "Refs #15178\nPart of #15173\n"
+        assert closing_issues(body) == set()
+        assert not check(body)[0]
+
+    def test_a_body_with_no_link_at_all_is_still_the_other_gate_s_problem(self) -> None:
+        """The split must not turn a mention-only body into an unlinked one."""
+        ok, message = check("## What Changed\nnothing linked here\n")
+        assert ok
+        assert "pr-issue-validation" in message
