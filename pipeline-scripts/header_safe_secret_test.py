@@ -25,8 +25,8 @@ from header_safe_secret import HeaderUnsafeSecret, require_header_safe
 
 # Distinctive so a substring check cannot pass by accident, and shaped like the
 # real failure: a token with a stray character from a bad paste or a truncation.
-LEAKY = "ghp_AaBbCcDd1234567890EeFfGg"
-GOOD = "ghp_0123456789abcdefghijklmnopqrstuvwx"
+LEAKY = "ghp_AaBbCcDd1234567890EeFfGg"  # pragma: allowlist secret
+GOOD = "ghp_0123456789abcdefghijklmnopqrstuvwx"  # pragma: allowlist secret
 
 MALFORMED = {
     "newline": f"{LEAKY}\nX-Injected: 1",
