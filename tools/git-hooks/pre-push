@@ -94,6 +94,67 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   # ------------------------------------------------------------------------
+  # Phase 7 (#16859): PR body must satisfy the template-sections and
+  # same-scope-batching gates before CI runs, not after.
+  #
+  # `gh pr create --body-file` never loads .github/PULL_REQUEST_TEMPLATE.md,
+  # so an author writing a body in a file learns the required headings from a
+  # red check ~63 checks in, not before the push. This runs the two gates
+  # locally against the PR body itself, the same functions CI calls
+  # (scripts/validate_pr_body.py), so a body that passes here passes there.
+  #
+  # Only covers a branch that ALREADY has an open PR: a body that does not
+  # exist yet (before the first `gh pr create`) cannot be read by a git hook,
+  # and pretending otherwise would be worse than saying so.
+  #
+  # Three states, and they must not collapse into two (#16866 review):
+  # `gh` absent, `gh` present but the call failed (not signed in, offline,
+  # rate-limited, an API error), and `gh` present with a confirmed "this
+  # branch has no PR". The middle state is NOT the same as the third — both
+  # end with an empty `pr_number`, but only the third is a true claim that
+  # nothing needs checking. Collapsing them told an author "no open PR yet"
+  # when `gh` had in fact not run, which is the exact defect class this PR
+  # argues against: a skip that reads as "nothing to check". `gh pr view`
+  # exits non-zero for BOTH the real "no PR" case and every failure case, so
+  # the two are told apart by matching the one message `gh` prints for a
+  # genuine no-PR branch, not by exit code alone.
+  # ------------------------------------------------------------------------
+  if ! command -v gh >/dev/null 2>&1; then
+    log "gh CLI not installed — PR body NOT checked (#16859); before pushing, validate it yourself:"
+    log "  python3 scripts/validate_pr_body.py --file <path>"
+  else
+    gh_view_output=$(gh pr view "$branch_name" --json number --jq '.number' 2>&1)
+    gh_view_exit=$?
+    if [ "$gh_view_exit" = "0" ]; then
+      pr_number="$gh_view_output"
+      log "PR #$pr_number exists for $branch_name — checking its body (#16859)"
+      body_check_output=$(python3 "$REPO_ROOT/scripts/validate_pr_body.py" --pr "$branch_name" 2>&1)
+      body_check_exit=$?
+      if [ "$body_check_exit" != "0" ]; then
+        fail "PR body fails the template-sections and/or batching gate (#16859):"
+        echo "$body_check_output" | sed 's/^/  /' >&2
+        EXIT_CODE=1
+      else
+        ok "PR body satisfies both gates"
+      fi
+    elif echo "$gh_view_output" | grep -qi "no pull requests found"; then
+      # #16859: stated rather than silent. A hook cannot see a body that has
+      # no PR yet, so this is the limit of what pre-push can cover -- not a
+      # skip that looks identical to "nothing to check".
+      log "no open PR yet for $branch_name — this hook cannot check a body before 'gh pr create' (#16859)"
+      log "  before 'gh pr create --body-file <path>', validate it yourself:"
+      log "  python3 scripts/validate_pr_body.py --file <path>"
+    else
+      # gh ran and failed for a reason OTHER than "no PR" -- not signed in,
+      # offline, rate-limited, an API error. Must not read as "no open PR":
+      # the branch may have a PR with a broken body, and the true answer is
+      # this check did not run, not that it found nothing wrong.
+      warn "gh pr view failed (not the 'no PR' case) — PR body NOT checked (#16859):"
+      echo "$gh_view_output" | sed 's/^/  /' >&2
+    fi
+  fi
+
+  # ------------------------------------------------------------------------
   # Phase 0c (#5142): verification mandate (type-check + test-run)
   # ------------------------------------------------------------------------
   # Find files changed in the commits we're pushing. Always prefer the merge
