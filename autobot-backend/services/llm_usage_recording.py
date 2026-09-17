@@ -43,15 +43,15 @@ from services.llm_cost_tracker import get_cost_tracker
 
 logger = get_logger(__name__)
 
-INPUT_TOKEN_KEY = "prompt_tokens"
-OUTPUT_TOKEN_KEY = "completion_tokens"
+INPUT_TOKEN_KEY = "prompt_tokens"  # nosec B105 - usage-dict key, not a credential
+OUTPUT_TOKEN_KEY = "completion_tokens"  # nosec B105 - usage-dict key, not a credential
 
 # The compat gateways' streaming paths have no provider-reported counts and
 # approximate from text (`_estimate_tokens`, ~1.3 tokens/word). Recording that
 # as though the provider had reported it would make estimated and measured
 # spend indistinguishable in the ledger, so the record says which it is.
-ESTIMATED_TOKENS = {"token_source": "estimated"}
-MEASURED_TOKENS = {"token_source": "provider_reported"}
+ESTIMATED_TOKENS = {"token_source": "estimated"}  # nosec B105 - provenance marker, not a credential
+MEASURED_TOKENS = {"token_source": "provider_reported"}  # nosec B105 - provenance marker, not a credential
 
 
 def token_counts(usage: Dict[str, Any]) -> tuple[int, int] | None:
