@@ -25663,15 +25663,10 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
     # BATCH 153: knowledge_ai_stack.py - COMPLETE (100%)
     # ==============================================
 
-    def test_batch_153_enhanced_search_simple_pattern(self):
-        """Verify enhanced_search endpoint uses Simple Pattern"""
-        from api import knowledge_ai_stack
-
-        source = inspect.getsource(knowledge_ai_stack.search)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="search"', source)
-        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+    # test_batch_153_enhanced_search_simple_pattern removed (#16908):
+    # knowledge_ai_stack.search no longer exists -- it was dead code, shadowed
+    # by knowledge_search.py's own /search at the same (method, path), and was
+    # deleted rather than re-pathed since it carried zero tenant filtering.
 
     def test_batch_153_rag_search_simple_pattern(self):
         """Verify rag_search endpoint uses Simple Pattern"""
@@ -25747,8 +25742,10 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify all knowledge_ai_stack endpoints have @with_error_handling decorator"""
         from api import knowledge_ai_stack
 
+        # #16908: knowledge_ai_stack.search removed from this list -- deleted,
+        # not migrated; see the removed test_batch_153_enhanced_search_simple_
+        # pattern above.
         endpoint_functions = [
-            knowledge_ai_stack.search,
             knowledge_ai_stack.rag_search,
             knowledge_ai_stack.extract_knowledge,
             knowledge_ai_stack.analyze_documents,
@@ -25770,8 +25767,10 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify knowledge_ai_stack.py has reached 100% migration"""
         from api import knowledge_ai_stack
 
+        # #16908: knowledge_ai_stack.search removed from this list (deleted,
+        # not migrated) -- see test_batch_153_all_knowledge_ai_stack_endpoints_
+        # have_decorator above.
         endpoint_functions = [
-            knowledge_ai_stack.search,
             knowledge_ai_stack.rag_search,
             knowledge_ai_stack.extract_knowledge,
             knowledge_ai_stack.analyze_documents,
@@ -25783,7 +25782,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         migrated_count = sum(1 for func in endpoint_functions if "@with_error_handling" in inspect.getsource(func))
 
-        total_endpoints = 8
+        total_endpoints = 7
         self.assertEqual(
             migrated_count,
             total_endpoints,
@@ -25793,31 +25792,34 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertEqual(progress_percentage, 100.0)
 
     def test_batch_153_migration_preserves_ai_stack_integration(self):
-        """Verify migration preserves AI Stack client integration"""
-        from api import knowledge_ai_stack
+        """Verify migration preserves AI Stack client integration.
 
-        # Verify AI Stack client dependency injection
-        enhanced_search_source = inspect.getsource(knowledge_ai_stack.search)
-        self.assertIn("get_ai_stack_client", enhanced_search_source)
-        self.assertIn("ai_client", enhanced_search_source)
+        #16908: previously also checked knowledge_ai_stack.search's own AI
+        Stack client injection; that handler is deleted (dead, unsafe code --
+        see the removed test_batch_153_enhanced_search_simple_pattern), so
+        this only pins what rag_search (still live) preserves.
+        """
+        from api import knowledge_ai_stack
 
         # Verify RAG query functionality
         rag_source = inspect.getsource(knowledge_ai_stack.rag_search)
         self.assertIn("rag_query", rag_source)
+        self.assertIn("get_ai_stack_client", rag_source)
+        self.assertIn("ai_client", rag_source)
 
     def test_batch_153_migration_preserves_rag_capabilities(self):
-        """Verify migration preserves RAG (Retrieval-Augmented Generation) capabilities"""
+        """Verify migration preserves RAG (Retrieval-Augmented Generation) capabilities.
+
+        #16908: previously also checked knowledge_ai_stack.search's use of
+        include_rag/rag_enhanced; that handler is deleted (see
+        test_batch_153_migration_preserves_ai_stack_integration's docstring).
+        """
         from api import knowledge_ai_stack
 
         # Verify RAG search functionality
         rag_source = inspect.getsource(knowledge_ai_stack.rag_search)
         self.assertIn("rag_query", rag_source)
         self.assertIn("documents", rag_source)
-
-        # Verify enhanced search combines RAG
-        enhanced_source = inspect.getsource(knowledge_ai_stack.search)
-        self.assertIn("include_rag", enhanced_source)
-        self.assertIn("rag_enhanced", enhanced_source)
 
     def test_batch_153_migration_preserves_knowledge_extraction(self):
         """Verify migration preserves knowledge extraction functionality"""
@@ -25852,18 +25854,22 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_migration_preserves_pydantic_models(self):
         """Verify migration preserves Pydantic request models (#10666 B1: SearchRequest
-        renamed to SearchRequest; AIStackSearchRequest is the ai_stack variant)"""
+        renamed to SearchRequest; AIStackSearchRequest is the ai_stack variant)
+
+        #16908: AIStackSearchRequest dropped from this test -- it was
+        knowledge_ai_stack.search's own request model, and that handler (and
+        its import of the model) is deleted along with it.
+        """
         from api import knowledge_ai_stack
 
-        # Verify request models are defined (AIStackSearchRequest is the ai-stack variant)
-        self.assertTrue(hasattr(knowledge_ai_stack, "AIStackSearchRequest"))
+        # Verify request models are defined
         self.assertTrue(hasattr(knowledge_ai_stack, "KnowledgeExtractionRequest"))
         self.assertTrue(hasattr(knowledge_ai_stack, "DocumentAnalysisRequest"))
         self.assertTrue(hasattr(knowledge_ai_stack, "RAGQueryRequest"))
 
-        # Verify models are used in endpoints
-        enhanced_search_source = inspect.getsource(knowledge_ai_stack.search)
-        self.assertIn("AIStackSearchRequest", enhanced_search_source)
+        # Verify a model is used in a still-live endpoint
+        rag_search_source = inspect.getsource(knowledge_ai_stack.rag_search)
+        self.assertIn("AIStackRAGQueryRequest", rag_search_source)
 
     # ==============================================
     # BATCH 154: metrics.py - COMPLETE (100%)
