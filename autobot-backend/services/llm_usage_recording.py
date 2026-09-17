@@ -46,6 +46,13 @@ logger = get_logger(__name__)
 INPUT_TOKEN_KEY = "prompt_tokens"
 OUTPUT_TOKEN_KEY = "completion_tokens"
 
+# The compat gateways' streaming paths have no provider-reported counts and
+# approximate from text (`_estimate_tokens`, ~1.3 tokens/word). Recording that
+# as though the provider had reported it would make estimated and measured
+# spend indistinguishable in the ledger, so the record says which it is.
+ESTIMATED_TOKENS = {"token_source": "estimated"}
+MEASURED_TOKENS = {"token_source": "provider_reported"}
+
 
 def token_counts(usage: Dict[str, Any]) -> tuple[int, int] | None:
     """``(input, output)`` from a usage block, or ``None`` when it has neither key.
@@ -60,6 +67,56 @@ def token_counts(usage: Dict[str, Any]) -> tuple[int, int] | None:
     return int(input_tokens or 0), int(output_tokens or 0)
 
 
+async def record_token_usage(
+    *,
+    provider: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    session_id: str | None = None,
+    user_id: str | None = None,
+    agent_id: str | None = None,
+    endpoint: str | None = None,
+    metadata: Dict[str, Any] | None = None,
+    success: bool = True,
+    error_message: str | None = None,
+) -> None:
+    """Persist already-extracted token counts so cost and budget policy see them.
+
+    The entry point for callers holding loose counts rather than an
+    ``LLMResponse`` -- the compat gateways' streaming paths, which assemble
+    usage as chunks arrive (#16845).
+
+    Best-effort with respect to the caller: a tracker failure is logged, never
+    raised, since it must not turn a served completion into an error. It is
+    logged at error level with a traceback -- the point of #16845 is that this
+    failing has to be visible to someone, which ``logger.debug`` was not.
+    """
+    try:
+        await get_cost_tracker().track_usage(
+            provider=provider,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            session_id=session_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            endpoint=endpoint,
+            latency_ms=None,
+            success=success,
+            error_message=error_message,
+            metadata=metadata,
+        )
+    except Exception:
+        logger.exception(
+            "Cost tracking failed for %s/%s: %d in / %d out unrecorded, and budget policy cannot see this spend",
+            provider or "unknown",
+            model or "unknown",
+            input_tokens,
+            output_tokens,
+        )
+
+
 async def record_response_usage(
     response: LLMResponse,
     session_id: str | None = None,
@@ -67,13 +124,15 @@ async def record_response_usage(
     user_id: str | None = None,
     agent_id: str | None = None,
     endpoint: str | None = None,
+    model: str | None = None,
+    metadata: Dict[str, Any] | None = None,
 ) -> None:
     """Persist ``response``'s token usage so cost and budget policy can see it.
 
-    Best-effort with respect to the caller: a tracker failure is logged, never
-    raised, since it must not turn a served completion into an error. It is
-    logged at error level with a traceback -- the point of #16845 is that this
-    failing has to be visible to someone, which ``logger.debug`` was not.
+    ``model`` overrides ``response.model`` for callers that priced the call
+    under a resolved name -- the compat gateways price with ``resolved_model``,
+    and a record naming a different model than the cost was computed from is
+    not reconcilable afterwards.
     """
     usage = response.usage or {}
     if not usage:
@@ -93,7 +152,7 @@ async def record_response_usage(
     try:
         await get_cost_tracker().track_usage(
             provider=response.provider,
-            model=response.model,
+            model=model or response.model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             session_id=session_id,
@@ -103,12 +162,13 @@ async def record_response_usage(
             latency_ms=response.processing_time * 1000 if response.processing_time else None,
             success=not response.error,
             error_message=response.error,
+            metadata=metadata,
         )
     except Exception:
         logger.exception(
             "Cost tracking failed for %s/%s: %d in / %d out unrecorded, and budget policy cannot see this spend",
             response.provider or "unknown",
-            response.model or "unknown",
+            (model or response.model) or "unknown",
             input_tokens,
             output_tokens,
         )

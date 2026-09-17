@@ -29,7 +29,13 @@ import pytest
 
 from llm_shared.models import LLMResponse
 from services.llm_cost_tracker import LLMCostTracker
-from services.llm_usage_recording import record_response_usage, token_counts
+from services.llm_usage_recording import (
+    ESTIMATED_TOKENS,
+    MEASURED_TOKENS,
+    record_response_usage,
+    record_token_usage,
+    token_counts,
+)
 
 _LLM_SERVICE = Path(__file__).resolve().parent / "llm_service.py"
 
@@ -224,3 +230,90 @@ def test_every_track_usage_call_is_awaited() -> None:
     awaited = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Await) and isinstance(n.value, ast.Call)}
     unawaited = [c.lineno for c in calls if id(c) not in awaited]
     assert not unawaited, f"_track_usage called without await at llm_service.py lines {unawaited}"
+
+
+# ---------------------------------------------------------------------------
+# record_token_usage: the compat gateways' entry point
+# ---------------------------------------------------------------------------
+
+
+async def _record_tokens(tracker: MagicMock, **kwargs) -> MagicMock:
+    defaults = {"provider": "openai", "model": "gpt-4o-mini", "input_tokens": 12, "output_tokens": 3}
+    defaults.update(kwargs)
+    with patch("services.llm_usage_recording.get_cost_tracker", return_value=tracker):
+        await record_token_usage(**defaults)
+    return tracker
+
+
+@pytest.mark.asyncio
+async def test_loose_token_counts_land_a_cost_record() -> None:
+    tracker = await _record_tokens(_tracker(), endpoint="/v1/chat/completions")
+
+    kwargs = tracker.track_usage.await_args.kwargs
+    assert (kwargs["input_tokens"], kwargs["output_tokens"]) == (12, 3)
+    assert kwargs["endpoint"] == "/v1/chat/completions"
+
+
+@pytest.mark.asyncio
+async def test_estimated_tokens_are_recorded_as_estimated() -> None:
+    """Streaming has no provider counts; estimated and measured spend must not
+    be indistinguishable once in the ledger."""
+    tracker = await _record_tokens(_tracker(), metadata=dict(ESTIMATED_TOKENS))
+    assert tracker.track_usage.await_args.kwargs["metadata"] == {"token_source": "estimated"}
+
+
+def test_the_two_token_sources_are_not_the_same_marker() -> None:
+    """If these ever collapse, the ledger silently loses the distinction."""
+    assert ESTIMATED_TOKENS != MEASURED_TOKENS
+
+
+@pytest.mark.asyncio
+async def test_a_tracker_failure_on_loose_counts_is_logged_not_raised() -> None:
+    tracker = _tracker()
+    tracker.track_usage.side_effect = RuntimeError("redis down")
+
+    with patch("services.llm_usage_recording.logger") as log:
+        await _record_tokens(tracker)  # must not raise
+
+    log.exception.assert_called_once()
+    log.debug.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_the_model_override_wins_over_the_response_model() -> None:
+    """The compat gateways price under resolved_model; a record naming a
+    different model than the cost was computed from cannot be reconciled."""
+    tracker = await _record(_response(model="gpt-4o-mini"), _tracker(), model="gpt-4o-2024-08-06")
+    assert tracker.track_usage.await_args.kwargs["model"] == "gpt-4o-2024-08-06"
+
+
+# ---------------------------------------------------------------------------
+# The compat gateways must actually record (#16845 AC2)
+# ---------------------------------------------------------------------------
+
+_COMPAT_MODULES = ("openai_compat.py", "anthropic_compat.py")
+_RECORDERS = {"record_token_usage", "record_response_usage"}
+
+
+@pytest.mark.parametrize("module_name", _COMPAT_MODULES)
+def test_each_compat_gateway_awaits_a_recorder_on_both_paths(module_name: str) -> None:
+    """Both gateways priced usage with calculate_cost and persisted nothing.
+
+    Asserted on the call being awaited, and on there being one per path
+    (streaming + non-streaming), so dropping either half fails here rather than
+    silently restoring half the defect.
+    """
+    path = _LLM_SERVICE.parent.parent / "api" / module_name
+    assert path.is_file(), f"{module_name} moved; this guard has no subject"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    awaited = [
+        n.value.func.id
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Await) and isinstance(n.value, ast.Call) and isinstance(n.value.func, ast.Name)
+    ]
+    recorded = [name for name in awaited if name in _RECORDERS]
+    assert len(recorded) >= 2, (
+        f"{module_name} awaits {len(recorded)} recorder call(s); expected one for the "
+        "streaming path and one for the non-streaming path"
+    )
