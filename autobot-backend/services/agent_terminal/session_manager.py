@@ -244,12 +244,14 @@ class SessionManager:
             conversation_id: Optional chat conversation ID to link
             host: Target host for command execution
             metadata: Additional session metadata
-            owner: Authenticated creator's username (#14989/#14960)
+            owner: Authenticated creator's username (#14989/#14960); None = the conversation's owner (#17053)
 
         Returns:
             Created session
         """
         session_id = str(uuid.uuid4())
+        if owner is None:
+            owner = await self._conversation_owner(conversation_id)
         pty_session_id = await self._setup_pty_for_session(session_id, conversation_id, owner)
 
         session = AgentTerminalSession(
@@ -260,6 +262,7 @@ class SessionManager:
             host=host,
             metadata=metadata or {},
             pty_session_id=pty_session_id,
+            owner=owner,  # #17053: the one record the REST ownership checks read
         )
 
         async with self._sessions_lock:
@@ -317,6 +320,7 @@ class SessionManager:
                         host=session_data.get("host"),
                         metadata=session_data.get("metadata", {}),
                         pty_session_id=session_data.get("pty_session_id"),
+                        owner=session_data.get("owner"),
                     )
 
                     # Restore session state
@@ -348,6 +352,22 @@ class SessionManager:
         # unreachable from the one path that needed it.
         return await self._rebuild_session_from_pending_approval(session_id)
 
+    async def _conversation_owner(self, conversation_id: str | None) -> str | None:
+        """Owner of the conversation driving a session, or None if it has none or can't be read (#17053).
+
+        Sessions the chat workflow creates carry no caller, so their owner is the
+        conversation's recorded owner -- the chat session file is the record of
+        truth (THREAT_MODEL.md section 2). None leaves the session admin-only.
+        """
+        if not conversation_id or not self.chat_history_manager:
+            return None
+        try:
+            owner = await self.chat_history_manager.get_session_owner(conversation_id)
+        except Exception as exc:
+            logger.warning("Could not read the owner of conversation %s: %s", conversation_id[:8], exc)
+            return None
+        return owner if isinstance(owner, str) and owner else None
+
     async def _rebuild_session_from_pending_approval(self, session_id: str) -> AgentTerminalSession | None:
         """Reconstruct a vanished session that still has an unanswered approval.
 
@@ -368,6 +388,7 @@ class SessionManager:
             # command is allowed to do.
             agent_role=AgentRole.CHAT_AGENT,
             conversation_id=conversation_id,
+            owner=await self._conversation_owner(conversation_id),
         )
         await self._restore_pending_approval(session, conversation_id)
 

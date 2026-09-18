@@ -1078,11 +1078,9 @@ async def authenticate_websocket(websocket) -> dict | None:
                     "role": token_data["role"],
                     "email": token_data.get("email", ""),
                     "auth_method": "jwt_websocket",
+                    "login_token": is_login_token(token_data),  # #17052: WS approvals need a person too
                 }
-                if token_data.get("user_id") is not None:
-                    result["user_id"] = token_data["user_id"]
-                if token_data.get("org_id") is not None:
-                    result["org_id"] = token_data["org_id"]
+                result.update({k: token_data[k] for k in ("user_id", "org_id") if token_data.get(k) is not None})
                 return result
         except Exception:
             logger.warning("WebSocket JWT authentication failed")

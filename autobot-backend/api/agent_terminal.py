@@ -92,25 +92,10 @@ AGENT_CONTROL → (user interrupt) → USER_INTERRUPT → USER_CONTROL
                                                            │
 AGENT_CONTROL ← (agent resume) ← AGENT_RESUME ← (user release)
 
-REST API Endpoints:
-------------------
-# Session Management
-POST   /api/agent-terminal/sessions           - Create agent session
-GET    /api/agent-terminal/sessions           - List sessions
-GET    /api/agent-terminal/sessions/{id}      - Get session details
-DELETE /api/agent-terminal/sessions/{id}      - Close session
-
-# Command Execution
-POST   /api/agent-terminal/sessions/{id}/execute  - Execute command
-POST   /api/agent-terminal/sessions/{id}/approve  - Approve/deny command
-
-# User Control
-POST   /api/agent-terminal/sessions/{id}/interrupt - User takes control
-POST   /api/agent-terminal/sessions/{id}/release   - User releases control
-
-# Information
-GET    /api/agent-terminal/sessions/{id}/history   - Command history
-GET    /api/agent-terminal/sessions/{id}/state     - Current state
+REST API Endpoints and Examples:
+-------------------------------
+See docs/api/AGENT_TERMINAL_API.md -- the one maintained reference for routes,
+request bodies and responses.
 
 Security Features:
 -----------------
@@ -140,60 +125,11 @@ Security Features:
    - User can deny dangerous commands
    - User can take direct control of terminal
 
-Request/Response Examples:
--------------------------
-# Create Session
-POST /api/agent-terminal/sessions
-{
-  "agent_id": "chat_agent_abc123",
-  "agent_role": "chat_agent",
-  "conversation_id": "chat_xyz",
-  "host": "main"
-}
-→ {
-  "session_id": "agent-session-456",
-  "pty_session_id": "pty-789",  # Use this for WebSocket
-  "state": "agent_control",
-  "created_at": 1704801234.56
-}
-
-# Execute Command (Approval Required)
-POST /api/agent-terminal/sessions/agent-session-456/execute
-{
-  "command": "sudo apt install nginx",
-  "description": "Install nginx"
-}
-→ {
-  "status": "approval_required",
-  "command": "sudo apt install nginx",
-  "risk": "high",
-  "reasons": ["Requires sudo", "Package installation"],
-  "session_id": "agent-session-456"
-}
-
-# Approve Command
-POST /api/agent-terminal/sessions/agent-session-456/approve
-{
-  "approved": true,
-  "user_id": "user123"
-}
-→ {
-  "status": "approved",
-  "command": "sudo apt install nginx",
-  "executed": true
-}
-
-# User Takeover
-POST /api/agent-terminal/sessions/agent-session-456/interrupt
-{
-  "user_id": "user123"
-}
-→ {
-  "status": "success",
-  "previous_state": "agent_control",
-  "new_state": "user_control",
-  "session_id": "agent-session-456"
-}
+6. **Session Ownership (#17052, #17053)**
+   - Only a session's owner or an admin may read, drive or decide for it
+   - Approving, denying and taking control need a person signed in interactively
+   - The approver is always the verified caller, never a body ``user_id``
+   - See api/agent_terminal_access.py
 
 Integration Points:
 ------------------
@@ -230,6 +166,14 @@ from fastapi import APIRouter, Depends, HTTPException
 # Host selection lives in its own sub-router (#14959) — same shape as
 # terminal_tools under api/terminal.py (#185). Included below so every
 # /agent-terminal/host-selection/* path stays exactly where it was.
+from api.agent_terminal_access import (
+    get_agent_terminal_service,
+    may_access_session,
+    session_decider,
+    session_for_terminal_id,
+    session_owner,
+    verified_actor,
+)
 from api.agent_terminal_host_selection import router as host_selection_router
 from api.schemas_agent import (
     AgentTerminalApproveResponse,
@@ -258,7 +202,6 @@ from api.schemas_terminal import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from services.agent_terminal import AgentSessionState, AgentTerminalService
 from services.command_approval_manager import AgentRole
@@ -273,38 +216,6 @@ logger = get_logger(__name__)
 # Create router
 router = APIRouter(prefix="/agent-terminal", tags=["agent-terminal"])
 router.include_router(host_selection_router)
-
-# Dependency for AgentTerminalService
-# CRITICAL: Use singleton pattern to maintain sessions across requests
-
-_agent_terminal_service_instance: AgentTerminalService | None = None
-
-# Thread-safe lock for singleton
-import threading
-
-_agent_terminal_service_lock = threading.Lock()
-
-
-def get_agent_terminal_service(
-    redis_client=Depends(get_redis_client),
-) -> AgentTerminalService:
-    """
-    Get singleton AgentTerminalService instance (thread-safe).
-
-    IMPORTANT: This MUST return the same instance for all requests,
-    otherwise sessions will be lost between API calls.
-    """
-    global _agent_terminal_service_instance
-
-    if _agent_terminal_service_instance is None:
-        with _agent_terminal_service_lock:
-            # Double-check after acquiring lock
-            if _agent_terminal_service_instance is None:
-                logger.info("Initializing AgentTerminalService singleton")
-                _agent_terminal_service_instance = AgentTerminalService(redis_client=redis_client)
-
-    return _agent_terminal_service_instance
-
 
 # API Endpoints
 
@@ -390,6 +301,7 @@ async def list_agent_terminal_sessions(
         agent_id=agent_id,
         conversation_id=conversation_id,
     )
+    sessions = [s for s in sessions if may_access_session(s, current_user)]  # #17053: own, or all for admin
 
     return {
         "status": "success",
@@ -420,7 +332,7 @@ async def list_agent_terminal_sessions(
 )
 async def get_agent_terminal_session(
     session_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(session_owner),
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
@@ -447,7 +359,7 @@ async def get_agent_terminal_session(
 )
 async def delete_agent_terminal_session(
     session_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(session_owner),
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
@@ -473,7 +385,7 @@ async def delete_agent_terminal_session(
     error_code_prefix="AGENT_TERMINAL",
 )
 async def execute_agent_command(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(session_owner),
     session_id: str = None,
     request: TerminalExecuteCommandRequest = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
@@ -512,7 +424,7 @@ async def execute_agent_command(
 )
 async def approve_agent_command(
     session_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(session_decider),
     request: TerminalApproveCommandRequest = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
@@ -525,14 +437,14 @@ async def approve_agent_command(
     """
     logger.info(
         f"[API] Approval request received: session_id={session_id}, approved={request.approved}, "
-        f"user_id={request.user_id}, comment={request.comment}, "
+        f"approver={current_user.get('username')}, comment={request.comment}, "
         f"remember_for_project={request.remember_for_project}"
     )
 
     result = await service.approve_command(
         session_id=session_id,
         approved=request.approved,
-        user_id=request.user_id,
+        user_id=verified_actor(current_user, request.user_id),
         comment=request.comment,
         auto_approve_future=request.auto_approve_future,
         remember_for_project=request.remember_for_project,
@@ -692,7 +604,7 @@ async def answer_human_question(
 )
 async def interrupt_agent_session(
     session_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(session_decider),
     request: TerminalInterruptRequest = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
@@ -709,7 +621,7 @@ async def interrupt_agent_session(
     """
     result = await service.user_interrupt(
         session_id=session_id,
-        user_id=request.user_id,
+        user_id=verified_actor(current_user, request.user_id),
     )
 
     return result
@@ -723,7 +635,7 @@ async def interrupt_agent_session(
 )
 async def resume_agent_session(
     session_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(session_owner),
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
@@ -746,6 +658,7 @@ async def resume_agent_session(
 async def get_command_state(
     command_id: str,
     current_user: dict = Depends(get_current_user),
+    service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
     Get command state and output from the command execution queue.
@@ -783,7 +696,9 @@ async def get_command_state(
     # Retrieve command from queue
     command = await queue.get_command(command_id)
 
-    if not command:
+    # #17053: a command is readable only through its session -- same 404 either way.
+    session = session_for_terminal_id(await service.list_sessions(), command.terminal_session_id) if command else None
+    if not command or not may_access_session(session, current_user):
         raise HTTPException(status_code=404, detail=f"Command {command_id} not found in queue")
 
     # Return command state and output

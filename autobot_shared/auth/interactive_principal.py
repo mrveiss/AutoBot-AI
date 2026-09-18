@@ -43,7 +43,10 @@ NON_LOGIN_CLAIMS = frozenset(
 )
 
 #: Credential kinds a person produces by logging in.
-_INTERACTIVE_AUTH_METHODS = frozenset({"jwt", "session"})
+_INTERACTIVE_AUTH_METHODS = frozenset({"jwt", "jwt_websocket", "session"})
+
+#: Of those, the ones carried by a token, which must be a login token.
+_TOKEN_AUTH_METHODS = frozenset({"jwt", "jwt_websocket"})
 
 #: Username prefixes the backend gives its synthetic principals.
 _NON_HUMAN_USERNAME_PREFIXES = ("service:", "run:", "device:")
@@ -57,16 +60,16 @@ def is_login_token(claims: Mapping[str, Any]) -> bool:
 def is_interactive_human(user: Optional[Mapping[str, Any]]) -> bool:
     """True only for a person's interactive login; deny-by-default otherwise.
 
-    A JWT user must also carry ``login_token: True``, which the backend's JWT
-    extraction sets from :func:`is_login_token` — a ``jwt`` user without that
-    positive marker is refused, not assumed human.
+    A JWT user (HTTP or WebSocket) must also carry ``login_token: True``, which
+    the backend's JWT extraction sets from :func:`is_login_token` — a token user
+    without that positive marker is refused, not assumed human.
     """
     if not user or user.get("service") or user.get("auth_disabled"):
         return False
     method = user.get("auth_method")
     if method not in _INTERACTIVE_AUTH_METHODS:
         return False
-    if method == "jwt" and user.get("login_token") is not True:
+    if method in _TOKEN_AUTH_METHODS and user.get("login_token") is not True:
         return False
     username = str(user.get("username") or "")
     return not username.startswith(_NON_HUMAN_USERNAME_PREFIXES)
