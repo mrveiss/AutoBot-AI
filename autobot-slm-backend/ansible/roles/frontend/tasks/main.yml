@@ -253,12 +253,19 @@
   when: package_json_path.stat.exists
   tags: ['frontend', 'build', 'config']
 
-- name: "Frontend | Build production frontend"
-  command: npx vite build
-  args:
-    chdir: "{{ frontend_install_dir }}/autobot-frontend"
-  become: true
-  become_user: "{{ frontend_user }}"
+# #15603: staged build-then-swap, the same mechanism build_publish_slm_frontend.yml
+# already gives the SLM frontend (#15557, #15610) — a build that fails no
+# longer empties the served directory and leaves nginx answering 403 for
+# every path. frontend_dist_dir (defaults/main.yml) now names the `current`
+# symlink this publishes, not a directory vite refills in place.
+- name: "Frontend | Build and publish production frontend, staged (#15603)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/build_publish_slm_frontend.yml
+  vars:
+    slm_frontend_publish_label: "Frontend"
+    slm_frontend_publish_dir: "{{ frontend_install_dir }}/autobot-frontend"
+    slm_frontend_publish_user: "{{ frontend_user }}"
+    slm_frontend_publish_build_script: "build"
+    slm_frontend_publish_build_env: {}
   when: package_json_path.stat.exists
   tags: ['frontend', 'build']
 

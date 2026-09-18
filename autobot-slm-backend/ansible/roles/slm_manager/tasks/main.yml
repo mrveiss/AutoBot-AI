@@ -924,15 +924,19 @@
     - user_frontend_package_json.stat.exists | default(false)
   tags: ['slm', 'frontend', 'colocated']
 
-- name: "SLM | Build user frontend for production"
-  ansible.builtin.command:
-    cmd: npx vite build
-    chdir: "{{ frontend_dist_dir | dirname }}"
-  become_user: "{{ slm_user }}"
+# #15603: staged build-then-swap (#15557, #15610's mechanism) — a failed
+# build here used to empty the served directory this same host's nginx
+# co-located block reads from, with nothing failing the play.
+- name: "SLM | Build and publish user frontend for production, staged (#15603)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/build_publish_slm_frontend.yml
+  vars:
+    slm_frontend_publish_label: "SLM co-located (user frontend)"
+    slm_frontend_publish_dir: "{{ frontend_dist_dir | dirname }}"
+    slm_frontend_publish_user: "{{ slm_user }}"
+    slm_frontend_publish_build_script: "build"
+    slm_frontend_publish_build_env: {}
   when:
     - user_frontend_package_json.stat.exists | default(false)
-  register: user_frontend_build_result
-  changed_when: user_frontend_build_result.rc == 0
   tags: ['slm', 'frontend', 'colocated']
 
 # ==========================================================
