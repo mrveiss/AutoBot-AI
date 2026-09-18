@@ -12,11 +12,23 @@ refused, or allowed. The row is ``resource_type="api_key"`` with
 identification prefix (the first 12 characters, which the key table stores in
 plaintext for the same purpose).
 
-A write that fails raises. A key request that cannot be audited does not proceed,
-because the ruling makes the audit part of accepting a key.
+A write that fails is logged and raised as ``AuditUnavailable``. A key request that
+cannot be audited does not proceed, because the ruling makes the audit part of
+accepting a key. Each caller answers it with an explicit 503, never a bare 500.
 """
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+#: What a caller answers when the audit write fails.
+AUDIT_UNAVAILABLE_DETAIL = "API-key requests are refused while the audit log is unavailable"
+
+
+class AuditUnavailable(Exception):
+    """The key request's audit row could not be written; the request must not proceed."""
+
 
 #: Characters of a presented key recorded to identify it; the key table's ``key_prefix`` length.
 KEY_PREFIX_LENGTH = 12
@@ -35,6 +47,14 @@ async def audit_key_request(
     reason: str | None = None,
 ) -> None:
     """Write one audit row for a request that presented an API key."""
+    try:
+        await _write(request, action, allowed, status, presented_key, api_key_id, username, permission, reason)
+    except Exception as exc:
+        logger.exception("API-key audit write failed for %s %s (%s)", request.method, request.url.path, action)
+        raise AuditUnavailable(action) from exc
+
+
+async def _write(request, action, allowed, status, presented_key, api_key_id, username, permission, reason) -> None:
     from api.security import create_audit_log
     from services.database import db_service
 

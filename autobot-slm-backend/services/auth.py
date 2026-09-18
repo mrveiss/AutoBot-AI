@@ -46,7 +46,7 @@ from autobot_shared.user_management.password_epoch import (
 )
 from config import settings
 from models.schemas import TokenResponse, UserCreate, UserResponse
-from services.api_key_audit import audit_key_request
+from services.api_key_audit import AUDIT_UNAVAILABLE_DETAIL, AuditUnavailable, audit_key_request
 from services.api_key_authority import legacy_grace_deadline, permission_allowed, role_for_user
 from services.api_key_routes import mark_key_permission
 from services.token_denylist import is_jti_revoked
@@ -457,9 +457,17 @@ async def get_api_key_user(
     }
 
 
+async def _audit_or_503(request: Request, **row) -> None:
+    """Write the key request's audit row (#16294), or answer 503: an unaudited key request never proceeds."""
+    try:
+        await audit_key_request(request, **row)
+    except AuditUnavailable:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=AUDIT_UNAVAILABLE_DETAIL)
+
+
 async def _reject_key(request: Request, presented: str, reason: str, api_key_id: str | None = None) -> NoReturn:
     """Audit a rejected key (#16294), then answer 401."""
-    await audit_key_request(
+    await _audit_or_503(
         request,
         action="api_key_rejected",
         allowed=False,
@@ -507,7 +515,7 @@ def require_key_permission(permission: Permission) -> Callable:
 
     async def _check(request: Request, current_user: dict = Depends(get_api_key_user)) -> dict:
         allowed = permission_allowed(current_user, permission)
-        await audit_key_request(
+        await _audit_or_503(
             request,
             action="api_key_request" if allowed else "api_key_refused_scope",
             allowed=allowed,

@@ -35,6 +35,7 @@ from _real_auth_import import load_real_auth  # noqa: E402
 from autobot_shared.auth.key_scopes import scope_granted  # noqa: E402
 from autobot_shared.auth.permissions import Permission  # noqa: E402
 from middleware.api_key_allow_list import ApiKeyAllowListMiddleware  # noqa: E402
+from services.api_key_audit import AuditUnavailable  # noqa: E402
 from services.api_key_authority import API_KEY_SCOPES_ENFORCED_FROM  # noqa: E402
 
 _auth = load_real_auth(secrets.token_hex(32))
@@ -187,3 +188,18 @@ def test_every_decision_on_a_key_request_is_audited_as_one(call, method, path, k
     assert row["presented_key"] == _KEY
     if known:
         assert row["api_key_id"] and row["permission"] in ("knowledge.read", "knowledge.write")
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "known"),
+    [("GET", "/session", True), ("GET", "/knowledge", True), ("GET", "/knowledge", False)],
+    ids=["middleware: off the list", "dependency: key decision", "dependency: key rejected"],
+)
+def test_a_failed_audit_write_is_an_explicit_503_never_a_bare_500(call, method, path, known):
+    """66's review of #16989: the SLM has no exception handler for it, and the middleware sits outside one."""
+    call.audit.side_effect = AuditUnavailable("down")
+
+    response = call(method, path, known=known)
+
+    assert response.status_code == 503, response.text
+    assert "audit" in response.json()["detail"]

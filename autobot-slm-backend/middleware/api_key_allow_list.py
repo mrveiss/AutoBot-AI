@@ -19,7 +19,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from services.api_key_audit import audit_key_request
+from services.api_key_audit import AUDIT_UNAVAILABLE_DETAIL, AuditUnavailable, audit_key_request
 from services.api_key_routes import accepts_api_key
 
 API_KEY_HEADER = "X-API-Key"
@@ -31,13 +31,16 @@ class ApiKeyAllowListMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         presented = request.headers.get(API_KEY_HEADER)
         if presented and not accepts_api_key(request.app, request.scope):
-            await audit_key_request(
-                request,
-                action="api_key_refused_off_allow_list",
-                allowed=False,
-                status=403,
-                presented_key=presented,
-                reason="API keys are not accepted on this route",
-            )
+            try:
+                await audit_key_request(
+                    request,
+                    action="api_key_refused_off_allow_list",
+                    allowed=False,
+                    status=403,
+                    presented_key=presented,
+                    reason="API keys are not accepted on this route",
+                )
+            except AuditUnavailable:  # outside the exception middleware: answer it here, not as a bare 500
+                return JSONResponse(status_code=503, content={"detail": AUDIT_UNAVAILABLE_DETAIL})
             return JSONResponse(status_code=403, content={"detail": "API keys are not accepted on this route"})
         return await call_next(request)
