@@ -235,29 +235,26 @@
 # and the only one it may ever read -- a plaintext env-file read would be a
 # parallel credential path the owner's secrets-management rule forbids.
 #
-# #16299 review round 2: registering here, inline in this role's own tasks,
-# is only safe for a playbook where the backend's secrets-table migration has
-# ALREADY run by the time this role executes. setup-user-backend.yml runs
-# roles (common -> backend -> vnc) BEFORE post_tasks' migration sequence, so
-# on a fresh host this can never succeed no matter how long it retries --
-# and a hard failure here aborts the whole play before post_tasks (migrations
-# included) ever run, breaking provisioning entirely, not just VNC.
+# #16299 review round 3: a block/rescue here was wrong in a different way
+# than round 2's local-file gate -- it doesn't just cover the one PLAYBOOK
+# where a failure here is expected (setup-user-backend.yml, whose roles:
+# phase runs before its own post_tasks' migration sequence); it ALSO
+# silently swallows a genuine failure (wrong API key, backend down) into a
+# debug line on every OTHER playbook that includes this role, where the
+# vault is already migrated and a failure here is real. VNC would fail
+# closed with nothing but a log line nobody reads.
 #
-# So this is best-effort here (block/rescue, mirroring the existing
-# "Register VNC credentials in SLM" pattern below) for every OTHER playbook
-# that includes this role on an already-provisioned host (deploy.yml,
-# playbooks/deploy_role.yml, playbooks/enroll-node.yml,
-# playbooks/provision-fleet-roles.yml -- none of these run migrations, so the
-# vault is already there). setup-user-backend.yml additionally calls
-# register-vnc-password.yml a second time from ITS OWN post_tasks, after the
-# migration sequence -- register-vnc-password.yml's own vault-read-back check
-# (not the local vnc-secrets.env file) makes a second, later, successful
-# call safe to run after a first one that failed pre-migration.
+# vnc_defer_vault_registration (defaults/main.yml, default false) separates
+# the one EXPECTED-to-fail case from every genuine one: setup-user-backend.yml
+# sets it true for this role, so this task skips registration entirely here
+# (nothing to rescue -- it never runs) and calls register-vnc-password.yml
+# again, unrescued, from its OWN post_tasks after migrations. Every other
+# playbook leaves the flag false, so a failure here is real and fails the
+# play -- not silently swallowed.
 #
-# The non-desktop refusal is deliberately NOT inside this best-effort
-# block: sending a password in cleartext to a genuinely remote host is a
-# real misconfiguration, not a migration-timing flake, and must hard-fail
-# the play rather than degrade into a rescued debug message.
+# The non-desktop refusal always hard-fails regardless of the flag: sending
+# a password in cleartext to a genuinely remote host is a real
+# misconfiguration, never something to defer or rescue.
 - name: "VNC | Refuse to register a non-co-located host's password over plaintext HTTP (#16299)"
   ansible.builtin.fail:
     msg: >-
@@ -271,24 +268,23 @@
     - vnc_password_result.stdout | length > 0
     - vnc_type != 'desktop'
 
-- name: "VNC | Register the VNC password in the canonical secrets system (best-effort, #16299)"
+- name: "VNC | Secrets-vault registration deferred to post_tasks (#16299)"
+  ansible.builtin.debug:
+    msg: >-
+      VNC password registration deferred to setup-user-backend.yml's post_tasks, after
+      migrations run -- this role's own roles:-phase invocation cannot reach the secrets
+      vault before then.
   when:
     - vnc_password_result.stdout | length > 0
     - vnc_type == 'desktop'
-  block:
-    - name: "VNC | Register VNC password in the canonical secrets system"
-      ansible.builtin.include_tasks: register-vnc-password.yml
-  rescue:
-    - name: "VNC | Secrets-vault registration skipped or failed (non-fatal)"
-      ansible.builtin.debug:
-        msg: >-
-          VNC password registration in the secrets vault failed or was skipped for
-          {{ inventory_hostname }} (vnc_type={{ vnc_type }}). If this host is being
-          provisioned via setup-user-backend.yml, its post_tasks retries this after
-          migrations run and this is expected on a fresh host. On any other path,
-          desktop VNC connections will fail closed until this is registered --
-          re-run this role, or register the secret by hand via
-          POST /api/v2/secrets/system.
+    - vnc_defer_vault_registration | bool
+
+- name: "VNC | Register VNC password in the canonical secrets system (#16299)"
+  ansible.builtin.include_tasks: register-vnc-password.yml
+  when:
+    - vnc_password_result.stdout | length > 0
+    - vnc_type == 'desktop'
+    - not (vnc_defer_vault_registration | bool)
 
 # --- Node-level TLS cert (#1962) ---
 # Shared node keypair, also provisioned by roles/backend and setup-internal-ca.

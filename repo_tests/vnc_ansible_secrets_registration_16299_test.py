@@ -2,29 +2,37 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""#16299 review round 2: the VNC password's secrets-vault registration must
-never abort the provisioning play, and a fresh host must end ONE run with
-the secret actually registered.
+"""#16299 review round 3: the VNC password's secrets-vault registration must
+never abort the provisioning play, must never silently swallow a genuine
+failure either, and a fresh host must end ONE run with the secret actually
+registered.
 
 Round 1 fixed the local-marker-file gate (a failed attempt was never
 retried) by gating on an actual vault read-back instead, with retry/wait
-logic. That was still wrong: setup-user-backend.yml runs `roles:` (which
-includes the vnc role) BEFORE `post_tasks:` (which runs the backend's
-secrets-table migration). On a fresh host the vault table cannot exist
-while the vnc role's inline task runs, however long it retries -- the
-retries just delay a `uri` task failure that still aborts the whole play
-before post_tasks, including the migrations themselves, ever run. A fresh
-host could then never finish provisioning at all, not just lose VNC.
+logic -- round 2 found that retrying just delayed the same abort, since
+setup-user-backend.yml runs `roles:` (which includes the vnc role) BEFORE
+`post_tasks:` (which runs the backend's secrets-table migration): on a
+fresh host the vault table cannot exist while the vnc role's inline task
+runs, however long it retries.
 
-Fixed by splitting the registration logic into its own tasks file
-(register-vnc-password.yml) called from two places: tasks/main.yml calls it
-best-effort (block/rescue) for every OTHER playbook that includes this role
-on an already-provisioned, already-migrated host; setup-user-backend.yml
-ALSO calls it directly from its own post_tasks, after the migration
-sequence, which is the one playbook where the roles:-phase attempt cannot
-succeed on a fresh host. register-vnc-password.yml's own vault-read-back check
-makes a second, later, successful call safe regardless of whether the
-first one ran, skipped, or failed.
+Round 2's own fix (block/rescue around the registration call, in both
+tasks/main.yml and setup-user-backend.yml's post_tasks) was ALSO wrong, in
+the opposite direction: rescuing every failure into a debug line is only
+correct for the ONE case that is genuinely expected to fail
+(setup-user-backend.yml's roles:-phase call, pre-migration). On every OTHER
+playbook that includes this role (deploy.yml, playbooks/deploy_role.yml,
+playbooks/enroll-node.yml, playbooks/provision-fleet-roles.yml -- none run
+migrations, so the vault already exists) and in setup-user-backend.yml's
+OWN post_tasks call (after migrations), a failure is real (wrong API key,
+backend down) and rescuing it just makes VNC fail closed silently.
+
+Fixed with an explicit `vnc_defer_vault_registration` role var (defaults to
+false): setup-user-backend.yml sets it true for the vnc role, so
+tasks/main.yml SKIPS registration entirely there (nothing to rescue --
+logged as deferred instead) and calls register-vnc-password.yml again,
+unrescued, from its own post_tasks after migrations. Every other playbook
+leaves the flag false, so tasks/main.yml's call there is unrescued too --
+a real failure fails the play, as it should.
 
 No live ansible target host is available in this environment; these are
 static assertions on the task files' own text, same approach as
@@ -96,38 +104,71 @@ def test_no_hardcoded_backend_port_default() -> None:
     )
 
 
-def test_non_desktop_registration_is_a_hard_failure_not_rescued() -> None:
+def test_non_desktop_registration_refusal_is_a_top_level_task() -> None:
     """vnc_type is hardcoded to "desktop" (co-located, loopback-adjacent)
     everywhere this role is invoked today. The registration POST goes over
     plain HTTP with no TLS -- safe for that loopback case, but would send
     the password in cleartext to a genuinely remote host once "browser" is
     wired. This is a real misconfiguration, not a migration-timing flake, so
-    it must hard-fail the play -- NOT be swallowed by the same block/rescue
-    that makes migration-timing failures non-fatal."""
+    it must hard-fail the play unconditionally -- it must not be nested
+    inside any conditional block that could soften it (there is no
+    block/rescue in this file at all as of round 3, but a future edit
+    reintroducing one around this task would be exactly the regression this
+    guards against)."""
     text = _text(_VNC_MAIN_TASKS)
     fail_idx = text.index('name: "VNC | Refuse to register a non-co-located host')
-    block_idx = text.index('name: "VNC | Register the VNC password in the canonical secrets system (best-effort')
-    assert fail_idx < block_idx, "the refusal must be declared before the best-effort block, not inside it"
-    # Confirm the refusal task itself is not nested inside a `block:` (i.e. not indented as a
-    # block/rescue child) -- it must sit at the same top level as the block it precedes.
+    deferred_idx = text.index('name: "VNC | Secrets-vault registration deferred')
+    assert fail_idx < deferred_idx, "the refusal must be declared before the deferred-log task"
     refusal_task_text = text[fail_idx : text.index("\n\n", fail_idx)]
     assert not refusal_task_text.startswith("    - name:"), (
-        "the non-desktop refusal must be a top-level task, not nested inside the best-effort "
-        "block/rescue -- otherwise a real misconfiguration degrades into a rescued debug "
-        "message instead of hard-failing the play (#16299 review)"
+        "the non-desktop refusal must be a top-level task, not nested inside a block -- "
+        "otherwise a real misconfiguration could be softened into a rescued debug message "
+        "instead of hard-failing the play (#16299 review)"
     )
 
 
-def test_main_tasks_registration_is_best_effort() -> None:
-    """The roles:-phase call (every playbook other than setup-user-backend.yml)
-    must never abort the play -- block/rescue, mirroring the existing
-    "Register VNC credentials in SLM" pattern in this same file."""
+def test_main_tasks_registration_defers_rather_than_rescues() -> None:
+    """#16299 review round 3: a failure here is only ever expected on
+    setup-user-backend.yml, which sets vnc_defer_vault_registration true and
+    so never reaches the registration call at all -- it gets a deferred-log
+    debug instead. On every OTHER playbook the flag is false, the call runs
+    for real, and it must NOT be rescued: a failure there is genuine and
+    must fail the play, not degrade into a silent debug line."""
     text = _text(_VNC_MAIN_TASKS)
-    start = text.index('name: "VNC | Register the VNC password in the canonical secrets system (best-effort')
+    start = text.index('name: "VNC | Secrets-vault registration deferred')
     end = text.index("--- Node-level TLS cert")
     block = text[start:end]
-    assert "rescue:" in block, "the roles:-phase registration call must be wrapped in block/rescue (#16299 review)"
+    assert "vnc_defer_vault_registration" in block, (
+        "the registration call must be gated on vnc_defer_vault_registration, not "
+        "wrapped in a block/rescue that would swallow a genuine failure on every "
+        "other playbook (#16299 review round 3)"
+    )
+    assert "rescue:" not in block, (
+        "no rescue here -- a failure on a non-deferring playbook is real (wrong API key, "
+        "backend down) and must fail the play, not become a silent debug line (#16299 review round 3)"
+    )
     assert "register-vnc-password.yml" in block
+
+
+def test_defer_flag_defaults_to_false() -> None:
+    defaults_path = REPO_ROOT / "autobot-slm-backend/ansible/roles/vnc/defaults/main.yml"
+    text = _text(defaults_path)
+    assert "vnc_defer_vault_registration: false" in text, (
+        "vnc_defer_vault_registration must default to false -- only setup-user-backend.yml "
+        "opts into deferring (#16299 review round 3)"
+    )
+
+
+def test_setup_user_backend_sets_the_defer_flag_for_the_vnc_role() -> None:
+    text = _text(_SETUP_USER_BACKEND)
+    role_idx = text.index("role: vnc")
+    post_tasks_idx = text.index("post_tasks:")
+    role_block = text[role_idx:post_tasks_idx]
+    assert "vnc_defer_vault_registration: true" in role_block, (
+        "setup-user-backend.yml must set vnc_defer_vault_registration: true on the vnc role "
+        "include -- its roles:-phase invocation runs before this play's own migrations "
+        "(#16299 review round 3)"
+    )
 
 
 def test_setup_user_backend_registers_again_after_migrations() -> None:
@@ -147,19 +188,25 @@ def test_setup_user_backend_registers_again_after_migrations() -> None:
     assert post_tasks_idx < migration_idx < register_idx
 
 
-def test_setup_user_backend_post_migration_call_is_also_rescued() -> None:
-    """Even the authoritative post-migration attempt must not fail the whole
-    provisioning run if it somehow still fails -- VNC registration is not
-    as critical as the migrations themselves."""
+def test_setup_user_backend_post_migration_call_is_not_rescued() -> None:
+    """#16299 review round 3: after migrations run and the health check
+    above confirms the backend is up, a registration failure here is real
+    (wrong API key, backend actually down) -- it must fail the play, not
+    degrade into a debug line. Recovery is re-running this playbook through
+    the builtin updater; there is no manual recovery path to fall back to."""
     text = _text(_SETUP_USER_BACKEND)
     start = text.index("Register the VNC password now that migrations have run")
     end = text.index("Display setup summary")
     block = text[start:end]
-    assert "rescue:" in block, (
-        "the post-migration registration call must also be wrapped in block/rescue -- it must "
-        "never fail the overall provisioning run (#16299 review round 2)"
+    assert "rescue:" not in block, (
+        "the post-migration registration call must NOT be rescued -- migrations have already "
+        "run and the backend is confirmed up, so a failure here is genuine (#16299 review round 3)"
     )
     assert "tasks_from: register-vnc-password" in block
+    assert "register the secret by hand" not in text.lower(), (
+        "no manual-recovery language -- recovery is re-running the playbook through the "
+        "builtin updater (#16299 review round 3)"
+    )
 
 
 def test_the_password_read_task_has_no_log() -> None:

@@ -92,6 +92,13 @@
     - role: vnc
       tags: [vnc, desktop]
       when: enable_vnc | default(true)
+      vars:
+        # #16299 review round 3: this role's own tasks run before this
+        # play's post_tasks migration sequence, so its secrets-vault
+        # registration cannot succeed yet here -- defer it (see
+        # roles/vnc/defaults/main.yml) to the explicit post-migration call
+        # below instead of letting it fail every time.
+        vnc_defer_vault_registration: true
 
   post_tasks:
     # Strict migration sequence (#10001/#10026): the old task invoked alembic
@@ -149,25 +156,21 @@
     # whether the earlier roles:-phase attempt ran, skipped, or failed.
     # Still wrapped in block/rescue -- VNC registration failing must never
     # fail the overall provisioning run.
+    # #16299 review round 3: no rescue here -- migrations have already run
+    # and the health check above confirmed the backend is up, so a failure
+    # at this point is real (wrong API key, backend actually down) and must
+    # fail the play, not degrade into a debug line nobody reads. Recovery is
+    # re-running this playbook through the builtin updater; there is no
+    # manual recovery path.
     - name: "VNC | Register the VNC password now that migrations have run (#16299)"
+      ansible.builtin.include_role:
+        name: vnc
+        tasks_from: register-vnc-password
       when:
         - enable_vnc | default(true)
         - vnc_password_result is defined
         - vnc_password_result.stdout | default('') | length > 0
       tags: [vnc, migrations]
-      block:
-        - name: "VNC | Register VNC password in the canonical secrets system (post-migration)"
-          ansible.builtin.include_role:
-            name: vnc
-            tasks_from: register-vnc-password
-      rescue:
-        - name: "VNC | Post-migration secrets-vault registration failed (non-fatal)"
-          ansible.builtin.debug:
-            msg: >-
-              VNC password registration in the secrets vault failed for {{ inventory_hostname }}
-              even after migrations ran. Desktop VNC connections will fail closed until this is
-              registered -- check backend logs, then re-run this playbook or register the secret
-              by hand via POST /api/v2/secrets/system.
 
     - name: Display setup summary
       debug:

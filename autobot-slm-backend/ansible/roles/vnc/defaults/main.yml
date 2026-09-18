@@ -41,6 +41,19 @@ vnc_group: "{{ lookup('env', 'VNC_GROUP') | default('autobot-vnc', true) }}"
 # is the only value this role has ever actually been invoked with to date.
 vnc_type: "desktop"
 
+# #16299 review round 3: when true, this role's own tasks skip secrets-vault
+# registration entirely rather than attempting and rescuing a failure. Set to
+# true only by setup-user-backend.yml, the one playbook where this role runs
+# BEFORE the backend's secrets-table migration (roles: then post_tasks:) --
+# an attempt there is not a real error to report, it is guaranteed to fail
+# every time, so skipping it (and logging that it is deferred) is more
+# honest than a rescue block that would also swallow a GENUINE failure (wrong
+# API key, backend down) on every other playbook that includes this role.
+# setup-user-backend.yml itself calls register-vnc-password again from its
+# own post_tasks, after migrations, with no rescue -- a failure there is real
+# and must fail the play.
+vnc_defer_vault_registration: false
+
 # #14319: the account VNC ran under before this change (the platform-wide
 # default before this issue). Used once, by the migration task in
 # tasks/main.yml, to relocate an existing host's VNC state to the new
