@@ -191,7 +191,11 @@ def _peer_authority(peer_id: str | None):
 
 def _report_capability_refusal(manager, task_id: str, result: Dict[str, Any]) -> None:
     """Fail the task naming the capabilities the peer lacks (#16957), and nothing the agents would have read."""
-    missing = ", ".join(result.get("missing_capabilities", []))
+    causes = [
+        *result.get("missing_capabilities", []),
+        *(f"unclassified:{a}" for a in result.get("unclassified_agents", [])),
+    ]
+    missing = ", ".join(causes)
     message = f"capability_refused: {missing}"
     manager.update_state(task_id, TaskState.FAILED, message=message)
     manager.publish_event(

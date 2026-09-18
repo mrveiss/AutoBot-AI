@@ -28,13 +28,24 @@ def _members_named(source: str) -> set:
     }
 
 
+def _is_test_file(name: str) -> bool:
+    """pytest.ini's ``python_files`` naming, not a substring: ``"test" in name`` would skip ``attestation.py``."""
+    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
+
+
+def test_a_production_module_whose_name_contains_test_is_still_scanned():
+    """Negative control for the filter: on this tree the old substring match skipped two real modules."""
+    assert not _is_test_file("attestation.py") and not _is_test_file("testing_coverage_analyzer.py")
+    assert _is_test_file("capability_enforcement_guard_test.py")
+
+
 def _production_modules():
     """Non-test modules under autobot-backend. ``os.walk`` does not follow the ``backend -> .`` symlink."""
     for root, dirs, files in os.walk(_BACKEND):
         dirs[:] = [d for d in dirs if d not in {"tests", "node_modules", "__pycache__"}]
         for name in files:
             path = Path(root) / name
-            if name.endswith(".py") and "test" not in name and path != _DEFINITION:
+            if name.endswith(".py") and not _is_test_file(name) and path != _DEFINITION:
                 yield path
 
 

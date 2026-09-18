@@ -12,9 +12,12 @@ any agent runs, and the only place the originator's authority is in scope. So th
 check happens here, for every agent the decision would run.
 
 Every agent type the orchestrator can route to is classified below, either as
-needing a capability or as needing none, with the reason. An unclassified agent
-fails ``capability_requirements_test``, so a new agent cannot slip past the gate by
-being forgotten.
+needing a capability or as needing none, with the reason. **An unclassified agent
+is refused to an external originator (fail closed).** ``DistributedAgentManager``
+accepts agent types at runtime, so a test over the known set cannot be the only
+line: a plugin-registered agent that nobody classified must not reach a peer
+unchecked. ``capability_requirements_test`` still fails on an unclassified built-in
+agent, so the refusal is not the first anyone hears of it.
 """
 
 from __future__ import annotations
@@ -55,24 +58,33 @@ NEEDS_NO_CAPABILITY: Dict[str, str] = {
 }
 
 
+def _may_reach(authority: Authority, agent: str) -> bool:
+    """Whether *authority* may reach *agent*: only a classified agent, and only with what it requires."""
+    if agent in NEEDS_NO_CAPABILITY:
+        return True
+    required = REQUIRED_CAPABILITY.get(agent)
+    return required is not None and authority.has_capability(required.value)
+
+
 def refused_agents(authority: Authority | None, agent_types: Iterable[str]) -> List[str]:
     """The agents in *agent_types* that *authority* may not reach. None, an internal caller, reaches all."""
     if authority is None:
         return []
-    return [
-        agent
-        for agent in agent_types
-        if agent in REQUIRED_CAPABILITY and not authority.has_capability(REQUIRED_CAPABILITY[agent].value)
-    ]
+    return [agent for agent in agent_types if not _may_reach(authority, agent)]
 
 
 def refusal(refused: List[str]) -> Dict[str, object]:
     """The orchestrator's answer when a request's originator may not reach the agents it routed to."""
-    needed = sorted({REQUIRED_CAPABILITY[agent].value for agent in refused})
+    needed = sorted({REQUIRED_CAPABILITY[agent].value for agent in refused if agent in REQUIRED_CAPABILITY})
+    unclassified = sorted(agent for agent in refused if agent not in REQUIRED_CAPABILITY)
+    reasons = [f"capabilities its originator does not hold: {', '.join(needed)}"] if needed else []
+    if unclassified:
+        reasons.append(f"agents not classified for external originators: {', '.join(unclassified)}")
     return {
         "status": "refused",
-        "response": f"This request needs capabilities its originator does not hold: {', '.join(needed)}",
+        "response": "This request was refused -- " + "; ".join(reasons),
         "refused_agents": refused,
         "missing_capabilities": needed,
+        "unclassified_agents": unclassified,
         "routing_strategy": "refused_by_capability",
     }

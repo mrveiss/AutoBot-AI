@@ -48,6 +48,26 @@ class TestRefusedAgents:
         assert refused_agents(STANDARD, list(REQUIRED_CAPABILITY)) == []
 
 
+class TestAnUnclassifiedAgentIsRefused:
+    """#16969 review: DistributedAgentManager accepts agent types at runtime, so the gate must fail closed."""
+
+    def test_even_the_highest_trust_peer_cannot_reach_an_unclassified_agent(self):
+        from a2a.trust_score import authority_for_level
+
+        assert refused_agents(authority_for_level(TrustLevel.TRUSTED), ["plugin_agent"]) == ["plugin_agent"]
+
+    def test_the_refusal_names_it_as_unclassified(self):
+        from agents.agent_orchestration.capability_requirements import refusal
+
+        result = refusal(["plugin_agent"])
+
+        assert result["unclassified_agents"] == ["plugin_agent"] and result["missing_capabilities"] == []
+        assert "plugin_agent" in result["response"]
+
+    def test_the_control_an_internal_caller_still_reaches_it(self):
+        assert refused_agents(None, ["plugin_agent"]) == []
+
+
 def test_a_multi_agent_decision_names_its_secondaries():
     decision = {"primary_agent": AgentType.CHAT, "secondary_agents": [AgentType.RESEARCH]}
 
@@ -131,3 +151,16 @@ class TestTheDistributedPath:
 
         assert result["status"] == "success"
         agent.process_request.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_a_runtime_registered_unclassified_agent_is_refused_to_a_peer(self):
+        """A plugin agent nobody classified must not reach even a TRUSTED peer unchecked."""
+        executor = _executor()
+        agent = self._with_agent(executor, "plugin_agent")
+
+        result = await executor.process_with_distributed_agents(
+            "anything", {}, [], None, authority=authority_for_level(TrustLevel.TRUSTED)
+        )
+
+        assert result["status"] == "refused" and result["unclassified_agents"] == ["plugin_agent"]
+        agent.process_request.assert_not_awaited()

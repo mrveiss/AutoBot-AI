@@ -82,7 +82,9 @@ class TestTheGrant:
 
         entry = manager.get_audit_log(pair)[0]
         assert entry["new_level"] == TrustLevel.STANDARD.value
-        assert "admin-1" in entry["reason"]
+        # Structured, not only in the free-text reason: the snapshot is the record as granted.
+        assert (entry["snapshot"]["granted_by"], entry["snapshot"]["peer_id"]) == ("admin-1", pair)
+        assert entry["snapshot"]["granted_level"] == TrustLevel.STANDARD.value
 
     def test_a_grant_survives_score_drift(self, manager):
         """Without a floor, the first recompute of a history-less record would demote it at once."""
