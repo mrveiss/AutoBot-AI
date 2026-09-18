@@ -316,7 +316,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/security/enterprise/sso_integration.py": 916,
     "autobot-backend/security/enterprise/threat_detection/engine.py": 719,
     "autobot-backend/security/input_validator.py": 607,
-    "autobot-backend/security/prompt_injection_detector.py": 703,  # #16354: invisible-char table moved to security/unicode_normalization.py
+    "autobot-backend/security/prompt_injection_detector.py": 703,  # #16354: invisible chars -> unicode_normalization.py
     "autobot-backend/security/security_edge_cases_test.py": 638,
     "autobot-backend/security/session_ownership.py": 833,
     "autobot-backend/security/threat_detection_refactor_test.py": 880,

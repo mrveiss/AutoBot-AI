@@ -843,7 +843,9 @@ async def test_conversation_aware_retrieve_escalate_clears_context_and_citations
 
 
 @pytest.mark.asyncio
-async def test_smart_retrieve_knowledge_quarantine_scrubs_citation_content(mock_rag_service, sample_search_results) -> None:
+async def test_smart_retrieve_knowledge_quarantine_scrubs_citation_content(
+    mock_rag_service, sample_search_results
+) -> None:
     """#16930 review: the QUARANTINE-scrub branch added to smart_retrieve_knowledge
     alongside conversation_aware_retrieve's had no test of its own -- mirrors that
     test exactly, mocked verdict isolating this from which detector rule produces
@@ -898,7 +900,9 @@ async def test_retrieve_combined_knowledge_quarantine_scrubs_citation_content(
         escalated=False,
     )
     with patch("services.knowledge.service.inspect_rag_context", AsyncMock(return_value=quarantine_verdict)):
-        context, rag_citations, doc_results = await service.retrieve_combined_knowledge(query="How do I configure Redis?")
+        context, rag_citations, doc_results = await service.retrieve_combined_knowledge(
+            query="How do I configure Redis?"
+        )
 
     assert context == "[SANITIZED] the flagged text was stripped [/SANITIZED]"
     assert rag_citations != []
