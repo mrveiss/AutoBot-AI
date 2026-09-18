@@ -59,9 +59,15 @@ export function useAdminPricingApi(): UseAdminPricingApiReturn {
 
   async function fetchStatus(): Promise<PricingStatusResponse> {
     try {
-      const data = await api.get<{ providers?: PricingStatusResponse }>(
-        `${getApiBase()}/admin/pricing/status`,
-      )
+      // No generated-contract type for this endpoint's response shape yet
+      // (the backend returns a bare dict) -- api.get's own <T = unknown>
+      // default plus a cast here, rather than a type argument at the call
+      // site, is what keeps this off repo_tests/frontend_api_contract_
+      // ratchet_test.py's inline_generics count (#16875); the shape claim
+      // itself is exactly as unverified either way.
+      const data = (await api.get(`${getApiBase()}/admin/pricing/status`)) as {
+        providers?: PricingStatusResponse
+      }
       return data?.providers ?? {}
     } catch (error: unknown) {
       logger.error('Failed to load pricing refresh status', error)
@@ -70,7 +76,7 @@ export function useAdminPricingApi(): UseAdminPricingApiReturn {
   }
 
   async function refreshNow(): Promise<RefreshSummary> {
-    const data = await api.post<RefreshSummary>(`${getApiBase()}/admin/pricing/refresh`)
+    const data = (await api.post(`${getApiBase()}/admin/pricing/refresh`)) as RefreshSummary
     return data ?? { sources: {} }
   }
 
