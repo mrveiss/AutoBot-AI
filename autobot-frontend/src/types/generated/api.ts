@@ -84725,7 +84725,16 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** MultiModalResponse */
+        /**
+         * MultiModalResponse
+         * @description Response for POST /process/image, /process/audio and /process/text.
+         *
+         *     ``success`` says whether processing succeeded; ``persistence`` says whether
+         *     the result was then written to memory (#16926). The two are independent: a
+         *     processed result can be refused storage, and the caller must see that here,
+         *     not only in the server log. Values mirror ``PersistenceOutcome``; None when
+         *     processing failed and there was nothing to store.
+         */
         MultiModalResponse: {
             /** Success */
             success: boolean;
@@ -84745,6 +84754,8 @@ export interface components {
             device_used?: string | null;
             /** Error Message */
             error_message?: string | null;
+            /** Persistence */
+            persistence?: ("stored" | "unowned" | "refused" | "failed") | null;
         } & {
             [key: string]: unknown;
         };
