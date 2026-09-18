@@ -1383,7 +1383,11 @@ async def _ingest_audio_source(
     if content_result is None or not content_result.content.strip():
         raise HTTPException(status_code=422, detail="Transcription produced no content")
 
-    transcript = content_result.content
+    # #16985: AudioConnector.fetch_content is called directly here, bypassing the
+    # AbstractConnector._process_change sync path (and its own redaction chokepoint)
+    # entirely -- a spoken credential transcribed verbatim would otherwise reach the
+    # KB unmasked. Shared by both audio routes via this helper (see docstring).
+    transcript = redact_content(content_result.content)
     effective_title = title or content_result.metadata.get("title", "") or source
     metadata = {
         "title": effective_title,

@@ -25,6 +25,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Set, TypeVar
 
 from autobot_shared.datetime_utils import datetime_now
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import redact_content
 from autobot_shared.time_utils import parse_utc_iso
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -603,7 +604,13 @@ class AbstractConnector(ABC):
         )
         stamp_if_document(ingest_metadata)  # #16693: unclaimed connector content is a document
 
-        text = content.content
+        # #16985: single chokepoint for every connector's sync-triggered ingestion --
+        # _process_change calls self.fetch_content() polymorphically for whichever
+        # subclass is running, so redacting here covers all of them (gdrive/onedrive
+        # included, where it is a safe no-op on top of their own already-redacted
+        # docx/pdf branches) without a per-connector call. Connectors that bypass this
+        # sync path via their own direct API endpoint (audio) redact at that call site.
+        text = redact_content(content.content)
         if not text.strip():
             self.logger.debug("Skipping empty content for source %s", content.source_id)
             return
