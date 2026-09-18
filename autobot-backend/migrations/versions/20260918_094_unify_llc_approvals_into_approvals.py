@@ -70,8 +70,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    bind = op.get_bind()
-    bind.execute(sa.text("DELETE FROM approvals WHERE id IN (SELECT id FROM llc_approvals)"))
-    op.drop_index("ix_approvals_company_status", table_name="approvals")
-    op.drop_index("ix_approvals_company_id", table_name="approvals")
-    op.drop_column("approvals", "company_id")
+    """Refused (#17043 review): no cutover marker exists to tell a copied row
+    apart from one that has since been decided, commented on, or task-linked
+    through the unified table. A blind ``DELETE ... WHERE id IN (SELECT id
+    FROM llc_approvals)`` would cascade away any such newer data along with
+    the row itself -- the no-data-loss rule means this must not run
+    unattended. Reversing this migration is a manual, reviewed operation:
+    confirm no unified row has changed since the copy, then hand-run the
+    DELETE and the three ``op.drop_*`` calls this function used to make.
+    """
+    raise NotImplementedError(
+        "20260918_094 downgrade is refused: undoing it could silently drop comments, task "
+        "links or decisions recorded on a migrated row since the copy ran. Reverse by hand "
+        "after confirming no unified row has changed since cutover -- see this function's docstring."
+    )

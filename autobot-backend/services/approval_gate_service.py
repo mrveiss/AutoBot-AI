@@ -216,7 +216,14 @@ class ApprovalGateService:
         approval_id: uuid.UUID,
         task_id: str,
     ) -> bool:
-        """Remove a task link from an approval."""
+        """Remove a task link from an approval.
+
+        Goes through ``_get_or_raise`` first, like ``link_task`` (#17043
+        review): the unscoped chokepoint's whole point is that a
+        company-scoped row 404s before any mutation, and this was the one
+        method that queried ``TaskApprovalLink`` directly instead.
+        """
+        await self._get_or_raise(approval_id)
         stmt = select(TaskApprovalLink).where(
             TaskApprovalLink.approval_id == approval_id,
             TaskApprovalLink.task_id == task_id,

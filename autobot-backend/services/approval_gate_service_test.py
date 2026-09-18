@@ -127,3 +127,22 @@ async def test_approve_on_a_company_scoped_id_is_treated_as_not_found() -> None:
         await svc.approve(uuid.uuid4(), "alice", author_type="human")
 
     assert _statement_excludes_company_scoped_rows(session)
+
+
+@pytest.mark.asyncio
+async def test_unlink_task_on_a_company_scoped_id_is_treated_as_not_found() -> None:
+    """unlink_task must go through _get_or_raise like every sibling mutation (#17043 review).
+
+    Before this fix it queried TaskApprovalLink directly, so the general,
+    tenant-blind API could delete an LLC approval's task link.
+    """
+    session = _make_session(scalar_result=None)  # excluded by the WHERE, so "not found"
+    svc = ApprovalGateService(session)
+
+    with pytest.raises(ValueError, match="not found"):
+        await svc.unlink_task(uuid.uuid4(), "task-1")
+
+    assert _statement_excludes_company_scoped_rows(session)
+    # _get_or_raise's own select must be the only one issued -- unlink_task
+    # never reaches its TaskApprovalLink query once the guard refuses.
+    session.execute.assert_awaited_once()

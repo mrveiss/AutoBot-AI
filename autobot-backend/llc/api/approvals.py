@@ -144,7 +144,15 @@ async def decide_approval(
 
     # IDOR: derive the owning company from the row and tenant-check it before
     # allowing a decision (GH#12148).
-    await load_authorized(session, Approval, aid, ctx, not_found_detail="Approval not found")
+    authorized = await load_authorized(session, Approval, aid, ctx, not_found_detail="Approval not found")
+    # load_authorized's platform-admin exemption skips the company_id
+    # comparison outright, so an admin could otherwise reach a NULL-company_id
+    # (general, non-LLC) row through this LLC-scoped route (#17043 review) --
+    # mutating it through LLC decision semantics and logging to
+    # company:None:decisions. Refused here, same as any other cross-scope
+    # row: 404, existence hidden.
+    if authorized.company_id is None:
+        raise HTTPException(status_code=404, detail="Approval not found")
 
     try:
         async with session.begin():

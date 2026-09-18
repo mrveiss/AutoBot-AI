@@ -417,7 +417,13 @@ async def unlink_task(
 ):
     """Unlink a task from an approval gate (#1402)."""
     svc = ApprovalGateService(session)
-    removed = await svc.unlink_task(approval_id, task_id)
+    try:
+        removed = await svc.unlink_task(approval_id, task_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Internal server error",
+        )
     if not removed:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
