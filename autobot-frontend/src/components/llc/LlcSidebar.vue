@@ -91,6 +91,13 @@ const links = computed<SidebarLink[]>(() => {
     { labelKey: 'nav.llcCosts', to: { path: `/llc/companies/${id}/costs` } },
     { labelKey: 'nav.llcHeartbeat', to: { path: `/llc/companies/${id}/heartbeat` } },
     { labelKey: 'nav.llcRoutines', to: { path: `/llc/companies/${id}/routines` } },
+    // #16901: the workflow builder had no entry at all and was reachable only by
+    // typing the URL. Linked at `/automation/overview` rather than `/automation`,
+    // which only redirects there — `isActive` compares the resolved path exactly,
+    // so linking the redirect would leave the item never highlighted.
+    // Reuses `nav.automation`, already translated in all 11 locales, rather than
+    // adding a twelfth spelling of the same word.
+    { labelKey: 'nav.automation', to: { path: `/llc/companies/${id}/automation/overview` } },
     { labelKey: 'nav.llcCeoChat', to: { path: `/llc/companies/${id}/ceo-chat` } },
     { labelKey: 'nav.llcActivity', to: { path: `/llc/companies/${id}/activity` } },
     { labelKey: 'nav.llcPortability', to: { path: `/llc/companies/${id}/portability` } },
