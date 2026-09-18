@@ -17,7 +17,7 @@ the routes here are test routes, as the owner ruled for #16040 AC4 and AC6 on
 import secrets
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -31,11 +31,14 @@ from _real_auth_import import load_real_auth  # noqa: E402
 
 from autobot_shared.auth.key_scopes import scope_granted  # noqa: E402
 from autobot_shared.auth.permissions import Permission  # noqa: E402
+from services.api_key_authority import API_KEY_SCOPES_ENFORCED_FROM  # noqa: E402
 
 _auth = load_real_auth(secrets.token_hex(32))
 _KEY = "ak_test_plaintext"
-#: After the enforcement cutoff, so the key is held to its scopes (no AC5 grace).
-_AFTER_ENFORCEMENT = datetime(2026, 9, 12, tzinfo=timezone.utc)
+#: A day after the configured enforcement cutoff, so the key is held to its scopes (no AC5 grace).
+_AFTER_ENFORCEMENT = datetime.fromisoformat(API_KEY_SCOPES_ENFORCED_FROM).replace(tzinfo=timezone.utc) + timedelta(
+    days=1
+)
 
 
 def _app() -> fastapi.FastAPI:

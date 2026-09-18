@@ -158,7 +158,9 @@ def _slm_modules() -> list[Path]:
 def _references(tree: ast.Module, name: str) -> list[str | None]:
     """The enclosing top-level function of every use of *name*, or None at module or class level.
 
-    A use is a name, an attribute, or an import of it: an alias would otherwise hide one.
+    A use is a name, an attribute, an import of it (an alias would otherwise hide one),
+    or a string that is exactly the name (``getattr(auth, "get_api_key_user")``). A
+    docstring that mentions the name is not a use: it only contains it.
     """
     found: list[str | None] = []
 
@@ -170,6 +172,8 @@ def _references(tree: ast.Module, name: str) -> list[str | None]:
             ):
                 found.append(owner)
             if isinstance(child, ast.ImportFrom) and any(alias.name == name for alias in child.names):
+                found.append(owner)
+            if isinstance(child, ast.Constant) and child.value == name:
                 found.append(owner)
             visit(child, child.name if is_function and owner is None else owner)
 

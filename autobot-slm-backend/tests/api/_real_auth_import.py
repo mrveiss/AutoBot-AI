@@ -47,7 +47,8 @@ def _exec_by_path(name: str) -> types.ModuleType:
 
 
 def load_real_auth(secret_key: str, expire_minutes: int = 30) -> types.ModuleType:
-    """Return the real ``services.auth`` module, leaving ``sys.modules`` as it found it."""
+    """Return the real ``services.auth`` module, leaving ``sys.modules`` and ``sys.path`` as it found them."""
+    path_before = list(sys.path)
     for root in (_BACKEND, _BACKEND.parent):
         if str(root) not in sys.path:
             sys.path.insert(0, str(root))
@@ -62,6 +63,7 @@ def load_real_auth(secret_key: str, expire_minutes: int = 30) -> types.ModuleTyp
             sys.modules[name] = MagicMock()
         return [_exec_by_path(name) for name in _REAL][-1]
     finally:
+        sys.path[:] = path_before
         for name in managed:
             if name in before:
                 sys.modules[name] = before[name]
