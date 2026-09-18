@@ -399,9 +399,9 @@ def test_positive_control_test_before_reload_passes() -> None:
         {"name": "test nginx config", "command": "nginx -t"},
         {"name": "restart nginx", "systemd": {"name": "nginx", "state": "reloaded"}},
     ]
-    assert _handler_order_gap(handlers) is None, (
-        "positive control: test defined BEFORE reload must pass -- the checker is rejecting everything"
-    )
+    assert (
+        _handler_order_gap(handlers) is None
+    ), "positive control: test defined BEFORE reload must pass -- the checker is rejecting everything"
 
 
 def test_role_with_only_a_reload_handler_is_not_flagged() -> None:
@@ -410,9 +410,9 @@ def test_role_with_only_a_reload_handler_is_not_flagged() -> None:
     its handlers file has a reload handler with nothing to order it against,
     and must not be flagged."""
     handlers = [{"name": "reload nginx backend", "ansible.builtin.systemd": {"name": "nginx", "state": "reloaded"}}]
-    assert _handler_order_gap(handlers) is None, (
-        "a role with only a reload handler (no test handler) has nothing to check and must not be flagged"
-    )
+    assert (
+        _handler_order_gap(handlers) is None
+    ), "a role with only a reload handler (no test handler) has nothing to check and must not be flagged"
 
 
 # --------------------------------------------------------------------------
@@ -562,9 +562,9 @@ def test_positive_control_play_level_reload_safe_via_handler_order() -> None:
             {"name": "reload nginx", "systemd": {"name": "nginx", "state": "reloaded"}},
         ],
     }
-    assert _play_reload_gap(play) is None, (
-        "positive control: a play-level handlers: list ordered test-before-reload must pass"
-    )
+    assert (
+        _play_reload_gap(play) is None
+    ), "positive control: a play-level handlers: list ordered test-before-reload must pass"
 
 
 def test_positive_control_play_level_reload_safe_via_ordinary_task() -> None:
