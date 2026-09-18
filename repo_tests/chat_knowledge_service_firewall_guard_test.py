@@ -30,6 +30,18 @@ Hand-enumerated rather than tree-scanned for the same reason as
 repo_tests/ingestion_redaction_guard_test.py: "returns prompt context" is not
 a discoverable syntactic pattern, so repo_tests._reach's tree-scanning-guard
 floor mechanism doesn't apply here either.
+
+#16930 review split: the three entry points' repeated inspect-then-quarantine
+sequence moved into rag_firewall.inspect_and_quarantine (services/knowledge/
+rag_firewall.py), to bring service.py back under its file-size ceiling. A
+literal ``inspect_rag_context(`` no longer appears in any entry point's own
+source -- only in the helper's. Per CLAUDE_RULES rule 7 ("grep the behavior,
+not the symbol, on extraction PRs"), _calls_inspect_rag_context now also
+accepts a call to inspect_and_quarantine as evidence, but ONLY because
+test_inspect_and_quarantine_itself_calls_the_firewall below pins the other
+end of that indirection: if the helper ever stopped calling
+inspect_rag_context, that test would fail even though every entry point
+still shows a green ``inspect_and_quarantine(`` match.
 """
 
 from __future__ import annotations
@@ -44,14 +56,20 @@ _ENTRY_POINTS = [
     "retrieve_combined_knowledge",
 ]
 
+# A call to either marker satisfies the guard -- see the module docstring for
+# why inspect_and_quarantine is trustworthy evidence here, and not just a
+# same-shaped name.
+_FIREWALL_CALL_MARKERS = ("inspect_rag_context(", "inspect_and_quarantine(")
+
 
 def _calls_inspect_rag_context(source: str) -> bool:
-    """True if *source* contains an actual call to inspect_rag_context(...).
+    """True if *source* calls the firewall, directly or via the extracted
+    inspect_and_quarantine helper (see _FIREWALL_CALL_MARKERS).
 
     Checked against the method's own source, not the module's imports, so a
     method that imports the firewall but never calls it still fails.
     """
-    return "inspect_rag_context(" in source
+    return any(marker in source for marker in _FIREWALL_CALL_MARKERS)
 
 
 @pytest.mark.parametrize("method_name", _ENTRY_POINTS)
@@ -64,6 +82,24 @@ def test_rag_entry_point_passes_through_the_content_firewall(method_name: str) -
         f"ChatKnowledgeService.{method_name} returns RAG context to a caller but its "
         "source has no inspect_rag_context(...) call -- unfirewalled content would "
         "reach the chat prompt unfiltered (#16771 AC5)."
+    )
+
+
+def test_inspect_and_quarantine_itself_calls_the_firewall() -> None:
+    """Pins the other end of the indirection the three tests above rely on.
+
+    If rag_firewall.inspect_and_quarantine stopped calling inspect_rag_context,
+    every entry point above would still show a green ``inspect_and_quarantine(``
+    match while firewalling nothing -- the exact "did not look" failure mode
+    MEASUREMENT_DISCIPLINE.md warns about, just moved one hop away.
+    """
+    from services.knowledge.rag_firewall import inspect_and_quarantine
+
+    source = inspect.getsource(inspect_and_quarantine)
+    assert "inspect_rag_context(" in source, (
+        "rag_firewall.inspect_and_quarantine no longer calls inspect_rag_context -- "
+        "every RAG entry point that relies on it (#16771 AC5) would silently stop "
+        "being firewalled."
     )
 
 
