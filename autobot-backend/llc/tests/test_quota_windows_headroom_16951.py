@@ -9,11 +9,26 @@ Before this, the route's own docstring said actual headroom values were
 window-structure map — even though ``QuotaHeadroomStore`` (#15026) already
 records real provider-reported readings off every LLM call. Nothing read them.
 
-Two behaviours matter, and each gets its own test: a provider with a real
-recorded reading reports it, and a provider with none reports an empty
-``headroom`` list and an honest note — never a fabricated zero, which is
-exactly the distinction ``QuotaHeadroomStore.get``'s own docstring draws
-between "no signal received yet" and "confirmed zero remaining".
+A first version of this fix filtered the shown readings to the provider's
+static ``_PROVIDER_QUOTA_STRUCTURE`` window names (``rpm``, ``tpm``,
+``5h_output_tokens``, ...) — which silently dropped exactly the data the
+store's only production writer actually records: every 429 is persisted
+under the generic window ``"requests"`` with ``remaining=0``
+(``rate_limit_backoff.py``), a name that appears in none of those lists.
+The mirror image of a fabricated zero: real data discarded because it did
+not match an expected shape. ``test_a_recorded_reading_is_returned_for_its_window``
+uses exactly that shape (``"requests"``, ``remaining=0``) as its fixture,
+not a name that happens to already be on the static list, so a regression
+back to filtering by ``windows`` fails it again.
+
+Three behaviours matter, and each gets its own test: a provider with a real
+recorded reading reports it even when its window name is outside the static
+vocabulary; a ``remaining=0`` reading is real data and stays visible, never
+collapsed into "no data" by a truthy check; and a provider with no reading at
+all reports an empty ``headroom`` list and an honest note — never a
+fabricated zero, which is exactly the distinction
+``QuotaHeadroomStore.get``'s own docstring draws between "no signal received
+yet" and "confirmed zero remaining".
 """
 
 import time
@@ -49,18 +64,28 @@ def _client(app: FastAPI) -> httpx.AsyncClient:
 
 @pytest.mark.asyncio
 async def test_a_recorded_reading_is_returned_for_its_window():
+    """Uses the REAL writer's exact shape — window="requests", remaining=0.
+
+    Not "5h_output_tokens" (a name that happens to already be on anthropic's
+    static window list): rate_limit_backoff.py's 429 handler is the only
+    production writer this store has, and it always records under the
+    generic window "requests", which is on no provider's static list. A
+    reader that filters to that static list passes against a friendlier
+    fixture and fails against what actually gets written — this fixture is
+    what actually gets written.
+    """
     tier_svc = MagicMock()
     tier_svc.get_tier_map.return_value = {"anthropic": {"fast": "claude-haiku"}}
 
     reading = QuotaHeadroomEntry(
         provider="anthropic",
-        window="5h_output_tokens",
+        window="requests",
         account_id="default",
-        limit=1_000_000.0,
-        remaining=250_000.0,
+        limit=None,
+        remaining=0.0,
         resets_at=time.time() + 3600,
         observed_at=time.time(),
-        source="anthropic-ratelimit-output-tokens-remaining",
+        source="rate_limit_backoff:429",
     )
     store = MagicMock()
     store.all_entries = AsyncMock(return_value=[reading])
@@ -75,17 +100,27 @@ async def test_a_recorded_reading_is_returned_for_its_window():
     assert resp.status_code == 200
     body = resp.json()
     entry = next(w for w in body if w["provider"] == "anthropic")
+    # "requests" is on none of anthropic's static windows (5h/7d output
+    # tokens) — shown anyway, because it was actually recorded.
+    assert "requests" not in entry["windows"]
     assert entry["headroom"] == [
         {
-            "window": "5h_output_tokens",
-            "limit": 1_000_000.0,
-            "remaining": 250_000.0,
-            "utilization": pytest.approx(0.75),
+            "window": "requests",
+            "limit": None,
+            "remaining": 0.0,
+            "utilization": None,
             "resets_at": reading.resets_at,
             "observed_at": reading.observed_at,
-            "source": "anthropic-ratelimit-output-tokens-remaining",
+            "source": "rate_limit_backoff:429",
         }
     ]
+    # remaining=0 is real, observed data — distinct from no reading at all
+    # (test_no_reading_reports_empty_headroom_not_a_fabricated_zero below).
+    # A falsy-value check (`if entry.remaining:`) would have collapsed this
+    # into the empty case; asserting the list is non-empty pins that it does
+    # not.
+    assert len(entry["headroom"]) == 1
+    assert entry["headroom"][0]["remaining"] == 0.0
     assert "Live headroom" in entry["note"]
     store.all_entries.assert_awaited_with(provider="anthropic")
 

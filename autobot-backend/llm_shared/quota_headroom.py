@@ -25,9 +25,17 @@ Key shape: ``autobot:llm:headroom:{provider}:{account_id}:{window}`` →
 
 ``account_id`` defaults to ``"default"`` — the current single-credential
 subject — so #15029's multi-account pool can extend this without a schema
-change. ``window`` is a free-form provider-defined string (``rpm``, ``tpm``,
-``5h_output_tokens``, ``7d_output_tokens``, ``daily_tokens``) matching the
-vocabulary already in ``llc/api/costs.py``'s ``_PROVIDER_QUOTA_STRUCTURE``.
+change. ``window`` is a free-form string. Most writers should use the
+provider-specific vocabulary already in ``llc/api/costs.py``'s
+``_PROVIDER_QUOTA_STRUCTURE`` (``rpm``, ``tpm``, ``5h_output_tokens``,
+``7d_output_tokens``, ``daily_tokens``) — but that vocabulary is not a
+closed set this store enforces, and one legitimate writer cannot use it: a
+generic 429 handler (``rate_limit_backoff.py``) sees only a
+``retry-after``/reset marker, never which specific per-provider window
+tripped, and records it under the generic window ``"requests"`` instead
+(#16951 caught a reader that had assumed the vocabulary was closed and
+silently dropped this data as a result — read every entry ``all_entries``
+returns, never only the ones whose ``window`` matches a fixed list).
 
 A provider/window with no recorded entry means "no headroom signal received
 yet" — distinguishable from "zero remaining", which is a real entry with

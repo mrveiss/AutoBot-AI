@@ -43,7 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from llm_shared.quota_headroom import get_quota_headroom_store
+from llm_shared.quota_headroom import QuotaHeadroomEntry, get_quota_headroom_store
 from llc.deps import assert_company_access
 from llc.models.budget import LLCAgentBudget
 from llc.services.model_tiers import get_model_tier_service
@@ -167,11 +167,17 @@ class QuotaWindow(BaseModel):
     provider: str
     windows: List[str]
     description: str
-    # #16951: real observed readings, one per window with an entry recorded.
-    # A window absent from this list means "no signal received yet" — never
-    # fabricated as zero, matching QuotaHeadroomStore's own contract.
+    # #16951: real observed readings, one per RECORDED entry — not filtered to
+    # the static `windows` list above. `windows` documents the vocabulary a
+    # provider's own dashboard uses (rpm/tpm/etc.); a real writer is not
+    # bound to it, and the one writer this store actually has today
+    # (rate_limit_backoff.py's 429 handler) records under "requests" instead
+    # (see quota_headroom.py's docstring). Filtering headroom to `windows`
+    # silently dropped exactly that data — the same defect class as a
+    # fabricated zero, from the other side: real data that does not match an
+    # expected shape must still be shown, not discarded.
     headroom: List[QuotaHeadroomReading] = Field(default_factory=list)
-    note: str = "Headroom values require provider API key configuration to populate."
+    note: str
 
 
 # ---------------------------------------------------------------------------
@@ -253,6 +259,43 @@ async def costs_by_agent_model(
     ]
 
 
+def _build_quota_window(provider: str, entries: List[QuotaHeadroomEntry]) -> QuotaWindow:
+    """Assemble one provider's response from its static structure and real entries.
+
+    Every entry ``all_entries`` returned is shown — never filtered to the
+    static ``windows`` vocabulary below, which documents what a provider's own
+    dashboard calls its windows and is not a constraint on what a writer may
+    record (#16951). ``windows`` and ``headroom`` can therefore name different
+    window strings for the same provider; that is a true statement about two
+    different things (the vocabulary a provider defines, and what has actually
+    been observed), not a bug to reconcile.
+    """
+    structure = _PROVIDER_QUOTA_STRUCTURE.get(provider, {})
+    headroom = [
+        QuotaHeadroomReading(
+            window=entry.window,
+            limit=entry.limit,
+            remaining=entry.remaining,
+            utilization=entry.utilization,
+            resets_at=entry.resets_at,
+            observed_at=entry.observed_at,
+            source=entry.source,
+        )
+        for entry in entries
+    ]
+    return QuotaWindow(
+        provider=provider,
+        windows=structure.get("windows", ["rpm"]),
+        description=structure.get("description", f"Rate limit windows for provider {provider!r}"),
+        headroom=headroom,
+        note=(
+            "Live headroom below, as last observed from the provider."
+            if headroom
+            else "No headroom observed yet for this provider — no call has recorded a rate-limit reading."
+        ),
+    )
+
+
 @router.get("/quota-windows", response_model=List[QuotaWindow])
 async def quota_windows(
     company_id: Optional[str] = Query(None, description="Filter by company UUID"),
@@ -264,8 +307,8 @@ async def quota_windows(
     Each entry describes the rate-limit windows applicable to the provider
     (e.g. RPM + TPM for OpenAI; 5-hour + 7-day output token windows for
     Anthropic), plus whatever ``QuotaHeadroomStore`` has actually observed for
-    each — the provider's own rate-limit response headers and 429s, recorded
-    by ``llm_shared/rate_limit_backoff.py`` on every LLM call. A window with no
+    it — the provider's own rate-limit response headers and 429s, recorded by
+    ``llm_shared/rate_limit_backoff.py`` on every LLM call. A window with no
     reading yet reports none rather than a fabricated zero: "never observed"
     and "confirmed empty" are different facts.
     """
@@ -286,36 +329,7 @@ async def quota_windows(
     for p in sorted(all_providers):
         if p not in _PROVIDER_QUOTA_STRUCTURE and p not in tier_map:
             continue
-        windows = _PROVIDER_QUOTA_STRUCTURE.get(p, {}).get("windows", ["rpm"])
-        entries_by_window = {e.window: e for e in await store.all_entries(provider=p)}
-        headroom = [
-            QuotaHeadroomReading(
-                window=w,
-                limit=entries_by_window[w].limit,
-                remaining=entries_by_window[w].remaining,
-                utilization=entries_by_window[w].utilization,
-                resets_at=entries_by_window[w].resets_at,
-                observed_at=entries_by_window[w].observed_at,
-                source=entries_by_window[w].source,
-            )
-            for w in windows
-            if w in entries_by_window
-        ]
-        results.append(
-            QuotaWindow(
-                provider=p,
-                windows=windows,
-                description=_PROVIDER_QUOTA_STRUCTURE.get(p, {}).get(
-                    "description", f"Rate limit windows for provider {p!r}"
-                ),
-                headroom=headroom,
-                note=(
-                    "Live headroom below, as last observed from the provider."
-                    if headroom
-                    else "No headroom observed yet for this provider — no call has recorded a rate-limit reading."
-                ),
-            )
-        )
+        results.append(_build_quota_window(p, await store.all_entries(provider=p)))
     return results
 
 
