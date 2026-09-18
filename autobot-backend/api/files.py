@@ -124,7 +124,7 @@ ALLOWED_EXTENSIONS = {
     ".log",
     ".cfg",
     ".ini",
-    ".con",
+    ".conf",
     # Code files
     ".py",
     ".js",
