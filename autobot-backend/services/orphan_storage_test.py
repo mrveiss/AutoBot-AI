@@ -43,11 +43,12 @@ class TestListAllCandidates:
             orphan_storage.OrphanDetector(provider="b", list_candidates=_list_b, delete=None)
         )
 
-        candidates = await orphan_storage.list_all_candidates()
+        listing = await orphan_storage.list_all_candidates()
 
-        assert {(c.provider, c.id) for c in candidates} == {("a", "1"), ("b", "1"), ("b", "2")}
+        assert {(c.provider, c.id) for c in listing.candidates} == {("a", "1"), ("b", "1"), ("b", "2")}
+        assert {s.provider: s.available for s in listing.statuses} == {"a": True, "b": True}
 
-    async def test_one_detectors_failure_does_not_hide_the_others(self):
+    async def test_one_detectors_failure_does_not_hide_the_others_candidates(self):
         async def _boom():
             raise RuntimeError("detector unavailable")
 
@@ -61,9 +62,26 @@ class TestListAllCandidates:
             orphan_storage.OrphanDetector(provider="ok", list_candidates=_list_ok, delete=None)
         )
 
-        candidates = await orphan_storage.list_all_candidates()
+        listing = await orphan_storage.list_all_candidates()
 
-        assert [c.provider for c in candidates] == ["ok"]
+        assert [c.provider for c in listing.candidates] == ["ok"]
+
+    async def test_a_failed_detector_is_reported_unavailable_not_silently_empty(self):
+        """MEASUREMENT_DISCIPLINE: an outage must read as "could not check", never "found nothing"."""
+
+        async def _boom():
+            raise RuntimeError("registry unreachable")
+
+        orphan_storage.register_detector(
+            orphan_storage.OrphanDetector(provider="broken", list_candidates=_boom, delete=None)
+        )
+
+        listing = await orphan_storage.list_all_candidates()
+
+        assert listing.candidates == []
+        assert listing.statuses == [
+            orphan_storage.ProviderStatus(provider="broken", available=False, error="registry unreachable")
+        ]
 
 
 class TestDeleteCandidate:
@@ -88,6 +106,19 @@ class TestDeleteCandidate:
 
         assert result.deleted is True
         assert calls == ["candidate-9"]
+
+    async def test_an_unexpected_exception_from_the_detector_is_never_deleted_true(self):
+        async def _boom(_candidate_id):
+            raise RuntimeError("unexpected failure")
+
+        orphan_storage.register_detector(
+            orphan_storage.OrphanDetector(provider="p", list_candidates=None, delete=_boom)
+        )
+
+        result = await orphan_storage.delete_candidate("p", "candidate-1")
+
+        assert result.deleted is False
+        assert "unexpected failure" in result.reason
 
 
 def test_grace_period_is_clamped_to_at_least_one_hour(monkeypatch):

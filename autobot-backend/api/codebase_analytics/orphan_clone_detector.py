@@ -6,8 +6,11 @@
 
 A directory under ``CODE_SOURCES_BASE`` with no matching ``CodeSource``
 record -- the #17036 orphan (``f5673506...``, a 290 MB clone from a failed
-delete) is exactly this. Registers into ``services.orphan_storage`` at
-import time, the same side-effect pattern ``register_env_var`` uses.
+delete) is exactly this. ``register()`` adds it to ``services.orphan_storage``
+-- called once by whatever imports this module for real use
+(``api/admin_orphan_storage.py``), never as an import-time side effect, so a
+test that imports this module for its functions doesn't also mutate the
+shared registry.
 
 Not the same case as ``source_service.delete_source_and_cleanup``: that
 function deletes a *known* source's clone alongside its record. An orphan
@@ -26,7 +29,7 @@ from pathlib import Path
 from autobot_shared.logging_manager import get_logger
 
 from .source_paths import CODE_SOURCES_BASE
-from .source_storage import get_source, list_sources
+from .source_storage import RegistryUnavailable, registered_source_ids
 
 logger = get_logger(__name__)
 
@@ -47,30 +50,17 @@ def _resolved_clone_dir(candidate_id: str) -> Path | None:
     return clone_dir
 
 
-async def _registry_reachable() -> bool:
-    """False when the source registry (Redis) cannot be reached.
-
-    ``list_sources()``/``get_source()`` both return an empty/None result on
-    a Redis outage -- indistinguishable, from their return value alone, from
-    "there genuinely are no sources" or "this one genuinely has no record".
-    Both callers below must tell the two apart explicitly: on an outage,
-    every clone on disk would otherwise look orphaned at once, and a human
-    could be asked to approve deleting all of them.
-    """
-    from autobot_shared.redis_client import get_async_redis_client
-
-    return await get_async_redis_client(database="analytics") is not None
-
-
 async def _list_candidates():
     from services.orphan_storage import OrphanCandidate, orphan_grace_period_hours
 
     if not CODE_SOURCES_BASE.is_dir():
         return []
-    if not await _registry_reachable():
-        logger.error("Orphan clone detector: source registry unreachable -- refusing to list any candidate")
-        return []
-    known_ids = {source.id for source in await list_sources()}
+    # Raises RegistryUnavailable on an outage -- propagated to
+    # list_all_candidates(), which records this provider as unavailable
+    # rather than reading the outage as "zero known ids" (#17039 review).
+    # Membership-only (no per-id fetch), so one record's own fetch failing
+    # can never drop its id and falsely orphan its directory.
+    known_ids = await registered_source_ids()
     grace_seconds = orphan_grace_period_hours() * 3600
     now = time.time()
     candidates = []
@@ -101,12 +91,14 @@ async def _delete(candidate_id: str):
         return DeleteResult(deleted=False, reason="invalid candidate id")
     if not clone_dir.is_dir():
         return DeleteResult(deleted=False, reason="candidate no longer exists")
-    if not await _registry_reachable():
-        return DeleteResult(deleted=False, reason="source registry unreachable -- refusing rather than guessing")
     # Re-check at delete time (#17039 AC): a record may have reappeared, or
     # the directory may no longer be past the grace period. Never trust a
     # stale list_candidates() result for something this destructive.
-    if await get_source(candidate_id) is not None:
+    try:
+        still_orphaned = candidate_id not in await registered_source_ids()
+    except RegistryUnavailable as exc:
+        return DeleteResult(deleted=False, reason=f"source registry unreachable: {exc}")
+    if not still_orphaned:
         return DeleteResult(deleted=False, reason="a source record now references this directory")
     grace_seconds = orphan_grace_period_hours() * 3600
     age_seconds = time.time() - clone_dir.stat().st_mtime

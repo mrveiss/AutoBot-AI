@@ -9,7 +9,7 @@ import time
 import pytest
 
 from api.codebase_analytics import orphan_clone_detector as detector
-from api.codebase_analytics.source_models import CodeSource
+from api.codebase_analytics.source_storage import RegistryUnavailable
 
 pytestmark = pytest.mark.asyncio
 
@@ -21,16 +21,18 @@ def _age_dir(path, hours_old: float) -> None:
     os.utime(path, (stamp, stamp))
 
 
+def _known_ids(*ids):
+    async def _registered(_ids=frozenset(ids)):
+        return set(_ids)
+
+    return _registered
+
+
 @pytest.fixture(autouse=True)
 def _registry_reachable_by_default(monkeypatch):
-    """Every test but TestFailsClosedOnARegistryOutage assumes a reachable
-    registry -- this repo's own test env has no real Redis, so without this
-    every test would exercise the outage path instead of the one it names."""
-
-    async def _reachable():
-        return True
-
-    monkeypatch.setattr(detector, "_registry_reachable", _reachable)
+    """Every test but TestFailsClosedOnARegistryOutage assumes a reachable,
+    empty-by-default registry -- override with `_known_ids(...)` per test."""
+    monkeypatch.setattr(detector, "registered_source_ids", _known_ids())
 
 
 class TestListCandidates:
@@ -40,11 +42,6 @@ class TestListCandidates:
         orphan_dir.mkdir()
         (orphan_dir / "file.txt").write_bytes(b"x" * 100)
         _age_dir(orphan_dir, hours_old=48)
-
-        async def _no_sources():
-            return []
-
-        monkeypatch.setattr(detector, "list_sources", _no_sources)
         monkeypatch.setenv("AUTOBOT_ORPHAN_GRACE_HOURS", "24")
 
         candidates = await detector._list_candidates()
@@ -60,11 +57,7 @@ class TestListCandidates:
         known_dir = tmp_path / "known-id"
         known_dir.mkdir()
         _age_dir(known_dir, hours_old=48)
-
-        async def _one_source():
-            return [CodeSource(id="known-id", name="x")]
-
-        monkeypatch.setattr(detector, "list_sources", _one_source)
+        monkeypatch.setattr(detector, "registered_source_ids", _known_ids("known-id"))
 
         candidates = await detector._list_candidates()
 
@@ -75,11 +68,6 @@ class TestListCandidates:
         fresh_dir = tmp_path / "fresh-id"
         fresh_dir.mkdir()
         _age_dir(fresh_dir, hours_old=1)
-
-        async def _no_sources():
-            return []
-
-        monkeypatch.setattr(detector, "list_sources", _no_sources)
         monkeypatch.setenv("AUTOBOT_ORPHAN_GRACE_HOURS", "24")
 
         candidates = await detector._list_candidates()
@@ -88,7 +76,7 @@ class TestListCandidates:
 
 
 class TestFailsClosedOnARegistryOutage:
-    """#17039 review: a Redis outage must never make every clone look orphaned."""
+    """#17039 review: an unreachable registry must never make every clone look orphaned."""
 
     async def test_list_candidates_returns_nothing_when_the_registry_is_unreachable(self, monkeypatch, tmp_path):
         monkeypatch.setattr(detector, "CODE_SOURCES_BASE", tmp_path)
@@ -96,14 +84,13 @@ class TestFailsClosedOnARegistryOutage:
         orphan_dir.mkdir()
         _age_dir(orphan_dir, hours_old=48)
 
-        async def _unreachable():
-            return False
+        async def _unavailable():
+            raise RegistryUnavailable("Redis is down")
 
-        monkeypatch.setattr(detector, "_registry_reachable", _unreachable)
+        monkeypatch.setattr(detector, "registered_source_ids", _unavailable)
 
-        candidates = await detector._list_candidates()
-
-        assert candidates == [], 'an unreachable registry must never be read as "zero sources"'
+        with pytest.raises(RegistryUnavailable):
+            await detector._list_candidates()
 
     async def test_delete_refuses_when_the_registry_is_unreachable(self, monkeypatch, tmp_path):
         monkeypatch.setattr(detector, "CODE_SOURCES_BASE", tmp_path)
@@ -111,10 +98,10 @@ class TestFailsClosedOnARegistryOutage:
         clone_dir.mkdir()
         _age_dir(clone_dir, hours_old=48)
 
-        async def _unreachable():
-            return False
+        async def _unavailable():
+            raise RegistryUnavailable("Redis is down")
 
-        monkeypatch.setattr(detector, "_registry_reachable", _unreachable)
+        monkeypatch.setattr(detector, "registered_source_ids", _unavailable)
 
         result = await detector._delete("maybe-still-referenced")
 
@@ -128,11 +115,6 @@ class TestDelete:
         orphan_dir = tmp_path / "orphan-id"
         orphan_dir.mkdir()
         _age_dir(orphan_dir, hours_old=48)
-
-        async def _no_source(_cid):
-            return None
-
-        monkeypatch.setattr(detector, "get_source", _no_source)
         monkeypatch.setenv("AUTOBOT_ORPHAN_GRACE_HOURS", "24")
 
         result = await detector._delete("orphan-id")
@@ -146,11 +128,7 @@ class TestDelete:
         orphan_dir = tmp_path / "reclaimed-id"
         orphan_dir.mkdir()
         _age_dir(orphan_dir, hours_old=48)
-
-        async def _now_has_a_source(_cid):
-            return CodeSource(id="reclaimed-id", name="reclaimed")
-
-        monkeypatch.setattr(detector, "get_source", _now_has_a_source)
+        monkeypatch.setattr(detector, "registered_source_ids", _known_ids("reclaimed-id"))
 
         result = await detector._delete("reclaimed-id")
 
@@ -162,11 +140,6 @@ class TestDelete:
         young_dir = tmp_path / "young-id"
         young_dir.mkdir()
         _age_dir(young_dir, hours_old=1)
-
-        async def _no_source(_cid):
-            return None
-
-        monkeypatch.setattr(detector, "get_source", _no_source)
         monkeypatch.setenv("AUTOBOT_ORPHAN_GRACE_HOURS", "24")
 
         result = await detector._delete("young-id")
@@ -180,11 +153,6 @@ class TestDelete:
         orphan_dir = tmp_path / "stubborn-id"
         orphan_dir.mkdir()
         _age_dir(orphan_dir, hours_old=48)
-
-        async def _no_source(_cid):
-            return None
-
-        monkeypatch.setattr(detector, "get_source", _no_source)
         monkeypatch.setenv("AUTOBOT_ORPHAN_GRACE_HOURS", "24")
 
         def _boom(_path):

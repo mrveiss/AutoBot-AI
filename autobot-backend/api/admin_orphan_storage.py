@@ -17,7 +17,11 @@ gain one that bypasses it afterwards either.
 from fastapi import APIRouter, Depends
 
 from api.codebase_analytics.orphan_clone_detector import register as register_code_source_clone_detector
-from api.schemas_orphan_storage import OrphanStorageCandidateResponse, OrphanStorageListResponse
+from api.schemas_orphan_storage import (
+    OrphanStorageCandidateResponse,
+    OrphanStorageListResponse,
+    OrphanStorageProviderStatusResponse,
+)
 from auth_rbac import require_role
 from services.orphan_storage import list_all_candidates
 
@@ -32,10 +36,15 @@ register_code_source_clone_detector()
 
 @router.get("/orphan-storage", response_model=OrphanStorageListResponse)
 async def list_orphan_storage() -> OrphanStorageListResponse:
-    """Every orphan-storage candidate, across every registered detector."""
-    candidates = await list_all_candidates()
+    """Every orphan-storage candidate, across every registered detector.
+
+    ``provider_statuses`` names each detector that failed to run -- an
+    outage must read as "could not check", never as "found nothing".
+    """
+    listing = await list_all_candidates()
     return OrphanStorageListResponse(
-        candidates=[OrphanStorageCandidateResponse(**vars(c)) for c in candidates],
-        total_count=len(candidates),
-        total_size_bytes=sum(c.size_bytes for c in candidates),
+        candidates=[OrphanStorageCandidateResponse(**vars(c)) for c in listing.candidates],
+        total_count=len(listing.candidates),
+        total_size_bytes=sum(c.size_bytes for c in listing.candidates),
+        provider_statuses=[OrphanStorageProviderStatusResponse(**vars(s)) for s in listing.statuses],
     )

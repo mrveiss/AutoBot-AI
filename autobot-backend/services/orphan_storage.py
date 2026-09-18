@@ -65,6 +65,29 @@ class DeleteResult:
 
 
 @dataclass(frozen=True)
+class ProviderStatus:
+    """Whether one detector's listing actually ran (#17039 review, #17050).
+
+    An outage that makes a detector raise must never be read as "this
+    provider has no orphans" -- ``list_all_candidates()`` reports it here
+    instead of swallowing it, so a caller can tell "nothing found" apart
+    from "could not look" (MEASUREMENT_DISCIPLINE).
+    """
+
+    provider: str
+    available: bool
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class OrphanListing:
+    """Every candidate found, plus which detectors actually ran."""
+
+    candidates: list[OrphanCandidate]
+    statuses: list[ProviderStatus]
+
+
+@dataclass(frozen=True)
 class OrphanDetector:
     """One data-owning module's read-only listing plus its own delete path."""
 
@@ -84,20 +107,38 @@ def registered_providers() -> list[str]:
     return sorted(_REGISTRY)
 
 
-async def list_all_candidates() -> list[OrphanCandidate]:
-    """Every registered detector's candidates. One detector's failure never hides the rest."""
+async def list_all_candidates() -> OrphanListing:
+    """Every registered detector's candidates, plus which ones actually ran.
+
+    One detector's failure never hides the rest, and never reads as that
+    detector reporting zero orphans either -- it shows up in ``statuses``
+    as unavailable, with why.
+    """
     candidates: list[OrphanCandidate] = []
+    statuses: list[ProviderStatus] = []
     for provider, detector in _REGISTRY.items():
         try:
             candidates.extend(await detector.list_candidates())
+            statuses.append(ProviderStatus(provider=provider, available=True))
         except Exception as exc:
             logger.error("Orphan detector %r failed to list candidates: %s", provider, exc)
-    return candidates
+            statuses.append(ProviderStatus(provider=provider, available=False, error=str(exc)))
+    return OrphanListing(candidates=candidates, statuses=statuses)
 
 
 async def delete_candidate(provider: str, candidate_id: str) -> DeleteResult:
-    """Delete through the owning detector. Refused for an unregistered provider."""
+    """Delete through the owning detector. Refused for an unregistered provider.
+
+    An unexpected exception from the detector's own delete (not just a
+    registry outage it already turns into a refusal) is caught here too --
+    the safe outcome either way is "nothing was deleted", never an
+    unhandled exception surfacing past this boundary.
+    """
     detector = _REGISTRY.get(provider)
     if detector is None:
         return DeleteResult(deleted=False, reason=f"unknown provider {provider!r}")
-    return await detector.delete(candidate_id)
+    try:
+        return await detector.delete(candidate_id)
+    except Exception as exc:
+        logger.error("Orphan detector %r failed to delete %r: %s", provider, candidate_id, exc)
+        return DeleteResult(deleted=False, reason=f"delete failed: {exc}")

@@ -73,3 +73,27 @@ def test_lists_candidates_from_every_registered_detector_with_totals(monkeypatch
     assert body["total_count"] == 2
     assert body["total_size_bytes"] == 150
     assert {c["provider"] for c in body["candidates"]} == {"a", "b"}
+    assert {s["provider"]: s["available"] for s in body["provider_statuses"]} == {"a": True, "b": True}
+
+
+def test_an_unavailable_detector_names_itself_rather_than_reading_as_success(monkeypatch):
+    """66's review: an outage response must not look like an empty success."""
+    monkeypatch.setattr(orphan_storage, "_REGISTRY", {})
+
+    async def _broken():
+        raise RuntimeError("registry unreachable")
+
+    orphan_storage.register_detector(
+        orphan_storage.OrphanDetector(provider="broken", list_candidates=_broken, delete=None)
+    )
+
+    auth = MagicMock()
+    auth.get_user_from_request.return_value = _ADMIN
+
+    with patch("auth_rbac.get_auth_middleware", return_value=auth):
+        response = _client().get("/api/admin/orphan-storage")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["candidates"] == []
+    assert body["provider_statuses"] == [{"provider": "broken", "available": False, "error": "registry unreachable"}]

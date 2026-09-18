@@ -384,7 +384,13 @@ async def delete_code_source(source_id: str):
     if source is None:
         raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
     ok = await delete_source_and_cleanup(source_id, source=source)
-    return JSONResponse({"success": ok, "source_id": source_id})
+    body = {"success": ok, "source_id": source_id}
+    if not ok:
+        # delete_source_and_cleanup() mutates `source` in place on a cleanup
+        # failure (#17036) -- surface it instead of a bare 200/false.
+        body["status"] = source.status.value
+        body["error_message"] = source.error_message
+    return JSONResponse(body)
 
 
 @router.post("/sources/{source_id}/sync")
@@ -458,11 +464,7 @@ async def share_code_source(source_id: str, request: SourceShareRequest):
 
 
 async def _get_last_indexed(source_id: str) -> str | None:
-    """Read last_indexed timestamp from ChromaDB stats metadata.
-
-    Helper for get_source_summary (#1458).
-    Issue #1716: Reads per-source stats doc first, falls back to global.
-    """
+    """Read last_indexed timestamp from ChromaDB stats metadata (#1458) -- per-source doc first, then global (#1716)."""
     try:
         from ..storage import get_code_collection_async
 
