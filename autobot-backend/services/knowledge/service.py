@@ -368,7 +368,6 @@ class ChatKnowledgeService:
         citations = []
 
         for i, fact in enumerate(facts, 1):
-            # Extract relevant metadata
             score = fact.rerank_score if fact.rerank_score is not None else fact.hybrid_score
 
             citation = {
@@ -385,7 +384,6 @@ class ChatKnowledgeService:
                 },
             }
 
-            # Add rerank_score if available
             if fact.rerank_score is not None:
                 citation["metadata"]["rerank_score"] = round(fact.rerank_score, 3)
 
@@ -432,7 +430,6 @@ class ChatKnowledgeService:
         """
         query_lower = query.lower()
 
-        # Check each category in priority order
         category_checks = [
             (self.AUTOBOT_KEYWORDS, "autobot_knowledge"),
             (self.SYSTEM_KEYWORDS, "system_knowledge"),
@@ -444,7 +441,6 @@ class ChatKnowledgeService:
             if result:
                 return result
 
-        # For KNOWLEDGE_QUERY intent, search all relevant categories
         if intent_result.intent == QueryKnowledgeIntent.KNOWLEDGE_QUERY:
             logger.debug("[Smart Category] No specific category - searching all")
             return None
@@ -665,11 +661,9 @@ class ChatKnowledgeService:
         start_time = time.time()
         intent_result = self.intent_detector.detect_intent(query)
 
-        # Check if we should skip retrieval (Issue #665: uses helper)
         if self._should_skip_retrieval(intent_result, force_retrieval):
             return "", [], intent_result, None
 
-        # Enhance query and determine categories (Issue #665: uses helpers)
         enhanced_query = self._enhance_query_with_context(query, conversation_history)
         effective_categories = self._get_effective_categories(intent_result, query, categories, enable_smart_categories)
         search_query = self._get_search_query(query, enhanced_query)
@@ -711,13 +705,7 @@ class ChatKnowledgeService:
             doc_block = "AUTOBOT DOCUMENTATION CONTEXT:\n" + "\n".join(doc_lines)
             context_string = doc_block + "\n\n" + context_string if context_string else doc_block
 
-        # #16771: the chat path is a RAG path too -- one shared inspection
-        # point (also used by advanced_rag_optimizer's search-based path)
-        # delimits this as untrusted DATA before it reaches the prompt, and
-        # blocks it outright on a high-risk verdict rather than answering
-        # from poisoned context. The citations are what the context_string
-        # was built from, so they're dropped with it -- a citation pointing
-        # at content the model never actually saw would mislead the caller.
+        # #16771: chat is a RAG path too; citations dropped with a blocked context (see PR).
         if context_string:
             fw_verdict = await inspect_rag_context(context_string, context_label=query[:80])
             if fw_verdict.blocked:
@@ -917,7 +905,6 @@ class ChatKnowledgeService:
             categories=categories,
         )
 
-        # Combine contexts
         combined_parts = []
         if doc_context:
             combined_parts.append(doc_context)
@@ -947,7 +934,6 @@ class ChatKnowledgeService:
             "doc_searcher_enabled": self.doc_searcher is not None,
         }
 
-        # Add documentation stats if available
         if self.doc_searcher and self.doc_searcher._initialized:
             try:
                 doc_count = self.doc_searcher._collection.count()

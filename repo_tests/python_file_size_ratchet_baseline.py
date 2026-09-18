@@ -25,7 +25,7 @@ from __future__ import annotations
 
 RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/a2a/a2a_test.py": 713,
-    "autobot-backend/advanced_rag_optimizer.py": 1183,
+    "autobot-backend/advanced_rag_optimizer.py": 1180,
     "autobot-backend/agent_loop/loop.py": 2046,
     "autobot-backend/agent_loop/types.py": 670,
     "autobot-backend/agents/agent_orchestration/distributed_management.py": 649,
