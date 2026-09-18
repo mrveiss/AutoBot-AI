@@ -1,0 +1,109 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025-2026 mrveiss
+# Author: mrveiss
+#
+# Post-merge hook for automatic documentation indexing
+# Issue #250 (origin), #16934 (moved here from post-commit)
+#
+# Was post-commit-doc-sync: fired on EVERY commit, in EVERY worktree, and
+# indexed from that worktree's own tree into the shared, live autobot_docs
+# collection. A worktree's first commit re-embedded the whole doc set (no
+# per-checkout hash cache) and wrote that branch's unmerged docs into
+# production, where chat grounding reads them as true.
+#
+# post-merge is the right trigger: it fires only after a local `git merge`
+# or `git pull` completes, never on a plain `git commit` -- so a fresh
+# worktree's first commit (a `git commit`, not a merge) no longer triggers
+# this at all. Still gated explicitly below rather than trusting the
+# trigger alone, since a `git merge`/`git pull` can happen on any branch,
+# including one locally named "main" that never tracked origin's.
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/_common.sh
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    echo "post-merge-doc-sync: cannot load lib/_common.sh — refusing to report clean" >&2
+    exit 1
+}
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+
+# Gate 1: this checkout's current branch must be main. Not sufficient alone
+# (see Gate 2) -- a worktree or manual local branch can carry that name
+# without tracking origin/main -- but cheap enough to fail fast on.
+CURRENT_BRANCH="$(git branch --show-current 2>/dev/null || true)"
+if [ "$CURRENT_BRANCH" != "main" ]; then
+    exit 0
+fi
+
+# Gate 2: HEAD, right after this merge, must equal origin/main's own tip --
+# not just a branch named "main" that happens to be merging something. A
+# `git pull origin main` on a real main-tracking checkout makes these equal
+# by construction; anything else (merging a feature branch into a local
+# "main" that was never pushed, or that has diverged) does not, and must
+# not index. No `git fetch` here on purpose -- if origin/main hasn't been
+# fetched recently, failing to index is the safe direction; a false skip
+# costs a delayed index, a false index writes wrong content to production.
+ORIGIN_MAIN="$(git rev-parse origin/main 2>/dev/null || true)"
+if [ -z "$ORIGIN_MAIN" ] || [ "$(git rev-parse HEAD)" != "$ORIGIN_MAIN" ]; then
+    exit 0
+fi
+
+# What changed in this merge. ORIG_HEAD is git's own record of where HEAD
+# was immediately before the merge started -- correct for a fast-forward
+# pull bringing in many commits at once, unlike a single HEAD~1 diff.
+CHANGED_DOCS=$(git diff --name-only ORIG_HEAD HEAD -- 'docs/*.md' CLAUDE.md 2>/dev/null || true)
+
+if [ -z "$CHANGED_DOCS" ]; then
+    exit 0
+fi
+
+DOC_COUNT=$(echo "$CHANGED_DOCS" | wc -l)
+
+echo ""
+echo -e "${CYAN}📚 AutoBot Documentation Sync (Issue #250, #16934)${NC}"
+echo "=================================================="
+echo -e "${YELLOW}Detected $DOC_COUNT documentation file(s) changed on main:${NC}"
+echo "$CHANGED_DOCS" | head -5 | sed 's/^/  • /'
+if [ "$DOC_COUNT" -gt 5 ]; then
+    echo "  ... and $((DOC_COUNT - 5)) more"
+fi
+echo ""
+
+INDEX_SCRIPT="$PROJECT_ROOT/tools/index_documentation.py"
+if [ ! -f "$INDEX_SCRIPT" ]; then
+    echo -e "${YELLOW}⚠️ Documentation indexer not found at: $INDEX_SCRIPT${NC}" >&2
+    echo -e "${YELLOW}   Documentation index is now STALE for this merge.${NC}" >&2
+    exit 0
+fi
+
+PYTHON_CMD=""
+if [ -n "$VIRTUAL_ENV" ]; then
+    PYTHON_CMD="$VIRTUAL_ENV/bin/python"
+elif [ -f "$PROJECT_ROOT/venv/bin/python" ]; then
+    PYTHON_CMD="$PROJECT_ROOT/venv/bin/python"
+elif command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+else
+    echo -e "${YELLOW}⚠️ Python not found, skipping documentation sync${NC}"
+    exit 0
+fi
+
+echo -e "${GREEN}🔄 Triggering incremental documentation indexing...${NC}"
+
+LOG_FILE="$PROJECT_ROOT/logs/doc_index_$(date +%Y%m%d_%H%M%S).log"
+mkdir -p "$PROJECT_ROOT/logs"
+
+nohup "$PYTHON_CMD" "$INDEX_SCRIPT" --incremental > "$LOG_FILE" 2>&1 &
+BG_PID=$!
+
+echo -e "${GREEN}✅ Indexing started in background (PID: $BG_PID)${NC}"
+echo -e "   Log: $LOG_FILE"
+echo "=================================================="
+echo ""
+
+exit 0
