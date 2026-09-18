@@ -64,6 +64,24 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_AGENT_PRESENCE_SYNC_INTERVAL_SECONDS",
+        type=float,
+        default=30.0,
+        description=(
+            "How often the background task re-runs every kind's presence "
+            "adapter (#16965) -- kept comfortably under "
+            "`AUTOBOT_AGENT_PRESENCE_TTL_SECONDS` so an entry never goes "
+            "stale between sweeps. Raising it means a status change (busy, "
+            "gone) takes longer to show up in `list_live()`; lowering it "
+            "polls the DB/health-registry/session-manager sources more "
+            "often (initialization/agent_presence_sync.py)."
+        ),
+        component="agents",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_RUN_CHECKPOINT_TTL_SECONDS",
         type=int,
         default=86400,
