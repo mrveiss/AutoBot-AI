@@ -256,7 +256,12 @@ onMounted(load)
                 <button class="btn-icon-action" :title="t('common.edit')" @click="openEdit(server)">
                   <Icon name="pencil-alt" />
                 </button>
-                <button class="btn-icon-action btn-icon-action--danger" :title="t('common.delete')" @click="confirmDelete(server)">
+                <button
+                  class="btn-icon-action"
+                  style="color: var(--color-error)"
+                  :title="t('common.delete')"
+                  @click="confirmDelete(server)"
+                >
                   <Icon name="trash-alt" />
                 </button>
               </td>
@@ -396,57 +401,16 @@ onMounted(load)
   </div>
 </template>
 
-<style scoped>
-/*
- * Page chrome, cards, alerts, the empty state, the data table, form fields and
- * the icon-action buttons all come from the global
- * autobot-frontend/src/assets/css/components.css (Issue #901) — only what that
- * file doesn't cover lives here. See AdminPricingView.vue for the same note.
- */
-.admin-mcp-servers {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.admin-mcp-servers-body {
-  padding: var(--spacing-6);
-}
-
-.modal-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3);
-}
-
-.field-row.two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-3);
-}
-
-.required {
-  color: var(--color-error);
-}
-
-.role-checkboxes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-3);
-}
-
-.checkbox-label {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-1);
-  font-size: var(--text-sm);
-}
-
-.modal-body-text {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-.btn-icon-action--danger {
-  color: var(--color-error);
-}
-</style>
+<!--
+  No <style> block: this view's own classes (admin-mcp-servers,
+  admin-mcp-servers-body, modal-form, role-checkboxes, checkbox-label,
+  modal-body-text), plus page chrome, cards, alerts, the empty state, the
+  data table, form fields and the icon-action buttons, are all defined in
+  the shared autobot-frontend/src/assets/css/components.css (Issue #901,
+  "Admin: MCP Servers" section) rather than here. The delete row's icon
+  button uses an inline style for its error color rather than a dedicated
+  btn-icon-action--danger modifier class components.css does not define
+  and no other view needed yet -- one bespoke class for one button would be
+  exactly the fragmentation repo_tests/frontend_fragmentation_ratchet_test.py
+  (#16875) exists to push back on.
+-->
