@@ -147,6 +147,7 @@ conflict when their rows sort next to each other.
 | `AUTOBOT_OTEL_PROTOCOL` | otel | str | `'grpc'` | OTLP export protocol: 'grpc' or 'http/protobuf'. |
 | `AUTOBOT_OTEL_SAMPLE_RATE` | otel | float | `0.1` | Fraction of traces to sample (0.0–1.0). Range: 0.0–1.0. |
 | `AUTOBOT_OTEL_SERVICE_VERSION` | otel | str | `'1.5.0'` | Service version tag attached to all OTel spans. |
+| `AUTOBOT_OVERSEER_COMMAND_TIMEOUT_S` | agents | int | `60` | Seconds an overseer step command may run in the user's terminal before it is interrupted and reported as timed out (#17078). A step that finishes sooner returns as soon as its exit code appears (agents/overseer/step_executor_agent.py). Range: 1–3600. |
 | `AUTOBOT_OWNERSHIP_BLAME_TIMEOUT_SECONDS` | backend | float | `10.0` | Seconds a single `git blame` may take during ownership analysis. Must stay below the whole-analysis budget, which a previous 30s value exceeded (#13602). |
 | `AUTOBOT_OWNERSHIP_BUDGET_SECONDS` | backend | float | `20.0` | Total seconds ownership analysis may spend blaming files before it returns what it has (#13602). |
 | `AUTOBOT_OWNERSHIP_MAX_FILES` | backend | int | `2000` | How many files ownership analysis will blame. Paired with the time budget because a file count alone is the wrong bound — file size dominates blame cost (#13602). |

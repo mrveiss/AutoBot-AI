@@ -383,3 +383,18 @@ register_env_var(
         range=(1, 3600),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_OVERSEER_COMMAND_TIMEOUT_S",
+        type=int,
+        default=60,
+        description=(
+            "Seconds an overseer step command may run in the user's terminal before it is "
+            "interrupted and reported as timed out (#17078). A step that finishes sooner returns "
+            "as soon as its exit code appears (agents/overseer/step_executor_agent.py)."
+        ),
+        component="agents",
+        range=(1, 3600),
+    )
+)

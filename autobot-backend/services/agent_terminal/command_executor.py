@@ -7,30 +7,25 @@ Agent Terminal Command Executor
 
 Handles command execution in PTY with intelligent polling and cancellation.
 
-A command runs in the session's own shell, followed at once by a UUID-marked
-``echo '<marker>'$?`` line (#17074). The shell runs the marker only after the
-command returns, so the marker's appearance in the PTY's transcript is the
-completion signal and ``$?`` is the command's own exit code, from the same
-shell. Output used to be polled from chat history filtered to
-``sender == "terminal"``, but agent output is saved as ``agent_terminal`` and
-only after the command returns: the poll never saw it, every command waited
-out its timeout, and the exit-code marker written afterwards landed in a shell
-recreated after the kill, reporting ``EXIT_CODE: 0`` for a command that never
-finished. A command that times out is now cancelled and reported as timed out,
-and nothing more is written to its PTY.
+A command runs in the session's own shell and completes when its UUID exit-code
+marker appears in the PTY's transcript (services/pty_command.py, #17074). It
+used to poll chat history for ``sender == "terminal"``, while agent output is
+saved as ``agent_terminal`` and only after the command returns: every command
+waited out its timeout, and the exit-code marker written afterwards landed in
+a shell recreated after the kill, reporting ``EXIT_CODE: 0`` for a command that
+never finished. A command that times out is now cancelled and reported as timed
+out, and nothing more is written to its PTY.
 """
 
 import asyncio
-import re
-import time
-import uuid
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
+from services import pty_command
+from services.pty_command import TIMED_OUT_RETURN_CODE, TRUNCATED_NOTE  # noqa: F401 -- part of this module's contract
 from type_defs.common import Metadata
-from utils.encoding_utils import strip_ansi_codes
 
 from .models import AgentTerminalSession
 
@@ -38,54 +33,6 @@ logger = get_logger(__name__)
 
 #: Seconds an agent command may run before it is cancelled and reported as timed out (#17074).
 AGENT_COMMAND_TIMEOUT_S = env_int("AUTOBOT_AGENT_COMMAND_TIMEOUT_S", 30)
-
-#: Return code reported for a command cancelled on timeout, as timeout(1) reports it.
-TIMED_OUT_RETURN_CODE = 124
-
-#: A few of the PTY reader thread's 10 ms poll cycles: output already on the wire at
-#: the deadline gets this long to be read before the command is called timed out.
-_READER_GRACE_S = 0.05
-
-#: Prefixed to output whose start the transcript cap had already dropped.
-TRUNCATED_NOTE = "[earlier output dropped: it exceeded the terminal transcript]\n"
-
-
-def _command_output(transcript: str, marker: str, echoed_lines: int) -> str:
-    """The output after the *echoed_lines* lines the shell echoed back, before the first marker line.
-
-    A multi-line command is echoed one line per line, continuations behind the
-    PS2 prompt, so the echo spans as many lines as the command does.
-    """
-    lines = strip_ansi_codes(transcript).replace("\r", "").split("\n")[echoed_lines:]
-    kept = []
-    for line in lines:
-        if marker in line:  # the prompt that echoes the marker line, or the marker's own output
-            break
-        kept.append(line)
-    return "\n".join(kept).strip()
-
-
-def _find_exit_code(transcript: str, marker: str) -> int | None:
-    """The exit code printed after *marker*, or None if it has not appeared yet."""
-    match = re.search(rf"{re.escape(marker)}(\d+)", strip_ansi_codes(transcript))
-    return int(match.group(1)) if match else None
-
-
-def _scan_for_exit_code(pty, cursor: int, marker: str) -> tuple[int, int | None]:
-    """Search only output past *cursor* -- plus enough overlap for a marker split across reads.
-
-    Returns the new cursor and the exit code, if it has appeared.
-    """
-    offset, text = pty.read_transcript(max(cursor - len(marker) - 16, 0))
-    return offset + len(text), _find_exit_code(text, marker)
-
-
-def _output_since(pty, start: int, command: str, marker: str) -> str:
-    """The command's output, noting it when the transcript cap already dropped its beginning."""
-    offset, transcript = pty.read_transcript(start)
-    if offset > start:
-        return TRUNCATED_NOTE + _command_output(transcript, marker, echoed_lines=0)
-    return _command_output(transcript, marker, echoed_lines=command.count("\n") + 1)
 
 
 class CommandExecutor:
@@ -294,36 +241,6 @@ class CommandExecutor:
         else:
             logger.error("[PTY_EXEC] Failed to cancel command after timeout - " "may have orphaned process")
 
-    async def _await_exit_code(
-        self, session: AgentTerminalSession, pty, start: int, marker: str, timeout: float
-    ) -> tuple[int | None, bool]:
-        """
-        Watch the PTY transcript from *start* until the exit-code marker appears.
-
-        SECURITY FIX (Critical #2): the marker is UUID-based, so a command cannot
-        fake its exit code (`echo "EXIT_CODE:0" && malicious_command`). Each poll
-        reads only output it has not scanned yet.
-
-        Returns:
-            (exit code, timed out). The code is None when the shell ended first,
-            or when the command was cancelled on timeout; nothing is then read
-            from a new shell.
-        """
-        deadline = time.monotonic() + timeout
-        cursor, poll_interval = start, TimingConstants.MICRO_DELAY / 2
-        while time.monotonic() < deadline:
-            cursor, return_code = _scan_for_exit_code(pty, cursor, marker)
-            if return_code is not None or not pty.is_alive():
-                return return_code, False
-            await asyncio.sleep(min(poll_interval, max(deadline - time.monotonic(), 0)))
-            poll_interval = min(poll_interval * 1.5, 1.0)
-        await asyncio.sleep(_READER_GRACE_S)
-        _, return_code = _scan_for_exit_code(pty, cursor, marker)
-        if return_code is not None:
-            return return_code, False
-        await self._handle_poll_timeout(session, timeout)
-        return None, True
-
     def _build_pty_error_result(self, error_msg: str) -> Metadata:
         """
         Build error result for PTY command execution failure.
@@ -389,18 +306,20 @@ class CommandExecutor:
         timeout = AGENT_COMMAND_TIMEOUT_S if timeout is None else timeout
         logger.info("[PTY_EXEC] Executing in PTY: %s", command)
 
-        marker = f"__EXIT_CODE_{uuid.uuid4()}__:"
+        marker = pty_command.new_marker()
         try:
             pty = self._live_pty(session)
         except Exception as e:
             logger.error("Error preparing PTY: %s", e)
             pty = None
         start = pty.transcript_position() if pty else 0
-        if pty is None or not pty.write_input(f"{command}\necho '{marker}'$?\n"):
+        if pty is None or not pty.write_input(pty_command.typed_input(command, marker)):
             return self._build_pty_error_result("Failed to write command to PTY")
 
-        return_code, timed_out = await self._await_exit_code(session, pty, start, marker, timeout)
-        output = _output_since(pty, start, command, marker)
+        return_code, timed_out = await pty_command.await_exit_code(
+            pty, start, marker, timeout, on_timeout=lambda: self._handle_poll_timeout(session, timeout)
+        )
+        output = pty_command.output_since(pty, start, command, marker)
         if timed_out:
             return self._build_pty_timeout_result(output, timeout)
         if return_code is None:
