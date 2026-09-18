@@ -562,7 +562,6 @@ class TrustScoreManager:
 get_trust_manager = lazy_singleton(TrustScoreManager)
 
 
-
 def authority_for_level(level: TrustLevel) -> "Authority":
     """A peer's authority for the intersection rule (#16950): its trust level's capabilities.
 

@@ -41,10 +41,10 @@ from fastapi.responses import StreamingResponse
 
 from a2a.agent_card import build_agent_card
 from a2a.capability_verifier import verify_local_card, verify_remote_card
+from a2a.peer_identity import credential_subject, jwt_subject_for_audit, peer_trust_key
 from a2a.security import SecurityCardSigner
 from a2a.task_executor import execute_a2a_task
 from a2a.task_manager import get_task_manager
-from a2a.peer_identity import credential_subject, jwt_subject_for_audit, peer_trust_key
 from a2a.tracing import extract_caller_id, new_trace_id
 from a2a.trust_score import Capability, TrustAccessDenied, get_trust_manager
 from a2a.types import Task
@@ -233,6 +233,9 @@ async def submit_task(
     # #16950 (owner decision): trust is keyed on the verified credential presenting the
     # peer id, never on the self-declared header alone -- one credential cannot borrow
     # another's trust by claiming its peer id. The same key attributes the task.
+    # The subject MUST come from current_user (verified by the auth middleware), never
+    # from jwt_sub above: jwt_subject_for_audit decodes without checking the signature,
+    # so keying on it would let a caller choose the pair whose trust it borrows.
     peer_key = peer_trust_key(credential_subject(current_user), x_a2a_agent_id)
     try:
         get_trust_manager().require_capability(peer_key, Capability.SUBMIT_TASKS)

@@ -81,7 +81,11 @@ class TestTheLegacyPath:
 
     @pytest.mark.asyncio
     async def test_a_secondary_memory_agent_refuses_the_whole_decision(self):
-        decision = {"strategy": "multi_agent", "primary_agent": AgentType.CHAT, "secondary_agents": [AgentType.RESEARCH]}
+        decision = {
+            "strategy": "multi_agent",
+            "primary_agent": AgentType.CHAT,
+            "secondary_agents": [AgentType.RESEARCH],
+        }
         executor = _executor(decision)
 
         result = await executor.process_with_legacy_agents("q", {}, [], authority=LIMITED)

@@ -51,8 +51,6 @@ async def list_legacy_trust() -> List[Dict[str, Any]]:
     return get_trust_manager().list_legacy_peers()
 
 
-
-
 @router.get(
     "/trust",
     summary="List all peer trust records",

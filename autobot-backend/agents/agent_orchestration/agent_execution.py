@@ -30,7 +30,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-
 def _routed_agent_types(routing_decision: Dict[str, Any]) -> List[str]:
     """Every agent a routing decision would run: its primary and, for multi-agent, each secondary."""
     agents = [routing_decision.get("primary_agent"), *routing_decision.get("secondary_agents", [])]

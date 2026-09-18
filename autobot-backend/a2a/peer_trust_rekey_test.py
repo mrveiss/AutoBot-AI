@@ -98,10 +98,13 @@ class TestTheGrant:
         manager.grant(pair, TrustLevel.STANDARD, actor="admin")
 
         manager.record_threat_event(pair)
+
+        assert manager.get_record(pair).granted_level is None, "misconduct must clear the grant"
+        assert manager.get_trust_level(pair) == TrustLevel.LIMITED, "and the pair is demoted"
+
         manager.record_success(pair)
 
-        assert manager.get_trust_level(pair) != TrustLevel.STANDARD
-        assert manager.get_record(pair).granted_level is None
+        assert manager.get_trust_level(pair) == TrustLevel.LIMITED, "the revoked floor must not lift it back"
 
     def test_the_control_an_ungranted_pair_cannot_climb_in_one_step(self, manager):
         """The grant is what lifted the pairs above: the behavioural path still needs its window."""
@@ -125,7 +128,9 @@ def test_the_grant_route_keys_on_the_pair_and_records_the_acting_admin():
     app.include_router(trust_api.router, prefix="/api/a2a")
     app.dependency_overrides[trust_api.get_current_user] = lambda: {"username": "admin-1", "user_id": "admin-1"}
     manager = MagicMock()
-    manager.grant.return_value = TrustRecord(peer_id=peer_trust_key("alice", "peer-x"), current_level=TrustLevel.STANDARD)
+    manager.grant.return_value = TrustRecord(
+        peer_id=peer_trust_key("alice", "peer-x"), current_level=TrustLevel.STANDARD
+    )
 
     with patch.object(trust_api, "get_trust_manager", return_value=manager):
         response = TestClient(app).post(
