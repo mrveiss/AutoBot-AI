@@ -18,6 +18,7 @@ from typing import Dict, Tuple
 from fastapi import HTTPException, Request, status
 
 from auth_revocation import reject_if_revoked_by_password_change
+from autobot_shared.auth.interactive_principal import is_login_token
 from autobot_shared.auth.jwt_core import (
     decode_jwt_multi,
     encode_jwt,
@@ -594,13 +595,11 @@ class AuthenticationMiddleware:
             "role": token_data.get("role", "user"),
             "email": token_data.get("email", ""),
             "auth_method": "jwt",
+            "login_token": is_login_token(token_data),  # #17042: no purpose claim, so a login
         }
 
         # Issue #684: Include org hierarchy from token
-        if token_data.get("user_id"):
-            user["user_id"] = token_data["user_id"]
-        if token_data.get("org_id"):
-            user["org_id"] = token_data["org_id"]
+        user.update({claim: token_data[claim] for claim in ("user_id", "org_id") if token_data.get(claim)})
 
         # #12924: carry ``iat`` through so the async ``get_current_user`` can
         # reject tokens minted before a password change. This extraction is
