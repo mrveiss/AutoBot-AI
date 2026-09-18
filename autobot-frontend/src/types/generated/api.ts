@@ -52520,10 +52520,12 @@ export interface paths {
          * @description Return the recorded timeline for a run (for step-browser).
          *
          *     Raw inputs are stored in the DB; use ``?redact_pii=true`` to have
-         *     credentials stripped from the response on read.  Emails are NOT
-         *     separately redacted (the credential_redaction module covers API keys
-         *     and bearer tokens; email redaction would require regex patterns not
-         *     currently present in that module).
+         *     credentials stripped from the response on read.  Free text (an email
+         *     body, a document) is covered too (#13708): ``credential_redaction``'s
+         *     ``redact_string`` now also runs the cross-service content scanner
+         *     (``autobot_shared.secret_redaction``), which catches a credential sitting
+         *     in prose -- PEM blocks, basic-auth URLs, "password is X" phrasing -- not
+         *     just the API-key/bearer-token shapes this module's own patterns cover.
          */
         get: operations["get_replay_log_api_llc_agents__agent_id__runs__run_id__replay_log_get"];
         put?: never;

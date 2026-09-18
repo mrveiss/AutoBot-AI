@@ -63,6 +63,7 @@ from api.system_health import ComponentHealth, KnownProbes, register_health_prob
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import redact_content
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
 from knowledge.ingestion_visibility import stamp_if_document
@@ -1282,9 +1283,9 @@ async def upload_file_to_knowledge(
         # with no way to tell that OCR — not a different file — is what is needed.
         raise HTTPException(status_code=400, detail=_no_text_detail(extracted_doc))
 
-    # Issue #5064: sanitize uploaded document content against prompt injection
-    # before the text reaches the KB / embedding pipeline.
-    content = _sanitize_document(content, source="file_upload").sanitized_text
+    # Issue #5064: sanitize against prompt injection; #13708: also the redact_content chokepoint,
+    # since this endpoint's own extraction path skips content_extraction.py's redacted wrappers.
+    content = redact_content(_sanitize_document(content, source="file_upload").sanitized_text)
 
     logger.info("Uploading file: filename='%s', size=%d", filename, len(file_content))
 
