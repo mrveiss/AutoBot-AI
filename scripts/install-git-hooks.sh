@@ -53,8 +53,10 @@ warn()  { printf "${YELLOW}[install-hooks WARN]${NC} %s\n" "$*" >&2; }
 fail()  { printf "${RED}[install-hooks FAIL]${NC} %s\n" "$*" >&2; }
 
 # Hooks this installer manages. Each name must exist as a real file under
-# tools/git-hooks/<name>.
-MANAGED_HOOKS="pre-commit pre-push"
+# tools/git-hooks/<name>. commit-msg (#17029) strips co-author trailers and
+# rejects a subject without the `<type>(scope): ... (#NNNN)` convention; it was
+# a hand-installed local file until then, present on one machine and nowhere else.
+MANAGED_HOOKS="pre-commit pre-push commit-msg"
 
 # --- Locate the repo and its canonical hook templates (portable) -----------
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
