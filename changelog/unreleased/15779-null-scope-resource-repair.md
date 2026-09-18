@@ -2,6 +2,6 @@
 type: fix
 scope: security
 issue: 15779
-pr: 0000
+pr: 16927
 ---
-A resource with owner_id=None, no resource_grants row, and a scope whose own key is also null (ORGANIZATION with company_id=None, GROUP with no group_ids, or any of USER/PRIVATE/SESSION/SHARED/WORKFLOW) was denied to every principal including an admin, with no in-app remedy: the repair itself was gated by the same check that denied it. Added a pure `is_unreachable()` predicate for detecting this orphan state, an admin-only, audited `repair_grant()` break-glass path (exposed via `POST /admin/resource-grants/repair`) that grants access without needing to touch the resource's own owner/scope columns, and made `resource_grant_store.grant()`/`revoke()` invalidate the visibility cache automatically instead of relying on every caller to remember to.
+A knowledge fact or an envelope secret that no live user could reach — its owner deleted, no share or grant held by anyone still present, and a scope nobody holds — was denied to everyone, admins included, with no way to fix it inside AutoBot. Administrators can now find such resources (`GET /api/admin/orphans?resource_type=knowledge_fact|secret`) and assign a live user as the new owner (`POST /api/admin/orphans/repair`). A repair is refused unless the resource is genuinely unreachable: a resource any live user can still reach is left untouched and the request answers 409. Every attempt, successful, refused or failed, is written to the audit log with the conditions it was judged on. Repairing a secret re-wraps its key for the new owner's vault; the secret's value is never decrypted or shown. A deactivated (not deleted) user still counts as present, so their resources cannot be taken this way.

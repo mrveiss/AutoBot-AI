@@ -85,7 +85,7 @@ def is_visible(principal: Principal, resource: ResourceDescriptor, has_grant: Gr
     return False
 
 
-def is_unreachable(resource: ResourceDescriptor, has_grant: bool) -> bool:
+def is_unreachable(resource: ResourceDescriptor, has_grant: bool, *, owner_is_live: bool) -> bool:
     """True if NO principal, however scoped or authenticated, could ever pass
     `is_visible()` for this resource (#15779) -- an orphan with no in-app
     remedy, since the fix (assign an owner, add a grant) is gated by the same
@@ -96,8 +96,15 @@ def is_unreachable(resource: ResourceDescriptor, has_grant: bool) -> bool:
     ORGANIZATION/GROUP are only unreachable when their own scope key is empty,
     and everything else (USER/PRIVATE/SESSION/SHARED/WORKFLOW) is unreachable
     the moment ownership and grants are both absent.
+
+    *owner_is_live* is required, and the caller must resolve it (#16927). A set
+    ``owner_id`` naming a user who no longer exists (a deleted user's leftover) is
+    no owner at all: no live principal can match it. That is #15779's own "orphaned
+    by a deleted user" case, which ``owner_id is not None`` used to call reachable.
+    Ownership is checked by truthiness, as ``is_visible()`` does, so an empty id is
+    no owner either.
     """
-    if resource.owner_id is not None or has_grant:
+    if (resource.owner_id and owner_is_live) or has_grant:
         return False
     if resource.scope is ScopeLevel.SYSTEM or resource.scope is ScopeLevel.PUBLIC:
         return False
