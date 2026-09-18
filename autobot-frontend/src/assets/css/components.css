@@ -589,6 +589,18 @@
   font-weight: var(--font-normal);
 }
 
+/* Required-field marker, next to a .field-label. */
+.required {
+  color: var(--color-error);
+}
+
+/* Two fields side by side inside a .field-group's parent form. */
+.field-row.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-3);
+}
+
 .field-input,
 .field-select,
 .field-textarea {
@@ -839,4 +851,118 @@
   .stat-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ============================================================
+ * ADMIN: PRICING (AdminPricingView.vue, #16875)
+ * Moved out of that view's own <style> block -- one more
+ * component-local style block was exactly what
+ * repo_tests/frontend_fragmentation_ratchet_test.py exists to
+ * push back on, even for classes only that view currently uses.
+ * ============================================================ */
+
+.admin-pricing {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.admin-pricing-body {
+  padding: var(--spacing-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.provider-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--spacing-4);
+}
+
+.provider-card {
+  padding: var(--spacing-4);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+}
+
+.provider-name {
+  font-weight: var(--font-semibold);
+  text-transform: capitalize;
+}
+
+.provider-meta {
+  margin: 0;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
+  padding: var(--spacing-1) 0;
+}
+
+.meta-row dt {
+  color: var(--text-tertiary);
+}
+
+.meta-row dd {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.override-form,
+.override-remove-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-4);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.remove-row {
+  display: flex;
+  gap: var(--spacing-2);
+  align-items: center;
+}
+
+/* ============================================================
+ * ADMIN: MCP SERVERS (AdminMcpServersView.vue, #16875)
+ * Moved out of that view's own <style> block -- same reason as
+ * the Admin: Pricing section above.
+ * ============================================================ */
+
+.admin-mcp-servers {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.admin-mcp-servers-body {
+  padding: var(--spacing-6);
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.role-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-3);
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  font-size: var(--text-sm);
+}
+
+.modal-body-text {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
