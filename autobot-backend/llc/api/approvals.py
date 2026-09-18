@@ -178,6 +178,9 @@ def _verified_decider(ctx: TenantContext, body: ApprovalDecision) -> uuid.UUID:
             body.decided_by_agent_id,
             ctx.user_id,
         )
+    # Every interactive login carries a UUID user id (api/auth.py sets it from the
+    # users table), so this refuses only a caller the system cannot name. If the
+    # login payload ever stops carrying it, people are refused here, not misattributed.
     if ctx.user_id is None:
         raise HTTPException(status_code=403, detail="The decision cannot be attributed to a verified user")
     return ctx.user_id

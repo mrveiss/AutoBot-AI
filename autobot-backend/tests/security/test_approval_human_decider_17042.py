@@ -37,7 +37,7 @@ import api.approval_gates as gates_api
 import api.user_management.dependencies as user_deps
 import llc.api.approvals as llc_api
 from api.user_management.human_decider import HUMAN_DECISION_REQUIRED
-from autobot_shared.auth.interactive_principal import is_interactive_human
+from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_interactive_human, is_login_token
 from autobot_shared.auth.jwt_core import decode_jwt, encode_jwt
 from llc.deps import get_session as llc_get_session
 
@@ -61,6 +61,7 @@ _HUMAN = {
 #: What every forged or non-login token also carries, so nothing but the
 #: human-decider check stands between it and a recorded decision.
 _ADVANTAGE = {"user_id": str(_CALLER), "org_id": str(_ORG)}
+_LOGIN = {**_HUMAN, "token_type": LOGIN_TOKEN_TYPE}
 _DEVICE_CLAIMS = {"aud": _DEVICE_AUD, "device_id": "dev-1", "scope": "write", **_ADVANTAGE}
 
 
@@ -71,7 +72,10 @@ def _bearer(claims: dict, secret: str = _PLATFORM_SECRET) -> dict:
 def _credentials() -> dict:
     """Credential kind -> request headers, as each is actually presented."""
     return {
-        "login_jwt": _bearer(_HUMAN),
+        "login_jwt": _bearer(_LOGIN),
+        # A person's login minted before 2026-09-18: no token_type, so no positive
+        # evidence it is a login. Refused until the 24h token is re-issued.
+        "pre_17042_login_jwt": _bearer(_HUMAN),
         "session": {"X-Session-ID": _SESSION_ID},
         "internal_service_key": {"X-Internal-API-Key": _INTERNAL_KEY},
         "run_jwt": _bearer({"aud": _RUN_AUD, "run_id": "run-1", "agent_id": "agent-1", "scope": []}, _RUN_SECRET),
@@ -95,6 +99,7 @@ _REFUSED_BY_HUMAN_CHECK = "human"
 #: #17042 check refused it; any other refuser is credential resolution, which
 #: the LLC route's sync ``get_current_user`` never extends to service/run/device.
 _LLC_EXPECTED = {
+    "pre_17042_login_jwt": (403, _REFUSED_BY_HUMAN_CHECK),
     "internal_service_key": (401, "resolution"),
     "run_jwt": (401, "resolution"),
     "device_jwt": (401, "resolution"),
@@ -106,6 +111,7 @@ _LLC_EXPECTED = {
     "llc_agent_api_key": (401, "resolution"),
 }
 _GATE_EXPECTED = {
+    "pre_17042_login_jwt": (403, _REFUSED_BY_HUMAN_CHECK),
     "internal_service_key": (403, _REFUSED_BY_HUMAN_CHECK),
     "run_jwt": (403, "run-JWT path allow-list"),
     "device_jwt": (403, "device-JWT path allow-list"),
@@ -333,6 +339,25 @@ def test_every_credential_kind_has_a_control_in_both_systems():
     """A credential kind added to ``_credentials`` must be classified for both routes."""
     kinds = set(_credentials()) - set(_HUMAN_KINDS)
     assert kinds == set(_LLC_EXPECTED) == set(_GATE_EXPECTED)
+
+
+def test_the_login_mint_and_the_check_agree(real_auth_middleware, monkeypatch):
+    """What create_jwt_token signs is what is_login_token accepts — the positive evidence exists."""
+    minted = {}
+
+    def _capture(payload, **_kwargs):
+        minted.update(payload)
+        return "signed"
+
+    monkeypatch.setattr(real_auth_middleware, "encode_jwt", _capture)
+    middleware = _real_middleware(real_auth_middleware, enable_auth=True)
+    middleware.jwt_private_key, middleware.jwt_kid, middleware.jwt_expiry_hours = "key", "kid", 24
+
+    middleware.create_jwt_token({"username": "alice", "role": "user", "user_id": _CALLER, "org_id": _ORG})
+
+    assert minted["token_type"] == LOGIN_TOKEN_TYPE
+    assert (minted["user_id"], minted["org_id"]) == (str(_CALLER), str(_ORG))
+    assert is_login_token(minted)
 
 
 # --- the check itself, for credentials a route refuses before reaching it -------

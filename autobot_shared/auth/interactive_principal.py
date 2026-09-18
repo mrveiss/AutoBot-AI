@@ -15,15 +15,22 @@ alone proves nothing:
   SLM MFA-pending token, the backend's SLM service token, a device JWT on the
   fallback secret — which the JWT path resolves as ``auth_method="jwt"``.
 
-This module admits only a session or a login JWT whose claims carry no purpose
-marker, and denies everything else, including anything it does not recognise.
+This module admits only a session or a login JWT, and denies everything else,
+including anything it does not recognise. A login JWT is known by *positive*
+evidence — the ``token_type`` its mint sets — not by the absence of other
+claims, which would fail open for any future token type carrying none of them.
 It is stdlib-only so any service can import it.
 """
 
 from typing import Any, Mapping, Optional
 
+#: ``token_type`` every login mint sets (backend ``create_jwt_token``). A token
+#: issued before 2026-09-18 lacks it and is not a login here until re-issued.
+LOGIN_TOKEN_TYPE = "login"
+
 #: Claims that appear only on tokens minted for something other than a finished
-#: human login. Presence of any one of them, whatever its value, disqualifies.
+#: human login. Presence of any one of them, whatever its value, disqualifies
+#: even a token that also says ``token_type: login``.
 NON_LOGIN_CLAIMS = frozenset(
     {
         "aud",  # run / device JWTs are audience-bound; login tokens are not
@@ -32,7 +39,6 @@ NON_LOGIN_CLAIMS = frozenset(
         "run_id",  # run JWTs
         "scope",  # run / device JWTs carry a scoped grant
         "service",  # service-to-service tokens
-        "token_type",  # device-token-service tokens
     }
 )
 
@@ -44,8 +50,8 @@ _NON_HUMAN_USERNAME_PREFIXES = ("service:", "run:", "device:")
 
 
 def is_login_token(claims: Mapping[str, Any]) -> bool:
-    """True when verified JWT *claims* carry none of :data:`NON_LOGIN_CLAIMS`."""
-    return NON_LOGIN_CLAIMS.isdisjoint(claims)
+    """True when verified JWT *claims* say ``token_type: login`` and carry no other purpose claim."""
+    return claims.get("token_type") == LOGIN_TOKEN_TYPE and NON_LOGIN_CLAIMS.isdisjoint(claims)
 
 
 def is_interactive_human(user: Optional[Mapping[str, Any]]) -> bool:

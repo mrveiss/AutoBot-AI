@@ -18,7 +18,7 @@ from typing import Dict, Tuple
 from fastapi import HTTPException, Request, status
 
 from auth_revocation import reject_if_revoked_by_password_change
-from autobot_shared.auth.interactive_principal import is_login_token
+from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_login_token
 from autobot_shared.auth.jwt_core import (
     decode_jwt_multi,
     encode_jwt,
@@ -400,8 +400,8 @@ class AuthenticationMiddleware:
 
         Signs with the RS256 private key and embeds the ``kid`` header so
         consumers can locate the correct public key in the JWKS response.
-        Claims are unchanged: username / role / email / iat (+ user_id / org_id
-        from #684).
+        Claims: username / role / email / iat (+ user_id / org_id from #684),
+        and token_type=login so a login is known by positive evidence (#17042).
         """
         payload = {
             "username": user_data["username"],
@@ -412,13 +412,11 @@ class AuthenticationMiddleware:
             # be an integer"), which silently broke JWT verification (every
             # /api/auth/me 401'd → login redirect loop) once real auth ran.
             "iat": int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp()),
+            "token_type": LOGIN_TOKEN_TYPE,
         }
 
         # Issue #684: Include org/user hierarchy in token
-        if user_data.get("user_id"):
-            payload["user_id"] = str(user_data["user_id"])
-        if user_data.get("org_id"):
-            payload["org_id"] = str(user_data["org_id"])
+        payload.update({claim: str(user_data[claim]) for claim in ("user_id", "org_id") if user_data.get(claim)})
 
         return encode_jwt(
             payload,
@@ -595,7 +593,7 @@ class AuthenticationMiddleware:
             "role": token_data.get("role", "user"),
             "email": token_data.get("email", ""),
             "auth_method": "jwt",
-            "login_token": is_login_token(token_data),  # #17042: no purpose claim, so a login
+            "login_token": is_login_token(token_data),  # #17042: minted as a login, no other purpose
         }
 
         # Issue #684: Include org hierarchy from token

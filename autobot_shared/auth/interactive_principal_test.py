@@ -6,19 +6,42 @@
 
 import pytest
 
-from autobot_shared.auth.interactive_principal import NON_LOGIN_CLAIMS, is_interactive_human, is_login_token
+from autobot_shared.auth.interactive_principal import (
+    LOGIN_TOKEN_TYPE,
+    NON_LOGIN_CLAIMS,
+    is_interactive_human,
+    is_login_token,
+)
 
-_LOGIN_CLAIMS = {"username": "alice", "role": "user", "email": "a@example.test", "user_id": "u-1", "iat": 1}
+_LOGIN_CLAIMS = {
+    "username": "alice",
+    "role": "user",
+    "email": "a@example.test",
+    "user_id": "u-1",
+    "iat": 1,
+    "token_type": LOGIN_TOKEN_TYPE,
+}
 _JWT_HUMAN = {"username": "alice", "role": "user", "auth_method": "jwt", "login_token": True}
 _SESSION_HUMAN = {"username": "alice", "role": "user", "auth_method": "session"}
 
 
-def test_a_login_token_carries_no_purpose_claim():
+def test_a_token_minted_as_a_login_is_a_login():
     assert is_login_token(_LOGIN_CLAIMS)
 
 
+def test_a_token_without_the_login_type_is_not_a_login():
+    """Absence of purpose claims is not evidence: a pre-2026-09-18 or foreign token is refused."""
+    claims = {key: value for key, value in _LOGIN_CLAIMS.items() if key != "token_type"}
+    assert not is_login_token(claims)
+
+
+@pytest.mark.parametrize("token_type", ["device", "LOGIN", "", None, True])
+def test_any_other_token_type_is_not_a_login(token_type):
+    assert not is_login_token({**_LOGIN_CLAIMS, "token_type": token_type})
+
+
 @pytest.mark.parametrize("claim", sorted(NON_LOGIN_CLAIMS))
-def test_any_purpose_claim_disqualifies_a_token_whatever_its_value(claim):
+def test_any_purpose_claim_disqualifies_even_a_login_typed_token(claim):
     for value in (True, False, None, "", "x"):
         assert not is_login_token({**_LOGIN_CLAIMS, claim: value}), (claim, value)
 
