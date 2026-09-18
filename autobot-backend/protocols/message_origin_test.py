@@ -171,9 +171,8 @@ class _Routed(CommunicationChannel):
     async def send(self, message: StandardMessage) -> bool:
         wire = StandardMessage.from_json(message.to_json())
         target = self.protocols[message.header.recipient]
-        asyncio.get_running_loop().create_task(
-            target._handle_message(wire, self.channel_id), context=contextvars.Context()
-        )
+        inbox = next(iter(target.channels))  # the receiver's own channel, as its poller would pass
+        asyncio.get_running_loop().create_task(target._handle_message(wire, inbox), context=contextvars.Context())
         return True
 
     async def receive(self, timeout=None):
