@@ -62,10 +62,9 @@ _GDOC_MIME = "application/vnd.google-apps.document"
 _GSHEET_MIME = "application/vnd.google-apps.spreadsheet"
 
 # Issue #12659: _load_ts()/_store_ts()/_classify_change() moved to
-# AbstractConnector (byte-identical to onedrive.py's copies). This
-# connector's Redis prefix ("connector:gdrive:ts:") matches the base class
-# default derived from connector_type, so no override is needed. Its
-# _modified_time_field also matches the base default ("modifiedTime").
+# AbstractConnector (byte-identical to onedrive.py's copies). This connector's
+# Redis prefix and _modified_time_field both match the base class defaults
+# ("connector:gdrive:ts:" derived from connector_type, and "modifiedTime"), so no override is needed.
 
 
 @ConnectorRegistry.register("gdrive")
@@ -268,16 +267,9 @@ class GoogleDriveConnector(AbstractConnector):
             )
             return None
 
-        # #13708: single chokepoint for every branch above (gdoc/gsheet export,
-        # docx, pdf, md/txt) -- the docx branch already redacts internally via
-        # content_extraction.py's extract_text_from_docx, this covers the
-        # gdoc/gsheet/pdf/md/txt branches that don't, and is a no-op on text
-        # already redacted.
-        text = redact_content(text)
-
-        # Add file header
+        # Add file header (redact_content is idempotent -- extract_text_from_docx already redacts its branch, #13708)
         header = f"# {file_name}\n\nFile: {file_meta.get('webViewLink', '')}\n\n"
-        text = header + text
+        text = header + redact_content(text)
 
         # Update stored timestamp
         last_modified = file_meta.get("modifiedTime", "")
