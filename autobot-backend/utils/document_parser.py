@@ -14,6 +14,7 @@ from typing import Dict, Tuple
 from autobot_shared.logging_manager import get_logger
 from media.document.extraction import extract_docx, extract_pdf
 from media.document.provenance import render_text_and_tables
+from media.document.zip_formats import SUFFIX_BY_FORMAT, sniff_zip_format
 
 logger = get_logger(__name__)
 
@@ -60,19 +61,34 @@ class DocumentParser:
         if not exists:
             raise FileNotFoundError(f"Document not found: {file_path}")
 
-        extension = file_path.suffix.lower()
+        candidates = await asyncio.to_thread(self._candidate_extensions, file_path)
 
-        if extension not in self.supported_formats:
+        if not candidates:
             raise ValueError(
-                f"Unsupported document format: {extension}. " f"Supported: {', '.join(self.supported_formats.keys())}"
+                f"Unsupported document format: {file_path.suffix.lower()}. "
+                f"Supported: {', '.join(self.supported_formats.keys())}"
             )
 
         # Run extraction in thread pool to avoid blocking
         text, metadata = await asyncio.get_running_loop().run_in_executor(
-            None, self._extract_text_sync, file_path, extension
+            None, self._extract_text_sync, file_path, candidates
         )
 
         return text, metadata
+
+    def _candidate_extensions(self, file_path: Path) -> list[str]:
+        """Supported extensions to try, the content-verified one first (#16773).
+
+        A renamed file used to be misrouted or rejected outright, because its name was
+        the only input. When the archive's own members disagree with the name, the
+        verified format leads and the name is still tried after it -- a mismatch alone
+        never fails an extraction, mirroring how pdf/docx already behave.
+        """
+        extension = file_path.suffix.lower()
+        verified = SUFFIX_BY_FORMAT.get(sniff_zip_format(file_path) or "")
+        if verified and verified != extension:
+            logger.info("%s: content says %s, name says %s — trying content first", file_path.name, verified, extension)
+        return [c for c in dict.fromkeys([verified, extension]) if c in self.supported_formats]
 
     def _get_parser_for_extension(self, extension: str):
         """Get parser function for extension (Issue #315 - dispatch table)."""
@@ -98,30 +114,41 @@ class DocumentParser:
 
         return None
 
-    def _extract_text_sync(self, file_path: Path, extension: str) -> Tuple[str, Dict[str, any]]:
-        """Synchronous text extraction (Issue #315 - refactored to dispatch table)."""
+    def _extract_text_sync(self, file_path: Path, candidates: list[str]) -> Tuple[str, Dict[str, any]]:
+        """Synchronous text extraction (Issue #315 - refactored to dispatch table).
+
+        #16773: *candidates* is the content-verified format first, then the file's own
+        extension. Each is tried in turn, so a mislabeled document parses with the right
+        parser instead of failing on the wrong one.
+        """
         metadata = {
             "file_name": file_path.name,
             "file_size": file_path.stat().st_size,
-            "format": extension,
+            "format": candidates[0] if candidates else file_path.suffix.lower(),
         }
 
-        try:
-            parser = self._get_parser_for_extension(extension)
-            if parser is None:
-                raise ValueError(f"No parser implemented for {extension}")
+        last_error: Exception | None = None
+        for extension in candidates:
+            try:
+                parser = self._get_parser_for_extension(extension)
+                if parser is None:
+                    raise ValueError(f"No parser implemented for {extension}")
 
-            text = parser(file_path, metadata)
-            metadata["extraction_success"] = True
-            metadata["text_length"] = len(text)
+                text = parser(file_path, metadata)
+                metadata["format"] = extension
+                metadata["extraction_success"] = True
+                metadata["text_length"] = len(text)
 
-            return text, metadata
+                return text, metadata
 
-        except Exception as e:
-            logger.error("Failed to parse %s: %s", file_path, e, exc_info=True)
-            metadata["extraction_success"] = False
-            metadata["extraction_error"] = str(e)
-            return "", metadata
+            except Exception as e:
+                last_error = e
+                logger.warning("Parsing %s as %s failed: %s", file_path, extension, e)
+
+        logger.error("Failed to parse %s, tried %s: %s", file_path, candidates, last_error, exc_info=True)
+        metadata["extraction_success"] = False
+        metadata["extraction_error"] = str(last_error)
+        return "", metadata
 
     def _parse_pdf(self, file_path: Path, metadata: Dict) -> str:
         """Extract text from PDF via the canonical extractor (#13893).
