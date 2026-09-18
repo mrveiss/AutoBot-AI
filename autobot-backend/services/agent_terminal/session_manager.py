@@ -231,6 +231,7 @@ class SessionManager:
         host: str = "main",
         metadata: Metadata | None = None,
         owner: str | None = None,
+        tenant_id: str | None = None,
     ) -> AgentTerminalSession:
         """
         Create a new agent terminal session with PTY integration.
@@ -245,6 +246,8 @@ class SessionManager:
             host: Target host for command execution
             metadata: Additional session metadata
             owner: Authenticated creator's username (#14989/#14960)
+            tenant_id: The creator's org_id, from the JWT claim only (#16975).
+                None if it could not be determined -- never guessed here.
 
         Returns:
             Created session
@@ -257,6 +260,7 @@ class SessionManager:
             agent_id=agent_id,
             agent_role=agent_role,
             conversation_id=conversation_id,
+            tenant_id=tenant_id,
             host=host,
             metadata=metadata or {},
             pty_session_id=pty_session_id,

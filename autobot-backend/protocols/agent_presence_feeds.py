@@ -92,21 +92,16 @@ async def sync_ai_stack_presence(registry: AgentPresenceRegistry, health_registr
 async def sync_session_presence(registry: AgentPresenceRegistry, session_manager: "SessionManager") -> None:
     """Report every live agent-terminal session; busy iff it has a running command.
 
-    tenant_id is UNKNOWN_TENANT for every session, not derived (#16947 review
-    asked for `conversation_id` -> owner -> org). Checked and reported back:
-    `AgentTerminalSession.conversation_id` is a chat_history correlation id
-    only -- `chat_history`'s own session/conversation mixins (base.py,
-    session.py, security.py) carry no user_id/org_id anywhere, and the
-    `owner` username threaded through `SessionManager.create_session` is not
-    persisted onto `AgentTerminalSession` for a later lookup to recover. The
-    real fix is threading tenant through at session-creation time, not
-    deriving it after the fact from a field that cannot carry it -- left as
-    a follow-up; UNKNOWN_TENANT is the correct value until that lands.
+    tenant_id (#16975) is `AgentTerminalSession.tenant_id`, captured at
+    creation from the creating principal's JWT `org_id` claim -- it cannot be
+    recovered afterwards (see that field's own docstring), so a session
+    created before #16975 or via a path with no authenticated context falls
+    back to UNKNOWN_TENANT here rather than guessing.
     """
     for session_id, session in list(session_manager.sessions.items()):
         registry.report(
             kind=AgentKind.SESSION,
-            tenant_id=UNKNOWN_TENANT,
+            tenant_id=session.tenant_id or UNKNOWN_TENANT,
             name=session_id,
             instance_id=session_id,
             busy=session.has_running_task(),

@@ -36,6 +36,10 @@ class AgentTerminalSession:
     agent_id: str
     agent_role: AgentRole
     conversation_id: str | None = None  # Linked chat conversation
+    # #16975: the creating principal's org_id (JWT claim only, never a
+    # caller-supplied value), captured at creation -- it cannot be recovered
+    # afterwards. None when undetermined; presence then reports UNKNOWN_TENANT.
+    tenant_id: str | None = None
     host: str = "main"  # Target host (main, frontend, npu-worker, etc.)
     state: AgentSessionState = AgentSessionState.AGENT_CONTROL
     created_at: float = field(default_factory=time.time)

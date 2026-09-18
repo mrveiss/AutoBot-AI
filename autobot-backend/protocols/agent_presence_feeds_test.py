@@ -120,30 +120,40 @@ class TestSyncAiStackPresence:
         assert all(e.busy is False for e in entries.values())
 
 
+def _fake_session(*, agent_id: str = "claude", busy: bool = False, tenant_id: str | None = None):
+    return SimpleNamespace(agent_id=agent_id, has_running_task=lambda: busy, tenant_id=tenant_id)
+
+
 class TestSyncSessionPresence:
     @pytest.mark.asyncio
     async def test_a_session_with_a_running_command_is_busy(self):
         session_manager = SimpleNamespace(
             sessions={
-                "sess-1": SimpleNamespace(agent_id="claude", has_running_task=lambda: True),
-                "sess-2": SimpleNamespace(agent_id="claude", has_running_task=lambda: False),
+                "sess-1": _fake_session(busy=True, tenant_id="tenant-x"),
+                "sess-2": _fake_session(busy=False, tenant_id="tenant-x"),
             }
         )
         registry = AgentPresenceRegistry(ttl_seconds=60)
 
         await sync_session_presence(registry, session_manager)
 
-        # Sessions carry UNKNOWN_TENANT (#16947 review): never listable via
-        # list_live(), by design -- inspect the stored record directly.
-        stored = {name: rec for (_, _, name), rec in registry._entries.items()}
-        assert stored["sess-1"].busy is True
-        assert stored["sess-2"].busy is False
+        entries = {e.name: e for e in registry.list_live("tenant-x")}
+        assert entries["sess-1"].busy is True
+        assert entries["sess-2"].busy is False
 
     @pytest.mark.asyncio
-    async def test_sessions_are_reported_with_unknown_tenant_and_never_listed(self):
-        session_manager = SimpleNamespace(
-            sessions={"sess-1": SimpleNamespace(agent_id="claude", has_running_task=lambda: False)}
-        )
+    async def test_a_session_with_a_known_tenant_is_discoverable_within_it_only(self):
+        session_manager = SimpleNamespace(sessions={"sess-1": _fake_session(tenant_id="tenant-x")})
+        registry = AgentPresenceRegistry(ttl_seconds=60)
+
+        await sync_session_presence(registry, session_manager)
+
+        assert {e.name for e in registry.list_live("tenant-x")} == {"sess-1"}
+        assert registry.list_live("tenant-y") == []
+
+    @pytest.mark.asyncio
+    async def test_a_session_with_no_tenant_is_unknown_and_never_listed(self):
+        session_manager = SimpleNamespace(sessions={"sess-1": _fake_session(tenant_id=None)})
         registry = AgentPresenceRegistry(ttl_seconds=60)
 
         await sync_session_presence(registry, session_manager)

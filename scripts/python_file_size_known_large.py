@@ -323,7 +323,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/security/threat_intelligence.py": 763,
     "autobot-backend/security_layer.py": 767,
     "autobot-backend/services/agent_analytics.py": 686,
-    "autobot-backend/services/agent_terminal/service.py": 962,
+    "autobot-backend/services/agent_terminal/service.py": 959,
     "autobot-backend/services/ai_stack_client.py": 790,
     "autobot-backend/services/analytics_service.py": 838,
     "autobot-backend/services/audit_logger.py": 1022,
