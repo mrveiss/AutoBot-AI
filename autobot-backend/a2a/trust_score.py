@@ -91,21 +91,26 @@ def _level_from_score(score: float) -> TrustLevel:
 
 
 class Capability(str, Enum):
-    DISCOVERY = "discovery"  # view agent card, list capabilities
-    SUBMIT_TASKS = "submit_tasks"  # submit new A2A tasks
-    QUERY_MEMORY = "query_memory"  # read knowledge / memory stores
-    # #16957: DEFINE_AGENTS ("contribute new agent definitions") was removed. No route or
-    # code path lets a peer define an agent, so granting it at TRUSTED claimed a control
-    # that did not exist. Re-add it together with the operation it gates, never before.
+    """What a peer's trust level lets it do. Every member must have an enforcement site (#16957)."""
+
+    SUBMIT_TASKS = "submit_tasks"  # submit new A2A tasks -- enforced at api/a2a.py submit_task
+    QUERY_MEMORY = "query_memory"  # read knowledge / memory stores -- enforced at orchestrator routing
+    # #16957: two members were removed because they claimed controls that did not exist.
+    # - DEFINE_AGENTS ("contribute new agent definitions"): no route or code path lets a
+    #   peer define an agent. Re-add it together with the operation it gates, never before.
+    # - DISCOVERY ("view agent card"): the card is public by protocol design at
+    #   /.well-known/agent.json (A2A spec 3.1), so no trust level can restrict it. Gating
+    #   the admin copy at /api/a2a/agent-card would refuse a document anyone can fetch.
 
 
 _CAPABILITY_MATRIX: Dict[TrustLevel, Set[Capability]] = {
-    TrustLevel.UNTRUSTED: {Capability.DISCOVERY},
-    TrustLevel.LIMITED: {Capability.DISCOVERY, Capability.SUBMIT_TASKS},
-    TrustLevel.STANDARD: {Capability.DISCOVERY, Capability.SUBMIT_TASKS, Capability.QUERY_MEMORY},
+    TrustLevel.UNTRUSTED: set(),
+    TrustLevel.LIMITED: {Capability.SUBMIT_TASKS},
+    TrustLevel.STANDARD: {Capability.SUBMIT_TASKS, Capability.QUERY_MEMORY},
     # Since #16957, TRUSTED grants nothing beyond STANDARD: the one capability it added
-    # had no operation behind it. The level still matters for promotion and demotion.
-    TrustLevel.TRUSTED: {Capability.DISCOVERY, Capability.SUBMIT_TASKS, Capability.QUERY_MEMORY},
+    # had no operation behind it. The level still matters for promotion and demotion;
+    # the levels as a whole are to be revisited once the peer-identity re-key is decided.
+    TrustLevel.TRUSTED: {Capability.SUBMIT_TASKS, Capability.QUERY_MEMORY},
 }
 
 

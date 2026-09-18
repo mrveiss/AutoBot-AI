@@ -165,13 +165,12 @@ class TestTrustLevelMapping:
 
 
 class TestCapabilityMatrix:
-    def test_untrusted_has_only_discovery(self):
+    def test_untrusted_has_no_capability(self):
         caps = get_capabilities(TrustLevel.UNTRUSTED)
-        assert caps == {Capability.DISCOVERY}
+        assert caps == set()
 
-    def test_limited_has_discovery_and_tasks(self):
+    def test_limited_has_tasks(self):
         caps = get_capabilities(TrustLevel.LIMITED)
-        assert Capability.DISCOVERY in caps
         assert Capability.SUBMIT_TASKS in caps
         assert Capability.QUERY_MEMORY not in caps
 
@@ -286,8 +285,11 @@ class TestRequireCapability:
 
     def test_no_raise_for_allowed_capability(self, tmp_path):
         mgr = _manager_no_redis(tmp_path)
-        # UNTRUSTED can do discovery
-        mgr.require_capability("new-peer", Capability.DISCOVERY)  # must not raise
+        peer = "ltd-peer"
+        for _ in range(PROMOTION_WINDOW):
+            mgr.record_success(peer)
+        assert mgr.get_trust_level(peer) != TrustLevel.UNTRUSTED
+        mgr.require_capability(peer, Capability.SUBMIT_TASKS)  # must not raise
 
     def test_standard_peer_can_query_memory(self, tmp_path):
         mgr = _manager_no_redis(tmp_path)

@@ -33,7 +33,7 @@ async def test_the_orchestrator_receives_the_peers_capabilities():
     _, orchestrator = await _run(TrustLevel.LIMITED, refusal(["rag"]))
 
     authority = orchestrator.process_request.await_args.kwargs["authority"]
-    assert authority.capabilities == {"discovery", "submit_tasks"}
+    assert authority.capabilities == {"submit_tasks"}
 
 
 @pytest.mark.asyncio

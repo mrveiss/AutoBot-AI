@@ -22,7 +22,7 @@ from autobot_shared.trust_enums import TrustLevel
 #: The distributed agents the coordinator registers (coordinator.py, builtin_distributed_agents).
 _DISTRIBUTED = {"classification", "npu_code_search"}
 
-LIMITED = authority_for_level(TrustLevel.LIMITED)  # discovery, submit_tasks -- no query_memory
+LIMITED = authority_for_level(TrustLevel.LIMITED)  # submit_tasks only -- no query_memory
 STANDARD = authority_for_level(TrustLevel.STANDARD)
 
 
