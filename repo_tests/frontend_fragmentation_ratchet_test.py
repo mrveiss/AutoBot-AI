@@ -89,9 +89,22 @@ BASELINE = {
     # copy of the design system.
     "components_declaring_styles": 380,  # #16245: RedisServiceControl.vue removed
     # Distinct class names declared anywhere in the frontend.
-    "distinct_class_names": 5617,  # #16245: recounted at the rebased tree, combined with #16596's cuts
+    #
+    # #16972/#15455: OWNER-APPROVED, ONE-OFF EXCEPTION -- for this counter and
+    # css_rule_declarations only, not precedent for recounting any other ratchet
+    # in this file (the five duplication counters below stay strict). Raised
+    # for #16875's two genuinely new admin pages' own non-duplicated layout,
+    # after every actual duplicate was consolidated first (by hand and by
+    # cross-referencing sibling admin views) -- this pair is documented above
+    # as measuring page SIZE, not duplication, and is interim until #15455
+    # replaces them with a real duplication measure.
+    "distinct_class_names": 5628,  # one less than the owner-approved 5629: the
+    # KnowledgeResearchTabs.vue fix below also removed 2 rules from the tree
     # Total CSS rule declarations.
-    "css_rule_declarations": 9388,  # #16696: recounted at the merged tree
+    #
+    # #16972/#15455: same owner-approved, one-off exception as distinct_class_names
+    # directly above -- see that comment.
+    "css_rule_declarations": 9411,  # one less than the owner-approved 9412, same reason
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
     "button_definition_files": 101,
