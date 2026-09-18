@@ -23,6 +23,7 @@ from typing import Any, Dict, List
 import aiohttp
 import psutil
 
+from autobot_shared.gpu_telemetry import METRICS_QUERY_FIELDS, nvidia_metric_fields, query_nvidia_gpus
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot
@@ -47,101 +48,22 @@ class GPUCollector:
         """Initialize GPU collector."""
         self.gpu_available = gpu_available
 
-    def _parse_metric_value(self, parts: List[str], index: int, as_int: bool = False) -> Any | None:
-        """Parse GPU metric value from nvidia-smi output."""
-        if index >= len(parts):
-            return None
-        value = parts[index]
-        if value == "[Not Supported]":
-            return None
-        try:
-            return int(float(value)) if as_int else float(value)
-        except (ValueError, TypeError):
-            return None
-
-    def _parse_throttling(self, parts: List[str]) -> tuple:
-        """Parse GPU throttling status.
-
-        Returns:
-            Tuple of (thermal_throttling, power_throttling)
-        """
-        if len(parts) <= 16:
-            return False, False
-        thermal_throttling = parts[16] == "Active"
-        power_throttling = (parts[15] == "Active" or parts[17] == "Active") if len(parts) > 17 else False
-        return thermal_throttling, power_throttling
-
-    def _build_metrics(self, parts: List[str]) -> GPUMetrics | None:
-        """Build GPUMetrics from parsed nvidia-smi output."""
-        if len(parts) < 8:
-            return None
-
-        memory_used = int(float(parts[1]))
-        memory_total = int(float(parts[2]))
-        memory_free = memory_total - memory_used
-        thermal_throttling, power_throttling = self._parse_throttling(parts)
-
-        return GPUMetrics(
-            timestamp=time.time(),
-            name=parts[0],
-            utilization_percent=float(parts[3]),
-            memory_used_mb=memory_used,
-            memory_total_mb=memory_total,
-            memory_free_mb=memory_free,
-            memory_utilization_percent=round((memory_used / memory_total) * 100, 1),
-            temperature_celsius=int(float(parts[4])),
-            power_draw_watts=self._parse_metric_value(parts, 5) or 0.0,
-            gpu_clock_mhz=self._parse_metric_value(parts, 6, as_int=True) or 0,
-            memory_clock_mhz=self._parse_metric_value(parts, 7, as_int=True) or 0,
-            fan_speed_percent=self._parse_metric_value(parts, 8, as_int=True),
-            encoder_utilization=self._parse_metric_value(parts, 9, as_int=True),
-            decoder_utilization=self._parse_metric_value(parts, 10, as_int=True),
-            performance_state=(parts[11] if len(parts) > 11 and parts[11] != "[Not Supported]" else None),
-            thermal_throttling=thermal_throttling,
-            power_throttling=power_throttling,
-        )
+    def _build_metrics(self, row: Dict[str, str]) -> GPUMetrics | None:
+        """One GPU's metrics from a METRICS_QUERY_FIELDS row; the mapping is gpu_telemetry's (#16289)."""
+        fields = nvidia_metric_fields(row)
+        return None if fields is None else GPUMetrics(timestamp=time.time(), **fields)
 
     async def collect(self) -> GPUMetrics | None:
-        """Collect comprehensive GPU performance metrics."""
+        """The first GPU's metrics.
+
+        #16289: autobot_shared.gpu_telemetry runs nvidia-smi and splits its rows,
+        so a second GPU no longer shares the first one's comma-split. Consumers
+        take one GPUMetrics; reporting every GPU to them is #16297.
+        """
         if not self.gpu_available:
             return None
-
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "nvidia-smi",
-                "--query-gpu=name,memory.used,memory.total,utilization.gpu,"
-                "temperature.gpu,power.draw,clocks.current.graphics,"
-                "clocks.current.memory,fan.speed,encoder.stats.utilization,"
-                "decoder.stats.utilization,pstate,clocks_throttle_reasons.gpu_idle,"
-                "clocks_throttle_reasons.applications_clocks_setting,"
-                "clocks_throttle_reasons.sw_power_cap,"
-                "clocks_throttle_reasons.hw_slowdown,"
-                "clocks_throttle_reasons.hw_thermal_slowdown,"
-                "clocks_throttle_reasons.hw_power_brake_slowdown",
-                "--format=csv,noheader,nounits",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-
-            try:
-                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
-                result_stdout = stdout.decode("utf-8")
-                returncode = proc.returncode
-            except asyncio.TimeoutError:
-                proc.kill()
-                await proc.wait()
-                logger.warning("nvidia-smi command timed out")
-                return None
-
-            if returncode != 0:
-                return None
-
-            parts = [p.strip() for p in result_stdout.strip().split(",")]
-            return self._build_metrics(parts)
-
-        except Exception as e:
-            logger.error("Error collecting GPU metrics: %s", e)
-            return None
+        rows = await asyncio.to_thread(query_nvidia_gpus, METRICS_QUERY_FIELDS)
+        return self._build_metrics(rows[0]) if rows else None
 
 
 class NPUCollector:
