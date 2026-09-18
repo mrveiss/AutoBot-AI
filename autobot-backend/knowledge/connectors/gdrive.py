@@ -34,6 +34,7 @@ import aiohttp
 from autobot_shared.auth import BearerAuth
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import redact_content
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.content_extraction import extract_pdf_document as _extract_pdf_document
@@ -266,6 +267,13 @@ class GoogleDriveConnector(AbstractConnector):
                 file_id,
             )
             return None
+
+        # #13708: single chokepoint for every branch above (gdoc/gsheet export,
+        # docx, pdf, md/txt) -- the docx branch already redacts internally via
+        # content_extraction.py's extract_text_from_docx, this covers the
+        # gdoc/gsheet/pdf/md/txt branches that don't, and is a no-op on text
+        # already redacted.
+        text = redact_content(text)
 
         # Add file header
         header = f"# {file_name}\n\nFile: {file_meta.get('webViewLink', '')}\n\n"
