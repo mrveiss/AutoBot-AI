@@ -13,32 +13,15 @@ grants access rather than mutating the resource's own owner/scope columns.
 """
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.schemas_resource_grants import RepairGrantRequest, RepairGrantResponse
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from auth_rbac import require_role
 from services.resource_visibility import repair_grant
 
 router = APIRouter(prefix="/admin")
-
-
-class RepairGrantRequest(BaseModel):
-    resource_type: str = Field(..., min_length=1, max_length=32)
-    resource_id: str = Field(..., min_length=1, max_length=255)
-    grantee_type: str = Field(..., pattern="^(user|group)$")
-    grantee_id: str = Field(..., min_length=1, max_length=255)
-    permission: str = Field(default="use", pattern="^(view|use|manage)$")
-
-
-class RepairGrantResponse(BaseModel):
-    id: str
-    resource_type: str
-    resource_id: str
-    grantee_type: str
-    grantee_id: str
-    permission: str
 
 
 @router.post("/resource-grants/repair", response_model=RepairGrantResponse, status_code=201)
