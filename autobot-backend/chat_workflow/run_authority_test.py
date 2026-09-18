@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS
 from chat_workflow import delegation
 from chat_workflow.models import AgentContext
 from chat_workflow.run_authority import NO_INHERITANCE, Inheritance, authority_of, gated_tools
@@ -95,6 +96,41 @@ class TestTheOutOfProcessEngine:
         disallowed = await self._disallowed(NO_INHERITANCE)
 
         assert "Write" not in disallowed and "Edit" not in disallowed
+
+
+class TestAHeldActionHasNoBashFallback:
+    """#16950 review: a gate has no fallback. Every approval category must cost a Bash-keeping child its Bash.
+
+    Every bounded profile today forbids shell, which maps to Bash, so the child's own
+    boundary already removes it. The gap was latent, opening for any profile that
+    keeps Bash. These tests model that child by giving it an empty boundary.
+    """
+
+    @staticmethod
+    async def _disallowed_for_bash_keeping_child(inherited: Inheritance, monkeypatch) -> list:
+        import orchestration.agent_registry as registry
+
+        monkeypatch.setattr(registry, "resolve_forbidden_tools", lambda _agent: frozenset())
+        return await TestTheOutOfProcessEngine._disallowed(inherited)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("category", sorted(APPROVAL_CATEGORY_TOOLS))
+    async def test_every_gated_category_takes_bash_away(self, category, monkeypatch):
+        inherited = Inheritance(authority=Authority(approval_gates=frozenset({category})))
+
+        assert "Bash" in await self._disallowed_for_bash_keeping_child(inherited, monkeypatch)
+
+    @pytest.mark.asyncio
+    async def test_the_control_a_bash_keeping_child_with_nothing_held_keeps_bash(self, monkeypatch):
+        assert "Bash" not in await self._disallowed_for_bash_keeping_child(NO_INHERITANCE, monkeypatch)
+
+
+def test_an_unmappable_profile_token_still_leaves_bash_alone():
+    """The profile-boundary path keeps its accepted behaviour: only a held token costs Bash."""
+    from chat_workflow.delegation import claude_tools_refusing
+
+    assert "Bash" not in claude_tools_refusing(frozenset({"git_push"}), frozenset())
+    assert "Bash" in claude_tools_refusing(frozenset(), frozenset({"git_push"}))
 
 
 @pytest.mark.asyncio
