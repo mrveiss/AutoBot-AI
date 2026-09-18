@@ -194,3 +194,13 @@ def test_presence_ttl_seconds_falls_back_on_an_unparseable_env_value(monkeypatch
     monkeypatch.setenv("AUTOBOT_AGENT_PRESENCE_TTL_SECONDS", "not-a-number")
 
     assert presence_ttl_seconds() == DEFAULT_PRESENCE_TTL_SECONDS
+
+
+def test_presence_ttl_seconds_clamps_a_zero_or_negative_value(monkeypatch):
+    """#16965 review: an unclamped 0/negative TTL makes every entry look
+    stale the instant it is reported."""
+    from protocols.agent_presence import MIN_PRESENCE_TTL_SECONDS, presence_ttl_seconds
+
+    monkeypatch.setenv("AUTOBOT_AGENT_PRESENCE_TTL_SECONDS", "-5")
+
+    assert presence_ttl_seconds() == MIN_PRESENCE_TTL_SECONDS

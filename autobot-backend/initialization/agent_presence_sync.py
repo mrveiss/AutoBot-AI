@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from autobot_shared.env_utils import env_float
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
@@ -33,10 +33,21 @@ logger = get_logger(__name__)
 
 SYNC_INTERVAL_ENV = "AUTOBOT_AGENT_PRESENCE_SYNC_INTERVAL_SECONDS"
 DEFAULT_SYNC_INTERVAL_SECONDS = 30.0
+#: A 0 or negative interval would make `asyncio.sleep` return immediately,
+#: busy-spinning _sync_once()'s DB session, Redis and health-registry reads
+#: every tick -- clamped to a minimum of 1s (#16965 review), matching the
+#: EnvVarSpec's own `range=`.
+MIN_SYNC_INTERVAL_SECONDS = 1.0
+MAX_SYNC_INTERVAL_SECONDS = 3600.0
 
 
 def sync_interval_seconds() -> float:
-    return env_float(SYNC_INTERVAL_ENV, DEFAULT_SYNC_INTERVAL_SECONDS)
+    return env_float_clamped(
+        SYNC_INTERVAL_ENV,
+        DEFAULT_SYNC_INTERVAL_SECONDS,
+        min_v=MIN_SYNC_INTERVAL_SECONDS,
+        max_v=MAX_SYNC_INTERVAL_SECONDS,
+    )
 
 
 async def start(app: "FastAPI") -> None:
@@ -72,7 +83,10 @@ async def _sync_once() -> None:
 
     async with get_async_session_factory()() as session:
         for company_id in await distinct_company_ids_with_agents(session):
-            await sync_company_os_presence(registry, session, company_id)
+            try:
+                await sync_company_os_presence(registry, session, company_id)
+            except Exception as company_error:
+                logger.warning("Presence sync failed for company %s: %s", company_id, company_error)
 
 
 async def _loop() -> None:

@@ -10,6 +10,9 @@ callers -- correct adapters, never invoked. `_sync_once()` is the one
 caller; this proves it reaches all three and the registry reflects it.
 """
 
+import asyncio
+import contextlib
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -19,6 +22,7 @@ import api.agent_terminal as agent_terminal_module
 import autobot_shared.redis_client as redis_client_module
 import chat_workflow as chat_workflow_module
 import llc.services.agent_presence_queries as queries_module
+import protocols.agent_presence_feeds as feeds_module
 import user_management.database as database_module
 from initialization import agent_presence_sync
 from protocols.agent_kind import AgentKind
@@ -82,3 +86,68 @@ class TestSyncOncePopulatesTheRegistry:
         # raising cleanly rather than corrupting state.
         with pytest.raises(RuntimeError):
             await agent_presence_sync._sync_once()
+
+
+def test_sync_interval_seconds_clamps_a_zero_or_negative_value(monkeypatch):
+    """#16965 review: an unclamped 0/negative interval makes asyncio.sleep
+    return immediately, busy-spinning _sync_once() every tick."""
+    monkeypatch.setenv("AUTOBOT_AGENT_PRESENCE_SYNC_INTERVAL_SECONDS", "0")
+
+    assert agent_presence_sync.sync_interval_seconds() == agent_presence_sync.MIN_SYNC_INTERVAL_SECONDS
+
+
+class TestPerCompanyIsolation:
+    async def test_one_companys_sync_failure_does_not_skip_the_rest(self, wired, monkeypatch, caplog):
+        async def _two_companies(session):
+            return ["company-a", "company-b"]
+
+        monkeypatch.setattr(queries_module, "distinct_company_ids_with_agents", _two_companies)
+
+        synced: list[str] = []
+
+        async def _flaky_sync_company_os_presence(registry, session, company_id):
+            if company_id == "company-a":
+                raise RuntimeError("company-a's DB row is malformed")
+            synced.append(company_id)
+
+        monkeypatch.setattr(feeds_module, "sync_company_os_presence", _flaky_sync_company_os_presence)
+
+        with caplog.at_level(logging.WARNING):
+            await agent_presence_sync._sync_once()
+
+        assert synced == ["company-b"], "company-b must still sync after company-a's failure"
+        assert any("company-a" in r.message for r in caplog.records)
+
+
+class TestLoopSurvivesAFailedIteration:
+    async def test_a_logged_failure_does_not_stop_the_next_iteration_from_running(self, wired, monkeypatch, caplog):
+        monkeypatch.setattr(agent_presence_sync, "sync_interval_seconds", lambda: 0.01)
+        real_sync_once = agent_presence_sync._sync_once
+        calls = {"n": 0}
+
+        async def _flaky_sync_once():
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("first iteration fails")
+            await real_sync_once()
+
+        monkeypatch.setattr(agent_presence_sync, "_sync_once", _flaky_sync_once)
+
+        with caplog.at_level(logging.WARNING):
+            task = asyncio.ensure_future(agent_presence_sync._loop())
+            try:
+                for _ in range(200):
+                    if calls["n"] >= 2:
+                        break
+                    await asyncio.sleep(0.01)
+            finally:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+
+        assert calls["n"] >= 2, "the loop must run a second iteration after the first one raised"
+        assert any("Agent presence sync iteration failed" in r.message for r in caplog.records)
+        entries = wired.list_live(None)
+        assert any(
+            e.kind is AgentKind.AI_STACK and e.name == "chat" for e in entries
+        ), "the surviving second iteration must still reach the real _sync_once() and populate the registry"
