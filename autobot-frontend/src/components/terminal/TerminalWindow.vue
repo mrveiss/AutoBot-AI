@@ -237,6 +237,9 @@ export default {
     const waitingForUserConfirmation = ref(false);
 
     // Advanced workflow management state
+    // Default true, so behaviour is unchanged: the advanced modal opens as it
+    // always has. Setting it false routes the same call to the legacy modal
+    // (#16312). Returned from setup, so a caller or a test can flip it.
     const isAdvancedMode = ref(true); // Use advanced modal by default
     const workflowTemplates = ref([]);
     const passwordPromptActive = ref(false);
@@ -618,7 +621,16 @@ export default {
 
     const requestManualStepConfirmation = (stepInfo) => {
       pendingWorkflowStep.value = stepInfo;
-      showManualStepModal.value = true;
+      // #16312: isAdvancedMode chooses which modal opens. Until this, it was set
+      // and never read, and showLegacyModal was only ever set to FALSE (three
+      // sites, all closing it) — so the documented fallback could not open under
+      // any condition, and a route that cannot run is indistinguishable from one
+      // that simply never fired.
+      if (isAdvancedMode.value) {
+        showManualStepModal.value = true;
+      } else {
+        showLegacyModal.value = true;
+      }
       waitingForUserConfirmation.value = true;
 
       addOutputLine({
