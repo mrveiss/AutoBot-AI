@@ -235,40 +235,29 @@
 # and the only one it may ever read -- a plaintext env-file read would be a
 # parallel credential path the owner's secrets-management rule forbids.
 #
-# One mechanism for both VNC types: the vnc_type default (defaults/main.yml)
-# is what names the secret, not anything host-specific, so api.vnc_proxy's
-# VNC_ENDPOINTS key ("desktop"/"browser") is exactly the lookup key the
-# backend needs. register-credentials.yml is the only place this role has
-# ever actually been invoked, always as "desktop" -- a future "browser"
-# invocation only needs to set vnc_type; the refusal below is what keeps
-# that future invocation from silently sending a secret in cleartext
-# cross-host once it exists.
+# #16299 review round 2: registering here, inline in this role's own tasks,
+# is only safe for a playbook where the backend's secrets-table migration has
+# ALREADY run by the time this role executes. setup-user-backend.yml runs
+# roles (common -> backend -> vnc) BEFORE post_tasks' migration sequence, so
+# on a fresh host this can never succeed no matter how long it retries --
+# and a hard failure here aborts the whole play before post_tasks (migrations
+# included) ever run, breaking provisioning entirely, not just VNC.
 #
-# #16299 review: this used to be gated on `not vnc_secrets_stat.stat.exists`
-# (the LOCAL file), which only ever fires once per host, ever -- password
-# generation above creates that file BEFORE this ever runs, so a first
-# attempt that fails for any reason (the backend not up yet, migrations not
-# run yet) is never retried: the file already exists on every later run.
-# Gated on an actual read-back of the vault instead, so a failed attempt
-# self-heals on the next run regardless of the local file's state.
+# So this is best-effort here (block/rescue, mirroring the existing
+# "Register VNC credentials in SLM" pattern below) for every OTHER playbook
+# that includes this role on an already-provisioned host (deploy.yml,
+# playbooks/deploy_role.yml, playbooks/enroll-node.yml,
+# playbooks/provision-fleet-roles.yml -- none of these run migrations, so the
+# vault is already there). setup-user-backend.yml additionally calls
+# register-vnc-password.yml a second time from ITS OWN post_tasks, after the
+# migration sequence -- register-vnc-password.yml's own vault-read-back check
+# (not the local vnc-secrets.env file) makes a second, later, successful
+# call safe to run after a first one that failed pre-migration.
 #
-# Reaches the backend via {{ main_host }}:{{ backend_port }}, mirroring
-# autobot_shared/network_constants.py's BACKEND_API
-# (f"http://{MAIN_MACHINE_IP}:{BACKEND_PORT}") -- backend_port's own comment
-# elsewhere in this role tree says "loopback only" (plain HTTP, no TLS
-# listener on this port), true for the co-located desktop host. The
-# "vnc_type == desktop" guard below is what keeps this from ever sending the
-# password in cleartext to a genuinely remote host once "browser" is wired.
-- name: "VNC | Read AUTOBOT_INTERNAL_API_KEY from slm-secrets.env (#16299)"
-  ansible.builtin.shell:
-    cmd: >-
-      grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
-      /etc/autobot/slm-secrets.env 2>/dev/null || true
-  register: _vnc_internal_api_key_read
-  changed_when: false
-  failed_when: false
-  no_log: true
-
+# The non-desktop refusal is deliberately NOT inside this best-effort
+# block: sending a password in cleartext to a genuinely remote host is a
+# real misconfiguration, not a migration-timing flake, and must hard-fail
+# the play rather than degrade into a rescued debug message.
 - name: "VNC | Refuse to register a non-co-located host's password over plaintext HTTP (#16299)"
   ansible.builtin.fail:
     msg: >-
@@ -278,48 +267,28 @@
       validation (the shared TLS keypair, #16020) before enabling this for a genuinely
       remote host; sending the password in cleartext cross-host is not an acceptable
       fallback.
-  when: vnc_type != 'desktop'
-
-- name: "VNC | Wait for the secrets API to accept requests, and check if already registered (#16299)"
-  ansible.builtin.uri:
-    url: "http://{{ main_host }}:{{ backend_port | default(8001) }}/api/v2/secrets/system"
-    method: GET
-    headers:
-      X-Internal-API-Key: "{{ _vnc_internal_api_key_read.stdout | trim }}"
-    status_code: [200]
-    validate_certs: false
-  register: _vnc_existing_secrets
-  retries: 12
-  delay: 5
-  until: _vnc_existing_secrets.status | default(0) == 200
   when:
-    - vnc_type == 'desktop'
-    - (_vnc_internal_api_key_read.stdout | default('') | trim) | length > 0
+    - vnc_password_result.stdout | length > 0
+    - vnc_type != 'desktop'
 
-- name: "VNC | Register VNC password in the canonical secrets system (#16299)"
-  ansible.builtin.uri:
-    url: "http://{{ main_host }}:{{ backend_port | default(8001) }}/api/v2/secrets/system"
-    method: POST
-    headers:
-      X-Internal-API-Key: "{{ _vnc_internal_api_key_read.stdout | trim }}"
-    body_format: json
-    body:
-      owner_vault: system
-      name: "vnc-password-{{ vnc_type }}"
-      secret_type: vnc_password
-      value: "{{ vnc_password_result.stdout }}"
-    status_code: [201]
-    validate_certs: false
-  register: _vnc_register_result
-  retries: 5
-  delay: 5
-  until: _vnc_register_result.status | default(0) == 201
+- name: "VNC | Register the VNC password in the canonical secrets system (best-effort, #16299)"
   when:
+    - vnc_password_result.stdout | length > 0
     - vnc_type == 'desktop'
-    - (_vnc_internal_api_key_read.stdout | default('') | trim) | length > 0
-    - _vnc_existing_secrets is succeeded
-    - (_vnc_existing_secrets.json | default([]) | selectattr('name', 'equalto', 'vnc-password-' + vnc_type) | list | length) == 0
-  no_log: true
+  block:
+    - name: "VNC | Register VNC password in the canonical secrets system"
+      ansible.builtin.include_tasks: register-vnc-password.yml
+  rescue:
+    - name: "VNC | Secrets-vault registration skipped or failed (non-fatal)"
+      ansible.builtin.debug:
+        msg: >-
+          VNC password registration in the secrets vault failed or was skipped for
+          {{ inventory_hostname }} (vnc_type={{ vnc_type }}). If this host is being
+          provisioned via setup-user-backend.yml, its post_tasks retries this after
+          migrations run and this is expected on a fresh host. On any other path,
+          desktop VNC connections will fail closed until this is registered --
+          re-run this role, or register the secret by hand via
+          POST /api/v2/secrets/system.
 
 # --- Node-level TLS cert (#1962) ---
 # Shared node keypair, also provisioned by roles/backend and setup-internal-ca.

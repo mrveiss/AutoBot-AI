@@ -139,6 +139,36 @@
       failed_when: false
       tags: [verify]
 
+    # #16299 review round 2: the vnc role's own inline registration attempt
+    # (roles: phase, before migrations run in this post_tasks: block) cannot
+    # succeed on a fresh host and is deliberately best-effort there (see
+    # roles/vnc/tasks/main.yml's comment). This is the authoritative attempt:
+    # the backend is confirmed up (health check above) and migrations have
+    # already run, so the secrets vault exists. register-vnc-password.yml's own
+    # vault-read-back check makes re-running it here safe regardless of
+    # whether the earlier roles:-phase attempt ran, skipped, or failed.
+    # Still wrapped in block/rescue -- VNC registration failing must never
+    # fail the overall provisioning run.
+    - name: "VNC | Register the VNC password now that migrations have run (#16299)"
+      when:
+        - enable_vnc | default(true)
+        - vnc_password_result is defined
+        - vnc_password_result.stdout | default('') | length > 0
+      tags: [vnc, migrations]
+      block:
+        - name: "VNC | Register VNC password in the canonical secrets system (post-migration)"
+          ansible.builtin.include_role:
+            name: vnc
+            tasks_from: register-vnc-password
+      rescue:
+        - name: "VNC | Post-migration secrets-vault registration failed (non-fatal)"
+          ansible.builtin.debug:
+            msg: >-
+              VNC password registration in the secrets vault failed for {{ inventory_hostname }}
+              even after migrations ran. Desktop VNC connections will fail closed until this is
+              registered -- check backend logs, then re-run this playbook or register the secret
+              by hand via POST /api/v2/secrets/system.
+
     - name: Display setup summary
       debug:
         msg: |
