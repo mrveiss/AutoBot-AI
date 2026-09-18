@@ -499,10 +499,10 @@ async def resume_operation(operation_id: str, manager=Depends(get_operation_mana
 )
 async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
     """WebSocket endpoint for real-time progress updates"""
+    if not await open_authenticated_ws(websocket, admin=True):  # #17009, #17010: before anything else is revealed
+        return
     if not _OPERATIONS_AVAILABLE:
         await websocket.close(code=1003, reason="Service not available")
-        return
-    if not await open_authenticated_ws(websocket, admin=True):  # #17009, #17010
         return
 
     # Add to connections

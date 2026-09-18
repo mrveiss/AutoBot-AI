@@ -104,6 +104,16 @@ def test_operation_progress_is_admin_only(operations):
     assert _connect(operations.router, "/op-1/progress", ADMIN) == "accepted"
 
 
+def test_an_unauthenticated_probe_learns_nothing_about_the_framework(monkeypatch):
+    """#17018 review: availability was checked first, so a 1003 told an anonymous caller the framework was down."""
+    from api import long_running_operations as lro
+
+    monkeypatch.setattr(lro, "_OPERATIONS_AVAILABLE", False)
+
+    assert _refused(lro.router, "/op-1/progress", None) == 1008
+    assert _refused(lro.router, "/op-1/progress", USER) == 1008
+
+
 def test_every_long_running_http_route_requires_admin():
     """#17010: each HTTP route carries the admin dependency; none is left open."""
     from api import long_running_operations as lro
