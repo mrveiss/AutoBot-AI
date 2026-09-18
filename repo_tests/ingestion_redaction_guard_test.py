@@ -25,8 +25,10 @@ negative control below proves the detection logic itself, not just this list.
 
 from __future__ import annotations
 
+import ast
 import importlib
 import inspect
+import textwrap
 
 import pytest
 
@@ -42,8 +44,14 @@ def _calls_redact_content(source: str) -> bool:
 
     Checked against the function's own source, not the module's imports, so an
     entry point that imports the redactor but never calls it still fails.
+    Parsed with ast rather than a substring search (review): a comment or a
+    docstring mentioning "redact_content(" in passing must not satisfy this.
     """
-    return "redact_content(" in source
+    tree = ast.parse(textwrap.dedent(source))
+    return any(
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "redact_content"
+        for node in ast.walk(tree)
+    )
 
 
 def _resolve(module_path: str, qualname: str):
@@ -80,3 +88,21 @@ def test_negative_control_a_function_that_skips_redaction_is_caught() -> None:
 
     source = inspect.getsource(_fake_entry_point_that_forgets_to_redact)
     assert not _calls_redact_content(source), "negative control itself contains a redact_content(...) call"
+
+
+def test_negative_control_a_mention_in_a_comment_or_string_is_not_a_call() -> None:
+    """A substring search would pass this; an ast.Call check must not (review).
+
+    ``# TODO: call redact_content(text) here`` and a docstring naming the
+    function are exactly the false-positive shape a plain ``"redact_content(" in
+    source`` check cannot tell apart from a real call.
+    """
+
+    def _fake_entry_point_that_only_mentions_it(content_bytes: bytes) -> str:
+        """Caller must invoke redact_content(text) before returning."""
+        # TODO: call redact_content(text) here
+        text = content_bytes.decode("utf-8")
+        return text
+
+    source = inspect.getsource(_fake_entry_point_that_only_mentions_it)
+    assert not _calls_redact_content(source), "a comment/docstring mention of redact_content( must not count as a call"

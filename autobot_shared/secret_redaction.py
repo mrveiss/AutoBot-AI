@@ -239,16 +239,22 @@ _KNOWN_PREFIX_RE = re.compile(
     r")\b"
 )
 
-# scheme://user:password@host -- credentials embedded directly in a URL.
-_BASIC_AUTH_URL_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@]+:[^\s/@]+@[^\s]+")
+# scheme://user:password@host -- credentials embedded directly in a URL. Both
+# userinfo components stop at '?' and '#' too, not just '/' and '@' -- without
+# that, "https://example.com?next=user:pass@example.org" reads its query
+# string as a username and wrongly redacts ordinary URL content (review).
+_BASIC_AUTH_URL_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@?#]+:[^\s/@?#]+@[^\s]+")
 
 # "your password is X", "here is your api key: Y" -- a signup/notification
 # email's own words pointing at the value that follows.  The value itself
 # still has to look credential-shaped (checked in code, not the regex): a
 # plain identifier like ``getKey()`` must not qualify just because it follows
-# the word "key".
+# the word "key" -- but that exclusion only applies to "api key"/"secret"/
+# "token" (ambiguous with a code identifier); a real password is routinely a
+# plain alphanumeric string like "Hunter123", so "password"/"passwd" keep the
+# keyword captured separately (group 1) to exempt them from it (review).
 _CREDENTIAL_PHRASE_RE = re.compile(
-    r"\b(?:password|passwd|api[ _-]?key|secret|token)\b\s*(?:is|:|=)\s*[\"']?([^\s\"'.,;]{6,})[\"']?",
+    r"\b(password|passwd|api[ _-]?key|secret|token)\b\s*(?:is|:|=)\s*[\"']?([^\s\"'.,;]{6,})[\"']?",
     re.IGNORECASE,
 )
 
@@ -329,11 +335,14 @@ def scan_content_for_credentials(text: str) -> list[ContentMatch]:
         if _claim(m.start(), m.end()):
             matches.append(ContentMatch("basic_auth_url", m.start(), m.end(), "high"))
     for m in _CREDENTIAL_PHRASE_RE.finditer(text):
-        value = m.group(1)
-        if _looks_like_identifier(value) or not any(c.isdigit() or not c.isalnum() for c in value):
-            continue  # a plain word/identifier following "password"/"key" is not itself a value
-        if _claim(m.start(1), m.end(1)):
-            matches.append(ContentMatch("credential_phrase", m.start(1), m.end(1), "medium"))
+        keyword = m.group(1).lower()
+        value = m.group(2)
+        if keyword not in ("password", "passwd") and (
+            _looks_like_identifier(value) or not any(c.isdigit() or not c.isalnum() for c in value)
+        ):
+            continue  # a plain word/identifier following "key"/"secret"/"token" is not itself a value
+        if _claim(m.start(2), m.end(2)):
+            matches.append(ContentMatch("credential_phrase", m.start(2), m.end(2), "medium"))
 
     data_uri_spans = [(m.start(), m.end()) for m in _DATA_URI_RE.finditer(text)]
     for m in _HIGH_ENTROPY_RE.finditer(text):
