@@ -27,11 +27,23 @@ Round 2 of the same review found the fix for round 1 itself had three gaps:
   or a block scalar evades -- the literal text on the assignment line is not
   necessarily the resolved value.
 
+Round 3 found the round-2 fix had two more gaps of its own:
+
+* the equals-form regex change dropped the pre-existing empty-string
+  alternatives (`""`/`''`), so `--host=""` no longer matched even though
+  `_WILDCARD_BIND_VALUES` still treats `""` as a wildcard -- the two checks
+  disagreed;
+* the compose sweep only ever looked at `ports:`, so a ChromaDB service with
+  `network_mode: host` -- which binds every interface with no `ports:` entry
+  at all -- would pass unnoticed.
+
 This version resolves the variable's actual value via `yaml.safe_load` (not a
 regex), discovers ansible launch sites by sweeping tracked
-`.service`/`.service.j2`/`.sh` files, and discovers Docker Compose ChromaDB
+`.service`/`.service.j2`/`.sh` files, discovers Docker Compose ChromaDB
 `ports:` sites by sweeping `docker-compose*.yml` and any compose file under
-`docker/` -- so all of the above are structural fixes, not a longer list.
+`docker/`, and separately checks every discovered ChromaDB service's
+`network_mode` regardless of whether it has a `ports:` key -- so all of the
+above are structural fixes, not a longer list.
 
 No named cluster-mode allowlist: `docs/architecture/NETWORK_TOPOLOGY.md`'s
 only documented multi-node path is setting `chromadb_bind_host` to a specific
@@ -87,8 +99,9 @@ _CHROMA_LAUNCH_SITE_WINDOW = re.compile(r"chroma\s+run\b[\s\S]{0,120}?--host[\s=
 
 # A bind literal typed directly into a rendered/heredoc ExecStart, space or
 # `=` form. 127.0.0.1 is the chosen safe default and is not itself a
-# violation; a real regression looks like 0.0.0.0 or the IPv6 wildcard.
-_HARDCODED_WIDE_BIND = re.compile(r"--host[\s=]+(?:0\.0\.0\.0|::)")
+# violation; a real regression looks like 0.0.0.0, the IPv6 wildcard, or an
+# empty value.
+_HARDCODED_WIDE_BIND = re.compile(r"--host[\s=]+(?:0\.0\.0\.0|::|\"\"|'')")
 
 _WILDCARD_BIND_VALUES = {"0.0.0.0", "::", ""}
 
@@ -219,19 +232,35 @@ def _discover_compose_files(root: Path) -> list[str]:
     return [rel for rel in found if "services" in _load_yaml_mapping(root / rel)]
 
 
-def _discover_compose_chromadb_port_sites(root: Path) -> list[tuple[str, str, object]]:
-    """(file, service_name, port_entry) for every `ports:` entry on a service
-    that looks like ChromaDB, across every file COMPOSE_FILES reaches."""
-    sites: list[tuple[str, str, object]] = []
+def _uses_host_networking(service: dict) -> bool:
+    """`network_mode: host` binds every interface with no `ports:` entry at
+    all -- a `ports:`-only sweep would miss it entirely (#15317 review round 2)."""
+    return service.get("network_mode") == "host"
+
+
+def _discover_compose_chromadb_services(root: Path) -> list[tuple[str, str, dict]]:
+    """(file, service_name, service_dict) for every service that looks like
+    ChromaDB, across every file COMPOSE_FILES reaches -- the shared basis for
+    both the ports check and the network_mode check below."""
+    found: list[tuple[str, str, dict]] = []
     for rel in COMPOSE_FILES.examined(root):
         services = _load_yaml_mapping(root / rel).get("services") or {}
         for name, service in services.items():
             service = service or {}
-            if not _looks_like_chromadb_service(name, service):
-                continue
-            for entry in service.get("ports") or []:
-                sites.append((rel, name, entry))
-    return sites
+            if _looks_like_chromadb_service(name, service):
+                found.append((rel, name, service))
+    return found
+
+
+def _discover_compose_chromadb_port_sites(root: Path) -> list[tuple[str, str, object]]:
+    """(file, service_name, port_entry) for every `ports:` entry on a service
+    that looks like ChromaDB, across every service COMPOSE_CHROMADB_SERVICES
+    reaches."""
+    return [
+        (rel, name, entry)
+        for rel, name, service in COMPOSE_CHROMADB_SERVICES.examined(root)
+        for entry in service.get("ports") or []
+    ]
 
 
 #: 4 known launch sites today: the two live ansible templates, the infra
@@ -263,6 +292,16 @@ COMPOSE_FILES = declare(
     floor=3,
     growth=3,
     what="docker-compose-shaped YAML files scanned for a ChromaDB service (#15317 review round 2)",
+)
+
+#: 2 known service blocks today: docker-compose.yml's and
+#: docker-compose.hardened.yml's autobot-chromadb.
+COMPOSE_CHROMADB_SERVICES = declare(
+    "chromadb-compose-services",
+    discover=_discover_compose_chromadb_services,
+    floor=2,
+    growth=2,
+    what="compose services that look like ChromaDB (#15317 review round 2)",
 )
 
 #: 1 real site today: docker-compose.yml's autobot-chromadb `ports:` entry.
@@ -352,10 +391,18 @@ def test_the_compose_sweep_reaches_real_compose_files() -> None:
     COMPOSE_FILES.examined(_REPO_ROOT)
 
 
-def test_the_compose_sweep_reaches_a_chromadb_port_site() -> None:
+def test_the_compose_sweep_reaches_chromadb_services() -> None:
     """Vacuity floor distinct from the file-count floor above -- a broken
-    service-name/image match here would check zero port entries and still
-    read as a clean pass."""
+    service-name/image match here would check zero services and still read
+    as a clean pass. Shared by both the ports check and the network_mode
+    check below."""
+    COMPOSE_CHROMADB_SERVICES.examined(_REPO_ROOT)
+
+
+def test_the_compose_sweep_reaches_a_chromadb_port_site() -> None:
+    """Vacuity floor distinct from the service-count floor above -- a
+    service with no `ports:` key at all must not make this read as clean by
+    finding zero entries to check."""
     COMPOSE_CHROMADB_PORT_SITES.examined(_REPO_ROOT)
 
 
@@ -372,6 +419,18 @@ def test_no_compose_chromadb_port_binds_a_wildcard_or_bare_port() -> None:
     assert not offenders, f"{offenders} publish ChromaDB without a safe, host-scoped port mapping (#15317)"
 
 
+def test_no_compose_chromadb_service_uses_host_networking() -> None:
+    """`network_mode: host` binds every interface with NO `ports:` entry at
+    all, so it must be flagged even when the ports check above finds nothing
+    to complain about (#15317 review round 2)."""
+    offenders = [
+        (rel, name)
+        for rel, name, service in COMPOSE_CHROMADB_SERVICES.examined(_REPO_ROOT)
+        if _uses_host_networking(service)
+    ]
+    assert not offenders, f"{offenders} run ChromaDB with network_mode: host, which binds every interface (#15317)"
+
+
 def test_the_wide_bind_sweep_catches_a_synthetic_wildcard_launch_site(tmp_path: Path) -> None:
     """Negative control: a fabricated wide-bind unit must be caught by the same
     discovery-marker + literal-scan pair the real guard runs above, proving
@@ -386,10 +445,22 @@ def test_the_wide_bind_sweep_catches_a_synthetic_wildcard_launch_site(tmp_path: 
     assert _HARDCODED_WIDE_BIND.search(text), "literal-bind detector failed to catch a synthetic 0.0.0.0"
 
 
-@pytest.mark.parametrize("host_flag", ["--host 0.0.0.0", "--host=0.0.0.0", "--host   0.0.0.0"])
+@pytest.mark.parametrize(
+    "host_flag",
+    [
+        "--host 0.0.0.0",
+        "--host=0.0.0.0",
+        "--host   0.0.0.0",
+        '--host ""',
+        "--host ''",
+        '--host=""',
+        "--host=''",
+    ],
+)
 def test_the_wide_bind_regex_catches_space_and_equals_forms(host_flag: str) -> None:
-    """Negative control for review round 2's nit: --host=0.0.0.0 (no space)
-    must be caught exactly like the space-separated form."""
+    """Negative control for review round 2's nits: --host=0.0.0.0 (no space)
+    and an empty value (space or `=` form, either quote style) must all be
+    caught exactly like the space-separated 0.0.0.0 form."""
     text = f"ExecStart=/venv/bin/chroma run \\\n    {host_flag} \\\n    --port 8100\n"
     assert _CHROMA_LAUNCH_SITE_WINDOW.search(text), f"sweep marker missed {host_flag!r}"
     assert _HARDCODED_WIDE_BIND.search(text), f"literal-bind detector missed {host_flag!r}"
@@ -439,3 +510,21 @@ def test_the_compose_port_check_catches_a_synthetic_wildcard(tmp_path: Path) -> 
     assert _compose_port_offender(bare_entry) is not None, "bare port:port mapping should be flagged"
     assert _compose_port_offender("0.0.0.0:8100:8000") is not None, "explicit 0.0.0.0 host should be flagged"
     assert _compose_port_offender("127.0.0.1:8100:8000") is None, "a real loopback mapping must not be flagged"
+
+
+def test_the_network_mode_check_catches_a_synthetic_host_network(tmp_path: Path) -> None:
+    """Negative control for the network_mode gap (#15317 review round 2): a
+    fabricated ChromaDB service with `network_mode: host` and NO `ports:` at
+    all must be caught by the same function the real guard runs above,
+    proving it isn't silently vacuous just because today's compose files
+    don't use host networking."""
+    fake_compose = tmp_path / "docker-compose.fake-host-net.yml"
+    fake_compose.write_text(
+        "services:\n  autobot-chromadb:\n    image: chromadb/chroma:1.5.9\n    network_mode: host\n",
+        encoding="utf-8",
+    )
+    service = _load_yaml_mapping(fake_compose)["services"]["autobot-chromadb"]
+    assert _looks_like_chromadb_service("autobot-chromadb", service)
+    assert "ports" not in service, "this control must prove the check fires with no ports: key at all"
+    assert _uses_host_networking(service), "network_mode check failed to catch a synthetic host-network service"
+    assert not _uses_host_networking({"network_mode": "bridge"}), "bridge network_mode must not be flagged"
