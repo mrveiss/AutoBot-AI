@@ -169,10 +169,19 @@
   no_log: true
   tags: ['backend', 'config']
 
+# #16299 review: guarded to replace ONLY the known shipped default, not
+# whatever backend_secret_key already resolved to here -- backend commonly
+# runs on a different host/play than slm_manager (the whole reason this reads
+# from a file instead of a live fact), so an operator who set a real value in
+# THIS role's own inventory (host_vars/group_vars for the backend host) must
+# not have it silently replaced by slm_manager's generated one just because
+# the file happens to carry a value. Only the literal default is eligible.
 - name: "Backend | Align backend_secret_key with AUTOBOT_BACKEND_SECRET_KEY when present (#16299)"
   ansible.builtin.set_fact:
     backend_secret_key: "{{ _backend_secret_key_read.stdout | trim }}"
-  when: (_backend_secret_key_read.stdout | default('') | trim) | length > 0
+  when:
+    - (_backend_secret_key_read.stdout | default('') | trim) | length > 0
+    - backend_secret_key == 'change-me-in-production'
   no_log: true
   tags: ['backend', 'config']
 

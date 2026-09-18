@@ -119,6 +119,36 @@ def test_monitoring_reads_the_grafana_password_back() -> None:
     assert 'grafana_admin_password: "{{ _grafana_admin_password_read.stdout | trim }}"' in text
 
 
+def test_align_tasks_replace_only_the_known_default_not_any_existing_value() -> None:
+    """Review finding: the align tasks used to overwrite backend_secret_key /
+    grafana_admin_password from the file whenever the file had a value, with no
+    check on what the var already held. On a fresh install where an operator
+    deliberately set a real value in the CONSUMING role's own inventory scope
+    (backend commonly runs on a different host/play than slm_manager, and
+    monitoring can run standalone via deploy-monitoring.yml), that operator
+    choice would be silently replaced by whatever slm_manager generated, just
+    because the file happened to carry a value.
+
+    Verified functionally with a throwaway role+playbook (role defaults,
+    faithful to the real precedence -- role defaults below set_fact, set_fact
+    below inventory/extra-vars), not asserted from reasoning alone: with the
+    var still at its role default, the align fires and adopts the file's
+    value; with an inventory-level override in place, the align's `when:` is
+    false (the var no longer equals the known default) and the operator's
+    value survives untouched. This test pins the guard clause statically."""
+    backend_text = _text(_BACKEND_TASKS)
+    assert "backend_secret_key == 'change-me-in-production'" in backend_text, (
+        "the backend_secret_key align task must only fire when the current value is still the "
+        "known shipped default -- otherwise an operator's own inventory override for this role "
+        "gets silently replaced by whatever slm_manager generated (#16299 review)"
+    )
+    monitoring_text = _text(_MONITORING_GRAFANA_TASKS)
+    assert "grafana_admin_password == 'admin'" in monitoring_text, (
+        "the grafana_admin_password align task must only fire when the current value is still "
+        "the known shipped default, for the same reason (#16299 review)"
+    )
+
+
 def test_standalone_fallback_defaults_still_documented() -> None:
     """A backend deployed standalone (no SLM ever reaching it) and monitoring
     deployed standalone (deploy-monitoring.yml) still need SOME default -- these

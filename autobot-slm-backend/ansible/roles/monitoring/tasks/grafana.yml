@@ -99,10 +99,18 @@
   failed_when: false
   no_log: true
 
+# #16299 review: guarded to replace ONLY the known shipped default, not
+# whatever grafana_admin_password already resolved to here -- an operator who
+# set a real value in THIS play's own inventory (deploy-monitoring.yml
+# standalone, or a group_vars override on the combined play) must not have it
+# silently replaced by slm_manager's generated one just because the file
+# happens to carry a value. Only the literal default is eligible.
 - name: "Align grafana_admin_password with GRAFANA_ADMIN_PASSWORD when present (#16299)"
   ansible.builtin.set_fact:
     grafana_admin_password: "{{ _grafana_admin_password_read.stdout | trim }}"
-  when: (_grafana_admin_password_read.stdout | default('') | trim) | length > 0
+  when:
+    - (_grafana_admin_password_read.stdout | default('') | trim) | length > 0
+    - grafana_admin_password == 'admin'
   no_log: true
 
 - name: Configure Grafana
