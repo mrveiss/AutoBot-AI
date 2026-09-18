@@ -419,7 +419,9 @@ def _governable_agent_id(source: Dict[str, Any]) -> str | None:
 
     agent_id = source.get("agent_id")
     if agent_id and is_unbounded_agent_id(agent_id) and source.get(PINNED_ROLE_CONTEXT_KEY) != agent_id:
-        logger.warning("Unpinned executor agent_id %r in a request context: default boundary applies (#16950)", agent_id)
+        logger.warning(
+            "Unpinned executor agent_id %r in a request context: default boundary applies (#16950)", agent_id
+        )
         return f"unpinned:{agent_id}"
     return agent_id
 

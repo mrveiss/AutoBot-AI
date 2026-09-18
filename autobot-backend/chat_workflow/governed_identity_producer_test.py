@@ -80,7 +80,8 @@ _KNOWN_CALLERS = {"chat_workflow/manager.py", "chat_workflow/graph.py", "chat_wo
 def _calls_builder(source: str) -> bool:
     tree = ast.parse(source)
     return any(
-        isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) == "build_governed_identity"
+        isinstance(node, ast.Call)
+        and getattr(node.func, "id", getattr(node.func, "attr", None)) == "build_governed_identity"
         for node in ast.walk(tree)
     )
 

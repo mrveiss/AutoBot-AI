@@ -747,4 +747,3 @@ async def broadcast_to_all_agents(sender_id: str, message_data: Any) -> int:
     )
 
     return await sender_protocol.broadcast(broadcast_msg)
-

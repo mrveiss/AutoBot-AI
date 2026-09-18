@@ -9,13 +9,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from chat_workflow import delegation
-from chat_workflow.run_authority import NO_INHERITANCE
 from chat_workflow.delegation import (
     MAX_DELEGATION_DEPTH,
     MAX_DELEGATIONS_PER_TURN,
     forbidden_to_claude_tools,
     run_delegated_subtask,
 )
+from chat_workflow.run_authority import NO_INHERITANCE
 
 # --- forbidden_work → claude_code tool mapping -----------------------------
 
