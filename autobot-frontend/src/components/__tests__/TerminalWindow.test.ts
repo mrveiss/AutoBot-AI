@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/vue'
+import { mount } from '@vue/test-utils'
 import userEvent from '@testing-library/user-event'
 import { ref, reactive } from 'vue'
 import TerminalWindow from '../terminal/TerminalWindow.vue'
 import {
+  createTestRouter,
   renderComponent,
 } from '../../test/utils/test-utils'
+import { createI18n } from 'vue-i18n'
 import { webSocketTestUtil } from '../../test/mocks/websocket-mock'
 
 // ---- Mock dependencies ----
@@ -172,6 +175,77 @@ describe('TerminalWindow', () => {
   afterEach(() => {
     webSocketTestUtil.teardown()
     vi.clearAllMocks()
+  })
+
+  // #16312: the legacy workflow-step modal could never open. `showLegacyModal`
+  // was set to FALSE at three sites and to true at none, and `isAdvancedMode`
+  // was declared and never read — so the documented fallback was unreachable and
+  // looked identical to a fallback that simply never triggered.
+  //
+  // Mounted with @vue/test-utils rather than the file's testing-library helper
+  // because this asserts the DECISION, not the rendering: the exposed refs are
+  // the subject, and testing-library deliberately does not surface them. That
+  // the legacy modal renders once its prop is true is already covered by
+  // TerminalModals.test.ts.
+  // test-utils' own i18n instance is module-private, so this block builds an
+  // equivalent rather than exporting it — empty messages with warnings off, the
+  // same shape renderComponent uses. `$t` then returns the key, which is all
+  // these assertions need.
+  const modalTestI18n = createI18n({
+    legacy: false,
+    locale: 'en',
+    fallbackLocale: 'en',
+    messages: { en: {} },
+    missingWarn: false,
+    fallbackWarn: false,
+  })
+
+  describe('workflow-step modal choice (#16312)', () => {
+    const STEP = { command: 'ls -la', stepNumber: 1, totalSteps: 3, description: 'list files' }
+
+    const mountWindow = () =>
+      mount(TerminalWindow, {
+        global: {
+          plugins: [modalTestI18n, createTestRouter(undefined, ['/terminal/test-session'])],
+          stubs: {
+            AdvancedStepConfirmationModal: { template: '<div />' },
+            CompletionSuggestions: { template: '<div />' },
+            TerminalModals: { template: '<div />' },
+          },
+        },
+      })
+
+    it('opens the advanced modal by default', () => {
+      const wrapper = mountWindow()
+      wrapper.vm.requestManualStepConfirmation(STEP)
+
+      expect(wrapper.vm.showManualStepModal).toBe(true)
+      expect(wrapper.vm.showLegacyModal).toBe(false)
+    })
+
+    it('opens the legacy modal when isAdvancedMode is false', () => {
+      // The path this issue exists for. Without the branch under test, this
+      // assertion fails: showLegacyModal stayed false under every condition.
+      const wrapper = mountWindow()
+      wrapper.vm.isAdvancedMode = false
+      wrapper.vm.requestManualStepConfirmation(STEP)
+
+      expect(wrapper.vm.showLegacyModal).toBe(true)
+      expect(wrapper.vm.showManualStepModal).toBe(false)
+    })
+
+    it('marks the step pending and waits for confirmation on either path', () => {
+      // Whichever modal opens, the surrounding state must be identical —
+      // otherwise the fallback would open and the workflow would not pause.
+      for (const advanced of [true, false]) {
+        const wrapper = mountWindow()
+        wrapper.vm.isAdvancedMode = advanced
+        wrapper.vm.requestManualStepConfirmation(STEP)
+
+        expect(wrapper.vm.pendingWorkflowStep).toEqual(STEP)
+        expect(wrapper.vm.waitingForUserConfirmation).toBe(true)
+      }
+    })
   })
 
   describe('Rendering', () => {

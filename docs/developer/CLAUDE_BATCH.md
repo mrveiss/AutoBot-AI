@@ -76,6 +76,12 @@ Sub-agents without Bash permissions cannot complete git operations and stall mid
 
 **On permission failure:** Do not retry the same agent. Report: which agent failed, at which step, what was left incomplete. Main session completes the git operation manually.
 
+**Never escalate privileges (#13090).** A dispatched sub-agent inherits the same "never `sudo`,
+never run a service as root" rule as the main session (see `CLAUDE_RULES.md`) — state it
+explicitly in the dispatch prompt rather than relying on the sub-agent to have read that doc.
+No hook enforces this yet (see `CLAUDE_RULES.md` for why), so the prompt line is the only
+thing catching it today.
+
 ---
 
 ## Headless / Automated Audit
