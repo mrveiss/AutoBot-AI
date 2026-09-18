@@ -1110,6 +1110,10 @@ const initializeChatInterface = async () => {
         // pushed (empty placeholders are skipped).
         const backendIds = new Set<string>((sessions as Array<{ id: string }>).map(s => s.id))
         await controller.pushLocalOnlySessions(backendIds)
+        // #16274: same rule as the Promise.race guard above — this await does
+        // real network I/O, and a component that unmounted while it was in
+        // flight must not write to the store below.
+        if (isUnmounted) return
         // Issue #4352: intentional_empty=true means the backend confirmed 0 sessions
         // is correct (user deleted all). Pass this through so syncSessionsWithBackend
         // can bypass the #4328 defensive guard and clear local sessions as intended.
@@ -1184,9 +1188,15 @@ function _onLgBreakpoint(e: MediaQueryListEvent): void {
 onMounted(async () => {
   // Initialize chat interface with streamlined loading
   await initializeChatInterface()
+  // #16274: initializeChatInterface() guards its own internals but still
+  // resolves normally on an early return — this await always completes, so
+  // onMounted must check the same flag before resuming, or it re-adds the
+  // listener/poller that onUnmounted already cleaned up.
+  if (isUnmounted) return
 
   // Load NoVNC URL after initialization
   await loadNovncUrl()
+  if (isUnmounted) return
 
   // #6773: connection state mirrors appStore.backendStatus (driven by
   // HealthMonitor). Seed once from current store state so initial
