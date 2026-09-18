@@ -2536,6 +2536,7 @@
       "typeLabel": "Type:",
       "manageTab": "Manage",
       "watchFoldersTab": "תיקיות במעקב",
+      "connectorsTab": "Connectors",
       "confirmDeleteSelected": "Delete {count} selected entries?"
     },
     "systemKnowledge": {
@@ -2905,7 +2906,6 @@
     },
     "views": {
       "searchAriaLabel": "Search knowledge base",
-      "connectorsAriaLabel": "Source connectors",
       "researchAriaLabel": "Live research with browser observation",
       "categoriesAriaLabel": "Browse categories",
       "navAriaLabel": "Knowledge base navigation",
@@ -2914,7 +2914,6 @@
       "search": "Search",
       "entitiesAriaLabel": "View entities",
       "manageAriaLabel": "Manage knowledge base",
-      "connectors": "Connectors",
       "manage": "Manage",
       "categories": "Categories",
       "research": "Research",
@@ -3430,9 +3429,7 @@
       "title": "Web Research",
       "subtitle": "Fetch, crawl, discover, and extract data from the web",
       "navLabel": "Web Research",
-      "navAriaLabel": "Web research panel",
       "settingsNavLabel": "Research Settings",
-      "settingsNavAriaLabel": "Web research settings",
       "tabListAriaLabel": "Web research tabs",
       "renderLabel": "Render Mode",
       "renderAuto": "Auto",
