@@ -367,3 +367,19 @@ register_env_var(
         component="orchestration",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AGENT_COMMAND_TIMEOUT_S",
+        type=int,
+        default=30,
+        description=(
+            "Seconds an agent-terminal command may run before it is cancelled and reported as "
+            "timed out (#17074). A command that finishes sooner returns as soon as its exit code "
+            "appears, so this bounds only long or stuck commands. Raising it lets long builds "
+            "finish; lowering it cancels them sooner (services/agent_terminal/command_executor.py)."
+        ),
+        component="agents",
+        range=(1, 3600),
+    )
+)
