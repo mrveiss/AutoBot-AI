@@ -19,6 +19,12 @@ not a duplicate store of what they already know.
 `EXTERNAL` identities (admitted A2A peers) are refused at `report()` --
 owner decision 3 on #16946: external peers get identity for attribution only
 and never appear in discovery.
+
+`report()`/`deregister()` enforce no caller identity of their own -- the
+authoritative-source guarantee (#16946 §2) holds only because the three
+adapters in `agent_presence_feeds` are the sole intended callers, each
+reading a source that itself is the gate. Do not call either from anything
+else without adding a real check here first.
 """
 
 from __future__ import annotations
@@ -28,8 +34,18 @@ import time
 from dataclasses import dataclass, field
 from threading import Lock
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from protocols.agent_kind import AgentKind
+
+logger = get_logger(__name__)
+
+#: Reserved tenant_id for "we could not determine this entity's tenant" --
+#: distinct from `None` (deliberately shared infrastructure, visible to every
+#: tenant). Never returned by a tenant-scoped `list_live()` query: unlike
+#: `None`, an unknown entry fails closed rather than becoming globally
+#: visible by default (#16947 review).
+UNKNOWN_TENANT = "__presence_unknown_tenant__"
 
 #: How long a reporting agent's entry stays live with no further heartbeat.
 #: An agent that stops reporting (crashed, network partition, clean exit that
@@ -41,9 +57,11 @@ DEFAULT_PRESENCE_TTL_SECONDS = 90.0
 
 def presence_ttl_seconds() -> float:
     """The staleness bound in seconds; the default when the var is unusable."""
+    raw = os.getenv(PRESENCE_TTL_ENV, "")
     try:
-        return float(os.getenv(PRESENCE_TTL_ENV, "") or DEFAULT_PRESENCE_TTL_SECONDS)
+        return float(raw or DEFAULT_PRESENCE_TTL_SECONDS)
     except ValueError:
+        logger.warning("%s=%r is not a float; using default %.1fs", PRESENCE_TTL_ENV, raw, DEFAULT_PRESENCE_TTL_SECONDS)
         return DEFAULT_PRESENCE_TTL_SECONDS
 
 
@@ -119,12 +137,21 @@ class AgentPresenceRegistry:
         same instance re-reporting (the ordinary heartbeat) always succeeds.
         """
         if kind is AgentKind.EXTERNAL:
+            logger.warning("presence report refused: %r is EXTERNAL (#16946 dec. 3)", name)
             raise ExternalIdentityExcludedError(f"{name!r} is EXTERNAL -- refused, not discoverable (#16946 dec. 3)")
         key = (kind, tenant_id, name)
         now = time.time()
         with self._lock:
             existing = self._entries.get(key)
             if existing is not None and existing.instance_id != instance_id and now - existing.last_seen < self._ttl:
+                logger.warning(
+                    "presence report refused: %r (%s, tenant=%r) is live under instance %r; refusing %r",
+                    name,
+                    kind.value,
+                    tenant_id,
+                    existing.instance_id,
+                    instance_id,
+                )
                 raise PresenceNameCollisionError(
                     f"{name!r} ({kind.value}, tenant={tenant_id!r}) is already live under instance "
                     f"{existing.instance_id!r}; refusing instance {instance_id!r}"
@@ -139,13 +166,22 @@ class AgentPresenceRegistry:
             if existing is not None and existing.instance_id == instance_id:
                 del self._entries[key]
 
-    def list_live(self) -> list[PresenceEntry]:
-        """Every agent that has reported within the TTL, across all three kinds.
+    def list_live(self, tenant_id: str | None = None) -> list[PresenceEntry]:
+        """Live agents visible to *tenant_id*: that tenant's own plus shared.
+
+        Never returns an `UNKNOWN_TENANT` entry, regardless of *tenant_id* --
+        unknown fails closed, it does not become visible to whoever happens
+        to ask. Pass `None` (the default) for shared infrastructure only,
+        with no tenant-owned entries -- there is no unscoped "every tenant"
+        query here on purpose; a caller that needs one reimplements the leak
+        this replaces.
 
         Stale entries (no heartbeat within `ttl_seconds`) are pruned here,
         not on a timer -- the bounded-time guarantee is enforced at read
         time, so it holds regardless of how often this is called.
         """
+        if tenant_id == UNKNOWN_TENANT:
+            tenant_id = None  # UNKNOWN_TENANT is never a valid query scope; fail closed to shared-only.
         now = time.time()
         with self._lock:
             live = {k: v for k, v in self._entries.items() if now - v.last_seen < self._ttl}
@@ -153,14 +189,15 @@ class AgentPresenceRegistry:
             return [
                 PresenceEntry(
                     kind=kind,
-                    tenant_id=tenant_id,
+                    tenant_id=key_tenant,
                     name=name,
                     busy=rec.busy,
                     instance_id=rec.instance_id,
                     detail=rec.detail,
                     last_seen=rec.last_seen,
                 )
-                for (kind, tenant_id, name), rec in live.items()
+                for (kind, key_tenant, name), rec in live.items()
+                if key_tenant is None or key_tenant == tenant_id
             ]
 
 

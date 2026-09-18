@@ -18,7 +18,7 @@ import pytest
 from llc.models.enums import LLCRunStatus
 from models.agent_org import AgentOrgNode
 from protocols.agent_kind import AgentKind
-from protocols.agent_presence import AgentPresenceRegistry
+from protocols.agent_presence import UNKNOWN_TENANT, AgentPresenceRegistry
 from protocols.agent_presence_feeds import (
     sync_ai_stack_presence,
     sync_company_os_presence,
@@ -60,7 +60,7 @@ class TestSyncCompanyOsPresence:
 
         await sync_company_os_presence(registry, session, str(company_id))
 
-        entries = registry.list_live()
+        entries = registry.list_live(str(company_id))
         assert len(entries) == 1
         assert entries[0].kind == AgentKind.COMPANY_OS
         assert entries[0].name == "assistant-abc123"
@@ -76,7 +76,7 @@ class TestSyncCompanyOsPresence:
 
         await sync_company_os_presence(registry, session, str(company_id))
 
-        assert registry.list_live()[0].busy is False
+        assert registry.list_live(str(company_id))[0].busy is False
 
     @pytest.mark.asyncio
     async def test_an_agent_with_no_heartbeat_run_yet_is_idle_not_dropped(self):
@@ -87,9 +87,22 @@ class TestSyncCompanyOsPresence:
 
         await sync_company_os_presence(registry, session, str(company_id))
 
-        entries = registry.list_live()
+        entries = registry.list_live(str(company_id))
         assert len(entries) == 1
         assert entries[0].busy is False
+
+    @pytest.mark.asyncio
+    async def test_a_node_with_no_company_id_is_unknown_tenant_not_shared(self):
+        node = _org_node(agent_id="orphan-agent", company_id=None)
+        session = _FakeSession([(node, None)])
+        registry = AgentPresenceRegistry(ttl_seconds=60)
+
+        await sync_company_os_presence(registry, session, "some-company")
+
+        # Fails closed: not visible to a specific tenant's query...
+        assert registry.list_live("some-company") == []
+        # ...nor treated as shared infrastructure, visible to every tenant.
+        assert registry.list_live("a-different-company") == []
 
 
 class TestSyncAiStackPresence:
@@ -120,7 +133,21 @@ class TestSyncSessionPresence:
 
         await sync_session_presence(registry, session_manager)
 
-        entries = {e.name: e for e in registry.list_live()}
-        assert entries["sess-1"].busy is True
-        assert entries["sess-2"].busy is False
-        assert all(e.kind == AgentKind.SESSION for e in entries.values())
+        # Sessions carry UNKNOWN_TENANT (#16947 review): never listable via
+        # list_live(), by design -- inspect the stored record directly.
+        stored = {name: rec for (_, _, name), rec in registry._entries.items()}
+        assert stored["sess-1"].busy is True
+        assert stored["sess-2"].busy is False
+
+    @pytest.mark.asyncio
+    async def test_sessions_are_reported_with_unknown_tenant_and_never_listed(self):
+        session_manager = SimpleNamespace(
+            sessions={"sess-1": SimpleNamespace(agent_id="claude", has_running_task=lambda: False)}
+        )
+        registry = AgentPresenceRegistry(ttl_seconds=60)
+
+        await sync_session_presence(registry, session_manager)
+
+        assert list(registry._entries)[0][1] == UNKNOWN_TENANT
+        assert registry.list_live() == []
+        assert registry.list_live("any-tenant") == []

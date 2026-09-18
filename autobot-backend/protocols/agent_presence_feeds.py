@@ -26,7 +26,7 @@ from llc.models.enums import LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from models.agent_org import AgentOrgNode
 from protocols.agent_kind import AgentKind
-from protocols.agent_presence import AgentPresenceRegistry
+from protocols.agent_presence import UNKNOWN_TENANT, AgentPresenceRegistry
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,7 +60,9 @@ async def sync_company_os_presence(registry: AgentPresenceRegistry, session: "As
     for node, run in result.all():
         registry.report(
             kind=AgentKind.COMPANY_OS,
-            tenant_id=str(node.company_id) if node.company_id else None,
+            # A null company_id is unresolved tenancy, not shared infrastructure --
+            # UNKNOWN_TENANT so it fails closed instead of leaking into every tenant's view.
+            tenant_id=str(node.company_id) if node.company_id else UNKNOWN_TENANT,
             name=node.agent_id,
             instance_id=node.agent_id,
             busy=run is not None and run.status == LLCRunStatus.RUNNING.value,
@@ -88,11 +90,23 @@ async def sync_ai_stack_presence(registry: AgentPresenceRegistry, health_registr
 
 
 async def sync_session_presence(registry: AgentPresenceRegistry, session_manager: "SessionManager") -> None:
-    """Report every live agent-terminal session; busy iff it has a running command."""
+    """Report every live agent-terminal session; busy iff it has a running command.
+
+    tenant_id is UNKNOWN_TENANT for every session, not derived (#16947 review
+    asked for `conversation_id` -> owner -> org). Checked and reported back:
+    `AgentTerminalSession.conversation_id` is a chat_history correlation id
+    only -- `chat_history`'s own session/conversation mixins (base.py,
+    session.py, security.py) carry no user_id/org_id anywhere, and the
+    `owner` username threaded through `SessionManager.create_session` is not
+    persisted onto `AgentTerminalSession` for a later lookup to recover. The
+    real fix is threading tenant through at session-creation time, not
+    deriving it after the fact from a field that cannot carry it -- left as
+    a follow-up; UNKNOWN_TENANT is the correct value until that lands.
+    """
     for session_id, session in list(session_manager.sessions.items()):
         registry.report(
             kind=AgentKind.SESSION,
-            tenant_id=None,
+            tenant_id=UNKNOWN_TENANT,
             name=session_id,
             instance_id=session_id,
             busy=session.has_running_task(),

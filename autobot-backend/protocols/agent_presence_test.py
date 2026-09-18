@@ -11,6 +11,7 @@ import pytest
 
 from protocols.agent_kind import AgentKind
 from protocols.agent_presence import (
+    UNKNOWN_TENANT,
     AgentPresenceRegistry,
     ExternalIdentityExcludedError,
     PresenceNameCollisionError,
@@ -37,9 +38,9 @@ class TestReportAndList:
         reg = _registry()
         reg.report(kind=AgentKind.COMPANY_OS, tenant_id="co-1", name="assistant-abc", instance_id="a", busy=True)
         reg.report(kind=AgentKind.AI_STACK, tenant_id=None, name="rag", instance_id="b", busy=False)
-        reg.report(kind=AgentKind.SESSION, tenant_id=None, name="sess-1", instance_id="c", busy=True)
+        reg.report(kind=AgentKind.SESSION, tenant_id="co-1", name="sess-1", instance_id="c", busy=True)
 
-        kinds = {e.kind for e in reg.list_live()}
+        kinds = {e.kind for e in reg.list_live("co-1")}
 
         assert kinds == {AgentKind.COMPANY_OS, AgentKind.AI_STACK, AgentKind.SESSION}
 
@@ -67,7 +68,45 @@ class TestReportAndList:
 
         reg.report(kind=AgentKind.COMPANY_OS, tenant_id="co-2", name="dup", instance_id="b", busy=False)
 
-        assert len(reg.list_live()) == 2
+        assert len(reg.list_live("co-1")) == 1
+        assert len(reg.list_live("co-2")) == 1
+
+
+class TestTenantScoping:
+    def test_a_tenant_query_does_not_see_a_different_tenants_entries(self):
+        """Negative control (#16947 review): tenant X must not see tenant Y."""
+        reg = _registry()
+        reg.report(kind=AgentKind.COMPANY_OS, tenant_id="tenant-x", name="agent-x", instance_id="a", busy=False)
+        reg.report(kind=AgentKind.COMPANY_OS, tenant_id="tenant-y", name="agent-y", instance_id="b", busy=False)
+
+        names = {e.name for e in reg.list_live("tenant-x")}
+
+        assert names == {"agent-x"}
+
+    def test_a_tenant_query_includes_shared_entries(self):
+        reg = _registry()
+        reg.report(kind=AgentKind.COMPANY_OS, tenant_id="tenant-x", name="agent-x", instance_id="a", busy=False)
+        reg.report(kind=AgentKind.AI_STACK, tenant_id=None, name="rag", instance_id="b", busy=False)
+
+        names = {e.name for e in reg.list_live("tenant-x")}
+
+        assert names == {"agent-x", "rag"}
+
+    def test_no_tenant_argument_returns_shared_entries_only(self):
+        reg = _registry()
+        reg.report(kind=AgentKind.COMPANY_OS, tenant_id="tenant-x", name="agent-x", instance_id="a", busy=False)
+        reg.report(kind=AgentKind.AI_STACK, tenant_id=None, name="rag", instance_id="b", busy=False)
+
+        assert {e.name for e in reg.list_live()} == {"rag"}
+
+    def test_an_unknown_tenant_entry_is_never_returned_by_any_query(self):
+        reg = _registry()
+        reg.report(kind=AgentKind.SESSION, tenant_id=UNKNOWN_TENANT, name="sess-1", instance_id="a", busy=False)
+
+        assert reg.list_live() == []
+        assert reg.list_live("tenant-x") == []
+        # Querying the sentinel directly must not become a backdoor to it either.
+        assert reg.list_live(UNKNOWN_TENANT) == []
 
 
 class TestCollisionRejection:
