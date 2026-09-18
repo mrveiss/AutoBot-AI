@@ -33,8 +33,9 @@ vi.mock('@/config/ssot-config', () => ({
   getApiBase: () => '/api'
 }))
 
+// #16457: the token travels as a subprotocol, not embedded in the URL.
 vi.mock('@/utils/buildAuthenticatedWsUrl', () => ({
-  buildAuthenticatedWsUrl: (base: string) => `${base}?token=fake-test-token`
+  buildAuthenticatedWsSubprotocols: () => ['bearer', 'fake-test-token']
 }))
 
 const inviteToSession = vi.fn()
@@ -84,6 +85,17 @@ describe('useSessionCollaboration (#16443)', () => {
     const socket = MockWebSocket.getLatestInstance()!
     expect(socket.url).toContain('/ws/sessions/session-1/presence')
     expect(socket.url).not.toContain('/ws/live')
+  })
+
+  it('sends the token as a subprotocol, never in the URL (#16457)', async () => {
+    const { joinSession } = useSessionCollaboration()
+    joinSession('session-1')
+    await vi.advanceTimersByTimeAsync(20)
+
+    const socket = MockWebSocket.getLatestInstance()!
+    expect(socket.url).not.toContain('token=')
+    expect(socket.url).not.toContain('fake-test-token')
+    expect(socket.protocols).toEqual(['bearer', 'fake-test-token'])
   })
 
   it('never sends one of the old fake /ws/live message shapes', async () => {
