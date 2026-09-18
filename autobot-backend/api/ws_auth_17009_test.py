@@ -12,6 +12,7 @@ closed before it is accepted raises ``WebSocketDisconnect`` on connect; one that
 was accepted does not.
 """
 
+import concurrent.futures
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,11 +26,22 @@ ADMIN = {"username": "root", "user_id": "u-root", "role": "admin"}
 
 
 def _connect(router, path: str, caller):
+    """Open the socket; raises ``WebSocketDisconnect`` if the endpoint closed it before accepting.
+
+    What an endpoint does after accepting is not under test. A streaming loop still
+    running when the client leaves is cancelled by the TestClient on exit, so that
+    one cancellation is tolerated there, and only there.
+    """
     app = FastAPI()
     app.include_router(router)
     with patch("api.ws_security._resolve_ws_user", new=AsyncMock(return_value=caller)):
-        with TestClient(app).websocket_connect(path):
-            return "accepted"
+        session = TestClient(app).websocket_connect(path)
+        session.__enter__()
+        try:
+            session.__exit__(None, None, None)
+        except concurrent.futures.CancelledError:
+            pass
+        return "accepted"
 
 
 def _refused(router, path: str, caller) -> int:
