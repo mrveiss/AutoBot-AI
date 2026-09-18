@@ -253,6 +253,50 @@
  * Use these for inline icon buttons and action bars
  * ============================================================ */
 
+/*
+ * Documented above (line 17) since #901, but never actually defined here —
+ * every view that used them (AdminUsersView.vue, VisionAutomationView.vue,
+ * AdminPricingView.vue, AdminMcpServersView.vue) carried its own identical
+ * copy instead. Defining it once, here, is what the comment already claimed.
+ */
+.btn-action-primary,
+.btn-action-secondary,
+.btn-action-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-action-primary {
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+}
+
+.btn-action-secondary {
+  background: transparent;
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.btn-action-danger {
+  background: var(--color-error);
+  color: var(--text-on-error);
+}
+
+.btn-action-primary:disabled,
+.btn-action-secondary:disabled,
+.btn-action-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-icon-action {
   display: inline-flex;
   align-items: center;
