@@ -59,7 +59,9 @@
   when:
     - not (slm_colocated_frontend | default(false) | bool)
     - _frontend_nginx_sites_enabled_stat.stat.exists
-    - not _frontend_nginx_sites_enabled_stat.stat.islnk
+    # order-independent (#16979 review): default(false) instead of relying
+    # on the list's short-circuit order.
+    - not (_frontend_nginx_sites_enabled_stat.stat.islnk | default(false))
   changed_when: true
   tags: ['frontend', 'nginx']
 

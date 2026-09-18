@@ -1426,12 +1426,70 @@
   when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['backend', 'nginx']
 
+# #16979 (PR review): the render above only touches sites-available. This
+# role's own main.yml always runs render+enable together (no `tasks_from`
+# self-update seam splits them -- see repo_tests/nginx_sites_enabled_link_
+# enforced_16979_test.py), so this was never the *reachability* gap #16979
+# fixed elsewhere. But the "Enable vhost" task below had no non-symlink
+# handling at all: a stale regular file at sites-enabled/autobot-backend.conf
+# would make `state: link` hard-fail a full re-provision, where the SLM/
+# frontend sites instead silently kept serving stale content. Same fix here
+# for consistency -- every render site behaves the same way.
+- name: "Backend nginx | Stat sites-enabled file to detect non-symlink (#16979)"
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/autobot-backend.conf
+  register: _backend_nginx_sites_enabled_stat
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['backend', 'nginx']
+
+# nginx loads every file under sites-enabled/, so a backup left there would
+# be served as a second site -- move it beside the sites-available/ backup
+# a re-render would leave (#16979 AC2, same reasoning as
+# roles/slm_manager/tasks/nginx_site.yml).
+- name: "Backend nginx | Back up non-symlink sites-enabled file before replacing it (#16979)"
+  ansible.builtin.command:
+    cmd: >-
+      mv /etc/nginx/sites-enabled/autobot-backend.conf
+      /etc/nginx/sites-available/autobot-backend.conf.enabled-backup.{{
+      _backend_nginx_sites_enabled_stat.stat.mtime | int }}
+  when:
+    - not (slm_colocated_frontend | default(false) | bool)
+    - _backend_nginx_sites_enabled_stat.stat.exists
+    # order-independent (#16979 review): default(false) instead of relying
+    # on the list's short-circuit order.
+    - not (_backend_nginx_sites_enabled_stat.stat.islnk | default(false))
+  changed_when: true
+  tags: ['backend', 'nginx']
+
 - name: "Backend nginx | Enable vhost (symlink)"
   ansible.builtin.file:
     src: /etc/nginx/sites-available/autobot-backend.conf
     dest: /etc/nginx/sites-enabled/autobot-backend.conf
     state: link
   notify: reload nginx backend
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Stat sites-enabled after linking (#16979)"
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/autobot-backend.conf
+  register: _backend_nginx_sites_enabled_check
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['backend', 'nginx']
+
+# AC3-equivalent (#16979 review): fail loudly rather than let nginx quietly
+# serve the wrong file.
+- name: "Backend nginx | Assert sites-enabled resolves to the rendered site (#16979)"
+  ansible.builtin.assert:
+    that:
+      - _backend_nginx_sites_enabled_check.stat.exists
+      - _backend_nginx_sites_enabled_check.stat.islnk
+      - _backend_nginx_sites_enabled_check.stat.lnk_source == '/etc/nginx/sites-available/autobot-backend.conf'
+    fail_msg: >-
+      /etc/nginx/sites-enabled/autobot-backend.conf is not a symlink resolving to
+      /etc/nginx/sites-available/autobot-backend.conf -- nginx is not serving the
+      rendered backend site config (#16979).
+    success_msg: "sites-enabled/autobot-backend.conf resolves to the rendered site config."
   when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['backend', 'nginx']
 

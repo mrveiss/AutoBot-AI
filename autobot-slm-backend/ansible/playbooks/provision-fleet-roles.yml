@@ -532,7 +532,9 @@
       when:
         - _is_slm_frontend_colocated | bool
         - _slm_colocated_sites_enabled_stat.stat.exists
-        - not _slm_colocated_sites_enabled_stat.stat.islnk
+        # order-independent (#16979 review): default(false) instead of relying
+        # on the list's short-circuit order.
+        - not (_slm_colocated_sites_enabled_stat.stat.islnk | default(false))
       changed_when: true
       tags: ['frontend', 'slm-nginx', 'provision']
 

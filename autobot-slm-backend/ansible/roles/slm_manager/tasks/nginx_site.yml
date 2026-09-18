@@ -75,7 +75,10 @@
   become: true
   when:
     - _slm_nginx_sites_enabled_stat.stat.exists
-    - not _slm_nginx_sites_enabled_stat.stat.islnk
+    # order-independent (#16979 review): each `when:` item must stand on its
+    # own -- `default(false)` rather than relying on the list's short-circuit
+    # order to keep an undefined `islnk` from ever being evaluated.
+    - not (_slm_nginx_sites_enabled_stat.stat.islnk | default(false))
   changed_when: true
   tags: ['slm', 'nginx']
 

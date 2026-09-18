@@ -5,6 +5,14 @@
 """Every nginx site that gets templated into sites-available/ must also be
 enabled in the SAME task file (#16979).
 
+PR review (#16980) found a second, related gap this file now also guards:
+roles/frontend/handlers/main.yml defined `restart nginx` (a reload) BEFORE
+`test nginx config`. Ansible runs notified handlers in DEFINITION order, not
+notify order, so a task that notifies both -- as roles/frontend/tasks/
+code_only.yml's enable task now does -- reloaded nginx before `nginx -t` ever
+ran. roles/slm_manager/handlers/main.yml already had this right (test, then
+reload); frontend did not.
+
 Root cause: roles/slm_manager/tasks/nginx_site.yml rendered
 sites-available/{{ slm_nginx_config }} but the steps that made it live (stat
 sites-enabled for a non-symlink, replace it, link it) lived only in
@@ -32,6 +40,7 @@ caught by the same scan, not by remembering to update a hardcoded list.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -254,4 +263,137 @@ def test_positive_control_a_render_with_a_matching_link_passes(tmp_path) -> None
     assert _has_matching_enable_link(synthetic, dests[0]), (
         "positive control: a render WITH a matching sites-enabled link must pass -- "
         "the checker is rejecting everything, not discriminating"
+    )
+
+
+# --------------------------------------------------------------------------
+# Handler order (#16980 review): in any role whose handlers include BOTH a
+# `nginx -t` test handler and an nginx reload/restart handler, the test
+# handler must be defined FIRST. Ansible runs notified handlers in
+# DEFINITION order (the order they appear in handlers/main.yml), not notify
+# order, so a task notifying both -- as this issue's own fix now does in
+# roles/slm_manager/tasks/nginx_site.yml and roles/frontend/tasks/
+# code_only.yml -- would reload nginx before validating it if the reload
+# handler were listed first. A role with only one of the two (e.g.
+# roles/backend, which validates via an ordinary task before its handlers
+# ever flush, not via a handler) has nothing to check and is skipped.
+# --------------------------------------------------------------------------
+
+_NGINX_TEST_COMMAND_RE = re.compile(r"nginx\s+-t\b")
+_COMMAND_KEYS = ("ansible.builtin.command", "command", "ansible.builtin.shell", "shell")
+_SYSTEMD_KEYS = ("ansible.builtin.systemd", "systemd", "ansible.builtin.service", "service")
+_RELOAD_STATES = ("reloaded", "restarted")
+
+_HANDLER_VACUITY_FLOOR = 20  # 27 roles/*/handlers/main.yml files as of #16979/#16980
+
+
+def _command_text(task: dict) -> str:
+    """The free-form command string of a command/shell task, whichever of
+    the two shapes it was written in: ``command: nginx -t`` (a bare string)
+    or ``ansible.builtin.command: {cmd: nginx -t}`` (a dict)."""
+    for key in _COMMAND_KEYS:
+        value = task.get(key)
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict):
+            cmd = value.get("cmd", "")
+            if isinstance(cmd, str):
+                return cmd
+    return ""
+
+
+def _is_nginx_test_handler(task: dict) -> bool:
+    return bool(_NGINX_TEST_COMMAND_RE.search(_command_text(task)))
+
+
+def _is_nginx_reload_handler(task: dict) -> bool:
+    args = _module_args(task, _SYSTEMD_KEYS)
+    return bool(args) and args.get("name") == "nginx" and args.get("state") in _RELOAD_STATES
+
+
+def _handler_order_gap(handlers: list[dict]) -> str | None:
+    """None when *handlers* has no ordering problem (including when it
+    defines neither or only one of the two handler kinds -- nothing to
+    check). Otherwise a description of the violation: the reload/restart
+    handler nearest the top is not preceded by every test handler."""
+    test_indices = [i for i, h in enumerate(handlers) if _is_nginx_test_handler(h)]
+    reload_indices = [i for i, h in enumerate(handlers) if _is_nginx_reload_handler(h)]
+    if not test_indices or not reload_indices:
+        return None
+    if max(test_indices) < min(reload_indices):
+        return None
+    return (
+        f"a reload/restart nginx handler is defined at index {min(reload_indices)}, "
+        f"at or before a test-nginx-config handler at index {max(test_indices)} -- "
+        "ansible runs notified handlers in DEFINITION order, so the reload could fire "
+        "before nginx -t validates the config"
+    )
+
+
+def _handler_files(ansible_root: Path) -> list[Path]:
+    return sorted((ansible_root / "roles").glob("*/handlers/main.yml"))
+
+
+def test_handler_files_vacuity_floor() -> None:
+    files = _handler_files(_ANSIBLE_ROOT)
+    assert len(files) >= _HANDLER_VACUITY_FLOOR, (
+        f"only {len(files)} roles/*/handlers/main.yml found under {_ANSIBLE_ROOT} -- "
+        f"expected at least {_HANDLER_VACUITY_FLOOR}. The scan did not reach the ansible "
+        "tree -- this is 'did not look', not 'found nothing to fix'."
+    )
+
+
+def test_nginx_test_handler_precedes_reload_in_every_role() -> None:
+    files = _handler_files(_ANSIBLE_ROOT)
+    assert len(files) >= _HANDLER_VACUITY_FLOOR, "vacuity floor failed -- see test_handler_files_vacuity_floor"
+
+    gaps = []
+    roles_with_both = []
+    for path in files:
+        handlers = _load_tasks(path)
+        if any(_is_nginx_test_handler(h) for h in handlers) and any(_is_nginx_reload_handler(h) for h in handlers):
+            roles_with_both.append(path)
+        gap = _handler_order_gap(handlers)
+        if gap is not None:
+            gaps.append(f"{path.relative_to(_ANSIBLE_ROOT)}: {gap}")
+
+    # At least slm_manager and frontend must actually be exercised by this
+    # check, or a filter regression would pass by finding nothing to flag.
+    assert len(roles_with_both) >= 2, (
+        f"only {len(roles_with_both)} role(s) with both a test and a reload/restart nginx "
+        "handler found -- expected at least 2 (roles/slm_manager, roles/frontend). "
+        "This is 'did not look', not 'nothing to fix'."
+    )
+    assert gaps == [], "nginx reload/restart handler(s) not preceded by test nginx config:\n" + "\n".join(gaps)
+
+
+def test_negative_control_reload_before_test_is_flagged() -> None:
+    handlers = [
+        {"name": "restart nginx", "systemd": {"name": "nginx", "state": "reloaded"}},
+        {"name": "test nginx config", "command": "nginx -t"},
+    ]
+    assert _handler_order_gap(handlers) is not None, (
+        "negative control: a reload handler defined before the test handler must be flagged -- "
+        "the checker is vacuously passing everything"
+    )
+
+
+def test_positive_control_test_before_reload_passes() -> None:
+    handlers = [
+        {"name": "test nginx config", "command": "nginx -t"},
+        {"name": "restart nginx", "systemd": {"name": "nginx", "state": "reloaded"}},
+    ]
+    assert _handler_order_gap(handlers) is None, (
+        "positive control: test defined BEFORE reload must pass -- the checker is rejecting everything"
+    )
+
+
+def test_role_with_only_a_reload_handler_is_not_flagged() -> None:
+    """roles/backend validates nginx config via an ordinary task that runs
+    before its handlers ever flush, not via a `test nginx config` handler --
+    its handlers file has a reload handler with nothing to order it against,
+    and must not be flagged."""
+    handlers = [{"name": "reload nginx backend", "ansible.builtin.systemd": {"name": "nginx", "state": "reloaded"}}]
+    assert _handler_order_gap(handlers) is None, (
+        "a role with only a reload handler (no test handler) has nothing to check and must not be flagged"
     )
