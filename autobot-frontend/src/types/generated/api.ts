@@ -53157,8 +53157,8 @@ export interface paths {
          *     Each entry describes the rate-limit windows applicable to the provider
          *     (e.g. RPM + TPM for OpenAI; 5-hour + 7-day output token windows for
          *     Anthropic), plus whatever ``QuotaHeadroomStore`` has actually observed for
-         *     each — the provider's own rate-limit response headers and 429s, recorded
-         *     by ``llm_shared/rate_limit_backoff.py`` on every LLM call. A window with no
+         *     it — the provider's own rate-limit response headers and 429s, recorded by
+         *     ``llm_shared/rate_limit_backoff.py`` on every LLM call. A window with no
          *     reading yet reports none rather than a fabricated zero: "never observed"
          *     and "confirmed empty" are different facts.
          */
@@ -89315,10 +89315,7 @@ export interface components {
             description: string;
             /** Headroom */
             headroom?: components["schemas"]["QuotaHeadroomReading"][];
-            /**
-             * Note
-             * @default Headroom values require provider API key configuration to populate.
-             */
+            /** Note */
             note: string;
         } & {
             [key: string]: unknown;
