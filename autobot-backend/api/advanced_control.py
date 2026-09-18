@@ -21,7 +21,6 @@ from api.schemas_system import (
 )
 from api.schemas_workflows import (
     AdvancedControlActiveTakeoversListResponse,
-    AdvancedControlEmergencyStopResponse,
     AdvancedControlHealthResponse,
     AdvancedControlInfoResponse,
     AdvancedControlPendingTakeoversListResponse,
@@ -43,7 +42,7 @@ from constants.threshold_constants import TimingConstants
 from desktop_streaming_manager import get_desktop_streaming
 from memory import TaskPriority  # canonical enum (#10626)
 from metrics.system_monitor import evaluate_resource_thresholds
-from services.emergency_stop import request_emergency_stop
+from services.emergency_stop import AdvancedControlEmergencyStopResponse, request_emergency_stop
 from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata

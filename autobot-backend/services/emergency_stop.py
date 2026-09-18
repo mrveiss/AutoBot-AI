@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
+from api.schemas_common import SuccessMessageResponse
 from memory import TaskPriority  # canonical enum (#10626)
 from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
@@ -54,3 +55,17 @@ async def request_emergency_stop() -> Tuple[str, List[str]]:
         auto_approve=True,
     )
     return request_id, affected_task_ids
+
+
+class AdvancedControlEmergencyStopResponse(SuccessMessageResponse):
+    """Response for POST /system/emergency-stop.
+
+    Moved from ``api/schemas_workflows.py`` (#16854): that file is grandfathered
+    in the file-size ratchet at 3011 lines, and adding ``tasks_paused`` to
+    report what this module's own ``request_emergency_stop`` actually found
+    would have pushed it over. Living beside the function whose return value it
+    shapes reads better than a schema file entry does anyway.
+    """
+
+    takeover_request_id: str
+    tasks_paused: List[str]
