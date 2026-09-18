@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
@@ -26,8 +25,8 @@ from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
-from ..models.heartbeat_run import LLCHeartbeatRun
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
+from ..services.agent_presence_queries import agent_org_nodes_with_latest_heartbeat
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["llc-agents"])
@@ -36,33 +35,6 @@ router = APIRouter(prefix="/agents", tags=["llc-agents"])
 class TriggerResponse(BaseModel):
     run_id: uuid.UUID
     status: str
-
-
-def agent_org_nodes_with_latest_heartbeat(company_id: str):
-    """AgentOrgNode LEFT JOINed to each agent's own latest heartbeat run.
-
-    Shared by `list_agents` below and `protocols.agent_presence_feeds
-    .sync_company_os_presence` (#16947) -- agent_id is the logical slug (the
-    dual-keyspace column shared by heartbeat/controls/budgets), not the UUID
-    PK; joining on the wrong one silently returns 0 rows in Postgres (see
-    AgentOrgNode).
-    """
-    latest_runs = (
-        select(LLCHeartbeatRun.agent_id, func.max(LLCHeartbeatRun.created_at).label("latest_at"))
-        .where(LLCHeartbeatRun.company_id == company_id)
-        .group_by(LLCHeartbeatRun.agent_id)
-        .subquery()
-    )
-    return (
-        select(AgentOrgNode, LLCHeartbeatRun)
-        .outerjoin(latest_runs, latest_runs.c.agent_id == AgentOrgNode.agent_id)
-        .outerjoin(
-            LLCHeartbeatRun,
-            (LLCHeartbeatRun.agent_id == latest_runs.c.agent_id)
-            & (LLCHeartbeatRun.created_at == latest_runs.c.latest_at),
-        )
-        .where(AgentOrgNode.company_id == company_id)
-    )
 
 
 @router.get("", response_model=List[Dict[str, Any]])
