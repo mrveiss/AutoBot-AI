@@ -86,13 +86,27 @@ def _calls_builder(source: str) -> bool:
     )
 
 
+def _is_test_file(name: str) -> bool:
+    """The repository's test-file naming (pytest.ini ``python_files``), not a substring.
+
+    ``"test" in name`` would also skip a production module such as ``attestation.py``,
+    and the guard would then pass without having looked at it.
+    """
+    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
+
+
 def _production_modules():
     """Every non-test module under autobot-backend. ``os.walk`` does not follow symlinks (``backend -> .``)."""
     for root, dirs, files in os.walk(_BACKEND):
         dirs[:] = [d for d in dirs if d not in {"tests", "node_modules", "__pycache__"}]
         for name in files:
-            if name.endswith(".py") and "test" not in name:
+            if name.endswith(".py") and not _is_test_file(name):
                 yield Path(root) / name
+
+
+def test_a_production_module_whose_name_contains_test_is_still_scanned():
+    assert not _is_test_file("attestation.py")
+    assert _is_test_file("governed_identity_producer_test.py") and _is_test_file("test_governed_execution.py")
 
 
 def test_every_caller_of_the_builder_is_a_reviewed_one():
