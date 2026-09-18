@@ -18,6 +18,7 @@ AIStackAgentPayload is retained as the base class and for legacy endpoints.
 from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel
+
 from type_defs.common import Metadata
 
 # ---------------------------------------------------------------------------

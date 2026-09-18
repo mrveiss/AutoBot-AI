@@ -16,13 +16,13 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 
 from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
 from api.schemas_ai_stack import (
-    MultiModalResponse,
     MultimodalBatchSizeData,
     MultimodalEmbeddingData,
     MultimodalFusionData,
     MultimodalOptimizeData,
     MultimodalPerfStatsData,
     MultimodalPerfSummaryData,
+    MultiModalResponse,
     MultimodalStatsData,
 )
 from api.schemas_knowledge import (
