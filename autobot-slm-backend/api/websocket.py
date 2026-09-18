@@ -16,7 +16,7 @@ from typing import Dict, Set
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from autobot_shared.time_utils import utc_timestamp
-from autobot_shared.websocket_subprotocol import accept_websocket, bearer_subprotocol_token
+from autobot_shared.websocket_subprotocol import accept_websocket, negotiated_subprotocol, resolve_ws_token
 from services.auth import auth_service
 
 logger = logging.getLogger(__name__)
@@ -29,14 +29,16 @@ def _extract_ws_token(websocket: WebSocket) -> str | None:
     Prefers the Sec-WebSocket-Protocol subprotocol header
     (``['bearer', '<token>']``) so the token is never written to URL access
     logs.  Falls back to the ``?token=`` query param for backwards
-    compatibility with older clients.
+    compatibility with older clients, logging once when that fallback is
+    what actually supplied it (#16457 review).
 
-    #16457 review: the subprotocol parse is now the shared
-    ``autobot_shared.websocket_subprotocol.bearer_subprotocol_token``, the
-    same one ``autobot-backend``'s ``auth_middleware.authenticate_websocket``
-    uses, rather than a second copy of the identical logic.
+    #16457: delegates to the shared ``autobot_shared.websocket_subprotocol
+    .resolve_ws_token``, the same one ``autobot-backend``'s
+    ``auth_middleware.authenticate_websocket`` uses, rather than a second
+    copy of the identical resolve-and-log logic. Kept as its own function
+    (not inlined at the one call site below) because tests patch it by name.
     """
-    return bearer_subprotocol_token(websocket) or websocket.query_params.get("token") or None
+    return resolve_ws_token(websocket)
 
 
 def _log_ws_reject_context(websocket: WebSocket, reason: str) -> None:
@@ -46,19 +48,24 @@ def _log_ws_reject_context(websocket: WebSocket, reason: str) -> None:
     (e.g. from a proxy or environment-specific config) can be traced back to
     the exact request properties (GH#10459).
 
+    #16457 review: used to log the raw ``sec-websocket-protocol`` header,
+    truncated to 60 chars -- for a bearer offer that header IS ``bearer,
+    <jwt>``, so an invalid or expired token landed in the log on every
+    reject. Logs only whether a bearer subprotocol was offered at all.
+
     Args:
         websocket: The incoming (not yet accepted) WebSocket.
         reason: Human-readable rejection reason for the log entry.
     """
     headers = websocket.headers
     logger.warning(
-        "WebSocket rejected (%s) | path=%s origin=%r host=%r peer=%r proto=%r",
+        "WebSocket rejected (%s) | path=%s origin=%r host=%r peer=%r bearer_offered=%s",
         reason,
         websocket.url.path,
         headers.get("origin", "-"),
         headers.get("host", "-"),
         websocket.client,
-        headers.get("sec-websocket-protocol", "-")[:60],
+        negotiated_subprotocol(websocket) is not None,
     )
 
 

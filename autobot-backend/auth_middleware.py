@@ -30,7 +30,7 @@ from autobot_shared.principal import resolve_principal_id  # noqa: F401  (re-exp
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import parse_utc_iso
-from autobot_shared.websocket_subprotocol import bearer_subprotocol_token
+from autobot_shared.websocket_subprotocol import resolve_ws_token
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
@@ -1067,7 +1067,7 @@ async def authenticate_websocket(websocket) -> dict | None:
     """
     # #16457: prefer Sec-WebSocket-Protocol (['bearer', '<jwt>']) over the query param so the
     # token never lands in URL access logs/browser history; query stays a fallback during migration.
-    token = bearer_subprotocol_token(websocket) or websocket.query_params.get("token")
+    token = resolve_ws_token(websocket)
     if token:
         try:
             # Use the singleton — a fresh AuthenticationMiddleware() generates a

@@ -23,7 +23,27 @@ client does not enforce the echo.
 Every endpoint now accepts through :func:`accept_websocket`, and
 ``repo_tests/websocket_subprotocol_echo_guard_test.py`` fails any module that
 authenticates a WebSocket and calls ``.accept(`` itself.
+
+:func:`resolve_ws_token` is the read-side counterpart (#16457 review):
+both backends' token resolution fell back to ``?token=`` identically, and
+that fallback's use was invisible -- neither logged when a handshake
+actually took it. One function now owns both, so a straggler client still
+using the query param shows up in the logs without a second copy of the
+same fallback-and-log logic per backend.
 """
+
+import logging
+
+# Plain stdlib logging, deliberately -- this module is imported at module
+# scope by `autobot-slm-backend/api/websocket.py`, whose test harness
+# (`tests/test_websocket_auth_smoke.py` et al.) loads that file with most of
+# the config stack replaced by MagicMock.
+# `autobot_shared.logging_manager.get_logger` builds a RotatingFileHandler
+# from config at call time and raises under that harness (mirrors
+# `autobot_shared/user_management/password_epoch.py`'s documented reason for
+# the same choice; CLAUDE.md's pattern table prescribes it for exactly this
+# situation).
+logger = logging.getLogger(__name__)
 
 BEARER = "bearer"
 
@@ -40,6 +60,20 @@ def bearer_subprotocol_token(websocket) -> str | None:
     """
     parts = _offered(websocket)
     return parts[1] if len(parts) == 2 and parts[0] == BEARER and parts[1] else None
+
+
+def resolve_ws_token(websocket) -> str | None:
+    """The auth token: subprotocol header preferred, ``?token=`` a logged fallback.
+
+    #16457 review: the query-param fallback is kept on purpose during
+    migration, but its use was invisible. Logs one warning per handshake
+    that actually took it -- naming the route only, the token never.
+    """
+    subprotocol_token = bearer_subprotocol_token(websocket)
+    token = subprotocol_token or websocket.query_params.get("token")
+    if token and not subprotocol_token:
+        logger.warning("WS auth via ?token= fallback, not subprotocol | path=%s", websocket.url.path)
+    return token
 
 
 def negotiated_subprotocol(websocket) -> str | None:

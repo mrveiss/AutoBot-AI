@@ -18,7 +18,10 @@ fixture (see ``test_authenticate_websocket_user_id.py``) and patches only the
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Fixture values built rather than typed as plain literals, so a secret scanner
 # never mistakes test data shaped like a credential for a real one.
@@ -33,6 +36,7 @@ def _ws(*, subprotocols: str = "", query_value: str | None = None) -> MagicMock:
         side_effect=lambda key, default="": subprotocols if key == "sec-websocket-protocol" else default
     )
     ws.query_params.get.return_value = query_value
+    ws.url.path = "/ws/example"
     return ws
 
 
@@ -90,3 +94,25 @@ async def test_no_value_anywhere_returns_none(real_auth_middleware):
     ws = _ws(subprotocols="", query_value=None)
     result = await real_auth_middleware.authenticate_websocket(ws)
     assert result is None
+
+
+async def test_query_fallback_logs_a_warning_naming_the_route_not_the_value(
+    real_auth_middleware, caplog: pytest.LogCaptureFixture
+):
+    """#16457 review: the fallback's use was invisible. One warning per
+    handshake that actually took it, naming the route only."""
+    seen: list[str] = []
+    ws = _ws(subprotocols="", query_value=_FROM_QUERY)
+    with _patch_auth(real_auth_middleware, seen), caplog.at_level(logging.WARNING):
+        result = await real_auth_middleware.authenticate_websocket(ws)
+    assert result is not None
+    assert "/ws/example" in caplog.text
+    assert _FROM_QUERY not in caplog.text
+
+
+async def test_subprotocol_success_logs_no_fallback_warning(real_auth_middleware, caplog: pytest.LogCaptureFixture):
+    seen: list[str] = []
+    ws = _ws(subprotocols=f"bearer, {_FROM_SUBPROTOCOL}", query_value=None)
+    with _patch_auth(real_auth_middleware, seen), caplog.at_level(logging.WARNING):
+        await real_auth_middleware.authenticate_websocket(ws)
+    assert caplog.text == ""

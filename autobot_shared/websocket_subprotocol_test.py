@@ -4,17 +4,34 @@
 # Author: mrveiss
 """Reading the bearer token and echoing ``bearer`` are one contract (#16457)."""
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
-from autobot_shared.websocket_subprotocol import accept_websocket, bearer_subprotocol_token, negotiated_subprotocol
+from autobot_shared.websocket_subprotocol import (
+    accept_websocket,
+    bearer_subprotocol_token,
+    negotiated_subprotocol,
+    resolve_ws_token,
+)
 
 
 def _ws(header: str | None) -> SimpleNamespace:
     headers = {} if header is None else {"sec-websocket-protocol": header}
     return SimpleNamespace(headers=headers, accept=AsyncMock())
+
+
+def _ws_with_query(header: str | None, query_token: str | None = None, path: str = "/ws/example") -> SimpleNamespace:
+    headers = {} if header is None else {"sec-websocket-protocol": header}
+    query_params = {} if query_token is None else {"token": query_token}
+    return SimpleNamespace(
+        headers=headers,
+        accept=AsyncMock(),
+        query_params=query_params,
+        url=SimpleNamespace(path=path),
+    )
 
 
 def _inline_parse_from_16891(header: str | None) -> str | None:
@@ -70,3 +87,34 @@ async def test_accept_websocket_echoes_exactly_what_was_negotiated(header: str |
     ws = _ws(header)
     await accept_websocket(ws)
     ws.accept.assert_awaited_once_with(subprotocol=echo)
+
+
+# --- resolve_ws_token: the read side, and the fallback's own visibility (#16457 review) ---
+
+
+def test_resolve_ws_token_prefers_the_subprotocol_over_the_query_param() -> None:
+    ws = _ws_with_query("bearer, tok", query_token="other")
+    assert resolve_ws_token(ws) == "tok"
+
+
+def test_resolve_ws_token_falls_back_to_the_query_param(caplog: pytest.LogCaptureFixture) -> None:
+    ws = _ws_with_query(None, query_token="other", path="/ws/deployments/dep-1")
+    with caplog.at_level(logging.WARNING):
+        assert resolve_ws_token(ws) == "other"
+    assert "/ws/deployments/dep-1" in caplog.text
+    # The route is named; the value itself never is.
+    assert "other" not in caplog.text
+
+
+def test_resolve_ws_token_logs_nothing_when_the_subprotocol_supplied_it(caplog: pytest.LogCaptureFixture) -> None:
+    ws = _ws_with_query("bearer, tok", query_token="other")
+    with caplog.at_level(logging.WARNING):
+        resolve_ws_token(ws)
+    assert caplog.text == ""
+
+
+def test_resolve_ws_token_logs_nothing_when_neither_source_has_a_value(caplog: pytest.LogCaptureFixture) -> None:
+    ws = _ws_with_query(None)
+    with caplog.at_level(logging.WARNING):
+        assert resolve_ws_token(ws) is None
+    assert caplog.text == ""
