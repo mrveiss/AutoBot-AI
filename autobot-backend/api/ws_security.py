@@ -80,12 +80,13 @@ async def enforce_ws_origin(websocket: WebSocket) -> bool:
 async def _resolve_ws_user(websocket: WebSocket) -> "dict | None":
     """Try every credential source a caller might legitimately present.
 
-    A browser JS client can only put a JWT in the query string -- it cannot
-    set custom headers on a WebSocket handshake -- so the query-param check
-    (:func:`auth_middleware.authenticate_websocket`) goes first. A
-    non-browser or service caller may instead send an ``Authorization``
-    header, an ``X-Session-ID`` session header, a dev-mode header, or the
-    internal-service key; ``get_user_from_request`` and
+    A browser JS client cannot set arbitrary custom headers on a WebSocket
+    handshake, but it can set the ``Sec-WebSocket-Protocol`` header (via the
+    `WebSocket` constructor's ``protocols`` argument) and the query string --
+    so the subprotocol/query-param check (:func:`auth_middleware.authenticate_websocket`,
+    #16457) goes first. A non-browser or service caller may instead send an
+    ``Authorization`` header, an ``X-Session-ID`` session header, a dev-mode
+    header, or the internal-service key; ``get_user_from_request`` and
     ``verify_internal_api_key`` already resolve those for HTTP requests, and
     a WebSocket exposes the same ``headers``/``cookies`` interface
     (``authenticate_ws_admin`` relies on the same fact). Trying each in turn
