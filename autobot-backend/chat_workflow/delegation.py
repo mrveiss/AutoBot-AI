@@ -55,11 +55,12 @@ Check all items before flipping ``AUTOBOT_DELEGATION_ENABLED=true`` in productio
       per-turn limit fires after MAX delegations in a single turn.
 """
 
-from typing import Awaitable, Callable, Dict, List
+from typing import Any, Awaitable, Callable, Dict, List
 
 from autobot_shared import tool_catalogue as _tc
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
+from chat_workflow.run_authority import NO_INHERITANCE, Inheritance, gated_tools
 from chat_workflow.session_role import DEFAULT_AUTH_ROLE
 
 logger = get_logger(__name__)
@@ -100,13 +101,24 @@ def forbidden_to_claude_tools(forbidden: "frozenset[str] | list[str]") -> List[s
     return sorted({tool for tool in (_claude_tool_for(f) for f in forbidden) if tool})
 
 
-async def _run_claude_code_subagent(task: str, agent_type: str, depth: int, auth_role: str = DEFAULT_AUTH_ROLE) -> str:
-    """Run *task* as a governed claude_code subagent; return its output."""
+async def _run_claude_code_subagent(
+    task: str, agent_type: str, depth: int, auth_role: str = DEFAULT_AUTH_ROLE, inherited: Inheritance = NO_INHERITANCE
+) -> str:
+    """Run *task* as a governed claude_code subagent; return its output.
+
+    #16950: the subprocess runs its own tool loop and cannot ask for approval, so
+    the parent's approval-gated tools are refused there, alongside both boundaries.
+    Its only other reach is AutoBot's MCP server, which exposes knowledge, memory
+    and agent-list reads only (mcp_server/autobot_server.py), so nothing gated or
+    forbidden is reachable that way.
+    """
     from orchestration.agent_registry import resolve_forbidden_tools
     from services.execution.base_backend import ExecutionTask
     from services.execution.claude_code_backend import build_claude_code_backend
 
-    disallowed = forbidden_to_claude_tools(resolve_forbidden_tools(agent_type))
+    parent = inherited.authority
+    refused = resolve_forbidden_tools(agent_type) | parent.forbidden_tools | gated_tools(parent.approval_gates)
+    disallowed = forbidden_to_claude_tools(refused)
     exec_task = ExecutionTask(
         task_id=f"delegate-{agent_type}-d{depth}",
         code=task,
@@ -120,7 +132,9 @@ async def _run_claude_code_subagent(task: str, agent_type: str, depth: int, auth
     return result.stdout or result.stderr or ""
 
 
-async def _run_internal_subagent(task: str, agent_type: str, depth: int, auth_role: str = DEFAULT_AUTH_ROLE) -> str:
+async def _run_internal_subagent(
+    task: str, agent_type: str, depth: int, auth_role: str = DEFAULT_AUTH_ROLE, inherited: Inheritance = NO_INHERITANCE
+) -> str:
     """Run *task* as a governed **internal-LLM** subagent; return its final text.
 
     Drives the production continuation loop (``_execute_llm_continuation_loop``) with
@@ -146,8 +160,11 @@ async def _run_internal_subagent(task: str, agent_type: str, depth: int, auth_ro
         initial_prompt=task,
         message=task,
         agent_context=agent_ctx,
-        work_item_id=work_item_id,
-        requires_approval_before=approval_categories,
+        # #16950: the parent's work item and gates travel with the work. Built from the
+        # child profile alone, a parent held from an action could delegate it unheld.
+        work_item_id=inherited.work_item_id or work_item_id,
+        requires_approval_before=sorted(set(approval_categories) | inherited.authority.approval_gates),
+        authority=inherited.authority,
         context={"delegation_depth": depth + 1},
         # #13821: a subagent acts for the same authenticated user, so it inherits
         # their role rather than silently dropping to the default. Leaving it
@@ -172,7 +189,7 @@ async def _run_internal_subagent(task: str, agent_type: str, depth: int, auth_ro
 
 
 # Engine registry — provider-agnostic dispatch; new engines register a name here.
-_ENGINES: Dict[str, Callable[[str, str, int, str], Awaitable[str]]] = {
+_ENGINES: Dict[str, Callable[[str, str, int, str, Inheritance], Awaitable[str]]] = {
     "claude_code": _run_claude_code_subagent,
     "internal": _run_internal_subagent,
 }
@@ -185,8 +202,14 @@ async def run_delegated_subtask(
     engine: str = "claude_code",
     parent_agent_id: str | None = None,
     auth_role: str = DEFAULT_AUTH_ROLE,
+    parent: Any = None,
 ) -> str:
     """Run a delegated subtask as a governed subagent (GH#11207).
+
+    #16950: ``parent`` is the delegating run's ctx. The child inherits its full
+    authority (gates, boundary, grants) and its work item, met with the child's own,
+    so delegating can never widen what the parent may do. None, for a delegation
+    with no parent run, inherits nothing.
 
     #13821: ``auth_role`` is the delegating session's authenticated role, carried
     so a subagent acts with the same RBAC identity as the user who asked for it —
@@ -213,6 +236,9 @@ async def run_delegated_subtask(
             f"delegation to unbounded agent {agent_type!r} is refused: a subagent may not hold "
             "a wider tool boundary than the profiles available to delegation (GH#13588)"
         )
+    inherited = Inheritance.of(parent)
+    if parent_agent_id is None and getattr(parent, "agent_context", None) is not None:
+        parent_agent_id = parent.agent_context.agent_id
     runner = _ENGINES.get(engine)
     if runner is None:
         raise ValueError(f"unknown delegation engine: {engine!r} (available: {sorted(_ENGINES)})")
@@ -224,4 +250,4 @@ async def run_delegated_subtask(
         depth,
         task,
     )
-    return await runner(task, agent_type, depth, auth_role)
+    return await runner(task, agent_type, depth, auth_role, inherited)

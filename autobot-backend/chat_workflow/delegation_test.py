@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from chat_workflow import delegation
+from chat_workflow.run_authority import NO_INHERITANCE
 from chat_workflow.delegation import (
     MAX_DELEGATION_DEPTH,
     MAX_DELEGATIONS_PER_TURN,
@@ -75,7 +76,7 @@ async def test_run_delegated_subtask_dispatches_to_engine():
     with patch.dict(delegation._ENGINES, {"claude_code": engine}):
         out = await run_delegated_subtask("do it", agent_type="research_agent", depth=0)
     assert out == "subagent output"
-    engine.assert_awaited_once_with("do it", "research_agent", 0, "user")
+    engine.assert_awaited_once_with("do it", "research_agent", 0, "user", NO_INHERITANCE)
 
 
 @pytest.mark.asyncio
@@ -126,7 +127,7 @@ async def test_internal_engine_registered_and_dispatches():
     with patch.dict(delegation._ENGINES, {"internal": engine}):
         out = await run_delegated_subtask("t", agent_type="research_agent", depth=0, engine="internal")
     assert out == "internal result"
-    engine.assert_awaited_once_with("t", "research_agent", 0, "user")
+    engine.assert_awaited_once_with("t", "research_agent", 0, "user", NO_INHERITANCE)
 
 
 # --- _handle_delegate_tool: flag off = unchanged, on = runs subagent -------

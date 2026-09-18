@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     from async_chat_workflow import WorkflowMessage
+    from security.authority import Authority
 
 logger = logging.getLogger(__name__)
 
@@ -397,6 +398,10 @@ class LLMIterationContext:
     # key that slipped through. Defaults to the same "user" every downstream
     # seam already defaulted to.
     auth_role: str = "user"
+    # #16950: authority inherited from the principals this run acts for -- a delegating
+    # parent's gates, boundary and grants. Met with the run's own at every seam that
+    # enforces one, so no hop can widen it. None: nothing inherited.
+    authority: "Authority | None" = None
 
 
 def build_governed_identity(
