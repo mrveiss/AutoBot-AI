@@ -45,6 +45,7 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 - **Never hardcode.** Config via SSOT, TTLs via env-var-backed module constants, no IPs or ports in code.
 - **The codebase is the source of truth** — never edit `/opt/autobot/` or `/var/log/autobot/`.
 - **System updates (test AND prod) go through the builtin updater only** — the code-sync API / self-update path a user reaches in the maintenance UI. If the builtin cannot do it, fix that gap (issue + PR); never side-channel via ad-hoc ansible or shell.
+- **No agent cleans up data or credentials on its own.** Deleting, rewriting or rotating stored data or credentials is only *proposed* by an agent. A human approves it through an always-available review queue (the approval gates), it is never auto-approved, and it always leaves a durable paper trail — [#17038](https://github.com/mrveiss/AutoBot-AI/issues/17038).
 - **Security reviews are findings-first** — one-line verdict, then a severity/`file:line`/issue/fix table, within 3 tool calls. Verify *after*; never explore before the verdict lands. Skill: `secreview`.
 - **Nothing internal in outward artifacts** — no IPs, hostnames, secrets, tokens, or internal filesystem paths in issues, PRs, comments or logs. Redact to a generic role or node reference.
 - **Dispatch gates on review capacity, not PR count.** There is no open-PR limit; every PR still gets a `code-reviewer` pass before merge. PRs accumulating means review is the bottleneck — do that, don't defer new work.
