@@ -17,7 +17,7 @@ def _normalize_outbound_url(url: str) -> str:
     """Rewrite a 0.0.0.0 bind-address host to 127.0.0.1 for outbound calls.
 
     Bug fix: the Ollama endpoint is sometimes configured as
-    ``http://0.0.0.0:11434`` (a server *bind* address — "all interfaces").
+    the wildcard bind host ``0.0.0.0`` (a server *bind* address — "all interfaces").
     0.0.0.0 is not a valid *connect* target, so an outbound client request to
     it raises aiohttp.ClientError, the LLM call fails, and no assistant reply is
     produced. Normalize it to loopback so the call reaches a locally-bound
