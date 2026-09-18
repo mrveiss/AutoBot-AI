@@ -10,12 +10,78 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from autobot_shared import websocket_subprotocol
 from autobot_shared.websocket_subprotocol import (
     accept_websocket,
     bearer_subprotocol_token,
     negotiated_subprotocol,
     resolve_ws_token,
 )
+
+
+class _FakeRedis:
+    """Minimal in-memory stand-in for the calls AlertCooldownManager makes.
+
+    Real, stateful (not a per-call MagicMock return) so a burst of calls
+    within one test can actually observe the cooldown key a prior call set --
+    ``alert_cooldown_test.py``'s own ``_make_redis`` fixes each call's return
+    value instead, which cannot simulate that sequence.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict[str, str] = {}
+
+    def get(self, key: str) -> bytes | None:
+        value = self._store.get(key)
+        return value.encode() if value is not None else None
+
+    def exists(self, key: str) -> int:
+        return 1 if key in self._store else 0
+
+    def set(self, key: str, value: object, ex: int | None = None) -> bool:
+        self._store[key] = str(value)
+        return True
+
+    def pipeline(self) -> "_FakePipeline":
+        return _FakePipeline(self)
+
+
+class _FakePipeline:
+    def __init__(self, redis: _FakeRedis) -> None:
+        self._redis = redis
+        self._incr_keys: list[str] = []
+
+    def incr(self, key: str) -> None:
+        self._incr_keys.append(key)
+
+    def expire(self, key: str, seconds: int) -> None:
+        pass  # TTL isn't observable through this fake; irrelevant to what these tests assert.
+
+    def execute(self) -> list[int]:
+        results = []
+        for key in self._incr_keys:
+            current = int(self._redis._store.get(key, "0")) + 1
+            self._redis._store[key] = str(current)
+            results.append(current)
+        self._incr_keys = []
+        return results
+
+
+@pytest.fixture(autouse=True)
+def _isolated_fallback_cooldown(monkeypatch: pytest.MonkeyPatch) -> _FakeRedis:
+    """Every test in this file gets its own in-memory Redis stand-in.
+
+    Without this, `resolve_ws_token`'s fallback-warning throttle (#16457
+    review, round 3) shares the real `alert_cooldown` Redis state across
+    every test run -- confirmed by running the fallback test twice in a row
+    locally: the second run's cooldown key was still live from the first,
+    and the "logs a warning" assertion failed. Each test gets a fresh,
+    empty fake, so the first fallback call in any test always passes the
+    cooldown check.
+    """
+    fake = _FakeRedis()
+    monkeypatch.setattr(websocket_subprotocol._fallback_cooldown, "_get_client", lambda: fake)
+    return fake
 
 
 def _ws(header: str | None) -> SimpleNamespace:
@@ -118,3 +184,24 @@ def test_resolve_ws_token_logs_nothing_when_neither_source_has_a_value(caplog: p
     with caplog.at_level(logging.WARNING):
         assert resolve_ws_token(ws) is None
     assert caplog.text == ""
+
+
+def test_a_burst_of_fallback_handshakes_on_one_route_logs_once(caplog: pytest.LogCaptureFixture) -> None:
+    """#16457 review, round 3: unthrottled, a reconnect loop or a prober
+    floods the log with one line per handshake attempt. Five handshakes in
+    a burst on the same route must log exactly once."""
+    with caplog.at_level(logging.WARNING):
+        for _ in range(5):
+            ws = _ws_with_query(None, query_token="other", path="/ws/deployments/dep-1")
+            assert resolve_ws_token(ws) == "other"
+    assert caplog.text.count("/ws/deployments/dep-1") == 1
+
+
+def test_a_burst_on_a_different_route_is_not_suppressed_by_the_first(caplog: pytest.LogCaptureFixture) -> None:
+    """The cooldown is per route, not global: a second route in the same
+    burst must still get its own first warning."""
+    with caplog.at_level(logging.WARNING):
+        resolve_ws_token(_ws_with_query(None, query_token="other", path="/ws/deployments/dep-1"))
+        resolve_ws_token(_ws_with_query(None, query_token="other", path="/ws/deployments/dep-2"))
+    assert "/ws/deployments/dep-1" in caplog.text
+    assert "/ws/deployments/dep-2" in caplog.text

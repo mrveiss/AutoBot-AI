@@ -30,9 +30,17 @@ that fallback's use was invisible -- neither logged when a handshake
 actually took it. One function now owns both, so a straggler client still
 using the query param shows up in the logs without a second copy of the
 same fallback-and-log logic per backend.
+
+The fallback warning is throttled per route through the existing
+``autobot_shared.alert_cooldown`` (#16457 review, round 3): unthrottled, a
+client stuck in a reconnect loop -- or a prober -- can flood the log with
+one line per handshake attempt.
 """
 
+import hashlib
 import logging
+
+from autobot_shared.alert_cooldown import AlertCooldownManager, AlertTier
 
 # Plain stdlib logging, deliberately -- this module is imported at module
 # scope by `autobot-slm-backend/api/websocket.py`, whose test harness
@@ -44,6 +52,11 @@ import logging
 # the same choice; CLAUDE.md's pattern table prescribes it for exactly this
 # situation).
 logger = logging.getLogger(__name__)
+
+# ROUTINE: this is a migration-visibility signal, not a paging alert -- 2/hr
+# and a 60-minute per-route cooldown is plenty to notice a straggler client
+# without a reconnect loop flooding the log with a line per attempt.
+_fallback_cooldown = AlertCooldownManager()
 
 BEARER = "bearer"
 
@@ -62,17 +75,36 @@ def bearer_subprotocol_token(websocket) -> str | None:
     return parts[1] if len(parts) == 2 and parts[0] == BEARER and parts[1] else None
 
 
+def _route_cooldown_key(route: str) -> str:
+    """An opaque per-route cooldown fingerprint, immune to ``alert_cooldown``'s
+    own normalisation.
+
+    ``AlertCooldownManager`` strips whole-token numeric runs from the alert
+    text before hashing it (so e.g. "Disk at 95%" and "Disk at 96%" dedupe as
+    the same alert) -- which silently collapsed ``/ws/deployments/dep-1`` and
+    ``/ws/deployments/dep-2`` onto one cooldown key, verified by a failing
+    test: only the first route's handshake ever logged. Prefixing the hash
+    with a non-numeric run makes the whole token non-digit-only, so it can
+    never match that strip.
+    """
+    return "route" + hashlib.sha256(str(route).encode("utf-8")).hexdigest()[:16]
+
+
 def resolve_ws_token(websocket) -> str | None:
     """The auth token: subprotocol header preferred, ``?token=`` a logged fallback.
 
     #16457 review: the query-param fallback is kept on purpose during
-    migration, but its use was invisible. Logs one warning per handshake
-    that actually took it -- naming the route only, the token never.
+    migration, but its use was invisible. Logs one warning per route, at
+    most once per cooldown window, naming the route only, the token never.
     """
     subprotocol_token = bearer_subprotocol_token(websocket)
     token = subprotocol_token or websocket.query_params.get("token")
     if token and not subprotocol_token:
-        logger.warning("WS auth via ?token= fallback, not subprotocol | path=%s", websocket.url.path)
+        route = websocket.url.path
+        cooldown_key = _route_cooldown_key(route)
+        if _fallback_cooldown.should_send(cooldown_key, AlertTier.ROUTINE):
+            logger.warning("WS auth via ?token= fallback, not subprotocol | path=%s", route)
+            _fallback_cooldown.record_sent(cooldown_key, AlertTier.ROUTINE)
     return token
 
 
