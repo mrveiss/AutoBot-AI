@@ -25663,10 +25663,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
     # BATCH 153: knowledge_ai_stack.py - COMPLETE (100%)
     # ==============================================
 
-    # test_batch_153_enhanced_search_simple_pattern removed (#16908):
-    # knowledge_ai_stack.search no longer exists -- it was dead code, shadowed
-    # by knowledge_search.py's own /search at the same (method, path), and was
-    # deleted rather than re-pathed since it carried zero tenant filtering.
+    # test_batch_153_enhanced_search_simple_pattern removed: knowledge_ai_stack.search deleted, not migrated (#16908).
 
     def test_batch_153_rag_search_simple_pattern(self):
         """Verify rag_search endpoint uses Simple Pattern"""
@@ -25742,9 +25739,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify all knowledge_ai_stack endpoints have @with_error_handling decorator"""
         from api import knowledge_ai_stack
 
-        # #16908: knowledge_ai_stack.search removed from this list -- deleted,
-        # not migrated; see the removed test_batch_153_enhanced_search_simple_
-        # pattern above.
+        # search removed from this list: deleted, not migrated (#16908).
         endpoint_functions = [
             knowledge_ai_stack.rag_search,
             knowledge_ai_stack.extract_knowledge,
@@ -25767,9 +25762,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify knowledge_ai_stack.py has reached 100% migration"""
         from api import knowledge_ai_stack
 
-        # #16908: knowledge_ai_stack.search removed from this list (deleted,
-        # not migrated) -- see test_batch_153_all_knowledge_ai_stack_endpoints_
-        # have_decorator above.
+        # search removed from this list: deleted, not migrated (#16908).
         endpoint_functions = [
             knowledge_ai_stack.rag_search,
             knowledge_ai_stack.extract_knowledge,
@@ -25792,13 +25785,8 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertEqual(progress_percentage, 100.0)
 
     def test_batch_153_migration_preserves_ai_stack_integration(self):
-        """Verify migration preserves AI Stack client integration.
-
-        #16908: previously also checked knowledge_ai_stack.search's own AI
-        Stack client injection; that handler is deleted (dead, unsafe code --
-        see the removed test_batch_153_enhanced_search_simple_pattern), so
-        this only pins what rag_search (still live) preserves.
-        """
+        """Verify migration preserves AI Stack client integration. Pins only
+        rag_search now -- search's own checks removed, deleted not migrated (#16908)."""
         from api import knowledge_ai_stack
 
         # Verify RAG query functionality
@@ -25809,11 +25797,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_migration_preserves_rag_capabilities(self):
         """Verify migration preserves RAG (Retrieval-Augmented Generation) capabilities.
-
-        #16908: previously also checked knowledge_ai_stack.search's use of
-        include_rag/rag_enhanced; that handler is deleted (see
-        test_batch_153_migration_preserves_ai_stack_integration's docstring).
-        """
+        search's own include_rag/rag_enhanced checks removed, deleted not migrated (#16908)."""
         from api import knowledge_ai_stack
 
         # Verify RAG search functionality
@@ -25854,12 +25838,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_migration_preserves_pydantic_models(self):
         """Verify migration preserves Pydantic request models (#10666 B1: SearchRequest
-        renamed to SearchRequest; AIStackSearchRequest is the ai_stack variant)
-
-        #16908: AIStackSearchRequest dropped from this test -- it was
-        knowledge_ai_stack.search's own request model, and that handler (and
-        its import of the model) is deleted along with it.
-        """
+        renamed to SearchRequest; AIStackSearchRequest dropped -- search's own model, deleted (#16908))"""
         from api import knowledge_ai_stack
 
         # Verify request models are defined

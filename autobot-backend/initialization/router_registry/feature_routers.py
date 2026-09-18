@@ -201,12 +201,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "llm_optimization",
     ),
     ("api.llm_awareness", "/llm-awareness", ["llm-awareness"], "llm_awareness"),
-    # Issue #4258: Dynamic endpoint capability discovery for LLM self-awareness.
-    # #16908: prefix corrected from "" to "/self" -- the module's own decorator
-    # is @router.get("/capabilities") and its docstring documents the intended
-    # path as GET /api/self/capabilities, but the missing prefix here landed it
-    # at /api/capabilities instead, silently colliding with (and losing to)
-    # api/chat.py's real /capabilities endpoint.
+    # Issue #4258: LLM self-awareness. Prefix corrected to /self (#16908 PR body).
     (
         "api.self_capabilities",
         "/self",
@@ -554,13 +549,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["admin", "feature-flags"],
         "feature_flags",
     ),
-    # Issue #12820: Operator toggles for background schedulers.
-    # #16908: this module's own GET /schedulers used to be shadowed by
-    # api/admin_schedulers.py (a core router registered before this one, so it
-    # always won) -- deleted, since its response omitted every operator
-    # override this module's PUT/DELETE exist to set, and the frontend
-    # (SchedulerTogglesApiClient.ts) was already built against this module's
-    # response shape instead.
+    # Issue #12820: Operator toggles; shadowing admin_schedulers.py deleted (#16908).
     (
         "api.scheduler_toggles",
         "/admin",
