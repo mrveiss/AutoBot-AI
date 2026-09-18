@@ -300,6 +300,5 @@ def test_python_files_prunes_skip_dirs_during_the_walk_not_after(tmp_path, monke
         "exactly the negative-control gap this test closes."
     )
     assert files == [kept_dir / "kept.py"], (
-        "the sentinel file under the SKIP_DIR_PARTS directory must never reach "
-        "the returned generator either"
+        "the sentinel file under the SKIP_DIR_PARTS directory must never reach " "the returned generator either"
     )

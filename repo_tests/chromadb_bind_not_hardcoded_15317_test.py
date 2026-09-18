@@ -61,9 +61,9 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
+
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _REPO_ROOT = repo_root()

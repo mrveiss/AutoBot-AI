@@ -43,9 +43,7 @@ _INDEXER_STUB = """\
 import sys
 from pathlib import Path
 Path(__file__).resolve().parent.parent.joinpath("{marker}").write_text("invoked")
-""".format(
-    marker=_MARKER_NAME
-)
+""".format(marker=_MARKER_NAME)
 
 
 def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -216,9 +214,7 @@ def test_post_commit_hook_no_longer_chains_to_doc_sync():
     -- is the regression this guards)."""
     text = _POST_COMMIT.read_text(encoding="utf-8")
     invocation_lines = [
-        line
-        for line in text.splitlines()
-        if "doc-sync" in line.lower() and not line.lstrip().startswith("#")
+        line for line in text.splitlines() if "doc-sync" in line.lower() and not line.lstrip().startswith("#")
     ]
     assert not invocation_lines, f"post-commit still invokes doc-sync: {invocation_lines}"
 
