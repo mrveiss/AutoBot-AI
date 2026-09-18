@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Tuple
 from advanced_rag_optimizer import SearchResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import config
+from security.content_firewall import inspect_rag_context
 from services.rag_service import RAGService
 
 from .context_enhancer import get_context_enhancer
@@ -709,6 +710,19 @@ class ChatKnowledgeService:
                 )
             doc_block = "AUTOBOT DOCUMENTATION CONTEXT:\n" + "\n".join(doc_lines)
             context_string = doc_block + "\n\n" + context_string if context_string else doc_block
+
+        # #16771: the chat path is a RAG path too -- one shared inspection
+        # point (also used by advanced_rag_optimizer's search-based path)
+        # delimits this as untrusted DATA before it reaches the prompt, and
+        # blocks it outright on a high-risk verdict rather than answering
+        # from poisoned context. The citations are what the context_string
+        # was built from, so they're dropped with it -- a citation pointing
+        # at content the model never actually saw would mislead the caller.
+        if context_string:
+            fw_verdict = await inspect_rag_context(context_string, context_label=query[:80])
+            if fw_verdict.blocked:
+                return "", [], intent_result, enhanced_query
+            context_string = fw_verdict.content
 
         logger.info(
             "[Conversation RAG] Completed in %.3fs - %d citations, " "enhanced=%s, categories=%s, docs=%s",
