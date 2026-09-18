@@ -23,6 +23,10 @@
 #     either way; `pre-commit install` refuses while the key merely exists.
 #   * Dangling symlinks in the hooks dir are detected, reported, and replaced.
 #   * Idempotent — safe to re-run; a second run is a no-op when up to date.
+#   * The installed `pre-commit` runs the branch guard, then dispatches staged
+#     files to the `pre-commit` framework binary if it's on PATH (#16923) —
+#     see tools/git-hooks/pre-commit for the logic; this installer just copies
+#     it verbatim, same as every other managed hook.
 #
 # Usage:
 #   bash scripts/install-git-hooks.sh          # install/refresh hooks
