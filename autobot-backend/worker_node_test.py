@@ -10,6 +10,7 @@ all original functionality while reducing nesting depth.
 """
 
 import ast
+import importlib
 import inspect
 import sys
 import textwrap
@@ -298,6 +299,52 @@ class TestGUIControllerPlatformGate:
 
         assert reloaded.GUIController is gui_controller_dummy.GUIController
         assert reloaded.GUI_AUTOMATION_SUPPORTED is False
+
+
+class TestNvidiaSmiDetails:
+    """#16289: WorkerNode reads GPU details through autobot_shared.gpu_telemetry."""
+
+    GPU_A = {
+        "name": "NVIDIA Test GPU A",
+        "memory.total": "16384",
+        "memory.used": "4096",
+        "memory.free": "12288",
+        "utilization.gpu": "30",
+        "utilization.memory": "25",
+    }
+
+    @staticmethod
+    def _details(rows):
+        # TestGuiAutomation above pops sys.modules["worker_node"] and re-imports
+        # it, so the module-level WorkerNode can belong to a module object that
+        # patch("worker_node...") no longer reaches. Resolve both from the live one.
+        live = importlib.import_module("worker_node")
+        with patch.object(live, "query_nvidia_gpus", return_value=rows) as query:
+            details = live.WorkerNode._get_nvidia_smi_details(live.WorkerNode.__new__(live.WorkerNode))
+        query.assert_called_once_with(live._NVIDIA_DETAIL_FIELDS)
+        return details
+
+    def test_each_gpu_row_becomes_its_own_entry(self):
+        gpu_b = {**self.GPU_A, "name": "NVIDIA Test GPU B", "memory.total": "6144"}
+
+        details = self._details([self.GPU_A, gpu_b])
+
+        assert [entry["name"] for entry in details] == ["NVIDIA Test GPU A", "NVIDIA Test GPU B"]
+        assert details[0] == {
+            "name": "NVIDIA Test GPU A",
+            "memory_total_mb": 16384,
+            "memory_used_mb": 4096,
+            "memory_free_mb": 12288,
+            "gpu_util_percent": 30,
+            "mem_util_percent": 25,
+        }
+        assert details[1]["memory_total_mb"] == 6144
+
+    def test_a_gpu_with_an_unreadable_value_is_skipped(self):
+        assert self._details([{**self.GPU_A, "memory.total": "[N/A]"}]) == []
+
+    def test_no_nvidia_smi_is_no_details(self):
+        assert self._details(None) == []
 
 
 if __name__ == "__main__":
