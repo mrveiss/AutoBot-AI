@@ -9,6 +9,7 @@ A fake repairer stands in for the per-type services (tested on their own in
 so these tests judge the route and the break-glass rules, not a store.
 """
 
+import asyncio
 import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -68,8 +69,8 @@ def audit():
         yield audit_log
 
 
-def _repair(resource_type="fake", new_owner=LIVE_USER):
-    body = {"resource_type": resource_type, "resource_id": "r-1", "new_owner_id": new_owner}
+def _repair(resource_type="fake", new_owner=LIVE_USER, resource_id="r-1"):
+    body = {"resource_type": resource_type, "resource_id": resource_id, "new_owner_id": new_owner}
     return _client().post("/api/admin/orphans/repair", json=body)
 
 
@@ -134,3 +135,39 @@ def test_orphans_are_listed_with_their_conditions(audit):
 
     assert response.status_code == 200
     assert response.json()["orphans"] == [{"resource_id": "r-1", "conditions": {"owner": "deleted"}}]
+
+
+def test_15779_ac1_a_null_scope_fact_is_denied_then_repaired_through_the_api(audit):
+    """#15779 AC1 exactly: owner_id=None, no grant, ORGANIZATION with company_id=None.
+
+    Denied to a normal principal by the real KnowledgeOwnership.check_access, repaired
+    through this route by the real knowledge repairer, then reachable by the new owner
+    through that same check -- and still not by anyone else.
+    """
+    from knowledge.ownership import KnowledgeOwnership
+    from services.orphan_repair_types import KnowledgeFactRepairer
+
+    facts = {"f1": {"owner_id": None, "visibility": "organization", "organization_id": None}}
+
+    class _KB:
+        def get_fact(self, fact_id):
+            return {"fact_id": fact_id, "metadata": dict(facts[fact_id])}
+
+        async def update_fact(self, fact_id, metadata):
+            facts[fact_id].update(metadata)
+            return {"status": "success"}
+
+    async def _kb():
+        return _KB()
+
+    check = KnowledgeOwnership(MagicMock()).check_access
+    normal = str(uuid.uuid4())
+    assert not asyncio.run(check("f1", normal, facts["f1"], user_org_id="org-9"))
+
+    with patch.dict(route.REPAIRERS, {"knowledge_fact": KnowledgeFactRepairer(kb_factory=_kb)}):
+        response = _repair(resource_type="knowledge_fact", resource_id="f1")
+
+    assert response.status_code == 201, response.text
+    assert response.json()["conditions"] == {"owner": "none", "grant": "none", "scope": "organization_without_company"}
+    assert asyncio.run(check("f1", LIVE_USER, facts["f1"]))
+    assert not asyncio.run(check("f1", normal, facts["f1"], user_org_id="org-9"))
