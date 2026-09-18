@@ -101,6 +101,22 @@ def forbidden_to_claude_tools(forbidden: "frozenset[str] | list[str]") -> List[s
     return sorted({tool for tool in (_claude_tool_for(f) for f in forbidden) if tool})
 
 
+def claude_tools_refusing(boundary: "frozenset[str]", held: "frozenset[str]") -> List[str]:
+    """claude_code ``--disallowedTools`` for a profile *boundary* plus the tokens a parent *holds* (#16950).
+
+    An unmappable token means different things on the two paths. In a profile
+    boundary it is left undisallowed, and the boundary's other tokens still constrain
+    the agent: the accepted behaviour. A token the parent holds (gated for a human,
+    or forbidden to it) has no such fallback. ``git push``, ``curl`` and the rest are
+    reachable through ``Bash``, so a held token with no finer claude tool takes
+    ``Bash`` away. The held action then happens in the parent, with a human.
+    """
+    tools = set(forbidden_to_claude_tools(boundary | held))
+    if any(_claude_tool_for(token) is None for token in held):
+        tools.add("Bash")
+    return sorted(tools)
+
+
 async def _run_claude_code_subagent(
     task: str, agent_type: str, depth: int, auth_role: str = DEFAULT_AUTH_ROLE, inherited: Inheritance = NO_INHERITANCE
 ) -> str:
@@ -108,6 +124,8 @@ async def _run_claude_code_subagent(
 
     #16950: the subprocess runs its own tool loop and cannot ask for approval, so
     the parent's approval-gated tools are refused there, alongside both boundaries.
+    A held token claude_code has no finer tool for takes ``Bash`` away
+    (``claude_tools_refusing``).
     Its only other reach is AutoBot's MCP server, which exposes knowledge, memory
     and agent-list reads only (mcp_server/autobot_server.py), so nothing gated or
     forbidden is reachable that way.
@@ -117,8 +135,8 @@ async def _run_claude_code_subagent(
     from services.execution.claude_code_backend import build_claude_code_backend
 
     parent = inherited.authority
-    refused = resolve_forbidden_tools(agent_type) | parent.forbidden_tools | gated_tools(parent.approval_gates)
-    disallowed = forbidden_to_claude_tools(refused)
+    held = parent.forbidden_tools | gated_tools(parent.approval_gates)
+    disallowed = claude_tools_refusing(resolve_forbidden_tools(agent_type), held)
     exec_task = ExecutionTask(
         task_id=f"delegate-{agent_type}-d{depth}",
         code=task,
