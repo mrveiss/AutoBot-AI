@@ -34,9 +34,14 @@ async def list_agent_presence(
 ) -> List[Dict[str, Any]]:
     """Every agent visible to the caller: its own tenant's, plus shared.
 
-    Tenant comes from the verified JWT/session context (`require_org_context`),
-    never a request parameter -- a caller cannot ask to see another tenant's
-    agents by passing one in.
+    Tenant comes from `require_org_context` -> `get_tenant_context`
+    (#10750 A5): an ordinary caller cannot see another tenant's agents by
+    passing one in -- a request-supplied org (header/path/query) is only
+    honoured after a real membership check, otherwise 403. A **platform
+    admin** (`is_platform_admin` or an admin role on the JWT) is the
+    documented exception: `get_tenant_context` trusts an admin's
+    request-supplied org outright, exactly as every other org-scoped route
+    already does -- this route adds no new admin-override path.
     """
     entries = get_presence_registry().list_live(str(ctx.org_id) if ctx.org_id else None)
     return [
