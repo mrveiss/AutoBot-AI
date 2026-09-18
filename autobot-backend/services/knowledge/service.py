@@ -53,6 +53,8 @@ def build_grounded_context(contents: List[str]) -> str:
 async def budget_grounded_context(
     kb_results: List[Dict[str, Any]],
     model_name: str | None = None,
+    *,
+    context_label: str = "budget_grounded_context",
 ) -> Tuple[str, List[Dict[str, Any]]]:
     """Estimate tokens, compress when over budget, rebuild via build_grounded_context. (#10837)
 
@@ -60,19 +62,38 @@ async def budget_grounded_context(
     compress+rebuild sequence is never duplicated.  Each dict in kb_results must
     have a ``"content"`` key; dicts without content are silently skipped.
 
+    #16930: every return path is re-inspected by the content firewall before the
+    caller sees it, not only the uncompressed one. ``conversation_aware_retrieve``
+    already firewalls the context string it builds -- but this function is called
+    AFTER that, and rebuilds a fresh string from each result's raw ``content``
+    (compression especially: ``compress_kb_results`` selects a SUBSET of results
+    and this rebuilds from their raw content, which is not the same string
+    ``conversation_aware_retrieve`` inspected). Passing the earlier verdict
+    through was rejected in favour of re-inspecting this function's own output:
+    it is correct regardless of which results survive compression, and it also
+    closes the same gap for ``async_chat_workflow._budget_kb_context``, whose
+    ``kb_results`` never go through ``conversation_aware_retrieve``'s check at
+    all -- found while fixing this, not the bug originally assigned.
+
     Args:
         kb_results: Dicts with at least a ``"content"`` key (citations or raw KB dicts).
         model_name: Active LLM model name for per-model budget tuning.  Pass the
             selected model (llm_handler path) or None to use the YAML default
             (async_chat_workflow path).
+        context_label: Short description of the call site, surfaced in the
+            firewall's own logging when it quarantines or blocks (#15026's
+            ``context_label`` convention).
 
     Returns:
         Tuple of (context_str, effective_kb_results) where:
         - empty input → ("", [])
-        - under budget → (raw_context, kb_results) — full original list unchanged
-        - compressed → (compressed_context, trimmed) — trimmed is the subset kept
-          in the prompt, so callers can rebind citations to the trimmed list and
-          avoid showing the user sources the model never saw (#10837 regression fix).
+        - under budget → (context_str, kb_results) — full original list unchanged
+        - compressed → (context_str, trimmed) — trimmed is the subset kept in the
+          prompt, so callers can rebind citations to the trimmed list and avoid
+          showing the user sources the model never saw (#10837 regression fix).
+        - firewall blocks either string → ("", []) — never a partial context with
+          no citations to explain it, same contract as an empty/under-threshold
+          retrieval.
     """
     if not kb_results:
         return "", []
@@ -88,26 +109,31 @@ async def budget_grounded_context(
     kc_tokens = cwm.estimate_tokens(raw_context)
     max_kb_tokens = cwm.get_max_history_tokens(model_name=model_name)
     if not await cwm.async_should_compress(content_tokens=kc_tokens, model_name=model_name):
-        return raw_context, kb_results
+        context, results = raw_context, kb_results
+    else:
+        svc = ContextCompressionService(
+            model_thresholds={
+                name: spec.get("compression_threshold", 8192)
+                for name, spec in cwm.config.get("models", {}).items()
+                if isinstance(spec, dict)
+            }
+        )
+        trimmed = await svc.compress_kb_results(kb_results, max_tokens=max_kb_tokens)
+        if not trimmed:
+            return "", []
+        compressed = build_grounded_context([r.get("content", "") for r in trimmed if r.get("content")])
+        logger.info(
+            "[#10837] KB compressed: %d → %d results (%d tokens)",
+            len(kb_results),
+            len(trimmed),
+            cwm.estimate_tokens(compressed),
+        )
+        context, results = compressed, trimmed
 
-    svc = ContextCompressionService(
-        model_thresholds={
-            name: spec.get("compression_threshold", 8192)
-            for name, spec in cwm.config.get("models", {}).items()
-            if isinstance(spec, dict)
-        }
-    )
-    trimmed = await svc.compress_kb_results(kb_results, max_tokens=max_kb_tokens)
-    if not trimmed:
+    fw_verdict = await inspect_rag_context(context, context_label=context_label)
+    if fw_verdict.blocked:
         return "", []
-    compressed = build_grounded_context([r.get("content", "") for r in trimmed if r.get("content")])
-    logger.info(
-        "[#10837] KB compressed: %d → %d results (%d tokens)",
-        len(kb_results),
-        len(trimmed),
-        cwm.estimate_tokens(compressed),
-    )
-    return compressed, trimmed
+    return fw_verdict.content, results
 
 
 # Issue #556: Standard knowledge categories for chat RAG

@@ -961,7 +961,9 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             if knowledge_context and citations:
                 from services.knowledge.service import budget_grounded_context
 
-                knowledge_context, citations = await budget_grounded_context(citations, model_name=selected_model)
+                knowledge_context, citations = await budget_grounded_context(
+                    citations, model_name=selected_model, context_label=message[:80]
+                )
         else:
             session.metadata["used_knowledge"] = False
 
