@@ -55,10 +55,9 @@ def _parse_priority(priority: Any) -> "MessagePriority":
     return MessagePriority.NORMAL
 
 
-from autobot_shared.async_compat import fire_and_forget, run_or_schedule
-
-# noqa: E402
+from autobot_shared.async_compat import fire_and_forget, run_or_schedule  # noqa: E402
 from autobot_shared.redis_client import get_redis_client  # noqa: E402
+from protocols.agent_kind import AgentKind  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -110,6 +109,14 @@ class AgentIdentity:
     supported_patterns: List[CommunicationPattern] = field(default_factory=list)
     health_status: str = "healthy"
     last_heartbeat: float = field(default_factory=time.time)
+    # #16947: additive shared-identity fields (design on #16946) -- every existing caller is unaffected.
+    kind: AgentKind = AgentKind.AI_STACK
+    name: str | None = None
+    tenant_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.name is None:
+            self.name = self.agent_id
 
 
 @dataclass
@@ -706,13 +713,11 @@ async def send_agent_request(
         logger.error("Sender agent %s not registered", sender_id)
         return None
 
-    # Create request message
     request = StandardMessage(
         header=MessageHeader(message_type=MessageType.REQUEST, recipient=recipient_id),
         payload=MessagePayload(content=request_data),
     )
 
-    # Send request and wait for response
     response = await sender_protocol.send_request(request, timeout=timeout)
 
     if response and response.header.message_type != MessageType.ERROR:
@@ -735,7 +740,6 @@ async def broadcast_to_all_agents(sender_id: str, message_data: Any) -> int:
         logger.error("Sender agent %s not registered", sender_id)
         return 0
 
-    # Create broadcast message
     broadcast_msg = StandardMessage(
         header=MessageHeader(message_type=MessageType.BROADCAST),
         payload=MessagePayload(content=message_data),
@@ -756,16 +760,13 @@ if __name__ == "__main__":
 
         manager = get_communication_manager()
 
-        # Create test agents
         agent1_identity = AgentIdentity(agent_id="test_agent_1", agent_type="test", capabilities=["test", "demo"])
 
         agent2_identity = AgentIdentity(agent_id="test_agent_2", agent_type="test", capabilities=["test", "demo"])
 
-        # Register agents with direct communication
         await manager.register_agent(agent1_identity, [{"type": "direct"}])
         protocol2 = await manager.register_agent(agent2_identity, [{"type": "direct"}])
 
-        # Set up message handlers
         async def handle_request(message: StandardMessage) -> StandardMessage:
             """Handle incoming request and return response message."""
             logger.info(f"Agent 2 received request: {message.payload.content}")
@@ -790,7 +791,6 @@ if __name__ == "__main__":
 
         logger.info("Broadcast sent to %s channels", broadcast_count)
 
-        # Cleanup
         await manager.shutdown_all()
         logger.info("✅ Communication protocol test completed!")
 
