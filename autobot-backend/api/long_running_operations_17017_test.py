@@ -95,8 +95,9 @@ def test_a_non_admin_lists_only_their_own_and_an_admin_lists_all(integration):
     _operation(integration, "legacy", None)  # created before #17017: an admin's alone
 
     def ids(caller):
-        response = _client(integration, caller).get("/")
-        assert response.status_code == 200, response.text
+        with patch.object(lro.logger, "error") as logged:
+            response = _client(integration, caller).get("/")
+        assert response.status_code == 200, (response.text, logged.call_args_list)
         body = response.json()
         return sorted(op["operation_id"] for op in body["operations"]), body["total_count"]
 
