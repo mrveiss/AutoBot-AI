@@ -77,6 +77,18 @@ def test_redact_content_masks_every_true_positive(name: str, text: str) -> None:
         assert text[m.start : m.end] not in redacted
 
 
+@pytest.mark.parametrize("name,text", _TRUE_POSITIVES, ids=[t[0] for t in _TRUE_POSITIVES])
+def test_redact_content_is_idempotent(name: str, text: str) -> None:
+    """#16895 review: multiple call sites redact the same content on its way to the
+    KB (the entry-point call in gdrive.py/onedrive.py/upload_file_to_knowledge, then
+    again at the knowledge/facts.py chokepoint) -- a second pass over already-masked
+    text must be a no-op, not a further mangling or a fresh (false-positive) match on
+    the placeholder itself."""
+    once = redact_content(text)
+    twice = redact_content(once)
+    assert twice == once, f"{name}: a second redact_content pass changed already-redacted text"
+
+
 # ---------------------------------------------------------------------------
 # False positives: an ordinary body is not caught
 # ---------------------------------------------------------------------------

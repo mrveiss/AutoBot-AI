@@ -761,6 +761,10 @@ class FactsMixin(FactProjectionMixin):
         # Lazy: fact_store pulls SQLAlchemy, absent from the startup-import smoke env.
         from knowledge import fact_store
 
+        # #13708: content is already redacted -- store_fact() (this method's one
+        # caller) runs it through sanitize_fact_content() before _check_for_duplicates,
+        # which is also update_fact()'s credential chokepoint (knowledge/ingest_sanitize.py).
+        # Redacting again here would be a same-call-chain no-op, not defense in depth.
         await fact_store.persist_fact(fact_id, content, metadata)
         await self._project_fact_to_redis(fact_id, content, metadata)
         await self._vectorize_fact_in_chromadb(fact_id, content, metadata)
