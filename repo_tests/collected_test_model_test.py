@@ -15,7 +15,9 @@ spot #15195 removed.
 from __future__ import annotations
 
 import ast
+import os
 
+from repo_tests import collected_test_model
 from repo_tests.collected_test_model import (
     collectable_tests,
     own_nodes,
@@ -158,3 +160,56 @@ def test_a_test_with_no_try_at_all_is_untouched_by_the_rule() -> None:
     plain = "def test_a():\n    assert True\n    raise SystemExit(0)\n"
     assert _live(plain) == 2
     assert not swallowed_assertions(plain)
+
+
+# ---------------------------------------------------------------------------
+# Does the walk actually PRUNE a SKIP directory, or merely filter it out of
+# the result afterward? (#16601)
+#
+# `rglob()` filtered post-hoc and `os.walk()` with `dirnames[:] = [...]`
+# pruning produce the identical final file list -- that identity is exactly
+# why no assertion on `test_modules()`'s RETURN VALUE can tell them apart,
+# and why the shard-10 hang (rglob descending into a huge excluded directory
+# regardless) shipped without any test noticing. This test instead watches
+# which directories `os.walk` is fed to next: a SKIP directory holding a
+# sentinel file must never be YIELDED by the walk at all, which is true only
+# when `dirnames` is mutated in place before the walk continues past it.
+# ---------------------------------------------------------------------------
+
+
+def test_modules_prunes_skip_directories_during_the_walk_not_after(tmp_path, monkeypatch) -> None:
+    skip_name = next(iter(collected_test_model.SKIP))
+    skip_dir = tmp_path / skip_name
+    skip_dir.mkdir()
+    # A file that would be collected if this directory were ever descended
+    # into -- its mere presence in the returned list, or its directory being
+    # visited at all, is the tell.
+    (skip_dir / "sentinel_test.py").write_text("def test_x():\n    pass\n", encoding="utf-8")
+    kept_dir = tmp_path / "kept"
+    kept_dir.mkdir()
+    (kept_dir / "test_kept.py").write_text("def test_x():\n    pass\n", encoding="utf-8")
+
+    visited_dirpaths: list[str] = []
+    real_walk = os.walk
+
+    def spying_walk(root, *args, **kwargs):
+        for dirpath, dirnames, filenames in real_walk(root, *args, **kwargs):
+            visited_dirpaths.append(dirpath)
+            yield dirpath, dirnames, filenames
+
+    monkeypatch.setattr(collected_test_model, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(collected_test_model.os, "walk", spying_walk)
+
+    modules = collected_test_model.test_modules()
+
+    assert str(skip_dir) not in visited_dirpaths, (
+        f"os.walk descended into {skip_dir}, a directory in SKIP -- pruning "
+        "must mutate `dirnames` in place BEFORE the walk continues past it, "
+        "not filter the results afterward (#16601). A post-hoc filter would "
+        "leave this directory out of `modules` below just the same, which is "
+        "exactly the negative-control gap this test closes."
+    )
+    assert modules == [kept_dir / "test_kept.py"], (
+        "the sentinel file under the SKIP directory must never reach the "
+        "returned list either"
+    )
