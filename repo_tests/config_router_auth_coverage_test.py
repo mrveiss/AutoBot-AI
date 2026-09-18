@@ -167,9 +167,9 @@ def test_the_known_ungated_list_only_ever_shrinks() -> None:
 
 def test_the_ceiling_is_pinned_to_the_list() -> None:
     """Growth past the ceiling fails; so does a ceiling left above the list, which lets it grow back into the gap."""
-    assert len(KNOWN_UNGATED) == _MAX_KNOWN_UNGATED, (
-        f"KNOWN_UNGATED holds {len(KNOWN_UNGATED)}; lower _MAX_KNOWN_UNGATED to match"
-    )
+    assert (
+        len(KNOWN_UNGATED) == _MAX_KNOWN_UNGATED
+    ), f"KNOWN_UNGATED holds {len(KNOWN_UNGATED)}; lower _MAX_KNOWN_UNGATED to match"
 
 
 def test_the_routers_this_sweep_cannot_read_are_declared() -> None:
