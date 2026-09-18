@@ -95,7 +95,9 @@ def test_a_non_admin_lists_only_their_own_and_an_admin_lists_all(integration):
     _operation(integration, "legacy", None)  # created before #17017: an admin's alone
 
     def ids(caller):
-        body = _client(integration, caller).get("/").json()
+        response = _client(integration, caller).get("/")
+        assert response.status_code == 200, response.text
+        body = response.json()
         return sorted(op["operation_id"] for op in body["operations"]), body["total_count"]
 
     assert ids(ALICE) == (["a-1"], 1)
