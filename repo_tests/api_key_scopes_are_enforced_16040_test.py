@@ -46,6 +46,7 @@ key) is tested on a test route in
 from __future__ import annotations
 
 import ast
+import os
 from pathlib import Path
 
 import pytest
@@ -54,6 +55,8 @@ from ._paths import repo_root
 
 SLM = repo_root() / "autobot-slm-backend"
 AUTH = SLM / "services" / "auth.py"
+KEY_MIDDLEWARE = SLM / "middleware" / "api_key_allow_list.py"
+BACKEND = repo_root() / "autobot-backend"
 MODEL = repo_root() / "autobot_shared" / "user_management" / "models" / "api_key.py"
 
 
@@ -144,11 +147,21 @@ def _is_test_module(relative: Path) -> bool:
     return name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py" or "tests" in relative.parts
 
 
+def _production_modules(root: Path) -> list[Path]:
+    """Every non-test ``.py`` under *root*. Symlinked directories are not followed: a
+    local ``backend -> .`` link would otherwise recurse."""
+    if not root.is_dir():
+        pytest.skip(f"{root} not present in this checkout")
+    found = []
+    for directory, subdirs, files in os.walk(root):
+        subdirs[:] = [d for d in subdirs if not d.startswith((".", "__pycache__", "node_modules"))]
+        found += [Path(directory) / f for f in files if f.endswith(".py")]
+    return sorted(p for p in found if not _is_test_module(p.relative_to(root)))
+
+
 def _slm_modules() -> list[Path]:
     """Every production module of the SLM backend. Fails, never passes, on an empty scan."""
-    if not SLM.is_dir():
-        pytest.skip(f"{SLM} not present in this checkout")
-    modules = [p for p in sorted(SLM.rglob("*.py")) if not _is_test_module(p.relative_to(SLM))]
+    modules = _production_modules(SLM)
     routes = [p for p in modules if p.relative_to(SLM).parts[0] == "api"]
     assert len(routes) > 10, f"scanned {len(routes)} SLM route modules; this guard would pass on an empty set"
     assert AUTH in modules, "services/auth.py was not scanned; re-derive this guard"
@@ -216,3 +229,137 @@ def test_a_route_reaches_a_key_only_by_declaring_the_permission_it_requires() ->
         f"get_api_key_user is used outside require_key_permission: {offenders}. Depend on "
         "require_key_permission(Permission.X) instead, so the route declares what the key must carry."
     )
+
+
+# --- #16294: the owner's ruling (2026-09-18) --------------------------------------
+#
+# The SLM accepts user API keys only on an explicit allow-list of integration routes,
+# each declaring its permission through require_key_permission; the main backend
+# accepts none. The list ships empty: no SLM route was found that an integration calls
+# with a user key (#16294).
+
+#: The SLM key allow-list, as (module, enclosing function) of each require_key_permission
+#: use. Adding a member is an owner decision on #16294: record it there, then here.
+_KEY_ALLOW_LIST: frozenset = frozenset()
+
+
+def test_the_key_allow_list_is_exactly_the_owners() -> None:
+    """A route joins the list by declaring ``require_key_permission``; this pins that list."""
+    members = {
+        (str(path.relative_to(SLM)), owner)
+        for path in _slm_modules()
+        if path != AUTH
+        for owner in _references(ast.parse(path.read_text(encoding="utf-8")), "require_key_permission")
+    }
+
+    assert members == set(_KEY_ALLOW_LIST), (
+        f"the SLM key allow-list is {sorted(members, key=str)}, but the owner's list is "
+        f"{sorted(_KEY_ALLOW_LIST, key=str)}. A route that accepts a key is an owner decision (#16294)."
+    )
+
+
+def _is_key_header(node: ast.AST) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value.lower() == "x-api-key"
+
+
+def _is_header_call(node: ast.AST) -> bool:
+    func = getattr(node, "func", None)
+    return isinstance(node, ast.Call) and getattr(func, "id", getattr(func, "attr", None)) == "Header"
+
+
+def _key_header_reads(tree: ast.Module) -> list[int]:
+    """Lines that read the X-API-Key request header, in any of the ways a route can.
+
+    - ``Header(..., alias="X-API-Key")``;
+    - a ``Header()`` parameter named ``x_api_key``, which FastAPI maps to that header;
+    - ``<x>.headers.get("X-API-Key")`` and ``<x>.headers["X-API-Key"]``.
+
+    Building an outbound request (``headers={"X-API-Key": k}``) is not a read.
+    """
+    lines = []
+    for node in ast.walk(tree):
+        if _is_header_call(node) and any(kw.arg == "alias" and _is_key_header(kw.value) for kw in node.keywords):
+            lines.append(node.lineno)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = node.args.args + node.args.kwonlyargs
+            defaults = [None] * (len(node.args.args) - len(node.args.defaults)) + node.args.defaults
+            defaults += node.args.kw_defaults
+            for arg, default in zip(args, defaults):
+                if arg.arg == "x_api_key" and default is not None and _is_header_call(default):
+                    lines.append(arg.lineno)
+        on_headers = getattr(getattr(node, "func", None), "value", None) if isinstance(node, ast.Call) else None
+        if isinstance(node, ast.Call) and getattr(node.func, "attr", None) == "get" and node.args:
+            if getattr(on_headers, "attr", None) == "headers" and _is_key_header(node.args[0]):
+                lines.append(node.lineno)
+        if isinstance(node, ast.Subscript) and getattr(node.value, "attr", None) == "headers":
+            if _is_key_header(node.slice):
+                lines.append(node.lineno)
+    return lines
+
+
+@pytest.mark.parametrize(
+    ("source", "flagged"),
+    [
+        ('def r(k: str = Header(None, alias="X-API-Key")): ...', True),
+        ("def r(x_api_key: str = Header(None)): ...", True),
+        ('def r(request): return request.headers.get("x-api-key")', True),
+        ('def r(request): return request.headers["X-API-Key"]', True),
+        ('httpx.get(url, headers={"X-API-Key": key})', False),
+        ('BLOCKED_HEADERS = ["x-api-key"]', False),
+        ('def r(request): return request.headers.get("Authorization")', False),
+        ('header = config.get("header", "X-Api-Key")', False),
+    ],
+    ids=["alias", "x_api_key param", "headers.get", "headers[]", "outbound", "a list", "other header", "config"],
+)
+def test_the_header_detector_finds_reads_and_only_reads(source: str, flagged: bool) -> None:
+    """Negative and positive controls for the two guards below."""
+    assert bool(_key_header_reads(ast.parse(source))) is flagged
+
+
+def test_the_slm_reads_the_key_header_only_where_keys_are_handled() -> None:
+    """A route that read X-API-Key itself would authenticate a key without naming either guarded symbol.
+
+    The one dependency that authenticates a key (``services/auth.py``) and the middleware
+    that refuses keys off the list are the only places the header may be named at all,
+    in any spelling, including a constant that a later ``.get(NAME)`` would use.
+    """
+    offenders = []
+    for path in _slm_modules():
+        if path in (AUTH, KEY_MIDDLEWARE):
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        named = [n.lineno for n in ast.walk(tree) if _is_key_header(n)]
+        offenders += [f"{path.relative_to(SLM)}:{line}" for line in sorted(set(named + _key_header_reads(tree)))]
+
+    assert offenders == [], f"X-API-Key is read or named outside the key handling: {offenders}"
+
+
+#: The LLC agent-key credential: a different key, table (``llc_agent_api_keys``) and header
+#: (``Authorization: Bearer``), validated by the LLC agent middleware. Not a user API key.
+_LLC_AGENT_KEY = BACKEND / "llc" / "middleware" / "agent_auth.py"
+#: The user API-key table's model, re-exported for the backend's schema metadata only.
+_KEY_MODEL_SHIM = BACKEND / "user_management" / "models"
+
+
+def test_the_main_backend_accepts_no_user_api_key() -> None:
+    """#16294: the main backend accepts no user API key until a named integration needs one.
+
+    It may not read the X-API-Key header, validate a key (``validate_key``) except the
+    named LLC agent-key exemption, or look up the user API-key table (``APIKey``,
+    ``APIKeyService``) outside the model shim.
+    """
+    modules = _production_modules(BACKEND)
+    assert len(modules) > 500, f"scanned {len(modules)} backend modules; this guard would pass on an empty set"
+    assert _LLC_AGENT_KEY in modules, "the named LLC exemption was not scanned; re-derive this guard"
+
+    offenders = []
+    for path in modules:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        where = str(path.relative_to(BACKEND))
+        offenders += [f"{where}:{line} reads X-API-Key" for line in _key_header_reads(tree)]
+        if path != _LLC_AGENT_KEY and _references(tree, "validate_key"):
+            offenders.append(f"{where} validates a key")
+        if _KEY_MODEL_SHIM not in path.parents and (_references(tree, "APIKey") or _references(tree, "APIKeyService")):
+            offenders.append(f"{where} uses the user API-key table")
+
+    assert offenders == [], f"the main backend accepts user API keys (#16294 rules it accepts none): {offenders}"

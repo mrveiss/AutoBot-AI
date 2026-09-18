@@ -2,16 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""A key-authenticated route refuses an out-of-scope key with 403, through the real dependencies (#16040).
+"""API keys over HTTP: allowed only where declared, refused with 403 elsewhere, always audited (#16040, #16294).
 
 ``require_key_permission`` is exercised over HTTP. The ``X-API-Key`` header goes
 through the real ``get_api_key_user`` (key validation, owner lookup, grace-period
 check, payload) and then the real ``permission_allowed``. Only the two database
 edges are stood in for: ``APIKeyService.validate_key`` and the owner lookup.
 
-No production route accepts a key yet; which ones will is #16294's decision. So
-the routes here are test routes, as the owner ruled for #16040 AC4 and AC6 on
-2026-09-11.
+The app also runs the real ``ApiKeyAllowListMiddleware``. Owner ruling on #16294
+(2026-09-18): a key is accepted only on routes that declare a key permission, and
+refused with 403 everywhere else, even when its scopes would allow the action. The
+production allow-list ships empty, so the declared routes here are test routes, as
+the owner ruled for #16040 AC4 and AC6 on 2026-09-11. Every decision on a key request
+is audited as one; the audit writer is the one stand-in added for that.
 """
 
 import secrets
@@ -31,6 +34,7 @@ from _real_auth_import import load_real_auth  # noqa: E402
 
 from autobot_shared.auth.key_scopes import scope_granted  # noqa: E402
 from autobot_shared.auth.permissions import Permission  # noqa: E402
+from middleware.api_key_allow_list import ApiKeyAllowListMiddleware  # noqa: E402
 from services.api_key_authority import API_KEY_SCOPES_ENFORCED_FROM  # noqa: E402
 
 _auth = load_real_auth(secrets.token_hex(32))
@@ -56,10 +60,19 @@ def _app() -> fastapi.FastAPI:
     async def configure(caller: dict = fastapi.Depends(_auth.require_key_permission(Permission.ADMIN_CONFIG_WRITE))):
         return {"sub": caller["sub"]}
 
+    @app.get("/session")  # an ordinary session route: not on the key allow-list
+    async def session_only(caller: dict = fastapi.Depends(_auth.get_current_user)):
+        return {"sub": caller["sub"]}
+
+    @app.get("/open")  # needs no credential at all: still not a place for a key
+    async def open_route():
+        return {"ok": True}
+
     async def _no_db():
         yield None
 
     app.dependency_overrides[_auth.get_slm_db] = _no_db
+    app.add_middleware(ApiKeyAllowListMiddleware)
     return app
 
 
@@ -76,11 +89,19 @@ def _api_key(scopes: list) -> SimpleNamespace:
 
 @pytest.fixture
 def call(monkeypatch):
-    """Send one request as a key holding *scopes*, owned by an admin or a plain user."""
+    """Send one request as a key holding *scopes*, owned by an admin or a plain user.
+
+    ``call.audit`` records every key-request audit row, from the dependency and the
+    middleware alike; ``call.service`` is the last call's key service.
+    """
+    audit = AsyncMock()
+    monkeypatch.setattr(_auth, "audit_key_request", audit)
+    monkeypatch.setattr("middleware.api_key_allow_list.audit_key_request", audit)
 
     def _call(method: str, path: str, *, scopes=("knowledge:read",), owner_admin=True, key=_KEY, known=True):
         service = MagicMock()
         service.return_value.validate_key = AsyncMock(return_value=_api_key(list(scopes)) if known else None)
+        _call.service = service
         for name, attr, value in (
             ("user_management.services.api_key_service", "APIKeyService", service),
             ("user_management.services.base_service", "TenantContext", MagicMock()),
@@ -93,7 +114,14 @@ def call(monkeypatch):
         with patch.object(_auth, "_get_user_for_api_key", AsyncMock(return_value=owner)):
             return TestClient(_app()).request(method, path, headers=headers)
 
+    _call.audit = audit
     return _call
+
+
+def _audited(call) -> dict:
+    """The keyword arguments of the last key-request audit row."""
+    assert call.audit.await_count, "no key-request audit row was written"
+    return call.audit.await_args.kwargs
 
 
 def test_a_narrow_key_is_refused_an_out_of_scope_route_with_403(call):
@@ -121,3 +149,41 @@ def test_a_key_never_exceeds_its_owner(call):
 def test_a_missing_or_unknown_key_is_401_not_403(call, key, known):
     """Not authenticated is 401. 403 is kept for an authenticated key that lacks the scope."""
     assert call("GET", "/knowledge", key=key, known=known).status_code == 401
+
+
+@pytest.mark.parametrize("path", ["/session", "/open"])
+def test_a_key_is_refused_with_403_on_a_route_that_does_not_accept_keys(call, path):
+    """#16294: refused off the allow-list even though an ``admin:*`` key on an admin's account would pass."""
+    response = call("GET", path, scopes=("admin:*",))
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == "API keys are not accepted on this route"
+    call.service.return_value.validate_key.assert_not_awaited()  # never validated: validity is irrelevant here
+    assert _audited(call)["action"] == "api_key_refused_off_allow_list"
+
+
+def test_the_controls_without_a_key_those_routes_answer_as_before(call):
+    """The middleware acts on a key only: a session route still asks for a session, an open one answers."""
+    assert call("GET", "/session", key=None).status_code == 401
+    assert call("GET", "/open", key=None).status_code == 200
+    call.audit.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "known", "expected"),
+    [
+        ("GET", "/knowledge", True, {"action": "api_key_request", "allowed": True, "status": 200}),
+        ("POST", "/knowledge", True, {"action": "api_key_refused_scope", "allowed": False, "status": 403}),
+        ("GET", "/knowledge", False, {"action": "api_key_rejected", "allowed": False, "status": 401}),
+    ],
+    ids=["allowed", "scope refused", "key rejected"],
+)
+def test_every_decision_on_a_key_request_is_audited_as_one(call, method, path, known, expected):
+    """#16294: key requests are audited distinctly: each row names the decision and, once known, the key."""
+    call(method, path, known=known)
+
+    row = _audited(call)
+    assert {k: row[k] for k in expected} == expected
+    assert row["presented_key"] == _KEY
+    if known:
+        assert row["api_key_id"] and row["permission"] in ("knowledge.read", "knowledge.write")

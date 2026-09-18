@@ -186,7 +186,7 @@ Each entry includes:
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes | `Bearer <token>` or `Bearer <api-key>` |
+| `Authorization` | Yes | `Bearer <token>`, a JWT. The main backend accepts no user API key (#16294). |
 | `Content-Type` | Yes (POST/PUT) | `application/json` or `multipart/form-data` |
 | `Accept` | No | `application/json` (default) or `text/event-stream` |
 | `X-Request-ID` | No | Client-generated request ID for tracing |

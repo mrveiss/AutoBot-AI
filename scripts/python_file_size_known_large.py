@@ -459,7 +459,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/stateful.py": 688,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1129,
-    "autobot-slm-backend/main.py": 806,  # #15728: local admin socket lifespan wiring
+    "autobot-slm-backend/main.py": 793,  # #15728: local admin socket lifespan wiring
     "autobot-slm-backend/models/database.py": 1140,
     "autobot-slm-backend/models/schemas.py": 2181,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,
