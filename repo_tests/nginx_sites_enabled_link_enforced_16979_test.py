@@ -13,6 +13,19 @@ code_only.yml's enable task now does -- reloaded nginx before `nginx -t` ever
 ran. roles/slm_manager/handlers/main.yml already had this right (test, then
 reload); frontend did not.
 
+A follow-up review round found that first guard only swept
+roles/*/handlers/main.yml, so a PLAY-level `handlers:` block (embedded
+directly in a playbook, not a role) was invisible to it --
+autobot-slm-backend/ansible/migrate-grafana-to-vm.yml defines its own
+`reload nginx` handler with no paired test handler in that same list. It is
+safe today only because an ordinary `nginx -t` task runs earlier in the same
+play, outside the handlers: block entirely -- a shape the role-scoped guard
+had no way to recognize as safe OR unsafe. This file's second guard sweeps
+every `*.yml` under the ansible tree for a play-level `handlers:` block with
+its own nginx reload/restart handler, and accepts either safety mechanism:
+a preceding test handler, or an ordinary task-based `nginx -t` in the same
+play.
+
 Root cause: roles/slm_manager/tasks/nginx_site.yml rendered
 sites-available/{{ slm_nginx_config }} but the steps that made it live (stat
 sites-enabled for a non-symlink, replace it, link it) lived only in
@@ -357,11 +370,14 @@ def test_nginx_test_handler_precedes_reload_in_every_role() -> None:
         if gap is not None:
             gaps.append(f"{path.relative_to(_ANSIBLE_ROOT)}: {gap}")
 
-    # At least slm_manager and frontend must actually be exercised by this
-    # check, or a filter regression would pass by finding nothing to flag.
-    assert len(roles_with_both) >= 2, (
+    # At least slm_manager, frontend and nginx must actually be exercised by
+    # this check, or a filter regression would pass by finding nothing to
+    # flag. roles/nginx's Test nginx config handler (#16980 review) has
+    # nothing notifying it today -- included anyway, per the same no-debris
+    # reasoning that added it.
+    assert len(roles_with_both) >= 3, (
         f"only {len(roles_with_both)} role(s) with both a test and a reload/restart nginx "
-        "handler found -- expected at least 2 (roles/slm_manager, roles/frontend). "
+        "handler found -- expected at least 3 (roles/slm_manager, roles/frontend, roles/nginx). "
         "This is 'did not look', not 'nothing to fix'."
     )
     assert gaps == [], "nginx reload/restart handler(s) not preceded by test nginx config:\n" + "\n".join(gaps)
@@ -396,4 +412,168 @@ def test_role_with_only_a_reload_handler_is_not_flagged() -> None:
     handlers = [{"name": "reload nginx backend", "ansible.builtin.systemd": {"name": "nginx", "state": "reloaded"}}]
     assert _handler_order_gap(handlers) is None, (
         "a role with only a reload handler (no test handler) has nothing to check and must not be flagged"
+    )
+
+
+# --------------------------------------------------------------------------
+# Play-level handlers (#16980 review, round 2): a `handlers:` block embedded
+# directly in a playbook play -- not a role's handlers/main.yml, which the
+# section above already covers -- was invisible to that guard entirely.
+# autobot-slm-backend/ansible/migrate-grafana-to-vm.yml defines its own
+# `reload nginx` handler with no test handler in the same list; it is safe
+# today only because an ordinary `nginx -t` TASK runs earlier in the play,
+# outside handlers: altogether. That is a second, independently valid way to
+# be safe -- handlers fire only after every task in the play has been
+# visited (no explicit `meta: flush_handlers` in any file this guard
+# covers), so an unconditional nginx -t task anywhere in the play's own task
+# list always runs before the reload/restart handler could fire, regardless
+# of its position relative to whichever task notified that handler.
+# --------------------------------------------------------------------------
+
+_PLAY_YML_VACUITY_FLOOR = 100  # *.yml files anywhere under the ansible tree
+
+
+def _all_ansible_yml_files(ansible_root: Path) -> list[Path]:
+    return sorted(ansible_root.rglob("*.yml"))
+
+
+def _plays_with_own_handlers(path: Path) -> list[dict]:
+    """Every play in *path* that defines its own play-level `handlers:`
+    list. A role's handlers/main.yml is a flat list with no `hosts:` key and
+    never matches here -- that shape is test_nginx_test_handler_precedes_
+    reload_in_every_role's job, not this one's."""
+    try:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return []
+    if not isinstance(doc, list):
+        return []
+    return [
+        entry
+        for entry in doc
+        if isinstance(entry, dict) and "hosts" in entry and isinstance(entry.get("handlers"), list)
+    ]
+
+
+def _play_tasks(play: dict) -> list[dict]:
+    """pre_tasks + tasks + post_tasks of a single play, flattened."""
+    combined: list[dict] = []
+    for key in ("pre_tasks", "tasks", "post_tasks"):
+        value = play.get(key)
+        if isinstance(value, list):
+            combined.extend(value)
+    return _flatten(combined)
+
+
+def _handlers_have_ordered_test(handlers: list[dict]) -> bool:
+    """True iff *handlers* defines a test handler that precedes every nginx
+    reload/restart handler in the same list. Deliberately NOT
+    `_handler_order_gap(handlers) is None` -- that returns None both when
+    ordered correctly AND when no test handler exists at all (the right
+    call for the role-level guard above, where a reload-only role like
+    roles/backend is legitimately safe via a mechanism that guard doesn't
+    model). Here "no test handler in handlers:" must fall through to the
+    task-based escape hatch instead of being treated as already safe."""
+    test_indices = [i for i, h in enumerate(handlers) if _is_nginx_test_handler(h)]
+    reload_indices = [i for i, h in enumerate(handlers) if _is_nginx_reload_handler(h)]
+    if not test_indices or not reload_indices:
+        return False
+    return max(test_indices) < min(reload_indices)
+
+
+def _play_reload_gap(play: dict) -> str | None:
+    """None when *play* has nothing to reload, or its nginx reload/restart
+    handler is safe by either mechanism described above. Otherwise a
+    description of the violation."""
+    handlers = _flatten(play.get("handlers"))
+    if not any(_is_nginx_reload_handler(h) for h in handlers):
+        return None  # nothing to reload in this play
+
+    if _handlers_have_ordered_test(handlers):
+        return None  # (a): a test handler already precedes reload in handlers:
+
+    if any(_is_nginx_test_handler(t) for t in _play_tasks(play)):
+        return None  # (b): an ordinary task-based nginx -t covers it instead
+
+    gap = _handler_order_gap(handlers)
+    if gap is not None:
+        return f"{gap} -- and no ordinary `nginx -t` task exists in the play's own task list either"
+    return (
+        "a reload/restart nginx handler is defined with no preceding test handler in the play's "
+        "handlers: list, and no ordinary `nginx -t` task exists in the play's own task list either"
+    )
+
+
+def test_play_level_yml_files_vacuity_floor() -> None:
+    files = _all_ansible_yml_files(_ANSIBLE_ROOT)
+    assert len(files) >= _PLAY_YML_VACUITY_FLOOR, (
+        f"only {len(files)} *.yml files found under {_ANSIBLE_ROOT} -- expected at least "
+        f"{_PLAY_YML_VACUITY_FLOOR}. The scan did not reach the ansible tree -- this is "
+        "'did not look', not 'found nothing to fix'."
+    )
+
+
+def test_play_level_nginx_reload_handlers_are_safely_ordered() -> None:
+    files = _all_ansible_yml_files(_ANSIBLE_ROOT)
+    assert len(files) >= _PLAY_YML_VACUITY_FLOOR, "vacuity floor failed -- see test_play_level_yml_files_vacuity_floor"
+
+    reload_plays = []
+    gaps = []
+    for path in files:
+        for play in _plays_with_own_handlers(path):
+            handlers = _flatten(play.get("handlers"))
+            if not any(_is_nginx_reload_handler(h) for h in handlers):
+                continue
+            reload_plays.append((path, play.get("name")))
+            gap = _play_reload_gap(play)
+            if gap is not None:
+                gaps.append(f"{path.relative_to(_ANSIBLE_ROOT)} (play {play.get('name')!r}): {gap}")
+
+    # migrate-grafana-to-vm.yml and playbooks/deploy-nginx-proxy.yml both
+    # define their own nginx reload handler -- a filter regression that
+    # matched nothing would otherwise pass by finding nothing to flag.
+    assert len(reload_plays) >= 2, (
+        f"only {len(reload_plays)} play(s) with their own nginx reload/restart handler found -- "
+        "expected at least 2 (migrate-grafana-to-vm.yml, playbooks/deploy-nginx-proxy.yml). "
+        "This is 'did not look', not 'nothing to fix'."
+    )
+    assert gaps == [], "play-level nginx reload/restart handler(s) not safely ordered:\n" + "\n".join(gaps)
+
+
+def test_negative_control_play_level_reload_with_no_test_handler_or_task_is_flagged() -> None:
+    play = {
+        "hosts": "all",
+        "tasks": [{"name": "do something unrelated", "ansible.builtin.debug": {"msg": "hi"}}],
+        "handlers": [{"name": "reload nginx", "ansible.builtin.systemd": {"name": "nginx", "state": "reloaded"}}],
+    }
+    gap = _play_reload_gap(play)
+    assert gap is not None, (
+        "negative control: a play-level reload handler with neither a preceding test handler nor an "
+        "ordinary nginx -t task must be flagged -- the checker is vacuously passing everything"
+    )
+
+
+def test_positive_control_play_level_reload_safe_via_handler_order() -> None:
+    play = {
+        "hosts": "all",
+        "tasks": [],
+        "handlers": [
+            {"name": "test nginx config", "command": "nginx -t"},
+            {"name": "reload nginx", "systemd": {"name": "nginx", "state": "reloaded"}},
+        ],
+    }
+    assert _play_reload_gap(play) is None, (
+        "positive control: a play-level handlers: list ordered test-before-reload must pass"
+    )
+
+
+def test_positive_control_play_level_reload_safe_via_ordinary_task() -> None:
+    play = {
+        "hosts": "all",
+        "tasks": [{"name": "Validate config", "ansible.builtin.command": "nginx -t"}],
+        "handlers": [{"name": "reload nginx", "ansible.builtin.systemd": {"name": "nginx", "state": "reloaded"}}],
+    }
+    assert _play_reload_gap(play) is None, (
+        "positive control: an ordinary task-based nginx -t in the play must pass, same as "
+        "migrate-grafana-to-vm.yml and playbooks/deploy-nginx-proxy.yml today"
     )
