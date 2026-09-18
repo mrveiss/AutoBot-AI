@@ -50,6 +50,41 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 - **Batch same-scope issues into one PR by default** (`Closes #A, #B`) — one CI suite per batch, not per issue. Each issue must still be *fully* delivered; partial delivery never closes. Independent or different-risk changes get separate PRs, as does anything too large for one honest review pass.
 - **A pushed PR ends the tick — never wait on its CI.** Pushing is the sweep point: check every *other* in-flight PR once (approval gate, CI verdict, behind-ness), act on what is green or red, then start the next non-colliding scoped issue immediately. The PR just pushed is re-checked at the next sweep, never polled.
 
+## Git/PR Workflow
+
+### Pre-Push Checklist (non-negotiable)
+1. Commit subject includes the issue reference — see commit format under **Never violate**.
+2. No file exceeds `MAX_LINES` (600, enforced by `check_python_file_size.py`) — split, don't
+   raise the ceiling; see [`RATCHET_BASELINES.md`](docs/developer/RATCHET_BASELINES.md).
+3. Run the repo's lint/type-check locally before pushing — don't rely on `/pre-merge-validate`
+   at review time to catch it first.
+4. Never bypass pre-commit hooks via `core.hooksPath` or `--no-verify` — see **Never violate**.
+
+## Verification
+
+Never state CI is green, history was destroyed, work is complete, or a check failed without
+pasting the command and its output. Three-dot diffs (`git diff base...head`, from the merge
+base) for "what this PR changes" — a two-dot diff between two tips shows base's own
+independent commits reversed as if the PR made them once base has moved. Re-read source APIs
+for current numbers — never hand-patch a cached figure. Applies to every claim made against
+[`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md) and
+[`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md) steps.
+
+## Environment Guards
+
+A worktree cap, protect-files hook, or permission classifier blocking an action is reported
+with the exact blocker, verbatim, immediately — never retried blind and never resolved by
+proposing to raise the limit. Never touch a branch, PR, or worktree another session owns,
+unless the user asks or it is the abandoned/stale work you were dispatched to finish (claim
+it in the ledger first) — see the global worktree-mandate exception.
+
+## Issue Filing
+
+Search open **and** closed issues (`gh issue list --search "<query>" --state all`) before
+filing — no duplicates. Scrub external vendor/product names from filed content (see the
+`research-to-issues` skill). Link children to their umbrella with native GitHub relationships,
+not just the `- [ ]` checklist — full commands in [`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md).
+
 ## Essential Patterns
 
 | What | How |

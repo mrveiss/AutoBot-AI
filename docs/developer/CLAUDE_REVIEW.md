@@ -1,5 +1,8 @@
 # Code Review & Merge Rules
 
+> Every claim in this doc (CI status, "done", a check's outcome) follows the
+> **Verification** rule in `CLAUDE.md`: paste the command and its output, never assert.
+
 ## Code Review Agent Requirements (MANDATORY)
 
 **Every finder and verifier agent prompt MUST contain all three — refuse to dispatch if any missing:**
