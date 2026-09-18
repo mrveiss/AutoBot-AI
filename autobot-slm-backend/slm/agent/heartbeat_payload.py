@@ -77,6 +77,17 @@ def build_heartbeat_payload(
         Dictionary payload matching HeartbeatRequest schema.
     Issue #620.
     """
+    extra_data = {
+        "services": health.get("services", {}),
+        "discovered_services": health.get("discovered_services", []),
+        "load_avg": health.get("load_avg", []),
+        "uptime_seconds": health.get("uptime_seconds", 0),
+        "hostname": health.get("hostname"),
+    }
+    # #16280: forwarded only when the collector probed, so an absent key keeps
+    # meaning "this agent does not report GPUs" and [] keeps meaning "none present".
+    if "gpu" in health:
+        extra_data["gpu"] = health["gpu"]
     return {
         "cpu_percent": health.get("cpu_percent", 0.0),
         "memory_percent": health.get("memory_percent", 0.0),
@@ -86,11 +97,5 @@ def build_heartbeat_payload(
         "code_version": code_version,  # Issue #741: Add code version
         "role_report": build_role_report(role_detector, definitions_loaded),  # Issue #779
         "listening_ports": build_listening_ports_list(),  # Issue #779
-        "extra_data": {
-            "services": health.get("services", {}),
-            "discovered_services": health.get("discovered_services", []),
-            "load_avg": health.get("load_avg", []),
-            "uptime_seconds": health.get("uptime_seconds", 0),
-            "hostname": health.get("hostname"),
-        },
+        "extra_data": extra_data,
     }
