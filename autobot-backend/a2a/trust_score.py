@@ -162,6 +162,12 @@ class TrustRecord:
     current_level: TrustLevel = TrustLevel.UNTRUSTED
     score: float = 0.0
 
+    # #16950: an admin grant -- a floor the score cannot drift below. Misconduct
+    # (a threat event or integrity violation) revokes it. None: no grant.
+    granted_level: Optional[str] = None
+    granted_by: Optional[str] = None
+    granted_at: Optional[float] = None
+
     # Timestamps (Unix epoch floats)
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
@@ -200,7 +206,13 @@ class TrustRecord:
 # Redis key layout
 # ---------------------------------------------------------------------------
 
-_KEY_TRUST = "a2a:trust:{}"
+#: #16950 (owner decision): trust is keyed on the pair (credential subject, peer id),
+#: see a2a/peer_identity.py. Pair records live in their own namespace, so no
+#: self-declared header id can ever collide with a pair key.
+_KEY_TRUST = "a2a:peer-trust:{}"
+#: The header-only records from before #16950. Never read for access and never
+#: deleted: they are the audit trail of who held what, and tell an admin whom to re-grant.
+_KEY_LEGACY_TRUST_PATTERN = "a2a:trust:*"
 
 
 def _default_trust_audit_db() -> Path:
@@ -216,6 +228,13 @@ _SQLITE_DB_DEFAULT = _default_trust_audit_db()
 # ---------------------------------------------------------------------------
 # TrustScoreManager
 # ---------------------------------------------------------------------------
+
+
+def _revoke_grant(record: TrustRecord) -> None:
+    """Misconduct revokes an admin grant, so the demotion that follows is not undone by the floor."""
+    if record.granted_level is not None:
+        logger.info("trust_score: grant revoked peer=%s (was %s)", record.peer_id, record.granted_level)
+        record.granted_level = record.granted_by = record.granted_at = None
 
 
 class TrustScoreManager:
@@ -274,6 +293,7 @@ class TrustScoreManager:
         old_level = record.current_level
         record.threat_event_count += 1
         record.consecutive_successes = 0
+        _revoke_grant(record)
         record.score = record.compute_score()
 
         # Instant demotion — cap at LIMITED; do not raise UNTRUSTED peers
@@ -292,6 +312,7 @@ class TrustScoreManager:
         old_level = record.current_level
         record.integrity_violation_count += 1
         record.consecutive_successes = 0
+        _revoke_grant(record)
         record.score = record.compute_score()
 
         # Integrity violations demote directly to UNTRUSTED
@@ -311,7 +332,7 @@ class TrustScoreManager:
         """Return TrustRecords for all known peers (scanned from Redis)."""
         try:
             r = self._redis()
-            keys = r.keys("a2a:trust:*")
+            keys = r.keys(_KEY_TRUST.format("*"))
             records = []
             for key in keys:
                 raw = r.get(key)
@@ -323,6 +344,38 @@ class TrustScoreManager:
             return sorted(records, key=lambda rec: rec.peer_id)
         except Exception as exc:
             logger.warning("trust_score: list_peers Redis scan failed: %s", exc)
+            return []
+
+    def grant(self, peer_key: str, level: TrustLevel, *, actor: str) -> TrustRecord:
+        """An admin sets *peer_key*'s level, as a floor its score cannot drift below (#16950).
+
+        The only way a peer regains trust after the re-key reset. Without it, a peer
+        that may not submit tasks can never earn trust through them. Audited with the
+        actor, the pair and the level; misconduct later revokes it.
+        """
+        record = self._load(peer_key)
+        old_level = record.current_level
+        record.granted_level, record.granted_by, record.granted_at = level.value, actor, time.time()
+        record.current_level = level
+        record.last_level_change_at = time.time()
+        logger.info("trust_score: admin grant peer=%s level=%s actor=%s", peer_key, level.value, actor)
+        self._snapshot(record, old_level, level, reason=f"admin_grant by {actor}")
+        self._save(record)
+        return record
+
+    def list_legacy_peers(self) -> list[dict]:
+        """The pre-#16950 header-only records, read-only: whom an admin needs to re-grant."""
+        try:
+            r = self._redis()
+            rows = []
+            for key in r.keys(_KEY_LEGACY_TRUST_PATTERN):
+                raw = r.get(key)
+                if raw:
+                    d = json.loads(raw)
+                    rows.append({k: d.get(k) for k in ("peer_id", "current_level", "score", "updated_at")})
+            return sorted(rows, key=lambda row: str(row["peer_id"]))
+        except Exception as exc:
+            logger.warning("trust_score: legacy listing failed: %s", exc)
             return []
 
     def get_audit_log(self, peer_id: str, limit: int = 100) -> list[dict]:
@@ -379,6 +432,10 @@ class TrustScoreManager:
         old_level = record.current_level
         record.score = record.compute_score()
         computed_level = _level_from_score(record.score)
+        if record.granted_level is not None:
+            # #16950: a grant is a floor against score drift, not against misconduct.
+            floor = TrustLevel(record.granted_level)
+            computed_level = _LEVEL_ORDER[max(_level_rank(computed_level), _level_rank(floor))]
 
         old_rank = _level_rank(old_level)
         computed_rank = _level_rank(computed_level)
