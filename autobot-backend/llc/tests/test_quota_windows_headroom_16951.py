@@ -50,7 +50,7 @@ _USER_ID = uuid.uuid4()
 
 def _app() -> FastAPI:
     app = FastAPI()
-    app.include_router(costs.router, prefix="/api/llc/costs")
+    app.include_router(costs.router, prefix="/api/llc")
     app.dependency_overrides[get_current_user] = lambda: {"id": str(_USER_ID), "user_id": str(_USER_ID)}
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=_ORG_ID, user_id=_USER_ID, is_platform_admin=False

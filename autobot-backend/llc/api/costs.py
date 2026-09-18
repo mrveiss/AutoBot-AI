@@ -43,11 +43,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from llm_shared.quota_headroom import QuotaHeadroomEntry, get_quota_headroom_store
 from llc.deps import assert_company_access
 from llc.models.budget import LLCAgentBudget
 from llc.services.model_tiers import get_model_tier_service
 from llc.services.step_rollup import StepRollupService
+from llm_shared.quota_headroom import QuotaHeadroomEntry, get_quota_headroom_store
 from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
 from user_management.services import TenantContext
