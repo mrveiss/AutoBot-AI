@@ -90,4 +90,26 @@ describe('useWebSocket protocols option (#16457)', () => {
     expect(instances).toHaveLength(2)
     expect(instances[1].protocols).toEqual(['bearer', 'second-token'])
   })
+
+  it('calls a protocols getter on every connect, and an undefined result means no subprotocol (#17009)', async () => {
+    // The #17009 callers pass `() => buildAuthenticatedWsSubprotocols() ?? undefined`:
+    // the token is read at connect time, and a missing token opens the plain form
+    // (which the now-authenticating endpoint then refuses) rather than throwing.
+    let token: string | null = null
+    const { connect, disconnect } = useWebSocket('wss://backend.example/api/ws/knowledge/research', {
+      autoConnect: false,
+      autoReconnect: false,
+      protocols: () => (token ? ['bearer', token] : undefined),
+    })
+
+    connect()
+    await vi.advanceTimersByTimeAsync(20)
+    expect(MockWebSocket.getLatestInstance()!.protocols).toBeUndefined()
+
+    disconnect()
+    token = 'fresh-token'
+    connect()
+    await vi.advanceTimersByTimeAsync(20)
+    expect(MockWebSocket.getLatestInstance()!.protocols).toEqual(['bearer', 'fresh-token'])
+  })
 })
