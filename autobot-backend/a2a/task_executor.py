@@ -22,7 +22,7 @@ from autobot_shared.logging_manager import get_logger
 from .pii_pipeline import PIIBlocked, scrub_outbound
 from .self_evaluator import DEFAULT_EVAL_THRESHOLD, evaluate_task_output
 from .task_manager import _TERMINAL_STATES, get_task_manager
-from .trust_score import get_trust_manager
+from .trust_score import authority_for_level, get_trust_manager
 from .types import TaskArtifact, TaskState
 
 logger = get_logger(__name__)
@@ -178,6 +178,27 @@ def _report_refusal(manager, task_id: str, conflict) -> None:
         },
     )
     logger.info("A2A task %s refused: %s", task_id, conflict)
+
+
+def _peer_authority(peer_id: str | None):
+    """The submitting peer's authority (#16957). No peer id, an anonymous caller, holds no capability."""
+    from security.authority import Authority
+
+    if not peer_id:
+        return Authority(capabilities=frozenset())
+    return authority_for_level(get_trust_manager().get_trust_level(peer_id))
+
+
+def _report_capability_refusal(manager, task_id: str, result: Dict[str, Any]) -> None:
+    """Fail the task naming the capabilities the peer lacks (#16957), and nothing the agents would have read."""
+    missing = ", ".join(result.get("missing_capabilities", []))
+    message = f"capability_refused: {missing}"
+    manager.update_state(task_id, TaskState.FAILED, message=message)
+    manager.publish_event(
+        task_id,
+        {"event": "state_change", "state": "failed", "terminal": True, "message": message, "task_id": task_id},
+    )
+    logger.info("A2A task %s refused by capability: %s", task_id, missing)
 
 
 def _scrub_inbound(task_id: str, input_text: str, peer_id: str | None, manager) -> str | None:
@@ -391,10 +412,14 @@ async def _execute_claimed(
         from agents.agent_orchestration import get_distributed_agent_coordinator
 
         orchestrator = get_distributed_agent_coordinator()
+        # #16957: the peer's capabilities travel with its task, so an agent it may
+        # not reach is refused at routing rather than run on the executor's authority.
         result: Dict[str, Any] = await orchestrator.process_request(
-            input_text,
-            context=context,
+            input_text, context=context, authority=_peer_authority(peer_id)
         )
+        if result.get("status") == "refused":
+            _report_capability_refusal(manager, task_id, result)
+            return
 
         if await _abort_if_cancelled(task_id, manager, "after orchestration"):
             return

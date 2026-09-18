@@ -50,12 +50,15 @@ import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional, Set
+from typing import TYPE_CHECKING, Dict, Optional, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from autobot_shared.trust_enums import TrustLevel
+
+if TYPE_CHECKING:
+    from security.authority import Authority
 
 logger = get_logger(__name__)
 
@@ -91,19 +94,18 @@ class Capability(str, Enum):
     DISCOVERY = "discovery"  # view agent card, list capabilities
     SUBMIT_TASKS = "submit_tasks"  # submit new A2A tasks
     QUERY_MEMORY = "query_memory"  # read knowledge / memory stores
-    DEFINE_AGENTS = "define_agents"  # contribute new agent definitions
+    # #16957: DEFINE_AGENTS ("contribute new agent definitions") was removed. No route or
+    # code path lets a peer define an agent, so granting it at TRUSTED claimed a control
+    # that did not exist. Re-add it together with the operation it gates, never before.
 
 
 _CAPABILITY_MATRIX: Dict[TrustLevel, Set[Capability]] = {
     TrustLevel.UNTRUSTED: {Capability.DISCOVERY},
     TrustLevel.LIMITED: {Capability.DISCOVERY, Capability.SUBMIT_TASKS},
     TrustLevel.STANDARD: {Capability.DISCOVERY, Capability.SUBMIT_TASKS, Capability.QUERY_MEMORY},
-    TrustLevel.TRUSTED: {
-        Capability.DISCOVERY,
-        Capability.SUBMIT_TASKS,
-        Capability.QUERY_MEMORY,
-        Capability.DEFINE_AGENTS,
-    },
+    # Since #16957, TRUSTED grants nothing beyond STANDARD: the one capability it added
+    # had no operation behind it. The level still matters for promotion and demotion.
+    TrustLevel.TRUSTED: {Capability.DISCOVERY, Capability.SUBMIT_TASKS, Capability.QUERY_MEMORY},
 }
 
 
@@ -496,3 +498,16 @@ class TrustScoreManager:
 # ---------------------------------------------------------------------------
 
 get_trust_manager = lazy_singleton(TrustScoreManager)
+
+
+
+def authority_for_level(level: TrustLevel) -> "Authority":
+    """A peer's authority for the intersection rule (#16950): its trust level's capabilities.
+
+    Only the capability surface is constrained. A peer has no approval gates, tool
+    boundary or RBAC role of its own to add, so those are top, and the chain's other
+    hops supply them. An unrecognised level grants nothing: fail closed.
+    """
+    from security.authority import Authority
+
+    return Authority(capabilities=frozenset(c.value for c in _CAPABILITY_MATRIX.get(level, ())))

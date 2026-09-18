@@ -178,16 +178,14 @@ class TestCapabilityMatrix:
     def test_standard_has_memory(self):
         caps = get_capabilities(TrustLevel.STANDARD)
         assert Capability.QUERY_MEMORY in caps
-        assert Capability.DEFINE_AGENTS not in caps
 
     def test_trusted_has_all_capabilities(self):
         caps = get_capabilities(TrustLevel.TRUSTED)
-        assert caps == {
-            Capability.DISCOVERY,
-            Capability.SUBMIT_TASKS,
-            Capability.QUERY_MEMORY,
-            Capability.DEFINE_AGENTS,
-        }
+        assert caps == set(Capability)
+
+    def test_define_agents_is_gone_with_no_operation_behind_it(self):
+        """#16957: a capability no route or code path gates claims a control that does not exist."""
+        assert "define_agents" not in {c.value for c in Capability}
 
     def test_has_capability_positive(self):
         assert has_capability(TrustLevel.STANDARD, Capability.SUBMIT_TASKS)
