@@ -107,9 +107,13 @@ def _may_see(operation, user: dict) -> bool:
     return bool(creator) and creator == user.get("username")
 
 
-def _owned_operation(manager, operation_id: str, user: dict):
-    """The operation, or 404 if it does not exist or is another user's: existence is not disclosed."""
-    operation = manager.operation_manager.get_operation(operation_id)
+async def _owned_operation(manager, operation_id: str, user: dict):
+    """The operation, or 404 if it does not exist or is another user's: existence is not disclosed.
+
+    ``get_operation`` is a coroutine; every caller here used to skip the ``await`` and
+    got a coroutine object back, which is why status never worked (#17017).
+    """
+    operation = await manager.operation_manager.get_operation(operation_id)
     if operation is None or not _may_see(operation, user):
         raise HTTPException(status_code=404, detail="Operation not found")
     return operation
@@ -118,7 +122,9 @@ def _owned_operation(manager, operation_id: str, user: dict):
 async def _may_see_id(operation_id: str, user: dict) -> bool:
     """The progress socket's ``allow`` check: the operation's creator or an admin."""
     manager = operation_integration_manager if _OPERATIONS_AVAILABLE else None
-    operation = manager.operation_manager.get_operation(operation_id) if manager and manager.operation_manager else None
+    operation = (
+        await manager.operation_manager.get_operation(operation_id) if manager and manager.operation_manager else None
+    )
     return is_admin_role(user.get("role")) or (operation is not None and _may_see(operation, user))
 
 
@@ -269,7 +275,7 @@ async def get_operation_status(
 ):
     """Get detailed operation status: its creator's or an admin's (#17017)"""
     try:
-        return operation_view(_owned_operation(manager, operation_id, current_user))
+        return operation_view(await _owned_operation(manager, operation_id, current_user))
     except HTTPException:
         raise
     except Exception as e:
@@ -333,7 +339,7 @@ async def cancel_operation(
 ):
     """Cancel a running operation: its creator or an admin (#17017)"""
     try:
-        _owned_operation(manager, operation_id, current_user)
+        await _owned_operation(manager, operation_id, current_user)
         success = await manager.operation_manager.cancel_operation(operation_id)
         if not success:
             raise HTTPException(status_code=404, detail="Operation not found or cannot be cancelled")
@@ -358,7 +364,7 @@ async def resume_operation(
 ):
     """Resume operation from latest checkpoint: its creator or an admin, who then owns the resumed one (#17017)"""
     try:
-        creator = _owned_operation(manager, operation_id, current_user).metadata.get("created_by")
+        creator = (await _owned_operation(manager, operation_id, current_user)).metadata.get("created_by")
         # Issue #321: Use helper method to reduce message chains
         checkpoints = await manager.list_operation_checkpoints(operation_id)
         if not checkpoints:
@@ -367,7 +373,7 @@ async def resume_operation(
         # Use latest checkpoint
         latest_checkpoint = checkpoints[-1]
         new_operation_id = await manager.operation_manager.resume_operation(latest_checkpoint.checkpoint_id)
-        resumed = manager.operation_manager.get_operation(new_operation_id)
+        resumed = await manager.operation_manager.get_operation(new_operation_id)
         if resumed is not None:
             resumed.metadata.setdefault("created_by", creator)
 
@@ -407,7 +413,7 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
 
     try:
         # Send current progress if operation exists
-        operation = operation_integration_manager.operation_manager.get_operation(operation_id)
+        operation = await operation_integration_manager.operation_manager.get_operation(operation_id)
         if operation:
             await websocket.send_json(
                 {

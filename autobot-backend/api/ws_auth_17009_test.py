@@ -91,7 +91,7 @@ def operations(monkeypatch):
     from api import long_running_operations as lro
 
     manager = MagicMock(websocket_connections={})
-    manager.operation_manager.get_operation.return_value = None
+    manager.operation_manager.get_operation = AsyncMock(return_value=None)  # a coroutine, like the real one
     monkeypatch.setattr(lro, "_OPERATIONS_AVAILABLE", True)
     monkeypatch.setattr(lro, "operation_integration_manager", manager)
     return lro
