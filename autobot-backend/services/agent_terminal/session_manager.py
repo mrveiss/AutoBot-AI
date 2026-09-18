@@ -353,18 +353,42 @@ class SessionManager:
         return await self._rebuild_session_from_pending_approval(session_id)
 
     async def _conversation_owner(self, conversation_id: str | None) -> str | None:
-        """Owner of the conversation driving a session, or None if it has none or can't be read (#17053).
+        """Owner of the conversation driving a session, or None if none can be found (#17053).
 
-        Sessions the chat workflow creates carry no caller, so their owner is the
-        conversation's recorded owner -- the chat session file is the record of
-        truth (THREAT_MODEL.md section 2). None leaves the session admin-only.
+        Sessions the chat workflow creates carry no caller, so the owner is
+        resolved the way the chat ownership gate resolves it: the session file's
+        owner (the record of truth, THREAT_MODEL.md section 2), else the grant the
+        gate writes -- to Redis only -- when it hands a never-owned conversation to
+        its first caller (legacy_migration), which the message now being
+        processed has just passed. None leaves the session admin-only.
         """
-        if not conversation_id or not self.chat_history_manager:
+        if not conversation_id:
+            return None
+        return await self._durable_conversation_owner(conversation_id) or await self._granted_conversation_owner(
+            conversation_id
+        )
+
+    async def _durable_conversation_owner(self, conversation_id: str) -> str | None:
+        """The owner recorded in the chat session file, or None."""
+        if not self.chat_history_manager:
             return None
         try:
             owner = await self.chat_history_manager.get_session_owner(conversation_id)
         except Exception as exc:
             logger.warning("Could not read the owner of conversation %s: %s", conversation_id[:8], exc)
+            return None
+        return owner if isinstance(owner, str) and owner else None
+
+    async def _granted_conversation_owner(self, conversation_id: str) -> str | None:
+        """The owner the chat ownership gate recorded in Redis, or None."""
+        from autobot_shared.redis_client import get_redis_client  # noqa: PLC0415
+        from security.session_ownership import SessionOwnershipValidator  # noqa: PLC0415
+
+        try:
+            redis = await get_redis_client(async_client=True, database="main")
+            owner = await SessionOwnershipValidator(redis).get_session_owner(conversation_id) if redis else None
+        except Exception as exc:
+            logger.warning("Could not read the granted owner of conversation %s: %s", conversation_id[:8], exc)
             return None
         return owner if isinstance(owner, str) and owner else None
 

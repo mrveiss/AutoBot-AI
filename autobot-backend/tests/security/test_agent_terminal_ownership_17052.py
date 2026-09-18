@@ -194,6 +194,14 @@ def test_someone_elses_session_and_a_missing_one_answer_alike(terminal, route):
     assert (foreign.status_code, foreign.json()) == (missing.status_code, missing.json())
 
 
+def test_execute_without_a_session_is_refused_before_anything_runs(terminal):
+    """``session_id`` was optional on the handler; the ownership check now requires it."""
+    response = terminal.client.post("/api/agent-terminal/execute", json={"command": "ls"})
+
+    assert response.status_code == 422, response.text
+    terminal.service.execute_command.assert_not_awaited()
+
+
 # --- decisions: a person, recorded as the verified caller ----------------------
 
 

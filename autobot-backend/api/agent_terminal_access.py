@@ -15,6 +15,14 @@ else's all answer the same 404, so a response never confirms who owns what
 Decisions -- approving or denying a command, taking control, choosing a host --
 also need a person signed in interactively (#17042).
 
+Why these stay outside the consolidated approval service (#17043): a command
+approval is a synchronous gate on a live session -- the agent is blocked until
+the session's owner answers, and the answer is consumed at once -- not a
+durable record with a lifecycle (revision, comments, task links) that any
+authorised reviewer in a tenant may decide. What the two share is the rule,
+and it is shared by code: the same interactive-human predicate and the verified
+caller as the recorded approver.
+
 This module also holds the process-wide ``AgentTerminalService`` singleton, so
 the REST routes, the host-selection sub-router, the WebSocket approval path and
 the chat workflow all act on one instance.
@@ -40,15 +48,20 @@ _agent_terminal_service_instance: AgentTerminalService | None = None
 _agent_terminal_service_lock = threading.Lock()
 
 
-def get_agent_terminal_service(redis_client=Depends(get_redis_client)) -> AgentTerminalService:
-    """Get the singleton AgentTerminalService (thread-safe, double-checked)."""
+def ensure_agent_terminal_service(**kwargs: Any) -> AgentTerminalService:
+    """The singleton, built from ``kwargs`` by whichever caller gets there first (thread-safe)."""
     global _agent_terminal_service_instance
     if _agent_terminal_service_instance is None:
         with _agent_terminal_service_lock:
             if _agent_terminal_service_instance is None:
                 logger.info("Initializing AgentTerminalService singleton")
-                _agent_terminal_service_instance = AgentTerminalService(redis_client=redis_client)
+                _agent_terminal_service_instance = AgentTerminalService(**kwargs)
     return _agent_terminal_service_instance
+
+
+def get_agent_terminal_service(redis_client=Depends(get_redis_client)) -> AgentTerminalService:
+    """FastAPI dependency: the singleton AgentTerminalService."""
+    return ensure_agent_terminal_service(redis_client=redis_client)
 
 
 def may_act_for(owner: Optional[str], user: Mapping[str, Any]) -> bool:

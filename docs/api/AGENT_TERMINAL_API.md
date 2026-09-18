@@ -223,7 +223,7 @@ Execute a command in an agent terminal session with security controls.
 
 #### Query Parameters
 
-- `session_id` (required): Session ID
+- `session_id` (required): Session ID. The caller must own the session or be an admin. A request without it is refused with 422 before anything runs.
 
 #### Request Body
 

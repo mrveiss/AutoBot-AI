@@ -1320,19 +1320,12 @@ class ToolHandlerMixin:
     def _init_terminal_tool(self):
         """Initialize terminal tool for command execution."""
         try:
-            import api.agent_terminal_access as agent_terminal_api
+            from api.agent_terminal_access import ensure_agent_terminal_service
             from tools.terminal_tool import TerminalTool
 
-            # CRITICAL: Access the global singleton instance directly
-            # This ensures sessions created here are visible to the approval API
-            if agent_terminal_api._agent_terminal_service_instance is None:
-                from services.agent_terminal import AgentTerminalService
-
-                # Pass self to prevent circular initialization loop
-                agent_terminal_api._agent_terminal_service_instance = AgentTerminalService(chat_workflow_manager=self)
-                logger.info("Initialized global AgentTerminalService singleton")
-
-            agent_service = agent_terminal_api._agent_terminal_service_instance
+            # CRITICAL: the one singleton, so sessions created here are visible to the
+            # approval API. Passing self prevents a circular initialization loop.
+            agent_service = ensure_agent_terminal_service(chat_workflow_manager=self)
             self.terminal_tool = TerminalTool(agent_terminal_service=agent_service)
             logger.info("Terminal tool initialized successfully with singleton service")
         except Exception as e:
