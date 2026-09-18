@@ -988,34 +988,14 @@
 # #15610: the render lives in nginx_site.yml so playbooks/update-all-nodes.yml
 # — which deploys the SLM backend by unarchive and never runs this role — can
 # re-render the site config from the same source after it publishes a bundle.
-- name: "SLM | Deploy nginx configuration (#15610)"
+# #16979: nginx_site.yml also carries the steps that make the render live
+# (detect/replace a non-symlink sites-enabled entry, link, verify) -- moved
+# out of this file because both self-update playbooks include ONLY
+# nginx_site.yml, never this one, so those steps ran on a full provision but
+# not on self-update. Do not re-add them here; a copy in both places is the
+# drift #15610 already wrote a comment to warn against.
+- name: "SLM | Deploy nginx configuration (#15610, #16979)"
   ansible.builtin.include_tasks: nginx_site.yml
-  tags: ['slm', 'nginx']
-
-- name: "SLM | Stat sites-enabled file to detect non-symlink (#1122)"
-  ansible.builtin.stat:
-    path: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
-  register: nginx_sites_enabled_stat
-  become: true
-  tags: ['slm', 'nginx']
-
-- name: "SLM | Remove standalone sites-enabled file if not a symlink (#1122)"
-  ansible.builtin.file:
-    path: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
-    state: absent
-  become: true
-  when:
-    - nginx_sites_enabled_stat.stat.exists
-    - not nginx_sites_enabled_stat.stat.islnk
-  tags: ['slm', 'nginx']
-
-- name: "SLM | Enable nginx site (symlink to sites-available)"
-  ansible.builtin.file:
-    src: /etc/nginx/sites-available/{{ slm_nginx_config }}
-    dest: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
-    state: link
-  become: true
-  notify: reload nginx
   tags: ['slm', 'nginx']
 
 - name: "SLM | Remove default nginx site"

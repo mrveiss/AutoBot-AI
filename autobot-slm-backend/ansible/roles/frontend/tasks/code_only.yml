@@ -16,6 +16,13 @@
 #
 # Handlers (`test nginx config`, `restart nginx`) live in the role, so this file
 # is only usable via include_role/import_role.
+#
+# #16979: the enable steps (detect/replace a non-symlink sites-enabled entry,
+# link, verify) used to live only in tasks/main.yml, so
+# playbooks/update-all-nodes.yml PLAY 2 -- which includes ONLY this file via
+# `tasks_from: code_only` -- rendered a new sites-available/autobot-frontend
+# on every update and never touched sites-enabled. Same shape as the SLM
+# nginx_site.yml bug (#16979): render and enable now live in the same file.
 
 - name: "Frontend | Configure nginx"
   ansible.builtin.template:
@@ -27,5 +34,66 @@
   notify:
     - test nginx config
     - restart nginx
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['frontend', 'nginx']
+
+- name: "Frontend | Stat sites-enabled file to detect non-symlink (#16979)"
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/autobot-frontend
+  register: _frontend_nginx_sites_enabled_stat
+  become: true
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['frontend', 'nginx']
+
+# nginx loads every file under sites-enabled/, so a backup left there would
+# be served as a second site -- move it beside the sites-available/ backups
+# `template: backup: true` above already writes (#16979 AC2, same reasoning
+# as roles/slm_manager/tasks/nginx_site.yml).
+- name: "Frontend | Back up non-symlink sites-enabled file before replacing it (#16979)"
+  ansible.builtin.command:
+    cmd: >-
+      mv /etc/nginx/sites-enabled/autobot-frontend
+      /etc/nginx/sites-available/autobot-frontend.enabled-backup.{{
+      _frontend_nginx_sites_enabled_stat.stat.mtime | int }}
+  become: true
+  when:
+    - not (slm_colocated_frontend | default(false) | bool)
+    - _frontend_nginx_sites_enabled_stat.stat.exists
+    - not _frontend_nginx_sites_enabled_stat.stat.islnk
+  changed_when: true
+  tags: ['frontend', 'nginx']
+
+- name: "Frontend | Enable nginx site (symlink to sites-available) (#16979)"
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/autobot-frontend
+    dest: /etc/nginx/sites-enabled/autobot-frontend
+    state: link
+  become: true
+  notify:
+    - test nginx config
+    - restart nginx
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['frontend', 'nginx']
+
+- name: "Frontend | Stat sites-enabled after linking (#16979)"
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/autobot-frontend
+  register: _frontend_nginx_sites_enabled_check
+  become: true
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['frontend', 'nginx']
+
+# AC3 (#16979): fail loudly instead of leaving nginx serving the wrong file.
+- name: "Frontend | Assert sites-enabled resolves to the rendered site (#16979)"
+  ansible.builtin.assert:
+    that:
+      - _frontend_nginx_sites_enabled_check.stat.exists
+      - _frontend_nginx_sites_enabled_check.stat.islnk
+      - _frontend_nginx_sites_enabled_check.stat.lnk_source == '/etc/nginx/sites-available/autobot-frontend'
+    fail_msg: >-
+      /etc/nginx/sites-enabled/autobot-frontend is not a symlink resolving to
+      /etc/nginx/sites-available/autobot-frontend -- nginx is not serving the
+      rendered frontend site config (#16979).
+    success_msg: "sites-enabled/autobot-frontend resolves to the rendered site config."
   when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['frontend', 'nginx']
