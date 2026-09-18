@@ -342,12 +342,21 @@ async def open_authenticated_ws(
         logger.warning("Rejected non-admin %s on an admin WebSocket", user.get("username"))
         await _close_policy(websocket, "Admin role required")
         return None
-    if allow is not None and not await allow(user):
+    if allow is not None and not await _allowed(allow, user):
         logger.warning("Rejected %s: not authorized for this WebSocket resource", user.get("username"))
         await _close_policy(websocket, "Not authorized for this resource")
         return None
     await accept_websocket(websocket)
     return user
+
+
+async def _allowed(allow: "Callable[[dict], Awaitable[bool]]", user: dict) -> bool:
+    """Run an endpoint's authorization check; an error in it refuses, logged, never an unhandled drop."""
+    try:
+        return bool(await allow(user))
+    except Exception:
+        logger.exception("WebSocket authorization check failed for %s; refusing", user.get("username"))
+        return False
 
 
 async def owns_chat_session(websocket: WebSocket, session_id: str, user: dict) -> bool:
@@ -356,18 +365,33 @@ async def owns_chat_session(websocket: WebSocket, session_id: str, user: dict) -
     Strict, unlike the flag-degradable ``validate_session_ownership`` HTTP
     dependency: a socket that drives a PTY must never fall back to log-only. The
     owner is the Redis ownership key, else the session file's durable owner
-    (#14018). A session with no recorded owner belongs to no one but an admin.
+    (#14018). A session with no recorded owner belongs to no one but an admin, and so
+    does one whose file exists but cannot be read (``SessionOwnerUnreadable``): the
+    owner is unknown, so it is not the caller.
     """
     if is_admin_role(user.get("role")):
         return True
     from autobot_shared.redis_client import get_redis_client  # noqa: PLC0415
     from security.session_ownership import SessionOwnershipValidator  # noqa: PLC0415
-    from utils.chat_utils import get_chat_history_manager  # noqa: PLC0415
 
     owner = await SessionOwnershipValidator(
         await get_redis_client(async_client=True, database="main")
     ).get_session_owner(session_id)
     if owner is None:
-        manager = get_chat_history_manager(websocket)
-        owner = await manager.get_session_owner(session_id) if manager is not None else None
+        owner = await _durable_session_owner(websocket, session_id)
     return bool(owner) and owner == user.get("username")
+
+
+async def _durable_session_owner(websocket: WebSocket, session_id: str) -> "str | None":
+    """The session file's owner, or None when it records none or cannot be read."""
+    from security.session_owner_errors import SessionOwnerUnreadable  # noqa: PLC0415
+    from utils.chat_utils import get_chat_history_manager  # noqa: PLC0415
+
+    manager = get_chat_history_manager(websocket)
+    if manager is None:
+        return None
+    try:
+        return await manager.get_session_owner(session_id)
+    except SessionOwnerUnreadable:
+        logger.warning("Owner of session %s... is unreadable; treating it as unowned", session_id[:8])
+        return None

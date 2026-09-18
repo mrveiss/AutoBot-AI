@@ -173,6 +173,38 @@ class TestOwnsChatSession:
         redis_owner.value, durable_owner.value = redis_value, durable_value
         assert await owns(SimpleNamespace(app=None), "s-1", caller) is expected
 
+    @pytest.mark.asyncio
+    async def test_an_unreadable_session_file_is_unowned_not_an_unhandled_error(self, owners):
+        """#17018 review: a session file that fails to decrypt must refuse cleanly, not crash the socket."""
+        from security.session_owner_errors import SessionOwnerUnreadable
+
+        owns, redis_owner, durable_owner = owners
+        redis_owner.value = None
+        with patch("utils.chat_utils.get_chat_history_manager") as manager:
+            manager.return_value.get_session_owner = AsyncMock(side_effect=SessionOwnerUnreadable("s-1"))
+            assert await owns(SimpleNamespace(app=None), "s-1", USER) is False
+
+
+@pytest.mark.asyncio
+async def test_an_authorization_check_that_raises_refuses_the_socket():
+    """The ``allow`` hook fails closed: an exception refuses with 1008, logged, instead of an unhandled drop."""
+    from api import ws_security
+
+    websocket = MagicMock(close=AsyncMock())
+
+    async def broken(_user):
+        raise RuntimeError("store down")
+
+    with (
+        patch.object(ws_security, "enforce_ws_origin", new=AsyncMock(return_value=True)),
+        patch.object(ws_security, "enforce_ws_authentication", new=AsyncMock(return_value=USER)),
+        patch.object(ws_security, "accept_websocket", new=AsyncMock()) as accept,
+    ):
+        assert await ws_security.open_authenticated_ws(websocket, allow=broken) is None
+
+    accept.assert_not_awaited()
+    assert websocket.close.await_args.kwargs["code"] == 1008
+
 
 class TestTheWorkflowSocket:
     """#17009 row 3: no check at all before; any caller took any slot and steered any workflow."""
