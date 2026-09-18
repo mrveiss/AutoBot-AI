@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from llc.api.agents import agent_org_nodes_with_latest_heartbeat
 from llc.models.enums import LLCRunStatus
+from llc.services.agent_presence_queries import agent_org_nodes_with_latest_heartbeat
 from protocols.agent_kind import AgentKind
 from protocols.agent_presence import UNKNOWN_TENANT, AgentPresenceRegistry
 
