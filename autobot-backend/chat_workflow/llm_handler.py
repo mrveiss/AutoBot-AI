@@ -26,26 +26,9 @@ from middleware.manager import get_extension_manager
 from prompt_manager import get_language_instruction, get_prompt, resolve_language
 
 from .models import WorkflowSession
+from .outbound_url import _VALID_URL_SCHEMES, _normalize_outbound_url
 
 logger = get_logger(__name__)
-
-# Issue #380: Module-level tuple for URL scheme validation
-_VALID_URL_SCHEMES = ("http://", "https://")
-
-
-def _normalize_outbound_url(url: str) -> str:
-    """Rewrite a 0.0.0.0 bind-address host to 127.0.0.1 for outbound calls.
-
-    Bug fix: the Ollama endpoint is sometimes configured as
-    ``http://0.0.0.0:11434`` (a server *bind* address — "all interfaces").
-    0.0.0.0 is not a valid *connect* target, so an outbound client request to
-    it raises aiohttp.ClientError, the LLM call fails, and no assistant reply is
-    produced. Normalize it to loopback so the call reaches a locally-bound
-    Ollama. No-op for any other host.
-    """
-    if not url:
-        return url
-    return url.replace("//0.0.0.0:", "//127.0.0.1:").replace("//0.0.0.0/", "//127.0.0.1/")
 
 
 async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
