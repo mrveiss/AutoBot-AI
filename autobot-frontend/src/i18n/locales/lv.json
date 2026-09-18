@@ -7845,6 +7845,8 @@
     "systemHealth": "Sistēmas veselība",
     "providerFallback": "Nodrošinātāja rezerve",
     "advancedControl": "Papildu vadība",
+    "adminPricing": "Modeļu cenas",
+    "adminMcpServers": "MCP serveri",
     "llcRoles": "Lomas"
   },
   "llcCompanyStatus": {

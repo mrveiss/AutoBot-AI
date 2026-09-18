@@ -7845,6 +7845,8 @@
     "systemHealth": "Salud del sistema",
     "providerFallback": "Respaldo de proveedor",
     "advancedControl": "Control avanzado",
+    "adminPricing": "Precios de modelos",
+    "adminMcpServers": "Servidores MCP",
     "llcRoles": "Roles"
   },
   "llcCompanyStatus": {

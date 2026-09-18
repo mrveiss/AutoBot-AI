@@ -7845,6 +7845,8 @@
     "systemHealth": "Kondycja systemu",
     "providerFallback": "Przełączanie dostawcy",
     "advancedControl": "Sterowanie zaawansowane",
+    "adminPricing": "Ceny modeli",
+    "adminMcpServers": "Serwery MCP",
     "llcRoles": "Role"
   },
   "llcCompanyStatus": {

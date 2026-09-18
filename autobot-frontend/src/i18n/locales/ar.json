@@ -7845,6 +7845,8 @@
     "systemHealth": "صحة النظام",
     "providerFallback": "احتياطي المزود",
     "advancedControl": "التحكم المتقدم",
+    "adminPricing": "تسعير النماذج",
+    "adminMcpServers": "خوادم MCP",
     "llcRoles": "الأدوار"
   },
   "llcCompanyStatus": {
