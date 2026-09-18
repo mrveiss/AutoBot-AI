@@ -861,6 +861,32 @@ export const routes: RouteRecordRaw[] = [
       admin: true,
     },
   },
+  // Issue #16825: live model-pricing refresh status + manual override —
+  // the GH#6480/#16228/#16231 backend had no reachable GUI.
+  {
+    path: '/admin/pricing',
+    name: 'admin-pricing',
+    component: () => import('@/views/AdminPricingView.vue'),
+    meta: {
+      title: 'Model Pricing',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
+    },
+  },
+  // Issue #16825: external MCP server admin CRUD — the #11542 backend had no
+  // reachable GUI.
+  {
+    path: '/admin/mcp-servers',
+    name: 'admin-mcp-servers',
+    component: () => import('@/views/AdminMcpServersView.vue'),
+    meta: {
+      title: 'MCP Servers',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
+    },
+  },
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
