@@ -77,15 +77,26 @@ class TestAddressingAndTenancy:
 
     def test_a_shared_recipient_is_addressable_from_any_tenant(self):
         presence = AgentPresenceRegistry(ttl_seconds=60)
-        presence.report(kind=AgentKind.AI_STACK, tenant_id=None, name="rag", instance_id="rag", busy=False)
+        presence.report(kind=AgentKind.AI_STACK, tenant_id=None, name="chat", instance_id="chat", busy=False)
         directory = PeerInboxDirectory(presence)
 
         directory.send(
-            kind=AgentKind.AI_STACK, name="rag", sender=_sender(tenant_id="tenant-x"), content="hi", message_id="m1"
+            kind=AgentKind.AI_STACK, name="chat", sender=_sender(tenant_id="tenant-x"), content="hi", message_id="m1"
         )
 
-        drained = directory.inbox_for(kind=AgentKind.AI_STACK, tenant_id=None, name="rag").drain()
+        drained = directory.inbox_for(kind=AgentKind.AI_STACK, tenant_id=None, name="chat").drain()
         assert len(drained) == 1
+
+    def test_an_ai_stack_role_with_no_wired_drain_is_refused_even_though_live(self):
+        """`"rag"`/`"system_commands"` are reported live by sync_ai_stack_presence
+        (#16947) but nothing drains their inbox yet (#16997) -- addressing
+        one must fail loud, not silently accept and then lose the message."""
+        presence = AgentPresenceRegistry(ttl_seconds=60)
+        presence.report(kind=AgentKind.AI_STACK, tenant_id=None, name="rag", instance_id="rag", busy=False)
+        directory = PeerInboxDirectory(presence)
+
+        with pytest.raises(RecipientNotAddressableError):
+            directory.send(kind=AgentKind.AI_STACK, name="rag", sender=_sender(), content="hi", message_id="m1")
 
     def test_the_recipients_own_tenant_is_used_for_the_inbox_key_not_the_senders(self):
         """A same-tenant delivery must key under the recipient's tenant.

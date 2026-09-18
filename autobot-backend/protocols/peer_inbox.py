@@ -13,7 +13,9 @@ is a queue per recipient, drained non-blocking at each kind's own real turn
 boundary (mapped and confirmed on #16946/#16948 -- there is no single
 seam common to all three kinds, so each integrates this module at its own):
 
-- AI_STACK: `chat_workflow/tool_handler.py`'s `_dispatch_tool_call`.
+- AI_STACK: `chat_workflow/tool_handler.py`'s `_dispatch_tool_call`, wired for
+  the `"chat"` role only today -- `"rag"`/`"system_commands"` are live in
+  presence but not yet addressable (#16997).
 - SESSION: `services/agent_terminal/service.py`'s `execute_command`.
 - COMPANY_OS: out of this module's scope -- #16992, delivered through a
   heartbeat run's own context, which has no queue-and-drain shape.
@@ -95,6 +97,16 @@ class RecipientNotAddressableError(Exception):
     """
 
 
+#: `sync_ai_stack_presence` reports every `AgentHealthRegistry` role as its
+#: own addressable AI_STACK entry, but only `"chat"` has a drain wired
+#: (`chat_workflow/tool_dispatch_guards.py::enforce_peer_messages`) -- `"rag"`
+#: and `"system_commands"` run their own `StandardizedAgent.process_request`
+#: flow, unrelated to that seam. Addressing them would succeed (they are
+#: live) and then silently lose the message forever, which is worse than
+#: refusing. Restricted here until #16997 wires their own turn boundary.
+_AI_STACK_ADDRESSABLE_NAMES = frozenset({"chat"})
+
+
 class PeerInboxDirectory:
     """Maps a live presence name to its `PeerInbox`; the addressing layer.
 
@@ -136,10 +148,18 @@ class PeerInboxDirectory:
         entry, never a caller-supplied value: trusting the caller could key
         the delivery under a tenant the recipient's own drain call never
         looks under, silently losing the message rather than refusing it.
+
+        An AI_STACK name outside `_AI_STACK_ADDRESSABLE_NAMES` is refused
+        for the same reason: being live in presence is not the same as
+        having a drain that will ever read this inbox (#16997).
         """
         match = next((e for e in self._presence.list_live(sender.tenant_id) if (e.kind, e.name) == (kind, name)), None)
         if match is None:
             raise RecipientNotAddressableError(f"{name!r} ({kind.value}) is not addressable from this tenant")
+        if kind is AgentKind.AI_STACK and name not in _AI_STACK_ADDRESSABLE_NAMES:
+            raise RecipientNotAddressableError(
+                f"{name!r} (ai_stack) is live but has no wired peer-message drain yet (#16997)"
+            )
         self.inbox_for(kind=kind, tenant_id=match.tenant_id, name=name).deliver(
             PeerMessageEntry(message_id=message_id, sender=sender, content=content)
         )
