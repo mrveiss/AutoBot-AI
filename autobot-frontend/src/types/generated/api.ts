@@ -54799,6 +54799,12 @@ export interface components {
         /**
          * AdvancedControlEmergencyStopResponse
          * @description Response for POST /system/emergency-stop.
+         *
+         *     Moved from ``api/schemas_workflows.py`` (#16854): that file is grandfathered
+         *     in the file-size ratchet at 3011 lines, and adding ``tasks_paused`` to
+         *     report what this module's own ``request_emergency_stop`` actually found
+         *     would have pushed it over. Living beside the function whose return value it
+         *     shapes reads better than a schema file entry does anyway.
          */
         AdvancedControlEmergencyStopResponse: {
             /** Success */
