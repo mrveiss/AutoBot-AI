@@ -19,7 +19,7 @@ def test_the_transcript_is_addressed_by_absolute_offset():
     pty._append_transcript("def")
 
     assert pty.transcript_position() == 6
-    assert (pty.read_transcript(0), pty.read_transcript(2), pty.read_transcript(6)) == ("abcdef", "cdef", "")
+    assert [pty.read_transcript(since) for since in (0, 2, 6)] == [(0, "abcdef"), (2, "cdef"), (6, "")]
 
 
 def test_the_oldest_output_is_dropped_past_the_cap_and_offsets_stay_absolute(monkeypatch):
@@ -29,8 +29,8 @@ def test_the_oldest_output_is_dropped_past_the_cap_and_offsets_stay_absolute(mon
         pty._append_transcript(chunk)
 
     assert pty.transcript_position() == 9
-    assert pty.read_transcript(0) == "ghi"
-    assert pty.read_transcript(7) == "hi"
+    assert pty.read_transcript(0) == (6, "ghi"), "an offset past the one asked for says output was dropped"
+    assert pty.read_transcript(7) == (7, "hi")
 
 
 def test_the_read_loop_feeds_the_transcript_and_still_feeds_the_queue(monkeypatch):
@@ -42,7 +42,7 @@ def test_the_read_loop_feeds_the_transcript_and_still_feeds_the_queue(monkeypatc
 
     pty._read_loop()
 
-    assert pty.read_transcript(0) == "hello"
+    assert pty.read_transcript(0) == (0, "hello")
     assert pty.get_output() == ("output", "hello"), "the WebSocket's queue still gets every output event"
     pty.read_transcript(0)
     assert pty.get_output() == ("eof", "")

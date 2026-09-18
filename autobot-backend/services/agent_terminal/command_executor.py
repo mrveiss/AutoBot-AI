@@ -42,10 +42,21 @@ AGENT_COMMAND_TIMEOUT_S = env_int("AUTOBOT_AGENT_COMMAND_TIMEOUT_S", 30)
 #: Return code reported for a command cancelled on timeout, as timeout(1) reports it.
 TIMED_OUT_RETURN_CODE = 124
 
+#: A few of the PTY reader thread's 10 ms poll cycles: output already on the wire at
+#: the deadline gets this long to be read before the command is called timed out.
+_READER_GRACE_S = 0.05
 
-def _command_output(transcript: str, marker: str) -> str:
-    """The command's output: after its echoed command line, before the first line bearing the marker."""
-    lines = strip_ansi_codes(transcript).replace("\r", "").split("\n")[1:]
+#: Prefixed to output whose start the transcript cap had already dropped.
+TRUNCATED_NOTE = "[earlier output dropped: it exceeded the terminal transcript]\n"
+
+
+def _command_output(transcript: str, marker: str, echoed_lines: int) -> str:
+    """The output after the *echoed_lines* lines the shell echoed back, before the first marker line.
+
+    A multi-line command is echoed one line per line, continuations behind the
+    PS2 prompt, so the echo spans as many lines as the command does.
+    """
+    lines = strip_ansi_codes(transcript).replace("\r", "").split("\n")[echoed_lines:]
     kept = []
     for line in lines:
         if marker in line:  # the prompt that echoes the marker line, or the marker's own output
@@ -58,6 +69,23 @@ def _find_exit_code(transcript: str, marker: str) -> int | None:
     """The exit code printed after *marker*, or None if it has not appeared yet."""
     match = re.search(rf"{re.escape(marker)}(\d+)", strip_ansi_codes(transcript))
     return int(match.group(1)) if match else None
+
+
+def _scan_for_exit_code(pty, cursor: int, marker: str) -> tuple[int, int | None]:
+    """Search only output past *cursor* -- plus enough overlap for a marker split across reads.
+
+    Returns the new cursor and the exit code, if it has appeared.
+    """
+    offset, text = pty.read_transcript(max(cursor - len(marker) - 16, 0))
+    return offset + len(text), _find_exit_code(text, marker)
+
+
+def _output_since(pty, start: int, command: str, marker: str) -> str:
+    """The command's output, noting it when the transcript cap already dropped its beginning."""
+    offset, transcript = pty.read_transcript(start)
+    if offset > start:
+        return TRUNCATED_NOTE + _command_output(transcript, marker, echoed_lines=0)
+    return _command_output(transcript, marker, echoed_lines=command.count("\n") + 1)
 
 
 class CommandExecutor:
@@ -268,31 +296,33 @@ class CommandExecutor:
 
     async def _await_exit_code(
         self, session: AgentTerminalSession, pty, start: int, marker: str, timeout: float
-    ) -> tuple[str, int | None, bool]:
+    ) -> tuple[int | None, bool]:
         """
-        Read the PTY transcript from *start* until the exit-code marker appears.
+        Watch the PTY transcript from *start* until the exit-code marker appears.
 
         SECURITY FIX (Critical #2): the marker is UUID-based, so a command cannot
-        fake its exit code (`echo "EXIT_CODE:0" && malicious_command`).
+        fake its exit code (`echo "EXIT_CODE:0" && malicious_command`). Each poll
+        reads only output it has not scanned yet.
 
         Returns:
-            (transcript, exit code, timed out). The code is None when the shell ended
-            first, or when the command was cancelled on timeout; nothing is then read
+            (exit code, timed out). The code is None when the shell ended first,
+            or when the command was cancelled on timeout; nothing is then read
             from a new shell.
         """
         deadline = time.monotonic() + timeout
-        poll_interval = TimingConstants.MICRO_DELAY / 2
-        while True:
-            transcript = pty.read_transcript(start)
-            return_code = _find_exit_code(transcript, marker)
+        cursor, poll_interval = start, TimingConstants.MICRO_DELAY / 2
+        while time.monotonic() < deadline:
+            cursor, return_code = _scan_for_exit_code(pty, cursor, marker)
             if return_code is not None or not pty.is_alive():
-                return transcript, return_code, False
-            if time.monotonic() >= deadline:
-                break
+                return return_code, False
             await asyncio.sleep(min(poll_interval, max(deadline - time.monotonic(), 0)))
             poll_interval = min(poll_interval * 1.5, 1.0)
+        await asyncio.sleep(_READER_GRACE_S)
+        _, return_code = _scan_for_exit_code(pty, cursor, marker)
+        if return_code is not None:
+            return return_code, False
         await self._handle_poll_timeout(session, timeout)
-        return transcript, None, True
+        return None, True
 
     def _build_pty_error_result(self, error_msg: str) -> Metadata:
         """
@@ -369,8 +399,8 @@ class CommandExecutor:
         if pty is None or not pty.write_input(f"{command}\necho '{marker}'$?\n"):
             return self._build_pty_error_result("Failed to write command to PTY")
 
-        transcript, return_code, timed_out = await self._await_exit_code(session, pty, start, marker, timeout)
-        output = _command_output(transcript, marker)
+        return_code, timed_out = await self._await_exit_code(session, pty, start, marker, timeout)
+        output = _output_since(pty, start, command, marker)
         if timed_out:
             return self._build_pty_timeout_result(output, timeout)
         if return_code is None:

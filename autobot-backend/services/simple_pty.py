@@ -277,8 +277,13 @@ class SimplePTY:
         with self._transcript_lock:
             return self._transcript_base + self._transcript_len
 
-    def read_transcript(self, since: int) -> str:
-        """Output received after absolute offset *since*, without consuming the output queue (#17074)."""
+    def read_transcript(self, since: int) -> tuple[int, str]:
+        """Output received after absolute offset *since*, without consuming the output queue (#17074).
+
+        Returns ``(offset, text)``: the absolute offset *text* starts at, read
+        atomically with it. An offset past *since* means the output in between
+        was already dropped under the cap -- the caller has lost it, and knows.
+        """
         with self._transcript_lock:
             parts, offset = [], self._transcript_base
             for chunk in self._transcript:
@@ -286,7 +291,7 @@ class SimplePTY:
                 if end > since:
                     parts.append(chunk[max(since - offset, 0) :])
                 offset = end
-            return "".join(parts)
+            return max(since, self._transcript_base), "".join(parts)
 
     def get_output(self) -> tuple | None:
         """Get output from PTY (non-blocking)"""

@@ -19,7 +19,7 @@ import pytest
 
 import services.simple_pty as simple_pty_module
 from services.agent_terminal import command_executor as executor_module
-from services.agent_terminal.command_executor import TIMED_OUT_RETURN_CODE, CommandExecutor
+from services.agent_terminal.command_executor import TIMED_OUT_RETURN_CODE, TRUNCATED_NOTE, CommandExecutor
 from services.agent_terminal.models import AgentTerminalSession
 from services.command_approval_manager import AgentRole
 
@@ -29,10 +29,15 @@ PROMPT = "user@host:~$ "
 class _Shell:
     """A PTY running an interactive shell, as far as the executor can tell."""
 
-    def __init__(self, results=None, hangs=(), history=""):
-        self.results = results or {}  # command -> (output, exit code)
+    def __init__(self, results=None, hangs=(), history="", finishes_after=None, drops_output=False):
+        self.results = results or {}  # command -> (output, exit code); a multi-line command is one key
         self.hangs = set(hangs)  # commands that never return
+        self.finishes_after = finishes_after  # (command, seconds): returns only after that long
+        self.drops_output = drops_output  # the transcript cap drops the start of the next command
         self.transcript = history + PROMPT
+        self.base = 0  # absolute offset of the oldest output still held
+        self.pending = None  # (due time, command) of a slow command still running
+        self.queued = None  # the marker line typed ahead of a running command
         self.writes = []
         self.alive = True
         self.busy = False
@@ -42,21 +47,36 @@ class _Shell:
         return len(self.transcript)
 
     def read_transcript(self, since):
-        return self.transcript[since:]
+        if self.pending and time.monotonic() >= self.pending[0]:
+            self._finish(*self.pending[1:])
+        offset = max(since, self.base)
+        return offset, self.transcript[offset:]
 
     def is_alive(self):
         return self.alive
 
     def write_input(self, text):
         self.writes.append(text)
-        for line in text.split("\n")[:-1]:
+        rest = text
+        while rest:
+            whole = next((c for c in self.results if "\n" in c and rest.startswith(c + "\n")), None)
+            line = whole or rest.split("\n", 1)[0]
+            rest = rest[len(line) + 1 :]
             if self.alive and not self.busy:  # a typed-ahead line waits for the running command
                 self._run(line)
+            elif self.busy and line.startswith("echo '__EXIT_CODE_"):
+                self.queued = line
         return True
 
     def _run(self, line):
-        self.transcript += f"{line}\r\n"
-        if line in self.hangs:
+        first, *continuations = line.split("\n")  # bash echoes continuations behind PS2
+        self.transcript += f"{first}\r\n" + "".join(f"> {more}\r\n" for more in continuations)
+        if self.drops_output:  # once: the cap drops up to a few characters into this command's output
+            self.base, self.drops_output = len(self.transcript) + 3, False
+        if self.finishes_after and line == self.finishes_after[0]:
+            self.busy = True
+            self.pending = (time.monotonic() + self.finishes_after[1], line)
+        elif line in self.hangs:
             self.busy = True
         elif line == "exit":
             self.alive = False
@@ -66,6 +86,13 @@ class _Shell:
         else:
             output, self.last_code = self.results.get(line, ("", 0))
             self.transcript += (f"{output}\r\n" if output else "") + PROMPT
+
+    def _finish(self, line):
+        """A slow command returns; the marker typed ahead of it runs now."""
+        self.pending, self.busy = None, False
+        output, self.last_code = self.results.get(line, ("", 0))
+        self.transcript += (f"{output}\r\n" if output else "") + PROMPT
+        self._run(self.queued)
 
 
 class _Manager:
@@ -177,3 +204,34 @@ async def test_a_stale_shell_is_recreated_before_the_command_not_after(run):
 
     assert manager.created == ["pty-1"]
     assert result["status"] == "success" and stale.writes == []
+
+
+@pytest.mark.asyncio
+async def test_a_multi_line_command_echo_is_not_its_output(run):
+    """bash echoes each continuation line behind PS2 ('> '); none of that is output (#17074 review)."""
+    loop = "for i in 1 2; do\necho $i\ndone"
+
+    result, _, _ = await run(_Shell(results={loop: ("1\r\n2", 0)}), loop)
+
+    assert result["stdout"] == "1\n2"
+
+
+@pytest.mark.asyncio
+async def test_output_the_transcript_cap_already_dropped_is_marked_not_passed_off_as_whole(run):
+    shell = _Shell(results={"make": ("building everything\r\nall done", 0)}, drops_output=True)
+
+    result, _, _ = await run(shell, "make")
+
+    assert result["stdout"].startswith(TRUNCATED_NOTE)
+    assert result["stdout"].endswith("all done") and result["return_code"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_command_finishing_at_the_deadline_reports_its_exit_code_not_a_timeout(run):
+    """Output already on the wire at the deadline gets one more read before the cancel (#17074 review)."""
+    shell = _Shell(results={"slow": ("done", 3)}, finishes_after=("slow", 0.32))
+
+    result, manager, _ = await run(shell, "slow", timeout=0.3)
+
+    assert (result["status"], result["return_code"], result["stdout"]) == ("error", 3, "done")
+    assert manager.closed == [], "a finished command is not cancelled"
