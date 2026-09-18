@@ -473,10 +473,14 @@
     # "admin" as "the operator set this", and never generate -- a silent no-op. The
     # check below must compare against the KNOWN weak literal specifically, the same
     # way an inventory-supplied real password (which will never equal "admin") is
-    # still respected. On a re-run monitoring reads this file back (#10400's pattern)
-    # rather than depending on this task having run this time. deploy-monitoring.yml
-    # also runs monitoring standalone, with no SLM present at all -- that path keeps
-    # the role's own "admin" default as a documented fallback.
+    # still respected. An operator who deliberately sets their password to the
+    # literal string "admin" is indistinguishable from "nobody set it" and also
+    # gets overridden -- accepted, since both cases end up running Grafana on the
+    # same guessable password either way. On a re-run monitoring reads this file
+    # back (#10400's pattern) rather than depending on this task having run this
+    # time. deploy-monitoring.yml also runs monitoring standalone, with no SLM
+    # present at all -- that path keeps the role's own "admin" default as a
+    # documented fallback.
     grafana_admin_password: >-
       {{ grafana_admin_password
          if (grafana_admin_password | default('') | trim | length > 0 and grafana_admin_password != 'admin')
