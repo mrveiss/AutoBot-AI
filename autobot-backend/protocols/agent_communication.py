@@ -202,6 +202,7 @@ class AgentCommunicationProtocol:
         self.message_processor_task = None
         self._handling: set = set()  # in-flight inbound messages, one task each (#16986)
         self._backlog: deque = deque()  # inbound messages waiting for a handler slot
+        self._dropped = 0  # messages dropped in the current overload, logged once when it starts and ends
 
     async def start(self):
         """Start the communication protocol"""
@@ -364,13 +365,14 @@ class AgentCommunicationProtocol:
         logger.info("Broadcasted message to %s/%s recipients", sent_count, len(recipients))
         return sent_count
 
-    def _dispatch(self, message: StandardMessage, channel_id: str) -> None:
+    async def _dispatch(self, message: StandardMessage, channel_id: str) -> None:
         """Handle *message* in its own task, at most ``MAX_INFLIGHT_HANDLERS`` at once (#16986).
 
         Awaited inline, a handler that sends its own request (B forwarding A's to C)
         blocked the loop that must hand it C's reply. So this never makes the loop wait.
         A reply resolves its request at once, without a slot. Anything else starts a
-        handler if a slot is free, or joins a bounded backlog, or past that is dropped.
+        handler if a slot is free, or joins a bounded backlog, or past that is dropped;
+        a dropped request is answered with an error at once rather than left to time out.
         Waiting for a slot in the loop would bring the deadlock back: the replies the
         busy handlers need would queue behind the message waiting for their slot.
         """
@@ -387,13 +389,20 @@ class AgentCommunicationProtocol:
                 )
             self._backlog.append((message, channel_id))
         else:
+            await self._drop(message, channel_id)
+
+    async def _drop(self, message: StandardMessage, channel_id: str) -> None:
+        """Shed *message*: one warning per overload, and an immediate error to a waiting requester."""
+        if not self._dropped:
             logger.warning(
-                "Agent %s dropped message %s: %d handling, %d queued",
+                "Agent %s is overloaded (%d handling, %d queued); dropping until it drains",
                 self.agent_identity.agent_id,
-                message.header.message_id,
                 len(self._handling),
                 len(self._backlog),
             )
+        self._dropped += 1
+        if message.header.message_type == MessageType.REQUEST:
+            await self.send_response(self._error_reply(message, "Agent overloaded", "Overloaded"), message, channel_id)
 
     def _start(self, message: StandardMessage, channel_id: str) -> None:
         task = asyncio.create_task(self._handle_message(message, channel_id))
@@ -405,6 +414,9 @@ class AgentCommunicationProtocol:
         self._handling.discard(task)
         if self._backlog and self.is_active:
             self._start(*self._backlog.popleft())
+        if self._dropped and not self._backlog:
+            logger.warning("Agent %s drained; %d messages were dropped", self.agent_identity.agent_id, self._dropped)
+            self._dropped = 0
 
     async def _process_incoming_messages(self):
         """Background task to process incoming messages from all channels"""
@@ -415,7 +427,7 @@ class AgentCommunicationProtocol:
                     try:
                         message = await channel.receive(timeout=TimingConstants.MICRO_DELAY)
                         if message:
-                            self._dispatch(message, channel_id)
+                            await self._dispatch(message, channel_id)
                     except Exception as e:
                         logger.error(f"Error processing message from channel {channel_id}: {e}")
 
@@ -471,15 +483,16 @@ class AgentCommunicationProtocol:
             except Exception as e:
                 logger.error("Error in message handler: %s", e)
                 if is_request:
-                    error_response = StandardMessage(
-                        header=MessageHeader(
-                            message_type=MessageType.ERROR, correlation_id=message.header.correlation_id
-                        ),
-                        payload=MessagePayload(
-                            content={"error": "Message handling failed", "error_type": type(e).__name__}
-                        ),
-                    )
-                    await self.send_response(error_response, message, channel_id)
+                    error = self._error_reply(message, "Message handling failed", type(e).__name__)
+                    await self.send_response(error, message, channel_id)
+
+    @staticmethod
+    def _error_reply(message: StandardMessage, error: str, error_type: str) -> StandardMessage:
+        """An error answer to *message*, correlated so its requester stops waiting."""
+        return StandardMessage(
+            header=MessageHeader(message_type=MessageType.ERROR, correlation_id=message.header.correlation_id),
+            payload=MessagePayload(content={"error": error, "error_type": error_type}),
+        )
 
     async def _heartbeat_loop(self):
         """Keep this agent reachable: refresh its registration on every channel (#16986).

@@ -12,6 +12,8 @@ channel kind, so delivery has to go through it.
 """
 
 import asyncio
+import sys
+from types import ModuleType
 from unittest.mock import patch
 
 import fakeredis
@@ -305,3 +307,117 @@ async def test_a_channel_whose_listener_died_stops_renewing(redis_server):
 
     assert redis_server.zscore(REGISTERED_KEY, "agent_d") == stale
     await channel.close()
+
+
+@pytest.mark.asyncio
+async def test_two_channels_racing_for_one_id_cannot_both_win(redis_server):
+    """66's review of #17001: the claim was a get then a set. It is one script now."""
+    first, second = RedisCommunicationChannel("r1"), RedisCommunicationChannel("r2")
+    first.bind("agent_race")
+    second.bind("agent_race")
+
+    outcomes = await asyncio.gather(first.start(), second.start(), return_exceptions=True)
+
+    refused = [o for o in outcomes if isinstance(o, ChannelOwnerCollisionError)]
+    winner = first if outcomes[0] is None else second
+    assert len(refused) == 1 and outcomes.count(None) == 1, outcomes
+    assert redis_server.hget(OWNERS_KEY, "agent_race") == winner.instance
+    await winner.close()
+
+
+@pytest.mark.asyncio
+async def test_a_channel_that_lost_its_id_stops_reading_the_inbox(redis_server):
+    """A stale channel taken over must not keep a listener splitting its successor's inbox."""
+    stale, successor = RedisCommunicationChannel("old"), RedisCommunicationChannel("new")
+    stale.bind("agent_y")
+    successor.bind("agent_y")
+    await stale.start()
+    redis_server.zadd(REGISTERED_KEY, {"agent_y": _server_now(redis_server) - REGISTRATION_TTL_SECONDS - 1})
+    await successor.start()
+
+    await stale.refresh()
+
+    assert not stale.is_active
+    try:  # its listener was cancelled: wait for it to wind down
+        await stale.listener_task
+    except asyncio.CancelledError:
+        pass
+    assert stale.listener_task.done()
+    assert redis_server.hget(OWNERS_KEY, "agent_y") == successor.instance
+    await stale.close()
+    await successor.close()
+
+
+@pytest.mark.asyncio
+async def test_a_dropped_request_is_answered_with_an_error_at_once(redis_server, monkeypatch):
+    """66's review of #17001: a shed request used to leave its requester waiting out the whole timeout."""
+    monkeypatch.setattr(agent_communication, "MAX_INFLIGHT_HANDLERS", 1)
+    monkeypatch.setattr(agent_communication, "INBOX_MAX_LENGTH", 1)
+    manager, release = AgentCommunicationManager(), asyncio.Event()
+
+    async def slow(message):
+        await release.wait()
+
+    a = await manager.register_agent(AgentIdentity(agent_id="agent_a", agent_type="t"), [{"type": "direct"}])
+    b = await manager.register_agent(AgentIdentity(agent_id="agent_b", agent_type="t"), [{"type": "direct"}])
+    b.register_message_handler(MessageType.REQUEST, slow)
+    try:
+        for _ in range(2):  # one handling, one queued
+            assert await a.send_message(_to("agent_b"))
+        await asyncio.sleep(0.2)
+        started = asyncio.get_running_loop().time()
+
+        reply = await a.send_request(_to("agent_b"), timeout=5)
+
+        assert reply is not None and reply.payload.content == {"error": "Agent overloaded", "error_type": "Overloaded"}
+        assert asyncio.get_running_loop().time() - started < 2, "the requester waited instead of hearing no"
+    finally:
+        release.set()
+        await manager.shutdown_all()
+
+
+@pytest.mark.asyncio
+async def test_a_peer_request_is_held_to_the_work_claims_like_any_other(redis_server, monkeypatch):
+    """#17001 review (High): the peer path skipped execute_with_tracking, and with it hold_scopes.
+
+    A scope another run holds must refuse a peer's request for it, and the refusal must
+    reach the requester over the wire.
+    """
+    import fakeredis.aioredis as fakeredis_async
+
+    from agents.base_agent import AgentRequest, AgentResponse, LocalAgent
+    from autobot_shared.coordination import work_claims
+
+    claims = fakeredis_async.FakeRedis(server=fakeredis_async.FakeServer(), decode_responses=True)
+
+    async def _claims_client(database: str = "main"):
+        return claims
+
+    monkeypatch.setattr(work_claims, "get_async_redis_client", _claims_client)
+    analytics = ModuleType("services.agent_analytics")
+    analytics.get_agent_analytics = lambda: (_ for _ in ()).throw(RuntimeError("no analytics in this test"))
+    monkeypatch.setitem(sys.modules, "services.agent_analytics", analytics)
+
+    class _Writer(LocalAgent):
+        def declared_scopes(self, request: AgentRequest):
+            return ["path:shared/file.py"]
+
+        async def process_request(self, request: AgentRequest) -> AgentResponse:
+            return AgentResponse(request_id=request.request_id, agent_type=self.agent_type, status="success", result={})
+
+        def get_capabilities(self):
+            return []
+
+    await work_claims.try_acquire("path:shared/file.py", agent_id="someone_else", task_id="t0", intent="editing")
+    manager, writer = AgentCommunicationManager(), _Writer("writer")
+    a = await manager.register_agent(AgentIdentity(agent_id="agent_a", agent_type="t"), [{"type": "direct"}])
+    w = await manager.register_agent(AgentIdentity(agent_id="agent_w", agent_type="t"), [{"type": "direct"}])
+    w.register_message_handler(MessageType.REQUEST, writer._handle_communication_request)
+    try:
+        reply = await a.send_request(_to("agent_w", action="write", payload={}), timeout=5)
+
+        assert reply is not None
+        assert reply.payload.content["status"] == "refused", reply.payload.content
+        assert "someone_else" in reply.payload.content["error"]
+    finally:
+        await manager.shutdown_all()

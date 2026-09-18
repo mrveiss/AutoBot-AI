@@ -30,6 +30,17 @@ addressed copy to each id in ``recipients()``.
   (``TIME``), so clock skew between hosts cannot make a live agent look stale. An
   inbox is capped at ``INBOX_MAX_LENGTH`` (oldest dropped, logged) and expires
   ``INBOX_TTL_SECONDS`` after its last write, so no list grows without bound.
+  Claiming an id is one atomic script: it checks for a live holder and writes the
+  claim and a fresh registration together, so two channels racing for one id cannot
+  both win. A channel that finds its claim taken stops reading the inbox, so two
+  listeners never split it.
+
+**Loss window.** A message is accepted only for a registered recipient, so nothing
+piles up for an agent that is gone. But an agent that dies stays registered for up to
+``REGISTRATION_TTL_SECONDS``. Messages sent to it in that window wait in its inbox, and
+if no channel claims that id within ``INBOX_TTL_SECONDS`` of the last write, they
+expire unread. A channel that takes over a stale id logs how many messages it found
+waiting.
 
 Until #16962 authenticates the envelope, anything with write access to Redis can push
 to any inbox. The caps above bound what such a writer can cost a recipient; they do
@@ -67,6 +78,23 @@ REGISTRATION_TTL_SECONDS = env_int("AUTOBOT_AGENT_COMM_REGISTRATION_TTL_SECONDS"
 INBOX_MAX_LENGTH = env_int("AUTOBOT_AGENT_COMM_INBOX_MAX_LENGTH", 1000)
 #: Seconds an inbox survives after its last write, so an abandoned one is reclaimed.
 INBOX_TTL_SECONDS = env_int("AUTOBOT_AGENT_COMM_INBOX_TTL_SECONDS", 3600)
+
+
+#: Claim *owner* for *instance* unless another instance holds it with a fresh registration.
+#: KEYS: owners hash, registrations zset. ARGV: owner, instance, now, ttl.
+#: Returns 0 refused, 1 claimed, 2 claimed from a stale holder.
+_CLAIM_SCRIPT = """
+local holder = redis.call('HGET', KEYS[1], ARGV[1])
+local took_over = 0
+if holder and holder ~= ARGV[2] then
+  local score = redis.call('ZSCORE', KEYS[2], ARGV[1])
+  if score and tonumber(score) >= tonumber(ARGV[3]) - tonumber(ARGV[4]) then return 0 end
+  took_over = 1
+end
+redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
+redis.call('ZADD', KEYS[2], ARGV[3], ARGV[1])
+return 1 + took_over
+"""
 
 
 class ChannelOwnerCollisionError(RuntimeError):
@@ -150,13 +178,16 @@ class RedisCommunicationChannel(CommunicationChannel):
         return self.owner is not None and _text(await self._redis("hget", OWNERS_KEY, self.owner)) == self.instance
 
     async def start(self):
-        """Claim the owner's registration, then start listening. A live owner is never displaced."""
+        """Claim the owner's registration atomically, then start listening. A live owner is never displaced."""
         if self.owner:
-            holder = _text(await self._redis("hget", OWNERS_KEY, self.owner))
-            if holder not in (None, self.instance) and await self._listening(self.owner):
+            args = (self.owner, self.instance, await self._now(), REGISTRATION_TTL_SECONDS)
+            claimed = int(await self._redis("eval", _CLAIM_SCRIPT, 2, OWNERS_KEY, REGISTERED_KEY, *args))
+            if not claimed:
                 logger.warning("Refused a second Redis channel for live agent %r", self.owner)
                 raise ChannelOwnerCollisionError(f"agent {self.owner!r} already has a live Redis channel")
-            await self._redis("hset", OWNERS_KEY, self.owner, self.instance)
+            if claimed == 2:
+                waiting = await self._redis("llen", self.channel_key)
+                logger.warning("Took over stale agent id %r; %d messages were waiting for it", self.owner, waiting)
         self.is_active = True
         self.listener_task = asyncio.create_task(self._listen_for_messages())
         await self.refresh()
@@ -192,7 +223,11 @@ class RedisCommunicationChannel(CommunicationChannel):
             logger.error("Redis channel %s has no running listener; not renewing %r", self.channel_id, self.owner)
             return
         if not await self._owns_registration():
-            logger.warning("Redis channel %s no longer owns %r; not renewing it", self.channel_id, self.owner)
+            logger.warning(
+                "Redis channel %s lost %r to another channel; it stops reading that inbox", self.channel_id, self.owner
+            )
+            self.is_active = False
+            self.listener_task.cancel()
             return
         now = await self._now()
         await self._redis("zadd", REGISTERED_KEY, {self.owner: now})
@@ -211,18 +246,23 @@ class RedisCommunicationChannel(CommunicationChannel):
             if not await self._listening(recipient):
                 logger.debug("Redis channel %s cannot reach recipient %r", self.channel_id, recipient)
                 return False
-            key = inbox_key(recipient)
-            length = await self._redis("rpush", key, message.to_json())
+            length = await asyncio.to_thread(self._push, inbox_key(recipient), message.to_json())
             if length > INBOX_MAX_LENGTH:
-                await self._redis("ltrim", key, -INBOX_MAX_LENGTH, -1)
                 dropped = length - INBOX_MAX_LENGTH
                 logger.warning("Inbox of %r over %d: dropped the %d oldest", recipient, INBOX_MAX_LENGTH, dropped)
-            await self._redis("expire", key, INBOX_TTL_SECONDS)
             logger.debug("Message sent to %s: %s", recipient, message.header.message_id)
             return True
         except Exception as e:
             logger.error("Failed to send Redis message: %s", e)
             return False
+
+    def _push(self, key: str, payload: str) -> int:
+        """Append, cap and re-arm the inbox in one round trip; the list's length before the cap."""
+        pipe = self.redis_client.pipeline()
+        pipe.rpush(key, payload)
+        pipe.ltrim(key, -INBOX_MAX_LENGTH, -1)
+        pipe.expire(key, INBOX_TTL_SECONDS)
+        return int(pipe.execute()[0])
 
     async def receive(self, timeout: float | None = None) -> StandardMessage | None:
         """Receive a message from the channel"""

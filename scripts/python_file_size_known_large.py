@@ -305,7 +305,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/plugin_manager.py": 702,
     "autobot-backend/project_state_manager.py": 998,
     "autobot-backend/prompt_manager.py": 1481,
-    "autobot-backend/protocols/agent_communication.py": 694,
+    "autobot-backend/protocols/agent_communication.py": 707,
     "autobot-backend/research_browser_manager.py": 704,
     "autobot-backend/secure_command_executor.py": 1220,
     "autobot-backend/secure_sandbox_executor.py": 1019,
