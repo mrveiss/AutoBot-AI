@@ -32,6 +32,7 @@ failing on.
 
 import ast
 import functools
+import os
 import pathlib
 
 import pytest
@@ -100,18 +101,30 @@ MIN_SWEPT_FILES = 500
 
 
 def _python_files():
-    for path in BACKEND_ROOT.rglob("*.py"):
+    # #16601: walked with os.walk, pruning SKIP_DIR_PARTS from dirnames in
+    # place, rather than BACKEND_ROOT.rglob("*.py") filtered afterward.
+    # rglob has no pruning hook -- it descends into every directory
+    # unconditionally and only skips the FILES it finds there, so it still
+    # pays the full traversal cost of whatever sits under a denylisted
+    # directory. A shard-10 hang was measured frozen inside rglob's own
+    # scandir call for 40+ minutes with zero progress (in a sibling sweep,
+    # repo_tests/collected_test_model.py, same anti-pattern); this sweep
+    # walks the same backend tree with the same shape and was flagged
+    # alongside it (#16915) for the same reason.
+    for dirpath, dirnames, filenames in os.walk(BACKEND_ROOT):
         # #14484: relative to the scan root, never the absolute path. Testing
         # ``set(path.parts)`` asks whether the *checkout* sits under a directory
         # named `archive`/`migrations`/`venv` as well as whether the file does,
         # so the guard's reach depended on where the tree was cloned.
-        if SKIP_DIR_PARTS & set(path.relative_to(BACKEND_ROOT).parts):
-            continue
-        if path.name.endswith("_test.py") or path.name.startswith("test_"):
-            continue
-        if path.name in EXEMPT_FILES:
-            continue
-        yield path
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIR_PARTS]
+        for filename in filenames:
+            if not filename.endswith(".py"):
+                continue
+            if filename.endswith("_test.py") or filename.startswith("test_"):
+                continue
+            if filename in EXEMPT_FILES:
+                continue
+            yield pathlib.Path(dirpath, filename)
 
 
 def _may_contain_offender(source: str) -> bool:
