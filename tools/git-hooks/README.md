@@ -54,13 +54,13 @@ follow `<type>(scope): <description> (#NNNN)` by running
 subjects are exempt. Until #17029 it was a hand-installed local file, not part of the repo.
 
 git runs it for `git commit` (and `--amend`), a real merge commit, and a rebase reword or
-conflict `--continue`. A plain `git revert` or `git cherry-pick` does not run it. So finishing a
+conflict `--continue`. A plain `git revert` or `git cherry-pick` does not run it. Finishing a
 conflicted cherry-pick or rebase of an **older commit whose subject predates the convention**
-is refused, and `git cherry-pick --continue` accepts no `--no-verify`. Either conclude that
-pick yourself with a conforming subject (`git commit -m "<type>(scope): … (#NNNN)"`, then
-`git cherry-pick --continue` for any picks left), or, for a deliberate backport that keeps its
-original subject, finish that one step with `git -c core.hooksPath=/dev/null cherry-pick
---continue` (likewise `rebase --continue`). The `-c` applies to that command only.
+therefore needs a conforming subject: conclude that pick with
+`git commit -m "<type>(scope): <description> (#NNNN)"` and then `git cherry-pick --continue`,
+or reword the subject during the rebase (`reword`). A backport carries its own issue reference
+like any other commit. If a real workflow cannot be completed that way, that is a hook defect:
+file it.
 
 ## What the pre-commit hook does
 
@@ -84,13 +84,9 @@ failures block the push with a clear "fix this" message.
 
 ## Bypass
 
-```bash
-git push --no-verify
-```
-
-Use only when you actually have to (e.g. delivering a hotfix and CI will
-verify). Don't make a habit of it — every bypass is the path that produces
-PR #5141-class incidents.
+There is no sanctioned bypass: never `--no-verify`, never a `core.hooksPath` override
+(CLAUDE.md, #17026; #15961 is what one silently disables). A hook that blocks legitimate work
+is a bug: fix the cause, or file the hook defect.
 
 ## Tested manually
 
