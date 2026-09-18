@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import redact_content
 from knowledge.fact_projection import FactProjectionMixin
 from knowledge.ingest_sanitize import sanitize_fact_content
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
@@ -760,6 +761,14 @@ class FactsMixin(FactProjectionMixin):
         """
         # Lazy: fact_store pulls SQLAlchemy, absent from the startup-import smoke env.
         from knowledge import fact_store
+
+        # #13708/#16895: the KB write chokepoint for credentials, same role as
+        # sanitize_fact_content's #16770 injection pass in store_fact() above --
+        # every caller (the 4 api/knowledge.py add-* routes, file upload, audio
+        # transcription, every KB connector's sync path) converges here before
+        # persist_fact/Redis projection/ChromaDB all see the same content, so one
+        # call covers all of them instead of redacting at each entry point.
+        content = redact_content(content)
 
         await fact_store.persist_fact(fact_id, content, metadata)
         await self._project_fact_to_redis(fact_id, content, metadata)
