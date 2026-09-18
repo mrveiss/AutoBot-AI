@@ -132,3 +132,22 @@ def test_an_admin_reads_and_cancels_anyones(integration):
 
     assert client.get("/a-1").status_code == 200
     assert client.post("/a-1/cancel").status_code == 200
+
+
+#: The ``Operation`` interface in autobot-frontend/src/types/operations.ts.
+PANEL_FIELDS = {
+    "operation_id", "name", "description", "operation_type", "status", "priority", "progress", "current_step",
+    "estimated_items", "processed_items", "created_at", "started_at", "completed_at", "error_message",
+    "context", "checkpoints_count", "can_resume",
+}  # fmt: skip
+
+
+def test_an_operation_reaches_the_panel_in_the_shape_it_reads(integration):
+    """Every status and list request answered 500: the old conversion had drifted from both ends (#17017)."""
+    _operation(integration, "a-1", "alice")
+
+    body = _client(integration, ALICE).get("/a-1").json()
+
+    assert set(body) == PANEL_FIELDS
+    assert (body["status"], body["priority"]) == ("pending", "normal")  # queued reads as pending
+    assert "created_by" not in body["context"]

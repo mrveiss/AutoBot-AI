@@ -54,6 +54,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
+from utils.long_running_operations.views import operation_view
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
@@ -268,7 +269,7 @@ async def get_operation_status(
 ):
     """Get detailed operation status: its creator's or an admin's (#17017)"""
     try:
-        return manager._convert_operation_to_response(_owned_operation(manager, operation_id, current_user))
+        return operation_view(_owned_operation(manager, operation_id, current_user))
     except HTTPException:
         raise
     except Exception as e:
@@ -299,7 +300,7 @@ async def list_operations(
         operations = [op for op in operations if _may_see(op, current_user)][:limit]
 
         # Convert to response format
-        operation_responses = [manager._convert_operation_to_response(op) for op in operations]
+        operation_responses = [operation_view(op) for op in operations]
 
         # Issue #321: Use helper method to reduce message chains
         all_operations = [op for op in manager.get_all_operations() if _may_see(op, current_user)]
@@ -411,7 +412,7 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
             await websocket.send_json(
                 {
                     "type": "current_progress",
-                    "data": (operation_integration_manager._convert_operation_to_response(operation).dict()),
+                    "data": operation_view(operation),
                 }
             )
 
