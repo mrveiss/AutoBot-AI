@@ -2,20 +2,25 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""POST /search and POST /search/rag filter local KB results by the caller's
+"""POST /search/rag filters local KB results used as RAG context by the caller's
 access (#16665). Uses a real KnowledgeOwnership.check_access rather than
 mocking it away, so this proves the route's own filtering wiring.
 
-Issue #16654/#16745: both feed RAG synthesis, so an admin caller gets no
-bypass here either -- confirmed by the admin-role negative controls below.
+Issue #16654/#16745: this feeds RAG synthesis, so an admin caller gets no
+bypass here either -- confirmed by the admin-role negative control below.
+
+#16908: this file used to also cover POST /search (knowledge_ai_stack.search),
+including its own admin-bypass negative control -- that handler was dead code
+(shadowed by api/knowledge_search.py's own POST /search, registered earlier)
+and was deleted rather than re-pathed, so its tests were deleted with it, not
+carried forward.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from api.knowledge_ai_stack import search
-from api.schemas_knowledge import AIStackRAGQueryRequest, AIStackSearchRequest
+from api.schemas_knowledge import AIStackRAGQueryRequest
 from knowledge.ownership import KnowledgeOwnership
 
 
@@ -28,36 +33,6 @@ def _make_kb(search_results: list) -> MagicMock:
 
 def _current_user(user_id: str, role: str = "user") -> dict:
     return {"user_id": user_id, "role": role}
-
-
-@pytest.mark.asyncio
-async def test_search_hides_another_users_private_fact_from_local_results():
-    mine = {"id": "f1", "content": "mine", "score": 0.9, "metadata": {"owner_id": "u1", "visibility": "private"}}
-    others_private = {
-        "id": "f2",
-        "content": "not mine",
-        "score": 0.9,
-        "metadata": {"owner_id": "u99", "visibility": "private"},
-    }
-    kb = _make_kb([mine, others_private])
-
-    mock_ai_client = AsyncMock()
-    mock_ai_client.search_knowledge.return_value = {"results": []}
-
-    with (
-        patch("api.knowledge_ai_stack.get_or_create_knowledge_base", new=AsyncMock(return_value=kb)),
-        patch("api.knowledge_ai_stack.get_ai_stack_client", AsyncMock(return_value=mock_ai_client)),
-    ):
-        result = await search(
-            request_data=AIStackSearchRequest(query="test", include_rag=False),
-            req=MagicMock(),
-            knowledge_base=kb,
-            current_user=_current_user("u1"),
-        )
-
-    local_results = result.data["source_breakdown"]["local_knowledge_base"]["results"]
-    ids = {r["id"] for r in local_results}
-    assert ids == {"f1"}, f"user u1 must not see u99's private fact: {local_results}"
 
 
 @pytest.mark.asyncio
@@ -115,37 +90,3 @@ async def test_rag_search_gives_an_admin_no_bypass_of_another_users_private_fact
     assert result.data["documents_used"] == 0, "admin u2 must not get u99's private fact into RAG context"
     mock_ai_client.rag_query.assert_called_once()
     assert mock_ai_client.rag_query.call_args.kwargs["documents"] == []
-
-
-@pytest.mark.asyncio
-async def test_search_gives_an_admin_no_bypass_of_another_users_private_fact():
-    """Owner rulings #16654/#16745: an admin's chat/RAG-bound reads get no bypass.
-
-    This endpoint's local KB results feed RAG synthesis when include_rag is set,
-    so an admin caller is scoped exactly like any other caller here.
-    """
-    others_private = {
-        "id": "f2",
-        "content": "not mine",
-        "score": 0.9,
-        "metadata": {"owner_id": "u99", "visibility": "private"},
-    }
-    kb = _make_kb([others_private])
-
-    mock_ai_client = AsyncMock()
-    mock_ai_client.search_knowledge.return_value = {"results": []}
-
-    with (
-        patch("api.knowledge_ai_stack.get_or_create_knowledge_base", new=AsyncMock(return_value=kb)),
-        patch("api.knowledge_ai_stack.get_ai_stack_client", AsyncMock(return_value=mock_ai_client)),
-    ):
-        result = await search(
-            request_data=AIStackSearchRequest(query="test", include_rag=False),
-            req=MagicMock(),
-            knowledge_base=kb,
-            current_user=_current_user("u2", role="admin"),
-        )
-
-    local_results = result.data["source_breakdown"]["local_knowledge_base"]["results"]
-    ids = {r["id"] for r in local_results}
-    assert ids == set(), f"admin u2 must not see u99's private fact (#16654/#16745): {local_results}"

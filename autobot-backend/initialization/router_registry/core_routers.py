@@ -20,7 +20,6 @@ from api.admin_event_logs import router as admin_event_logs_router  # Issue #446
 from api.admin_orphan_repair import router as admin_orphan_repair_router  # #15779, #16927
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
-from api.admin_schedulers import router as admin_schedulers_router  # GH#6594
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
 from api.agent_org import router as agent_org_router  # #1405
@@ -147,12 +146,6 @@ def _get_system_routers() -> list:
             ["admin", "retention"],
             "admin_retention_policies",
         ),  # MVA-3145, GH#8995
-        (
-            admin_schedulers_router,
-            "",
-            ["admin", "schedulers"],
-            "admin_schedulers",
-        ),  # GH#6594
         (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
         (jwks_auth_router, "/auth", ["auth", "jwks"], "jwks_auth"),  # #10196 /api/auth/jwks

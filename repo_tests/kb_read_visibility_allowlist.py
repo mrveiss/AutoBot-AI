@@ -40,6 +40,11 @@ _IMPL_SEARCH = (
 _SUMMARIES = "TRACKED_GAP #16694: raw knowledge_summaries reads served to any signed-in user"
 _RAG_CACHE = "TRACKED_GAP #16664: a query-keyed RAG cache shared across users; partition it by visibility scope"
 _RAW_ADMIN = "ADMIN_ONLY: raw KB-collection read reachable only behind an admin gate"
+_ORPHAN_REPAIR = (
+    "ADMIN_ONLY: #16927 orphan-repair reads a fact's own metadata to judge/reassign it; "
+    "reachable only through api/admin_orphan_repair.py's router-level "
+    'Depends(require_role("admin", "superadmin"))'
+)
 _RAW_REPAIR = "NOT_USER_FACING: operator vector-repair CLI; returns row ids and booleans, no fact content"
 _RAW_ADMIN_MEMORY = "ADMIN_ONLY: platform-admin user reassignment over the verbatim and trajectory stores, not KB facts"
 _CACHE_EVICT = "NOT_USER_FACING: cache eviction reads metadata only"
@@ -187,6 +192,8 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/services/knowledge/service.py", "ChatKnowledgeService._search_filter_and_format"): _T2,
     ("autobot-backend/services/knowledge_base_adapter.py", "KnowledgeBaseAdapter.get_all_facts"): _T2,
     ("autobot-backend/services/knowledge_base_adapter.py", "KnowledgeBaseAdapter.search"): _T2,
+    ("autobot-backend/services/orphan_repair_types.py", "KnowledgeFactRepairer._metadata"): _ORPHAN_REPAIR,
+    ("autobot-backend/services/orphan_repair_types.py", "KnowledgeFactRepairer.find_orphans"): _ORPHAN_REPAIR,
     ("autobot-backend/services/rag_service.py", "RAGService._execute_search_with_timeout"): _T2,
     ("autobot-backend/services/rag_service.py", "RAGService._fallback_basic_search"): _T2,
     ("autobot-backend/services/research/orchestrator.py", "_gather_candidate_sources"): _T2,

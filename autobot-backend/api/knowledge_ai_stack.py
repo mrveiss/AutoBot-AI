@@ -10,8 +10,6 @@ including RAG (Retrieval-Augmented Generation), knowledge extraction, and
 intelligent content analysis using the AI Stack VM.
 """
 
-from typing import Any, Dict, List
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
@@ -22,8 +20,6 @@ from api.schemas_knowledge import (
     AIStackQueryReformulateData,
     AIStackRAGQueryRequest,
     AIStackRagSearchData,
-    AIStackSearchData,
-    AIStackSearchRequest,
     AIStackStatsData,
     AIStackSystemInsightsData,
     DocumentAnalysisRequest,
@@ -66,281 +62,23 @@ router = APIRouter(tags=["knowledge-aistack"])
 
 
 # ====================================================================
-# Enhanced Search Helpers (Issue #281)
+# #16908 (consolidated with #16716 in this PR): the enhanced-search endpoint
+# that used to live here (Issue #281's _search_local_knowledge_base/
+# _search_rag/_search_librarian/_combine_search_results/_run_all_search_sources
+# helpers, and the POST /search handler itself) was deleted rather than
+# re-pathed.
+#
+# It was registered at the same (method, path) as api/knowledge_search.py's
+# POST /search, which always won (core router, registered earlier) -- so this
+# handler was reachable by nothing. That was the SAFE outcome even after
+# #16716 added tenant filtering to _search_local_knowledge_base() here: the
+# surviving api/knowledge_search.py implementation already carries its own
+# real tenant filtering (#15745). Re-pathing this dead handler to make it
+# reachable would just duplicate that endpoint under a second path. If
+# AI-Stack-combined search (local + RAG + librarian in one call) is still
+# wanted as a feature, reviving it is a design decision, not a duplicate-route
+# cleanup, and isn't reconstructed here.
 # ====================================================================
-
-
-async def _search_local_knowledge_base(
-    req: Request,
-    query: str,
-    max_results: int,
-    confidence_threshold: float,
-    user_id: str,
-    user_org_id: str | None,
-    user_group_ids: list,
-) -> Dict[str, Any]:
-    """
-    Search local knowledge base with confidence filtering.
-
-    Issue #281: Extracted helper for local KB search.
-    Issue #16665: results are scoped to the caller before any other filtering.
-    Issue #16654/#16745: no admin bypass here -- this result set feeds RAG
-    synthesis, so an admin caller is filtered to their own scope like anyone else.
-
-    Args:
-        req: FastAPI request for app state access
-        query: Search query string
-        max_results: Maximum results to return
-        confidence_threshold: Minimum confidence score
-        user_id: Authenticated caller's user id
-        user_org_id: Caller's organization id, if any
-        user_group_ids: Caller's group ids
-
-    Returns:
-        Dictionary with search results and metadata
-    """
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-        if kb_to_use:
-            local_results = await kb_to_use.search(query=query, top_k=max_results)
-            local_results = await filter_search_results_by_permission(
-                local_results,
-                user_id,
-                user_org_id,
-                user_group_ids,
-                ownership_manager=getattr(kb_to_use, "ownership_manager", None),
-            )
-
-            # Filter by confidence threshold
-            filtered_local = [result for result in local_results if result.get("score", 0) >= confidence_threshold]
-
-            logger.info(f"Local KB search: {len(local_results)} results, " f"{len(filtered_local)} above threshold")
-
-            return {
-                "results": filtered_local,
-                "total_found": len(local_results),
-                "filtered_count": len(filtered_local),
-                "source": "local_kb",
-            }
-
-        return {"results": [], "source": "local_kb", "error": "KB not available"}
-
-    except Exception as e:
-        logger.warning("Local knowledge base search failed: %s", e)
-        return {"results": [], "error": "Internal server error", "source": "local_kb"}
-
-
-async def _search_rag(
-    query: str,
-    max_results: int,
-    local_docs: List[Dict[str, Any]] | None = None,
-) -> Dict[str, Any]:
-    """
-    Search using AI Stack RAG capabilities.
-
-    Issue #281: Extracted helper for RAG search.
-
-    Args:
-        query: Search query string
-        max_results: Maximum results to return
-        local_docs: Optional local documents to augment with
-
-    Returns:
-        Dictionary with RAG search results
-    """
-    try:
-        ai_client = await get_ai_stack_client()
-        rag_results = await ai_client.rag_query(
-            query=query,
-            documents=local_docs,
-            max_results=max_results,
-        )
-
-        logger.info("RAG search completed successfully")
-        return {"results": rag_results, "source": "ai_stack_rag"}
-
-    except AIStackError as e:
-        logger.warning("AI Stack RAG search failed: %s", e)
-        return {"results": [], "error": e.message, "source": "ai_stack_rag"}
-
-
-async def _search_librarian(
-    query: str,
-    search_type: str,
-    max_results: int,
-) -> Dict[str, Any]:
-    """
-    Search using AI Stack KB librarian.
-
-    Issue #281: Extracted helper for librarian search.
-
-    Args:
-        query: Search query string
-        search_type: Type of search (precise, comprehensive, broad)
-        max_results: Maximum results to return
-
-    Returns:
-        Dictionary with librarian search results
-    """
-    try:
-        ai_client = await get_ai_stack_client()
-        librarian_results = await ai_client.search_knowledge(
-            query=query,
-            search_type=search_type,
-            max_results=max_results,
-        )
-
-        logger.info("Librarian search completed")
-        return {"results": librarian_results, "source": "ai_stack_librarian"}
-
-    except AIStackError as e:
-        logger.warning("Librarian search failed: %s", e)
-        return {"results": [], "error": e.message, "source": "ai_stack_librarian"}
-
-
-def _combine_search_results(
-    results: Dict[str, Dict[str, Any]],
-) -> tuple:
-    """
-    Combine and rank results from multiple sources.
-
-    Issue #281: Extracted helper for result combination.
-
-    Args:
-        results: Dictionary of results from different sources
-
-    Returns:
-        Tuple of (combined_results, source_count)
-    """
-    combined_results = []
-    source_count = 0
-
-    for source_key, source_data in results.items():
-        if source_data.get("results") and isinstance(source_data["results"], list):
-            source_count += 1
-            for result in source_data["results"]:
-                result["source_type"] = source_data["source"]
-                combined_results.append(result)
-
-    # Sort combined results by relevance score
-    combined_results.sort(key=lambda x: x.get("score", 0), reverse=True)
-
-    return combined_results, source_count
-
-
-# ====================================================================
-# Enhanced Search Endpoints
-# ====================================================================
-
-
-async def _run_all_search_sources(
-    request_data: "AIStackSearchRequest",
-    req: Request,
-    knowledge_base,
-    user_id: str,
-    user_org_id: str | None,
-    user_group_ids: list,
-) -> Dict[str, Any]:
-    """Helper for enhanced_search. Ref: #1088.
-
-    Executes local KB, RAG, and librarian searches and returns a combined
-    results dict keyed by source name.
-
-    Args:
-        request_data: Validated search request parameters
-        req: FastAPI request for app state access
-        knowledge_base: Injected knowledge base dependency
-        user_id: Authenticated caller's user id
-        user_org_id: Caller's organization id, if any
-        user_group_ids: Caller's group ids
-
-    Returns:
-        Dict mapping source name to search result data
-    """
-    results: Dict[str, Any] = {}
-
-    if request_data.include_local and knowledge_base:
-        results["local_knowledge_base"] = await _search_local_knowledge_base(
-            req=req,
-            query=request_data.query,
-            max_results=request_data.max_results,
-            confidence_threshold=request_data.confidence_threshold,
-            user_id=user_id,
-            user_org_id=user_org_id,
-            user_group_ids=user_group_ids,
-        )
-
-    if request_data.include_rag:
-        local_docs = results.get("local_knowledge_base", {}).get("results")
-        results["rag"] = await _search_rag(
-            query=request_data.query,
-            max_results=request_data.max_results,
-            local_docs=local_docs,
-        )
-
-    results["librarian"] = await _search_librarian(
-        query=request_data.query,
-        search_type=request_data.search_type,
-        max_results=request_data.max_results,
-    )
-
-    return results
-
-
-@router.post("/search", response_model=DataResponse[AIStackSearchData])
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search",
-    error_code_prefix="KNOWLEDGE_AI_STACK",
-)
-async def search(
-    request_data: AIStackSearchRequest,
-    req: Request,
-    knowledge_base=Depends(get_knowledge_base),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Search combining local knowledge base with AI Stack RAG capabilities.
-
-    Issue #281: Refactored from 144 lines to use extracted helper methods.
-    Issue #744: Requires authenticated user.
-    Issue #16665: local KB results are scoped to the caller before use, including
-    as RAG context -- an unfiltered fact would otherwise reach both the response
-    and the RAG synthesis prompt. Issue #16654/#16745: no admin bypass -- an admin
-    caller is scoped exactly like any other caller here, since this feeds RAG.
-
-    This endpoint provides superior search results by combining:
-    - Local knowledge base semantic search
-    - AI Stack RAG-enhanced retrieval
-    - Intelligent result ranking and synthesis
-    """
-    try:
-        user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-        results = await _run_all_search_sources(request_data, req, knowledge_base, user_id, user_org_id, user_group_ids)
-        combined_results, source_count = _combine_search_results(results)
-
-        return create_success_response(
-            {
-                "query": request_data.query,
-                "search_type": request_data.search_type,
-                "total_sources": source_count,
-                "combined_results": combined_results[: request_data.max_results],
-                "source_breakdown": results,
-                "search_metadata": {
-                    "confidence_threshold": request_data.confidence_threshold,
-                    "max_results": request_data.max_results,
-                    "sources_used": list(results.keys()),
-                },
-            }
-        )
-
-    except Exception as e:
-        logger.error("AI Stack search failed: %s", e)
-        return create_error_response(
-            error_code="SEARCH_ERROR",
-            message="AI Stack search failed",
-            status_code=500,
-        )
 
 
 @router.post("/search/rag", response_model=DataResponse[AIStackRagSearchData])
@@ -530,7 +268,7 @@ async def get_system_knowledge_insights(
 # ====================================================================
 
 
-@router.get("/stats", response_model=DataResponse[AIStackStatsData])
+@router.get("/ai-stack/stats", response_model=DataResponse[AIStackStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_aistack_stats",
@@ -542,6 +280,11 @@ async def get_aistack_stats(
 ):
     """
     Get enhanced knowledge base statistics including AI Stack metrics.
+
+    #16908: path corrected from "/stats" to "/ai-stack/stats" -- it collided
+    with (and always lost to) api/knowledge.py's own /stats, registered as a
+    core router before this one. "/ai-stack/stats" matches the path this
+    handler's own generated OpenAPI type already documented.
 
     Issue #744: Requires authenticated user.
     """
