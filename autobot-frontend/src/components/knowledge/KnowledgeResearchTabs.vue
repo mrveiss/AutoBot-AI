@@ -15,32 +15,28 @@
 
   `?tab=` mirrors KnowledgeEntries: the retired routes redirect here with it, so
   an existing link or bookmark lands on the tab it used to be a page.
+
+  #16972: the tab row itself uses the shared tab-nav/tab-btn pattern from
+  components.css (BrowserAutomationView.vue, VisionAutomationView.vue,
+  BusinessIntelligenceView.vue already do) rather than a component-local
+  variant -- KnowledgeEntries.vue's own manage-tabs/manage-tab-btn is a
+  DIFFERENT, filled-pill treatment, not this one, so this intentionally does
+  not reuse that file's classes even though "mirrors KnowledgeEntries" above
+  is about the ?tab= behaviour, not the visual style.
 -->
 <template>
   <div class="knowledge-research-tabs">
-    <div class="research-tabs">
-      <BaseButton
-        variant="ghost"
-        @click="researchTab = 'research'"
-        :class="['research-tab-btn', { active: researchTab === 'research' }]"
-      >
-        <Icon name="search" class="mr-2" />{{ $t('knowledge.views.research') }}
-      </BaseButton>
-      <BaseButton
-        variant="ghost"
-        @click="researchTab = 'webTools'"
-        :class="['research-tab-btn', { active: researchTab === 'webTools' }]"
-      >
-        <Icon name="globe" class="mr-2" />{{ $t('knowledge.webResearch.navLabel') }}
-      </BaseButton>
-      <BaseButton
-        variant="ghost"
-        @click="researchTab = 'settings'"
-        :class="['research-tab-btn', { active: researchTab === 'settings' }]"
-      >
-        <Icon name="cog" class="mr-2" />{{ $t('knowledge.webResearch.settingsNavLabel') }}
-      </BaseButton>
-    </div>
+    <nav class="tab-nav">
+      <button @click="researchTab = 'research'" :class="['tab-btn', { active: researchTab === 'research' }]">
+        <Icon name="search" />{{ $t('knowledge.views.research') }}
+      </button>
+      <button @click="researchTab = 'webTools'" :class="['tab-btn', { active: researchTab === 'webTools' }]">
+        <Icon name="globe" />{{ $t('knowledge.webResearch.navLabel') }}
+      </button>
+      <button @click="researchTab = 'settings'" :class="['tab-btn', { active: researchTab === 'settings' }]">
+        <Icon name="cog" />{{ $t('knowledge.webResearch.settingsNavLabel') }}
+      </button>
+    </nav>
 
     <KnowledgeResearchPanel v-if="researchTab === 'research'" />
     <WebResearchPanel v-else-if="researchTab === 'webTools'" />
@@ -52,7 +48,6 @@
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import Icon from '@/components/ui/Icon.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import KnowledgeResearchPanel from './KnowledgeResearchPanel.vue'
 import WebResearchPanel from './WebResearchPanel.vue'
 import WebResearchSettings from './WebResearchSettings.vue'
@@ -69,17 +64,3 @@ const initialTab = validResearchTabs.includes(route.query.tab as ResearchTab)
   : 'research'
 const researchTab = ref<ResearchTab>(initialTab)
 </script>
-
-<style scoped>
-.research-tabs {
-  display: flex;
-  gap: var(--space-2, 0.5rem);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
-  margin-bottom: var(--space-4, 1rem);
-}
-
-.research-tab-btn.active {
-  border-bottom: 2px solid var(--color-primary, #3b82f6);
-  color: var(--color-primary, #3b82f6);
-}
-</style>
