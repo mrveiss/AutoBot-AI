@@ -9,8 +9,10 @@ The routes run through FastAPI against the real ``OperationIntegrationManager`` 
 for: ``get_current_user`` and ``check_admin_permission`` are overridden per test.
 """
 
+import json
+from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -18,7 +20,12 @@ from fastapi.testclient import TestClient
 
 from api import long_running_operations as lro
 from auth_middleware import check_admin_permission, get_current_user
-from utils.long_running_operations_framework import LongRunningOperation, LongRunningOperationManager, OperationType
+from utils.long_running_operations_framework import (
+    LongRunningOperation,
+    LongRunningOperationManager,
+    OperationCheckpoint,
+    OperationType,
+)
 from utils.operation_timeout_integration import OperationIntegrationManager
 
 ALICE = {"username": "alice", "role": "user"}
@@ -45,6 +52,23 @@ def _client(integration, caller) -> TestClient:
     app.dependency_overrides[get_current_user] = lambda: caller
     app.dependency_overrides[check_admin_permission] = _admin_check
     return TestClient(app)
+
+
+def _checkpoint(operation_id: str) -> OperationCheckpoint:
+    return OperationCheckpoint(
+        checkpoint_id=f"c-{operation_id}",
+        operation_id=operation_id,
+        checkpoint_time=datetime.now(),
+        progress_percent=40.0,
+        state_data={},
+    )
+
+
+def _resumable(integration, operation_id: str) -> None:
+    """Stand in for checkpoint storage only; the real ``resume_operation`` runs."""
+    checkpoint = _checkpoint(operation_id)
+    integration.list_operation_checkpoints = AsyncMock(return_value=[checkpoint])
+    integration.operation_manager.checkpoint_manager.load_checkpoint = AsyncMock(return_value=checkpoint)
 
 
 def _operation(integration, operation_id: str, creator: str | None) -> None:
@@ -151,3 +175,41 @@ def test_an_operation_reaches_the_panel_in_the_shape_it_reads(integration):
     assert set(body) == PANEL_FIELDS
     assert (body["status"], body["priority"]) == ("pending", "normal")  # queued reads as pending
     assert "created_by" not in body["context"]
+
+
+def test_a_resumed_operation_reaches_the_panel_without_its_raw_checkpoint(integration):
+    """#17027 review: resume stores an ``OperationCheckpoint`` dataclass in metadata; it must not reach ``context``."""
+    _operation(integration, "r-1", "alice")
+    integration.operation_manager.operations["r-1"].metadata["resume_checkpoint"] = _checkpoint("a-1")
+
+    response = _client(integration, ALICE).get("/r-1")
+
+    assert response.status_code == 200, response.text
+    assert "resume_checkpoint" not in response.json()["context"]
+    json.dumps(response.json())
+
+
+def test_a_migrated_operation_records_its_creator(integration):
+    """#17027 review: the migrator had the same unaccepted ``estimated_items`` argument, and no creator."""
+    with patch("utils.operation_timeout_integration.operation_integration_manager", integration):
+        response = _client(integration, ADMIN).post(
+            "/migrate/existing", params={"operation_name": "legacy-job", "timeout_seconds": 60}
+        )
+
+    assert response.status_code == 200, response.text
+    operation = integration.operation_manager.operations[response.json()["operation_id"]]
+    assert operation.metadata["created_by"] == "root"
+
+
+@pytest.mark.parametrize(("caller", "owner"), [(ALICE, "alice"), (ADMIN, "bob")], ids=["its creator", "an admin"])
+def test_a_resumed_operation_keeps_its_original_creator(integration, caller, owner):
+    """#17027 review: the creator may resume their own; an admin may resume anyone's, and the
+    resumed operation stays the original creator's, not the admin's."""
+    _operation(integration, "o-1", owner)
+    _resumable(integration, "o-1")
+
+    response = _client(integration, caller).post("/o-1/resume")
+
+    assert response.status_code == 200, response.text
+    resumed = integration.operation_manager.operations[response.json()["new_operation_id"]]
+    assert resumed.metadata["created_by"] == owner

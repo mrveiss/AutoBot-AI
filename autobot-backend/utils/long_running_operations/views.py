@@ -16,6 +16,9 @@ from typing import Any, Dict
 
 #: Backend states the panel has no word for, mapped to the nearest one it has.
 _PANEL_STATUS = {"queued": "pending", "checkpoint_saved": "running", "resuming": "running"}
+#: Metadata the framework keeps for itself: the creator (access, not display) and a resumed
+#: operation's raw ``OperationCheckpoint`` (a dataclass, not JSON), never the panel's ``context``.
+_INTERNAL_METADATA = frozenset({"created_by", "resume_checkpoint"})
 
 
 def _iso(moment) -> "str | None":
@@ -41,7 +44,7 @@ def operation_view(operation) -> Dict[str, Any]:
         "started_at": _iso(operation.started_at),
         "completed_at": _iso(operation.completed_at),
         "error_message": operation.error_message,
-        "context": {key: value for key, value in metadata.items() if key != "created_by"},
+        "context": {key: value for key, value in metadata.items() if key not in _INTERNAL_METADATA},
         "checkpoints_count": len(operation.checkpoints),
         "can_resume": bool(operation.checkpoints),
     }

@@ -230,6 +230,7 @@ async def migrate_existing_operation(
     timeout_seconds: int,
     operation_type: str = "code_analysis",
     manager=Depends(get_operation_manager),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Migrate an existing timeout-sensitive operation to use long-running framework
@@ -256,6 +257,9 @@ async def migrate_existing_operation(
             operation_type=op_type,
         )
 
+        migrated = await manager.operation_manager.get_operation(operation_id)
+        if migrated is not None:  # #17017: its creator is recorded like any other operation's
+            migrated.metadata["created_by"] = current_user.get("username")
         return {"operation_id": operation_id, "status": "migrated"}
 
     except Exception as e:

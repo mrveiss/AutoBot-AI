@@ -102,9 +102,10 @@ def test_operation_progress_is_for_its_creator_or_an_admin(operations):
     assert _refused(operations.router, "/op-1/progress", None) == 1008
     assert _refused(operations.router, "/op-1/progress", USER) == 1008  # not their operation (none exists)
     assert _connect(operations.router, "/op-1/progress", ADMIN) == "accepted"
-    operations.operation_integration_manager.operation_manager.get_operation.return_value = SimpleNamespace(
-        metadata={"created_by": USER["username"]}
-    )
+    lookup = operations.operation_integration_manager.operation_manager.get_operation
+    lookup.return_value = SimpleNamespace(metadata={"created_by": "bob"})
+    assert _refused(operations.router, "/op-1/progress", USER) == 1008  # bob's, and alice is not an admin
+    lookup.return_value = SimpleNamespace(metadata={"created_by": USER["username"]})
     assert _connect(operations.router, "/op-1/progress", USER) == "accepted"
 
 
