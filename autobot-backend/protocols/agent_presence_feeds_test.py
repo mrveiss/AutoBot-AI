@@ -119,6 +119,25 @@ class TestSyncAiStackPresence:
         assert all(e.tenant_id is None for e in entries.values())
         assert all(e.busy is False for e in entries.values())
 
+    @pytest.mark.asyncio
+    async def test_every_role_is_busy_while_a_stream_is_in_flight(self):
+        health_registry = SimpleNamespace(list_agents=lambda: ["chat", "rag"])
+        chat_workflow_manager = SimpleNamespace(is_processing=lambda: True)
+        registry = AgentPresenceRegistry(ttl_seconds=60)
+
+        await sync_ai_stack_presence(registry, health_registry, chat_workflow_manager)
+
+        assert all(e.busy is True for e in registry.list_live())
+
+    @pytest.mark.asyncio
+    async def test_omitting_the_manager_reports_idle_not_a_guess(self):
+        health_registry = SimpleNamespace(list_agents=lambda: ["chat"])
+        registry = AgentPresenceRegistry(ttl_seconds=60)
+
+        await sync_ai_stack_presence(registry, health_registry)
+
+        assert registry.list_live()[0].busy is False
+
 
 def _fake_session(*, agent_id: str = "claude", busy: bool = False, tenant_id: str | None = None):
     return SimpleNamespace(agent_id=agent_id, has_running_task=lambda: busy, tenant_id=tenant_id)

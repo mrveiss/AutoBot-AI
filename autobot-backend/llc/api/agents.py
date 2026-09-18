@@ -38,6 +38,33 @@ class TriggerResponse(BaseModel):
     status: str
 
 
+def agent_org_nodes_with_latest_heartbeat(company_id: str):
+    """AgentOrgNode LEFT JOINed to each agent's own latest heartbeat run.
+
+    Shared by `list_agents` below and `protocols.agent_presence_feeds
+    .sync_company_os_presence` (#16947) -- agent_id is the logical slug (the
+    dual-keyspace column shared by heartbeat/controls/budgets), not the UUID
+    PK; joining on the wrong one silently returns 0 rows in Postgres (see
+    AgentOrgNode).
+    """
+    latest_runs = (
+        select(LLCHeartbeatRun.agent_id, func.max(LLCHeartbeatRun.created_at).label("latest_at"))
+        .where(LLCHeartbeatRun.company_id == company_id)
+        .group_by(LLCHeartbeatRun.agent_id)
+        .subquery()
+    )
+    return (
+        select(AgentOrgNode, LLCHeartbeatRun)
+        .outerjoin(latest_runs, latest_runs.c.agent_id == AgentOrgNode.agent_id)
+        .outerjoin(
+            LLCHeartbeatRun,
+            (LLCHeartbeatRun.agent_id == latest_runs.c.agent_id)
+            & (LLCHeartbeatRun.created_at == latest_runs.c.latest_at),
+        )
+        .where(AgentOrgNode.company_id == company_id)
+    )
+
+
 @router.get("", response_model=List[Dict[str, Any]])
 async def list_agents(
     company_id: Optional[str] = Query(None, description="Filter by company UUID"),
@@ -55,30 +82,8 @@ async def list_agents(
     """
     effective_company_id = company_id or str(ctx.org_id)
 
-    # Latest heartbeat run per agent, keyed by the logical agent_id *slug* — the
-    # dual-keyspace column shared by heartbeat/controls/budgets, NOT the UUID PK
-    # (joining on the wrong one silently returns 0 rows in Postgres; see AgentOrgNode).
-    latest_runs = (
-        select(
-            LLCHeartbeatRun.agent_id,
-            func.max(LLCHeartbeatRun.created_at).label("latest_at"),
-        )
-        .where(LLCHeartbeatRun.company_id == effective_company_id)
-        .group_by(LLCHeartbeatRun.agent_id)
-        .subquery()
-    )
-
-    # Full roster from the org chart, LEFT JOINed to each agent's latest run.
     result = await session.execute(
-        select(AgentOrgNode, LLCHeartbeatRun)
-        .outerjoin(latest_runs, latest_runs.c.agent_id == AgentOrgNode.agent_id)
-        .outerjoin(
-            LLCHeartbeatRun,
-            (LLCHeartbeatRun.agent_id == latest_runs.c.agent_id)
-            & (LLCHeartbeatRun.created_at == latest_runs.c.latest_at),
-        )
-        .where(AgentOrgNode.company_id == effective_company_id)
-        .order_by(AgentOrgNode.name)
+        agent_org_nodes_with_latest_heartbeat(effective_company_id).order_by(AgentOrgNode.name)
     )
 
     return [
