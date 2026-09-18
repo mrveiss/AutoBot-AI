@@ -84,7 +84,8 @@ async def _list_candidates():
 
 
 async def _delete(candidate_id: str):
-    from services.orphan_storage import DeleteResult, orphan_grace_period_hours, safe_error_reason
+    from autobot_shared.security.safe_response import safe_error_reason
+    from services.orphan_storage import DeleteResult, orphan_grace_period_hours
 
     clone_dir = _resolved_clone_dir(candidate_id)
     if clone_dir is None:

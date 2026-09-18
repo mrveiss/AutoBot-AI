@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.security.safe_response import safe_error_reason
 from security.secrets_store_errors import SecretsStoreUnavailable
 
 from .. import source_service
@@ -143,9 +144,7 @@ async def _do_sync(source: CodeSource) -> None:
                         # #17036: a swallowed failure here left a stale directory
                         # that the next clone attempt would silently write into.
                         logger.error("Failed to clear stale clone dir %s: %s", clone_path, rmtree_exc)
-                        err = (
-                            f"Could not clear existing clone directory: {source_service.safe_error_reason(rmtree_exc)}"
-                        )
+                        err = f"Could not clear existing clone directory: {safe_error_reason(rmtree_exc)}"
                 if not err:
                     clone_dir.mkdir(parents=True, exist_ok=True)
                     err = await _run_git_clone(url, clone_path, source.branch)
@@ -495,11 +494,7 @@ async def _get_last_indexed(source_id: str) -> str | None:
 
 
 async def _get_last_commit(clone_path: str, repo: str | None, is_local: bool = False) -> dict | None:
-    """Read latest git commit info from a clone directory.
-
-    Helper for get_source_summary (#1458).
-    Issue #1756: Allow local source paths outside CODE_SOURCES_BASE.
-    """
+    """Read latest git commit info from a clone dir (#1458) -- allows local paths outside CODE_SOURCES_BASE (#1756)."""
     clone = Path(clone_path)
     if not clone.is_dir():
         return None

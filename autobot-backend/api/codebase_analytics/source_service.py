@@ -9,26 +9,13 @@ import asyncio
 import uuid
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.safe_response import safe_error_reason
 
 from .source_models import CodeSource, SourceAccess, SourceStatus, SourceType
 from .source_paths import make_clone_path
 from .source_storage import save_source
 
 logger = get_logger(__name__)
-
-
-def safe_error_reason(exc: OSError) -> str:
-    """A logical failure reason, never the absolute path OSError's own text carries (#17065).
-
-    ``.strerror`` is set whenever the OS itself raised this (as
-    ``shutil.rmtree`` does) -- ``str(exc)`` on that same exception
-    additionally appends ``.filename``, which is exactly the path to keep
-    out. When ``.strerror`` is unset (a hand-raised, message-only
-    ``OSError``, never the OS's own), ``str(exc)`` IS just that message,
-    with no filename to have appended. The full exception, path included,
-    stays in the caller's log, never in a value a delete response returns.
-    """
-    return exc.strerror or str(exc)
 
 
 async def delete_source_and_cleanup(source_id: str, source: CodeSource | None = None) -> bool:

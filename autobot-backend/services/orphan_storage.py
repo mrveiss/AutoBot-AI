@@ -27,6 +27,7 @@ from typing import Awaitable, Callable
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.safe_response import safe_error_reason
 
 logger = get_logger(__name__)
 
@@ -37,25 +38,6 @@ DEFAULT_GRACE_PERIOD_HOURS = 24
 def orphan_grace_period_hours() -> int:
     """Hours below which a candidate is excluded -- work in flight is never offered."""
     return env_int_clamped(GRACE_PERIOD_ENV, DEFAULT_GRACE_PERIOD_HOURS, min_v=1, max_v=720)
-
-
-def safe_error_reason(exc: BaseException) -> str:
-    """A logical failure reason -- never a host, port or path an exception's own text may carry (#17065).
-
-    ``OSError.strerror`` is the OS's message alone, set whenever the OS
-    itself raised it (as ``shutil.rmtree`` does) -- ``str(exc)`` on that same
-    exception additionally appends ``.filename``, which is exactly the path
-    to keep out. When ``.strerror`` is unset (a hand-raised, message-only
-    ``OSError``, never the OS's own), ``str(exc)`` IS just that message, with
-    no filename to have appended. Anything that isn't an ``OSError`` at all
-    (a Redis client's own exception, for one) falls back to its class name,
-    since its message text cannot be trusted the same way. The full
-    exception, path and all, stays in the caller's log either way -- never
-    in a value returned to an API client.
-    """
-    if isinstance(exc, OSError):
-        return exc.strerror or str(exc)
-    return exc.__class__.__name__
 
 
 @dataclass(frozen=True)
