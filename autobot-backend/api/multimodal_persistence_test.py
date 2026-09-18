@@ -90,7 +90,9 @@ class TestTheProcessEndpointReportsPersistence:
 
     def test_the_refusal_comes_from_the_real_guard_on_the_principal_owner(self, proc):
         with patch.object(proc.memory_manager, "store_memory", new=AsyncMock(side_effect=_guarded_store)) as store:
-            body = _client({"sub": LEGACY_UNSCOPED_OWNER}).post("/api/multimodal/process/text", json={"text": "x"}).json()
+            body = (
+                _client({"sub": LEGACY_UNSCOPED_OWNER}).post("/api/multimodal/process/text", json={"text": "x"}).json()
+            )
 
         assert store.await_args.kwargs["user_id"] == LEGACY_UNSCOPED_OWNER
         assert body["persistence"] == "refused"
