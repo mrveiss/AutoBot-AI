@@ -56,7 +56,7 @@ For each ref you're pushing, the hook walks the changed files and runs:
 
 | Check | When | What |
 |---|---|---|
-| **Open-PR cap** (#17006) | ref does not yet exist on the remote (a new branch) | refuse the push once open PRs (excluding forks/bots) are `>= AUTOBOT_OPEN_PR_CAP` (default 40); pushes to an existing branch are never blocked |
+| **Open-PR cap** (#17006) | a `refs/heads/*` ref that does not yet exist on the remote (a new branch; a new tag is exempt) | refuse the push once open PRs (excluding forks/bots) are `>= AUTOBOT_OPEN_PR_CAP` (default 40); pushes to an existing branch are never blocked |
 | **Phase 6 issue check** | branch matches `issue-NNNN` | warn if issue is CLOSED on GitHub OR if `origin/main` already has a commit citing `#NNNN` |
 | **Phase 0c type check** | any `.ts` or `.vue` file changed | `vue-tsc --noEmit -p tsconfig.app.json` (90s timeout); only **errors in changed files** block — pre-existing project errors warn |
 | **Phase 0c test run** | any test file or composable changed | `vitest run <relevant test files>` (120s timeout); failures block |

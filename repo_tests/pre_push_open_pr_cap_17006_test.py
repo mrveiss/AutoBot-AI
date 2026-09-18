@@ -22,6 +22,14 @@ itself passes, exactly as gh's embedded jq would. So
 ``test_bot_authored_prs_excluded_from_count`` below is exercising the hook's
 own filter, not a Python stand-in for it.
 
+``_pr_list_calls`` (below) counts only the cap check's own ``gh pr list``,
+never every ``gh`` invocation the hook makes. Phase 7 (#16859) -- an
+unconditional ``gh pr view "$branch_name"`` -- is real, pre-existing
+behaviour already on ``origin/main`` before this change
+(``git show origin/main:tools/git-hooks/pre-push | grep -n 'Phase 7'``, or
+just read the file past the diff hunks: a PR diff view will not show it,
+since nothing here touches those lines).
+
 ``PATH`` is a curated sandbox (git/bash/coreutils only, no real ``gh``) so a
 developer's own authenticated ``gh`` on this machine can never leak into the
 test and mask a broken stub wiring.
@@ -69,6 +77,7 @@ _SANDBOX_TOOLS = (
     "uniq",
     "cat",
     "timeout",
+    "sleep",
     "wc",
     "date",
     "printf",
@@ -87,6 +96,11 @@ if [ "$1" = "pr" ] && [ "$2" = "list" ]; then
   if [ "${GH_FAIL:-0}" = "1" ]; then
     echo "gh: could not connect to api.github.com" >&2
     exit 1
+  fi
+  if [ "${GH_HANG:-0}" = "1" ]; then
+    # Outlives the hook's own `timeout "$OPEN_PR_CAP_TIMEOUT"` wrapper on
+    # purpose, so the kill (exit 124) comes from the hook, not this stub.
+    exec sleep 30
   fi
   jq_expr=""
   prev=""
@@ -210,7 +224,10 @@ def _run_hook(
     prs: list[dict] | None,
     cap: str | None,
     gh_fail: bool = False,
+    gh_hang: bool = False,
     new_branch: bool,
+    ref_prefix: str = "refs/heads/",
+    subprocess_timeout: int = 60,
 ) -> tuple[subprocess.CompletedProcess, list[str]]:
     bin_dir = _make_sandbox(tmp_path, include_gh=include_gh)
     env = _base_env(tmp_path, bin_dir)
@@ -218,6 +235,8 @@ def _run_hook(
         env["AUTOBOT_OPEN_PR_CAP"] = cap
     if gh_fail:
         env["GH_FAIL"] = "1"
+    if gh_hang:
+        env["GH_HANG"] = "1"
 
     state = tmp_path / "state"
     state.mkdir()
@@ -237,15 +256,20 @@ def _run_hook(
     else:
         local_sha, remote_sha = sha_second, sha_first  # already on the remote
 
-    ref = f"refs/heads/{branch}"
+    # `ref_prefix` lets a test push a TAG (refs/tags/...) instead of a branch
+    # -- `local_ref`, not just a zero `remote_sha`, is a distinct thing to
+    # target: the fake `branch` name is reused as the tag name too, which is
+    # fine since nothing here cares about tag-name syntax.
+    local_ref = f"{ref_prefix}{branch}"
+    remote_ref = local_ref
     result = subprocess.run(
         ["bash", str(HOOK_PATH)],
         cwd=local,
-        input=f"{ref} {local_sha} {ref} {remote_sha}\n",
+        input=f"{local_ref} {local_sha} {remote_ref} {remote_sha}\n",
         capture_output=True,
         text=True,
         env=env,
-        timeout=60,
+        timeout=subprocess_timeout,
     )
     calls_file = state / "gh_calls"
     calls = calls_file.read_text(encoding="utf-8").splitlines() if calls_file.exists() else []
@@ -253,14 +277,9 @@ def _run_hook(
 
 
 def _pr_list_calls(calls: list[str]) -> int:
-    """How many times the cap check's own `gh pr list` ran.
-
-    The hook also runs an unrelated, unconditional `gh pr view` (Phase 7,
-    #16859, the PR-body gate) on any ref it does not `continue` past -- that
-    call belongs to pre-existing behaviour this change does not touch, so the
-    "one API call" claim (#17006) is scoped to `pr list` specifically, not to
-    every `gh` invocation the whole hook makes.
-    """
+    """How many times the cap check's own `gh pr list` ran -- see the module
+    docstring for why this is scoped to `pr list` and not every `gh` call
+    the hook makes (Phase 7's `pr view` is real, pre-existing, unrelated)."""
     return sum(1 for c in calls if c == "pr list")
 
 
@@ -300,6 +319,53 @@ def test_existing_branch_push_allowed_even_at_cap(tmp_path: Path) -> None:
     ), f"an existing-branch push must never even attempt the cap's `gh pr list`, got {calls}"
 
 
+def test_new_tag_push_is_allowed_even_at_cap(tmp_path: Path) -> None:
+    """#17008 review: gating on `remote_sha == ZERO` alone also matches a brand-new
+    TAG (`git push origin v1.2.3` has a zero remote_sha too), and a tag is never a
+    PR head. The gate must additionally require `local_ref` to be `refs/heads/*`."""
+    prs = [_pr(n, days_ago=n) for n in range(1, 50)]  # far over any sane cap
+    result, calls = _run_hook(tmp_path, include_gh=True, prs=prs, cap="1", new_branch=True, ref_prefix="refs/tags/")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _pr_list_calls(calls) == 0, f"a new-tag push must never invoke the cap's `gh pr list`, got {calls}"
+
+
+def test_gh_timeout_refuses_and_has_no_override(tmp_path: Path) -> None:
+    """#17008 review, LOW: the `gh pr list` call is time-boxed (OPEN_PR_CAP_TIMEOUT)
+    and a timeout fails closed like every other undetermined-count case -- and,
+    unlike the file's other timeouts, AUTOBOT_PREPUSH_ALLOW_TIMEOUT=1 must NOT
+    rescue it: the cap has no bypass besides the cap value itself."""
+    bin_dir = _make_sandbox(tmp_path, include_gh=True)
+    env = _base_env(tmp_path, bin_dir)
+    env["GH_HANG"] = "1"
+    env["AUTOBOT_PREPUSH_ALLOW_TIMEOUT"] = "1"  # must be ignored by the cap check
+
+    state = tmp_path / "state"
+    state.mkdir()
+    env["STATE"] = str(state)
+
+    branch = "open-pr-cap-gate-test"
+    local, sha_first, _ = _seed_repo(tmp_path, env, branch, second_commit=False)
+    zero = "0" * 40
+    ref = f"refs/heads/{branch}"
+    result = subprocess.run(
+        ["bash", str(HOOK_PATH)],
+        cwd=local,
+        input=f"{ref} {sha_first} {ref} {zero}\n",
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=60,  # the hook's own internal timeout (10s) fires well inside this
+    )
+    calls = (state / "gh_calls").read_text(encoding="utf-8").splitlines() if (state / "gh_calls").exists() else []
+
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert _pr_list_calls(calls) == 1
+    assert "could not determine" in result.stderr.lower(), result.stderr
+    assert "timed out" in result.stderr.lower(), result.stderr
+    assert "AUTOBOT_PREPUSH_ALLOW_TIMEOUT does not apply" in result.stderr, result.stderr
+
+
 def test_gh_failure_refuses_with_could_not_determine_message(tmp_path: Path) -> None:
     """Negative control (#17006 AC): a failed query is refused, never treated as 'under the cap'."""
     result, calls = _run_hook(tmp_path, include_gh=True, prs=[], cap="40", gh_fail=True, new_branch=True)
@@ -321,13 +387,21 @@ def test_gh_missing_refuses_with_could_not_determine_message(tmp_path: Path) -> 
 
 def test_bot_authored_prs_excluded_from_count(tmp_path: Path) -> None:
     """Drives the hook's REAL jq filter (via the stub piping the fixture through real jq) --
-    not a Python reimplementation of the exclusion rule."""
+    not a Python reimplementation of the exclusion rule.
+
+    #17008 review: the two bot entries use the shape gh actually returns, measured
+    against this repo's own dependabot history -- `login: "app/dependabot"`,
+    `is_bot: true` (the App-slug form, never a `[bot]`-suffixed login). `is_bot`
+    is what excludes those. The third entry is a `[bot]`-suffixed login with
+    `is_bot: false`, exercising the filter's defensive fallback for a login
+    SHAPE, not a shape this API has been observed to produce.
+    """
     prs = [
         _pr(1, days_ago=1),
         _pr(2, days_ago=2),
-        _pr(90, days_ago=3, login="dependabot[bot]", is_bot=True),
-        _pr(91, days_ago=4, login="github-actions[bot]", is_bot=True),
-        _pr(92, days_ago=5, login="some-other-bot[bot]", is_bot=False),  # is_bot false, login still [bot]-suffixed
+        _pr(90, days_ago=3, login="app/dependabot", is_bot=True),
+        _pr(91, days_ago=4, login="app/github-actions", is_bot=True),
+        _pr(92, days_ago=5, login="some-legacy-integration[bot]", is_bot=False),  # defensive-fallback case only
         _pr(93, days_ago=6, login="a-human-fork-contributor", cross_repo=True),
     ]
     # Raw total is 6 (>= cap of 3); the filtered (non-bot, non-fork) count is 2 (< cap).

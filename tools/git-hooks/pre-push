@@ -67,12 +67,25 @@ EXIT_CODE=0
 # AUTOBOT_PREPUSH_ALLOW_TIMEOUT, above.
 #
 # Fails CLOSED (docs/developer/MEASUREMENT_DISCIPLINE.md): if gh is missing,
-# unauthenticated, or the query fails, the push is refused with a message
-# saying the count could not be determined -- that is NOT the same as "under
-# the cap". One API call: the filtered count and the oldest 10 open PRs both
-# come from a single `gh pr list --jq` invocation.
+# unauthenticated, the query fails, or it times out, the push is refused with
+# a message saying the count could not be determined -- that is NOT the same
+# as "under the cap". One API call: the filtered count and the oldest 10 open
+# PRs both come from a single `gh pr list --jq` invocation, time-boxed to
+# OPEN_PR_CAP_TIMEOUT like the other checks in this file (TEST_TIMEOUT /
+# TYPE_CHECK_TIMEOUT, #15985) -- EXCEPT that a timeout here is never covered
+# by AUTOBOT_PREPUSH_ALLOW_TIMEOUT: that var is this file's escape hatch for
+# an unverified push, and the cap has none (#17008 review) -- a timed-out
+# count is still an undetermined count, not a pass.
+#
+# Bot detection: `is_bot` is what actually excludes GitHub Apps in practice.
+# Measured against this repo's own dependabot history (#17008 review): gh's
+# GraphQL `author.login` for a bot reports the App-slug form `app/dependabot`,
+# never the REST-style `dependabot[bot]`, so the login-suffix test below is a
+# defensive fallback for a shape not observed in this API, not the mechanism
+# that actually does the excluding.
 # ---------------------------------------------------------------------------
 OPEN_PR_CAP="${AUTOBOT_OPEN_PR_CAP:-40}"
+OPEN_PR_CAP_TIMEOUT=10
 
 check_open_pr_cap() {
   if ! command -v gh >/dev/null 2>&1; then
@@ -82,7 +95,7 @@ check_open_pr_cap() {
   fi
 
   local out gh_exit
-  out=$(gh pr list --state open --limit 1000 \
+  out=$(timeout "$OPEN_PR_CAP_TIMEOUT" gh pr list --state open --limit 1000 \
     --json number,title,createdAt,author,isCrossRepository \
     --jq '
       ( [ .[] | select(.isCrossRepository == false)
@@ -92,6 +105,12 @@ check_open_pr_cap() {
       ( $counted | sort_by(.createdAt) | .[0:10][] | (.number|tostring) + "\t" + .title )
     ' 2>&1)
   gh_exit=$?
+
+  if [ "$gh_exit" = "124" ]; then
+    fail "open-PR cap: could not determine the open PR count (gh query timed out after ${OPEN_PR_CAP_TIMEOUT}s). This is NOT 'under the cap'."
+    fail "  No override for this -- AUTOBOT_PREPUSH_ALLOW_TIMEOUT does not apply to the open-PR cap. Retry, or push to an existing PR branch instead."
+    return 1
+  fi
 
   if [ "$gh_exit" != "0" ] || [ -z "$out" ]; then
     fail "open-PR cap: could not determine the open PR count (gh query failed). This is NOT 'under the cap'."
@@ -133,11 +152,14 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   log "checking $local_ref → $remote_ref"
 
   # ------------------------------------------------------------------------
-  # Open-PR cap (#17006): only for a ref that does not yet exist on the
-  # remote -- a brand-new branch. remote_sha is all-zero for exactly that
-  # case in git's pre-push stdin protocol.
+  # Open-PR cap (#17006): only for a BRANCH ref that does not yet exist on
+  # the remote -- a brand-new branch. remote_sha is all-zero for exactly that
+  # case in git's pre-push stdin protocol, but that alone is not sufficient:
+  # a brand-new TAG (`git push origin v1.2.3`) has a zero remote_sha too, and
+  # a tag is never a PR head (#17008 review). refs/heads/* is what narrows it
+  # to an actual branch.
   # ------------------------------------------------------------------------
-  if [ "$remote_sha" = "$ZERO" ]; then
+  if [ "$remote_sha" = "$ZERO" ] && [[ "$local_ref" == refs/heads/* ]]; then
     if ! check_open_pr_cap; then
       EXIT_CODE=1
       continue
