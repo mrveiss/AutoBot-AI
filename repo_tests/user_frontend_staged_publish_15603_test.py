@@ -247,13 +247,24 @@ def test_install_slm_sh_no_longer_discards_a_build_failure() -> None:
     )
 
 
-def test_manifest_no_longer_declares_the_dead_exec_start_build_step() -> None:
+#: Both manifests that used to declare a dead services[].exec_start build
+#: step — the SLM frontend's and (folded in from #16970's review) the user
+#: frontend's own. Same defect, same fix, same guard.
+_MANIFESTS_WITH_DEAD_EXEC_START = (
+    "autobot-slm-frontend",
+    "autobot-frontend",
+)
+
+
+@pytest.mark.parametrize("component", _MANIFESTS_WITH_DEAD_EXEC_START)
+def test_manifest_no_longer_declares_the_dead_exec_start_build_step(component: str) -> None:
     """AC3: manifest.yml's build oneshot named a field nothing reads."""
-    manifest = _REPO_ROOT / "autobot-infrastructure" / "autobot-slm-frontend" / "manifest.yml"
+    manifest = _REPO_ROOT / "autobot-infrastructure" / component / "manifest.yml"
     assert manifest.is_file(), f"{manifest} is missing"
     data = yaml.safe_load(manifest.read_text(encoding="utf-8"))
     services = data.get("services") or []
     assert not any("exec_start" in svc for svc in services), (
-        "manifest.yml still declares a services[].exec_start build step — confirmed to have zero "
-        "consumers anywhere in the codebase (#15603); either wire a real reader or keep it out."
+        f"{component}/manifest.yml still declares a services[].exec_start build step — confirmed "
+        "to have zero consumers anywhere in the codebase (#15603); either wire a real reader or "
+        "keep it out."
     )
