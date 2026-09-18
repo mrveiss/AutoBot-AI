@@ -23,6 +23,13 @@
       >
         <Icon name="folder" class="mr-2" />{{ $t('knowledge.entries.watchFoldersTab') }}
       </BaseButton>
+      <BaseButton
+        variant="ghost"
+        @click="manageTab = 'connectors'"
+        :class="['manage-tab-btn', { active: manageTab === 'connectors' }]"
+      >
+        <Icon name="plug" class="mr-2" />{{ $t('knowledge.entries.connectorsTab') }}
+      </BaseButton>
     </div>
 
     <!-- Upload Tab Content -->
@@ -30,6 +37,9 @@
 
     <!-- Watch Folders Tab Content -->
     <WatchFoldersPanel v-if="manageTab === 'watchFolders'" />
+
+    <!-- Connectors Tab Content (#16897) -->
+    <ConnectorManager v-if="manageTab === 'connectors'" />
 
     <!-- Manage Tab Content -->
     <div v-if="manageTab === 'manage'" class="entries-content">
@@ -430,6 +440,7 @@ import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import KnowledgeUpload from './KnowledgeUpload.vue'
 import WatchFoldersPanel from './WatchFoldersPanel.vue'
+import ConnectorManager from './connectors/ConnectorManager.vue'
 import BulkActionsToolbar from '@/components/knowledge/BulkActionsToolbar.vue'
 import BulkEditModal from '@/components/knowledge/modals/BulkEditModal.vue'
 import type { BulkEditMode, BulkEditEntry } from '@/components/knowledge/modals/BulkEditModal.vue'
@@ -458,8 +469,11 @@ const route = useRoute()
 // Manage tab state — initialized from ?tab= so /knowledge/manage?tab=watchFolders
 // (the redirect target for the retired /knowledge/watch-folders route) opens
 // directly on the right tab.
-type ManageTab = 'upload' | 'manage' | 'watchFolders'
-const validManageTabs: ManageTab[] = ['upload', 'manage', 'watchFolders']
+// #16897: connectors joined the same way — connectors and uploads are both
+// "give the knowledge base a source", so they belong on one surface rather than
+// two sidebar entries.
+type ManageTab = 'upload' | 'manage' | 'watchFolders' | 'connectors'
+const validManageTabs: ManageTab[] = ['upload', 'manage', 'watchFolders', 'connectors']
 const initialManageTab = validManageTabs.includes(route.query.tab as ManageTab)
   ? (route.query.tab as ManageTab)
   : 'upload'
