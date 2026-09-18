@@ -47,10 +47,28 @@ def _resolved_clone_dir(candidate_id: str) -> Path | None:
     return clone_dir
 
 
+async def _registry_reachable() -> bool:
+    """False when the source registry (Redis) cannot be reached.
+
+    ``list_sources()``/``get_source()`` both return an empty/None result on
+    a Redis outage -- indistinguishable, from their return value alone, from
+    "there genuinely are no sources" or "this one genuinely has no record".
+    Both callers below must tell the two apart explicitly: on an outage,
+    every clone on disk would otherwise look orphaned at once, and a human
+    could be asked to approve deleting all of them.
+    """
+    from autobot_shared.redis_client import get_async_redis_client
+
+    return await get_async_redis_client(database="analytics") is not None
+
+
 async def _list_candidates():
     from services.orphan_storage import OrphanCandidate, orphan_grace_period_hours
 
     if not CODE_SOURCES_BASE.is_dir():
+        return []
+    if not await _registry_reachable():
+        logger.error("Orphan clone detector: source registry unreachable -- refusing to list any candidate")
         return []
     known_ids = {source.id for source in await list_sources()}
     grace_seconds = orphan_grace_period_hours() * 3600
@@ -83,6 +101,8 @@ async def _delete(candidate_id: str):
         return DeleteResult(deleted=False, reason="invalid candidate id")
     if not clone_dir.is_dir():
         return DeleteResult(deleted=False, reason="candidate no longer exists")
+    if not await _registry_reachable():
+        return DeleteResult(deleted=False, reason="source registry unreachable -- refusing rather than guessing")
     # Re-check at delete time (#17039 AC): a record may have reappeared, or
     # the directory may no longer be past the grace period. Never trust a
     # stale list_candidates() result for something this destructive.

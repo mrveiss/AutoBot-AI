@@ -21,6 +21,18 @@ def _age_dir(path, hours_old: float) -> None:
     os.utime(path, (stamp, stamp))
 
 
+@pytest.fixture(autouse=True)
+def _registry_reachable_by_default(monkeypatch):
+    """Every test but TestFailsClosedOnARegistryOutage assumes a reachable
+    registry -- this repo's own test env has no real Redis, so without this
+    every test would exercise the outage path instead of the one it names."""
+
+    async def _reachable():
+        return True
+
+    monkeypatch.setattr(detector, "_registry_reachable", _reachable)
+
+
 class TestListCandidates:
     async def test_a_directory_with_no_source_record_past_the_grace_period_is_listed(self, monkeypatch, tmp_path):
         monkeypatch.setattr(detector, "CODE_SOURCES_BASE", tmp_path)
@@ -73,6 +85,41 @@ class TestListCandidates:
         candidates = await detector._list_candidates()
 
         assert candidates == [], "a clone still being written must never be offered for cleanup"
+
+
+class TestFailsClosedOnARegistryOutage:
+    """#17039 review: a Redis outage must never make every clone look orphaned."""
+
+    async def test_list_candidates_returns_nothing_when_the_registry_is_unreachable(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(detector, "CODE_SOURCES_BASE", tmp_path)
+        orphan_dir = tmp_path / "looks-orphaned-but-registry-is-down"
+        orphan_dir.mkdir()
+        _age_dir(orphan_dir, hours_old=48)
+
+        async def _unreachable():
+            return False
+
+        monkeypatch.setattr(detector, "_registry_reachable", _unreachable)
+
+        candidates = await detector._list_candidates()
+
+        assert candidates == [], 'an unreachable registry must never be read as "zero sources"'
+
+    async def test_delete_refuses_when_the_registry_is_unreachable(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(detector, "CODE_SOURCES_BASE", tmp_path)
+        clone_dir = tmp_path / "maybe-still-referenced"
+        clone_dir.mkdir()
+        _age_dir(clone_dir, hours_old=48)
+
+        async def _unreachable():
+            return False
+
+        monkeypatch.setattr(detector, "_registry_reachable", _unreachable)
+
+        result = await detector._delete("maybe-still-referenced")
+
+        assert result.deleted is False
+        assert clone_dir.exists()
 
 
 class TestDelete:
