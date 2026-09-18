@@ -46,7 +46,8 @@ from api.schemas_workflows import (
     TestSuiteRequest,
 )
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
-from api.ws_security import enforce_ws_origin
+from api.ws_security import open_authenticated_ws
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
@@ -75,6 +76,7 @@ if not _OPERATIONS_AVAILABLE:
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["long-running-operations"])
+_ADMIN = [Depends(check_admin_permission)]  # #17010: every route; operations record no creator to scope them by
 
 # Performance optimization: O(1) lookup for failed operation statuses (Issue #326)
 if _OPERATIONS_AVAILABLE:
@@ -91,7 +93,7 @@ async def get_operation_manager():
 
 
 # Enhanced API endpoints with AutoBot-specific operations
-@router.post("/codebase/index", response_model=Dict[str, str])
+@router.post("/codebase/index", response_model=Dict[str, str], dependencies=_ADMIN)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_codebase_indexing",
@@ -160,7 +162,7 @@ async def start_codebase_indexing(
         raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
-@router.post("/testing/comprehensive", response_model=Dict[str, str])
+@router.post("/testing/comprehensive", response_model=Dict[str, str], dependencies=_ADMIN)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_comprehensive_testing",
@@ -225,7 +227,7 @@ async def start_comprehensive_testing(
         raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
-@router.post("/knowledge-base/populate", response_model=Dict[str, str])
+@router.post("/knowledge-base/populate", response_model=Dict[str, str], dependencies=_ADMIN)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_knowledge_base_population",
@@ -278,7 +280,7 @@ async def start_knowledge_base_population(
         raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
-@router.post("/security/scan", response_model=Dict[str, str])
+@router.post("/security/scan", response_model=Dict[str, str], dependencies=_ADMIN)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_security_scan",
@@ -331,7 +333,7 @@ async def start_security_scan(
 
 
 # Legacy operation migration endpoints
-@router.post("/migrate/existing", response_model=LongRunningOperationMigrateResponse)
+@router.post("/migrate/existing", response_model=LongRunningOperationMigrateResponse, dependencies=_ADMIN)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="migrate_existing_operation",
@@ -376,7 +378,7 @@ async def migrate_existing_operation(
 
 
 # Operation status and control endpoints (proxy to integration manager)
-@router.get("/{operation_id}", response_model=LongRunningOperationStatusResponse)
+@router.get("/{operation_id}", response_model=LongRunningOperationStatusResponse, dependencies=_ADMIN)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_operation_status",
@@ -395,7 +397,7 @@ async def get_operation_status(operation_id: str, manager=Depends(get_operation_
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/", response_model=LongRunningOperationListResponse)
+@router.get("/", response_model=LongRunningOperationListResponse, dependencies=_ADMIN)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_operations",
@@ -439,7 +441,7 @@ async def list_operations(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/{operation_id}/cancel", response_model=LongRunningOperationCancelResponse)
+@router.post("/{operation_id}/cancel", response_model=LongRunningOperationCancelResponse, dependencies=_ADMIN)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cancel_operation",
@@ -459,7 +461,7 @@ async def cancel_operation(operation_id: str, manager=Depends(get_operation_mana
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/{operation_id}/resume", response_model=LongRunningOperationResumeResponse)
+@router.post("/{operation_id}/resume", response_model=LongRunningOperationResumeResponse, dependencies=_ADMIN)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_operation",
@@ -497,13 +499,11 @@ async def resume_operation(operation_id: str, manager=Depends(get_operation_mana
 )
 async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
     """WebSocket endpoint for real-time progress updates"""
-    if not await enforce_ws_origin(websocket):
-        return
     if not _OPERATIONS_AVAILABLE:
         await websocket.close(code=1003, reason="Service not available")
         return
-
-    await websocket.accept()
+    if not await open_authenticated_ws(websocket, admin=True):  # #17009, #17010
+        return
 
     # Add to connections
     if operation_id not in operation_integration_manager.websocket_connections:

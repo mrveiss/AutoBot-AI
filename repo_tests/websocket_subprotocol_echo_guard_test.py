@@ -57,6 +57,9 @@ BACKEND_AUTHENTICATORS: dict[str, tuple[str, ...]] = {
         "enforce_ws_remote_control_auth",
         "enforce_ws_terminal_auth",
         "enforce_ws_desktop_auth",
+        # #17009: the one call nine formerly unauthenticated endpoints now make; it
+        # authenticates and accepts through ``accept_websocket`` itself.
+        "open_authenticated_ws",
     ),
     "autobot-slm-backend": ("_authenticate_websocket_token",),
 }
@@ -118,10 +121,17 @@ def _authenticating_modules(root: Path) -> list[Path]:
 #: from gap 2). `growth=5` covers a handful of new authenticating endpoints
 #: before this needs a deliberate ratchet; this population moves with ordinary
 #: feature work, unlike a fixed-cardinality set.
+#:
+#: RE-MEASURED 2026-09-18 for #17009: 19. The eight endpoint modules that used
+#: to accept unauthenticated now authenticate through `open_authenticated_ws`:
+#: `api/analytics.py`, `api/analytics_quality.py`, `api/knowledge_research_ws.py`,
+#: `api/logs.py`, `api/long_running_operations.py`, `api/monitoring.py`,
+#: `api/overseer_handlers.py` and `services/workflow_automation/ws_endpoint.py`.
+#: All are in the population, with no exemption.
 REACH = declare(
     "websocket-subprotocol-echo",
     discover=_authenticating_modules,
-    floor=11,
+    floor=19,
     growth=5,
     what="WebSocket-authenticating backend modules",
 )
@@ -148,6 +158,16 @@ def test_the_guard_catches_a_direct_accept() -> None:
     """Negative control: the detector fires on exactly the pattern it forbids."""
     offending = ast.parse(
         "async def ep(websocket):\n    await authenticate_websocket(websocket)\n    await websocket.accept()\n"
+    )
+    assert _authenticates(offending, BACKEND_AUTHENTICATORS["autobot-backend"])
+    assert _direct_accepts(offending) == [3]
+
+
+def test_the_guard_catches_a_direct_accept_after_the_open_helper() -> None:
+    """#17009: a module that authenticates through ``open_authenticated_ws`` is in the
+    population, so a stray bare ``accept()`` in it is caught like any other."""
+    offending = ast.parse(
+        "async def ep(websocket):\n    await open_authenticated_ws(websocket)\n    await websocket.accept()\n"
     )
     assert _authenticates(offending, BACKEND_AUTHENTICATORS["autobot-backend"])
     assert _direct_accepts(offending) == [3]

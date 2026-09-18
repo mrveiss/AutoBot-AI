@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 from fastapi import WebSocket
 
@@ -312,3 +312,62 @@ async def enforce_ws_desktop_auth(websocket: WebSocket) -> "dict | None":
         DeviceCapability.DESKTOP_VIEW,
         DeviceCapability.DESKTOP_INPUT,
     )
+
+
+async def open_authenticated_ws(
+    websocket: WebSocket,
+    *,
+    admin: bool = False,
+    allow: "Callable[[dict], Awaitable[bool]] | None" = None,
+) -> "dict | None":
+    """Origin, authentication, an optional admin or per-endpoint check, then accept (#17009).
+
+    The one call a WebSocket endpoint makes before serving. It replaces the
+    ``enforce_ws_origin`` + bare ``accept()`` pair that nine endpoints used, which
+    checked the Origin header only and so let any client that sends none straight
+    in (#17009). Authentication tries every credential source
+    (:func:`enforce_ws_authentication`), including the ``bearer`` subprotocol
+    that :func:`authenticate_ws_admin` does not read. ``allow`` is an endpoint's
+    own authorization of the authenticated caller, e.g. owning the session it names.
+
+    Returns the caller, or ``None`` after closing the handshake: ``1008`` for no
+    credential, a non-admin on an ``admin`` endpoint, or a refused ``allow``.
+    """
+    if not await enforce_ws_origin(websocket):
+        return None
+    user = await enforce_ws_authentication(websocket)
+    if user is None:
+        return None
+    if admin and not is_admin_role(user.get("role")):
+        logger.warning("Rejected non-admin %s on an admin WebSocket", user.get("username"))
+        await _close_policy(websocket, "Admin role required")
+        return None
+    if allow is not None and not await allow(user):
+        logger.warning("Rejected %s: not authorized for this WebSocket resource", user.get("username"))
+        await _close_policy(websocket, "Not authorized for this resource")
+        return None
+    await accept_websocket(websocket)
+    return user
+
+
+async def owns_chat_session(websocket: WebSocket, session_id: str, user: dict) -> bool:
+    """Whether *user* owns chat session *session_id*, or is an admin (#17009).
+
+    Strict, unlike the flag-degradable ``validate_session_ownership`` HTTP
+    dependency: a socket that drives a PTY must never fall back to log-only. The
+    owner is the Redis ownership key, else the session file's durable owner
+    (#14018). A session with no recorded owner belongs to no one but an admin.
+    """
+    if is_admin_role(user.get("role")):
+        return True
+    from autobot_shared.redis_client import get_redis_client  # noqa: PLC0415
+    from security.session_ownership import SessionOwnershipValidator  # noqa: PLC0415
+    from utils.chat_utils import get_chat_history_manager  # noqa: PLC0415
+
+    owner = await SessionOwnershipValidator(
+        await get_redis_client(async_client=True, database="main")
+    ).get_session_owner(session_id)
+    if owner is None:
+        manager = get_chat_history_manager(websocket)
+        owner = await manager.get_session_owner(session_id) if manager is not None else None
+    return bool(owner) and owner == user.get("username")
