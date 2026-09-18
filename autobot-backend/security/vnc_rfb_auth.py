@@ -78,7 +78,9 @@ def encrypt_challenge(password: bytes, challenge: bytes) -> bytes:
     if len(challenge) != 16:
         raise ValueError(f"VNC challenge must be 16 bytes, got {len(challenge)}")
     key = vnc_des_key(password)
-    encryptor = Cipher(TripleDES(key * 3), modes.ECB()).encryptor()
+    encryptor = Cipher(
+        TripleDES(key * 3), modes.ECB()
+    ).encryptor()  # nosec B305 - RFB VNC auth mandates DES-ECB over the 16-byte challenge (RFC 6143 7.2.2)
     return encryptor.update(challenge) + encryptor.finalize()
 
 
