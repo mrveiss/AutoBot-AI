@@ -56,6 +56,10 @@ class InvalidNewOwner(OrphanRepairError):
     """The owner to assign is not a live user."""
 
 
+class RepairWriteFailed(Exception):
+    """The type's own store did not take the write: a failure, audited ``error``, never a refusal."""
+
+
 @dataclass(frozen=True)
 class Assessment:
     """Whether a resource is an orphan, and the conditions that decided it.
@@ -73,7 +77,11 @@ class OrphanRepairer(Protocol):
     """One resource type's repair, through that type's own service and grant source."""
 
     async def assess(self, session: AsyncSession, resource_id: str) -> Assessment:
-        """Judge the resource. Raises ``ResourceNotFound``."""
+        """Judge the resource for a repair. Raises ``ResourceNotFound``.
+
+        Where the type's store can, this locks the resource until the transaction
+        ends, so the judgment still holds when ``repair`` writes.
+        """
 
     async def repair(
         self, session: AsyncSession, resource_id: str, new_owner_id: str, assessment: Assessment

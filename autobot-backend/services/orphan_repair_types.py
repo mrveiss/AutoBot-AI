@@ -30,7 +30,7 @@ from autobot_shared.secrets_vault import VaultKind, VaultRef
 from services.orphan_repair import (
     Assessment,
     OrphanRepairer,
-    OrphanRepairError,
+    RepairWriteFailed,
     ResourceNotFound,
     owner_blocks_repair,
     user_state,
@@ -123,9 +123,10 @@ class KnowledgeFactRepairer:
         self, session: AsyncSession, resource_id: str, new_owner_id: str, assessment: Assessment
     ) -> Dict[str, Any]:
         kb, metadata = await self._metadata(resource_id)
+        # Unconditional: update_fact has no compare-and-set to hold the judgment to the write (#16984).
         result = await kb.update_fact(fact_id=resource_id, metadata={"owner_id": new_owner_id})
         if result.get("status") != "success":
-            raise OrphanRepairError("the knowledge store did not accept the new owner", assessment.conditions)
+            raise RepairWriteFailed("the knowledge store did not accept the new owner")
         return {"before": {"owner_id": metadata.get("owner_id")}, "after": {"owner_id": new_owner_id}}
 
 
@@ -156,7 +157,7 @@ class EnvelopeSecretRepairer:
         return EnvelopeSecretsService()
 
     @staticmethod
-    async def _load(session: AsyncSession, resource_id: str) -> Tuple[Any, List[str]]:
+    async def _load(session: AsyncSession, resource_id: str, *, lock: bool = False) -> Tuple[Any, List[str]]:
         from models.secret import Secret
         from models.secret_grant import SecretGrant
 
@@ -164,14 +165,19 @@ class EnvelopeSecretRepairer:
             secret_id = uuid.UUID(str(resource_id))
         except ValueError:
             raise ResourceNotFound(f"secret {resource_id!r} is not a secret id") from None
-        secret = await session.get(Secret, secret_id)
+        secret = await session.get(Secret, secret_id, with_for_update=lock)
         if secret is None or secret.sealed_value is None:
             raise ResourceNotFound(f"envelope secret {resource_id!r} not found")
         rows = await session.execute(select(SecretGrant.grantee).where(SecretGrant.secret_id == secret_id))
         return secret, list(rows.scalars())
 
     async def assess(self, session: AsyncSession, resource_id: str) -> Assessment:
-        secret, grantees = await self._load(session, resource_id)
+        """Judged under a row lock held to the end of the transaction: two break-glass
+        repairs of one secret serialize, and the second finds the first's live owner."""
+        return await self._judge(session, resource_id, lock=True)
+
+    async def _judge(self, session: AsyncSession, resource_id: str, *, lock: bool) -> Assessment:
+        secret, grantees = await self._load(session, resource_id, lock=lock)
         owner_blocks, owner = await owner_blocks_repair(session, str(secret.owner_id) if secret.owner_id else None)
         dead = [vault for vault in grantees if await _vault_is_dead(session, vault)]
         live = [vault for vault in grantees if vault not in dead]
@@ -186,7 +192,7 @@ class EnvelopeSecretRepairer:
         rows = await session.execute(select(Secret.id).where(Secret.sealed_value.isnot(None)).limit(limit))
         found = []
         for secret_id in rows.scalars():
-            verdict = await self.assess(session, str(secret_id))
+            verdict = await self._judge(session, str(secret_id), lock=False)  # a listing locks nothing
             if verdict.orphaned:
                 found.append({"resource_id": str(secret_id), "conditions": verdict.conditions})
         return found

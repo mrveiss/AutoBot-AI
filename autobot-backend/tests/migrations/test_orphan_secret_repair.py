@@ -11,6 +11,7 @@ vault -- the real access check. The repair re-wraps the data key; the plaintext 
 reaches the result or the audit.
 """
 
+import asyncio
 import base64
 import uuid
 from datetime import datetime, timezone
@@ -111,3 +112,24 @@ async def test_a_secret_a_live_vault_also_holds_is_refused(session, service):
     with patch("services.orphan_repair.audit_log", new=AsyncMock(return_value=True)):
         with pytest.raises(NotAnOrphan):
             await repair_orphan(session, _repairers(service), "secret", str(secret_id), str(_NEW), actor_user_id="a")
+
+
+async def test_two_concurrent_repairs_serialize_and_the_second_finds_a_live_owner(session, service, fresh_db_url):
+    """The judgment holds at the write: the secret row stays locked from assess to commit."""
+    secret_id = await _secret_owned_by(service, session, _GONE)
+    engine = create_async_engine(fresh_db_url)
+    other = async_sessionmaker(engine, expire_on_commit=False)()
+    try:
+        with patch("services.orphan_repair.audit_log", new=AsyncMock(return_value=True)):
+            await repair_orphan(session, _repairers(service), "secret", str(secret_id), str(_NEW), actor_user_id="a")
+            second = asyncio.create_task(
+                repair_orphan(other, _repairers(service), "secret", str(secret_id), str(_LIVE), actor_user_id="b")
+            )
+            await asyncio.sleep(0.5)
+            assert not second.done(), "the second repair must wait on the first's row lock"
+            await session.commit()
+            with pytest.raises(NotAnOrphan):
+                await second
+    finally:
+        await other.close()
+        await engine.dispose()

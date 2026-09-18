@@ -22,6 +22,7 @@ from knowledge.ownership import KnowledgeOwnership
 from services.orphan_repair import (
     InvalidNewOwner,
     NotAnOrphan,
+    RepairWriteFailed,
     UnknownResourceType,
     find_orphans,
     repair_orphan,
@@ -37,10 +38,11 @@ class _Users:
     """A session that knows four users: two live, one soft-deleted, one hard-deleted (no row)."""
 
     def __init__(self, secret=None, grantees=()) -> None:
-        self.secret, self.grantees = secret, list(grantees)
+        self.secret, self.grantees, self.secret_locks = secret, list(grantees), []
 
-    async def get(self, model, key):
+    async def get(self, model, key, with_for_update=None):
         if model.__name__ == "Secret":
+            self.secret_locks.append(with_for_update)
             return self.secret
         key = str(key)
         if key in (LIVE, NEW_OWNER):
@@ -49,8 +51,9 @@ class _Users:
             return SimpleNamespace(deleted_at=datetime.now(tz=timezone.utc))
         return None
 
-    async def execute(self, _statement):
-        return SimpleNamespace(scalars=lambda: iter(self.grantees))
+    async def execute(self, statement):
+        rows = self.grantees if "grantee" in str(statement) else [self.secret.id]  # a grant query, or the listing
+        return SimpleNamespace(scalars=lambda: iter(rows))
 
 
 class _KB:
@@ -130,6 +133,17 @@ class TestKnowledgeFacts:
         assert audit.await_args.kwargs["result"] == "denied"
 
     @pytest.mark.asyncio
+    async def test_a_store_that_refuses_the_write_is_audited_as_an_error_not_a_refusal(self, audit):
+        """A failed write is not a policy decision; the audit must not read as one (#16940)."""
+        kb = _KB(f1=dict(self.ORPHAN))
+        kb.update_fact = AsyncMock(return_value={"status": "error", "message": "Knowledge operation failed"})
+
+        with pytest.raises(RepairWriteFailed):
+            await repair_orphan(_Users(), _repairers(kb), "knowledge_fact", "f1", NEW_OWNER, actor_user_id="a")
+
+        assert audit.await_args.kwargs["result"] == "error"
+
+    @pytest.mark.asyncio
     async def test_a_null_owner_private_fact_is_an_orphan(self):
         kb = _KB(f1={"owner_id": "", "visibility": "private"})
 
@@ -171,6 +185,16 @@ class TestEnvelopeSecretJudgment:
         session = _Users(self._secret(DELETED), grantees)
 
         assert not (await EnvelopeSecretRepairer().assess(session, str(session.secret.id))).orphaned
+
+    @pytest.mark.asyncio
+    async def test_a_repair_judges_the_secret_under_a_row_lock_and_a_listing_locks_nothing(self):
+        """The judgment must still hold when the repair writes: two repairs of one secret serialize."""
+        session = _Users(self._secret(DELETED), [f"user:{DELETED}"])
+
+        await EnvelopeSecretRepairer().assess(session, str(session.secret.id))
+        await EnvelopeSecretRepairer().find_orphans(session, limit=10)
+
+        assert session.secret_locks == [True, False]
 
     @pytest.mark.asyncio
     async def test_a_live_owner_blocks_it(self):
