@@ -381,3 +381,42 @@ class TestTheWildcardIsNotAdvertised:
 def _stored_secret(request):
     """Stand in for the encrypting store: echo the validated request back."""
     return request.to_secret_model()
+
+
+class TestAuditLog:
+    """audit_log() logs a hash of secret_id, never the raw id (#16444).
+
+    Truncation (``secret_id[:8] + "..."``) still carried real id bytes, which
+    CodeQL's py/clear-text-logging-sensitive-data flagged regardless -- the
+    parameter is name-tainted, and slicing isn't a sanitizer it recognizes.
+    These tests pin the property (raw id absent, a stable correlation value
+    present), not the mechanism.
+    """
+
+    def test_raw_secret_id_never_logged(self, caplog):
+        from api.secrets import audit_log
+
+        fake_request = MagicMock()
+        with patch("api.secrets.get_client_id", return_value="client-1"), caplog.at_level("INFO"):
+            audit_log("read", "sk-not-a-real-secret-0123456789", fake_request)  # pragma: allowlist secret
+
+        assert "sk-not-a-real-secret-0123456789" not in caplog.text
+
+    def test_same_secret_id_logs_the_same_correlation_value(self, caplog):
+        """An operator must still be able to tell two log lines share one secret_id."""
+        from api.secrets import audit_log
+
+        fake_request = MagicMock()
+        with patch("api.secrets.get_client_id", return_value="client-1"), caplog.at_level("INFO"):
+            audit_log("read", "same-id", fake_request)
+            first = caplog.text
+            caplog.clear()
+            audit_log("write", "same-id", fake_request)
+            second = caplog.text
+
+        import re
+
+        first_id = re.search(r"SecretID: (\S+)", first).group(1)
+        second_id = re.search(r"SecretID: (\S+)", second).group(1)
+        assert first_id == second_id
+        assert first_id != "same-id"
