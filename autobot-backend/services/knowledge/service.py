@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Tuple
 from advanced_rag_optimizer import SearchResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import config
-from security.content_firewall import inspect_rag_context
+from security.content_firewall import FirewallAction, inspect_rag_context
 from services.rag_service import RAGService
 
 from .context_enhancer import get_context_enhancer
@@ -561,6 +561,17 @@ class ChatKnowledgeService:
             categories=effective_categories,
         )
 
+        # #16771 AC5: this is a second RAG entry point sharing conversation_aware_
+        # retrieve's chokepoint (inspect_rag_context), not a copy of its own.
+        if context_string:
+            fw_verdict = await inspect_rag_context(context_string, context_label=query[:80])
+            if fw_verdict.blocked or fw_verdict.escalated:
+                return "", [], intent_result
+            context_string = fw_verdict.content
+            if fw_verdict.action == FirewallAction.QUARANTINE:
+                for citation in citations:
+                    citation["content"] = "[FIREWALL: content withheld — moderate injection risk]"
+
         logger.info(
             "[Smart RAG] Completed in %.3fs - %d citations found",
             time.time() - start_time,
@@ -734,9 +745,20 @@ class ChatKnowledgeService:
         # #16771: chat is a RAG path too; citations dropped with a blocked context (see PR).
         if context_string:
             fw_verdict = await inspect_rag_context(context_string, context_label=query[:80])
-            if fw_verdict.blocked:
+            if fw_verdict.blocked or fw_verdict.escalated:
+                # ESCALATE has blocked=False (it's pending human approval, not a hard
+                # refusal), but the flagged text must not surface via citations before
+                # that approval happens -- same contract as BLOCK, not a softer one.
                 return "", [], intent_result, enhanced_query
             context_string = fw_verdict.content
+            if fw_verdict.action == FirewallAction.QUARANTINE:
+                # QUARANTINE keeps citations (the Sources UI reads them from
+                # session.metadata["last_citations"]), but each citation's raw
+                # content is the untrusted original -- only context_string got
+                # sanitized above. Scrub every citation the same way, not just
+                # the combined prompt string.
+                for citation in citations:
+                    citation["content"] = "[FIREWALL: content withheld — moderate injection risk]"
 
         logger.info(
             "[Conversation RAG] Completed in %.3fs - %d citations, " "enhanced=%s, categories=%s, docs=%s",
@@ -938,6 +960,21 @@ class ChatKnowledgeService:
             combined_parts.append(rag_context)
 
         combined_context = "\n\n".join(combined_parts) if combined_parts else ""
+
+        # #16771 AC5: shares conversation_aware_retrieve's chokepoint. A blocked
+        # or escalated verdict drops both citation lists -- combined_context
+        # mixes both sources, so neither list can be trusted to explain what's
+        # left.
+        if combined_context:
+            fw_verdict = await inspect_rag_context(combined_context, context_label=query[:80])
+            if fw_verdict.blocked or fw_verdict.escalated:
+                return "", [], []
+            combined_context = fw_verdict.content
+            if fw_verdict.action == FirewallAction.QUARANTINE:
+                for citation in rag_citations:
+                    citation["content"] = "[FIREWALL: content withheld — moderate injection risk]"
+                for doc_result in doc_results_list:
+                    doc_result["content"] = "[FIREWALL: content withheld — moderate injection risk]"
 
         return combined_context, rag_citations, doc_results_list
 
