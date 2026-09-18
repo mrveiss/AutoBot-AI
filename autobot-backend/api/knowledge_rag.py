@@ -14,6 +14,7 @@ Issue #4681: Added GET /entity/{id}/history for evolutionary lineage tracking.
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from api.knowledge_rag_loop import router as _loop_router
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -47,8 +48,6 @@ router = APIRouter()
 # Sub-router extracted from this file (#16665) to keep it under its
 # grandfathered line-count ceiling (#14236); mounts under this file's own
 # registered prefix, same as api.analytics's analytics_code/analytics_cost/etc.
-from api.knowledge_rag_loop import router as _loop_router
-
 router.include_router(_loop_router)
 
 
