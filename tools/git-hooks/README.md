@@ -36,13 +36,22 @@ framework's other quality hooks (#11598).
 bash scripts/install-git-hooks.sh
 ```
 
-Copies each hook (`pre-commit`, `pre-push`) into the repo's hooks dir as a
+Copies each hook (`pre-commit`, `pre-push`, `commit-msg`) into the repo's hooks dir as a
 **real file** — never a worktree symlink (those dangle when the worktree is
 deleted, silently disabling enforcement — #11598). The installer is idempotent
 (a second run is a no-op), normalises a bad absolute `core.hooksPath` back to
 git's default, detects/replaces any dangling symlink left by the old
 `install_hooks.sh` (now a shim that delegates here), and preserves a pre-commit
 framework hook when one is present.
+
+## What the commit-msg hook does
+
+It strips co-author and tool trailers (`Co-authored-by`, `Generated with [Claude Code]`,
+`Claude-Session:`), because mrveiss is the sole author. Then it rejects a subject that does not
+follow `<type>(scope): <description> (#NNNN)` by running
+`scripts/lint-conventions.sh --commit-msg`, the same rule the pre-commit framework's
+`lint-commit-subject` runs (#17029). Merge, Revert, `fixup!`, `squash!` and worktree-claim
+subjects are exempt. Until #17029 it was a hand-installed local file, not part of the repo.
 
 ## What the pre-commit hook does
 
