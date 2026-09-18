@@ -2,6 +2,8 @@
 
 > This file contains operational standards, git workflow, deployment, and agent delegation details.
 > CLAUDE.md summarizes the key points; read this file when you need the full policy.
+> Every status claim below (CI green, work complete, a check failed) follows the
+> **Verification** rule in `CLAUDE.md`: paste the command and its output, never assert.
 
 ---
 
