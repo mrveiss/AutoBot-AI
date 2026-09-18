@@ -32,6 +32,15 @@
 vnc_user: "{{ lookup('env', 'VNC_USER') or lookup('env', 'AUTOBOT_VNC_USER') | default('autobot-vnc', true) }}"
 vnc_group: "{{ lookup('env', 'VNC_GROUP') | default('autobot-vnc', true) }}"
 
+# #16299: which api.vnc_proxy VNC_ENDPOINTS entry this host's VNC server is --
+# "desktop" (co-located with the backend, e.g. setup-user-backend.yml) or
+# "browser" (the Playwright automation VM, a separate host). Names the
+# secret this role registers in the canonical secrets system, so the backend
+# can look it up by the same key it already uses to pick a VNC endpoint.
+# tasks/register-credentials.yml's own vnc_type: "desktop" predates this and
+# is the only value this role has ever actually been invoked with to date.
+vnc_type: "desktop"
+
 # #14319: the account VNC ran under before this change (the platform-wide
 # default before this issue). Used once, by the migration task in
 # tasks/main.yml, to relocate an existing host's VNC state to the new

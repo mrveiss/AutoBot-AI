@@ -43,23 +43,22 @@ export class AppConfigService {
           protocol: 'redis'
         },
         // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
+        // #16299: no password fields -- the backend authenticates to the real VNC server
+        // itself and offers the browser security-type "None" (api/vnc_handshake_bridge.py).
         vnc: {
           desktop: {
             host: import.meta.env.VITE_DESKTOP_VNC_HOST,
             port: import.meta.env.VITE_DESKTOP_VNC_PORT || '6080',
-            password: import.meta.env.VITE_DESKTOP_VNC_PASSWORD || 'autobot',
             protocol: 'http'
           },
           terminal: {
             host: import.meta.env.VITE_TERMINAL_VNC_HOST,
             port: import.meta.env.VITE_TERMINAL_VNC_PORT || '6080',
-            password: import.meta.env.VITE_TERMINAL_VNC_PASSWORD || 'autobot',
             protocol: 'http'
           },
           playwright: {
             host: import.meta.env.VITE_PLAYWRIGHT_VNC_HOST,
             port: import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || '6081',
-            password: import.meta.env.VITE_PLAYWRIGHT_VNC_PASSWORD || 'playwright',
             protocol: 'http'
           }
         },

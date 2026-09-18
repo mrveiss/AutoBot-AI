@@ -222,6 +222,64 @@
   become: true
   when: vnc_password_result.stdout | length > 0
 
+# #16299: register the same password in the canonical secrets system, so
+# api.vnc_proxy can authenticate to the real VNC server server-side instead
+# of the browser holding the password (the VITE_*_VNC_PASSWORD leak this
+# issue is about). The on-disk files above remain the VNC server's OWN copy
+# (x11vnc/vncserver read only from local files); this is the backend's copy,
+# and the only one it may ever read -- a plaintext env-file read would be a
+# parallel credential path the owner's secrets-management rule forbids.
+#
+# One mechanism for both VNC types: this task runs identically whether this
+# host is the co-located "desktop" host or a "browser" VM -- the vnc_type
+# default above (defaults/main.yml) is what names the secret, not anything
+# host-specific, so api.vnc_proxy's VNC_ENDPOINTS key ("desktop"/"browser")
+# is exactly the lookup key the backend needs. register-credentials.yml is
+# the only place this role has ever actually been invoked, always as
+# "desktop" -- a future "browser" invocation only needs to set vnc_type,
+# nothing here changes.
+#
+# Gated the same way password generation itself is (first run only): once
+# registered, this file's existence means AUTOBOT_INTERNAL_API_KEY has
+# already had its one chance to reach the vault for this host.
+#
+# ASSUMPTION FLAGGED FOR REVIEW: reaches the backend via
+# {{ main_host }}:{{ backend_port }}, mirroring
+# autobot_shared/network_constants.py's BACKEND_API
+# (f"http://{MAIN_MACHINE_IP}:{BACKEND_PORT}") -- backend_port's own comment
+# elsewhere in this role tree says "loopback only", which is true for the
+# co-located desktop host but needs confirming for the browser VM's
+# cross-host case.
+- name: "VNC | Read AUTOBOT_INTERNAL_API_KEY from slm-secrets.env (#16299)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
+      /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _vnc_internal_api_key_read
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when: not vnc_secrets_stat.stat.exists
+
+- name: "VNC | Register VNC password in the canonical secrets system (#16299)"
+  ansible.builtin.uri:
+    url: "http://{{ main_host }}:{{ backend_port | default(8001) }}/api/v2/secrets/system"
+    method: POST
+    headers:
+      X-Internal-API-Key: "{{ _vnc_internal_api_key_read.stdout | trim }}"
+    body_format: json
+    body:
+      owner_vault: system
+      name: "vnc-password-{{ vnc_type }}"
+      secret_type: vnc_password
+      value: "{{ vnc_password_result.stdout }}"
+    status_code: [201]
+    validate_certs: false
+  when:
+    - not vnc_secrets_stat.stat.exists
+    - (_vnc_internal_api_key_read.stdout | default('') | trim) | length > 0
+  no_log: true
+
 # --- Node-level TLS cert (#1962) ---
 # Shared node keypair, also provisioned by roles/backend and setup-internal-ca.
 # Kept here so a vnc-only node still ends up with one. It stays root:root 0600
