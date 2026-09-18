@@ -22,6 +22,7 @@ repeated here; where the two disagree, **this file wins**.
 | Deviating from a standard pattern on purpose | [`ARCHITECTURE_EXCEPTIONS.md`](docs/developer/ARCHITECTURE_EXCEPTIONS.md) |
 | Adding a ratchet, changing its detector or matcher, or freezing/regenerating a baseline | [`RATCHET_BASELINES.md`](docs/developer/RATCHET_BASELINES.md) |
 | Writing or changing a guard, sweep, count, or acceptance criterion — or reading an empty result | [`MEASUREMENT_DISCIPLINE.md`](docs/developer/MEASUREMENT_DISCIPLINE.md) |
+| Before pushing any code change — known self-inflicted bug patterns | [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md#self-review-before-pushing-known-self-inflicted-patterns) |
 
 ## Engineering Standard
 
