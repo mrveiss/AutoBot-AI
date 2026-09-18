@@ -64,4 +64,30 @@ describe('useWebSocket protocols option (#16457)', () => {
     expect(instance).toBeDefined()
     expect(instance!.protocols).toBeUndefined()
   })
+
+  it('a later connect() picks up a protocols ref mutated since the first, e.g. a refreshed token', async () => {
+    // SSHTerminal.vue's own reconnect flow: wsProtocols.value is reassigned
+    // to a fresh buildAuthenticatedWsSubprotocols() result right before each
+    // wsConnect() call. A stale closure over the first array would silently
+    // keep reconnecting with an expired token.
+    const protocols = ref<string[]>(['bearer', 'first-token'])
+    const { connect, disconnect } = useWebSocket('wss://backend.example/api/terminal/ws/ssh/host-1', {
+      autoConnect: false,
+      autoReconnect: false,
+      protocols,
+    })
+
+    connect()
+    await vi.advanceTimersByTimeAsync(20)
+    expect(MockWebSocket.getLatestInstance()!.protocols).toEqual(['bearer', 'first-token'])
+
+    disconnect()
+    protocols.value = ['bearer', 'second-token']
+    connect()
+    await vi.advanceTimersByTimeAsync(20)
+
+    const instances = MockWebSocket.getAllInstances()
+    expect(instances).toHaveLength(2)
+    expect(instances[1].protocols).toEqual(['bearer', 'second-token'])
+  })
 })
