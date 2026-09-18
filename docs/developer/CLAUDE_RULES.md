@@ -303,6 +303,33 @@ instructions.
 
 ---
 
+## Never Escalate Privileges (#13090)
+
+**Never `sudo`, and never run any application service as root.** If a task appears to need
+root (e.g. dumping a schema that requires starting a backend), that need is itself a finding
+to report under Rule 6 — not an obstacle to route around. #12662: an agent escalated to root
+to get an OpenAPI schema dump, produced a *worse* result than the unprivileged run that had
+already succeeded, and left 147 root-owned files the repo owner had to remove by hand —
+root-owned files cannot be cleaned up without root, so the cost always lands on someone else.
+
+A guard belongs in `.claude/hooks/block-dangerous-commands.sh` (denying a bare `sudo`
+invocation outright) so this rule doesn't decay the way an unenforced comment does — proposed
+in #13090, not yet landed: hook scripts reject edits from the same tool access used for
+everything else in this repo, so applying it needs someone with a different access path.
+Until it lands, this rule is process-only — read it, don't rely on being stopped.
+
+- **Service secrets belong in a tmpdir, never a worktree.** A service that auto-generates key
+  material when its env vars are unset (e.g. the SLM backend's `.slm_keys`) must be given
+  explicit throwaway values in a temp location first — a scratch worktree is not a safe home
+  for generated secrets.
+- **Leave no root-owned files.** Any file you create must be removable by the repo owner
+  without `sudo`. If you ever find one, that is the signal something upstream already went
+  wrong — report it under Rule 6, don't just delete it and move on.
+
+> Violation: Starting a backend as root because an unprivileged attempt printed a warning, without checking whether the warning was actually fatal.
+
+---
+
 ## Rule 7: Behavioral Grep for Extraction PRs (#5372)
 
 **Extraction PRs (pulling a duplicated pattern into a shared composable/utility + migrating N sites) MUST grep for the *behavior*, not just the *symbol*, and document before/after hit counts in the PR description.**
