@@ -66,6 +66,23 @@ def _blocked_sockets():
         yield
 
 
+def _mock_processed_result(processing_time: float) -> Mock:
+    """A Mock shaped like a completed ProcessingResult, shared by the three
+    processor.process() benchmarks below. #16990: metadata={} is required --
+    processor.py writes result.metadata["persisted"] = ... (#15234), and a
+    plain Mock's auto-generated `.metadata` has no __setitem__."""
+    return Mock(
+        success=True,
+        confidence=0.8,
+        processing_time=processing_time,
+        result_data={"decision": "test"},
+        modality_type=ModalityType.TEXT,
+        intent=ProcessingIntent.DECISION_MAKING,
+        result_id="test",
+        metadata={},
+    )
+
+
 class TestSystemPerformanceBenchmarks:
     """Performance benchmarks for system components"""
 
@@ -181,19 +198,7 @@ class TestSystemPerformanceBenchmarks:
             patch.object(processor.context_processor, "process", new_callable=AsyncMock) as mock_process,
             patch.object(processor, "_store_result", new_callable=AsyncMock) as mock_store,
         ):
-            mock_process.return_value = Mock(
-                success=True,
-                confidence=0.8,
-                processing_time=0.1,
-                result_data={"decision": "test"},
-                modality_type=ModalityType.TEXT,
-                intent=ProcessingIntent.DECISION_MAKING,
-                result_id="test",
-                # #16990: processor.py writes result.metadata["persisted"] = ... (#15234) --
-                # a plain Mock's auto-generated `.metadata` has no __setitem__, so this must
-                # be a real dict, not left to default.
-                metadata={},
-            )
+            mock_process.return_value = _mock_processed_result(processing_time=0.1)
 
             result, processing_time = await self.measure_async_execution_time(processor.process(test_input))
 
@@ -222,17 +227,7 @@ class TestSystemPerformanceBenchmarks:
             for i in range(10)
         ]
 
-        mock_result = Mock(
-            success=True,
-            confidence=0.8,
-            processing_time=0.05,
-            result_data={"decision": "test"},
-            modality_type=ModalityType.TEXT,
-            intent=ProcessingIntent.DECISION_MAKING,
-            result_id="test",
-            # #16990: see the sibling benchmark above -- result.metadata[...] needs a real dict.
-            metadata={},
-        )
+        mock_result = _mock_processed_result(processing_time=0.05)
 
         # #13162: prove concurrency directly instead of inferring it from the
         # clock. The counter records how many calls were inside the modality
@@ -540,17 +535,7 @@ class TestScalabilityBenchmarks:
             patch.object(processor.context_processor, "process", new_callable=AsyncMock) as mock_process,
             patch.object(processor, "_store_result", new_callable=AsyncMock),
         ):
-            mock_process.return_value = Mock(
-                success=True,
-                confidence=0.8,
-                processing_time=0.02,
-                result_data={"decision": "test"},
-                modality_type=ModalityType.TEXT,
-                intent=ProcessingIntent.DECISION_MAKING,
-                result_id="test",
-                # #16990: see test_multimodal_processor_performance above -- a real dict.
-                metadata={},
-            )
+            mock_process.return_value = _mock_processed_result(processing_time=0.02)
 
             # Process all inputs concurrently
             start_time = time.time()
