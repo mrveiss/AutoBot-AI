@@ -197,6 +197,11 @@
   register: vnc_password_result
   changed_when: false
   become: true
+  # #16299 review: this result's stdout is the plaintext password, and #16299
+  # added a real consumer of it (the secrets-vault registration task below) --
+  # without no_log, ansible prints the full task result, password included,
+  # to the console/log on a verbose run or on failure.
+  no_log: true
 
 - name: Set VNC password file for user
   ansible.builtin.shell: |
@@ -230,26 +235,30 @@
 # and the only one it may ever read -- a plaintext env-file read would be a
 # parallel credential path the owner's secrets-management rule forbids.
 #
-# One mechanism for both VNC types: this task runs identically whether this
-# host is the co-located "desktop" host or a "browser" VM -- the vnc_type
-# default above (defaults/main.yml) is what names the secret, not anything
-# host-specific, so api.vnc_proxy's VNC_ENDPOINTS key ("desktop"/"browser")
-# is exactly the lookup key the backend needs. register-credentials.yml is
-# the only place this role has ever actually been invoked, always as
-# "desktop" -- a future "browser" invocation only needs to set vnc_type,
-# nothing here changes.
+# One mechanism for both VNC types: the vnc_type default (defaults/main.yml)
+# is what names the secret, not anything host-specific, so api.vnc_proxy's
+# VNC_ENDPOINTS key ("desktop"/"browser") is exactly the lookup key the
+# backend needs. register-credentials.yml is the only place this role has
+# ever actually been invoked, always as "desktop" -- a future "browser"
+# invocation only needs to set vnc_type; the refusal below is what keeps
+# that future invocation from silently sending a secret in cleartext
+# cross-host once it exists.
 #
-# Gated the same way password generation itself is (first run only): once
-# registered, this file's existence means AUTOBOT_INTERNAL_API_KEY has
-# already had its one chance to reach the vault for this host.
+# #16299 review: this used to be gated on `not vnc_secrets_stat.stat.exists`
+# (the LOCAL file), which only ever fires once per host, ever -- password
+# generation above creates that file BEFORE this ever runs, so a first
+# attempt that fails for any reason (the backend not up yet, migrations not
+# run yet) is never retried: the file already exists on every later run.
+# Gated on an actual read-back of the vault instead, so a failed attempt
+# self-heals on the next run regardless of the local file's state.
 #
-# ASSUMPTION FLAGGED FOR REVIEW: reaches the backend via
-# {{ main_host }}:{{ backend_port }}, mirroring
+# Reaches the backend via {{ main_host }}:{{ backend_port }}, mirroring
 # autobot_shared/network_constants.py's BACKEND_API
 # (f"http://{MAIN_MACHINE_IP}:{BACKEND_PORT}") -- backend_port's own comment
-# elsewhere in this role tree says "loopback only", which is true for the
-# co-located desktop host but needs confirming for the browser VM's
-# cross-host case.
+# elsewhere in this role tree says "loopback only" (plain HTTP, no TLS
+# listener on this port), true for the co-located desktop host. The
+# "vnc_type == desktop" guard below is what keeps this from ever sending the
+# password in cleartext to a genuinely remote host once "browser" is wired.
 - name: "VNC | Read AUTOBOT_INTERNAL_API_KEY from slm-secrets.env (#16299)"
   ansible.builtin.shell:
     cmd: >-
@@ -259,7 +268,33 @@
   changed_when: false
   failed_when: false
   no_log: true
-  when: not vnc_secrets_stat.stat.exists
+
+- name: "VNC | Refuse to register a non-co-located host's password over plaintext HTTP (#16299)"
+  ansible.builtin.fail:
+    msg: >-
+      vnc_type={{ vnc_type }} is not "desktop" -- this role's secrets-vault registration
+      reaches the backend over plain HTTP (backend_port is loopback-only, no TLS listener),
+      which is only safe for the co-located desktop host. Wire real HTTPS with certificate
+      validation (the shared TLS keypair, #16020) before enabling this for a genuinely
+      remote host; sending the password in cleartext cross-host is not an acceptable
+      fallback.
+  when: vnc_type != 'desktop'
+
+- name: "VNC | Wait for the secrets API to accept requests, and check if already registered (#16299)"
+  ansible.builtin.uri:
+    url: "http://{{ main_host }}:{{ backend_port | default(8001) }}/api/v2/secrets/system"
+    method: GET
+    headers:
+      X-Internal-API-Key: "{{ _vnc_internal_api_key_read.stdout | trim }}"
+    status_code: [200]
+    validate_certs: false
+  register: _vnc_existing_secrets
+  retries: 12
+  delay: 5
+  until: _vnc_existing_secrets.status | default(0) == 200
+  when:
+    - vnc_type == 'desktop'
+    - (_vnc_internal_api_key_read.stdout | default('') | trim) | length > 0
 
 - name: "VNC | Register VNC password in the canonical secrets system (#16299)"
   ansible.builtin.uri:
@@ -275,9 +310,15 @@
       value: "{{ vnc_password_result.stdout }}"
     status_code: [201]
     validate_certs: false
+  register: _vnc_register_result
+  retries: 5
+  delay: 5
+  until: _vnc_register_result.status | default(0) == 201
   when:
-    - not vnc_secrets_stat.stat.exists
+    - vnc_type == 'desktop'
     - (_vnc_internal_api_key_read.stdout | default('') | trim) | length > 0
+    - _vnc_existing_secrets is succeeded
+    - (_vnc_existing_secrets.json | default([]) | selectattr('name', 'equalto', 'vnc-password-' + vnc_type) | list | length) == 0
   no_log: true
 
 # --- Node-level TLS cert (#1962) ---

@@ -150,6 +150,31 @@ async def test_server_offers_only_none_to_the_browser() -> None:
 
 
 @pytest.mark.asyncio
+async def test_server_rejects_a_pre_38_browser_client() -> None:
+    """Regression test: RFC 6143 Appendix A version-gates security-type
+    None's SecurityResult (3.8 sends one, 3.3/3.7 don't). The server used to
+    accept any 3.7+ client and always send it, which would desync a genuine
+    3.7 client. Rather than track two behaviors for a client this proxy has
+    no real reason to support (noVNC has spoken 3.8 for years), a pre-3.8
+    offer is refused outright."""
+
+    async def _fake_37_browser_client(pipe: _Pipe) -> None:
+        server_version = await pipe.read_exactly(12)
+        assert server_version == RFB_VERSION
+        await pipe.write(b"RFB 003.007\n")
+
+    async def _run() -> None:
+        server_side, browser_side = _make_pair()
+        await asyncio.gather(
+            offer_no_auth_as_server(server_side, server_side),
+            _fake_37_browser_client(browser_side),
+        )
+
+    with pytest.raises(VncAuthError, match="only 3.8 is supported"):
+        await _run()
+
+
+@pytest.mark.asyncio
 async def test_password_never_appears_in_any_exception_message() -> None:
     """The real password must never leak into a log line or an error message
     a client could observe -- checked by string-searching every VncAuthError

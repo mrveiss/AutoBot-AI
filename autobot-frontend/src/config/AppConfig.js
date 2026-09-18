@@ -205,9 +205,10 @@ export class AppConfigService {
     const backendUrl = await this.serviceDiscovery.getServiceUrl('backend');
     const proxyPath = type === 'playwright' ? 'browser' : type; // Map 'playwright' → 'browser'
 
+    // #16299: no password param -- the backend authenticates to the real VNC
+    // server itself and offers this browser security-type "None".
     const params = new URLSearchParams({
       autoconnect: options.autoconnect !== false ? 'true' : 'false',
-      password: options.password || vncConfig.password,
       resize: options.resize || 'remote',
       reconnect: options.reconnect !== false ? 'true' : 'false',
       quality: options.quality || '9',

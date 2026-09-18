@@ -159,14 +159,21 @@ async def offer_no_auth_as_server(reader: ByteReader, writer: ByteWriter) -> Non
     await writer.write(RFB_VERSION)
     client_version_raw = await reader.read_exactly(12)
     major, minor = _parse_version(client_version_raw)
-    if major != 3 or minor < 7:
-        raise VncAuthError(f"client offered unsupported RFB version: {major}.{minor}")
+    # #16299 review: security-type None's SecurityResult is version-gated by
+    # RFC 6143 Appendix A -- RFB 3.8 sends one, 3.3/3.7 do not. The
+    # unconditional send below is only correct for a negotiated 3.8 session,
+    # so require exactly that rather than tracking two behaviors for a
+    # pre-3.8 client this proxy has no real reason to support: noVNC (the
+    # only browser client this proxy ever talks to) has spoken 3.8 since
+    # well before this project existed.
+    if major != 3 or minor != 8:
+        raise VncAuthError(f"client offered unsupported RFB version: {major}.{minor} (only 3.8 is supported)")
 
     await writer.write(bytes([1, SECURITY_TYPE_NONE]))  # count=1, type=None
     chosen_raw = await reader.read_exactly(1)
     if chosen_raw[0] != SECURITY_TYPE_NONE:
         raise VncAuthError(f"client selected unexpected security type: {chosen_raw[0]}")
 
-    # RFB 3.8: even security-type None sends a SecurityResult (RFC 6143
-    # 7.2.1); 3.3/3.7 skip it, but we always offer 3.8 above, so always send it.
+    # RFB 3.8 (RFC 6143 7.2.1): even security-type None sends a SecurityResult.
+    # Safe unconditionally here since the version check above already requires 3.8.
     await writer.write((0).to_bytes(4, "big"))
