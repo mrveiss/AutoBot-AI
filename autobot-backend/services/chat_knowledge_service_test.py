@@ -842,6 +842,72 @@ async def test_conversation_aware_retrieve_escalate_clears_context_and_citations
     assert citations == []
 
 
+@pytest.mark.asyncio
+async def test_smart_retrieve_knowledge_quarantine_scrubs_citation_content(mock_rag_service, sample_search_results) -> None:
+    """#16930 review: the QUARANTINE-scrub branch added to smart_retrieve_knowledge
+    alongside conversation_aware_retrieve's had no test of its own -- mirrors that
+    test exactly, mocked verdict isolating this from which detector rule produces
+    QUARANTINE in practice."""
+    from unittest.mock import AsyncMock, patch
+
+    from security.content_firewall import ContentSource, FirewallAction, FirewallVerdict
+
+    service = ChatKnowledgeService(mock_rag_service)
+    mock_rag_service.advanced_search.return_value = (sample_search_results, RAGMetrics())
+
+    quarantine_verdict = FirewallVerdict(
+        content="[SANITIZED] the flagged text was stripped [/SANITIZED]",
+        action=FirewallAction.QUARANTINE,
+        risk=MagicMock(),
+        source=ContentSource.RAG,
+        blocked=False,
+        escalated=False,
+    )
+    with patch("services.knowledge.service.inspect_rag_context", AsyncMock(return_value=quarantine_verdict)):
+        context, citations, _intent = await service.smart_retrieve_knowledge(
+            query="How do I configure Redis?", force_retrieval=False
+        )
+
+    assert context == "[SANITIZED] the flagged text was stripped [/SANITIZED]"
+    assert citations != []  # QUARANTINE keeps citations, unlike BLOCK/ESCALATE
+    for citation in citations:
+        assert citation["content"] == "[FIREWALL: content withheld — moderate injection risk]"
+        assert "Redis" not in citation["content"]
+
+
+@pytest.mark.asyncio
+async def test_retrieve_combined_knowledge_quarantine_scrubs_citation_content(
+    mock_rag_service, sample_search_results
+) -> None:
+    """#16930 review: same gap in retrieve_combined_knowledge. enable_doc_search=False
+    isolates this to the rag_citations scrub path -- doc_results_list scrubbing is
+    the same loop body, covered by reading the source, not a second detector fixture."""
+    from unittest.mock import AsyncMock, patch
+
+    from security.content_firewall import ContentSource, FirewallAction, FirewallVerdict
+
+    service = ChatKnowledgeService(mock_rag_service, enable_doc_search=False)
+    mock_rag_service.advanced_search.return_value = (sample_search_results, RAGMetrics())
+
+    quarantine_verdict = FirewallVerdict(
+        content="[SANITIZED] the flagged text was stripped [/SANITIZED]",
+        action=FirewallAction.QUARANTINE,
+        risk=MagicMock(),
+        source=ContentSource.RAG,
+        blocked=False,
+        escalated=False,
+    )
+    with patch("services.knowledge.service.inspect_rag_context", AsyncMock(return_value=quarantine_verdict)):
+        context, rag_citations, doc_results = await service.retrieve_combined_knowledge(query="How do I configure Redis?")
+
+    assert context == "[SANITIZED] the flagged text was stripped [/SANITIZED]"
+    assert rag_citations != []
+    assert doc_results == []  # doc search disabled -- nothing to scrub on that side
+    for citation in rag_citations:
+        assert citation["content"] == "[FIREWALL: content withheld — moderate injection risk]"
+        assert "Redis" not in citation["content"]
+
+
 # ---------------------------------------------------------------------------
 # budget_grounded_context shared helper (#10837)
 # ---------------------------------------------------------------------------
