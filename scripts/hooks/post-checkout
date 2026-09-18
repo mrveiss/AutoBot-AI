@@ -94,8 +94,15 @@ fi
 # a branch guard as a safety net.
 #
 # Layout:
-#   .git/hooks/pre-commit                   → stash-free wrapper
-#   .git/hooks/pre-commit.pre-commit-framework → original pre-commit hook (backup)
+#   .git/hooks/pre-commit                      → stash-free wrapper, or the
+#                                                 #16923 branch-guard+formatter
+#                                                 template once that exists
+#   .git/hooks/pre-commit.pre-commit-framework → original pre-commit hook,
+#                                                 backed up when wrapped (above)
+#   .git/hooks/pre-commit.pre-formatter-dispatch → whatever pre-commit hook
+#                                                 (old wrapper, or hand-
+#                                                 customized) was replaced by
+#                                                 the #16923 template (below)
 #
 # Superseded, when present in THIS checkout, by tools/git-hooks/pre-commit
 # (#16923): the same branch guard, chained into formatter dispatch, and
@@ -131,6 +138,11 @@ if [ -d "$HOOKS_DIR" ] && [ -f "$NEW_PRECOMMIT_SRC" ]; then
     # with the modern branch-guard-plus-formatter-dispatch template instead
     # of the older branch-guard-only wrapper.
     PRECOMMIT_HOOK="$HOOKS_DIR/pre-commit"
+    # Backup for whatever this branch supersedes -- named for what it
+    # supersedes (the pre-#16923 state), same pattern the wrapper-swap
+    # branch below uses for what IT supersedes
+    # (pre-commit -> pre-commit.pre-commit-framework).
+    BACKUP_HOOK="$HOOKS_DIR/pre-commit.pre-formatter-dispatch"
 
     # Never clobber a hook `pre-commit install` generated itself (parity
     # with scripts/install-git-hooks.sh's own exception, #11598): that hook
@@ -142,6 +154,17 @@ if [ -d "$HOOKS_DIR" ] && [ -f "$NEW_PRECOMMIT_SRC" ]; then
             _installed_precommit=$(sed '/^# --- AUTOBOT_FLOCK/,/^# --- END AUTOBOT_FLOCK/d' "$PRECOMMIT_HOOK")
         fi
         if [ "$_installed_precommit" != "$(cat "$NEW_PRECOMMIT_SRC")" ]; then
+            # Whatever is installed here is neither this template
+            # (byte-identical, just ruled out above) nor a real
+            # pre-commit-framework-generated hook (ruled out by the
+            # containing `if`) -- it is either the OLD branch-guard-only
+            # wrapper (#1689) on a first-time #16923 upgrade, or a
+            # developer's hand-customized hook. Either way it must not be
+            # silently destroyed (found in review on PR #16938): move it
+            # aside before the template replaces it.
+            if [ -f "$PRECOMMIT_HOOK" ]; then
+                mv "$PRECOMMIT_HOOK" "$BACKUP_HOOK"
+            fi
             cp "$NEW_PRECOMMIT_SRC" "$PRECOMMIT_HOOK"
             chmod +x "$PRECOMMIT_HOOK"
         fi

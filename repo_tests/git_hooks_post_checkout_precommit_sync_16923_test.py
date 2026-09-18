@@ -230,6 +230,52 @@ def test_a_fresh_clone_installs_the_new_template_directly(tmp_path: Path, post_c
     assert installed == _NEW_PRECOMMIT_TEMPLATE.read_bytes()
 
 
+def test_an_installed_old_wrapper_is_upgraded_to_the_template(tmp_path: Path, post_checkout_text: str) -> None:
+    """The single most common real-world upgrade case: an existing checkout
+    already has the OLD branch-guard-only wrapper (#1689) installed as
+    .git/hooks/pre-commit, and this is the first checkout after #16923's
+    template lands in the tree. Found in review on PR #16938: not covered by
+    the tests above, which all seed either nothing or a raw framework hook."""
+    repo = _seed_repo(tmp_path, post_checkout_text, with_new_template=True)
+    _install_live_post_checkout(repo)
+    _install(repo / ".git" / "hooks" / "pre-commit", _OLD_WRAPPER.read_bytes())
+
+    _bounce(repo)
+
+    installed = (repo / ".git" / "hooks" / "pre-commit").read_bytes()
+    assert installed == _NEW_PRECOMMIT_TEMPLATE.read_bytes(), (
+        "an installed old wrapper was not upgraded to the #16923 template -- "
+        f"got:\n{installed.decode('utf-8', 'replace')[:400]}"
+    )
+
+
+def test_a_hand_customized_hook_is_backed_up_not_destroyed(tmp_path: Path, post_checkout_text: str) -> None:
+    """Found in review on PR #16938: the branch that upgrades an installed
+    hook to the #16923 template did a bare overwrite with no backup, unlike
+    the sibling wrapper-swap branch (which backs up to
+    pre-commit.pre-commit-framework before overwriting). A developer's
+    hand-customized hook -- neither the template, nor the old wrapper, nor a
+    real pre-commit-framework-generated hook -- must survive as a backup
+    file, not be silently destroyed."""
+    repo = _seed_repo(tmp_path, post_checkout_text, with_new_template=True)
+    _install_live_post_checkout(repo)
+    customized_hook = (
+        "#!/bin/bash\n# Hand-customized by a developer, not the template, not the wrapper, "
+        "not pre-commit-framework-generated.\necho 'my custom check'\nexit 0\n"
+    )
+    _install(repo / ".git" / "hooks" / "pre-commit", customized_hook.encode("utf-8"))
+
+    _bounce(repo)
+
+    installed = (repo / ".git" / "hooks" / "pre-commit").read_bytes()
+    assert installed == _NEW_PRECOMMIT_TEMPLATE.read_bytes(), "the customized hook was not replaced by the template"
+    backup = repo / ".git" / "hooks" / "pre-commit.pre-formatter-dispatch"
+    assert backup.is_file(), "the customized hook was destroyed with no backup left behind"
+    assert (
+        backup.read_text(encoding="utf-8") == customized_hook
+    ), "a backup exists but its content does not match the original customized hook"
+
+
 def test_a_real_pre_commit_framework_generated_hook_is_never_clobbered(tmp_path: Path, post_checkout_text: str) -> None:
     """Parity with scripts/install-git-hooks.sh's own exception (#11598):
     a hook `pre-commit install` generated itself already runs the full
