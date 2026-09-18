@@ -80,7 +80,9 @@ class TestOriginOf:
 
 def test_the_originator_survives_the_wire_format():
     """The Redis channel moves messages as JSON; the fields must come back out of it."""
-    message = StandardMessage(header=_header(originator="agent_a", chain=["agent_a", "relay_b"]), payload=MessagePayload())
+    message = StandardMessage(
+        header=_header(originator="agent_a", chain=["agent_a", "relay_b"]), payload=MessagePayload()
+    )
 
     header = StandardMessage.from_json(message.to_json()).header
 
@@ -136,7 +138,9 @@ async def test_a_peer_request_carries_its_originator_into_the_agent():
     """The handler used to drop the sender entirely, so a peer's request read as the agent's own."""
     agent = _Relay()
     inbound = StandardMessage(
-        header=_header(sender=AgentIdentity(agent_id="agent_a", agent_type="t"), originator="agent_a", chain=["agent_a"]),
+        header=_header(
+            sender=AgentIdentity(agent_id="agent_a", agent_type="t"), originator="agent_a", chain=["agent_a"]
+        ),
         payload=MessagePayload(content={"action": "process", "payload": {}}),
     )
 
