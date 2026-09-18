@@ -29,11 +29,11 @@ else without adding a real check here first.
 
 from __future__ import annotations
 
-import os
 import time
 from dataclasses import dataclass, field
 from threading import Lock
 
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from protocols.agent_kind import AgentKind
@@ -50,19 +50,23 @@ UNKNOWN_TENANT = "__presence_unknown_tenant__"
 #: How long a reporting agent's entry stays live with no further heartbeat.
 #: An agent that stops reporting (crashed, network partition, clean exit that
 #: skipped deregister) must leave the list within a bounded time, not linger
-#: forever -- this is that bound.
+#: forever -- this is that bound. A 0 or negative TTL would make every entry
+#: look stale the instant it is reported (#16965 review), so it is clamped
+#: to a minimum of 1s, matching the EnvVarSpec's own `range=`.
 PRESENCE_TTL_ENV = "AUTOBOT_AGENT_PRESENCE_TTL_SECONDS"
 DEFAULT_PRESENCE_TTL_SECONDS = 90.0
+MIN_PRESENCE_TTL_SECONDS = 1.0
+MAX_PRESENCE_TTL_SECONDS = 3600.0
 
 
 def presence_ttl_seconds() -> float:
     """The staleness bound in seconds; the default when the var is unusable."""
-    raw = os.getenv(PRESENCE_TTL_ENV, "")
-    try:
-        return float(raw or DEFAULT_PRESENCE_TTL_SECONDS)
-    except ValueError:
-        logger.warning("%s=%r is not a float; using default %.1fs", PRESENCE_TTL_ENV, raw, DEFAULT_PRESENCE_TTL_SECONDS)
-        return DEFAULT_PRESENCE_TTL_SECONDS
+    return env_float_clamped(
+        PRESENCE_TTL_ENV,
+        DEFAULT_PRESENCE_TTL_SECONDS,
+        min_v=MIN_PRESENCE_TTL_SECONDS,
+        max_v=MAX_PRESENCE_TTL_SECONDS,
+    )
 
 
 class PresenceNameCollisionError(Exception):

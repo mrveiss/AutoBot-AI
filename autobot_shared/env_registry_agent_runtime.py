@@ -59,6 +59,7 @@ register_env_var(
             "report more often (protocols/agent_presence.py, #16947)."
         ),
         component="agents",
+        range=(1, 3600),
     )
 )
 
@@ -77,6 +78,7 @@ register_env_var(
             "often (initialization/agent_presence_sync.py)."
         ),
         component="agents",
+        range=(1, 3600),
     )
 )
 
