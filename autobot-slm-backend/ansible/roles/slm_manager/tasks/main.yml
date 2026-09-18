@@ -452,6 +452,35 @@
       {{ autobot_secrets_root_key
          if (autobot_secrets_root_key | default('') | trim | length > 0)
          else lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}
+    # #16299: backend_secret_key's own role default (roles/backend/defaults/main.yml)
+    # was the guessable literal "change-me-in-production", shipped unchanged on every
+    # deployment that never overrode it. Generated here, once, the same way
+    # slm_secret_key is -- the backend role reads it back from this file (#10400's
+    # SLM_SECRET_KEY pattern) since backend commonly runs on a different host than
+    # this one. A backend deployed standalone, with no SLM secrets file ever reaching
+    # it, keeps its own role default as a documented fallback.
+    backend_secret_key: >-
+      {{ backend_secret_key
+         if (backend_secret_key | default('') | trim | length > 0)
+         else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    # #16299: grafana_admin_password's own role default (roles/monitoring/defaults/main.yml)
+    # is the guessable literal "admin". monitoring is listed in this SAME play
+    # (playbooks/deploy-slm-manager.yml's roles:), and Ansible's static roles: loads
+    # every listed role's defaults/main.yml up front, for the whole play -- verified
+    # empirically, not assumed: a throwaway two-role playbook showed the first role's
+    # task already seeing the SECOND role's own default before that role had run any
+    # task. So `grafana_admin_password | default('') | length > 0` would already read
+    # "admin" as "the operator set this", and never generate -- a silent no-op. The
+    # check below must compare against the KNOWN weak literal specifically, the same
+    # way an inventory-supplied real password (which will never equal "admin") is
+    # still respected. On a re-run monitoring reads this file back (#10400's pattern)
+    # rather than depending on this task having run this time. deploy-monitoring.yml
+    # also runs monitoring standalone, with no SLM present at all -- that path keeps
+    # the role's own "admin" default as a documented fallback.
+    grafana_admin_password: >-
+      {{ grafana_admin_password
+         if (grafana_admin_password | default('') | trim | length > 0 and grafana_admin_password != 'admin')
+         else lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
@@ -617,6 +646,59 @@
   when:
     - slm_secrets_stat.stat.exists
     - _slm_root_key_check.rc != 0
+  no_log: true
+  tags: ['slm', 'secrets']
+
+# #16299: same back-fill for the backend SECRET_KEY. Every host provisioned
+# before this change already has the secrets file, so the template task above
+# is skipped and the key would never appear -- leaving backend_secret_key's own
+# guessable "change-me-in-production" role default in effect forever.
+- name: "SLM | Check if AUTOBOT_BACKEND_SECRET_KEY present in secrets file (#16299)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^AUTOBOT_BACKEND_SECRET_KEY=.\+'
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_backend_secret_key_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  no_log: true
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Add AUTOBOT_BACKEND_SECRET_KEY to existing secrets file (#16299)"
+  ansible.builtin.lineinfile:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+    regexp: "^AUTOBOT_BACKEND_SECRET_KEY="
+    line: "AUTOBOT_BACKEND_SECRET_KEY={{ lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}"
+    create: false
+  when:
+    - slm_secrets_stat.stat.exists
+    - _slm_backend_secret_key_check.rc != 0
+  no_log: true
+  tags: ['slm', 'secrets']
+
+# #16299: same back-fill for the Grafana admin password.
+- name: "SLM | Check if GRAFANA_ADMIN_PASSWORD present in secrets file (#16299)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^GRAFANA_ADMIN_PASSWORD=.\+'
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_grafana_admin_pw_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  no_log: true
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Add GRAFANA_ADMIN_PASSWORD to existing secrets file (#16299)"
+  ansible.builtin.lineinfile:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+    regexp: "^GRAFANA_ADMIN_PASSWORD="
+    line: "GRAFANA_ADMIN_PASSWORD={{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
+    create: false
+  when:
+    - slm_secrets_stat.stat.exists
+    - _slm_grafana_admin_pw_check.rc != 0
   no_log: true
   tags: ['slm', 'secrets']
 
