@@ -63,16 +63,20 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 ## Verification
 
 Never state CI is green, history was destroyed, work is complete, or a check failed without
-pasting the command and its output. Two-dot diffs (`git diff base..head`) for change
-verification, never three-dot. Re-read source APIs for current numbers — never hand-patch a
-cached figure. Applies to every claim made against [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md)
-and [`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md) steps.
+pasting the command and its output. Three-dot diffs (`git diff base...head`, from the merge
+base) for "what this PR changes" — a two-dot diff between two tips shows base's own
+independent commits reversed as if the PR made them once base has moved. Re-read source APIs
+for current numbers — never hand-patch a cached figure. Applies to every claim made against
+[`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md) and
+[`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md) steps.
 
 ## Environment Guards
 
 A worktree cap, protect-files hook, or permission classifier blocking an action is reported
-with the exact blocker and its one-line fix (e.g. `WORKTREE_CAP=N`) immediately — never retried
-blind. Never touch a branch, PR, or worktree another session owns.
+with the exact blocker, verbatim, immediately — never retried blind and never resolved by
+proposing to raise the limit. Never touch a branch, PR, or worktree another session owns,
+unless the user asks or it is the abandoned/stale work you were dispatched to finish (claim
+it in the ledger first) — see the global worktree-mandate exception.
 
 ## Issue Filing
 
