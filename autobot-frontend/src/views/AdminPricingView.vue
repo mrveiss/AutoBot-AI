@@ -189,7 +189,7 @@ onMounted(load)
       </div>
 
       <!-- Manual override -->
-      <div class="card mt-6">
+      <div class="card">
         <div class="section-header card-header">
           <h2 class="section-title">{{ t('admin.pricing.overrideTitle') }}</h2>
           <button class="btn-action-secondary" @click="showOverrideForm = !showOverrideForm">
@@ -261,92 +261,14 @@ onMounted(load)
   </div>
 </template>
 
-<style scoped>
-/*
- * Page chrome (.page-header/.page-title/.page-actions), cards (.card/.card-header/
- * .card-body), alerts (.alert/.alert-error/.alert-info), the empty state, form
- * fields (.field-group/.field-label/.field-input) and the three .btn-action-*
- * variants all come from the global autobot-frontend/src/assets/css/components.css
- * (Issue #901) — only what that file doesn't cover lives here.
- */
-.admin-pricing {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.admin-pricing-body {
-  padding: var(--spacing-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-4);
-}
-
-.provider-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-  gap: var(--spacing-4);
-}
-
-.provider-card {
-  padding: var(--spacing-4);
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-}
-
-.provider-name {
-  font-weight: var(--font-semibold);
-  text-transform: capitalize;
-}
-
-.provider-meta {
-  margin: 0;
-}
-
-.meta-row {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--spacing-2);
-  font-size: var(--text-sm);
-  padding: var(--spacing-1) 0;
-}
-
-.meta-row dt {
-  color: var(--text-tertiary);
-}
-
-.meta-row dd {
-  margin: 0;
-  color: var(--text-secondary);
-}
-
-.override-form,
-.override-remove-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3);
-  margin-top: var(--spacing-4);
-  padding-top: var(--spacing-4);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.field-row.two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-3);
-}
-
-.required {
-  color: var(--color-error);
-}
-
-.remove-row {
-  display: flex;
-  gap: var(--spacing-2);
-  align-items: center;
-}
-
-.mt-6 {
-  margin-top: var(--spacing-6);
-}
-</style>
+<!--
+  No <style> block: every class this view uses (.admin-pricing/.admin-pricing-body/
+  .provider-cards/.provider-card/.provider-name/.provider-meta/.meta-row/
+  .override-form/.override-remove-form/.remove-row, plus page chrome, cards,
+  alerts, the empty state, form fields and the three .btn-action-* variants)
+  is defined in the shared autobot-frontend/src/assets/css/components.css
+  (Issue #901, "Admin: Pricing" section) rather than here — one more
+  component-local <style scoped> block was exactly what
+  repo_tests/frontend_fragmentation_ratchet_test.py (#16875) exists to push
+  back on.
+-->
