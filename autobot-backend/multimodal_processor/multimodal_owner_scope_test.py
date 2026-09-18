@@ -13,8 +13,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from memory.storage.general_storage import LEGACY_UNSCOPED_OWNER, OwnerScopeError, _require_user_id
 from multimodal_processor.models import ModalityType, ProcessingIntent, ProcessingResult
 from multimodal_processor.processor import MultiModalProcessor
+from multimodal_processor.types import PersistenceOutcome
 
 
 def _result(user_id=None):
@@ -58,9 +60,10 @@ class TestUnownedResultIsNotPersisted:
     @pytest.mark.asyncio
     async def test_unowned_result_skips_the_write(self, processor):
         with patch.object(processor.memory_manager, "store_memory", new_callable=AsyncMock) as store:
-            await processor._store_result(_result(user_id=None))
+            outcome = await processor._store_result(_result(user_id=None))
 
         store.assert_not_awaited()
+        assert outcome is PersistenceOutcome.UNOWNED
 
     @pytest.mark.asyncio
     async def test_the_skip_is_logged_not_silent(self, processor):
@@ -157,27 +160,27 @@ class TestSystemInitiatedWorkIsPersisted:
 
 # ---------------------------------------------------------------------------
 # #15234: a swallowed exception made a dropped result indistinguishable from
-# a stored one. The old code had no return statement at all (implicit None
-# on every path), so `is False` -- not merely falsy -- is what the contrast
-# mutation in the last test actually exercises.
+# a stored one. #16926: a bool then made a tenancy refusal indistinguishable
+# from a Redis blip. Each test pins one PersistenceOutcome member by identity,
+# so collapsing any two outcomes fails at least one of them.
 # ---------------------------------------------------------------------------
 
 
 class TestAStorageFailureIsVisibleToTheCaller:
     @pytest.mark.asyncio
-    async def test_a_generic_store_failure_returns_false_not_none(self, processor):
+    async def test_a_generic_store_failure_is_reported_as_failed(self, processor):
         with patch.object(processor.memory_manager, "store_memory", new_callable=AsyncMock) as store:
             store.side_effect = RuntimeError("redis unavailable")
             outcome = await processor._store_result(_result(user_id="user-42"))
 
-        assert outcome is False
+        assert outcome is PersistenceOutcome.FAILED
 
     @pytest.mark.asyncio
-    async def test_a_successful_store_returns_true(self, processor):
+    async def test_a_successful_store_is_reported_as_stored(self, processor):
         with patch.object(processor.memory_manager, "store_memory", new_callable=AsyncMock):
             outcome = await processor._store_result(_result(user_id="user-42"))
 
-        assert outcome is True
+        assert outcome is PersistenceOutcome.STORED
 
     @pytest.mark.asyncio
     async def test_process_records_whether_the_result_was_persisted(self):
@@ -200,17 +203,45 @@ class TestAStorageFailureIsVisibleToTheCaller:
                 store.side_effect = RuntimeError("redis unavailable")
                 result = await proc.process(modal_input)
 
-        assert result.metadata["persisted"] is False
+        assert result.metadata["persistence"] == "failed"
 
     @pytest.mark.asyncio
     async def test_a_tenancy_rejection_is_logged_as_a_refusal_not_a_generic_warning(self, processor):
         """#15234: the tenancy guard's ValueError must not read like a Redis blip."""
         with patch.object(processor.memory_manager, "store_memory", new_callable=AsyncMock) as store:
-            store.side_effect = ValueError("user_id is required — memory queries cannot be unscoped")
+            store.side_effect = OwnerScopeError("user_id is required — memory queries cannot be unscoped")
             with patch.object(processor, "logger") as log:
                 outcome = await processor._store_result(_result(user_id="user-42"))
 
-        assert outcome is False
+        assert outcome is PersistenceOutcome.REFUSED
         log.error.assert_called_once()
         log.warning.assert_not_called()
         assert "#15234" in log.error.call_args.args[0]
+
+    @pytest.mark.asyncio
+    async def test_a_validation_value_error_is_not_reported_as_a_refusal(self, processor):
+        """#16926: store_memory raises plain ValueError for bad input too; only the guard's type is a refusal."""
+        with patch.object(processor.memory_manager, "store_memory", new_callable=AsyncMock) as store:
+            store.side_effect = ValueError("content cannot be empty")
+            with patch.object(processor, "logger") as log:
+                outcome = await processor._store_result(_result(user_id="user-42"))
+
+        assert outcome is PersistenceOutcome.FAILED
+        log.error.assert_not_called()
+
+
+class TestTheGuardRaisesTheTypeTheProcessorCatches:
+    """The processor catches OwnerScopeError, not ValueError. These pin the real guard to that type, so reverting
+    it to a bare ValueError turns every tenancy refusal into a reported transient failure and fails here (#16926)."""
+
+    @pytest.mark.parametrize("scope", [None, "", "   "])
+    def test_a_missing_or_blank_scope(self, scope):
+        with pytest.raises(OwnerScopeError):
+            _require_user_id(scope, for_write=True)
+
+    def test_the_reserved_legacy_owner_on_a_write(self):
+        with pytest.raises(OwnerScopeError):
+            _require_user_id(LEGACY_UNSCOPED_OWNER, for_write=True)
+
+    def test_it_is_still_a_value_error_for_existing_callers(self):
+        assert issubclass(OwnerScopeError, ValueError)
