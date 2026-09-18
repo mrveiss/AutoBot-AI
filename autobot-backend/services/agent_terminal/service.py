@@ -95,13 +95,9 @@ class AgentTerminalService:
         host: str = "main",
         metadata: Metadata | None = None,
         owner: str | None = None,
+        tenant_id: str | None = None,
     ) -> AgentTerminalSession:
-        """Create a new agent terminal session with PTY integration.
-
-        Issue #14989: `owner` is the authenticated creator's username, stamped
-        onto the shared terminal session_configs entry so the WebSocket
-        ownership gate in api.terminal can recognise them (#14960).
-        """
+        """Create a session; `owner` (#14989) stamps the WebSocket ownership gate, `tenant_id` (#16975) is JWT-only."""
         return await self.session_manager.create_session(
             agent_id=agent_id,
             agent_role=agent_role,
@@ -109,6 +105,7 @@ class AgentTerminalService:
             host=host,
             metadata=metadata,
             owner=owner,
+            tenant_id=tenant_id,
         )
 
     async def get_session(self, session_id: str) -> AgentTerminalSession | None:
