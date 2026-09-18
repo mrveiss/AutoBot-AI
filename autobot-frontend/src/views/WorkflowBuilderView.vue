@@ -1012,12 +1012,12 @@ async function createFromNaturalLanguage(): Promise<void> {
   );
 
   if (workflowId) {
-    showToast('Workflow created successfully', 'success');
+    showToast(t('workflow.builder.created'), 'success');
     if (!requireApprovalBeforeRun.value) {
       navigateTo('runner');
     }
   } else {
-    showToast(error.value || 'Failed to create workflow', 'error');
+    showToast(error.value || t('workflow.builder.createFailed'), 'error');
   }
 }
 
@@ -1026,11 +1026,11 @@ async function handleApprovePlan(): Promise<void> {
 
   const success = await approvePlan(pendingApproval.value.workflow_id);
   if (success) {
-    showToast('Plan approved, workflow starting...', 'success');
+    showToast(t('workflow.builder.planApproved'), 'success');
     naturalLanguageInput.value = '';
     navigateTo('runner');
   } else {
-    showToast('Failed to approve plan', 'error');
+    showToast(t('workflow.builder.planApproveFailed'), 'error');
   }
 }
 
@@ -1039,7 +1039,7 @@ async function handleRejectPlan(): Promise<void> {
 
   const success = await rejectPlan(pendingApproval.value.workflow_id, 'User rejected');
   if (success) {
-    showToast('Plan rejected', 'info');
+    showToast(t('workflow.builder.planRejected'), 'info');
   }
 }
 
@@ -1080,13 +1080,13 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
   if (unsupportedNodes.length > 0) {
     const types = [...new Set(unsupportedNodes.map((n) => n.type))];
     showToast(
-      `${types.join(', ')} nodes are not yet supported and will be excluded. See #2140.`,
+      t('workflow.builder.unsupportedNodes', { types: types.join(', ') }),
       'warning',
     );
   }
   const steps = exportCanvasToSteps();
   if (steps.length === 0) {
-    showToast('Add at least one step before saving', 'warning');
+    showToast(t('workflow.builder.addStepFirst'), 'warning');
     return;
   }
   const template: WorkflowTemplate = {
@@ -1099,10 +1099,10 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
   };
   const workflowId = await createWorkflowFromTemplate(template, sessionId.value);
   if (workflowId) {
-    showToast(`Workflow "${name}" saved`, 'success');
+    showToast(t('workflow.builder.saved', { name }), 'success');
     navigateTo('runner');
   } else {
-    showToast('Failed to save workflow', 'error');
+    showToast(t('workflow.builder.saveFailed'), 'error');
   }
 }
 
@@ -1112,7 +1112,7 @@ async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTempl
   if (!full.steps?.length) {
     const detail = await fetchTemplateDetail(template.id);
     if (!detail?.steps?.length) {
-      showToast('Template has no steps to load', 'warning');
+      showToast(t('workflow.builder.templateEmpty'), 'warning');
       return;
     }
     full = { ...template, steps: detail.steps } as unknown as WorkflowTemplate;
@@ -1129,59 +1129,59 @@ async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTempl
     addNode(node);
   });
   navigateTo('canvas');
-  showToast(`Template "${template.name}" loaded into canvas`, 'success');
+  showToast(t('workflow.builder.templateLoaded', { name: template.name }), 'success');
 }
 
 async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
   const result = await executeApiTemplate(template.id);
   if (result?.success) {
-    showToast(`Workflow "${template.name}" started`, 'success');
+    showToast(t('workflow.builder.templateStarted', { name: template.name }), 'success');
     navigateTo('runner');
     await loadActiveWorkflows();
   } else {
-    showToast(result?.error || `Failed to run "${template.name}"`, 'error');
+    showToast(result?.error || t('workflow.builder.templateRunFailed', { name: template.name }), 'error');
   }
 }
 
 async function handleStartWorkflow(workflowId: string): Promise<void> {
   const success = await startWorkflow(workflowId);
   if (success) {
-    showToast('Workflow started', 'success');
+    showToast(t('workflow.builder.started'), 'success');
   }
 }
 
 async function handlePauseWorkflow(workflowId: string): Promise<void> {
   const success = await pauseWorkflow(workflowId);
   if (success) {
-    showToast('Workflow paused', 'info');
+    showToast(t('workflow.builder.paused'), 'info');
   }
 }
 
 async function handleResumeWorkflow(workflowId: string): Promise<void> {
   const success = await resumeWorkflow(workflowId);
   if (success) {
-    showToast('Workflow resumed', 'success');
+    showToast(t('workflow.builder.resumed'), 'success');
   }
 }
 
 async function handleCancelWorkflow(workflowId: string): Promise<void> {
   const success = await cancelWorkflow(workflowId);
   if (success) {
-    showToast('Workflow cancelled', 'info');
+    showToast(t('workflow.builder.cancelled'), 'info');
   }
 }
 
 async function handleApproveStep(workflowId: string, stepId: string): Promise<void> {
   const success = await approveStep(workflowId, stepId);
   if (success) {
-    showToast('Step approved', 'success');
+    showToast(t('workflow.builder.stepApproved'), 'success');
   }
 }
 
 async function handleSkipStep(workflowId: string, stepId: string): Promise<void> {
   const success = await skipStep(workflowId, stepId);
   if (success) {
-    showToast('Step skipped', 'info');
+    showToast(t('workflow.builder.stepSkipped'), 'info');
   }
 }
 
@@ -1220,7 +1220,7 @@ async function handleReRunWorkflow(workflowId: string): Promise<void> {
     activeWorkflows.value.find((wf) => wf.workflow_id === workflowId) ??
     (await getWorkflowStatus(workflowId));
   if (!existing) {
-    showToast('Could not find workflow to re-run', 'error');
+    showToast(t('workflow.builder.rerunNotFound'), 'error');
     return;
   }
   const template: WorkflowTemplate = {
@@ -1242,16 +1242,16 @@ async function handleReRunWorkflow(workflowId: string): Promise<void> {
   const newId = await createWorkflowFromTemplate(template, `session_${Date.now()}`);
   if (newId) {
     await startWorkflow(newId);
-    showToast(`Re-running "${existing.name}"`, 'success');
+    showToast(t('workflow.builder.rerunning', { name: existing.name }), 'success');
     navigateTo('runner');
   } else {
-    showToast('Failed to re-run workflow', 'error');
+    showToast(t('workflow.builder.rerunFailed'), 'error');
   }
 }
 
 /** Handle notification config saved event (#3139). */
 function handleNotificationConfigSaved(workflowId: string): void {
-  showToast('Notification settings saved', 'success');
+  showToast(t('workflow.builder.notificationsSaved'), 'success');
   logger.info('Notification config saved for workflow %s', workflowId);
 }
 

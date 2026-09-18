@@ -238,6 +238,28 @@
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
+# #16310 review round 6: autobot-slm-agent is in ALLOWED_COMPONENTS
+# (services/drift_checker.py) with a verified nonstandard source mapping
+# (_NONSTANDARD_COMPONENT_PATHS) -- its source of truth is this role's own
+# files/slm/agent/ tree, deployed one `copy:` task at a time above rather
+# than a bulk sync. That does not change what deletion needs: if a file is
+# removed from files/slm/agent/, its `copy:` task above is removed too, and
+# the deployed copy is never cleaned up on its own. This role is
+# `import_role`'d in full from BOTH update-all-nodes.yml plays (PLAY 1's own
+# agent redeploy and PLAY 2's fleet agent redeploy), so wiring it here --
+# once -- covers both, unlike roles/backend and roles/frontend where the
+# update path never runs main.yml at all.
+- name: "SLM Agent | Delete files removed from source (#16310)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/sync_deletions.yml
+  vars:
+    sync_deletions_label: "SLM Agent"
+    sync_deletions_source_dir: >-
+      {{ (code_source_dir | default(autobot.base_dir ~ '/code_source')) ~
+      '/autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent' }}
+    sync_deletions_target_dir: "{{ slm_agent_dir }}/slm/agent"
+    sync_deletions_owner: "{{ slm_agent_user }}"
+  tags: ['slm_agent', 'deploy']
+
 - name: "SLM Agent | Deploy agent configuration"
   template:
     src: agent-config.yaml.j2

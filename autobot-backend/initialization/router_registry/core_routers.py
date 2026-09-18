@@ -34,6 +34,7 @@ from api.chat_compare import router as chat_compare_router  # Issue #4414
 from api.chat_embed import router as chat_embed_router  # GH#9047
 from api.chat_presets import router as chat_presets_router  # GH#8595
 from api.collaboration import router as collaboration_router
+from api.collaboration_events import router as collaboration_events_router  # #16460
 from api.config_revisions import router as config_revisions_router  # #1404
 from api.coordination import router as coordination_router  # #15949
 from api.data_storage import router as data_storage_router
@@ -69,6 +70,8 @@ from api.knowledge_population import router as knowledge_population_router
 from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.knowledge_search import router as knowledge_search_router
 from api.knowledge_search_aggregator import router as knowledge_search_aggregator_router
+from api.knowledge_search_analytics import router as knowledge_search_analytics_router
+from api.knowledge_search_documentation import router as knowledge_search_documentation_router
 from api.knowledge_search_scoped import router as knowledge_search_scoped_router
 from api.knowledge_suggestions import router as knowledge_suggestions_router
 from api.knowledge_sync_queue import router as knowledge_sync_queue_router  # Issue #4453
@@ -81,6 +84,7 @@ from api.live_events import router as live_events_router  # Issue #6229
 from api.llm import router as llm_router
 from api.llm_providers import router as llm_providers_router
 from api.manual_mcp import router as manual_mcp_router
+from api.mcp_external_servers import router as mcp_external_servers_router
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
 from api.mobile_devices import router as mobile_devices_router  # GH#4463
@@ -152,6 +156,7 @@ def _get_system_routers() -> list:
         (chat_presets_router, "", ["chat"], "chat_presets"),  # GH#8595
         (benchmarks_router, "", ["benchmarks"], "benchmarks"),  # Issue #9024
         (collaboration_router, "", ["collaboration"], "collaboration"),
+        (collaboration_events_router, "", ["collaboration"], "collaboration_events"),  # #16460
         (
             telegram_bot_router,
             "",
@@ -207,6 +212,12 @@ def _get_core_knowledge_routers() -> list:
             "/knowledge_base",
             ["knowledge-search"],
             "knowledge_search",
+        ),
+        (
+            knowledge_search_analytics_router,
+            "/knowledge_base",
+            ["knowledge-search"],
+            "knowledge_search_analytics",
         ),
         (
             knowledge_search_scoped_router,
@@ -364,6 +375,12 @@ def _get_knowledge_feature_routers() -> list:
             ["knowledge-multi-source", "knowledge-search"],
             "knowledge_search_aggregator",
         ),
+        (
+            knowledge_search_documentation_router,
+            "/knowledge_base",
+            ["knowledge-multi-source"],
+            "knowledge_search_documentation",
+        ),
         # #11072: knowledge_vectorization is NOT registered here — api/knowledge.py
         # already includes it into knowledge_router (mounted at /knowledge_base),
         # so a second standalone mount at the same prefix produced duplicate
@@ -437,6 +454,7 @@ def _get_mcp_routers() -> list:
         (knowledge_mcp_router, "/knowledge", ["knowledge_mcp", "mcp"], "knowledge_mcp"),
         (vnc_mcp_router, "/vnc", ["vnc", "mcp"], "vnc_mcp"),
         (mcp_registry_router, "/mcp", ["mcp", "registry"], "mcp_registry"),
+        (mcp_external_servers_router, "/mcp", ["mcp", "mcp-external-servers"], "mcp_external_servers"),
         (
             sequential_thinking_mcp_router,
             "/sequential_thinking",

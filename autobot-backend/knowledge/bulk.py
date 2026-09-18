@@ -757,7 +757,7 @@ class BulkOperationsMixin:
 
                 result = await self.store_fact(
                     content=fact_data.get("content", ""),
-                    metadata=fact_data.get("metadata", {}),
+                    metadata={**fact_data.get("metadata", {}), "ingest_route": "bulk_import"},
                     fact_id=fact_id,
                 )
 

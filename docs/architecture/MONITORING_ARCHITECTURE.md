@@ -18,8 +18,8 @@ AutoBot uses a unified Prometheus/Grafana monitoring stack for comprehensive obs
 ```
 +------------------+     +------------------+     +------------------+
 |   AutoBot        |     |   NPU Worker     |     |   Browser        |
-|   Backend        |     |   (VM2)          |     |   VM (VM5)       |
-|   (Main/VM1)     |     |   :8081          |     |   :3000          |
+|   Backend        |     |   Role           |     |   Role           |
+|   (Backend Role) |     |   :8081          |     |   :3000          |
 +--------+---------+     +--------+---------+     +--------+---------+
          |                        |                        |
          | /metrics               | /metrics               | /metrics
@@ -27,7 +27,7 @@ AutoBot uses a unified Prometheus/Grafana monitoring stack for comprehensive obs
 +--------+-----------------------+-----------------------+---------+
 |                                                                   |
 |                         Prometheus                                |
-|                         (VM3: <database-ip>:9090)                |
+|                         (<database-ip>:9090)                     |
 |                                                                   |
 |   - Scrapes all /metrics endpoints every 15s                    |
 |   - Stores time-series data (30 day retention)                  |
@@ -41,7 +41,7 @@ AutoBot uses a unified Prometheus/Grafana monitoring stack for comprehensive obs
 +-------------+-------------+  +------------+------------+
 |                           |  |                         |
 |      Grafana              |  |     AlertManager        |
-|   (VM3: :3000)            |  |     (VM3: :9093)        |
+|   (:3000)                 |  |     (:9093)             |
 |                           |  |                         |
 |   - Dashboard viz         |  |   - Alert routing       |
 |   - Embedded in Vue UI    |  |   - Notifications       |
@@ -52,7 +52,7 @@ AutoBot uses a unified Prometheus/Grafana monitoring stack for comprehensive obs
               v
 +---------------------------+
 |   AutoBot Frontend        |
-|   (VM1: :5173)            |
+|   (:5173)                 |
 |                           |
 |   - GrafanaDashboard.vue  |
 |   - Embedded iframes      |
@@ -78,7 +78,7 @@ Location: `src/monitoring/`
 
 ### 2. Prometheus Server
 
-**Location**: VM3 (<database-ip>:9090)
+**Location**: <database-ip>:9090
 
 **Configuration**: `config/prometheus/prometheus.yml`
 
@@ -103,7 +103,7 @@ scrape_configs:
 
 ### 3. Grafana Dashboards
 
-**Location**: VM3 (<database-ip>:3000)
+**Location**: <database-ip>:3000
 
 **Datasource UID**: `PBFA97CFB590B2093`
 

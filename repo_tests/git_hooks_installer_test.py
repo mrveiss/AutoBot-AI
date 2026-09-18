@@ -92,8 +92,7 @@ def test_a_hook_installed_from_a_worktree_outlives_that_worktree(seeded: Path, t
     for name in _MANAGED:
         installed = hooks_dir / name
         assert installed.exists(), (
-            f"{name} was not installed at all — an installer that installs nothing "
-            "reads exactly like one that works"
+            f"{name} was not installed at all — an installer that installs nothing " "reads exactly like one that works"
         )
         assert not installed.is_symlink(), (
             f"{name} was installed as a symlink. That is the #11598/#14909 defect: "
@@ -101,8 +100,7 @@ def test_a_hook_installed_from_a_worktree_outlives_that_worktree(seeded: Path, t
             "without saying anything"
         )
         assert str(worktree) not in installed.read_text(encoding="utf-8"), (
-            f"{name}'s installed copy names the worktree it came from, so deleting "
-            "that worktree still breaks it"
+            f"{name}'s installed copy names the worktree it came from, so deleting " "that worktree still breaks it"
         )
 
     _git(seeded, "worktree", "remove", "--force", str(worktree))
@@ -112,9 +110,9 @@ def test_a_hook_installed_from_a_worktree_outlives_that_worktree(seeded: Path, t
         installed = hooks_dir / name
         assert installed.is_file(), f"{name} broke when its source worktree was removed"
         assert os.access(installed, os.X_OK), f"{name} survived but is not executable"
-        assert installed.read_bytes() == (_TEMPLATES / name).read_bytes(), (
-            f"{name}'s installed copy no longer matches its template"
-        )
+        assert (
+            installed.read_bytes() == (_TEMPLATES / name).read_bytes()
+        ), f"{name}'s installed copy no longer matches its template"
 
 
 def test_a_dangling_symlink_left_by_the_old_installer_is_replaced(seeded: Path, tmp_path: Path) -> None:
@@ -136,3 +134,78 @@ def test_a_dangling_symlink_left_by_the_old_installer_is_replaced(seeded: Path, 
     assert not installed.is_symlink(), "the dangling symlink was left in place"
     assert installed.is_file() and os.access(installed, os.X_OK)
     assert installed.read_bytes() == (_TEMPLATES / "pre-push").read_bytes()
+
+
+# --------------------------------------------------------------------------
+# core.hooksPath is removed on PRESENCE, not on value (#16812)
+# --------------------------------------------------------------------------
+
+
+def _hooks_path_values(repo: Path) -> list[str]:
+    """Every configured core.hooksPath value, or [] when the key is absent.
+
+    Deliberately not `--get`: that exits non-zero on a multi-valued key and
+    prints nothing, which is the failure mode that let a doubled entry read as
+    "unset". A helper that cannot tell absent from unreadable would hide the
+    thing these tests exist to catch.
+    """
+    result = subprocess.run(
+        ["git", "config", "--local", "--get-all", "core.hooksPath"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env=scrubbed_git_env(),
+    )
+    return [line for line in result.stdout.splitlines() if line.strip()]
+
+
+def test_a_hooks_path_set_to_the_default_is_still_removed(seeded: Path) -> None:
+    """The state that fooled the old check, and the one that actually bites.
+
+    `pre-commit install` refuses whenever core.hooksPath exists, whatever its
+    value -- so a key pointing at the default hooks dir changes nothing for git
+    and disables every hook in .pre-commit-config.yaml. The previous
+    implementation returned early on exactly this value as "nothing to fix".
+
+    Asserted as absence rather than as "equal to the default": equal-to-default
+    is the state under test, so a test that accepted it would pass on the bug.
+    """
+    _git(seeded, "config", "--local", "core.hooksPath", str(seeded / ".git" / "hooks"))
+    _install_from(seeded, seeded)
+    assert _hooks_path_values(seeded) == [], "core.hooksPath survived; pre-commit install will refuse"
+
+
+def test_a_hooks_path_pinned_elsewhere_is_still_removed(seeded: Path, tmp_path: Path) -> None:
+    """The behaviour that already worked (#11598) must not regress."""
+    _git(seeded, "config", "--local", "core.hooksPath", str(tmp_path / "elsewhere"))
+    _install_from(seeded, seeded)
+    assert _hooks_path_values(seeded) == []
+
+
+def test_every_value_of_a_multi_valued_hooks_path_is_removed(seeded: Path, tmp_path: Path) -> None:
+    """`--unset` fails on a multi-valued key and `|| true` swallows it.
+
+    One surviving value is as disqualifying to pre-commit as two, so removing
+    only the first would look like a fix and change nothing.
+    """
+    _git(seeded, "config", "--local", "--add", "core.hooksPath", str(seeded / ".git" / "hooks"))
+    _git(seeded, "config", "--local", "--add", "core.hooksPath", str(tmp_path / "elsewhere"))
+    _install_from(seeded, seeded)
+    assert _hooks_path_values(seeded) == []
+
+
+def test_the_installer_never_introduces_a_hooks_path(seeded: Path) -> None:
+    """Absent before, absent after -- the installer must not create the defect."""
+    assert _hooks_path_values(seeded) == []
+    _install_from(seeded, seeded)
+    assert _hooks_path_values(seeded) == []
+
+
+def test_the_hooks_still_land_when_a_hooks_path_was_removed(seeded: Path) -> None:
+    """Unsetting the key must not cost the installation it is clearing the way for."""
+    _git(seeded, "config", "--local", "core.hooksPath", str(seeded / ".git" / "hooks"))
+    _install_from(seeded, seeded)
+    for name in _MANAGED:
+        installed = seeded / ".git" / "hooks" / name
+        assert installed.is_file(), f"{name} was not installed"
+        assert os.access(installed, os.X_OK), f"{name} is not executable"

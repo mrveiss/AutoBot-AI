@@ -186,7 +186,7 @@ jobs:
               '| Local branches | ' + totalLocal + ' |\n' +
               '| Remote branches | ' + totalRemote + ' |\n' +
               '| Landed (merged PR, or base carries its issue) | ' + landed + ' |\n' +
-              '| Archival (rescued/, release/changelog-) | ' + archival + ' |\n' +
+              '| Archival (rescued/, changelog-) | ' + archival + ' |\n' +
               '| Unproven landing | ' + unproven + ' |\n' +
               '| Stale branches (30+ days) | ' + stale + ' |\n' +
               '| Active worktrees | ' + worktrees + ' |\n' +

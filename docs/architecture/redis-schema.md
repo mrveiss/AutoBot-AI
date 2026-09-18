@@ -12,7 +12,7 @@ This document describes the data structures and key patterns used in AutoBot's R
 
 ## Database Overview
 
-AutoBot uses Redis Stack on VM3 (`<database-ip>:6379`) with named database abstraction:
+AutoBot uses Redis Stack on the database role's host (`<database-ip>:6379`) with named database abstraction:
 
 | Database | Name | Purpose | Key Count (Typical) |
 |----------|------|---------|---------------------|

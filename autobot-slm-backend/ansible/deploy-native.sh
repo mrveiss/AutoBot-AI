@@ -161,6 +161,17 @@ update_backend_config() {
     # Create environment file for backend with VM endpoints
     local env_file="${PROJECT_ROOT}/.env.native"
 
+    # #16686: the Redis credential is the SLM-generated one -- the file roles read through
+    # _shared/tasks/read_redis_password.yml -- never a literal; its username goes with it (#16668).
+    local slm_secrets=/etc/autobot/slm-secrets.env
+    local redis_password="${AUTOBOT_REDIS_PASSWORD:-}" redis_username="${AUTOBOT_REDIS_USERNAME:-}"
+    if [ -z "$redis_password" ] && [ -r "$slm_secrets" ]; then
+        # `|| true`: under pipefail a missing key would abort the deploy (as read_redis_password.yml guards)
+        redis_password=$(grep -oP '^AUTOBOT_REDIS_PASSWORD=\K.*' "$slm_secrets" | head -n1 || true)
+        redis_username=${redis_username:-$(grep -oP '^AUTOBOT_REDIS_USERNAME=\K.*' "$slm_secrets" | head -n1 || true)}
+    fi
+    if [ -n "$redis_password" ]; then redis_username=${redis_username:-default}; fi
+
     cat > "$env_file" << EOF
 # AutoBot Native Configuration - Backend on Host, Services on VMs
 # Generated: $(date)
@@ -172,7 +183,8 @@ AUTOBOT_BACKEND_PORT=8001
 # VM Service Endpoints - NATIVE DEPLOYMENT
 AUTOBOT_REDIS_HOST=${AUTOBOT_REDIS_HOST:-localhost}
 AUTOBOT_REDIS_PORT=6379
-AUTOBOT_REDIS_PASSWORD=autobot123
+AUTOBOT_REDIS_PASSWORD=${redis_password}
+AUTOBOT_REDIS_USERNAME=${redis_username}
 
 AUTOBOT_AI_STACK_HOST=${AUTOBOT_AI_STACK_HOST:-localhost}
 AUTOBOT_AI_STACK_PORT=8080

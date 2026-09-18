@@ -155,14 +155,16 @@ async def _check_fact_access(
     user_org_id: str | None,
     user_group_ids: List[str],
     ownership_manager,
+    is_admin: bool = False,
 ) -> bool:
-    """Check whether a user has access to a fact. Ref: #1088."""
+    """Check whether a user has access to a fact (#1088); an admin reads any fact here (#16662)."""
     return await ownership_manager.check_access(
         fact_id=fact_id,
         user_id=user_id,
         fact_metadata=metadata,
         user_org_id=user_org_id,
         user_group_ids=user_group_ids,
+        is_admin=is_admin,
     )
 
 
@@ -579,6 +581,7 @@ async def get_knowledge_access_info(fact_id: str, request: Request, current_user
             user_org_id=user_org_id,
             user_group_ids=user_group_ids,
             ownership_manager=kb.ownership_manager,
+            is_admin=is_admin_role(current_user.get("role")),  # #16662: an explicit read API
         )
         if not has_access:
             raise HTTPException(status_code=403, detail="Access denied")

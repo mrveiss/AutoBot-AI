@@ -148,6 +148,15 @@
 # ============================================================
 # Python venv
 # ============================================================
+# #16641: makes python_interpreter_binary available for the
+# virtualenv_command: below -- ensure_venv_version (next task) only
+# checks/removes a wrong-version venv, it never derives that fact.
+- name: "TTS Worker | Install target Python interpreter"
+  ansible.builtin.include_role:
+    name: python_interpreter
+    public: true  # #16750: role defaults (python_interpreter_binary) must reach the pip tasks below
+  tags: ['tts', 'venv']
+
 - name: "TTS Worker | Enforce venv target Python version (env-drift fix)"
   ansible.builtin.include_role:
     name: python_interpreter
@@ -176,6 +185,12 @@
   ansible.builtin.pip:
     name: pip
     virtualenv: "{{ tts_install_dir }}/venv"
+    # #16641: `virtualenv:` alone makes pip shell out to the standalone
+    # `virtualenv` executable, absent from these hosts -- only the stdlib's
+    # `venv` module is installed. This role creates the venv explicitly
+    # above, but every pip task into it states its own creation command too,
+    # so none of them depends on that ordering to stay safe.
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     state: latest
   become_user: "{{ tts_user }}"
   environment:
@@ -200,6 +215,8 @@
       - python-multipart>=0.0.32
       - aiofiles>=25.1.0
     virtualenv: "{{ tts_install_dir }}/venv"
+    # #16641: see "TTS Worker | Upgrade pip in venv" above.
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     state: present
   become_user: "{{ tts_user }}"
   environment:
@@ -216,6 +233,8 @@
     name:
       - "torch>=2.14.0"
     virtualenv: "{{ tts_install_dir }}/venv"
+    # #16641: see "TTS Worker | Upgrade pip in venv" above.
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     state: present
     extra_args: "--index-url https://download.pytorch.org/whl/cpu --timeout 300"
   become_user: "{{ tts_user }}"
@@ -257,6 +276,8 @@
       - numpy
       - scipy>=1.18.1
     virtualenv: "{{ tts_install_dir }}/venv"
+    # #16641: see "TTS Worker | Upgrade pip in venv" above.
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     state: present
     extra_args: >-
       --timeout 300
