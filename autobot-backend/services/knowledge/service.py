@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Tuple
 from advanced_rag_optimizer import SearchResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import config
+from security.content_firewall import FirewallAction, inspect_rag_context
 from services.rag_service import RAGService
 
 from .context_enhancer import get_context_enhancer
@@ -52,6 +53,8 @@ def build_grounded_context(contents: List[str]) -> str:
 async def budget_grounded_context(
     kb_results: List[Dict[str, Any]],
     model_name: str | None = None,
+    *,
+    context_label: str = "budget_grounded_context",
 ) -> Tuple[str, List[Dict[str, Any]]]:
     """Estimate tokens, compress when over budget, rebuild via build_grounded_context. (#10837)
 
@@ -59,19 +62,38 @@ async def budget_grounded_context(
     compress+rebuild sequence is never duplicated.  Each dict in kb_results must
     have a ``"content"`` key; dicts without content are silently skipped.
 
+    #16930: every return path is re-inspected by the content firewall before the
+    caller sees it, not only the uncompressed one. ``conversation_aware_retrieve``
+    already firewalls the context string it builds -- but this function is called
+    AFTER that, and rebuilds a fresh string from each result's raw ``content``
+    (compression especially: ``compress_kb_results`` selects a SUBSET of results
+    and this rebuilds from their raw content, which is not the same string
+    ``conversation_aware_retrieve`` inspected). Passing the earlier verdict
+    through was rejected in favour of re-inspecting this function's own output:
+    it is correct regardless of which results survive compression, and it also
+    closes the same gap for ``async_chat_workflow._budget_kb_context``, whose
+    ``kb_results`` never go through ``conversation_aware_retrieve``'s check at
+    all -- found while fixing this, not the bug originally assigned.
+
     Args:
         kb_results: Dicts with at least a ``"content"`` key (citations or raw KB dicts).
         model_name: Active LLM model name for per-model budget tuning.  Pass the
             selected model (llm_handler path) or None to use the YAML default
             (async_chat_workflow path).
+        context_label: Short description of the call site, surfaced in the
+            firewall's own logging when it quarantines or blocks (#15026's
+            ``context_label`` convention).
 
     Returns:
         Tuple of (context_str, effective_kb_results) where:
         - empty input → ("", [])
-        - under budget → (raw_context, kb_results) — full original list unchanged
-        - compressed → (compressed_context, trimmed) — trimmed is the subset kept
-          in the prompt, so callers can rebind citations to the trimmed list and
-          avoid showing the user sources the model never saw (#10837 regression fix).
+        - under budget → (context_str, kb_results) — full original list unchanged
+        - compressed → (context_str, trimmed) — trimmed is the subset kept in the
+          prompt, so callers can rebind citations to the trimmed list and avoid
+          showing the user sources the model never saw (#10837 regression fix).
+        - firewall blocks either string → ("", []) — never a partial context with
+          no citations to explain it, same contract as an empty/under-threshold
+          retrieval.
     """
     if not kb_results:
         return "", []
@@ -87,26 +109,31 @@ async def budget_grounded_context(
     kc_tokens = cwm.estimate_tokens(raw_context)
     max_kb_tokens = cwm.get_max_history_tokens(model_name=model_name)
     if not await cwm.async_should_compress(content_tokens=kc_tokens, model_name=model_name):
-        return raw_context, kb_results
+        context, results = raw_context, kb_results
+    else:
+        svc = ContextCompressionService(
+            model_thresholds={
+                name: spec.get("compression_threshold", 8192)
+                for name, spec in cwm.config.get("models", {}).items()
+                if isinstance(spec, dict)
+            }
+        )
+        trimmed = await svc.compress_kb_results(kb_results, max_tokens=max_kb_tokens)
+        if not trimmed:
+            return "", []
+        compressed = build_grounded_context([r.get("content", "") for r in trimmed if r.get("content")])
+        logger.info(
+            "[#10837] KB compressed: %d → %d results (%d tokens)",
+            len(kb_results),
+            len(trimmed),
+            cwm.estimate_tokens(compressed),
+        )
+        context, results = compressed, trimmed
 
-    svc = ContextCompressionService(
-        model_thresholds={
-            name: spec.get("compression_threshold", 8192)
-            for name, spec in cwm.config.get("models", {}).items()
-            if isinstance(spec, dict)
-        }
-    )
-    trimmed = await svc.compress_kb_results(kb_results, max_tokens=max_kb_tokens)
-    if not trimmed:
+    fw_verdict = await inspect_rag_context(context, context_label=context_label)
+    if fw_verdict.blocked:
         return "", []
-    compressed = build_grounded_context([r.get("content", "") for r in trimmed if r.get("content")])
-    logger.info(
-        "[#10837] KB compressed: %d → %d results (%d tokens)",
-        len(kb_results),
-        len(trimmed),
-        cwm.estimate_tokens(compressed),
-    )
-    return compressed, trimmed
+    return fw_verdict.content, results
 
 
 # Issue #556: Standard knowledge categories for chat RAG
@@ -367,7 +394,6 @@ class ChatKnowledgeService:
         citations = []
 
         for i, fact in enumerate(facts, 1):
-            # Extract relevant metadata
             score = fact.rerank_score if fact.rerank_score is not None else fact.hybrid_score
 
             citation = {
@@ -384,7 +410,6 @@ class ChatKnowledgeService:
                 },
             }
 
-            # Add rerank_score if available
             if fact.rerank_score is not None:
                 citation["metadata"]["rerank_score"] = round(fact.rerank_score, 3)
 
@@ -431,7 +456,6 @@ class ChatKnowledgeService:
         """
         query_lower = query.lower()
 
-        # Check each category in priority order
         category_checks = [
             (self.AUTOBOT_KEYWORDS, "autobot_knowledge"),
             (self.SYSTEM_KEYWORDS, "system_knowledge"),
@@ -443,7 +467,6 @@ class ChatKnowledgeService:
             if result:
                 return result
 
-        # For KNOWLEDGE_QUERY intent, search all relevant categories
         if intent_result.intent == QueryKnowledgeIntent.KNOWLEDGE_QUERY:
             logger.debug("[Smart Category] No specific category - searching all")
             return None
@@ -537,6 +560,17 @@ class ChatKnowledgeService:
             score_threshold=score_threshold,
             categories=effective_categories,
         )
+
+        # #16771 AC5: this is a second RAG entry point sharing conversation_aware_
+        # retrieve's chokepoint (inspect_rag_context), not a copy of its own.
+        if context_string:
+            fw_verdict = await inspect_rag_context(context_string, context_label=query[:80])
+            if fw_verdict.blocked or fw_verdict.escalated:
+                return "", [], intent_result
+            context_string = fw_verdict.content
+            if fw_verdict.action == FirewallAction.QUARANTINE:
+                for citation in citations:
+                    citation["content"] = "[FIREWALL: content withheld — moderate injection risk]"
 
         logger.info(
             "[Smart RAG] Completed in %.3fs - %d citations found",
@@ -664,11 +698,9 @@ class ChatKnowledgeService:
         start_time = time.time()
         intent_result = self.intent_detector.detect_intent(query)
 
-        # Check if we should skip retrieval (Issue #665: uses helper)
         if self._should_skip_retrieval(intent_result, force_retrieval):
             return "", [], intent_result, None
 
-        # Enhance query and determine categories (Issue #665: uses helpers)
         enhanced_query = self._enhance_query_with_context(query, conversation_history)
         effective_categories = self._get_effective_categories(intent_result, query, categories, enable_smart_categories)
         search_query = self._get_search_query(query, enhanced_query)
@@ -709,6 +741,24 @@ class ChatKnowledgeService:
                 )
             doc_block = "AUTOBOT DOCUMENTATION CONTEXT:\n" + "\n".join(doc_lines)
             context_string = doc_block + "\n\n" + context_string if context_string else doc_block
+
+        # #16771: chat is a RAG path too; citations dropped with a blocked context (see PR).
+        if context_string:
+            fw_verdict = await inspect_rag_context(context_string, context_label=query[:80])
+            if fw_verdict.blocked or fw_verdict.escalated:
+                # ESCALATE has blocked=False (it's pending human approval, not a hard
+                # refusal), but the flagged text must not surface via citations before
+                # that approval happens -- same contract as BLOCK, not a softer one.
+                return "", [], intent_result, enhanced_query
+            context_string = fw_verdict.content
+            if fw_verdict.action == FirewallAction.QUARANTINE:
+                # QUARANTINE keeps citations (the Sources UI reads them from
+                # session.metadata["last_citations"]), but each citation's raw
+                # content is the untrusted original -- only context_string got
+                # sanitized above. Scrub every citation the same way, not just
+                # the combined prompt string.
+                for citation in citations:
+                    citation["content"] = "[FIREWALL: content withheld — moderate injection risk]"
 
         logger.info(
             "[Conversation RAG] Completed in %.3fs - %d citations, " "enhanced=%s, categories=%s, docs=%s",
@@ -903,7 +953,6 @@ class ChatKnowledgeService:
             categories=categories,
         )
 
-        # Combine contexts
         combined_parts = []
         if doc_context:
             combined_parts.append(doc_context)
@@ -911,6 +960,21 @@ class ChatKnowledgeService:
             combined_parts.append(rag_context)
 
         combined_context = "\n\n".join(combined_parts) if combined_parts else ""
+
+        # #16771 AC5: shares conversation_aware_retrieve's chokepoint. A blocked
+        # or escalated verdict drops both citation lists -- combined_context
+        # mixes both sources, so neither list can be trusted to explain what's
+        # left.
+        if combined_context:
+            fw_verdict = await inspect_rag_context(combined_context, context_label=query[:80])
+            if fw_verdict.blocked or fw_verdict.escalated:
+                return "", [], []
+            combined_context = fw_verdict.content
+            if fw_verdict.action == FirewallAction.QUARANTINE:
+                for citation in rag_citations:
+                    citation["content"] = "[FIREWALL: content withheld — moderate injection risk]"
+                for doc_result in doc_results_list:
+                    doc_result["content"] = "[FIREWALL: content withheld — moderate injection risk]"
 
         return combined_context, rag_citations, doc_results_list
 
@@ -933,7 +997,6 @@ class ChatKnowledgeService:
             "doc_searcher_enabled": self.doc_searcher is not None,
         }
 
-        # Add documentation stats if available
         if self.doc_searcher and self.doc_searcher._initialized:
             try:
                 doc_count = self.doc_searcher._collection.count()
