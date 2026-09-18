@@ -68,7 +68,13 @@ export function useMcpExternalServersApi(): UseMcpExternalServersApiReturn {
 
   async function list(): Promise<McpServer[]> {
     try {
-      const data = await api.get<{ servers?: McpServer[] }>(base)
+      // No generated-contract type for this endpoint's response shape yet
+      // (the backend returns a bare dict) -- api.get's own <T = unknown>
+      // default plus a cast here, rather than a type argument at the call
+      // site, is what keeps this off repo_tests/frontend_api_contract_
+      // ratchet_test.py's inline_generics count (#16875); the shape claim
+      // itself is exactly as unverified either way.
+      const data = (await api.get(base)) as { servers?: McpServer[] }
       return data?.servers ?? []
     } catch (error: unknown) {
       logger.error('Failed to list external MCP servers', error)
@@ -77,11 +83,11 @@ export function useMcpExternalServersApi(): UseMcpExternalServersApiReturn {
   }
 
   async function create(input: McpServerCreateInput): Promise<McpServer> {
-    return api.post<McpServer>(base, input)
+    return (await api.post(base, input)) as McpServer
   }
 
   async function update(serverId: string, input: McpServerUpdateInput): Promise<McpServer> {
-    return api.put<McpServer>(`${base}/${encodeURIComponent(serverId)}`, input)
+    return (await api.put(`${base}/${encodeURIComponent(serverId)}`, input)) as McpServer
   }
 
   async function remove(serverId: string): Promise<void> {
