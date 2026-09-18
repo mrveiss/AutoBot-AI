@@ -1265,10 +1265,9 @@ async def upload_file_to_knowledge(
             timeout=_deadline,
         )
     except asyncio.TimeoutError:
-        # The deadline is what makes the offload safe: to_thread frees the loop
-        # but the default executor's slots are process-wide and shared with the
-        # OCR path, so an extraction that never returns holds one indefinitely.
-        # Reported as a rejected upload rather than left to hang (#14754).
+        # The deadline is what makes the offload safe: to_thread frees the loop but the
+        # default executor's slots are process-wide and shared with the OCR path, so an
+        # extraction that never returns holds one indefinitely -- rejected here instead (#14754).
         logger.warning("Extraction of %s exceeded %ss", filename, _deadline)
         raise HTTPException(
             status_code=422,
@@ -1283,16 +1282,9 @@ async def upload_file_to_knowledge(
         # with no way to tell that OCR — not a different file — is what is needed.
         raise HTTPException(status_code=400, detail=_no_text_detail(extracted_doc))
 
-    # Issue #5064: sanitize uploaded document content against prompt injection
-    # before the text reaches the KB / embedding pipeline.
-    content = _sanitize_document(content, source="file_upload").sanitized_text
-
-    # #13708: this endpoint has its own extraction path (media.document.extraction,
-    # not knowledge/connectors/content_extraction.py's already-redacted wrappers),
-    # so it never got the credential scanner. Single chokepoint: every branch of
-    # _extract_file_content (txt/md/csv, html, json, pdf, docx) converges here
-    # before content reaches fact_metadata / embedding, regardless of extension.
-    content = redact_content(content)
+    # Issue #5064: sanitize against prompt injection; #13708: also the redact_content chokepoint,
+    # since this endpoint's own extraction path skips content_extraction.py's redacted wrappers.
+    content = redact_content(_sanitize_document(content, source="file_upload").sanitized_text)
 
     logger.info("Uploading file: filename='%s', size=%d", filename, len(file_content))
 

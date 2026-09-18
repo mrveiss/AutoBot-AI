@@ -2,55 +2,82 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Every write of *new* content into a KB persistence sink is reached only
-through sanitize_fact_content, or is an explicitly justified exception (#13708).
+"""Every write of *new* content into a KB persistence sink, anywhere under
+knowledge/, is reached only through sanitize_fact_content, or is an
+explicitly justified exception (#13708).
 
-#13708's review found two ways to skip the redaction chokepoint that a guard
-scoped only to entry points (repo_tests/ingestion_redaction_guard_test.py)
-cannot see: update_fact writes new content through a completely separate path
-from store_fact, and reverting a fact to a previous version pushes that
-version's (possibly pre-fix, possibly never-sanitized) content back into the
-live Redis projection. Both are fixed; this guard is the sweep that stops a
-THIRD one from landing silently.
+#13708's review found four ways to skip the redaction chokepoint a guard
+scoped to 3 hand-picked files couldn't see: update_fact writes new content
+through a separate path from store_fact; reverting a fact to a previous
+version pushed that version's content back into the live Redis projection
+(and, one level deeper, into a NEW version-history entry via create_version);
+the ECL pipeline (knowledge/pipeline/) never ran the chokepoint at all; and
+backup restore's ChromaDB embedding upsert used its own original content copy
+instead of what store_fact actually persisted. Each is fixed; this guard is
+now a genuine tree sweep of knowledge/ (repo_tests._reach floored, per
+convention) instead of 3 named files, so a fifth way can't land silently
+either.
 
-A third way surfaced reviewing the second fix: _apply_version_to_fact
-redacted the live Redis projection but left a local variable only, so
-revert_to_version's later create_version() call re-serialized the RAW
-version content straight into version history seconds later. Fixed by
-redacting in place; test_create_version_still_only_reachable_with_already_
-redacted_content below is the hand-verified guard for that one call chain,
-since it is one function parameter passed across a call boundary, not a
-pattern the AST sweep's per-function dict-literal tracking follows.
+Sink shapes detected, across every file the sweep reaches:
+- fact_store.persist_fact, fact_store.update_fact (not FactsMixin.update_fact
+  -- see _deref), FactsMixin._project_fact_to_redis,
+  FactsMixin._vectorize_fact_in_chromadb, FactProjectionMixin.
+  _durable_update_or_adopt, FactsMixin._revectorize_fact,
+  BulkOperationsMixin._restore_fact_embedding.
+- redis_client.hset(...) writing a "content" key (inline dict, or a
+  same-function local variable already known to be one).
+- redis_client.lpush(...) serializing a json.dumps(...) payload that does
+  the same.
+- A ChromaDB-shaped .upsert(...)/.add(...)/.update(...) call passing a
+  documents= keyword (knowledge/pipeline/loaders/chromadb_loader.py's own
+  shape -- the LlamaIndex Document()+vector_store.add([doc]) shape
+  knowledge/facts.py itself uses is covered by name
+  (_vectorize_fact_in_chromadb/_revectorize_fact) instead, since it has no
+  documents= kwarg to key on).
 
-Scope: the persistence primitives content actually reaches --
-fact_store.persist_fact, FactsMixin._project_fact_to_redis,
-FactsMixin._vectorize_fact_in_chromadb, FactProjectionMixin.
-_durable_update_or_adopt, FactsMixin._revectorize_fact, any
-redis_client.hset(...) call whose mapping writes a "content" key (inline or
-via a same-function local variable), and any redis_client.lpush(...) call
-serializing a json.dumps(...) payload that does the same -- every real
-redis_client write in this codebase runs through
-asyncio.to_thread(self.redis_client.<verb>, ...), so the sweep normalizes
-that form (see _deref) rather than only matching a direct <verb>(...) call.
-For each call site, found by AST across knowledge/facts.py,
-knowledge/fact_projection.py and knowledge/versioning.py, the enclosing
-function must be in _KNOWN_TO_REDACT (calls sanitize_fact_content or
-redact_content itself, directly or one call away) or in
-_EXEMPT_REDERIVES_EXISTING_CONTENT (does not accept new content -- it
-re-persists/re-embeds what a durable read already returned, so there is
-nothing here for redaction to intercept; backfilling already-stored raw
-content is explicitly out of scope, tracked separately). A call site whose
-enclosing function is in neither list fails the guard.
+Every real redis_client call in this codebase runs through
+asyncio.to_thread(self.redis_client.<verb>, ...) -- the callee is passed BY
+REFERENCE, never syntactically written as <verb>(...), so there is no
+ast.Call node whose own .func is that Attribute. _deref normalizes this
+(and the direct-call form) to one shape before any sink check runs; an
+earlier draft of this guard's hset/lpush detection matched nothing at all
+in this codebase until that normalization was added.
 
-Not tree-scanning (repo_tests._reach doesn't apply): a fixed set of 3 files,
-not a directory walk.
+For each call site the sweep finds, the enclosing function must be in
+_KNOWN_TO_REDACT (calls sanitize_fact_content/redact_content itself, or is a
+pass-through whose only caller already does) or in
+_EXEMPT_REDERIVES_EXISTING_CONTENT (re-persists/re-embeds content a durable
+read already returned -- not new content, so there is nothing here for
+redaction to intercept; backfilling already-stored raw content is a separate,
+tracked, deliberately out-of-scope concern) or _EXEMPT_INFRASTRUCTURE (a
+generic, content-agnostic adapter/test-fixture that forwards whatever its
+caller already decided, or has no production write path at all -- the
+redaction responsibility belongs to the caller, which the sweep already
+checks independently). A call site in none of the three fails the guard.
+
+Scope is knowledge/ specifically, not all of autobot-backend: a broader
+sweep (during this guard's own authoring) found several OTHER subsystems
+with a similar content->ChromaDB write shape -- an LLC "project KB" that is
+a wholly separate storage/chunking pipeline from this package
+(llc/kb/artifact_ingestor.py, sprint_summarizer.py), a security-findings
+memory store, an autoresearch synthesizer, and others. None of them share
+knowledge/facts.py's sanitize_fact_content chokepoint architecture, so
+"exempt them here" would be exactly the silent, undocumented gap this guard
+exists to prevent. Filed as #17025 instead of folded into this one (see
+that issue for the specific list) -- extending this sweep's scope to cover
+them is the natural next step once each has its own, individually-reviewed,
+redaction plan.
 """
 
 from __future__ import annotations
 
 import ast
+from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
+
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
 
@@ -62,33 +89,32 @@ _SINK_CALL_NAMES = frozenset(
         "_vectorize_fact_in_chromadb",
         "_durable_update_or_adopt",
         "_revectorize_fact",
+        "_restore_fact_embedding",
     }
-)
-
-_FILES = (
-    "autobot-backend/knowledge/facts.py",
-    "autobot-backend/knowledge/fact_projection.py",
-    "autobot-backend/knowledge/versioning.py",
 )
 
 #: Enclosing functions confirmed (by reading, at guard-authoring time) to run
 #: content through sanitize_fact_content or redact_content before any sink
-#: call below them executes.
+#: call below them executes -- or are a pass-through whose only caller does.
 _KNOWN_TO_REDACT = frozenset(
     {
         "_store_and_vectorize_fact",  # store_fact's only caller of this; store_fact redacts first
         "update_fact",  # calls sanitize_fact_content itself, before any sink call
         "_apply_version_to_fact",  # calls redact_content itself, right before the hset
-        # Pass-through: update_fact() is its ONLY caller (verified when this guard was
-        # written) and already redacted before calling it; this function does not
-        # itself need to redact, only to stay reached from nowhere else.
-        "_durable_update_or_adopt",
-        # Pass-through, its own hset writes "content" too: called by
-        # _store_and_vectorize_fact (pre-redacted, see above) AND by
-        # rebuild_fact_projections (exempt below, re-derives existing content) --
-        # both of its callers are already covered, so this function needs no
-        # redaction of its own.
-        "_project_fact_to_redis",
+        "_durable_update_or_adopt",  # pass-through: update_fact() is its only caller, already redacted
+        "_project_fact_to_redis",  # pass-through: both its callers (below) already covered
+        # bulk.py's backup restore: _store_restored_fact calls store_fact (redacts),
+        # then passes store_fact's own RETURNED (redacted) content -- not its own
+        # original copy -- into _restore_fact_embedding, which is where the actual
+        # sink call sits (both need listing: _SINK_CALL_NAMES flags a call to a
+        # named sink function from ITS caller too, not just the sink's own body).
+        "_restore_fact_embedding",
+        "_store_restored_fact",
+        # ECL pipeline (#13708 round 4): _run_extract_stage redacts input_data before
+        # any extract task runs, so every chunk/summary derived from it downstream is
+        # already clean by the time these two ChromaDB batch-upsert helpers run.
+        "_upsert_chunk_batch",
+        "_upsert_summary_batch",
     }
 )
 
@@ -101,7 +127,70 @@ _EXEMPT_REDERIVES_EXISTING_CONTENT = frozenset(
         "adopt_legacy_facts",  # re-persists a Redis-only fact's existing content into the durable store
         "rebuild_fact_projections",  # rebuilds Redis from the durable store's own content
         "vectorize_existing_fact",  # re-embeds a fact's already-stored content in ChromaDB
+        # knowledge/index.py: copies documents/embeddings/metadatas verbatim from an
+        # OLD ChromaDB collection's own .get() into a NEW one during a collection
+        # migration -- not new content, a read-then-rewrite of what is already there.
+        "_migrate_vectors_batch",
     }
+)
+
+#: Generic, content-agnostic infrastructure: forwards whatever its caller
+#: already decided (the caller is what this sweep independently checks), or
+#: has no production write path at all. Keyed (file, function), not bare name
+#: (#13708 round 4 review, MEDIUM 4): a bare-name exemption would silently
+#: cover any future function anywhere in the 141-file sweep that happens to
+#: share one of these common names (add/upsert/update) without ever being the
+#: specific adapter/fixture this exemption was written for.
+_EXEMPT_INFRASTRUCTURE = frozenset(
+    {
+        # knowledge/backends/{chromadb_adapter,async_chromadb_adapter}.py: thin ABC
+        # wrappers over the raw ChromaDB client ("does NOT reimplement any ChromaDB
+        # behaviour" -- their own module docstring). documents= here is whatever the
+        # CALLER already passed; that caller is a separate, independently-checked
+        # sink of its own.
+        ("autobot-backend/knowledge/backends/chromadb_adapter.py", "add"),
+        ("autobot-backend/knowledge/backends/chromadb_adapter.py", "upsert"),
+        ("autobot-backend/knowledge/backends/chromadb_adapter.py", "update"),
+        ("autobot-backend/knowledge/backends/async_chromadb_adapter.py", "add"),
+        ("autobot-backend/knowledge/backends/async_chromadb_adapter.py", "upsert"),
+        ("autobot-backend/knowledge/backends/async_chromadb_adapter.py", "update"),
+        # knowledge/backends/async_memory_adapter.py: the same thin-wrapper shape,
+        # an async shim over the in-memory test-only InMemoryCollection (#5316) --
+        # no production write path, documents= here is whatever the caller passed.
+        # The bare-name form of this exemption (pre-MEDIUM-4-fix) silently covered
+        # this file too, without it ever having been reviewed by name -- listing it
+        # explicitly is this fix's own proof the gap was real, not hypothetical.
+        ("autobot-backend/knowledge/backends/async_memory_adapter.py", "add"),
+        ("autobot-backend/knowledge/backends/async_memory_adapter.py", "upsert"),
+        ("autobot-backend/knowledge/backends/async_memory_adapter.py", "update"),
+        # knowledge/rag_benchmarks.py: a pytest fixture seeding an ephemeral,
+        # in-memory ChromaDB client with a hardcoded synthetic corpus for benchmark
+        # timing -- no production write path, no user-controllable content.
+        ("autobot-backend/knowledge/rag_benchmarks.py", "chroma_collection"),
+    }
+)
+
+
+def _connector_module_files(root: Path) -> list[str]:
+    # A single "*.py" here already matches recursively (git pathspec glob is
+    # fnmatch-style, not shell-style) -- measured returning a strict superset
+    # of the equivalent "**/*.py" pattern, so only one pattern is needed.
+    try:
+        tracked = tracked_paths(root, "autobot-backend/knowledge/*.py")
+    except EmptyEnumeration:
+        return []
+    return [rel for rel in tracked if not Path(rel).name.startswith("test_") and not rel.endswith("_test.py")]
+
+
+#: Bound at the 141 non-test files under knowledge/ measured when this guard
+#: was widened from 3 named files to a real tree sweep.
+REACH = declare(
+    "kb-content-redaction-chokepoint",
+    discover=_connector_module_files,
+    floor=141,
+    growth=10,
+    skips=0,
+    what="non-test files under knowledge/",
 )
 
 
@@ -178,6 +267,17 @@ def _lpush_writes_content(args: list[ast.expr], keywords: list[ast.keyword], con
     return False
 
 
+def _chromadb_upsert_writes_documents(name: str | None, keywords: list[ast.keyword]) -> bool:
+    """True for a .upsert(...)/.add(...)/.update(...)-shaped call passing documents=
+    (knowledge/pipeline/loaders/chromadb_loader.py's shape: a raw ChromaDB
+    collection.upsert(ids=..., documents=..., metadatas=...) call, distinct from
+    the LlamaIndex Document()+vector_store.add([doc]) shape covered by name via
+    _vectorize_fact_in_chromadb/_revectorize_fact instead)."""
+    if name not in ("add", "upsert", "update"):
+        return False
+    return any(kw.arg == "documents" for kw in keywords)
+
+
 def _sink_call_sites(source: str) -> list[tuple[str, int]]:
     """(enclosing_function_name, line) for every sink call in *source*."""
     tree = ast.parse(source)
@@ -214,6 +314,7 @@ def _sink_call_sites(source: str) -> list[tuple[str, int]]:
                     name in _SINK_CALL_NAMES
                     or (name == "hset" and _hset_writes_content(args, keywords, content_dict_vars))
                     or (name == "lpush" and _lpush_writes_content(args, keywords, content_dict_vars))
+                    or _chromadb_upsert_writes_documents(name, keywords)
                 )
                 if is_sink:
                     sites.append((self._stack[-1], node.lineno))
@@ -225,22 +326,27 @@ def _sink_call_sites(source: str) -> list[tuple[str, int]]:
 
 def test_every_content_sink_call_site_is_redacted_or_explicitly_exempt():
     offenders: list[str] = []
-    reached_any = False
-    for rel in _FILES:
+    files = REACH.examined(REPO_ROOT)
+    completed = 0
+    for rel in files:
         for func_name, line in _sink_call_sites(_read(rel)):
-            reached_any = True
-            if func_name in _KNOWN_TO_REDACT or func_name in _EXEMPT_REDERIVES_EXISTING_CONTENT:
+            completed += 1
+            if (
+                func_name in _KNOWN_TO_REDACT
+                or func_name in _EXEMPT_REDERIVES_EXISTING_CONTENT
+                or (rel, func_name) in _EXEMPT_INFRASTRUCTURE
+            ):
                 continue
             offenders.append(f"{rel}:{line} in {func_name}()")
+    REACH.completed(len(files))
 
-    assert reached_any, "swept 0 sink call sites across the 3 files -- the AST walk itself is broken"
     assert not offenders, (
         "content reaches a KB persistence sink from a function not known to redact and not an "
         "explicitly justified exception (#13708):\n  " + "\n  ".join(offenders) + "\n\n"
         "Either route this function's content through sanitize_fact_content/redact_content "
         "before the sink call, or -- only if it genuinely re-persists content a durable read "
-        "already returned, never NEW content -- add it to _EXEMPT_REDERIVES_EXISTING_CONTENT "
-        "with that justification."
+        "already returned, or is generic content-agnostic infrastructure -- add it to the "
+        "appropriate exemption set with that justification."
     )
 
 
@@ -256,6 +362,24 @@ class FactsMixin:
     func_name, _line = sites[0]
     assert func_name not in _KNOWN_TO_REDACT
     assert func_name not in _EXEMPT_REDERIVES_EXISTING_CONTENT
+    assert not any(fn == func_name for _file, fn in _EXEMPT_INFRASTRUCTURE)
+
+
+def test_negative_control_infrastructure_exemption_is_scoped_to_its_own_file():
+    """#13708 round 4 review, MEDIUM 4: a function elsewhere in the swept tree
+    that happens to share one of _EXEMPT_INFRASTRUCTURE's common names
+    (add/upsert/update) and forwards a documents= kwarg into a real ChromaDB
+    sink must still be caught -- the exemption is scoped to the specific file
+    it was written for, not to the bare name."""
+    fake_source = """
+class NotTheRealAdapter:
+    def add(self, ids, documents, metadatas):
+        self._collection.add(ids=ids, documents=documents, metadatas=metadatas)
+"""
+    sites = _sink_call_sites(fake_source)
+    assert sites == [("add", 4)]
+    func_name, _line = sites[0]
+    assert ("some/other/file.py", func_name) not in _EXEMPT_INFRASTRUCTURE
 
 
 def test_negative_control_hset_without_a_content_key_is_not_flagged():
@@ -266,6 +390,25 @@ class TagsMixin:
         await asyncio.to_thread(self.redis_client.hset, fact_key, mapping={"metadata": metadata})
 """
     assert _sink_call_sites(fake_source) == []
+
+
+def test_negative_control_a_chromadb_upsert_without_documents_is_not_flagged():
+    """A collection.upsert(...) call with only ids/embeddings/metadatas (no
+    documents=) doesn't write fact content and must not be flagged."""
+    fake_source = """
+async def _reindex_embeddings_only(collection, ids, embeddings):
+    await collection.upsert(ids=ids, embeddings=embeddings)
+"""
+    assert _sink_call_sites(fake_source) == []
+
+
+def test_negative_control_an_unredacted_chromadb_upsert_is_caught():
+    fake_source = """
+async def _new_loader_nobody_reviewed(collection, ids, chunks, metadatas):
+    await collection.upsert(ids=ids, documents=chunks, metadatas=metadatas)
+"""
+    sites = _sink_call_sites(fake_source)
+    assert sites == [("_new_loader_nobody_reviewed", 3)]
 
 
 def test_create_version_still_only_reachable_with_already_redacted_content():
@@ -303,4 +446,20 @@ def test_create_version_still_only_reachable_with_already_redacted_content():
         '_apply_version_to_fact no longer mutates target_version["content"] in place -- '
         'revert_to_version\'s later create_version(content=target_version["content"]) call '
         "would read the raw value again (the exact gap this test guards)"
+    )
+
+
+def test_the_ecl_pipeline_redacts_before_the_extract_stage():
+    """A second documented, hand-verified exception: the ECL pipeline's real
+    chokepoint (runner.py's _run_extract_stage) redacts input_data BEFORE
+    chunking, which is why _upsert_chunk_batch/_upsert_summary_batch in
+    chromadb_loader.py are exempt above rather than redacting themselves --
+    their content already is, several call frames up. Source-text checked
+    for the same reason as the test above: the AST sweep's per-function
+    tracking doesn't follow "redacted N calls ago, N files away".
+    """
+    source = _read("autobot-backend/knowledge/pipeline/runner.py")
+    assert "input_data = redact_content(input_data)" in source, (
+        "_run_extract_stage no longer redacts input_data before the extract task loop -- "
+        "every chunk/summary chromadb_loader.py persists downstream would be unredacted again"
     )

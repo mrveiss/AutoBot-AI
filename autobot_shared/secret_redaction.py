@@ -50,7 +50,7 @@ import math
 import re
 from dataclasses import dataclass
 from typing import Any, ClassVar, FrozenSet, Iterable, Tuple
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 # Masked stand-in for a populated credential value.  Fixed width so the mask
 # never discloses the length of the real secret.
@@ -130,6 +130,45 @@ def redact_url_userinfo(value: str, mask_username: bool = False) -> str:
     return urlunsplit(parsed._replace(netloc=netloc))
 
 
+def _redact_credential_query_params(query: str) -> str:
+    """Mask credential-shaped query-param values (``?api_key=X``, ``&token=Y``).
+
+    Reuses :func:`is_credential_field` on each param NAME -- the same rule
+    that already decides a config field is credential-shaped decides a query
+    param is too, so ``api_key``/``token``/``secret``/... are caught without
+    a second, drifting list of credential-ish names.
+    """
+    if not query:
+        return query
+    pairs = parse_qsl(query, keep_blank_values=True)
+    if not pairs:
+        return query
+    redacted = [(k, REDACTED_PLACEHOLDER if v and is_credential_field(k) else v) for k, v in pairs]
+    return urlencode(redacted)
+
+
+def redact_url_credentials(url: str) -> str:
+    """Mask both userinfo (``user:pass@``) and credential-shaped query params
+    in a URL (#13708 round 4) -- ``redact_url_userinfo`` alone leaves
+    ``?api_key=X``/``&token=Y`` untouched, and those are exactly how most
+    REST APIs and webhook URLs carry a credential instead of Basic-Auth.
+
+    Preserves scheme/host/port/path and every non-credential query param, so
+    a redacted URL is still diagnosable, same principle as
+    ``redact_url_userinfo``.
+    """
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return REDACTED_PLACEHOLDER
+    stripped_userinfo = redact_url_userinfo(url)
+    reparsed = urlsplit(stripped_userinfo) if stripped_userinfo != url else parsed
+    new_query = _redact_credential_query_params(reparsed.query)
+    if new_query == reparsed.query:
+        return stripped_userinfo
+    return urlunsplit(reparsed._replace(query=new_query))
+
+
 def redact_value(name: str, value: Any) -> Any:
     """Mask ``value`` when ``name`` is credential-shaped and the value is set."""
     if value is None or value == "":
@@ -200,16 +239,22 @@ _KNOWN_PREFIX_RE = re.compile(
     r")\b"
 )
 
-# scheme://user:password@host -- credentials embedded directly in a URL.
-_BASIC_AUTH_URL_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@]+:[^\s/@]+@[^\s]+")
+# scheme://user:password@host -- credentials embedded directly in a URL. Both
+# userinfo components stop at '?' and '#' too, not just '/' and '@' -- without
+# that, "https://example.com?next=user:pass@example.org" reads its query
+# string as a username and wrongly redacts ordinary URL content (review).
+_BASIC_AUTH_URL_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@?#]+:[^\s/@?#]+@[^\s]+")
 
 # "your password is X", "here is your api key: Y" -- a signup/notification
 # email's own words pointing at the value that follows.  The value itself
 # still has to look credential-shaped (checked in code, not the regex): a
 # plain identifier like ``getKey()`` must not qualify just because it follows
-# the word "key".
+# the word "key" -- but that exclusion only applies to "api key"/"secret"/
+# "token" (ambiguous with a code identifier); a real password is routinely a
+# plain alphanumeric string like "Hunter123", so "password"/"passwd" keep the
+# keyword captured separately (group 1) to exempt them from it (review).
 _CREDENTIAL_PHRASE_RE = re.compile(
-    r"\b(?:password|passwd|api[ _-]?key|secret|token)\b\s*(?:is|:|=)\s*[\"']?([^\s\"'.,;]{6,})[\"']?",
+    r"\b(password|passwd|api[ _-]?key|secret|token)\b\s*(?:is|:|=)\s*[\"']?([^\s\"'.,;]{6,})[\"']?",
     re.IGNORECASE,
 )
 
@@ -290,11 +335,14 @@ def scan_content_for_credentials(text: str) -> list[ContentMatch]:
         if _claim(m.start(), m.end()):
             matches.append(ContentMatch("basic_auth_url", m.start(), m.end(), "high"))
     for m in _CREDENTIAL_PHRASE_RE.finditer(text):
-        value = m.group(1)
-        if _looks_like_identifier(value) or not any(c.isdigit() or not c.isalnum() for c in value):
-            continue  # a plain word/identifier following "password"/"key" is not itself a value
-        if _claim(m.start(1), m.end(1)):
-            matches.append(ContentMatch("credential_phrase", m.start(1), m.end(1), "medium"))
+        keyword = m.group(1).lower()
+        value = m.group(2)
+        if keyword not in ("password", "passwd") and (
+            _looks_like_identifier(value) or not any(c.isdigit() or not c.isalnum() for c in value)
+        ):
+            continue  # a plain word/identifier following "key"/"secret"/"token" is not itself a value
+        if _claim(m.start(2), m.end(2)):
+            matches.append(ContentMatch("credential_phrase", m.start(2), m.end(2), "medium"))
 
     data_uri_spans = [(m.start(), m.end()) for m in _DATA_URI_RE.finditer(text)]
     for m in _HIGH_ENTROPY_RE.finditer(text):

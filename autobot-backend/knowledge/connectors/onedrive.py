@@ -109,10 +109,9 @@ def _extract_text_from_pptx(content_bytes: bytes) -> str:
 # (byte-identical to gdrive.py's copies — see
 # AbstractConnector._detect_changes_via_file_listing()/_classify_change()).
 # _load_ts()/_store_ts() are KEPT as connector-specific overrides below: this
-# connector's checks (explicit `redis is None` guard, strict
-# `isinstance(value, str)`) differ from the other 6 connectors' copies, so
-# folding them into the base implementation would silently drop that
-# defensive behavior.
+# connector's checks (explicit `redis is None` guard, strict `isinstance(value, str)`)
+# differ from the other 6 connectors' copies, so folding them into the base
+# implementation would silently drop that defensive behavior.
 
 
 @ConnectorRegistry.register("onedrive")
@@ -292,16 +291,9 @@ class OneDriveConnector(AbstractConnector):
             )
             return None
 
-        # #13708: single chokepoint for every branch above (docx, xlsx, pdf,
-        # pptx, md/txt) -- the docx branch already redacts internally via
-        # content_extraction.py's extract_text_from_docx, this covers
-        # xlsx/pdf/pptx/md/txt that don't, and is a no-op on text already
-        # redacted.
-        text = redact_content(text)
-
-        # Add file header
+        # Add file header (redact_content is idempotent -- extract_text_from_docx already redacts its branch, #13708)
         header = f"# {file_name}\n\nFile: {file_meta.get('webUrl', '')}\n\n"
-        text = header + text
+        text = header + redact_content(text)
 
         # Update stored timestamp
         last_modified = file_meta.get("lastModifiedDateTime", "")

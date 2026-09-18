@@ -74,7 +74,12 @@ def _make_client(
         yield mock_session
 
     app.dependency_overrides[get_session] = _fake_session
-    app.dependency_overrides[get_current_user] = lambda: {"id": str(_FIXED_USER_ID)}
+    # A person signed in interactively: deciding requires one (#17042).
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": str(_FIXED_USER_ID),
+        "username": "board-member",
+        "auth_method": "session",
+    }
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=uuid.UUID(caller_org_id), user_id=_FIXED_USER_ID, is_platform_admin=is_platform_admin
     )

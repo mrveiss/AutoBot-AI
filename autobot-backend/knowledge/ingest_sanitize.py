@@ -27,7 +27,7 @@ from __future__ import annotations
 from typing import Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.secret_redaction import redact_content
+from autobot_shared.secret_redaction import redact_content, redact_url_credentials
 from knowledge.query_sanitizer import sanitize_for_storage
 
 logger = get_logger(__name__)
@@ -49,6 +49,33 @@ INJECTION_RULES_HIT = "injection_rules_hit"
 CREDENTIAL_REDACTED = "credential_redacted"
 
 UNSPECIFIED_ROUTE = "unspecified"
+
+#: Metadata keys that hold a URL a writer fetched content from (#13708 round 4).
+#: add_url_to_knowledge stores the fetched URL verbatim in "source"; other
+#: writers use "source_url"/"url" for the same purpose. A URL in any of these
+#: can carry Basic-Auth userinfo or a credential-shaped query param
+#: (?api_key=..., &token=...) that redact_content (which only ever sees
+#: *content*, never metadata) cannot reach.
+URL_METADATA_FIELDS: Tuple[str, ...] = ("source", "source_url", "url")
+
+
+def redact_url_metadata_fields(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """Mask credentials in any of ``URL_METADATA_FIELDS`` present in *metadata*, in place.
+
+    Split out from :func:`sanitize_fact_content` (round 4): ``update_fact``
+    merges the caller's new ``metadata`` into the fact's *existing* metadata
+    AFTER calling ``sanitize_fact_content`` (deliberately -- see that
+    function's caller in ``knowledge/facts.py``, which keeps the fact's own
+    route from being clobbered by a metadata-only update). That ordering
+    means a URL-shaped field in the caller's own ``metadata`` argument never
+    reaches ``sanitize_fact_content`` at all, so ``update_fact`` calls this
+    directly on its own ``metadata`` too, before the merge.
+    """
+    for field in URL_METADATA_FIELDS:
+        value = metadata.get(field)
+        if isinstance(value, str) and value:
+            metadata[field] = redact_url_credentials(value)
+    return metadata
 
 
 def _route_of(metadata: Dict[str, Any]) -> str:
@@ -79,7 +106,17 @@ def sanitize_fact_content(content: str, metadata: Dict[str, Any] | None) -> Tupl
     entry points redact their own text before it reaches ``store_fact``/``update_fact``.
     """
     metadata = metadata if metadata is not None else {}
+    # #13708 round 4 review: this MUST run before _route_of. _route_of's fallback
+    # reads metadata["source"] verbatim (add_url_to_knowledge's exact shape) -- with
+    # the old order, the route label (persisted to metadata[INJECTION_ROUTE] below,
+    # AND used as a Prometheus label / log field in sanitize_for_storage) carried the
+    # raw pre-redaction URL even after "source" itself was correctly masked, leaking
+    # the same credential through a second field. Safe for _route_of's other two
+    # branches (an explicit ingest_route, or a connector's source_type/
+    # source_connector_id) -- neither reads a URL_METADATA_FIELDS key.
+    redact_url_metadata_fields(metadata)
     route = _route_of(metadata)
+
     result = sanitize_for_storage(content, source=route)
     sanitized = result.sanitized_text
     redacted = redact_content(sanitized)
