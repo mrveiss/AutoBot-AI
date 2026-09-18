@@ -13,13 +13,13 @@ import asyncio
 import json
 import os
 import platform
-import subprocess  # nosec B404  # required for GPU detection
 import sys
 from typing import Any, Dict
 
 import psutil
 
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.gpu_telemetry import parse_nvidia_value, query_nvidia_gpus
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
@@ -27,7 +27,9 @@ logger = get_logger(__name__)
 
 # Constants for unit conversions and hardware detection
 BYTES_PER_GB = 1024**3  # Bytes to gigabytes conversion
-NVIDIA_SMI_EXPECTED_FIELDS = 6  # Expected field count from nvidia-smi CSV output
+# nvidia-smi fields behind _get_nvidia_smi_details; autobot_shared.gpu_telemetry
+# runs the tool and splits its rows (#16289).
+_NVIDIA_DETAIL_FIELDS = ("name", "memory.total", "memory.used", "memory.free", "utilization.gpu", "utilization.memory")
 
 # Conditional torch import for environments without CUDA
 try:
@@ -193,38 +195,29 @@ class WorkerNode:
         return devices
 
     def _get_nvidia_smi_details(self) -> list:
-        """Get detailed GPU information using nvidia-smi."""
-        try:
-            nvidia_smi_output = (
-                subprocess.check_output(  # nosec B603 B607  # fixed nvidia-smi argv, no user input
-                    [
-                        "nvidia-smi",
-                        "--query-gpu=name,memory.total,memory.used,memory.free," "utilization.gpu,utilization.memory",
-                        "--format=csv,noheader,nounits",
-                    ]
-                )
-                .decode()
-                .strip()
-                .split("\n")
-            )
+        """Get detailed GPU information using nvidia-smi, one entry per GPU.
 
-            gpu_details = []
-            for line in nvidia_smi_output:
-                parts = [p.strip() for p in line.split(",")]
-                if len(parts) == NVIDIA_SMI_EXPECTED_FIELDS:
-                    gpu_details.append(
-                        {
-                            "name": parts[0],
-                            "memory_total_mb": int(parts[1]),
-                            "memory_used_mb": int(parts[2]),
-                            "memory_free_mb": int(parts[3]),
-                            "gpu_util_percent": int(parts[4]),
-                            "mem_util_percent": int(parts[5]),
-                        }
-                    )
-            return gpu_details
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return []
+        #16289: autobot_shared.gpu_telemetry runs the tool and splits its rows. A
+        GPU with a value the tool could not read is skipped -- the old int() of
+        "[N/A]" raised out of this method instead.
+        """
+        details = []
+        for row in query_nvidia_gpus(_NVIDIA_DETAIL_FIELDS) or []:
+            values = [parse_nvidia_value(row[field]) for field in _NVIDIA_DETAIL_FIELDS[1:]]
+            if any(value is None for value in values):
+                continue
+            total, used, free, gpu_util, mem_util = (int(value) for value in values)
+            details.append(
+                {
+                    "name": row["name"],
+                    "memory_total_mb": total,
+                    "memory_used_mb": used,
+                    "memory_free_mb": free,
+                    "gpu_util_percent": gpu_util,
+                    "mem_util_percent": mem_util,
+                }
+            )
+        return details
 
     def _detect_openvino_capabilities(self) -> Dict[str, Any]:
         """Detect OpenVINO capabilities."""
