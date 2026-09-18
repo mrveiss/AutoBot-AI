@@ -36,7 +36,7 @@ from fastapi.testclient import TestClient
 import api.approval_gates as gates_api
 import api.user_management.dependencies as user_deps
 import llc.api.approvals as llc_api
-from api.user_management.human_decider import HUMAN_DECISION_REQUIRED
+from api.user_management.human_decider import HUMAN_DECISION_REQUIRED, classify_author_type
 from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_interactive_human, is_login_token
 from autobot_shared.auth.jwt_core import decode_jwt, encode_jwt
 from llc.deps import get_session as llc_get_session
@@ -399,3 +399,23 @@ async def test_run_and_device_users_are_not_human_even_where_a_path_would_admit_
 
     assert user is not None, f"the real {kind} extractor did not resolve the test token"
     assert not is_interactive_human(user)
+
+
+# --- classify_author_type, for a comment's author_type (#17056) -----------------
+
+
+def test_classify_author_type_records_an_interactive_human():
+    assert classify_author_type({"username": "alice", "role": "user", "auth_method": "session"}) == "human"
+
+
+def test_classify_author_type_records_the_service_key_as_system():
+    assert classify_author_type({"username": "service:slm", "role": "admin", "service": True}) == "system"
+
+
+def test_classify_author_type_records_a_run_jwt_as_agent():
+    user = {"username": "run:r1", "role": "run_jwt", "auth_method": "run_jwt"}
+    assert classify_author_type(user) == "agent"
+
+
+def test_classify_author_type_never_defaults_to_human_for_no_user():
+    assert classify_author_type(None) == "agent"
