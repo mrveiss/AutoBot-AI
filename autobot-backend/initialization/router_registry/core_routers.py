@@ -17,6 +17,7 @@ import content_reach.health  # noqa: F401 — registers KnownProbes.CONTENT_REAC
 # Core router imports - these are required for basic functionality
 from api.adapters import router as adapters_router  # Issue #1403
 from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
+from api.admin_orphan_repair import router as admin_orphan_repair_router  # #15779, #16927
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
 from api.admin_schedulers import router as admin_schedulers_router  # GH#6594
@@ -134,6 +135,12 @@ def _get_system_routers() -> list:
             "admin_event_logs",
         ),  # Issue #4461
         (admin_pricing_router, "", ["admin", "pricing"], "admin_pricing"),  # GH#6480
+        (
+            admin_orphan_repair_router,
+            "",
+            ["admin", "orphan-repair"],
+            "admin_orphan_repair",
+        ),  # #15779
         (
             admin_retention_policies_router,
             "",
