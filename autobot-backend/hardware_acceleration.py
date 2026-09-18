@@ -16,6 +16,7 @@ from typing import Any, Dict
 
 import psutil
 
+from autobot_shared.gpu_telemetry import parse_nvidia_value, query_nvidia_gpus, run_vendor_tool
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from config import config_manager
@@ -26,42 +27,28 @@ logger = get_logger(__name__)
 NPU_HARDWARE_KEYWORDS = {"neural", "npu", "ai"}
 
 
-def _parse_nvidia_smi_output(output: str) -> Dict[str, Dict[str, Any]]:
-    """Parse nvidia-smi GPU status output (Issue #315: extracted).
+# nvidia-smi fields behind get_device_status's per-GPU load. #16280: parsed by
+# autobot_shared.gpu_telemetry, the one nvidia-smi parser.
+_GPU_STATUS_FIELDS = ("utilization.gpu", "memory.used", "memory.total")
 
-    Args:
-        output: Raw nvidia-smi CSV output
 
-    Returns:
-        Dict mapping gpu_N to status dict
+def _gpu_status_devices(rows: list[Dict[str, str]]) -> Dict[str, Dict[str, Any]]:
+    """Per-GPU load from nvidia-smi rows, keyed gpu_N (Issue #315: extracted).
+
+    A GPU whose values the tool could not read is left out, as before.
     """
     devices = {}
-    lines = output.strip().split("\n")
-
-    for i, line in enumerate(lines):
-        # Cache stripped line to avoid repeated calls (Issue #624)
-        line_stripped = line.strip()
-        if not line_stripped:
+    for i, row in enumerate(rows):
+        util, used, total = (parse_nvidia_value(row[field]) for field in _GPU_STATUS_FIELDS)
+        if util is None or used is None or not total:
             continue
-        parts = line_stripped.split(",")
-        if len(parts) < 3:
-            continue
-
-        try:
-            # Cache stripped parts to avoid repeated strip() calls
-            util = int(parts[0].strip())
-            mem_used = int(parts[1].strip())
-            mem_total = int(parts[2].strip())
-            devices[f"gpu_{i}"] = {
-                "utilization": util,
-                "memory_used_mb": mem_used,
-                "memory_total_mb": mem_total,
-                "memory_percent": (mem_used / mem_total) * 100,
-                "status": "optimal" if util < 80 else "high_load",
-            }
-        except (ValueError, ZeroDivisionError):
-            continue
-
+        devices[f"gpu_{i}"] = {
+            "utilization": int(util),
+            "memory_used_mb": int(used),
+            "memory_total_mb": int(total),
+            "memory_percent": (used / total) * 100,
+            "status": "optimal" if util < 80 else "high_load",
+        }
     return devices
 
 
@@ -168,34 +155,16 @@ class HardwareAccelerationManager:
 
     def _check_nvidia_gpu(self) -> bool:
         """Check for NVIDIA GPU via nvidia-smi. Issue #620."""
-        try:
-            result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv, no user input
-                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                logger.info("NVIDIA GPU detected")
-                return True
-        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-            logger.debug("nvidia-smi not available: %s", e)
+        if query_nvidia_gpus(("name",)):
+            logger.info("NVIDIA GPU detected")
+            return True
         return False
 
     def _check_amd_gpu(self) -> bool:
         """Check for AMD GPU via rocm-smi. Issue #620."""
-        try:
-            result = subprocess.run(  # nosec B603 B607  # fixed rocm-smi argv, no user input
-                ["rocm-smi", "--showproductname"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0:
-                logger.info("AMD GPU detected")
-                return True
-        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-            logger.debug("rocm-smi not available: %s", e)
+        if run_vendor_tool(["rocm-smi", "--showproductname"]) is not None:
+            logger.info("AMD GPU detected")
+            return True
         return False
 
     def _check_intel_gpu(self) -> bool:
@@ -266,21 +235,6 @@ class HardwareAccelerationManager:
 
         return info
 
-    def _parse_nvidia_gpu_output(self, output: str) -> list[str]:
-        """Parse nvidia-smi output into GPU list (Issue #315 - extracted helper)."""
-        gpus = []
-        for line in output.strip().split("\n"):
-            # Cache stripped line to avoid repeated calls (Issue #624)
-            line_stripped = line.strip()
-            if not line_stripped:
-                continue
-            parts = line_stripped.split(",")
-            if len(parts) >= 2:
-                name = parts[0].strip()
-                memory = parts[1].strip()
-                gpus.append(f"{name} ({memory}MB)")
-        return gpus
-
     def _get_gpu_info(self) -> Dict[str, Any]:
         """Get GPU information (Issue #315 - refactored depth 5 to 3)."""
         info = {
@@ -291,23 +245,11 @@ class HardwareAccelerationManager:
             "power_efficient": False,
         }
 
-        try:
-            result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv, no user input
-                [
-                    "nvidia-smi",
-                    "--query-gpu=name,memory.total",
-                    "--format=csv,noheader,nounits",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0:
-                info["devices"] = self._parse_nvidia_gpu_output(result.stdout)
-                info["vendor"] = "NVIDIA"
-                return info
-        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-            logger.debug("nvidia-smi GPU info unavailable: %s", e)
+        rows = query_nvidia_gpus(("name", "memory.total"))
+        if rows is not None:
+            info["devices"] = [f"{row['name']} ({row['memory.total']}MB)" for row in rows]
+            info["vendor"] = "NVIDIA"
+            return info
 
         # Fallback generic GPU info
         info["devices"] = ["GPU (detected)"]
@@ -647,22 +589,11 @@ class HardwareAccelerationManager:
 
         # Add GPU status if available (Issue #315: uses helper for parsing)
         if self.gpu_available:
-            try:
-                result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv, no user input
-                    [
-                        "nvidia-smi",
-                        "--query-gpu=utilization.gpu,memory.used,memory.total",
-                        "--format=csv,noheader,nounits",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                if result.returncode == 0:
-                    gpu_devices = _parse_nvidia_smi_output(result.stdout)
-                    status["devices"].update(gpu_devices)
-            except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+            rows = query_nvidia_gpus(_GPU_STATUS_FIELDS)
+            if rows is None:
                 status["devices"]["gpu"] = {"status": "unknown"}
+            else:
+                status["devices"].update(_gpu_status_devices(rows))
 
         # Add NPU status if available
         if self.npu_available:

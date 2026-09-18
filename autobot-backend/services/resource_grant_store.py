@@ -13,6 +13,17 @@ from autobot_shared.scoping.visibility import Principal
 from models.resource_grant import ResourceGrant
 
 
+def _invalidate_visibility_cache(resource_type: str, resource_id: str) -> None:
+    """Drop resource_visibility's cached decision (#15779) so a grant/revoke is
+    visible immediately, with no restart. Imported inside the function, not at
+    module level: resource_visibility.py imports this module at its own top
+    level, so a top-level import here would be circular.
+    """
+    import services.resource_visibility as visibility
+
+    visibility.invalidate(resource_type, resource_id)
+
+
 async def grant(
     session: AsyncSession,
     resource_type: str,
@@ -36,6 +47,7 @@ async def grant(
     if existing is not None:
         existing.permission = permission
         await session.flush()
+        _invalidate_visibility_cache(resource_type, resource_id)
         return existing
     row = ResourceGrant(
         resource_type=resource_type,
@@ -47,6 +59,7 @@ async def grant(
     )
     session.add(row)
     await session.flush()
+    _invalidate_visibility_cache(resource_type, resource_id)
     return row
 
 
@@ -67,7 +80,10 @@ async def revoke(
         )
     )
     await session.flush()
-    return (result.rowcount or 0) > 0
+    removed = (result.rowcount or 0) > 0
+    if removed:
+        _invalidate_visibility_cache(resource_type, resource_id)
+    return removed
 
 
 async def has_grant(
