@@ -62,6 +62,7 @@ from api.system_health import ComponentHealth, KnownProbes, register_health_prob
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import redact_content
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
 from knowledge.ingestion_visibility import stamp_if_document
@@ -1285,6 +1286,13 @@ async def upload_file_to_knowledge(
     # Issue #5064: sanitize uploaded document content against prompt injection
     # before the text reaches the KB / embedding pipeline.
     content = _sanitize_document(content, source="file_upload").sanitized_text
+
+    # #13708: this endpoint has its own extraction path (media.document.extraction,
+    # not knowledge/connectors/content_extraction.py's already-redacted wrappers),
+    # so it never got the credential scanner. Single chokepoint: every branch of
+    # _extract_file_content (txt/md/csv, html, json, pdf, docx) converges here
+    # before content reaches fact_metadata / embedding, regardless of extension.
+    content = redact_content(content)
 
     logger.info("Uploading file: filename='%s', size=%d", filename, len(file_content))
 
