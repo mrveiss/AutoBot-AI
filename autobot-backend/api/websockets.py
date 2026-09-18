@@ -674,7 +674,7 @@ _ws_clients_lock = asyncio.Lock()
 # Lock for thread-safe access to _npu_events_subscribed (Issue #513 - race condition fix)
 import threading
 
-from websocket_subprotocol import accept_websocket
+from autobot_shared.websocket_subprotocol import accept_websocket
 
 _npu_events_lock = threading.Lock()
 

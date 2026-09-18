@@ -20,9 +20,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.websocket_subprotocol import accept_websocket
 from models.collaboration_event import CollaborationEvent
 from user_management.database import get_async_session_factory
-from websocket_subprotocol import accept_websocket
 
 logger = get_logger(__name__)
 

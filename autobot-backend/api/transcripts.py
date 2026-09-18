@@ -32,13 +32,13 @@ from api.ws_security import enforce_ws_origin
 from auth_middleware import authenticate_websocket, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from knowledge import get_knowledge_base
 from llm_shared import LLMRequest, get_provider_registry
 from transcriber.ai.context import build_context
 from transcriber.ai.prompts import get_system_prompt
 from transcriber.deps import can_access, resolve_user_id
 from transcriber.export.segments import build_segment_list
-from websocket_subprotocol import accept_websocket
 
 logger = get_logger(__name__)
 router = APIRouter()

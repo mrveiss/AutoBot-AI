@@ -16,6 +16,7 @@ from typing import Dict, Set
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.websocket_subprotocol import accept_websocket, bearer_subprotocol_token
 from services.auth import auth_service
 
 logger = logging.getLogger(__name__)
@@ -29,13 +30,13 @@ def _extract_ws_token(websocket: WebSocket) -> str | None:
     (``['bearer', '<token>']``) so the token is never written to URL access
     logs.  Falls back to the ``?token=`` query param for backwards
     compatibility with older clients.
+
+    #16457 review: the subprotocol parse is now the shared
+    ``autobot_shared.websocket_subprotocol.bearer_subprotocol_token``, the
+    same one ``autobot-backend``'s ``auth_middleware.authenticate_websocket``
+    uses, rather than a second copy of the identical logic.
     """
-    protocols = websocket.headers.get("sec-websocket-protocol", "")
-    if protocols:
-        parts = [p.strip() for p in protocols.split(",")]
-        if len(parts) == 2 and parts[0] == "bearer" and parts[1]:
-            return parts[1]
-    return websocket.query_params.get("token") or None
+    return bearer_subprotocol_token(websocket) or websocket.query_params.get("token") or None
 
 
 def _log_ws_reject_context(websocket: WebSocket, reason: str) -> None:
@@ -84,7 +85,7 @@ async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
     token = _extract_ws_token(websocket)
     if not token:
         _log_ws_reject_context(websocket, "missing token")
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Authentication required")
         return None
 
@@ -96,13 +97,13 @@ async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
         # same as any other invalid token -- just via a WebSocket close frame
         # instead of an HTTP 401, since no HTTP response can be sent here.
         _log_ws_reject_context(websocket, "revocation check failed")
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Invalid or expired token")
         return None
 
     if not payload:
         _log_ws_reject_context(websocket, "invalid token")
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Invalid or expired token")
         return None
 
@@ -117,10 +118,15 @@ class ConnectionManager:
         self._lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket, channel: str) -> None:
-        """Accept a WebSocket connection and subscribe to a channel."""
-        protocols = websocket.headers.get("sec-websocket-protocol", "")
-        subprotocol = "bearer" if protocols.startswith("bearer") else None
-        await websocket.accept(subprotocol=subprotocol)
+        """Accept a WebSocket connection and subscribe to a channel.
+
+        #16457 review: the echo used to be a local ``startswith("bearer")``
+        check, which would echo ``bearer`` for an offer like ``bearerX`` that
+        was never actually made -- the browser would then refuse the
+        handshake it caused. ``accept_websocket`` (shared with
+        ``autobot-backend``) does the exact-match negotiation instead.
+        """
+        await accept_websocket(websocket)
         async with self._lock:
             if channel not in self._connections:
                 self._connections[channel] = set()

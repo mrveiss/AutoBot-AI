@@ -40,9 +40,9 @@ from auth_middleware import authenticate_websocket
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from services.personality_service import resolve_voice_id
 from services.tts_client import get_tts_client
-from websocket_subprotocol import accept_websocket
 
 logger = get_logger(__name__)
 router = APIRouter()

@@ -24,7 +24,7 @@ from fastapi import WebSocket
 
 from autobot_shared.auth.device_capabilities import DeviceCapability
 from autobot_shared.auth.permissions import is_admin_role
-from websocket_subprotocol import accept_websocket
+from autobot_shared.websocket_subprotocol import accept_websocket
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from services.device_capabilities import DeviceCapabilityDecision

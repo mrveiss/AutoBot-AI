@@ -30,10 +30,10 @@ from autobot_shared.principal import resolve_principal_id  # noqa: F401  (re-exp
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.websocket_subprotocol import bearer_subprotocol_token
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
-from websocket_subprotocol import bearer_subprotocol_token
 
 logger = get_logger(__name__)
 

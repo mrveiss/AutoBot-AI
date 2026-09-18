@@ -38,6 +38,7 @@ from api.ws_security import enforce_ws_admin, enforce_ws_origin
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.threshold_constants import TimingConstants
 from desktop_streaming_manager import get_desktop_streaming
@@ -46,7 +47,6 @@ from metrics.system_monitor import evaluate_resource_thresholds
 from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
-from websocket_subprotocol import accept_websocket
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["advanced_control"])

@@ -48,11 +48,11 @@ from api.ws_security import authenticate_ws_admin
 from api.ws_security import validate_ws_origin as _validate_ws_origin
 from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from services.docker_task_workspace import (
     WorkspaceInfo,
     get_task_workspace_manager,
 )
-from websocket_subprotocol import accept_websocket
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/workspace", tags=["task-workspace"])

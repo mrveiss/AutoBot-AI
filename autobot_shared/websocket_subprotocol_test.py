@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from websocket_subprotocol import accept_websocket, bearer_subprotocol_token, negotiated_subprotocol
+from autobot_shared.websocket_subprotocol import accept_websocket, bearer_subprotocol_token, negotiated_subprotocol
 
 
 def _ws(header: str | None) -> SimpleNamespace:

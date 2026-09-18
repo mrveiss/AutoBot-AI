@@ -18,10 +18,10 @@ from api.ws_security import enforce_ws_origin
 from auth_middleware import authenticate_websocket
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 from user_management.database import get_async_session_factory
 from websocket.presence import presence_websocket_handler
-from websocket_subprotocol import accept_websocket
 
 logger = get_logger(__name__)
 

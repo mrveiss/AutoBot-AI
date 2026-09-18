@@ -377,7 +377,7 @@ async def live_events_endpoint(websocket: WebSocket):
     # #9963: use the canonical WS auth (JWT), same as /api/ws — the local
     # raw-JWT check was too strict and rejected valid deployments.
     from auth_middleware import authenticate_websocket
-    from websocket_subprotocol import accept_websocket
+    from autobot_shared.websocket_subprotocol import accept_websocket
 
     user_payload: dict | None = await authenticate_websocket(websocket)
     if _auth_required() and user_payload is None:
