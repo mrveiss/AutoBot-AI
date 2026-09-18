@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from agents.agent_client import AgentHealthRegistry
+    from chat_workflow.manager import ChatWorkflowManager
     from services.agent_terminal.session_manager import SessionManager
 
 
@@ -70,22 +71,30 @@ async def sync_company_os_presence(registry: AgentPresenceRegistry, session: "As
         )
 
 
-async def sync_ai_stack_presence(registry: AgentPresenceRegistry, health_registry: "AgentHealthRegistry") -> None:
-    """Report every AI-stack role agent as present; busy is unknown here (#16947 follow-up).
+async def sync_ai_stack_presence(
+    registry: AgentPresenceRegistry,
+    health_registry: "AgentHealthRegistry",
+    chat_workflow_manager: "ChatWorkflowManager | None" = None,
+) -> None:
+    """Report every AI-stack role agent as present.
 
-    `AgentHealthRegistry` tracks health (healthy/degraded/offline), not
-    activity -- honestly reported as idle rather than guessed. A richer busy
-    signal exists in `DistributedAgentManager.distributed_agents[...].active_tasks`
-    for agents registered there; wiring that in is left for a follow-up so
-    this feed does not silently claim a signal it does not have.
+    busy is `chat_workflow_manager.is_processing()` for the whole registry --
+    `AgentHealthRegistry` has no per-role concurrency, and neither does
+    `ChatWorkflowManager` (one shared singleton serves every role), so "any
+    stream in flight" is the honest signal, not one attributed to a single
+    role. A richer per-role signal exists in
+    `DistributedAgentManager.distributed_agents[...].active_tasks` for agents
+    registered there; wiring that in is left for a follow-up. Omitting
+    *chat_workflow_manager* reports every role idle rather than guessing.
     """
+    busy = chat_workflow_manager.is_processing() if chat_workflow_manager is not None else False
     for agent_type in health_registry.list_agents():
         registry.report(
             kind=AgentKind.AI_STACK,
             tenant_id=None,
             name=agent_type,
             instance_id=agent_type,
-            busy=False,
+            busy=busy,
         )
 
 

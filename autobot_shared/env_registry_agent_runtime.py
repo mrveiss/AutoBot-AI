@@ -47,6 +47,23 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_AGENT_PRESENCE_TTL_SECONDS",
+        type=float,
+        default=90.0,
+        description=(
+            "Seconds an agent's live-presence entry survives with no further "
+            "heartbeat before `list_live()` treats it as gone. Raising it "
+            "tolerates a longer gap between reports before an agent is "
+            "reported offline; lowering it detects a crashed/partitioned "
+            "agent sooner, at the cost of a busier reporter needing to "
+            "report more often (protocols/agent_presence.py, #16947)."
+        ),
+        component="agents",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_RUN_CHECKPOINT_TTL_SECONDS",
         type=int,
         default=86400,

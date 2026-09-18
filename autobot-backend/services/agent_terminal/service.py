@@ -8,6 +8,7 @@ Agent Terminal Service
 Main service class that composes all agent terminal functionality.
 """
 
+import asyncio
 import time
 
 from autobot_logging.terminal_logger import TerminalLogger
@@ -60,23 +61,18 @@ class AgentTerminalService:
         self.redis_client = redis_client
         self.security_policy = SecurityPolicy()
 
-        # Initialize ChatHistoryManager for chat integration
         self.chat_history_manager = ChatHistoryManager()
 
         # Use passed ChatWorkflowManager instead of creating new one
         self.chat_workflow_manager = chat_workflow_manager
 
-        # Initialize managers
         self.approval_manager = CommandApprovalManager()
         self.command_queue = command_queue or get_command_queue()
 
-        # Terminal command logger
         self.terminal_logger = TerminalLogger(redis_client=redis_client, data_dir="data/chats")
 
-        # Prometheus metrics instance
         self.prometheus_metrics = get_metrics_manager()
 
-        # Initialize component modules
         self.session_manager = SessionManager(redis_client=redis_client, chat_history_manager=self.chat_history_manager)
         self.command_executor = CommandExecutor(chat_history_manager=self.chat_history_manager)
         self.approval_handler = ApprovalHandler(
@@ -268,6 +264,14 @@ class AgentTerminalService:
             interactive_reasons=interactive_reasons,
         )
 
+    async def _run_tracked(self, session: AgentTerminalSession, command: str) -> Metadata:
+        """Run in the PTY with `running_command_task` set for the duration (#16947 busy signal)."""
+        session.running_command_task = asyncio.ensure_future(self.command_executor.execute_in_pty(session, command))
+        try:
+            return await session.running_command_task
+        finally:
+            session.running_command_task = None
+
     async def _execute_auto_approved_command(
         self,
         session: AgentTerminalSession,
@@ -284,7 +288,7 @@ class AgentTerminalService:
         task_start_time = time.time()
         await log_autobot_command(self.terminal_logger, session, command, "executing")
 
-        result = await self.command_executor.execute_in_pty(session, command)
+        result = await self._run_tracked(session, command)
 
         with post_execution_guard(result):
             status = "success" if result.get("status") == "success" else "error"
@@ -403,13 +407,10 @@ class AgentTerminalService:
             comment: Approval comment
             auto_approve_future: Whether to auto-approve similar commands
         """
-        # Save to chat
         await self._save_command_to_chat(session.conversation_id, command, result, command_type="approved")
 
-        # Interpret command with workflow manager
         await self._interpret_approved_command(session, command, result)
 
-        # Update session history
         session.add_approved_to_history(
             command=command,
             risk_level=risk_level,
@@ -418,10 +419,8 @@ class AgentTerminalService:
             result=result,
         )
 
-        # Clear pending and resume
         session.clear_pending_and_resume()
 
-        # Store auto-approve rule if requested
         if auto_approve_future and user_id:
             await self.approval_handler.store_auto_approve_rule(
                 user_id=user_id,
@@ -445,7 +444,7 @@ class AgentTerminalService:
         """Helper for _execute_approved_command. Ref: #1088."""
         await log_command_approval(self.terminal_logger, session, command, user_id)
 
-        result = await self.command_executor.execute_in_pty(session, command)
+        result = await self._run_tracked(session, command)
 
         with post_execution_guard(result):
             await self.approval_handler.update_command_queue_status(
@@ -557,7 +556,6 @@ class AgentTerminalService:
                 user_id=user_id,
             )
 
-        # Update session history
         session.add_denied_to_history(
             command=command,
             risk_level=risk_level,
@@ -565,7 +563,6 @@ class AgentTerminalService:
             comment=comment,
         )
 
-        # Clear pending and resume
         session.clear_pending_and_resume()
 
         # Update and broadcast status
