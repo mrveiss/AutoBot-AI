@@ -65,6 +65,22 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_IDLE_NOTICE_TIMEOUT_SECONDS",
+        type=float,
+        default=300.0,
+        description=(
+            "Bound on `wait_for_idle()`'s one-shot subscription (#16949): how "
+            "long it waits for a peer to go idle before raising "
+            "`IdleWaitExpiredError` instead of waiting forever. Raising it "
+            "tolerates a longer-running peer before giving up; lowering it "
+            "fails a stuck wait sooner (protocols/idle_notice.py)."
+        ),
+        component="agents",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_AGENT_PRESENCE_SYNC_INTERVAL_SECONDS",
         type=float,
         default=30.0,

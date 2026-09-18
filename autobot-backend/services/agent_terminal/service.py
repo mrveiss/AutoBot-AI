@@ -122,7 +122,6 @@ class AgentTerminalService:
 
     async def close_session(self, session_id: str) -> bool:
         """Close an agent terminal session."""
-        # Clean up approval lock
         await self.approval_handler.cleanup_approval_lock(session_id)
         return await self.session_manager.close_session(session_id)
 
@@ -132,7 +131,6 @@ class AgentTerminalService:
         if not session:
             return None
 
-        # Check if PTY session is alive
         pty_alive = False
         if session.has_pty_session():
             try:
@@ -268,6 +266,29 @@ class AgentTerminalService:
             return await session.running_command_task
         finally:
             session.running_command_task = None
+
+    def _drain_peer_messages(self, session: AgentTerminalSession) -> None:
+        """Drain queued peer messages into session.metadata (#16948) -- never blocks.
+
+        A peer message is context, never an instruction (#16946 owner
+        ruling): a command it prompts still goes through this session's own
+        approval gate exactly as a human's would -- nothing here queues or
+        runs a command, it only makes the message visible for whatever
+        does next.
+        """
+        from protocols.agent_kind import AgentKind
+        from protocols.agent_presence import UNKNOWN_TENANT
+        from protocols.peer_inbox import get_peer_inbox_directory
+
+        # Mirrors sync_session_presence's own tenant_id derivation exactly (#16947)
+        # -- the inbox key here must match what that feed reports to presence, or
+        # a message send() authorized against list_live() would key into an inbox
+        # this drain call never looks under.
+        tenant_id = session.tenant_id or UNKNOWN_TENANT
+        directory = get_peer_inbox_directory()
+        drained = directory.inbox_for(kind=AgentKind.SESSION, tenant_id=tenant_id, name=session.session_id).drain()
+        if drained:
+            session.metadata.setdefault("peer_messages", []).extend(e.to_dict() for e in drained)
 
     async def _execute_auto_approved_command(
         self,
@@ -425,7 +446,6 @@ class AgentTerminalService:
                 risk_level=risk_level,
             )
 
-        # Update and broadcast status
         await self._update_and_broadcast_approval_status(session, command, True, user_id, comment)
 
     async def _run_approved_command_body(
@@ -480,24 +500,11 @@ class AgentTerminalService:
         comment: str | None,
         auto_approve_future: bool,
     ) -> Metadata:
-        """
-        Execute an approved command and update all tracking.
+        """Execute an approved command and update all tracking.
 
-        Issue #281: Extracted from approve_command.
-        Issue #665: Refactored to extract logging and post-execution helpers.
-        Issue #1088: Extracted _run_approved_command_body to reduce function length.
-
-        Args:
-            session: Terminal session
-            command: Command to execute
-            command_id: Unique command ID
-            risk_level: Risk level of command
-            user_id: User who approved
-            comment: Approval comment
-            auto_approve_future: Whether to auto-approve similar commands
-
-        Returns:
-            Execution result metadata
+        Issue #281: Extracted from approve_command. Issue #665: refactored to
+        extract logging/post-execution helpers. Issue #1088: extracted
+        _run_approved_command_body to reduce function length.
         """
         await self.approval_handler.update_command_queue_status(
             command_id=command_id,
@@ -535,7 +542,6 @@ class AgentTerminalService:
         comment: str | None,
     ) -> Metadata:
         """Handle a denied command and update all tracking (Issue #281: extracted)."""
-        # Update queue status
         await self.approval_handler.update_command_queue_status(
             command_id=command_id,
             approved=False,
@@ -543,7 +549,6 @@ class AgentTerminalService:
             comment=comment,
         )
 
-        # Log denial
         if session.has_conversation():
             await self.terminal_logger.log_command(
                 session_id=session.conversation_id,
@@ -562,7 +567,6 @@ class AgentTerminalService:
 
         session.clear_pending_and_resume()
 
-        # Update and broadcast status
         await self._update_and_broadcast_approval_status(session, command, False, user_id, comment)
 
         return {
@@ -691,7 +695,6 @@ class AgentTerminalService:
             logger.info(f"Command auto-approved by rule: {command} " f"(user: {user_id}, risk: {risk.value})")
             return True, None
 
-        # Queue for approval
         queue_response = await self._queue_command_for_approval(
             session=session,
             command=command,
@@ -725,21 +728,19 @@ class AgentTerminalService:
         Returns:
             Execution result with security metadata
         """
-        # Validate session
         session = await self.get_session(session_id)
         validation_error = self._validate_session_for_execution(session, session_id)
         if validation_error:
             return validation_error
 
-        # Assess command risk and interactivity
+        self._drain_peer_messages(session)
+
         _, risk, reasons, is_interactive, interactive_reasons = self._assess_command(command)
 
-        # Check agent permissions (Issue #665: extracted helper)
         permission_error = self._check_agent_permission(session, command, risk)
         if permission_error:
             return permission_error
 
-        # Check auto-approve or queue for approval (Issue #665: extracted helper)
         is_auto_approved, queue_response = await self._check_auto_approval_or_queue(
             session,
             command,
@@ -752,7 +753,6 @@ class AgentTerminalService:
         if not is_auto_approved:
             return queue_response
 
-        # Execute auto-approved command
         try:
             return await self._execute_auto_approved_command(session, command, risk)
         except PostExecutionError as exc:
@@ -776,7 +776,6 @@ class AgentTerminalService:
             return
 
         try:
-            # Save command
             await self.chat_history_manager.add_message(
                 sender="agent_terminal",
                 text=f"$ {command}",
@@ -834,7 +833,6 @@ class AgentTerminalService:
         project_path: str | None = None,
     ) -> Metadata:
         """Approve or deny a pending agent command."""
-        # Get per-session lock
         approval_lock = await self.approval_handler._get_approval_lock(session_id)
         async with approval_lock:
             return await self._approve_command_internal(
@@ -866,17 +864,14 @@ class AgentTerminalService:
         if not session:
             return {"status": "error", "error": "Session not found"}
 
-        # Issue #372: Use model method
         if not session.has_pending_approval():
             return {"status": "error", "error": "No pending approval"}
 
-        # Issue #372: Use model methods for pending data
         command = session.get_pending_command()
         risk_level = session.get_pending_risk_level()
         command_id = session.get_pending_command_id()
 
         if approved:
-            # Permission v2: Store in project memory if requested
             if remember_for_project and project_path and user_id:
                 await CommandApprovalManager.store_approval_memory(
                     command=command,
