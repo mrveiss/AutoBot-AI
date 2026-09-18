@@ -10,7 +10,7 @@ import uuid
 
 from autobot_shared.logging_manager import get_logger
 
-from .source_models import CodeSource, SourceAccess, SourceType
+from .source_models import CodeSource, SourceAccess, SourceStatus, SourceType
 from .source_paths import make_clone_path
 from .source_storage import save_source
 
@@ -19,7 +19,14 @@ logger = get_logger(__name__)
 
 async def delete_source_and_cleanup(source_id: str, source: CodeSource | None = None) -> bool:
     """Delete a CodeSource: its clone dir (only under CODE_SOURCES_BASE), its
-    ChromaDB documents, and its Redis record. Idempotent; returns Redis-delete result.
+    ChromaDB documents, and its Redis record. Idempotent; returns False on a
+    cleanup failure (#17036) as well as a missing source, so a caller cannot
+    tell those apart from the return value alone -- both mean "not deleted"
+    exactly as intended.
+
+    A failed clone removal is reported, never swallowed (#17036): the record
+    is marked ``CLEANUP_FAILED`` with the error rather than deleted while the
+    directory survives, so the orphan is visible instead of silent.
 
     Callers that already loaded the record (e.g. the DELETE handler's 404 check) may
     pass ``source`` to avoid a redundant Redis read."""
@@ -36,7 +43,14 @@ async def delete_source_and_cleanup(source_id: str, source: CodeSource | None = 
     if source.clone_path and Path(source.clone_path).exists():
         clone = Path(source.clone_path).resolve()
         if clone.is_relative_to(CODE_SOURCES_BASE):
-            shutil.rmtree(source.clone_path, ignore_errors=True)
+            try:
+                shutil.rmtree(source.clone_path)
+            except OSError as exc:
+                logger.error("Failed to remove clone dir %s for source %s: %s", source.clone_path, source_id, exc)
+                source.status = SourceStatus.CLEANUP_FAILED
+                source.error_message = f"Clone removal failed: {exc}"[:500]
+                await save_source(source)
+                return False
     await _purge_source_index(source_id)
     ok = await delete_source(source_id)
     logger.info("Deleted code source %s (clone+index+record)", source_id)

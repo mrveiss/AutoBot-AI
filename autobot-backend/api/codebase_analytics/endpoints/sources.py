@@ -79,11 +79,7 @@ def _sanitize_git_error(message: str) -> str:
 
 
 async def _run_git_clone(url: str, dest: str, branch: str) -> str:
-    """Clone a repo shallowly. Returns stderr on failure.
-
-    A 120-second timeout prevents the background task from hanging
-    indefinitely on large repos or network issues (#3092).
-    """
+    """Clone a repo shallowly. Returns stderr on failure (#3092: a 120s timeout guards large-repo/network hangs)."""
     proc = await asyncio.create_subprocess_exec(
         "git",
         "clone",
@@ -107,11 +103,7 @@ async def _run_git_clone(url: str, dest: str, branch: str) -> str:
 
 
 async def _run_git_pull(clone_path: str) -> str:
-    """Pull latest changes in an existing clone. Returns stderr on failure.
-
-    A 120-second timeout prevents the background task from hanging
-    indefinitely on network issues (#3092).
-    """
+    """Pull latest changes in an existing clone. Returns stderr on failure (#3092: a 120s timeout guards hangs)."""
     proc = await asyncio.create_subprocess_exec(
         "git", "-C", clone_path, "pull", "--ff-only", stderr=asyncio.subprocess.PIPE, env=scrubbed_git_env()
     )
@@ -145,9 +137,16 @@ async def _do_sync(source: CodeSource) -> None:
                 err = await _run_git_pull(clone_path)
             else:
                 if clone_dir.is_dir():
-                    shutil.rmtree(clone_path, ignore_errors=True)
-                clone_dir.mkdir(parents=True, exist_ok=True)
-                err = await _run_git_clone(url, clone_path, source.branch)
+                    try:
+                        shutil.rmtree(clone_path)
+                    except OSError as rmtree_exc:
+                        # #17036: a swallowed failure here left a stale directory
+                        # that the next clone attempt would silently write into.
+                        logger.error("Failed to clear stale clone dir %s: %s", clone_path, rmtree_exc)
+                        err = f"Could not clear existing clone directory: {rmtree_exc}"
+                if not err:
+                    clone_dir.mkdir(parents=True, exist_ok=True)
+                    err = await _run_git_clone(url, clone_path, source.branch)
 
         if err:
             source.status = SourceStatus.ERROR
