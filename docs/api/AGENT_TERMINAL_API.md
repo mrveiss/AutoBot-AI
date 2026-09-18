@@ -20,6 +20,8 @@ The Agent Terminal API provides secure programmatic terminal access for AI agent
 - **Approval Workflow**: HIGH/DANGEROUS commands require user approval
 - **User Control**: Users can interrupt and take control at any time
 - **Audit Logging**: All commands logged with security metadata
+- **Session Ownership** (#17052, #17053, #17057): only a session's owner or an admin can read, drive or decide for it. A session a chat drives belongs to that conversation's owner. A session with no recorded owner is admin-only. A missing session and someone else's session both return 404.
+- **A person decides**: approving, denying, taking control and choosing a host need an interactive login. An API key, the internal service key, and run or device tokens are refused (403). The approver recorded is always the signed-in caller; a `user_id` in the request body is ignored and logged.
 
 ### Agent Roles
 
@@ -309,10 +311,11 @@ Approve or deny a pending agent command.
 
 ```json
 {
-  "approved": "boolean (required)",
-  "user_id": "string (optional)"
+  "approved": "boolean (required)"
 }
 ```
+
+The approver is the signed-in caller. Only the session's owner or an admin may call this, from an interactive login. A `user_id` field is still accepted from older clients, but it is ignored and logged.
 
 #### Response - Approved
 
@@ -345,16 +348,14 @@ Approve or deny a pending agent command.
 curl -X POST https://<backend-ip>:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/approve \
   -H "Content-Type: application/json" \
   -d '{
-    "approved": true,
-    "user_id": "user_123"
+    "approved": true
   }'
 
 # Deny command
 curl -X POST https://<backend-ip>:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/approve \
   -H "Content-Type: application/json" \
   -d '{
-    "approved": false,
-    "user_id": "user_123"
+    "approved": false
   }'
 ```
 
@@ -368,11 +369,7 @@ User interrupts agent and takes control of the terminal session.
 
 #### Request Body
 
-```json
-{
-  "user_id": "string (required)"
-}
-```
+None needed. The actor is the signed-in caller, who must be the session's owner or an admin, from an interactive login. A `user_id` field from older clients is ignored and logged.
 
 #### Response (200 OK)
 
@@ -392,11 +389,7 @@ User interrupts agent and takes control of the terminal session.
 #### Example
 
 ```bash
-curl -X POST https://<backend-ip>:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/interrupt \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_id": "user_123"
-  }'
+curl -X POST https://<backend-ip>:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/interrupt
 ```
 
 ---

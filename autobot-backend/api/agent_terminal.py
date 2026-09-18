@@ -621,7 +621,7 @@ async def interrupt_agent_session(
     """
     result = await service.user_interrupt(
         session_id=session_id,
-        user_id=verified_actor(current_user, request.user_id),
+        user_id=verified_actor(current_user, request.user_id if request else None),
     )
 
     return result
