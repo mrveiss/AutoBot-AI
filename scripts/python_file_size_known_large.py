@@ -20,7 +20,7 @@ from __future__ import annotations
 
 KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/a2a/a2a_test.py": 713,
-    "autobot-backend/advanced_rag_optimizer.py": 1183,
+    "autobot-backend/advanced_rag_optimizer.py": 1180,
     "autobot-backend/agent_loop/loop.py": 2046,
     "autobot-backend/agent_loop/types.py": 670,
     "autobot-backend/agents/agent_orchestration/distributed_management.py": 649,
@@ -162,7 +162,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_history/session.py": 939,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1682,
-    "autobot-backend/chat_workflow/llm_handler.py": 1358,
+    "autobot-backend/chat_workflow/llm_handler.py": 1343,
     "autobot-backend/chat_workflow/manager.py": 4068,
     "autobot-backend/chat_workflow/tool_handler.py": 3729,  # #11542: external MCP dispatch merged into MCPDispatcher
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
@@ -335,7 +335,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/autoresearch/store_chromadb_test.py": 664,
     "autobot-backend/services/captcha_human_loop.py": 636,
     "autobot-backend/services/causal_inference_engine.py": 756,
-    "autobot-backend/services/chat_knowledge_service_test.py": 851,
+    "autobot-backend/services/chat_knowledge_service_test.py": 775,
     "autobot-backend/services/claim_verifier.py": 835,
     "autobot-backend/services/codebase_indexing_service.py": 1010,
     "autobot-backend/services/command_approval_manager.py": 649,
@@ -350,7 +350,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
     "autobot-backend/services/knowledge/code_indexer.py": 1179,
     "autobot-backend/services/knowledge/doc_indexer.py": 1274,
-    "autobot-backend/services/knowledge/service.py": 944,
+    "autobot-backend/services/knowledge/service.py": 851,
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1486,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
