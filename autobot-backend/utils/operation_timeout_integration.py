@@ -63,6 +63,7 @@ class CreateOperationRequest(BaseModel):
     estimated_items: int = 1
     context: Dict[str, Any] = {}
     execute_immediately: bool = False
+    created_by: str | None = None  # #17017: whose operation this is
 
 
 class OperationResponse(BaseModel):
@@ -166,8 +167,7 @@ class OperationIntegrationManager:
                 description=request.description,
                 operation_function=operation_function,
                 priority=priority,
-                estimated_items=request.estimated_items,
-                context=request.context,
+                metadata={"estimated_items": request.estimated_items, "created_by": request.created_by},  # #17017
                 execute_immediately=request.execute_immediately,
             )
             return {"operation_id": operation_id, "status": "created"}

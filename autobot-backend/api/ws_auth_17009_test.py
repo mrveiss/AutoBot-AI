@@ -97,11 +97,15 @@ def operations(monkeypatch):
     return lro
 
 
-def test_operation_progress_is_admin_only(operations):
-    """#17009 row 8: operations record no creator, so another user's progress is an admin's alone."""
+def test_operation_progress_is_for_its_creator_or_an_admin(operations):
+    """#17009 row 8, scoped by #17017: the creator and an admin, never another user or an anonymous caller."""
     assert _refused(operations.router, "/op-1/progress", None) == 1008
-    assert _refused(operations.router, "/op-1/progress", USER) == 1008
+    assert _refused(operations.router, "/op-1/progress", USER) == 1008  # not their operation (none exists)
     assert _connect(operations.router, "/op-1/progress", ADMIN) == "accepted"
+    operations.operation_integration_manager.operation_manager.get_operation.return_value = SimpleNamespace(
+        metadata={"created_by": USER["username"]}
+    )
+    assert _connect(operations.router, "/op-1/progress", USER) == "accepted"
 
 
 def test_an_unauthenticated_probe_learns_nothing_about_the_framework(monkeypatch):
@@ -114,15 +118,20 @@ def test_an_unauthenticated_probe_learns_nothing_about_the_framework(monkeypatch
     assert _refused(lro.router, "/op-1/progress", USER) == 1008
 
 
-def test_every_long_running_http_route_requires_admin():
-    """#17010: each HTTP route carries the admin dependency; none is left open."""
+def test_every_long_running_http_route_authenticates_and_starting_work_is_admin():
+    """#17010, as scoped by #17017: work-starting routes carry the admin dependency; the rest need
+    a signed-in caller and scope to the operation's creator (tested in ``long_running_operations_17017_test``)."""
     from api import long_running_operations as lro
-    from auth_middleware import check_admin_permission
+    from auth_middleware import check_admin_permission, get_current_user
 
     http = [r for r in lro.router.routes if hasattr(r, "methods")]
     assert len(http) >= 9, f"found {len(http)} HTTP routes; this check would pass on an empty router"
-    open_routes = [r.path for r in http if check_admin_permission not in {d.call for d in r.dependant.dependencies}]
-    assert open_routes == []
+    admin_only = {"/codebase/index", "/testing/comprehensive", "/knowledge-base/populate", "/security/scan"}
+    admin_only.add("/migrate/existing")
+    for route in http:
+        calls = {d.call for d in route.dependant.dependencies}
+        needed = check_admin_permission if route.path in admin_only else get_current_user
+        assert needed in calls, f"{route.path} is missing {needed.__name__}"
 
 
 class TestTheOverseerSocket:

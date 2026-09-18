@@ -122,7 +122,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/llm_optimization.py": 725,
     "autobot-backend/api/log_forwarding.py": 777,
     "autobot-backend/api/logs.py": 1029,
-    "autobot-backend/api/long_running_operations.py": 603,
     "autobot-backend/api/mcp_registry.py": 1176,
     "autobot-backend/api/memory.py": 1573,
     "autobot-backend/api/monitoring.py": 1319,

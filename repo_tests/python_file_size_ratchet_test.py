@@ -91,7 +91,7 @@ ANNOTATED_AS_LIVE = _BASELINE_MODULE.ANNOTATED_AS_LIVE
 # to deny. #15641/#15642 re-pinned it to the measured population. It starts at
 # whatever the walk finds and only falls after, because an unlisted oversized
 # file now fails the audit instead of joining the list.
-MAX_KNOWN_LARGE_ENTRIES = 487
+MAX_KNOWN_LARGE_ENTRIES = 486
 
 
 # Floor for the tracked-Python enumeration (4958 files at the time of writing).
