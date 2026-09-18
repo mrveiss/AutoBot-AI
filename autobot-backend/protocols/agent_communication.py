@@ -16,8 +16,7 @@ import os
 import sys
 import time
 import uuid
-from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List
 
@@ -58,7 +57,12 @@ def _parse_priority(priority: Any) -> "MessagePriority":
 from autobot_shared.async_compat import fire_and_forget, run_or_schedule
 
 # noqa: E402
-from autobot_shared.redis_client import get_redis_client  # noqa: E402
+# #16986: the channels, and delivery by recipient, live in protocols/agent_channels.py.
+from protocols.agent_channels import (  # noqa: E402,F401 -- re-exported
+    CommunicationChannel,
+    DirectCommunicationChannel,
+    RedisCommunicationChannel,
+)
 
 logger = get_logger(__name__)
 
@@ -177,163 +181,6 @@ class StandardMessage:
         return cls.from_dict(json.loads(json_str))
 
 
-class CommunicationChannel(ABC):
-    """Abstract base class for communication channels"""
-
-    def __init__(self, channel_id: str):
-        """Initialize communication channel with ID and inactive state."""
-        self.channel_id = channel_id
-        self.is_active = False
-
-    @abstractmethod
-    async def send(self, message: StandardMessage) -> bool:
-        """Send a message through the channel"""
-
-    @abstractmethod
-    async def receive(self, timeout: float | None = None) -> StandardMessage | None:
-        """Receive a message from the channel"""
-
-    @abstractmethod
-    async def close(self):
-        """Close the communication channel"""
-
-
-class RedisCommunicationChannel(CommunicationChannel):
-    """Redis-based communication channel implementation"""
-
-    def __init__(self, channel_id: str):
-        """Initialize Redis channel with client connection and message queue."""
-        super().__init__(channel_id)
-        self.redis_client = get_redis_client()
-        self.channel_key = f"autobot:agent_comm:{channel_id}"
-        self.message_queue = asyncio.Queue()
-        self.listener_task = None
-
-    async def start(self):
-        """Start the communication channel"""
-        self.is_active = True
-        self.listener_task = asyncio.create_task(self._listen_for_messages())
-        logger.info("Redis communication channel %s started", self.channel_id)
-
-    async def _listen_for_messages(self):
-        """Background task to listen for incoming messages"""
-        while self.is_active:
-            try:
-                # Use Redis BLPOP for blocking message retrieval (sync call in thread)
-                result = await asyncio.to_thread(self.redis_client.blpop, self.channel_key, 1)
-                if result:
-                    _, message_json = result
-                    if isinstance(message_json, bytes):
-                        message_data = message_json.decode()
-                    else:
-                        message_data = str(message_json)
-                    message = StandardMessage.from_json(message_data)
-                    await self.message_queue.put(message)
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error("Error listening for messages: %s", e)
-                await asyncio.sleep(TimingConstants.STANDARD_DELAY)
-
-    async def send(self, message: StandardMessage) -> bool:
-        """Send a message through Redis"""
-        try:
-            message_json = message.to_json()
-            await asyncio.to_thread(self.redis_client.rpush, self.channel_key, message_json)
-
-            # Set TTL for automatic cleanup
-            if message.header.expires_at:
-                ttl = int(message.header.expires_at - time.time())
-                if ttl > 0:
-                    await asyncio.to_thread(self.redis_client.expire, self.channel_key, ttl)
-
-            logger.debug(
-                "Message sent to channel %s: %s",
-                self.channel_id,
-                message.header.message_id,
-            )
-            return True
-
-        except Exception as e:
-            logger.error("Failed to send message: %s", e)
-            return False
-
-    async def receive(self, timeout: float | None = None) -> StandardMessage | None:
-        """Receive a message from the channel"""
-        try:
-            if timeout:
-                message = await asyncio.wait_for(self.message_queue.get(), timeout=timeout)
-            else:
-                message = await self.message_queue.get()
-            return message
-        except asyncio.TimeoutError:
-            return None
-        except Exception as e:
-            logger.error("Error receiving message: %s", e)
-            return None
-
-    async def close(self):
-        """Close the Redis communication channel"""
-        self.is_active = False
-        if self.listener_task:
-            self.listener_task.cancel()
-            try:
-                await self.listener_task
-            except asyncio.CancelledError:
-                logger.debug("Listener task cancelled for channel %s", self.channel_id)
-        logger.info("Redis communication channel %s closed", self.channel_id)
-
-
-class DirectCommunicationChannel(CommunicationChannel):
-    """Direct in-memory communication channel for same-process agents"""
-
-    def __init__(self, channel_id: str):
-        """Initialize direct in-memory channel with message queue."""
-        super().__init__(channel_id)
-        self.message_queue = asyncio.Queue()
-        self.is_active = True
-
-    async def send(self, message: StandardMessage) -> bool:
-        """Send a message directly to the queue"""
-        try:
-            if not self.is_active:
-                return False
-            await self.message_queue.put(message)
-            logger.debug(
-                "Message sent directly to %s: %s",
-                self.channel_id,
-                message.header.message_id,
-            )
-            return True
-        except Exception as e:
-            logger.error("Failed to send direct message: %s", e)
-            return False
-
-    async def receive(self, timeout: float | None = None) -> StandardMessage | None:
-        """Receive a message from the direct queue"""
-        try:
-            if timeout:
-                message = await asyncio.wait_for(self.message_queue.get(), timeout=timeout)
-            else:
-                message = await self.message_queue.get()
-            return message
-        except asyncio.TimeoutError:
-            return None
-        except Exception as e:
-            logger.error("Error receiving direct message: %s", e)
-            return None
-
-    async def close(self):
-        """Close the direct communication channel"""
-        self.is_active = False
-        # Clear remaining messages
-        while not self.message_queue.empty():
-            try:
-                self.message_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-
-
 class AgentCommunicationProtocol:
     """Main protocol handler for standardized agent communication"""
 
@@ -346,6 +193,7 @@ class AgentCommunicationProtocol:
         self.is_active = False
         self.heartbeat_task = None
         self.message_processor_task = None
+        self._handling: set = set()  # in-flight inbound messages, one task each (#16986)
 
     async def start(self):
         """Start the communication protocol"""
@@ -368,6 +216,8 @@ class AgentCommunicationProtocol:
             self.heartbeat_task.cancel()
         if self.message_processor_task:
             self.message_processor_task.cancel()
+        for task in list(self._handling):
+            task.cancel()
 
         # Close all channels
         for channel in self.channels.values():
@@ -384,7 +234,8 @@ class AgentCommunicationProtocol:
         )
 
     def add_channel(self, channel_id: str, channel: CommunicationChannel):
-        """Add a communication channel"""
+        """Add a communication channel, as this agent's inbound destination on it (#16986)"""
+        channel.bind(self.agent_identity.agent_id)
         self.channels[channel_id] = channel
         logger.info("Added communication channel: %s", channel_id)
 
@@ -412,24 +263,20 @@ class AgentCommunicationProtocol:
         # Set sender information
         message.header.sender = self.agent_identity
 
-        # Select channel
-        if channel_id:
-            if channel_id not in self.channels:
-                logger.error("Channel %s not found", channel_id)
-                return False
-            channel = self.channels[channel_id]
-        else:
-            # Use first available channel
-            if not self.channels:
-                logger.error("No communication channels available")
-                return False
-            channel = next(iter(self.channels.values()))
+        # The named channel, or else the first that can reach the recipient (#16986)
+        if channel_id and channel_id not in self.channels:
+            logger.error("Channel %s not found", channel_id)
+            return False
+        candidates = [self.channels[channel_id]] if channel_id else list(self.channels.values())
 
-        # Send message with error boundary
         @error_boundary(component="agent_communication", function="send_message")
         async def _send():
-            """Send message through channel with error boundary."""
-            return await channel.send(message)
+            """Send message through the candidate channels with error boundary."""
+            for channel in candidates:
+                if await channel.send(message):
+                    return True
+            logger.error("No channel reached recipient %r", message.header.recipient)
+            return False
 
         return await _send()
 
@@ -494,21 +341,28 @@ class AgentCommunicationProtocol:
         """Broadcast a message to all channels"""
 
         message.header.message_type = MessageType.BROADCAST
+        recipients = set()
+        for channel in self.channels.values():
+            recipients |= await channel.recipients()
+        recipients.discard(self.agent_identity.agent_id)  # #16986: never to the sender itself
+
         sent_count = 0
-
-        for channel_id, channel in self.channels.items():
-            try:
-                if await channel.send(message):
-                    sent_count += 1
-            except Exception as e:
-                logger.error("Failed to broadcast to channel %s: %s", channel_id, e)
-
-        logger.info(
-            "Broadcasted message to %s/%s channels",
-            sent_count,
-            len(self.channels),
-        )
+        for recipient in sorted(recipients):
+            copy = replace(message, header=replace(message.header, recipient=recipient))
+            if await self.send_message(copy):
+                sent_count += 1
+        logger.info("Broadcasted message to %s/%s recipients", sent_count, len(recipients))
         return sent_count
+
+    def _dispatch(self, message: StandardMessage, channel_id: str) -> None:
+        """Handle *message* in its own task (#16986).
+
+        Awaited inline, a handler that sends its own request (B forwarding A's to C)
+        blocked the very loop that must hand it C's reply, so it waited out its timeout.
+        """
+        task = asyncio.create_task(self._handle_message(message, channel_id))
+        self._handling.add(task)
+        task.add_done_callback(self._handling.discard)
 
     async def _process_incoming_messages(self):
         """Background task to process incoming messages from all channels"""
@@ -519,7 +373,7 @@ class AgentCommunicationProtocol:
                     try:
                         message = await channel.receive(timeout=TimingConstants.MICRO_DELAY)
                         if message:
-                            await self._handle_message(message, channel_id)
+                            self._dispatch(message, channel_id)
                     except Exception as e:
                         logger.error(f"Error processing message from channel {channel_id}: {e}")
 
@@ -541,6 +395,13 @@ class AgentCommunicationProtocol:
             message.header.message_type.value,
             message.header.message_id,
         )
+
+        recipient, own = message.header.recipient, self.agent_identity.agent_id
+        if recipient and recipient != own:  # #16986: never handle another agent's message
+            logger.warning(
+                "Dropped message %s addressed to %r, received by %r", message.header.message_id, recipient, own
+            )
+            return
 
         try:
             # Check if this is a response to a pending request
@@ -587,26 +448,17 @@ class AgentCommunicationProtocol:
             logger.error("Error handling message %s: %s", message.header.message_id, e)
 
     async def _heartbeat_loop(self):
-        """Send periodic heartbeat messages"""
+        """Keep this agent reachable: refresh its registration on every channel (#16986).
+
+        This used to broadcast a HEARTBEAT that no handler consumed; it looped back to
+        the sender. Now that a broadcast reaches every agent, it would be all-to-all
+        traffic for nobody. Liveness is what routing needs, so the heartbeat renews it.
+        """
         while self.is_active:
             try:
-                # Update heartbeat timestamp
                 self.agent_identity.last_heartbeat = time.time()
-
-                # Create heartbeat message
-                heartbeat = StandardMessage(
-                    header=MessageHeader(message_type=MessageType.HEARTBEAT),
-                    payload=MessagePayload(
-                        content={
-                            "agent_id": self.agent_identity.agent_id,
-                            "health_status": self.agent_identity.health_status,
-                            "timestamp": time.time(),
-                        }
-                    ),
-                )
-
-                # Broadcast heartbeat
-                await self.broadcast(heartbeat)
+                for channel in self.channels.values():
+                    await channel.refresh()
 
                 # Wait before next heartbeat (Issue #376 - use named constants)
                 await asyncio.sleep(TimingConstants.SHORT_TIMEOUT)
@@ -649,12 +501,11 @@ class AgentCommunicationManager:
             if channel_type in self.channel_factory:
                 channel_class = self.channel_factory[channel_type]
                 channel = channel_class(channel_id)
+                protocol.add_channel(channel_id, channel)  # bound first: a Redis channel reads its owner's inbox
 
                 # Start Redis channels
                 if isinstance(channel, RedisCommunicationChannel):
                     await channel.start()
-
-                protocol.add_channel(channel_id, channel)
             else:
                 logger.error("Unknown channel type: %s", channel_type)
 

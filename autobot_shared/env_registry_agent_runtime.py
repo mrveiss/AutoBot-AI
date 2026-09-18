@@ -367,3 +367,18 @@ register_env_var(
         component="orchestration",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AGENT_COMM_REGISTRATION_TTL_SECONDS",
+        type=int,
+        default=90,
+        description=(
+            "Seconds an agent stays reachable on the Redis peer channel after its last refresh. "
+            "The protocol's heartbeat (30 s) refreshes it, so an agent that died without closing its channel "
+            "stops receiving messages after three missed beats, rather than leaving them in an inbox no one reads "
+            "(protocols/agent_channels.py, #16986)."
+        ),
+        component="agents",
+    )
+)
