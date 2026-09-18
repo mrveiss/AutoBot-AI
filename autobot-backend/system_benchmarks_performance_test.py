@@ -189,6 +189,10 @@ class TestSystemPerformanceBenchmarks:
                 modality_type=ModalityType.TEXT,
                 intent=ProcessingIntent.DECISION_MAKING,
                 result_id="test",
+                # #16990: processor.py writes result.metadata["persisted"] = ... (#15234) --
+                # a plain Mock's auto-generated `.metadata` has no __setitem__, so this must
+                # be a real dict, not left to default.
+                metadata={},
             )
 
             result, processing_time = await self.measure_async_execution_time(processor.process(test_input))
@@ -226,6 +230,8 @@ class TestSystemPerformanceBenchmarks:
             modality_type=ModalityType.TEXT,
             intent=ProcessingIntent.DECISION_MAKING,
             result_id="test",
+            # #16990: see the sibling benchmark above -- result.metadata[...] needs a real dict.
+            metadata={},
         )
 
         # #13162: prove concurrency directly instead of inferring it from the
@@ -542,6 +548,8 @@ class TestScalabilityBenchmarks:
                 modality_type=ModalityType.TEXT,
                 intent=ProcessingIntent.DECISION_MAKING,
                 result_id="test",
+                # #16990: see test_multimodal_processor_performance above -- a real dict.
+                metadata={},
             )
 
             # Process all inputs concurrently
