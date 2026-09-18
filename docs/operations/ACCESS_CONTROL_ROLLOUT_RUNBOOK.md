@@ -2,7 +2,7 @@
 
 **AutoBot Critical Security Fix - CVSS 9.1 Vulnerability**
 
-This runbook provides step-by-step operational procedures for deploying session ownership validation and access control enforcement across AutoBot's 6-VM distributed infrastructure.
+This runbook provides step-by-step operational procedures for deploying session ownership validation and access control enforcement across AutoBot's role-based distributed infrastructure — Docker, a single VM, or however many machines a deployment scales to.
 
 ---
 
@@ -20,7 +20,7 @@ Deploy access control enforcement to eliminate CVSS 9.1 vulnerability: **Broken 
 
 ### Environment Verification
 
-- [ ] All 6 VMs accessible (<frontend-ip>-25)
+- [ ] All deployment machines accessible
 - [ ] Redis healthy (<database-ip>:6379)
 - [ ] Backend API responding (<backend-ip>:8443)
 - [ ] SSH keys configured (`~/.ssh/autobot_key`)
@@ -769,7 +769,7 @@ asyncio.run(main())
 - ✅ **100% ownership coverage** (all 54+ sessions)
 - ✅ **Audit logging capturing all access attempts**
 - ✅ **Performance impact < 10ms** per request
-- ✅ **All 6 VMs synchronized and operational**
+- ✅ **All deployment machines synchronized and operational**
 - ✅ **Rollback capability validated and ready**
 - ✅ **CVSS 9.1 vulnerability eliminated**
 

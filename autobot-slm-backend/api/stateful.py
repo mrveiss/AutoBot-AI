@@ -412,11 +412,7 @@ async def _run_replication_verify(source_node, target_node) -> dict:
     """Helper for verify_replication_sync. Ref: #1088."""
     from services.replication import replication_service
 
-    redis_password = await replication_service._get_redis_password(
-        source_node.ip_address,
-        source_node.ssh_user or "autobot",
-        source_node.ssh_port or 22,
-    )
+    redis_password = await replication_service._get_redis_password()
     return await replication_service.verify_sync(
         source_node.ip_address,
         target_node.ip_address,

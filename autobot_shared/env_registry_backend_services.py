@@ -453,3 +453,97 @@ register_env_var(
         component="network",
     )
 )
+
+# Registered here, not beside AUTOBOT_REDIS_PASSWORD in env_registry.py: that
+# module is closed to new entries at its file-size ceiling (see the docstring).
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REDIS_USERNAME",
+        type=str,
+        default=None,
+        description=(
+            "Redis ACL username, sent with the password as AUTH user password "
+            "(omit to keep the password-only AUTH, #16626)."
+        ),
+        component="redis",
+    )
+)
+
+#: Default pricing catalogue URLs, keyed by the variable that overrides each (#16229).
+#: One home for the value: live_sources.py reads it back from REGISTRY, so the code,
+#: the registry and the generated docs table cannot drift apart.
+_PRICING_LITELLM_FILE = "model_prices_and_context_window.json"
+_PRICING_URL_DEFAULTS = {
+    "AUTOBOT_PRICING_LITELLM_URL": "https://raw.githubusercontent.com/BerriAI/litellm/main/" + _PRICING_LITELLM_FILE,
+    "AUTOBOT_PRICING_OPENROUTER_URL": "https://openrouter.ai/api/v1/models",
+}
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_CROSSCHECK_TOLERANCE_PERCENT",
+        type=float,
+        default=10.0,
+        description=(
+            "Percent difference between LiteLLM's and OpenRouter's price for one model above which the "
+            "pricing refresh flags a disagreement. Flagged, never resolved silently (#16229)."
+        ),
+        component="pricing",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_FETCH_TIMEOUT_SECONDS",
+        type=float,
+        default=30.0,
+        description=(
+            "Total timeout, in seconds, for one live pricing catalogue fetch. A timed-out fetch is a failed "
+            "refresh and leaves stored prices to age, never looking fresh (#16229)."
+        ),
+        component="pricing",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_LITELLM_URL",
+        type=str,
+        default=_PRICING_URL_DEFAULTS["AUTOBOT_PRICING_LITELLM_URL"],
+        description=(
+            "URL of LiteLLM's model price map, the primary live pricing catalogue. Fetched public-only "
+            "through the egress guard (#16229)."
+        ),
+        component="pricing",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_OPENROUTER_URL",
+        type=str,
+        default=_PRICING_URL_DEFAULTS["AUTOBOT_PRICING_OPENROUTER_URL"],
+        description=(
+            "URL of OpenRouter's public models API, the cross-check pricing catalogue. Fetched public-only "
+            "through the egress guard (#16229)."
+        ),
+        component="pricing",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_REFRESH_INTERVAL_HOURS",
+        type=int,
+        default=24,
+        description=(
+            "Hours between automatic pricing refreshes: the Celery beat cadence, and the floor under the "
+            "Redis TTL so stored prices can never expire before the next scheduled refresh (#16231)."
+        ),
+        component="pricing",
+    )
+)

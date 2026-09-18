@@ -177,7 +177,7 @@ jobs:
         # upload the regenerated PNGs. Download this artifact, copy the
         # contents into tests/visual/__screenshots__/, and commit.
         if: steps.visual.outputs.first_run == 'regenerated'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: visual-regression-updated-baselines-${{ github.run_id }}
           path: autobot-frontend/tests/visual/__screenshots__/
@@ -191,7 +191,7 @@ jobs:
         # "Pull this branch + commit the generated baselines" is
         # unactionable since the screenshots never escape the CI runner.
         if: steps.visual.outputs.first_run == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: visual-regression-generated-baselines-${{ github.run_id }}
           path: autobot-frontend/tests/visual/__screenshots__/
@@ -203,7 +203,7 @@ jobs:
         # upload them so a maintainer can download and commit to enable
         # future diff enforcement for those stories.
         if: steps.visual.outputs.first_run == 'false' && success()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: visual-regression-new-baselines-${{ github.run_id }}
           path: autobot-frontend/tests/visual/__screenshots__/
@@ -212,7 +212,7 @@ jobs:
 
       - name: Upload Playwright HTML report on failure
         if: failure() || steps.visual.outcome == 'failure'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: visual-regression-report-${{ github.run_id }}
           path: autobot-frontend/playwright-report/
@@ -221,7 +221,7 @@ jobs:
 
       - name: Upload diff screenshots on failure
         if: failure() || steps.visual.outcome == 'failure'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: visual-regression-diffs-${{ github.run_id }}
           path: autobot-frontend/test-results/

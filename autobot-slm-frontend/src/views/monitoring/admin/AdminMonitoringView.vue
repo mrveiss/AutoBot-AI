@@ -15,7 +15,7 @@ const logger = createLogger('AdminMonitoringView')
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useAutobotApi } from '@/composables/useAutobotApi'
+import { useAutobotApi, type SystemHealthReport } from '@/composables/useAutobotApi'
 import { formatDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
@@ -29,15 +29,6 @@ const refreshInterval = 30
 interface ErrorStat {
   level: string
   count: number
-}
-
-interface SystemHealth {
-  status: 'healthy' | 'degraded' | 'critical'
-  cpu_percent?: number
-  memory_percent?: number
-  disk_percent?: number
-  uptime_seconds?: number
-  services?: { name: string; status: string }[]
 }
 
 interface ErrorStats {
@@ -54,7 +45,7 @@ interface MetricSummary {
   trend?: 'up' | 'down' | 'stable'
 }
 
-const systemHealth = ref<SystemHealth | null>(null)
+const systemHealth = ref<SystemHealthReport | null>(null)
 const errorStats = ref<ErrorStats | null>(null)
 interface MonitoringError {
   id: string
@@ -75,23 +66,33 @@ const healthStatus = computed(() => {
   return systemHealth.value.status
 })
 
+// The backend's probe vocabulary (#6909): ok / degraded / down
 const healthStatusClass = computed(() => {
   switch (healthStatus.value) {
-    case 'healthy': return 'bg-green-100 border-green-500'
+    case 'ok': return 'bg-green-100 border-green-500'
     case 'degraded': return 'bg-yellow-100 border-yellow-500'
-    case 'critical': return 'bg-red-100 border-red-500'
+    case 'down': return 'bg-red-100 border-red-500'
     default: return 'bg-gray-100 border-gray-500'
   }
 })
 
 const healthIcon = computed(() => {
   switch (healthStatus.value) {
-    case 'healthy': return 'text-green-600'
+    case 'ok': return 'text-green-600'
     case 'degraded': return 'text-yellow-600'
-    case 'critical': return 'text-red-600'
+    case 'down': return 'text-red-600'
     default: return 'text-gray-600'
   }
 })
+
+// /system/health/detailed lists each service as healthy or unhealthy
+function serviceBadgeClass(status: string): string {
+  switch (status) {
+    case 'healthy': return 'bg-green-100 text-green-800'
+    case 'unhealthy': return 'bg-red-100 text-red-800'
+    default: return 'bg-gray-100 text-gray-800'
+  }
+}
 
 // Methods
 
@@ -114,6 +115,8 @@ async function loadSystemHealth(): Promise<void> {
     systemHealth.value = data
   } catch (e) {
     logger.error('Failed to load system health:', e)
+    // A failed read says nothing about the backend now, so drop the last report
+    systemHealth.value = null
   }
 }
 
@@ -239,7 +242,7 @@ onUnmounted(() => {
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <svg :class="['w-6 h-6', healthIcon]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path v-if="healthStatus === 'healthy'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <path v-if="healthStatus === 'ok'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             <path v-else-if="healthStatus === 'degraded'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -421,12 +424,7 @@ onUnmounted(() => {
                 class="flex items-center justify-between py-2"
               >
                 <span class="text-sm text-gray-700">{{ service.name }}</span>
-                <span :class="[
-                  'px-2 py-0.5 text-xs font-medium rounded-full',
-                  service.status === 'running' ? 'bg-green-100 text-green-800' :
-                  service.status === 'stopped' ? 'bg-red-100 text-red-800' :
-                  'bg-yellow-100 text-yellow-800'
-                ]">
+                <span :class="['px-2 py-0.5 text-xs font-medium rounded-full', serviceBadgeClass(service.status)]">
                   {{ service.status }}
                 </span>
               </div>

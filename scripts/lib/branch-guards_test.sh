@@ -84,8 +84,8 @@ unset -f gh
 echo "== branch_is_archival =="
 branch_is_archival 'rescued/stash-2026-05-10-18b82cecd' && r=yes || r=no
 check "rescued/ is archival"          "yes" "$r"
-branch_is_archival 'release/changelog-v0.5.2' && r=yes || r=no
-check "release/changelog- is archival" "yes" "$r"
+branch_is_archival 'changelog-v0.5.2' && r=yes || r=no
+check "changelog- is archival" "yes" "$r"
 branch_is_archival 'issue-15036-sweeps' && r=yes || r=no
 check "issue branch is not archival"  "no"  "$r"
 branch_is_archival 'rescued-but-not-really' && r=yes || r=no

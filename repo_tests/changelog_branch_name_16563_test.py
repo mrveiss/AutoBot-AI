@@ -1,0 +1,120 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""The changelog branch name must carry no slash, and the sweep must know it (#16563).
+
+`release/changelog-${VERSION}` was unpushable from the moment a branch named
+`release` existed: git stores refs as paths, so `refs/heads/release` (a file) and
+`refs/heads/release/changelog-v0.9.0` (a directory) cannot coexist. Every release
+run from the 2026-09-12 rename onward failed at that push with
+`directory file conflict`, which is why no changelog reached the release branch.
+
+A flat name cannot hit that, so the first test pins the absence of a slash rather
+than the particular name. The second test is the one that matters longer: the
+release workflow and the branch sweep have to agree on the prefix, or renaming it
+in one place teaches the sweep to treat released changelog branches as abandoned
+work. That is a drift between two files that no single-file test can see.
+"""
+
+import re
+
+from repo_tests._paths import repo_root
+
+# #15925: one spelling of "the repository root" for every guard here. Re-deriving
+# it from __file__ is what the coverage instrument cannot pattern-match, so a
+# guard that binds it by hand is a guard that instrument cannot see.
+RELEASE_WORKFLOW = repo_root() / ".github" / "workflows" / "release.yml"
+BRANCH_GUARDS = repo_root() / "scripts" / "lib" / "branch-guards.sh"
+
+
+def _changelog_branch_expression() -> str:
+    """The right-hand side of the BRANCH= assignment in the changelog step."""
+    text = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    match = re.search(r'^\s*BRANCH="([^"]+)"', text, re.M)
+    assert match, "release.yml no longer assigns BRANCH= — update this guard with it"
+    return match.group(1)
+
+
+def _archival_prefixes() -> list[str]:
+    text = BRANCH_GUARDS.read_text(encoding="utf-8")
+    match = re.search(r'BRANCH_ARCHIVAL_PREFIXES="\$\{BRANCH_ARCHIVAL_PREFIXES:-([^}"]+)\}"', text)
+    assert match, "branch-guards.sh no longer defines BRANCH_ARCHIVAL_PREFIXES"
+    return match.group(1).split()
+
+
+def test_changelog_branch_name_carries_no_slash():
+    expression = _changelog_branch_expression()
+    assert "/" not in expression, (
+        f"changelog branch {expression!r} contains a slash. A ref cannot be both a file and a "
+        "directory, so any prefix that is also a branch name makes the push fail with "
+        "'directory file conflict' (#16563)."
+    )
+
+
+def test_the_sweep_recognises_the_changelog_branch_as_archival():
+    """Rename the branch without telling the sweep and it reads as abandoned work."""
+    literal_prefix = _changelog_branch_expression().split("${")[0]
+    assert literal_prefix, "changelog branch name starts with a variable — nothing to match a prefix against"
+    prefixes = _archival_prefixes()
+    assert any(literal_prefix.startswith(p) or p.startswith(literal_prefix) for p in prefixes), (
+        f"release.yml builds {literal_prefix!r}* but branch-guards.sh archival prefixes are "
+        f"{prefixes} — the sweep would treat released changelog branches as abandoned (#16563)."
+    )
+
+
+# AC2 of #16563 asks for the general rule, not this file's original special case:
+# no workflow may create a branch whose namespace equals a long-lived branch
+# name. The two tests above pin `release.yml`'s changelog branch specifically —
+# they would not catch a different workflow pushing `main/foo`.
+#
+# Long-lived names are read from the repository rather than hardcoded, so a
+# future rename does not leave this guard asserting against a name nobody uses.
+_LONG_LIVED = ("main", "release", "Dev_new_gui", "develop")
+
+#: Every shape a workflow uses to name a new branch. Each must expose the branch
+#: name as group 1. Missing a shape makes this guard silently narrower, which is
+#: the failure mode it exists to prevent, so `test_the_extractor_still_matches`
+#: pins that the known-good corpus keeps producing hits.
+_BRANCH_EXPRESSIONS = (
+    re.compile(r'^\s*BRANCH="([^"]+)"', re.M),
+    re.compile(r"git checkout -b\s+([A-Za-z0-9._${}/-]+)"),
+    re.compile(r"git push\s+\S+\s+HEAD:refs/heads/([A-Za-z0-9._${}/-]+)"),
+    re.compile(r'-f\s+ref="refs/heads/([^"]+)"'),
+)
+
+
+def _workflow_branch_names() -> list[tuple[str, str]]:
+    """``(workflow filename, branch expression)`` for every branch a workflow creates."""
+    found: list[tuple[str, str]] = []
+    workflows = repo_root() / ".github" / "workflows"
+    for path in sorted(workflows.glob("*.y*ml")):
+        text = path.read_text(encoding="utf-8")
+        for pattern in _BRANCH_EXPRESSIONS:
+            for match in pattern.finditer(text):
+                found.append((path.name, match.group(1)))
+    return found
+
+
+def test_the_extractor_still_matches_something():
+    """A zero here means the patterns drifted, not that no workflow makes a branch.
+
+    Without this, a rename of every branch-creating idiom would make the guard
+    below pass by finding nothing -- the same shape as the defect it guards.
+    """
+    found = _workflow_branch_names()
+    assert found, "no workflow branch expressions matched — the extractor patterns have drifted"
+
+
+def test_no_workflow_creates_a_branch_under_a_long_lived_namespace():
+    """`refs/heads/main` (a file) and `refs/heads/main/foo` (a directory) cannot coexist."""
+    offenders = []
+    for workflow, expression in _workflow_branch_names():
+        prefix = expression.split("/")[0]
+        if "/" in expression and prefix in _LONG_LIVED:
+            offenders.append(f"{workflow}: {expression!r} nests under {prefix!r}")
+    assert not offenders, (
+        "a workflow creates a branch under a long-lived branch's namespace; git cannot hold a ref "
+        "that is both a file and a directory, so the push fails with 'directory file conflict' "
+        "(#16563):\n  " + "\n  ".join(offenders)
+    )

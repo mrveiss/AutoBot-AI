@@ -66,6 +66,35 @@ ARTIFACT_FILE_GLOBS: tuple[str, ...] = ("*.pyc", "*.log")
 # a bare `config` would also exclude `autobot-slm-frontend/src/config/`, which
 # is tracked source, and suppressing it would read as permanent drift -- the
 # #11440 failure mode, arriving from the opposite direction.
+# #16310: services/sync_deletions.py's own marker filename, defined here --
+# the dependency-free base module -- rather than in sync_deletions.py, so
+# HOST_STATE_EXCLUDES and sync_deletions.DELETION_MARKER derive from ONE
+# literal. #14231's own lesson, repeated: a delete-style sync that does not
+# exclude a marker file wipes it before the next run can read it
+# (roles/slm_manager/tasks/main.yml's `delete: true` sync did exactly this).
+SYNC_DELETIONS_MARKER = ".autobot_sync_deletions_commit"
+
+# #16717: the SLM frontend's staged-release layout (#15610), defined here
+# (imported by slm_frontend_build.py, which WRITES it) so a forced resync
+# can never delete a live bundle for want of an exclude.
+SLM_FRONTEND_BUILD_PREFIX = "dist-"
+SLM_FRONTEND_CURRENT_LINK = "current"
+SLM_FRONTEND_PREVIOUS_LINK = "previous"
+SLM_FRONTEND_LEGACY_DIR = "dist"
+SLM_FRONTEND_LEGACY_PREVIOUS_DIR = "dist.previous"
+_SLM_FRONTEND_RELEASE_NAMES = frozenset(
+    {SLM_FRONTEND_CURRENT_LINK, SLM_FRONTEND_PREVIOUS_LINK, SLM_FRONTEND_LEGACY_DIR}
+)
+SLM_FRONTEND_RELEASE_EXCLUDES = _SLM_FRONTEND_RELEASE_NAMES | frozenset({f"{SLM_FRONTEND_BUILD_PREFIX}*"})
+
+
+def is_release_artifact(component: str, top_level_name: str) -> bool:
+    """True when ``top_level_name`` is component's staged-release name/prefix (#16717)."""
+    return component == "autobot-slm-frontend" and (
+        top_level_name in _SLM_FRONTEND_RELEASE_NAMES or top_level_name.startswith(SLM_FRONTEND_BUILD_PREFIX)
+    )
+
+
 HOST_STATE_EXCLUDES: tuple[str, ...] = (
     ".env",  # systemd EnvironmentFile (#2824, #9970) -- service will not start without it
     ".env.*",  # .env.production and siblings; the exact `.env` pattern never matched them
@@ -73,6 +102,7 @@ HOST_STATE_EXCLUDES: tuple[str, ...] = (
     "logs",  # audit trail; a dry run once listed logs/audit/*.jsonl among 55 deletions (#13851)
     "/config/",  # host-rendered service config
     "/.deployed_commit",  # what the self-update skip-check reads (#12202)
+    f"/{SYNC_DELETIONS_MARKER}",  # sync_deletions.py's own marker (#16310)
     "/ansible/enroll.yml",  # the node's rendered enrolment play
 )
 

@@ -20,6 +20,7 @@
   ansible.builtin.command:
     cmd: >
       redis-cli
+      {% if redis_username | default('') | length > 0 %}--user "{{ redis_username }}"{% endif %}
       {% if redis_password | default('') | length > 0 %}-a "{{ redis_password }}"{% endif %}
       INFO replication
   register: repl_info_before
@@ -56,6 +57,19 @@
         line: "masterauth {{ redis_master_auth }}"
         state: present
       when: redis_master_auth | default('') | length > 0
+      notify: restart redis for replication
+
+    # #16626: the replica authenticates to the master as this ACL user. Only
+    # meaningful alongside masterauth, so both must be set.
+    - name: Configure master user if username and password set
+      ansible.builtin.lineinfile:
+        path: "{{ redis_config_file }}"
+        regexp: "^masteruser "
+        line: "masteruser {{ redis_master_user }}"
+        state: present
+      when:
+        - redis_master_user | default('') | length > 0
+        - redis_master_auth | default('') | length > 0
       notify: restart redis for replication
 
     - name: Configure replica read-only mode
@@ -110,6 +124,13 @@
         state: absent
       notify: restart redis for replication
 
+    - name: Remove masteruser setting (#16626)
+      ansible.builtin.lineinfile:
+        path: "{{ redis_config_file }}"
+        regexp: "^masteruser "
+        state: absent
+      notify: restart redis for replication
+
     - name: Configure min replicas to write
       ansible.builtin.lineinfile:
         path: "{{ redis_config_file }}"
@@ -144,6 +165,7 @@
   ansible.builtin.command:
     cmd: >
       redis-cli
+      {% if redis_username | default('') | length > 0 %}--user "{{ redis_username }}"{% endif %}
       {% if redis_password | default('') | length > 0 %}-a "{{ redis_password }}"{% endif %}
       INFO replication
   register: repl_info_after

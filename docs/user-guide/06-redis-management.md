@@ -45,7 +45,7 @@ Redis is a critical component of AutoBot that provides:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Frontend UI (VM1)                         │
+│                    Frontend UI (Frontend Role)               │
 │              http://<frontend-ip>:5173                       │
 │                                                              │
 │  [Redis Service Controls]                                   │
@@ -70,7 +70,7 @@ Redis is a critical component of AutoBot that provides:
                        │ SSH Commands (systemctl)
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                Redis VM (VM3)                                │
+│                Redis (Database Role)                         │
 │           <database-ip>:6379                                │
 │                                                              │
 │  [Redis Service]                                            │

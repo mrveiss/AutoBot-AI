@@ -451,8 +451,8 @@ async def test_stop_service_requires_confirmation():
 **Priority:** P1 (High - Integration Validation)
 
 **Acceptance Criteria:**
-- [ ] Test: API call → RedisServiceManager → SSHManager → VM3 systemctl
-- [ ] Test service start via API (verify service actually starts on VM3)
+- [ ] Test: API call → RedisServiceManager → SSHManager → database role systemctl
+- [ ] Test service start via API (verify service actually starts on the database role)
 - [ ] Test service restart via API (verify PID changes)
 - [ ] Test service status query (verify accurate status)
 - [ ] Tests run against test environment (not production)
@@ -1645,9 +1645,9 @@ autobot ALL=(ALL) NOPASSWD: /bin/journalctl -u redis-server *
 
 **Acceptance Criteria:**
 - [ ] Ansible playbook runs successfully
-- [ ] sudoers file deployed to VM3
-- [ ] Manual test: SSH to VM3, run `sudo systemctl status redis-server` (no password prompt)
-- [ ] Manual test: SSH to VM3, run `sudo systemctl restart redis-server` (no password prompt)
+- [ ] sudoers file deployed to the database role
+- [ ] Manual test: SSH to the database role, run `sudo systemctl status redis-server` (no password prompt)
+- [ ] Manual test: SSH to the database role, run `sudo systemctl restart redis-server` (no password prompt)
 - [ ] Documented deployment procedure
 
 **Deployment Commands:**
@@ -2037,7 +2037,7 @@ async def load_test_status_endpoint(duration_seconds: int = 60):
   - [ ] Configuration files deployed
   - [ ] Ansible playbooks tested
   - [ ] Backend changes deployed
-  - [ ] Frontend changes synced to VM1
+  - [ ] Frontend changes synced to the frontend role
   - [ ] Database migrations (if any)
 - [ ] Deployment steps documented
 - [ ] Rollback procedure documented
@@ -2062,7 +2062,7 @@ async def load_test_status_endpoint(duration_seconds: int = 60):
 - [ ] Playbook deploys all components:
   - [ ] sudoers configuration to Redis VM
   - [ ] Backend service restart (main machine)
-  - [ ] Frontend sync to VM1
+  - [ ] Frontend sync to the frontend role
   - [ ] Configuration file deployment
 - [ ] Idempotent (can run multiple times safely)
 - [ ] Validation steps included
@@ -2086,7 +2086,7 @@ async def load_test_status_endpoint(duration_seconds: int = 60):
         state: restarted
       when: inventory_hostname == 'main'
 
-    - name: Sync frontend to VM1
+    - name: Sync frontend to the frontend role
       synchronize:
         src: autobot-frontend/
         dest: /home/autobot/autobot-frontend/
@@ -2349,7 +2349,7 @@ REDIS-5.4.1 + REDIS-5.4.2 (Final Testing)
 **Development Environment:**
 - Local development on `/opt/autobot`
 - Backend testing against Redis VM (<database-ip>)
-- Frontend testing on VM1 (<frontend-ip>:5173)
+- Frontend testing on the frontend role (<frontend-ip>:5173)
 - SSH key: `~/.ssh/autobot_key`
 
 **Deployment Strategy:**
@@ -2357,7 +2357,7 @@ REDIS-5.4.1 + REDIS-5.4.2 (Final Testing)
 - Sync to remote VMs via sync scripts or Ansible
 - Never edit code directly on remote VMs
 - Use `systemctl start autobot-backend` or `scripts/start-services.sh start` for backend startup
-- Frontend runs on VM1 only (single frontend server)
+- Frontend runs on the frontend role only (single frontend server)
 
 **Testing Strategy:**
 - Unit tests: Mock SSH and external dependencies
@@ -2411,7 +2411,7 @@ REDIS-5.4.1 + REDIS-5.4.2 (Final Testing)
 # Backend development
 scripts/start-services.sh start
 
-# Frontend development (runs on VM1)
+# Frontend development (runs on the frontend role)
 ./scripts/utilities/sync-frontend.sh
 
 # Run tests

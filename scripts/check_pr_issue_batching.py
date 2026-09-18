@@ -18,7 +18,9 @@ deliberate.
 
 The keyword set is the one ``.github/workflows/pr-issue-validation.yml`` already
 uses to decide what counts as an issue reference, so the two gates cannot
-disagree about what a reference is.
+disagree about what a reference is. #16795 split it in two for *this* gate's own
+question: a reference is any of them, but only a closing keyword is a delivered
+issue, and "batched" is a claim about delivery.
 """
 
 from __future__ import annotations
@@ -40,10 +42,21 @@ import sys
 _ONE_REF = r"(?:#?\d+|MVA-\d+)"
 # `, and` (Oxford) must read as ONE separator, not a comma followed by a non-ref.
 _SEP_RE = r"\s*(?:,\s*(?:and\s+)?|and\s+)"
-_REFERENCE = re.compile(
-    r"(?:resolves|closes|fixes|refs|references|part of)\s+" rf"({_ONE_REF}(?:{_SEP_RE}{_ONE_REF})*)",
-    re.IGNORECASE,
-)
+# #16795: the two keyword classes do NOT mean the same thing to this gate.
+# `Closes #A` says the PR delivers #A; `Refs #B` says #B is context -- usually
+# the umbrella, which issue decomposition tells every child PR to link. Counting
+# them together made the common, correct shape (`Closes #A` + `Refs #umbrella`)
+# score as two issues and exempt itself from the rule this gate exists to
+# enforce. #16781, #16783 and #16788 each passed that way, none with a rationale,
+# and each was reported as "Batched" -- a guard that cannot tell *satisfied* from
+# *not examined* is worse than an absent one, because the green is read as a
+# judgement. The wider set still answers "is anything linked at all", which is
+# the only question the sibling gate owns.
+_CLOSING_WORDS = "resolves|closes|fixes"
+_MENTION_WORDS = "refs|references|part of"
+_RUN = rf"({_ONE_REF}(?:{_SEP_RE}{_ONE_REF})*)"
+_CLOSING = re.compile(rf"(?:{_CLOSING_WORDS})\s+{_RUN}", re.IGNORECASE)
+_REFERENCE = re.compile(rf"(?:{_CLOSING_WORDS}|{_MENTION_WORDS})\s+{_RUN}", re.IGNORECASE)
 _SPLIT = re.compile(_SEP_RE, re.IGNORECASE)
 # A reference inside a fenced block or inline code is an EXAMPLE, not a link.
 # Found on this gate's own PR, whose worked examples scored as six extra issues:
@@ -70,25 +83,64 @@ _RATIONALE_HEADING = re.compile(
 # where autobot_shared.logging_manager would pull in config this job does not have.
 logger = logging.getLogger(__name__)
 
-RATIONALE_HINT = (
-    "This PR references exactly one issue. Batch same-scope issues into one PR "
-    "(one CI suite per batch, not per issue), or state why this one stands alone "
-    "by adding a line to the PR body:\n\n"
+_RATIONALE_FORMS = (
     "    Single-issue rationale: <why this cannot ride with another issue>\n\n"
     "or as a section, with the reason in the prose beneath it:\n\n"
     "    ## Single-issue rationale\n\n    <why this cannot ride with another issue>"
 )
 
+RATIONALE_HINT = (
+    "This PR delivers exactly one issue. Batch same-scope issues into one PR "
+    "(one CI suite per batch, not per issue), or state why this one stands alone "
+    "by adding a line to the PR body:\n\n" + _RATIONALE_FORMS
+)
 
-def referenced_issues(body: str) -> set[str]:
-    """Distinct issue identifiers referenced by ``body``."""
+
+def _closes_nothing_hint(referenced: set[str]) -> str:
+    """The failure for a PR that closes nothing (#16855).
+
+    ``RATIONALE_HINT`` opens "This PR delivers exactly one issue", which is a
+    count of one where the count is zero. Printed with ``_mention_note`` it said
+    both at once -- one issue delivered, and the only issue named not a delivered
+    one -- leaving the true number stated nowhere. ``_scope`` has carried the
+    right words for this state since #16795, but only the passing path reached
+    them.
+
+    Whether such a PR should need a rationale at all is open on #16855 and
+    deliberately not settled here: this changes the wording, not the verdict.
+    """
+    return (
+        f"This PR closes no issue -- it links {_render(referenced)} with a "
+        "non-closing keyword (refs/references/part of). Only resolves/closes/fixes "
+        "count toward batching, so there is nothing here to batch with. A "
+        "rationale line is still required while the rule stands; add one to the "
+        "PR body:\n\n" + _RATIONALE_FORMS
+    )
+
+
+def _issues_under(body: str, pattern: "re.Pattern[str]") -> set[str]:
+    """Distinct issue identifiers ``pattern`` links in ``body``."""
     found = set()
-    for run in _REFERENCE.findall(_FENCE.sub(" ", body or "")):
+    for run in pattern.findall(_FENCE.sub(" ", body or "")):
         for ref in _SPLIT.split(run):
             ref = ref.strip().lstrip("#")
             if ref:
                 found.add(ref.upper() if ref.upper().startswith("MVA-") else ref)
     return found
+
+
+def referenced_issues(body: str) -> set[str]:
+    """Distinct issue identifiers referenced by ``body``, under any keyword."""
+    return _issues_under(body, _REFERENCE)
+
+
+def closing_issues(body: str) -> set[str]:
+    """Distinct issues ``body`` says this PR DELIVERS (#16795).
+
+    A subset of :func:`referenced_issues`, and the difference is the whole gate:
+    a mention links context, only a closing keyword makes a PR batched.
+    """
+    return _issues_under(body, _CLOSING)
 
 
 # #16104: an ATX heading is 1-6 `#` followed by a space, a tab, or end of line.
@@ -128,7 +180,26 @@ def _rationale_under_heading(body: str) -> str | None:
     return _heading_rationale(body)[1]
 
 
-def _rationale_failure(body: str) -> str:
+def _mention_note(closing: set[str], referenced: set[str]) -> str:
+    """Why a `Refs #umbrella` link did not make this PR batched (#16795).
+
+    Without it the author reads "delivers exactly one issue" on a body that
+    visibly names two, and the only available fix is to guess. The gate changed
+    under them, so it owes them the reason rather than the verdict alone.
+    """
+    mentioned = referenced - closing
+    if not mentioned:
+        return ""
+    verb = "is" if len(mentioned) == 1 else "are"
+    return (
+        f"\n\n{_render(mentioned)} {verb} linked with a non-closing keyword "
+        "(refs/references/part of), which is context -- an umbrella, a follow-up, a "
+        "dependency -- not a second delivered issue. Only resolves/closes/fixes count "
+        "toward batching."
+    )
+
+
+def _rationale_failure(body: str, closing: set[str], referenced: set[str]) -> str:
     """The hint, naming WHICH of the two failures happened (#16104).
 
     "No section found" and "section found but empty" want opposite fixes, and a
@@ -138,7 +209,9 @@ def _rationale_failure(body: str) -> str:
     """
     found, _, terminator = _heading_rationale(body)
     if not found:
-        return RATIONALE_HINT
+        if not closing:
+            return _closes_nothing_hint(referenced)
+        return RATIONALE_HINT + _mention_note(closing, referenced)
     if terminator is not None:
         return (
             "The `## Single-issue rationale` section is present but reads as empty. "
@@ -183,17 +256,31 @@ def check(body: str, actor: str = "", branch: str = "", title: str = "") -> tupl
     if excused is not None:
         return True, f"Batching rule does not apply ({excused})."
 
-    issues = referenced_issues(body)
-    if len(issues) >= 2:
-        return True, f"Batched: references {len(issues)} issues ({_render(issues)})."
-    if not issues:
+    closing = closing_issues(body)
+    if len(closing) >= 2:
+        return True, f"Batched: closes {len(closing)} issues ({_render(closing)})."
+
+    referenced = referenced_issues(body)
+    if not referenced:
         # The PR-issue-link gate owns this case; do not fail twice for one defect.
         return True, "No issue reference found; pr-issue-validation owns that check."
 
     rationale = single_issue_rationale(body)
     if rationale:
-        return True, f"Single issue ({_render(issues)}), rationale given: {rationale}"
-    return False, _rationale_failure(body)
+        return True, f"{_scope(closing, referenced)}, rationale given: {rationale}"
+    return False, _rationale_failure(body, closing, referenced)
+
+
+def _scope(closing: set[str], referenced: set[str]) -> str:
+    """How this PR is linked, for the passing message (#16795).
+
+    Used to read "Single issue (#A, #umbrella)" -- printed from the reference
+    count, so it named the umbrella as something the PR delivered. The message a
+    reviewer trusts has to be true about which of the two it is.
+    """
+    if not closing:
+        return f"Closes nothing; references {_render(referenced)}"
+    return f"Single issue (closes {_render(closing)})"
 
 
 def _render(issues: set[str]) -> str:
