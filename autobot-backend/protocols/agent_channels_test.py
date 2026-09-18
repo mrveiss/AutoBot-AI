@@ -12,14 +12,22 @@ channel kind, so delivery has to go through it.
 """
 
 import asyncio
-import time
 from unittest.mock import patch
 
 import fakeredis
 import pytest
 
-from protocols import agent_channels
-from protocols.agent_channels import REGISTERED_KEY, REGISTRATION_TTL_SECONDS, RedisCommunicationChannel
+from protocols import agent_channels, agent_communication
+from protocols.agent_channels import (
+    _DIRECT_INBOXES,
+    OWNERS_KEY,
+    REGISTERED_KEY,
+    REGISTRATION_TTL_SECONDS,
+    ChannelOwnerCollisionError,
+    DirectCommunicationChannel,
+    RedisCommunicationChannel,
+    inbox_key,
+)
 from protocols.agent_communication import (
     AgentCommunicationManager,
     AgentIdentity,
@@ -37,8 +45,14 @@ AGENTS = ("agent_a", "agent_b", "agent_c")
 def redis_server():
     """Every Redis channel in the test talks to one fake server, as agents share one Redis."""
     server = fakeredis.FakeServer()
-    with patch.object(agent_channels, "get_redis_client", lambda: fakeredis.FakeRedis(server=server)):
-        yield fakeredis.FakeRedis(server=server)
+    client = lambda: fakeredis.FakeRedis(server=server, decode_responses=True)  # noqa: E731 -- as production's client
+    with patch.object(agent_channels, "get_redis_client", client):
+        yield client()
+
+
+def _server_now(redis) -> float:
+    seconds, micros = redis.time()
+    return int(seconds) + int(micros) / 1_000_000
 
 
 def _to(recipient: str, message_type: MessageType = MessageType.REQUEST, **content) -> StandardMessage:
@@ -143,14 +157,151 @@ async def test_an_agent_drops_a_message_addressed_to_someone_else(redis_server):
 @pytest.mark.asyncio
 async def test_a_redis_registration_past_its_ttl_is_unreachable_and_pruned(redis_server):
     """An agent that died without closing its channel stops being a destination."""
-    redis_server.zadd(REGISTERED_KEY, {"agent_stale": time.time() - REGISTRATION_TTL_SECONDS - 1})
+    redis_server.zadd(REGISTERED_KEY, {"agent_stale": _server_now(redis_server) - REGISTRATION_TTL_SECONDS - 1})
     channel = RedisCommunicationChannel("probe")
     channel.bind("agent_probe")
 
     assert await channel.send(_to("agent_stale")) is False
     assert "agent_stale" not in await channel.recipients()
 
-    await channel.refresh()
+    await channel.start()
 
     assert redis_server.zscore(REGISTERED_KEY, "agent_stale") is None
     assert redis_server.zscore(REGISTERED_KEY, "agent_probe") is not None
+    await channel.close()
+
+
+@pytest.mark.asyncio
+async def test_a_flood_never_runs_more_handlers_than_the_bound_and_a_reply_is_never_held(redis_server, monkeypatch):
+    """66's review of #17001: one task per message had no cap. It has one now, and a reply still gets through.
+
+    B's handler blocks, so a flood of six requests saturates B's two slots. While B is
+    saturated, B's own request to C must still get its reply: replies never wait for a slot.
+    """
+    monkeypatch.setattr(agent_communication, "MAX_INFLIGHT_HANDLERS", 2)
+    manager, release, running, peak, done = AgentCommunicationManager(), asyncio.Event(), [0], [0], []
+
+    async def slow(message):
+        running[0] += 1
+        peak[0] = max(peak[0], running[0])
+        await release.wait()
+        running[0] -= 1
+        done.append(message.header.message_id)
+
+    async def answer(message):
+        return _to("", MessageType.RESPONSE, ok=True)
+
+    protocols = {}
+    for agent_id, handler in (("agent_a", None), ("agent_b", slow), ("agent_c", answer)):
+        protocols[agent_id] = await manager.register_agent(
+            AgentIdentity(agent_id=agent_id, agent_type="t"), [{"type": "direct"}]
+        )
+        if handler:
+            protocols[agent_id].register_message_handler(MessageType.REQUEST, handler)
+    try:
+        for _ in range(6):
+            assert await protocols["agent_a"].send_message(_to("agent_b"))
+        for _ in range(300):
+            if running[0] == 2:
+                break
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(0.2)
+
+        reply = await protocols["agent_b"].send_request(_to("agent_c"), timeout=5)
+
+        assert reply is not None and reply.payload.content == {"ok": True}
+        assert (running[0], peak[0]) == (2, 2)
+        release.set()
+        for _ in range(300):
+            if len(done) == 6:
+                break
+            await asyncio.sleep(0.01)
+        assert (len(done), peak[0]) == (6, 2)
+    finally:
+        release.set()
+        await manager.shutdown_all()
+
+
+@pytest.mark.asyncio
+async def test_an_inbox_is_capped_dropping_the_oldest_and_expires(redis_server, monkeypatch):
+    """66's review of #17001: rpush had no LTRIM, and the expire branch never ran."""
+    monkeypatch.setattr(agent_channels, "INBOX_MAX_LENGTH", 3)
+    redis_server.zadd(REGISTERED_KEY, {"agent_x": _server_now(redis_server)})
+    sender = RedisCommunicationChannel("sender")
+    sender.bind("agent_s")
+
+    for n in range(5):
+        assert await sender.send(_to("agent_x", n=n))
+
+    kept = [
+        StandardMessage.from_json(raw).payload.content["n"] for raw in redis_server.lrange(inbox_key("agent_x"), 0, -1)
+    ]
+    assert kept == [2, 3, 4]
+    assert redis_server.ttl(inbox_key("agent_x")) > 0
+
+
+@pytest.mark.asyncio
+async def test_a_second_live_redis_owner_is_refused_and_a_stale_one_cannot_withdraw_its_successor(redis_server):
+    first, second, third = (RedisCommunicationChannel(f"c{n}") for n in range(3))
+    for channel in (first, second, third):
+        channel.bind("agent_x")
+    await first.start()
+
+    with pytest.raises(ChannelOwnerCollisionError):
+        await second.start()
+
+    redis_server.zadd(REGISTERED_KEY, {"agent_x": _server_now(redis_server) - REGISTRATION_TTL_SECONDS - 1})
+    await third.start()  # the first has gone stale: the id can be taken over
+    await first.close()
+
+    assert redis_server.hget(OWNERS_KEY, "agent_x") == third.instance
+    assert redis_server.zscore(REGISTERED_KEY, "agent_x") is not None
+    await third.close()
+
+
+def test_a_second_live_direct_owner_is_refused():
+    first, second = DirectCommunicationChannel("d1"), DirectCommunicationChannel("d2")
+    first.bind("agent_dup")
+    try:
+        with pytest.raises(ChannelOwnerCollisionError):
+            second.bind("agent_dup")
+        assert _DIRECT_INBOXES["agent_dup"] is first.message_queue
+    finally:
+        asyncio.run(first.close())
+
+
+@pytest.mark.asyncio
+async def test_a_refused_channel_leaves_nothing_bound(redis_server):
+    """An agent whose Redis channel is refused must not keep a direct inbox that nothing reads."""
+    live = RedisCommunicationChannel("live")
+    live.bind("agent_x")
+    await live.start()
+
+    with pytest.raises(ChannelOwnerCollisionError):
+        await AgentCommunicationManager().register_agent(
+            AgentIdentity(agent_id="agent_x", agent_type="t"), [{"type": "direct"}, {"type": "redis"}]
+        )
+
+    assert "agent_x" not in _DIRECT_INBOXES
+    await live.close()
+
+
+@pytest.mark.asyncio
+async def test_a_channel_whose_listener_died_stops_renewing(redis_server):
+    """#17001 review: a refresh for a dead listener would keep an inbox nobody reads looking live."""
+    channel = RedisCommunicationChannel("dying")
+    channel.bind("agent_d")
+    await channel.start()
+    channel.listener_task.cancel()
+    try:  # the listener ends quietly on cancel; a task cancelled before it ran raises instead
+        await channel.listener_task
+    except asyncio.CancelledError:
+        pass
+    assert channel.listener_task.done()
+    stale = _server_now(redis_server) - REGISTRATION_TTL_SECONDS - 1
+    redis_server.zadd(REGISTERED_KEY, {"agent_d": stale})
+
+    await channel.refresh()
+
+    assert redis_server.zscore(REGISTERED_KEY, "agent_d") == stale
+    await channel.close()

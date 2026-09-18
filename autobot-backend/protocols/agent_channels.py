@@ -12,25 +12,34 @@ queued a message on its own queue, and ``RedisCommunicationChannel`` pushed to a
 popped from its own key. ``header.recipient`` was never read, so a request an agent
 sent was answered by the sender itself.
 
-A channel is now bound to the agent that owns it (``bind``). It is registered under
-that agent's id as an inbound destination while it is open. ``send`` delivers to
+A channel is now bound to the agent that owns it (``bind``). While it is open, it is
+registered under that agent's id as the agent's inbound destination. One live owner
+per id: a second channel claiming a live id is refused, never silently swapped in
+(#16946), and a channel only ever withdraws its own registration. ``send`` delivers to
 ``header.recipient`` and refuses a message with no recipient, or one addressed to an
 agent this channel cannot reach. Broadcast is the protocol's job: it sends one
 addressed copy to each id in ``recipients()``.
 
 - **Direct:** in-process. A process-wide directory maps an agent id to its inbound
   queue.
-- **Redis:** each owner reads its own inbox key. A sorted set holds each listening
-  id with the time it last refreshed. The protocol's heartbeat refreshes it, so an
-  agent that died without closing drops out after ``REGISTRATION_TTL_SECONDS``. A
-  message to an agent nobody is listening for is refused rather than left in a list
-  no one will read.
+- **Redis:** each owner reads its own inbox list. A sorted set holds each listening id
+  with the time it last refreshed, and a hash names the channel instance that owns it.
+  The protocol's heartbeat refreshes the registration, but only while the channel's
+  listener is running. So an agent that died, or whose listener died, stops being a
+  destination after ``REGISTRATION_TTL_SECONDS``. Times are the **Redis server's**
+  (``TIME``), so clock skew between hosts cannot make a live agent look stale. An
+  inbox is capped at ``INBOX_MAX_LENGTH`` (oldest dropped, logged) and expires
+  ``INBOX_TTL_SECONDS`` after its last write, so no list grows without bound.
+
+Until #16962 authenticates the envelope, anything with write access to Redis can push
+to any inbox. The caps above bound what such a writer can cost a recipient; they do
+not authenticate it.
 """
 
 from __future__ import annotations
 
 import asyncio
-import time
+import uuid
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Dict, Set
 
@@ -46,17 +55,31 @@ logger = get_logger(__name__)
 
 #: Prefix of each agent's Redis inbox list.
 INBOX_KEY_PREFIX = "autobot:agent_comm:inbox:"
-#: Redis sorted set: agent id -> when its Redis channel last refreshed.
+#: Redis sorted set: agent id -> Redis server time of its channel's last refresh.
 REGISTERED_KEY = "autobot:agent_comm:registered"
+#: Redis hash: agent id -> the channel instance that owns its registration.
+OWNERS_KEY = "autobot:agent_comm:owners"
 #: How long an agent stays reachable over Redis after its last refresh. The protocol
 #: refreshes on every heartbeat (``TimingConstants.SHORT_TIMEOUT``, 30 s), so the
 #: default drops an agent after three missed beats.
 REGISTRATION_TTL_SECONDS = env_int("AUTOBOT_AGENT_COMM_REGISTRATION_TTL_SECONDS", 90)
+#: Most messages an inbox holds; beyond it the oldest are dropped.
+INBOX_MAX_LENGTH = env_int("AUTOBOT_AGENT_COMM_INBOX_MAX_LENGTH", 1000)
+#: Seconds an inbox survives after its last write, so an abandoned one is reclaimed.
+INBOX_TTL_SECONDS = env_int("AUTOBOT_AGENT_COMM_INBOX_TTL_SECONDS", 3600)
+
+
+class ChannelOwnerCollisionError(RuntimeError):
+    """A second channel claimed an agent id that a live channel already owns."""
 
 
 def inbox_key(agent_id: str) -> str:
     """The Redis list *agent_id*'s channel reads."""
     return f"{INBOX_KEY_PREFIX}{agent_id}"
+
+
+def _text(value) -> str | None:
+    return value.decode() if isinstance(value, bytes) else value
 
 
 class CommunicationChannel(ABC):
@@ -101,17 +124,42 @@ class RedisCommunicationChannel(CommunicationChannel):
         self.redis_client = get_redis_client()
         self.message_queue = asyncio.Queue()
         self.listener_task = None
+        self.instance = uuid.uuid4().hex
 
     @property
     def channel_key(self) -> str:
         """The inbox this channel reads: its owner's, once bound."""
         return inbox_key(self.owner or self.channel_id)
 
+    async def _redis(self, command: str, *args):
+        return await asyncio.to_thread(getattr(self.redis_client, command), *args)
+
+    async def _now(self) -> float:
+        """The Redis server's clock, which every host shares."""
+        seconds, micros = await self._redis("time")
+        return int(seconds) + int(micros) / 1_000_000
+
+    async def _listening(self, agent_id: str | None) -> bool:
+        """Whether *agent_id*'s channel refreshed within the TTL."""
+        if not agent_id:
+            return False
+        score = await self._redis("zscore", REGISTERED_KEY, agent_id)
+        return score is not None and float(score) >= await self._now() - REGISTRATION_TTL_SECONDS
+
+    async def _owns_registration(self) -> bool:
+        return self.owner is not None and _text(await self._redis("hget", OWNERS_KEY, self.owner)) == self.instance
+
     async def start(self):
-        """Start the communication channel, and register its owner as reachable."""
+        """Claim the owner's registration, then start listening. A live owner is never displaced."""
+        if self.owner:
+            holder = _text(await self._redis("hget", OWNERS_KEY, self.owner))
+            if holder not in (None, self.instance) and await self._listening(self.owner):
+                logger.warning("Refused a second Redis channel for live agent %r", self.owner)
+                raise ChannelOwnerCollisionError(f"agent {self.owner!r} already has a live Redis channel")
+            await self._redis("hset", OWNERS_KEY, self.owner, self.instance)
         self.is_active = True
-        await self.refresh()
         self.listener_task = asyncio.create_task(self._listen_for_messages())
+        await self.refresh()
         logger.info("Redis communication channel %s started", self.channel_id)
 
     async def _listen_for_messages(self):
@@ -124,11 +172,7 @@ class RedisCommunicationChannel(CommunicationChannel):
                 result = await asyncio.to_thread(self.redis_client.blpop, self.channel_key, 1)
                 if result:
                     _, message_json = result
-                    if isinstance(message_json, bytes):
-                        message_data = message_json.decode()
-                    else:
-                        message_data = str(message_json)
-                    message = StandardMessage.from_json(message_data)
+                    message = StandardMessage.from_json(_text(message_json) or "")
                     await self.message_queue.put(message)
             except asyncio.CancelledError:
                 break
@@ -137,25 +181,28 @@ class RedisCommunicationChannel(CommunicationChannel):
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
     async def refresh(self) -> None:
-        """Renew the owner's registration, and prune every registration past its TTL."""
-        if self.owner:
-            now = time.time()
-            await asyncio.to_thread(self.redis_client.zadd, REGISTERED_KEY, {self.owner: now})
-            await asyncio.to_thread(
-                self.redis_client.zremrangebyscore, REGISTERED_KEY, "-inf", now - REGISTRATION_TTL_SECONDS
-            )
+        """Renew the owner's registration, and prune every registration past its TTL.
+
+        Only while this channel's listener runs and it still owns the registration: a
+        refresh for a dead listener would keep an inbox nobody reads looking live.
+        """
+        if not self.owner:
+            return
+        if self.listener_task is None or self.listener_task.done():
+            logger.error("Redis channel %s has no running listener; not renewing %r", self.channel_id, self.owner)
+            return
+        if not await self._owns_registration():
+            logger.warning("Redis channel %s no longer owns %r; not renewing it", self.channel_id, self.owner)
+            return
+        now = await self._now()
+        await self._redis("zadd", REGISTERED_KEY, {self.owner: now})
+        await self._redis("zremrangebyscore", REGISTERED_KEY, "-inf", now - REGISTRATION_TTL_SECONDS)
 
     async def recipients(self) -> Set[str]:
         """Every agent id whose Redis channel refreshed within the TTL."""
-        cutoff = time.time() - REGISTRATION_TTL_SECONDS
-        members = await asyncio.to_thread(self.redis_client.zrangebyscore, REGISTERED_KEY, cutoff, "+inf")
-        return {m.decode() if isinstance(m, bytes) else str(m) for m in members or ()}
-
-    async def _listening(self, recipient: str | None) -> bool:
-        if not recipient:
-            return False
-        score = await asyncio.to_thread(self.redis_client.zscore, REGISTERED_KEY, recipient)
-        return score is not None and score >= time.time() - REGISTRATION_TTL_SECONDS
+        cutoff = await self._now() - REGISTRATION_TTL_SECONDS
+        members = await self._redis("zrangebyscore", REGISTERED_KEY, cutoff, "+inf")
+        return {_text(m) for m in members or ()}
 
     async def send(self, message: StandardMessage) -> bool:
         """Push *message* onto its recipient's inbox, if that recipient is listening."""
@@ -165,12 +212,12 @@ class RedisCommunicationChannel(CommunicationChannel):
                 logger.debug("Redis channel %s cannot reach recipient %r", self.channel_id, recipient)
                 return False
             key = inbox_key(recipient)
-            await asyncio.to_thread(self.redis_client.rpush, key, message.to_json())
-            # Set TTL for automatic cleanup
-            if message.header.expires_at:
-                ttl = int(message.header.expires_at - time.time())
-                if ttl > 0:
-                    await asyncio.to_thread(self.redis_client.expire, key, ttl)
+            length = await self._redis("rpush", key, message.to_json())
+            if length > INBOX_MAX_LENGTH:
+                await self._redis("ltrim", key, -INBOX_MAX_LENGTH, -1)
+                dropped = length - INBOX_MAX_LENGTH
+                logger.warning("Inbox of %r over %d: dropped the %d oldest", recipient, INBOX_MAX_LENGTH, dropped)
+            await self._redis("expire", key, INBOX_TTL_SECONDS)
             logger.debug("Message sent to %s: %s", recipient, message.header.message_id)
             return True
         except Exception as e:
@@ -192,10 +239,11 @@ class RedisCommunicationChannel(CommunicationChannel):
             return None
 
     async def close(self):
-        """Close the Redis communication channel, and stop advertising its owner."""
+        """Close the Redis communication channel, and withdraw its owner's registration if it is ours."""
         self.is_active = False
-        if self.owner:
-            await asyncio.to_thread(self.redis_client.zrem, REGISTERED_KEY, self.owner)
+        if await self._owns_registration():
+            await self._redis("zrem", REGISTERED_KEY, self.owner)
+            await self._redis("hdel", OWNERS_KEY, self.owner)
         if self.listener_task:
             self.listener_task.cancel()
             try:
@@ -219,7 +267,11 @@ class DirectCommunicationChannel(CommunicationChannel):
         self.is_active = True
 
     def bind(self, owner: str) -> None:
-        """Register this channel's queue as *owner*'s in-process inbox."""
+        """Register this channel's queue as *owner*'s in-process inbox. A live owner is never displaced."""
+        held = _DIRECT_INBOXES.get(owner)
+        if held is not None and held is not self.message_queue:
+            logger.warning("Refused a second direct channel for live agent %r", owner)
+            raise ChannelOwnerCollisionError(f"agent {owner!r} already has a live direct channel")
         super().bind(owner)
         _DIRECT_INBOXES[owner] = self.message_queue
 
@@ -255,7 +307,7 @@ class DirectCommunicationChannel(CommunicationChannel):
             return None
 
     async def close(self):
-        """Close the direct communication channel, and withdraw its owner's inbox"""
+        """Close the direct communication channel, and withdraw its owner's inbox if it is ours"""
         self.is_active = False
         if self.owner and _DIRECT_INBOXES.get(self.owner) is self.message_queue:
             del _DIRECT_INBOXES[self.owner]
