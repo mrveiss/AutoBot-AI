@@ -37,12 +37,13 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from llm_shared.quota_headroom import get_quota_headroom_store
 from llc.deps import assert_company_access
 from llc.models.budget import LLCAgentBudget
 from llc.services.model_tiers import get_model_tier_service
@@ -143,12 +144,33 @@ class AgentModelCost(BaseModel):
     window: str = "lifetime"
 
 
+class QuotaHeadroomReading(BaseModel):
+    """One observed headroom reading for a provider's rate-limit window.
+
+    Sourced from ``QuotaHeadroomStore`` (#15026), which records what the
+    provider itself reported (rate-limit response headers, a 429's
+    ``retry-after``) — never a computed guess.
+    """
+
+    window: str
+    limit: Optional[float] = None
+    remaining: Optional[float] = None
+    utilization: Optional[float] = None
+    resets_at: Optional[float] = None
+    observed_at: Optional[float] = None
+    source: str = ""
+
+
 class QuotaWindow(BaseModel):
     """Quota headroom for one provider."""
 
     provider: str
     windows: List[str]
     description: str
+    # #16951: real observed readings, one per window with an entry recorded.
+    # A window absent from this list means "no signal received yet" — never
+    # fabricated as zero, matching QuotaHeadroomStore's own contract.
+    headroom: List[QuotaHeadroomReading] = Field(default_factory=list)
     note: str = "Headroom values require provider API key configuration to populate."
 
 
@@ -237,12 +259,15 @@ async def quota_windows(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[QuotaWindow]:
-    """Return provider quota window structures for all configured providers.
+    """Return provider quota window structures, with real observed headroom (#16951, #15026).
 
     Each entry describes the rate-limit windows applicable to the provider
     (e.g. RPM + TPM for OpenAI; 5-hour + 7-day output token windows for
-    Anthropic).  Actual headroom values require provider API key configuration
-    and are populated by the quota monitor (phase 3).
+    Anthropic), plus whatever ``QuotaHeadroomStore`` has actually observed for
+    each — the provider's own rate-limit response headers and 429s, recorded
+    by ``llm_shared/rate_limit_backoff.py`` on every LLM call. A window with no
+    reading yet reports none rather than a fabricated zero: "never observed"
+    and "confirmed empty" are different facts.
     """
     if company_id:
         assert_company_access(ctx, company_id)
@@ -255,18 +280,43 @@ async def quota_windows(
     # response is the platform tier map only.
     tier_map = svc.get_tier_map()
     all_providers = set(tier_map.keys())
+    store = get_quota_headroom_store()
 
-    return [
-        QuotaWindow(
-            provider=p,
-            windows=_PROVIDER_QUOTA_STRUCTURE.get(p, {}).get("windows", ["rpm"]),
-            description=_PROVIDER_QUOTA_STRUCTURE.get(p, {}).get(
-                "description", f"Rate limit windows for provider {p!r}"
-            ),
+    results: List[QuotaWindow] = []
+    for p in sorted(all_providers):
+        if p not in _PROVIDER_QUOTA_STRUCTURE and p not in tier_map:
+            continue
+        windows = _PROVIDER_QUOTA_STRUCTURE.get(p, {}).get("windows", ["rpm"])
+        entries_by_window = {e.window: e for e in await store.all_entries(provider=p)}
+        headroom = [
+            QuotaHeadroomReading(
+                window=w,
+                limit=entries_by_window[w].limit,
+                remaining=entries_by_window[w].remaining,
+                utilization=entries_by_window[w].utilization,
+                resets_at=entries_by_window[w].resets_at,
+                observed_at=entries_by_window[w].observed_at,
+                source=entries_by_window[w].source,
+            )
+            for w in windows
+            if w in entries_by_window
+        ]
+        results.append(
+            QuotaWindow(
+                provider=p,
+                windows=windows,
+                description=_PROVIDER_QUOTA_STRUCTURE.get(p, {}).get(
+                    "description", f"Rate limit windows for provider {p!r}"
+                ),
+                headroom=headroom,
+                note=(
+                    "Live headroom below, as last observed from the provider."
+                    if headroom
+                    else "No headroom observed yet for this provider — no call has recorded a rate-limit reading."
+                ),
+            )
         )
-        for p in sorted(all_providers)
-        if p in _PROVIDER_QUOTA_STRUCTURE or p in tier_map
-    ]
+    return results
 
 
 # ---------------------------------------------------------------------------
