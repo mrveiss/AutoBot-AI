@@ -33,6 +33,7 @@ from autobot_shared.time_utils import parse_utc_iso
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
+from websocket_subprotocol import bearer_subprotocol_token
 
 logger = get_logger(__name__)
 
@@ -1066,9 +1067,7 @@ async def authenticate_websocket(websocket) -> dict | None:
     """
     # #16457: prefer Sec-WebSocket-Protocol (['bearer', '<jwt>']) over the query param so the
     # token never lands in URL access logs/browser history; query stays a fallback during migration.
-    protocols = [p.strip() for p in websocket.headers.get("sec-websocket-protocol", "").split(",")]
-    token = protocols[1] if len(protocols) == 2 and protocols[0] == "bearer" and protocols[1] else None
-    token = token or websocket.query_params.get("token")
+    token = bearer_subprotocol_token(websocket) or websocket.query_params.get("token")
     if token:
         try:
             # Use the singleton — a fresh AuthenticationMiddleware() generates a

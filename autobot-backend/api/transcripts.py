@@ -38,6 +38,7 @@ from transcriber.ai.context import build_context
 from transcriber.ai.prompts import get_system_prompt
 from transcriber.deps import can_access, resolve_user_id
 from transcriber.export.segments import build_segment_list
+from websocket_subprotocol import accept_websocket
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -158,11 +159,11 @@ async def analyze_transcript_ws(websocket: WebSocket, transcript_id: str):
     # from a missing route.
     user = await authenticate_websocket(websocket)
     if user is None:
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Unauthorized")
         return
 
-    await websocket.accept()
+    await accept_websocket(websocket)
 
     try:
         await _run_analysis_session(websocket, transcript_id, user)

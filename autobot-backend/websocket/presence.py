@@ -22,6 +22,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from models.collaboration_event import CollaborationEvent
 from user_management.database import get_async_session_factory
+from websocket_subprotocol import accept_websocket
 
 logger = get_logger(__name__)
 
@@ -326,12 +327,7 @@ async def presence_websocket_handler(
         session_id: Session identifier
         user_id: User identifier
     """
-    # #16457: echo the client's offered subprotocol; RFC 6455 4.2.2 requires the server to
-    # choose one of the client's offered subprotocols, and a browser fails the handshake
-    # if none is echoed back.
-    protocols = websocket.headers.get("sec-websocket-protocol", "")
-    subprotocol = "bearer" if protocols.startswith("bearer") else None
-    await websocket.accept(subprotocol=subprotocol)
+    await accept_websocket(websocket)
     try:
         await presence_manager.connect(session_id, user_id, websocket)
         await _send_presence_sync(websocket, session_id)

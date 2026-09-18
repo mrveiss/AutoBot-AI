@@ -24,6 +24,7 @@ from fastapi import WebSocket
 
 from autobot_shared.auth.device_capabilities import DeviceCapability
 from autobot_shared.auth.permissions import is_admin_role
+from websocket_subprotocol import accept_websocket
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from services.device_capabilities import DeviceCapabilityDecision
@@ -59,7 +60,7 @@ def validate_ws_origin(websocket: WebSocket) -> None:
 async def enforce_ws_origin(websocket: WebSocket) -> bool:
     """Validate the Origin and, on rejection, close the socket with ``1008``.
 
-    Convenience wrapper for the common pattern: call before ``websocket.accept()``
+    Convenience wrapper for the common pattern: call before ``accept_websocket(websocket)``
     (or immediately after, per endpoint) and ``return`` when it yields ``False``.
 
     Returns ``True`` when the handshake origin is allowed (or absent), ``False``
@@ -111,7 +112,7 @@ async def enforce_ws_authentication(websocket: WebSocket) -> "dict | None":
     """Authenticate a WebSocket handshake and, on failure, close with ``1008``.
 
     Convenience wrapper mirroring :func:`enforce_ws_origin`: call before
-    ``websocket.accept()`` and ``return`` when this yields ``None``. Closing
+    ``accept_websocket(websocket)`` and ``return`` when this yields ``None``. Closing
     before ``accept()`` rejects the handshake itself rather than the socket
     accepting then tearing down mid-stream (#14959, #14960, #14991).
 
@@ -164,7 +165,7 @@ def authenticate_ws_admin(websocket: WebSocket) -> bool:
 async def enforce_ws_admin(websocket: WebSocket) -> bool:
     """Enforce admin auth and, on rejection, accept then close with ``4001``.
 
-    Call before the endpoint's own ``websocket.accept()`` and ``return`` when
+    Call before the endpoint's own ``accept_websocket(websocket)`` and ``return`` when
     this yields ``False``. On rejection this accepts the handshake itself so
     the client receives a real WS close frame (code + reason) instead of an
     HTTP 403 that's indistinguishable from a missing route (#12366 — matches
@@ -177,7 +178,7 @@ async def enforce_ws_admin(websocket: WebSocket) -> bool:
     if authenticate_ws_admin(websocket):
         return True
     try:
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Authentication required (admin)")
     except Exception:  # already closed / handshake not completed
         pass

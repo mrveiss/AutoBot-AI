@@ -46,6 +46,7 @@ from metrics.system_monitor import evaluate_resource_thresholds
 from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
+from websocket_subprotocol import accept_websocket
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["advanced_control"])
@@ -167,10 +168,9 @@ async def request_takeover(
 
     Issue #744: Requires admin authentication.
     """
-    # Convert request strings to enums via direct name lookup so each enum is the
-    # single source of truth (#12208 — the old hand-maintained maps mirrored every
-    # member by hand and silently dropped any new one, rejecting a valid trigger
-    # with a 400). Enum member names are the UPPER strings the client sends.
+    # Convert request strings to enums via direct name lookup so each enum is the single source of truth (#12208 — the
+    # old hand-maintained maps mirrored every member by hand and silently dropped any new one, rejecting a valid
+    # trigger with a 400). Enum member names are the UPPER strings the client sends.
     try:
         trigger = TakeoverTrigger[request.trigger.upper()]
     except KeyError:
@@ -539,7 +539,7 @@ async def monitoring_websocket(websocket: WebSocket):
         return
     if not await enforce_ws_admin(websocket):
         return
-    await websocket.accept()
+    await accept_websocket(websocket)
     logger.info("Monitoring WebSocket client connected")
 
     try:
@@ -581,7 +581,7 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
         return
     if not await enforce_ws_admin(websocket):
         return
-    await websocket.accept()
+    await accept_websocket(websocket)
 
     try:
         # Use the desktop streaming manager's WebSocket handler
