@@ -25,7 +25,7 @@ from api.schemas_workflows import (
     TaskApprovalLinkResponse,
 )
 from api.user_management.dependencies import get_db_session
-from api.user_management.human_decider import require_interactive_human
+from api.user_management.human_decider import classify_author_type, require_interactive_human
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -206,6 +206,7 @@ async def approve(
             approval_id,
             username,
             body.comment,
+            author_type=classify_author_type(current_user),
         )
     except ValueError:
         raise HTTPException(
@@ -239,6 +240,7 @@ async def reject(
             approval_id,
             username,
             body.comment,
+            author_type=classify_author_type(current_user),
         )
     except ValueError:
         raise HTTPException(
@@ -272,6 +274,7 @@ async def request_revision(
             approval_id,
             username,
             body.comment,
+            author_type=classify_author_type(current_user),
         )
     except ValueError:
         raise HTTPException(
@@ -331,12 +334,18 @@ async def add_comment(
     """Add a comment to an approval gate (#1402)."""
     svc = ApprovalGateService(session)
     username = current_user.get("username", "unknown")
+    if body.author_type is not None:
+        logger.warning(
+            "Ignoring client-supplied author_type=%s for approval %s; recording the verified caller's (#17056)",
+            body.author_type.value,
+            approval_id,
+        )
     try:
         comment = await svc.add_comment(
             approval_id,
             username,
             body.body,
-            body.author_type.value,
+            author_type=classify_author_type(current_user),
         )
     except ValueError:
         raise HTTPException(

@@ -156,15 +156,21 @@ def _real_middleware(real_auth_middleware, *, enable_auth: bool):
 
 
 def _llc_approval() -> MagicMock:
+    """An Approval row shaped for the LLC (company-scoped) case (#17043).
+
+    Field names match the unified model llc/api/approvals.py._to_response now
+    reads (approval_type/context/requested_by_agent/decided_by_user), not the
+    pre-merge LLCApproval names.
+    """
     now = datetime.now(timezone.utc)
     approval = MagicMock()
     approval.id = uuid.uuid4()
     approval.company_id = str(_ORG)
-    approval.type = "project_disposal"
+    approval.approval_type = "project_disposal"
     approval.status = "pending"
-    approval.requested_by_agent_id = uuid.uuid4()
-    approval.payload = {}
-    approval.decided_by_agent_id = None
+    approval.requested_by_agent = str(uuid.uuid4())
+    approval.context = {}
+    approval.decided_by_user = None
     approval.decided_at = None
     approval.created_at = now
     approval.updated_at = now

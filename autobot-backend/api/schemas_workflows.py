@@ -1515,10 +1515,10 @@ class ApprovalResubmitRequest(BaseModel):
 
 
 class ApprovalAddCommentRequest(BaseModel):
-    """Request body for adding a comment to an approval gate."""
+    """Comment on an approval gate. author_type is ignored (#17056) -- kept only to log an old client sending it."""
 
     body: str
-    author_type: AuthorTypeEnum = AuthorTypeEnum.HUMAN
+    author_type: AuthorTypeEnum | None = None
 
 
 class ApprovalLinkTaskRequest(BaseModel):

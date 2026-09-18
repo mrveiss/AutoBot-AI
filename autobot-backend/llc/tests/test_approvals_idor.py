@@ -32,15 +32,16 @@ _AGENT_ID = "77777777-7777-7777-7777-777777777777"
 
 
 def _make_approval(company_id: str) -> MagicMock:
+    """An Approval row shaped for the LLC case (#17043): unified model attribute names."""
     now = datetime.now(timezone.utc)
     approval = MagicMock()
     approval.id = uuid.uuid4()
     approval.company_id = company_id
-    approval.type = "hire"
+    approval.approval_type = "hire"
     approval.status = "pending"
-    approval.requested_by_agent_id = _AGENT_ID
-    approval.payload = {}
-    approval.decided_by_agent_id = None
+    approval.requested_by_agent = _AGENT_ID
+    approval.context = {}
+    approval.decided_by_user = None
     approval.decided_at = None
     approval.created_at = now
     approval.updated_at = now

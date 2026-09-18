@@ -14,6 +14,8 @@ AgentStatus values. Cross-reference: GH#7504.
 
 from enum import Enum
 
+from models.approval import ApprovalStatus, ApprovalType  # noqa: F401
+
 
 def pg_enum_values(enum_cls: type[Enum]) -> list[str]:
     """``values_callable`` for ``sa.Enum`` so a create_all-built Postgres enum
@@ -118,17 +120,6 @@ class SprintStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class ApprovalType(str, Enum):
-    """Gate type for a board approval request (GH#8214)."""
-
-    HIRE = "hire"
-    STRATEGY = "strategy"
-    BUDGET_OVERRIDE = "budget_override"
-    SPRINT_CLOSE = "sprint_close"
-    PROJECT_DISPOSAL = "project_disposal"
-    FINDING_PROMOTION = "finding_promotion"
-
-
 class FindingProposalStatus(str, Enum):
     """Status of an analytics finding proposal (#11271)."""
 
@@ -137,14 +128,10 @@ class FindingProposalStatus(str, Enum):
     DISMISSED = "dismissed"
 
 
-class ApprovalStatus(str, Enum):
-    """Status of an LLC approval request (GH#8214)."""
-
-    PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    WITHDRAWN = "withdrawn"
-    EXPIRED = "expired"
+# ApprovalType and ApprovalStatus (GH#8214) moved to models.approval (#17043)
+# -- imported at the top of this module and re-exported so every existing
+# ``from .enums import ApprovalType`` / ``from ..models.enums import
+# ApprovalStatus`` keeps working unchanged.
 
 
 class LLCRunStatus(str, Enum):

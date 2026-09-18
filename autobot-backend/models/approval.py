@@ -11,7 +11,7 @@ SQLAlchemy models for human-in-the-loop approval gates.
 import uuid
 from enum import Enum
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import Uuid
@@ -20,27 +20,46 @@ from user_management.models.base import Base
 
 
 class ApprovalStatus(str, Enum):
-    """Possible statuses for an approval gate."""
+    """Possible statuses for an approval gate.
+
+    Canonical for both the platform-general and the LLC company-scoped case
+    (#17043): WITHDRAWN/EXPIRED were LLC-only until this merge.
+    """
 
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
     REVISION_REQUESTED = "revision_requested"
+    WITHDRAWN = "withdrawn"
+    EXPIRED = "expired"
 
 
 class ApprovalType(str, Enum):
-    """Categories of approval gates."""
+    """Categories of approval gates.
+
+    Canonical for both the platform-general and the LLC company-scoped case
+    (#17043): HIRE..FINDING_PROMOTION were LLC-only (``llc/models/enums.py``)
+    until this merge -- ``llc.models.enums.ApprovalType`` now re-exports this
+    class rather than defining its own, so the two never drift apart again.
+    """
 
     DESTRUCTIVE_ACTION = "destructive_action"
     RESOURCE_REQUEST = "resource_request"
     CREATE_AGENT = "create_agent"
     WORKFLOW_GATE = "workflow_gate"
+    HIRE = "hire"
+    STRATEGY = "strategy"
+    BUDGET_OVERRIDE = "budget_override"
+    SPRINT_CLOSE = "sprint_close"
+    PROJECT_DISPOSAL = "project_disposal"
+    FINDING_PROMOTION = "finding_promotion"
 
 
 class Approval(Base):
     """A human-in-the-loop approval gate request (#1402)."""
 
     __tablename__ = "approvals"
+    __table_args__ = (Index("ix_approvals_company_status", "company_id", "status"),)
 
     id = Column(
         Uuid(as_uuid=True),
@@ -60,6 +79,18 @@ class Approval(Base):
         default=ApprovalStatus.PENDING.value,
         index=True,
     )
+    # NULL = platform-general (unscoped); set = an LLC company-scoped approval
+    # (#17043). No FK: matches the pre-merge llc_approvals.company_id, which
+    # was never FK-constrained either.
+    company_id = Column(
+        Uuid(as_uuid=True),
+        nullable=True,
+        index=True,
+    )
+    # A caller-supplied identifier: a plain string for a platform-general
+    # requester, or an LLC agent's UUID stringified (#17043 merge -- LLC's
+    # requested_by_agent_id column becomes this column's value, not a second
+    # typed column, since this one already had no type constraint to violate).
     requested_by_agent = Column(
         String(255),
         nullable=True,

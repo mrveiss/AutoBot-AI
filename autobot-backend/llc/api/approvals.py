@@ -21,9 +21,9 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from api.user_management.human_decider import require_interactive_human
 from autobot_shared.logging_manager import get_logger
 from llc.deps import assert_company_access, get_session, load_authorized, service_dep
+from models.approval import Approval
 from user_management.services import TenantContext
 
-from ..models.approval import LLCApproval
 from ..models.enums import ApprovalStatus, ApprovalType
 from ..services.approval import (
     ApprovalNotFoundError,
@@ -144,7 +144,7 @@ async def decide_approval(
 
     # IDOR: derive the owning company from the row and tenant-check it before
     # allowing a decision (GH#12148).
-    await load_authorized(session, LLCApproval, aid, ctx, not_found_detail="Approval not found")
+    await load_authorized(session, Approval, aid, ctx, not_found_detail="Approval not found")
 
     try:
         async with session.begin():
@@ -187,14 +187,21 @@ def _verified_decider(ctx: TenantContext, body: ApprovalDecision) -> uuid.UUID:
 
 
 def _to_response(approval: Any) -> ApprovalResponse:
+    """Build the unchanged wire response from an ``Approval`` row (#17043).
+
+    Field *names* on the wire (``type``, ``payload``, ``requested_by_agent_id``,
+    ``decided_by_agent_id``) are the pre-merge contract; the attributes read
+    off ``approval`` are the unified model's (``approval_type``, ``context``,
+    ``requested_by_agent``, ``decided_by_user``).
+    """
     return ApprovalResponse(
         id=str(approval.id),
         company_id=str(approval.company_id),
-        type=approval.type,
+        type=approval.approval_type,
         status=approval.status,
-        requested_by_agent_id=str(approval.requested_by_agent_id),
-        payload=approval.payload or {},
-        decided_by_agent_id=(str(approval.decided_by_agent_id) if approval.decided_by_agent_id else None),
+        requested_by_agent_id=approval.requested_by_agent,
+        payload=approval.context or {},
+        decided_by_agent_id=approval.decided_by_user,
         decided_at=approval.decided_at.isoformat() if approval.decided_at else None,
         created_at=approval.created_at.isoformat(),
         updated_at=approval.updated_at.isoformat(),
