@@ -48,19 +48,30 @@ def _generate_secrets_block(text: str) -> str:
     return text[start:end]
 
 
-@pytest.mark.parametrize(
-    "var_name,env_key",
-    [
-        ("backend_secret_key", "AUTOBOT_BACKEND_SECRET_KEY"),
-        ("grafana_admin_password", "GRAFANA_ADMIN_PASSWORD"),
-    ],
-)
-def test_generated_once_in_slm_manager(var_name: str, env_key: str) -> None:
+@pytest.mark.parametrize("var_name", ["backend_secret_key", "grafana_admin_password"])
+def test_generated_once_in_slm_manager(var_name: str) -> None:
     text = _text(_SLM_MANAGER_TASKS)
     assert f"{var_name}: >-" in text, f"slm_manager's generate block no longer sets {var_name} (#16299)"
-    assert (
-        f"AUTOBOT_{var_name.upper()}" in text or env_key in text
-    ), f"slm_manager's backfill block no longer mentions {env_key} (#16299)"
+
+
+@pytest.mark.parametrize("env_key", ["AUTOBOT_BACKEND_SECRET_KEY", "GRAFANA_ADMIN_PASSWORD"])
+def test_no_backfill_for_an_existing_install(env_key: str) -> None:
+    """Regression test for a real bug caught before it shipped: unlike the three
+    existing backfills in this file (root key, chromadb token, Redis password --
+    each enabling a previously-OFF security feature), a backend or Grafana on an
+    existing install is already running on ITS CURRENT secret. Backfilling a fresh
+    value into an existing install's secrets file would flow through the read-back
+    tasks below and silently replace that secret -- signed sessions stop
+    validating, an operator logged into Grafana with the old password gets locked
+    out. That is exactly the "regenerated credential breaks a running service"
+    case the owner's 2026-09-17 ruling excludes. There must be no
+    `ansible.builtin.lineinfile` task adding this key to an existing file."""
+    text = _text(_SLM_MANAGER_TASKS)
+    assert f'"^{env_key}="' not in text, (
+        f"a lineinfile backfill for {env_key} exists in slm_manager's tasks -- this would silently "
+        "rotate a credential a running service already depends on for every install provisioned "
+        "before this change, which the owner's ruling explicitly excludes (see this test's docstring)"
+    )
 
 
 def test_generated_once_gated_on_secrets_file_not_existing() -> None:

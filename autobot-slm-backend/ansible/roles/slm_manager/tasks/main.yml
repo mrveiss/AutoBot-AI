@@ -653,58 +653,21 @@
   no_log: true
   tags: ['slm', 'secrets']
 
-# #16299: same back-fill for the backend SECRET_KEY. Every host provisioned
-# before this change already has the secrets file, so the template task above
-# is skipped and the key would never appear -- leaving backend_secret_key's own
-# guessable "change-me-in-production" role default in effect forever.
-- name: "SLM | Check if AUTOBOT_BACKEND_SECRET_KEY present in secrets file (#16299)"
-  ansible.builtin.shell:
-    cmd: >-
-      grep -q '^AUTOBOT_BACKEND_SECRET_KEY=.\+'
-      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
-  register: _slm_backend_secret_key_check
-  changed_when: false
-  failed_when: false
-  when: slm_secrets_stat.stat.exists
-  no_log: true
-  tags: ['slm', 'secrets']
-
-- name: "SLM | Add AUTOBOT_BACKEND_SECRET_KEY to existing secrets file (#16299)"
-  ansible.builtin.lineinfile:
-    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
-    regexp: "^AUTOBOT_BACKEND_SECRET_KEY="
-    line: "AUTOBOT_BACKEND_SECRET_KEY={{ lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}"
-    create: false
-  when:
-    - slm_secrets_stat.stat.exists
-    - _slm_backend_secret_key_check.rc != 0
-  no_log: true
-  tags: ['slm', 'secrets']
-
-# #16299: same back-fill for the Grafana admin password.
-- name: "SLM | Check if GRAFANA_ADMIN_PASSWORD present in secrets file (#16299)"
-  ansible.builtin.shell:
-    cmd: >-
-      grep -q '^GRAFANA_ADMIN_PASSWORD=.\+'
-      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
-  register: _slm_grafana_admin_pw_check
-  changed_when: false
-  failed_when: false
-  when: slm_secrets_stat.stat.exists
-  no_log: true
-  tags: ['slm', 'secrets']
-
-- name: "SLM | Add GRAFANA_ADMIN_PASSWORD to existing secrets file (#16299)"
-  ansible.builtin.lineinfile:
-    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
-    regexp: "^GRAFANA_ADMIN_PASSWORD="
-    line: "GRAFANA_ADMIN_PASSWORD={{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
-    create: false
-  when:
-    - slm_secrets_stat.stat.exists
-    - _slm_grafana_admin_pw_check.rc != 0
-  no_log: true
-  tags: ['slm', 'secrets']
+# #16299: deliberately NO back-fill for AUTOBOT_BACKEND_SECRET_KEY or
+# GRAFANA_ADMIN_PASSWORD, unlike the three back-fills above. Every host
+# provisioned before this change already has the secrets file, so the
+# generate block above is skipped for it -- but unlike the root key/chromadb
+# token/Redis password (each enabling a previously-OFF security feature), a
+# backend or Grafana on an existing install is ALREADY running on its current
+# secret. Back-filling a freshly generated value here would flow through
+# backend/monitoring's read-back tasks (#16299, mirroring #10400) and silently
+# replace the secret those services are actively using -- signed sessions
+# would stop validating, and an operator logged into Grafana with the old
+# password would be locked out. That is exactly the "regenerated credential
+# breaks a running service" case the owner's 2026-09-17 ruling excludes: an
+# existing install keeps its current password, full stop. The two role
+# defaults stay the standalone/existing-install fallback forever, not just
+# until the next backfill happens to run.
 
 # ==========================================================
 # #12297: Reconcile stale DB-URL landmines in slm-secrets.env

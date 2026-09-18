@@ -34,17 +34,43 @@ baseline entry NOT in that JSON file may not carry ``LEGACY_REASON`` -- that
 is the guard's actual boundary enforcement (rule 2: a test must fail when the
 boundary moves). A new entry added after this file was written must get its
 own real reason in ``SPECIFIC_REASONS``, or the guard fails; it cannot
-silently borrow the legacy label. Shrink the JSON file (moving entries out to
-``SPECIFIC_REASONS`` as #17034 reviews them) freely -- never grow it.
+silently borrow the legacy label.
+
+A count ceiling alone does not enforce this: swapping one legitimate legacy
+entry out of the JSON file for a fabricated one, keeping the total at 1,355,
+would pass a "does not grow" check while silently laundering a new,
+unreviewed entry under the legacy label. ``FROZEN_LEGACY_KEYS_SHA256`` pins
+the exact CONTENT (a hash over the canonicalised set, not the count), so ANY
+edit -- add, remove, or swap -- must also update this constant, which is a
+visible, deliberate act in the diff. #17034 does not need to touch this file
+at all: a legacy entry it individually reviews moves to ``SPECIFIC_REASONS``
+instead (the guard's membership check is an OR of both sets, so an entry
+present in both is harmless) -- this file is permanently frozen from here.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Tuple
 
 BaselineKey = Tuple[str, str, str]
+
+#: sha256 over the canonicalised (sorted, deterministically JSON-dumped) content
+#: of secrets_baseline_legacy_keys.json as frozen at #16299's introduction --
+#: pins the exact SET, not just its size (see the module docstring for why a
+#: count alone is not enough). Computed once; never re-derive it FROM the live
+#: file to "fix" a mismatch -- a mismatch means the file changed and that
+#: change needs its own review, the same as any other ratchet-baseline edit.
+FROZEN_LEGACY_KEYS_SHA256 = "7ecbbf5a24a455625f68f40f297758173297fa673580c2e67ad9ae43ecf3d54e"
+
+
+def content_hash(keys: frozenset[BaselineKey]) -> str:
+    """The same canonicalisation used to compute FROZEN_LEGACY_KEYS_SHA256."""
+    canonical = json.dumps(sorted(keys), sort_keys=True).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
 
 #: The sentinel legacy-boundary reason. A baseline key may carry this ONLY
 #: when it is also a member of load_legacy_keys() below -- enforced by the

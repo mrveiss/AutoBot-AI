@@ -32,7 +32,14 @@ from __future__ import annotations
 import json
 
 from repo_tests._paths import repo_root
-from repo_tests.secrets_baseline_reasons import LEGACY_REASON, SPECIFIC_REASONS, BaselineKey, load_legacy_keys
+from repo_tests.secrets_baseline_reasons import (
+    FROZEN_LEGACY_KEYS_SHA256,
+    LEGACY_REASON,
+    SPECIFIC_REASONS,
+    BaselineKey,
+    content_hash,
+    load_legacy_keys,
+)
 
 _REPO_ROOT = repo_root()
 _BASELINE = _REPO_ROOT / ".secrets.baseline"
@@ -86,14 +93,21 @@ def test_specific_reasons_actually_match_current_baseline_entries() -> None:
     )
 
 
-def test_legacy_keys_do_not_grow() -> None:
-    """The frozen legacy snapshot is a ceiling, never a target: #17034 shrinks it by
-    moving entries into SPECIFIC_REASONS, and nothing should ever add to it again."""
+def test_legacy_keys_match_the_frozen_snapshot_exactly() -> None:
+    """A count ceiling alone would let someone swap a legitimate legacy entry for a
+    fabricated one while keeping the total unchanged -- silently laundering a new,
+    unreviewed entry under the legacy label without ever growing the count. Pinning
+    the exact content (a hash over the canonicalised set) catches an add, a remove,
+    OR a swap; #17034 never needs to touch this file at all (see
+    repo_tests/secrets_baseline_reasons.py's module docstring for why), so this
+    hash should never need updating again."""
     legacy_keys = load_legacy_keys()
-    assert len(legacy_keys) <= 1355, (
-        f"secrets_baseline_legacy_keys.json holds {len(legacy_keys)} entries, more than the "
-        "1,355 frozen at #16299's introduction -- a new baseline entry must get a real reason "
-        "in SPECIFIC_REASONS, never be added to the legacy snapshot"
+    actual_hash = content_hash(legacy_keys)
+    assert actual_hash == FROZEN_LEGACY_KEYS_SHA256, (
+        f"secrets_baseline_legacy_keys.json's content no longer matches the hash frozen at "
+        f"#16299's introduction ({len(legacy_keys)} entries, hash {actual_hash}) -- this file "
+        "is not meant to be edited; a new baseline entry must get a real reason in "
+        "SPECIFIC_REASONS instead of touching this snapshot"
     )
 
 
@@ -106,5 +120,3 @@ def test_negative_control_a_new_unreasoned_entry_is_caught() -> None:
     assert synthetic_key not in legacy_keys
     offenders = _offenders({synthetic_key}, legacy_keys)
     assert offenders == ["some/new/file.py type=Secret Keyword hashed_secret=" + "0" * 40]
-
-
