@@ -84,7 +84,7 @@ async def _list_candidates():
 
 
 async def _delete(candidate_id: str):
-    from services.orphan_storage import DeleteResult, orphan_grace_period_hours
+    from services.orphan_storage import DeleteResult, orphan_grace_period_hours, safe_error_reason
 
     clone_dir = _resolved_clone_dir(candidate_id)
     if clone_dir is None:
@@ -97,7 +97,7 @@ async def _delete(candidate_id: str):
     try:
         still_orphaned = candidate_id not in await registered_source_ids()
     except RegistryUnavailable as exc:
-        return DeleteResult(deleted=False, reason=f"source registry unreachable: {exc}")
+        return DeleteResult(deleted=False, reason=f"source registry unreachable: {safe_error_reason(exc)}")
     if not still_orphaned:
         return DeleteResult(deleted=False, reason="a source record now references this directory")
     grace_seconds = orphan_grace_period_hours() * 3600
@@ -108,7 +108,7 @@ async def _delete(candidate_id: str):
         shutil.rmtree(clone_dir)
     except OSError as exc:
         logger.error("Failed to remove orphan clone dir for %s: %s", candidate_id, exc)
-        return DeleteResult(deleted=False, reason=f"removal failed: {exc}")
+        return DeleteResult(deleted=False, reason=f"removal failed: {safe_error_reason(exc)}")
     logger.info("Removed orphan code-source clone %s", candidate_id)
     return DeleteResult(deleted=True)
 

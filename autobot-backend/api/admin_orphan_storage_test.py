@@ -81,7 +81,7 @@ def test_an_unavailable_detector_names_itself_rather_than_reading_as_success(mon
     monkeypatch.setattr(orphan_storage, "_REGISTRY", {})
 
     async def _broken():
-        raise RuntimeError("registry unreachable")
+        raise RuntimeError("connection refused: redis.internal:6379")
 
     orphan_storage.register_detector(
         orphan_storage.OrphanDetector(provider="broken", list_candidates=_broken, delete=None)
@@ -96,4 +96,5 @@ def test_an_unavailable_detector_names_itself_rather_than_reading_as_success(mon
     assert response.status_code == 200
     body = response.json()
     assert body["candidates"] == []
-    assert body["provider_statuses"] == [{"provider": "broken", "available": False, "error": "registry unreachable"}]
+    assert body["provider_statuses"] == [{"provider": "broken", "available": False, "error": "RuntimeError"}]
+    assert "redis.internal" not in response.text, "#17065: never the raw exception text"

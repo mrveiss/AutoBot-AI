@@ -17,6 +17,20 @@ from .source_storage import save_source
 logger = get_logger(__name__)
 
 
+def safe_error_reason(exc: OSError) -> str:
+    """A logical failure reason, never the absolute path OSError's own text carries (#17065).
+
+    ``.strerror`` is set whenever the OS itself raised this (as
+    ``shutil.rmtree`` does) -- ``str(exc)`` on that same exception
+    additionally appends ``.filename``, which is exactly the path to keep
+    out. When ``.strerror`` is unset (a hand-raised, message-only
+    ``OSError``, never the OS's own), ``str(exc)`` IS just that message,
+    with no filename to have appended. The full exception, path included,
+    stays in the caller's log, never in a value a delete response returns.
+    """
+    return exc.strerror or str(exc)
+
+
 async def delete_source_and_cleanup(source_id: str, source: CodeSource | None = None) -> bool:
     """Delete a CodeSource: its clone dir (only under CODE_SOURCES_BASE), its
     ChromaDB documents, and its Redis record. Idempotent; returns False on a
@@ -48,7 +62,7 @@ async def delete_source_and_cleanup(source_id: str, source: CodeSource | None = 
             except OSError as exc:
                 logger.error("Failed to remove clone dir %s for source %s: %s", source.clone_path, source_id, exc)
                 source.status = SourceStatus.CLEANUP_FAILED
-                source.error_message = f"Clone removal failed: {exc}"[:500]
+                source.error_message = f"Clone removal failed: {safe_error_reason(exc)}"[:500]
                 await save_source(source)
                 return False
     await _purge_source_index(source_id)

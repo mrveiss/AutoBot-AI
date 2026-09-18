@@ -143,7 +143,9 @@ async def _do_sync(source: CodeSource) -> None:
                         # #17036: a swallowed failure here left a stale directory
                         # that the next clone attempt would silently write into.
                         logger.error("Failed to clear stale clone dir %s: %s", clone_path, rmtree_exc)
-                        err = f"Could not clear existing clone directory: {rmtree_exc}"
+                        err = (
+                            f"Could not clear existing clone directory: {source_service.safe_error_reason(rmtree_exc)}"
+                        )
                 if not err:
                     clone_dir.mkdir(parents=True, exist_ok=True)
                     err = await _run_git_clone(url, clone_path, source.branch)

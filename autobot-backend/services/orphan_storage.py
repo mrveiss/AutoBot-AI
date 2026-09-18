@@ -39,6 +39,25 @@ def orphan_grace_period_hours() -> int:
     return env_int_clamped(GRACE_PERIOD_ENV, DEFAULT_GRACE_PERIOD_HOURS, min_v=1, max_v=720)
 
 
+def safe_error_reason(exc: BaseException) -> str:
+    """A logical failure reason -- never a host, port or path an exception's own text may carry (#17065).
+
+    ``OSError.strerror`` is the OS's message alone, set whenever the OS
+    itself raised it (as ``shutil.rmtree`` does) -- ``str(exc)`` on that same
+    exception additionally appends ``.filename``, which is exactly the path
+    to keep out. When ``.strerror`` is unset (a hand-raised, message-only
+    ``OSError``, never the OS's own), ``str(exc)`` IS just that message, with
+    no filename to have appended. Anything that isn't an ``OSError`` at all
+    (a Redis client's own exception, for one) falls back to its class name,
+    since its message text cannot be trusted the same way. The full
+    exception, path and all, stays in the caller's log either way -- never
+    in a value returned to an API client.
+    """
+    if isinstance(exc, OSError):
+        return exc.strerror or str(exc)
+    return exc.__class__.__name__
+
+
 @dataclass(frozen=True)
 class OrphanCandidate:
     """One orphan-storage candidate, as a detector reports it (#17039).
@@ -122,7 +141,7 @@ async def list_all_candidates() -> OrphanListing:
             statuses.append(ProviderStatus(provider=provider, available=True))
         except Exception as exc:
             logger.error("Orphan detector %r failed to list candidates: %s", provider, exc)
-            statuses.append(ProviderStatus(provider=provider, available=False, error=str(exc)))
+            statuses.append(ProviderStatus(provider=provider, available=False, error=safe_error_reason(exc)))
     return OrphanListing(candidates=candidates, statuses=statuses)
 
 
@@ -141,4 +160,4 @@ async def delete_candidate(provider: str, candidate_id: str) -> DeleteResult:
         return await detector.delete(candidate_id)
     except Exception as exc:
         logger.error("Orphan detector %r failed to delete %r: %s", provider, candidate_id, exc)
-        return DeleteResult(deleted=False, reason=f"delete failed: {exc}")
+        return DeleteResult(deleted=False, reason=f"delete failed: {safe_error_reason(exc)}")

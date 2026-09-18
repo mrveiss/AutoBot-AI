@@ -80,8 +80,23 @@ class TestListAllCandidates:
 
         assert listing.candidates == []
         assert listing.statuses == [
-            orphan_storage.ProviderStatus(provider="broken", available=False, error="registry unreachable")
+            orphan_storage.ProviderStatus(provider="broken", available=False, error="RuntimeError")
         ]
+
+    async def test_a_failed_detectors_status_never_carries_the_raw_exception_text(self):
+        """#17065: a non-OSError's own message can name a host/port -- never returned as-is."""
+
+        async def _boom():
+            raise RuntimeError("connection refused: redis.internal:6379")
+
+        orphan_storage.register_detector(
+            orphan_storage.OrphanDetector(provider="broken", list_candidates=_boom, delete=None)
+        )
+
+        listing = await orphan_storage.list_all_candidates()
+
+        assert listing.statuses[0].error == "RuntimeError"
+        assert "redis.internal" not in listing.statuses[0].error
 
 
 class TestDeleteCandidate:
@@ -109,7 +124,7 @@ class TestDeleteCandidate:
 
     async def test_an_unexpected_exception_from_the_detector_is_never_deleted_true(self):
         async def _boom(_candidate_id):
-            raise RuntimeError("unexpected failure")
+            raise RuntimeError("connection refused: redis.internal:6379")
 
         orphan_storage.register_detector(
             orphan_storage.OrphanDetector(provider="p", list_candidates=None, delete=_boom)
@@ -118,7 +133,8 @@ class TestDeleteCandidate:
         result = await orphan_storage.delete_candidate("p", "candidate-1")
 
         assert result.deleted is False
-        assert "unexpected failure" in result.reason
+        assert "RuntimeError" in result.reason
+        assert "redis.internal" not in result.reason, "#17065: never the raw exception text"
 
 
 def test_grace_period_is_clamped_to_at_least_one_hour(monkeypatch):
