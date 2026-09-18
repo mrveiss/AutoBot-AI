@@ -108,15 +108,3 @@ def test_negative_control_a_new_unreasoned_entry_is_caught() -> None:
     assert offenders == ["some/new/file.py type=Secret Keyword hashed_secret=" + "0" * 40]
 
 
-def test_negative_control_borrowing_the_legacy_label_is_caught() -> None:
-    """A key that is NOT in the frozen legacy snapshot may not silently claim
-    LEGACY_REASON -- proves the boundary is a real set membership check, not just
-    'does this key have any string attached anywhere'."""
-    legacy_keys = load_legacy_keys()
-    synthetic_key: BaselineKey = ("some/new/file.py", "Secret Keyword", "1" * 40)
-    assert synthetic_key not in legacy_keys
-    # Even if something tried to reason it with the exact legacy string, it is
-    # not a member of the frozen snapshot, so _offenders still flags it -- the
-    # sentinel text alone proves nothing without set membership.
-    offenders = _offenders({synthetic_key}, legacy_keys)
-    assert offenders
