@@ -58,6 +58,7 @@ from ..exceptions import (
 )
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
+from ..org_role_authority import apply_org_role_bound
 from ..services.api_key import ApiKeyService
 from ..services.budget import BudgetService
 from ..services.controls_service import ControlsService
@@ -213,7 +214,7 @@ class HeartbeatScheduler:
             result = await session.execute(text("""
                     SELECT aon.agent_id, aon.name, aon.heartbeat_cron,
                            aon.adapter_type, aon.adapter_config, aon.context_mode,
-                           aon.company_id
+                           aon.company_id, aon.org_role
                     FROM agent_org_nodes aon
                     WHERE aon.heartbeat_enabled = true
                       AND aon.heartbeat_cron IS NOT NULL
@@ -845,13 +846,9 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
     ephemeral, run-scoped LLC API key so the woken agent can authenticate its
     LLC API calls; the key is revoked when the run finishes.
     """
+    agent = apply_org_role_bound(agent)  # #16950: bounded by its org role, or refused with the reason
     adapter_type = agent.get("adapter_type") or "autobot_agent"
-    logger.debug(
-        "Dispatching adapter=%s for agent=%s context_keys=%s",
-        adapter_type,
-        agent["agent_id"],
-        sorted(context.keys()),
-    )
+    logger.debug("Dispatching adapter=%s agent=%s context_keys=%s", adapter_type, agent["agent_id"], sorted(context))
 
     if adapter_type == "autobot_agent":
         await _dispatch_autobot_agent(agent, context)
