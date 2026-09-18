@@ -1,5 +1,34 @@
 # Code Review & Merge Rules
 
+> Every claim in this doc (CI status, "done", a check's outcome) follows the
+> **Verification** rule in `CLAUDE.md`: paste the command and its output, never assert.
+
+## Self-review before pushing: known self-inflicted patterns
+
+Clustered from reviewer-caught defects across the last 20 merged PRs (#16860–#16973). This is
+**review-caught** evidence, not confirmed CI-failure history — `gh pr checks`/`check-runs`
+exposed current state only, not history, for merged PRs, so treat this as "what reviewers keep
+catching," not "what breaks CI." Run through before pushing:
+
+1. **Silent failure swallowing** — a caught exception, a `|| echo ''` fallback, or a default
+   value that hides a real failure instead of surfacing it. (#16875, #16873, #16866, #16877)
+2. **Loose/imprecise test assertions** — checking a prefix, substring, or proxy value
+   (`startsWith`, an unanchored `grep`, a parent ref) instead of the exact result, letting a
+   test pass vacuously. (#16909, #16902, #16884, #16876, #16866)
+3. **Hardcoded UI strings** — still recurring despite "No hardcoded UI strings" in `CLAUDE.md`.
+   (#16907, #16902, #16875)
+4. **Missing negative/failure-case test coverage** — only the happy path is tested; the failure
+   path a change is supposed to guard is not. (#16893, #16890, #16886)
+5. **Auth/permission check ordering or completeness** — a check exists but runs after a bypass
+   path, or is missing a resource-type/ownership condition. (#16886, #16927)
+6. **Accessibility gaps** — missing ARIA/keyboard semantics or label/`for`-`id` associations.
+   (#16973, #16875)
+7. **Stale/cached state read instead of the live source of truth** — checking a local or cached
+   field instead of the durable record; see `store_authority` under Essential Patterns in
+   `CLAUDE.md`. (#16927)
+8. **Wrong issue/branch reference in a comment or doc** — citing the wrong number, costing a
+   dedicated fix PR later. (#16881, #16860)
+
 ## Code Review Agent Requirements (MANDATORY)
 
 **Every finder and verifier agent prompt MUST contain all three — refuse to dispatch if any missing:**
