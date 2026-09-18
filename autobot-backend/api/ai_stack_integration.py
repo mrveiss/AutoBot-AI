@@ -42,11 +42,15 @@ from api.schemas_knowledge import (
     ResearchRequest,
 )
 from api.system_health import register_singleton_probe
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from dependencies import get_knowledge_base
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.search_filters import (
+    extract_user_context_from_request,
+    filter_search_results_by_permission,
+)
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import Metadata
 
@@ -112,6 +116,7 @@ async def rag_query(
     request: RAGQueryRequest,
     admin_check: bool = Depends(check_admin_permission),
     knowledge_base=Depends(get_knowledge_base),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Perform advanced RAG query with document synthesis.
@@ -120,6 +125,9 @@ async def rag_query(
     RAG agent for enhanced retrieval and generation capabilities.
 
     Issue #744: Requires admin authentication.
+    Issue #16654/#16745: the admin gate does not bypass fact visibility -- KB
+    documents feeding RAG synthesis are scoped to the caller, same as any other
+    RAG-bound read, since an admin's RAG synthesis gets no special bypass.
     """
     ai_client = await get_ai_stack_client()
 
@@ -131,7 +139,15 @@ async def rag_query(
             kb_results = await knowledge_base.search(
                 query=request.query, top_k=request.max_results, filters=RESEARCH_QUARANTINE_FILTER
             )
-            documents = kb_results if isinstance(kb_results, list) else []
+            kb_results = kb_results if isinstance(kb_results, list) else []
+            user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
+            documents = await filter_search_results_by_permission(
+                kb_results,
+                user_id,
+                user_org_id,
+                user_group_ids,
+                ownership_manager=getattr(knowledge_base, "ownership_manager", None),
+            )
         except Exception as e:
             logger.warning("Knowledge base search failed: %s", e)
             documents = []
@@ -202,6 +218,7 @@ async def chat(
     request: ChatRequest,
     admin_check: bool = Depends(check_admin_permission),
     knowledge_base=Depends(get_knowledge_base),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Chat with AI Stack integration and knowledge base support.
@@ -210,6 +227,9 @@ async def chat(
     knowledge base and advanced AI reasoning capabilities.
 
     Issue #744: Requires admin authentication.
+    Issue #16654/#16745: the admin gate does not bypass fact visibility -- an
+    admin's chat gets no read bypass, so KB context is scoped to the caller
+    before it reaches the chat prompt.
     """
     ai_client = await get_ai_stack_client()
 
@@ -220,6 +240,15 @@ async def chat(
             # Search knowledge base for relevant context
             # Issue #13009: exclude quarantined research facts (#12622).
             kb_context = await knowledge_base.search(query=request.message, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
+            kb_context = kb_context if isinstance(kb_context, list) else []
+            user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
+            kb_context = await filter_search_results_by_permission(
+                kb_context,
+                user_id,
+                user_org_id,
+                user_group_ids,
+                ownership_manager=getattr(knowledge_base, "ownership_manager", None),
+            )
             if kb_context:
                 kb_summary = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_context[:3]])
                 enhanced_context = f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"

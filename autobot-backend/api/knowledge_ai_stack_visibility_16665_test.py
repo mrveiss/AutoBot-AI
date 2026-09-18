@@ -5,6 +5,9 @@
 """POST /search and POST /search/rag filter local KB results by the caller's
 access (#16665). Uses a real KnowledgeOwnership.check_access rather than
 mocking it away, so this proves the route's own filtering wiring.
+
+Issue #16654/#16745: both feed RAG synthesis, so an admin caller gets no
+bypass here either -- confirmed by the admin-role negative controls below.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -84,7 +87,43 @@ async def test_rag_search_hides_another_users_private_fact_from_rag_context():
 
 
 @pytest.mark.asyncio
-async def test_search_lets_an_admin_read_another_users_private_fact():
+async def test_rag_search_gives_an_admin_no_bypass_of_another_users_private_fact_in_rag_context():
+    """Negative control for #16716/#16665/#16654/#16745: an ADMIN caller must not get another
+    user's private fact into the RAG synthesis context either. Exercises the real
+    ``filter_search_results_by_permission`` -> ``KnowledgeOwnership.check_access`` call, not a
+    mock that trivially returns nothing -- fails if the ``is_admin=`` bypass were restored.
+    """
+    from api.knowledge_ai_stack import rag_search
+
+    others_private = {
+        "id": "f2",
+        "content": "not mine",
+        "metadata": {"owner_id": "u99", "visibility": "private"},
+    }
+    kb = _make_kb([others_private])
+
+    mock_ai_client = AsyncMock()
+    mock_ai_client.rag_query.return_value = {"answer": "ok"}
+
+    with patch("api.knowledge_ai_stack.get_ai_stack_client", AsyncMock(return_value=mock_ai_client)):
+        result = await rag_search(
+            request_data=AIStackRAGQueryRequest(query="test"),
+            knowledge_base=kb,
+            current_user=_current_user("u2", role="admin"),
+        )
+
+    assert result.data["documents_used"] == 0, "admin u2 must not get u99's private fact into RAG context"
+    mock_ai_client.rag_query.assert_called_once()
+    assert mock_ai_client.rag_query.call_args.kwargs["documents"] == []
+
+
+@pytest.mark.asyncio
+async def test_search_gives_an_admin_no_bypass_of_another_users_private_fact():
+    """Owner rulings #16654/#16745: an admin's chat/RAG-bound reads get no bypass.
+
+    This endpoint's local KB results feed RAG synthesis when include_rag is set,
+    so an admin caller is scoped exactly like any other caller here.
+    """
     others_private = {
         "id": "f2",
         "content": "not mine",
@@ -109,4 +148,4 @@ async def test_search_lets_an_admin_read_another_users_private_fact():
 
     local_results = result.data["source_breakdown"]["local_knowledge_base"]["results"]
     ids = {r["id"] for r in local_results}
-    assert ids == {"f2"}, "an explicit admin read must see every fact (#16665)"
+    assert ids == set(), f"admin u2 must not see u99's private fact (#16654/#16745): {local_results}"

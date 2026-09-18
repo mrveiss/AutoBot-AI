@@ -152,7 +152,12 @@ MIN_READS_FOUND = 40
 #: Then 97 -> 94 (#16665): merging the ai-stack/RAG visibility fix in removed the three
 #: TRACKED_GAP entries it closed (knowledge_ai_stack.py's two search paths and
 #: knowledge_rag.py's advanced_search) -- a measured shrink, not new debt.
-UNFILTERED_READ_CEILING = 94
+#: Then 94 -> 92 (#16665/#16654/#16745): ai_stack_integration.py's ``chat`` and
+#: ``rag_query`` now filter their KB-derived context through
+#: filter_search_results_by_permission (no admin bypass), so the scan marks both
+#: filtered and their _SCOPED_ADMIN_ROUTER allowlist entries are removed -- the
+#: admin gate alone was ruled insufficient for a chat/RAG synthesis path.
+UNFILTERED_READ_CEILING = 92
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)

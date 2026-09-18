@@ -15,7 +15,6 @@ Issue #4681: Added GET /entity/{id}/history for evolutionary lineage tracking.
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission, get_current_user
-from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.schemas.rag import (
@@ -154,7 +153,8 @@ async def advanced_search(
 
     Issue #620: Refactored to use extracted helper methods.
     Issue #744: Requires authenticated user.
-    Issue #16665: returned results are scoped to the caller.
+    Issue #16665: returned results are scoped to the caller. Issue #16654/#16745:
+    no admin bypass -- an admin caller is scoped the same as any other caller.
 
     **Parameters:**
     - **query**: Search query string
@@ -192,7 +192,6 @@ async def advanced_search(
         user_org_id,
         user_group_ids,
         ownership_manager=getattr(rag_service.kb_adapter.kb, "ownership_manager", None),
-        is_admin=is_admin_role(current_user.get("role")),
     )
     response = {
         "results": results_dicts,

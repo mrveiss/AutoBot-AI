@@ -29,7 +29,6 @@ from api.schemas_knowledge import (
     DocumentAnalysisRequest,
 )
 from auth_middleware import get_current_user
-from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
@@ -79,13 +78,14 @@ async def _search_local_knowledge_base(
     user_id: str,
     user_org_id: str | None,
     user_group_ids: list,
-    is_admin: bool,
 ) -> Dict[str, Any]:
     """
     Search local knowledge base with confidence filtering.
 
     Issue #281: Extracted helper for local KB search.
     Issue #16665: results are scoped to the caller before any other filtering.
+    Issue #16654/#16745: no admin bypass here -- this result set feeds RAG
+    synthesis, so an admin caller is filtered to their own scope like anyone else.
 
     Args:
         req: FastAPI request for app state access
@@ -95,7 +95,6 @@ async def _search_local_knowledge_base(
         user_id: Authenticated caller's user id
         user_org_id: Caller's organization id, if any
         user_group_ids: Caller's group ids
-        is_admin: Whether the caller is an admin (unconditional read)
 
     Returns:
         Dictionary with search results and metadata
@@ -110,7 +109,6 @@ async def _search_local_knowledge_base(
                 user_org_id,
                 user_group_ids,
                 ownership_manager=getattr(kb_to_use, "ownership_manager", None),
-                is_admin=is_admin,
             )
 
             # Filter by confidence threshold
@@ -242,7 +240,6 @@ async def _run_all_search_sources(
     user_id: str,
     user_org_id: str | None,
     user_group_ids: list,
-    is_admin: bool,
 ) -> Dict[str, Any]:
     """Helper for enhanced_search. Ref: #1088.
 
@@ -256,7 +253,6 @@ async def _run_all_search_sources(
         user_id: Authenticated caller's user id
         user_org_id: Caller's organization id, if any
         user_group_ids: Caller's group ids
-        is_admin: Whether the caller is an admin (unconditional read)
 
     Returns:
         Dict mapping source name to search result data
@@ -272,7 +268,6 @@ async def _run_all_search_sources(
             user_id=user_id,
             user_org_id=user_org_id,
             user_group_ids=user_group_ids,
-            is_admin=is_admin,
         )
 
     if request_data.include_rag:
@@ -311,7 +306,8 @@ async def search(
     Issue #744: Requires authenticated user.
     Issue #16665: local KB results are scoped to the caller before use, including
     as RAG context -- an unfiltered fact would otherwise reach both the response
-    and the RAG synthesis prompt.
+    and the RAG synthesis prompt. Issue #16654/#16745: no admin bypass -- an admin
+    caller is scoped exactly like any other caller here, since this feeds RAG.
 
     This endpoint provides superior search results by combining:
     - Local knowledge base semantic search
@@ -320,10 +316,7 @@ async def search(
     """
     try:
         user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-        is_admin = is_admin_role(current_user.get("role"))
-        results = await _run_all_search_sources(
-            request_data, req, knowledge_base, user_id, user_org_id, user_group_ids, is_admin
-        )
+        results = await _run_all_search_sources(request_data, req, knowledge_base, user_id, user_org_id, user_group_ids)
         combined_results, source_count = _combine_search_results(results)
 
         return create_success_response(
@@ -369,7 +362,7 @@ async def rag_search(
 
     Issue #744: Requires authenticated user.
     Issue #16665: locally-retrieved documents are scoped to the caller before
-    being used as RAG context.
+    being used as RAG context. Issue #16654/#16745: no admin bypass here.
     """
     try:
         ai_client = await get_ai_stack_client()
@@ -392,7 +385,6 @@ async def rag_search(
                     user_org_id,
                     user_group_ids,
                     ownership_manager=getattr(knowledge_base, "ownership_manager", None),
-                    is_admin=is_admin_role(current_user.get("role")),
                 )
                 logger.info(f"Retrieved {len(documents)} documents from local KB for RAG")
             except Exception as e:

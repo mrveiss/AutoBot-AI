@@ -6,6 +6,9 @@
 
 Uses a real KnowledgeOwnership.check_access rather than mocking it away, so
 this proves the route's own filtering wiring, not just that a mock was called.
+
+Issue #16654/#16745: an admin caller gets no bypass either -- confirmed by
+the admin-role negative control below.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -59,7 +62,11 @@ async def test_advanced_search_hides_another_users_private_fact():
 
 
 @pytest.mark.asyncio
-async def test_advanced_search_lets_an_admin_read_another_users_private_fact():
+async def test_advanced_search_gives_an_admin_no_bypass_of_another_users_private_fact():
+    """Negative control for #16716/#16665/#16654/#16745: an ADMIN caller must not see another
+    user's private fact either. Exercises the real ``filter_search_results_by_permission`` ->
+    ``KnowledgeOwnership.check_access`` call -- fails if the ``is_admin=`` bypass were restored.
+    """
     others_private = _result("f2", owner_id="u99")
     rag_service = _make_rag_service([others_private])
 
@@ -70,4 +77,4 @@ async def test_advanced_search_lets_an_admin_read_another_users_private_fact():
     )
 
     ids = {r["metadata"]["id"] for r in result["results"]}
-    assert ids == {"f2"}, "an explicit admin read must see every fact (#16665)"
+    assert ids == set(), f"admin u2 must not see u99's private fact (#16654/#16745): {result['results']}"
