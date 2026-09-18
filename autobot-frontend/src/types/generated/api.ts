@@ -257,7 +257,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/admin/resource-grants/repair": {
+    "/api/admin/orphans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Orphans
+         * @description Orphans among the first *limit* resources of a type, so they surface before a user trips on one.
+         */
+        get: operations["list_orphans_api_admin_orphans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orphans/repair": {
         parameters: {
             query?: never;
             header?: never;
@@ -267,15 +287,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Repair Resource Grant
-         * @description Grant access to a resource that `is_visible()` denies to everyone.
-         *
-         *     The one in-app remedy for #15779's orphan class: an admin explicitly
-         *     grants a user or group access, which `is_visible()` honors unconditionally
-         *     ahead of any scope rule -- no owner or scope key on the resource itself
-         *     needs to change.
+         * Repair Orphan Resource
+         * @description Assign a live owner to a resource no live principal can reach. Refused (409) if any can.
          */
-        post: operations["repair_resource_grant_api_admin_resource_grants_repair_post"];
+        post: operations["repair_orphan_resource_api_admin_orphans_repair_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -86181,6 +86196,66 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * OrphanListResponse
+         * @description Orphans of one type, each with the conditions that make it one (#15779 AC4).
+         */
+        OrphanListResponse: {
+            /** Resource Type */
+            resource_type: string;
+            /** Orphans */
+            orphans: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanRepairRequest
+         * @description Make *new_owner_id* the owner of a resource no live principal can reach.
+         *
+         *     ``resource_type`` is a plain string, not an enum, on purpose: an unknown type is
+         *     refused by the service **and audited**, where a validation error would leave no trace.
+         */
+        OrphanRepairRequest: {
+            /** Resource Type */
+            resource_type: string;
+            /** Resource Id */
+            resource_id: string;
+            /**
+             * New Owner Id
+             * @description A live user to own the resource
+             */
+            new_owner_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanRepairResponse
+         * @description What was repaired, and the conditions that justified the break-glass. Never secret material.
+         */
+        OrphanRepairResponse: {
+            /** Resource Type */
+            resource_type: string;
+            /** Resource Id */
+            resource_id: string;
+            /** New Owner Id */
+            new_owner_id: string;
+            /** Conditions */
+            conditions: {
+                [key: string]: unknown;
+            };
+            /** Before */
+            before: {
+                [key: string]: unknown;
+            };
+            /** After */
+            after: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * OverseerQueryData
          * @description Response data for POST /overseer/query/{session_id}.
          */
@@ -90409,41 +90484,6 @@ export interface components {
              * @description New name for the tag
              */
             new_tag: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** RepairGrantRequest */
-        RepairGrantRequest: {
-            /** Resource Type */
-            resource_type: string;
-            /** Resource Id */
-            resource_id: string;
-            /** Grantee Type */
-            grantee_type: string;
-            /** Grantee Id */
-            grantee_id: string;
-            /**
-             * Permission
-             * @default use
-             */
-            permission: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** RepairGrantResponse */
-        RepairGrantResponse: {
-            /** Id */
-            id: string;
-            /** Resource Type */
-            resource_type: string;
-            /** Resource Id */
-            resource_id: string;
-            /** Grantee Type */
-            grantee_type: string;
-            /** Grantee Id */
-            grantee_id: string;
-            /** Permission */
-            permission: string;
         } & {
             [key: string]: unknown;
         };
@@ -104487,7 +104527,39 @@ export interface operations {
             };
         };
     };
-    repair_resource_grant_api_admin_resource_grants_repair_post: {
+    list_orphans_api_admin_orphans_get: {
+        parameters: {
+            query: {
+                resource_type: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrphanListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repair_orphan_resource_api_admin_orphans_repair_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -104496,7 +104568,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RepairGrantRequest"];
+                "application/json": components["schemas"]["OrphanRepairRequest"];
             };
         };
         responses: {
@@ -104506,7 +104578,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RepairGrantResponse"];
+                    "application/json": components["schemas"]["OrphanRepairResponse"];
                 };
             };
             /** @description Validation Error */
