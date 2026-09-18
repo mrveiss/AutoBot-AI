@@ -15,9 +15,19 @@ Covers:
 - Bottleneck tracking
 """
 
+import socket
+
 from prometheus_client import Counter, Gauge, Histogram
 
 from .base import BaseMetricsRecorder
+
+# #16281: every GPU series carries the host it was measured on. A process that
+# reports its own GPUs labels them with its own hostname; the SLM passes each
+# fleet node's hostname explicitly.
+LOCAL_NODE = socket.gethostname()
+
+# The labels of every per-GPU series.
+_GPU_LABELS = ("node", "gpu_id", "gpu_name")
 
 
 class PerformanceMetricsRecorder(BaseMetricsRecorder):
@@ -41,34 +51,35 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
         self.gpu_utilization = Gauge(
             "autobot_gpu_utilization_percent",
             "GPU utilization percentage",
-            ["gpu_id", "gpu_name"],
+            list(_GPU_LABELS),
             registry=self.registry,
         )
 
         self.gpu_memory_utilization = Gauge(
             "autobot_gpu_memory_utilization_percent",
             "GPU memory utilization percentage",
-            ["gpu_id", "gpu_name"],
+            list(_GPU_LABELS),
             registry=self.registry,
         )
 
         self.gpu_temperature = Gauge(
             "autobot_gpu_temperature_celsius",
             "GPU temperature in Celsius",
-            ["gpu_id", "gpu_name"],
+            list(_GPU_LABELS),
             registry=self.registry,
         )
 
         self.gpu_power_watts = Gauge(
             "autobot_gpu_power_watts",
             "GPU power consumption in watts",
-            ["gpu_id", "gpu_name"],
+            list(_GPU_LABELS),
             registry=self.registry,
         )
 
         self.gpu_available = Gauge(
             "autobot_gpu_available",
             "GPU availability (1=available, 0=unavailable)",
+            ["node"],
             registry=self.registry,
         )
 
@@ -269,20 +280,44 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
         self,
         gpu_id: str,
         gpu_name: str,
-        utilization: float,
-        memory_utilization: float,
-        temperature: float,
-        power_watts: float,
+        utilization: float | None,
+        memory_utilization: float | None,
+        temperature: float | None,
+        power_watts: float | None,
+        node: str | None = None,
     ) -> None:
-        """Update all GPU metrics at once."""
-        self.gpu_utilization.labels(gpu_id=gpu_id, gpu_name=gpu_name).set(utilization)
-        self.gpu_memory_utilization.labels(gpu_id=gpu_id, gpu_name=gpu_name).set(memory_utilization)
-        self.gpu_temperature.labels(gpu_id=gpu_id, gpu_name=gpu_name).set(temperature)
-        self.gpu_power_watts.labels(gpu_id=gpu_id, gpu_name=gpu_name).set(power_watts)
+        """Update all GPU metrics at once; ``node`` defaults to this host (#16281).
 
-    def set_gpu_available(self, available: bool) -> None:
-        """Set GPU availability status."""
-        self.gpu_available.set(1 if available else 0)
+        A value the vendor tool could not read (None) leaves its series unset
+        rather than recording a false 0.
+        """
+        labels = {"node": node or LOCAL_NODE, "gpu_id": gpu_id, "gpu_name": gpu_name}
+        for gauge, value in (
+            (self.gpu_utilization, utilization),
+            (self.gpu_memory_utilization, memory_utilization),
+            (self.gpu_temperature, temperature),
+            (self.gpu_power_watts, power_watts),
+        ):
+            if value is not None:
+                gauge.labels(**labels).set(value)
+
+    def set_gpu_available(self, available: bool, node: str | None = None) -> None:
+        """Set GPU availability status; ``node`` defaults to this host (#16281)."""
+        self.gpu_available.labels(node=node or LOCAL_NODE).set(1 if available else 0)
+
+    def remove_gpu_node(self, node: str) -> None:
+        """Drop every GPU series labelled *node* -- it left, went offline, or re-reported (#16281)."""
+        for gauge, labelnames in (
+            (self.gpu_utilization, _GPU_LABELS),
+            (self.gpu_memory_utilization, _GPU_LABELS),
+            (self.gpu_temperature, _GPU_LABELS),
+            (self.gpu_power_watts, _GPU_LABELS),
+            (self.gpu_available, ("node",)),
+        ):
+            samples = [sample for metric in gauge.collect() for sample in metric.samples]
+            for sample in samples:
+                if sample.labels.get("node") == node:
+                    gauge.remove(*(sample.labels[name] for name in labelnames))
 
     def record_gpu_throttling(self, gpu_id: str, throttle_type: str) -> None:
         """Record a GPU throttling event."""
