@@ -404,6 +404,26 @@ class LLMIterationContext:
     authority: "Authority | None" = None
 
 
+def _governable_agent_id(source: Dict[str, Any]) -> str | None:
+    """The ``agent_id`` a context may govern its run with (#16950).
+
+    A context bag can carry a client's or a peer's claim. Naming a bounded profile
+    only restricts the run, so it is honoured as a self-restriction. Naming an
+    executor is a grant, and only the trusted overlay may make one:
+    ``session_role.apply_role`` pins it alongside ``PINNED_ROLE_CONTEXT_KEY``. An
+    unpinned executor claim is renamed to an id no profile holds, so it resolves to
+    the default boundary with a warning, exactly as an unknown id does (GH#13588).
+    """
+    from chat_workflow.session_role import PINNED_ROLE_CONTEXT_KEY
+    from orchestration.agent_registry import is_unbounded_agent_id
+
+    agent_id = source.get("agent_id")
+    if agent_id and is_unbounded_agent_id(agent_id) and source.get(PINNED_ROLE_CONTEXT_KEY) != agent_id:
+        logger.warning("Unpinned executor agent_id %r in a request context: default boundary applies (#16950)", agent_id)
+        return f"unpinned:{agent_id}"
+    return agent_id
+
+
 def build_governed_identity(
     source: Dict[str, Any], session_id: str
 ) -> "tuple[AgentContext | None, str | None, List[str]]":
@@ -423,7 +443,7 @@ def build_governed_identity(
     path must populate them; a future trusted producer must override, not merge
     with, user-supplied keys.
     """
-    agent_id = source.get("agent_id")
+    agent_id = _governable_agent_id(source)
     agent_context = AgentContext(agent_id=agent_id, session_id=session_id) if agent_id else None
     work_item_id = source.get("work_item_id")
     raw_categories = source.get("requires_approval_before") or []
