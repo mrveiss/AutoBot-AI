@@ -54,6 +54,58 @@ KNOWN_UNGATED: frozenset[str] = frozenset(
     }
 )
 
+#: "The list may only SHRINK" is a comment, and a comment cannot fail. These two
+#: make it an assertion (#16375). The equality tests above stop an ungated router
+#: that is not listed; they do not stop one that is added to the list with it.
+#: Every module KNOWN_UNGATED has ever held, from #16370's first run. Never add
+#: to it: an entry outside it is a new ungated router being parked, not a finding.
+_EVER_UNGATED: frozenset[str] = frozenset(
+    {
+        "api.analytics_llm_patterns",
+        "api.analytics_pattern_learning",
+        "api.analytics_reporting",
+        "api.anti_pattern",
+        "api.captcha",
+        "api.chat_knowledge",
+        "api.code_search",
+        "api.development_speedup",
+        "api.diagnostics",
+        "api.error_monitoring",
+        "api.error_resilience",
+        "api.ide_integration",
+        "api.knowledge_crawl",
+        "api.knowledge_eval",
+        "api.knowledge_scrape",
+        "api.knowledge_site_map",
+        "api.llm_awareness",
+        "api.metrics",
+        "api.natural_language_search",
+        "api.phases",
+        "api.project",
+        "api.project_state",
+        "api.prometheus_endpoint",
+        "api.realtime_session",
+        "api.registry",
+        "api.rum",
+        "api.run_jwt_router",
+        "api.search",
+        "api.self_capabilities",
+        "api.state_tracking",
+        "api.system_validation",
+        "api.validation_dashboard",
+        "api.web_research_settings",
+        "routers.code_completion",
+        "routers.feedback",
+        "routers.model_management",
+    }
+)
+
+#: Pinned to len(KNOWN_UNGATED). Lower it with every removal; raising it is the
+#: deliberate act the rule exists to make visible. It catches what the set above
+#: cannot: an entry removed once and later put back.
+_MAX_KNOWN_UNGATED = 27
+
+
 #: Config-registered routers this sweep cannot read, pinned so that a new one
 #: fails rather than silently dropping out of every bucket. ``classify`` reads
 #: ``<module>.py``; both of these are packages (``<module>/__init__.py``), so
@@ -106,6 +158,18 @@ def test_the_known_ungated_list_has_not_gone_stale() -> None:
     assert not fixed, "KNOWN_UNGATED entries that now have a gate -- remove them, the list only shrinks:\n  " + (
         "\n  ".join(fixed)
     )
+
+
+def test_the_known_ungated_list_only_ever_shrinks() -> None:
+    parked = sorted(KNOWN_UNGATED - _EVER_UNGATED)
+    assert not parked, "new entries in KNOWN_UNGATED -- gate the router, do not list it:\n  " + "\n  ".join(parked)
+
+
+def test_the_ceiling_is_pinned_to_the_list() -> None:
+    """Growth past the ceiling fails; so does a ceiling left above the list, which lets it grow back into the gap."""
+    assert (
+        len(KNOWN_UNGATED) == _MAX_KNOWN_UNGATED
+    ), f"KNOWN_UNGATED holds {len(KNOWN_UNGATED)}; lower _MAX_KNOWN_UNGATED to match"
 
 
 def test_the_routers_this_sweep_cannot_read_are_declared() -> None:
