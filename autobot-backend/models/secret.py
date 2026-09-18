@@ -245,7 +245,8 @@ class Secret(Base):
             scope = ScopeLevel.USER  # unknown stored scope: fail closed (owner-only)
         secret_teams = self.team_ids if isinstance(self.team_ids, list) else []
         resource = ResourceDescriptor(
-            owner_id=str(self.owner_id),
+            # #16927: a null owner stays None; str(None) would be the truthy "None".
+            owner_id=str(self.owner_id) if self.owner_id else None,
             company_id=str(self.org_id) if self.org_id else None,
             scope=scope,
             # keep the stored-value comparison semantics: only string entries
