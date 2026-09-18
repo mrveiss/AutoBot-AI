@@ -386,26 +386,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/admin/schedulers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Schedulers
-         * @description List every registered scheduler with its effective state and declared default.
-         */
-        get: operations["list_schedulers_api_admin_schedulers_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/audit/logs": {
         parameters: {
             query?: never;
@@ -1649,10 +1629,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Dynamic endpoint capability discovery
-         * @description Returns a dynamically derived list of all registered API endpoints, grouped by OpenAPI tag and operation type.  The result is derived from the live FastAPI OpenAPI schema (not hardcoded) and is cached with a 5-minute TTL that resets when the served route table changes.
+         * Get Chat Capabilities
+         * @description Get AI Stack chat capabilities and available features.
+         *
+         *     Issue #744: Requires authenticated user.
          */
-        get: operations["get_capabilities_api_capabilities_get"];
+        get: operations["get_chat_capabilities_api_capabilities_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4555,12 +4537,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Aistack Stats
-         * @description Get enhanced knowledge base statistics including AI Stack metrics.
+         * Get Knowledge Stats
+         * @description Get knowledge base statistics - FIXED to use proper instance
          *
-         *     Issue #744: Requires authenticated user.
+         *     Issue #744: Requires admin authentication.
          */
-        get: operations["get_aistack_stats_api_knowledge_base_stats_get"];
+        get: operations["get_knowledge_stats_api_knowledge_base_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6059,37 +6041,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/ai-stack/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Search
-         * @description Search combining local knowledge base with AI Stack RAG capabilities.
-         *
-         *     Issue #281: Refactored from 144 lines to use extracted helper methods.
-         *     Issue #744: Requires authenticated user.
-         *     Issue #16665: local KB results are scoped to the caller before use, including
-         *     as RAG context -- an unfiltered fact would otherwise reach both the response
-         *     and the RAG synthesis prompt.
-         *
-         *     This endpoint provides superior search results by combining:
-         *     - Local knowledge base semantic search
-         *     - AI Stack RAG-enhanced retrieval
-         *     - Intelligent result ranking and synthesis
-         */
-        post: operations["search_api_knowledge_base_ai_stack_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/knowledge_base/ai-stack/search/rag": {
         parameters: {
             query?: never;
@@ -6108,7 +6059,7 @@ export interface paths {
          *
          *     Issue #744: Requires authenticated user.
          *     Issue #16665: locally-retrieved documents are scoped to the caller before
-         *     being used as RAG context.
+         *     being used as RAG context. Issue #16654/#16745: no admin bypass here.
          */
         post: operations["rag_search_api_knowledge_base_ai_stack_search_rag_post"];
         delete?: never;
@@ -6192,7 +6143,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/ai-stack/stats": {
+    "/api/knowledge_base/ai-stack/ai-stack/stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -6203,9 +6154,14 @@ export interface paths {
          * Get Aistack Stats
          * @description Get enhanced knowledge base statistics including AI Stack metrics.
          *
+         *     #16908: path corrected from "/stats" to "/ai-stack/stats" -- it collided
+         *     with (and always lost to) api/knowledge.py's own /stats, registered as a
+         *     core router before this one. "/ai-stack/stats" matches the path this
+         *     handler's own generated OpenAPI type already documented.
+         *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["get_aistack_stats_api_knowledge_base_ai_stack_stats_get"];
+        get: operations["get_aistack_stats_api_knowledge_base_ai_stack_ai_stack_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6829,18 +6785,44 @@ export interface paths {
         put?: never;
         /**
          * Search
-         * @description Search combining local knowledge base with AI Stack RAG capabilities.
+         * @description Canonical knowledge base search endpoint (#555, #10666).
          *
-         *     Issue #281: Refactored from 144 lines to use extracted helper methods.
-         *     Issue #744: Requires authenticated user.
-         *     Issue #16665: local KB results are scoped to the caller before use, including
-         *     as RAG context -- an unfiltered fact would otherwise reach both the response
-         *     and the RAG synthesis prompt.
+         *     Single entry point combining all search capabilities:
+         *     - Basic search (query, limit/top_k)
+         *     - Search with tags, hybrid mode, reranking
+         *     - RAG search (query reformulation, synthesis)
+         *     - Advanced filtering (date filters, term filters, clustering)
+         *     - Analytics tracking
          *
-         *     This endpoint provides superior search results by combining:
-         *     - Local knowledge base semantic search
-         *     - AI Stack RAG-enhanced retrieval
-         *     - Intelligent result ranking and synthesis
+         *     **Parameters:**
+         *     - **query** (required): Search query string
+         *     - **limit** / **top_k**: Maximum results (default: 10, max: 100)
+         *     - **category**: Filter by category
+         *     - **mode**: Search mode — `semantic`, `keyword`, `hybrid` (default), `auto`
+         *     - **enable_rag**: Enable RAG enhancement for synthesized responses
+         *     - **enable_reranking**: Enable cross-encoder reranking
+         *     - **reformulate_query**: Expand query for better coverage
+         *     - **return_context**: Return optimized context for chat integration
+         *     - **tags** / **tags_match_any**: Tag filtering
+         *     - **min_score**: Minimum score threshold (0.0-1.0)
+         *     - **offset**: Pagination offset
+         *     - **include_documentation**: Also search project documentation
+         *     - **include_relations**: Include related facts
+         *     - **enable_query_expansion**: Synonym/related-term expansion
+         *     - **enable_relevance_scoring**: Additional relevance scoring
+         *     - **enable_clustering**: Cluster results by topic
+         *     - **exclude_sources**: Exclude results from these source IDs
+         *     - **verified_only**: Return only verified/approved facts
+         *     - **created_after** / **created_before**: Date range filters (YYYY-MM-DD)
+         *     - **exclude_terms** / **require_terms**: Term inclusion/exclusion
+         *     - **session_id** / **track_analytics**: Analytics correlation
+         *
+         *     **Returns:** results, total_results, query, mode, rag_applied,
+         *     reranking_applied, synthesized_response (if enable_rag=true).
+         *
+         *     Migration (#10666): /enhanced_search→tags/reranking params,
+         *     /rag_search→enable_rag=true, /similarity_search→mode=semantic+min_score,
+         *     advanced search→enable_query_expansion/enable_clustering etc.
          */
         post: operations["search_api_knowledge_base_search_post"];
         delete?: never;
@@ -9707,7 +9689,7 @@ export interface paths {
          *
          *     Issue #744: Requires authenticated user.
          *     Issue #16665: locally-retrieved documents are scoped to the caller before
-         *     being used as RAG context.
+         *     being used as RAG context. Issue #16654/#16745: no admin bypass here.
          */
         post: operations["rag_search_api_knowledge_base_search_rag_post"];
         delete?: never;
@@ -9783,6 +9765,33 @@ export interface paths {
          *     Issue #744: Requires authenticated user.
          */
         get: operations["get_system_knowledge_insights_api_knowledge_base_system_insights_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/ai-stack/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Aistack Stats
+         * @description Get enhanced knowledge base statistics including AI Stack metrics.
+         *
+         *     #16908: path corrected from "/stats" to "/ai-stack/stats" -- it collided
+         *     with (and always lost to) api/knowledge.py's own /stats, registered as a
+         *     core router before this one. "/ai-stack/stats" matches the path this
+         *     handler's own generated OpenAPI type already documented.
+         *
+         *     Issue #744: Requires authenticated user.
+         */
+        get: operations["get_aistack_stats_api_knowledge_base_ai_stack_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -33616,6 +33625,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/self/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dynamic endpoint capability discovery
+         * @description Returns a dynamically derived list of all registered API endpoints, grouped by OpenAPI tag and operation type.  The result is derived from the live FastAPI OpenAPI schema (not hardcoded) and is cached with a 5-minute TTL that resets when the served route table changes.
+         */
+        get: operations["get_capabilities_api_self_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/research-browser/url": {
         parameters: {
             query?: never;
@@ -45195,6 +45224,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai-stack/orchestrate/multi-agent-query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Multi Agent Query
+         * @description Orchestrate multiple AI agents for complex query processing.
+         *
+         *     Args:
+         *         query: Query to process with multiple agents
+         *         agents: List of agent names to use
+         *         coordination_mode: How to coordinate agents (parallel, sequential)
+         *
+         *     Issue #744: Requires admin authentication.
+         */
+        post: operations["multi_agent_query_api_ai_stack_orchestrate_multi_agent_query_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-stack/agents": {
         parameters: {
             query?: never;
@@ -45234,6 +45290,9 @@ export interface paths {
          *     RAG agent for enhanced retrieval and generation capabilities.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #16654/#16745: the admin gate does not bypass fact visibility -- KB
+         *     documents feeding RAG synthesis are scoped to the caller, same as any other
+         *     RAG-bound read, since an admin's RAG synthesis gets no special bypass.
          */
         post: operations["rag_query_api_ai_stack_rag_query_post"];
         delete?: never;
@@ -45303,6 +45362,9 @@ export interface paths {
          *     knowledge base and advanced AI reasoning capabilities.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #16654/#16745: the admin gate does not bypass fact visibility -- an
+         *     admin's chat gets no read bypass, so KB context is scoped to the caller
+         *     before it reaches the chat prompt.
          */
         post: operations["chat_api_ai_stack_chat_post"];
         delete?: never;
@@ -45487,33 +45549,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ai-stack/orchestrate/multi-agent-query": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Multi Agent Query
-         * @description Orchestrate multiple AI agents for complex query processing.
-         *
-         *     Args:
-         *         query: Query to process with multiple agents
-         *         agents: List of agent names to use
-         *         coordination_mode: How to coordinate agents (parallel, sequential)
-         *
-         *     Issue #744: Requires admin authentication.
-         */
-        post: operations["multi_agent_query_api_ai_stack_orchestrate_multi_agent_query_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/ai-stack/legacy/rag-search": {
         parameters: {
             query?: never;
@@ -45630,7 +45665,8 @@ export interface paths {
          *
          *     Issue #620: Refactored to use extracted helper methods.
          *     Issue #744: Requires authenticated user.
-         *     Issue #16665: returned results are scoped to the caller.
+         *     Issue #16665: returned results are scoped to the caller. Issue #16654/#16745:
+         *     no admin bypass -- an admin caller is scoped the same as any other caller.
          *
          *     **Parameters:**
          *     - **query**: Search query string
@@ -46070,6 +46106,26 @@ export interface paths {
          *         Success confirmation
          */
         post: operations["cleanup_old_metrics_api_admin_access_control_cleanup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/schedulers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Schedulers
+         * @description List every registered scheduler with its effective state and declared default.
+         */
+        get: operations["list_schedulers_api_admin_schedulers_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -54027,56 +54083,6 @@ export interface components {
          * @description data payload for POST /search/rag.
          */
         AIStackRagSearchData: {
-            [key: string]: unknown;
-        };
-        /**
-         * AIStackSearchData
-         * @description data payload for POST /search.
-         */
-        AIStackSearchData: {
-            [key: string]: unknown;
-        };
-        /**
-         * AIStackSearchRequest
-         * @description Search request with AI Stack integration.
-         */
-        AIStackSearchRequest: {
-            /**
-             * Query
-             * @description Search query
-             */
-            query: string;
-            /**
-             * Search Type
-             * @description Search type (precise, comprehensive, broad)
-             * @default comprehensive
-             */
-            search_type: string;
-            /**
-             * Max Results
-             * @description Maximum results to return
-             * @default 10
-             */
-            max_results: number;
-            /**
-             * Include Rag
-             * @description Include RAG-enhanced results
-             * @default true
-             */
-            include_rag: boolean;
-            /**
-             * Include Local
-             * @description Include local knowledge base results
-             * @default true
-             */
-            include_local: boolean;
-            /**
-             * Confidence Threshold
-             * @description Minimum confidence score
-             * @default 0.3
-             */
-            confidence_threshold: number;
-        } & {
             [key: string]: unknown;
         };
         /**
@@ -66963,21 +66969,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["AIStackRagSearchData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[AIStackSearchData] */
-        DataResponse_AIStackSearchData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AIStackSearchData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -104731,26 +104722,6 @@ export interface operations {
             };
         };
     };
-    list_schedulers_api_admin_schedulers_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SchedulerStateResponse"];
-                };
-            };
-        };
-    };
     query_audit_logs_api_audit_logs_get: {
         parameters: {
             query?: {
@@ -106620,7 +106591,7 @@ export interface operations {
             };
         };
     };
-    get_capabilities_api_capabilities_get: {
+    get_chat_capabilities_api_capabilities_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -106635,7 +106606,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SelfCapabilitiesResponse"];
+                    "application/json": components["schemas"]["DataResponse_ChatCapabilitiesData_"];
                 };
             };
         };
@@ -110709,7 +110680,7 @@ export interface operations {
             };
         };
     };
-    get_aistack_stats_api_knowledge_base_stats_get: {
+    get_knowledge_stats_api_knowledge_base_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -110724,7 +110695,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackStatsData_"];
+                    "application/json": components["schemas"]["KnowledgeStatsResponse"];
                 };
             };
         };
@@ -112405,39 +112376,6 @@ export interface operations {
             };
         };
     };
-    search_api_knowledge_base_ai_stack_search_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AIStackSearchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackSearchData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     rag_search_api_knowledge_base_ai_stack_search_rag_post: {
         parameters: {
             query?: never;
@@ -112567,7 +112505,7 @@ export interface operations {
             };
         };
     };
-    get_aistack_stats_api_knowledge_base_ai_stack_stats_get: {
+    get_aistack_stats_api_knowledge_base_ai_stack_ai_stack_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -113287,7 +113225,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AIStackSearchRequest"];
+                "application/json": components["schemas"]["api__schemas_knowledge__SearchRequest"];
             };
         };
         responses: {
@@ -113297,7 +113235,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackSearchData_"];
+                    "application/json": components["schemas"]["KnowledgeSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -116993,6 +116931,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_aistack_stats_api_knowledge_base_ai_stack_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_AIStackStatsData_"];
                 };
             };
         };
@@ -148382,6 +148340,26 @@ export interface operations {
             };
         };
     };
+    get_capabilities_api_self_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelfCapabilitiesResponse"];
+                };
+            };
+        };
+    };
     research_url_api_research_browser_url_post: {
         parameters: {
             query?: never;
@@ -163370,6 +163348,42 @@ export interface operations {
             };
         };
     };
+    multi_agent_query_api_ai_stack_orchestrate_multi_agent_query_post: {
+        parameters: {
+            query: {
+                query: string;
+                coordination_mode?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": string[];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_MultiAgentQueryData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_ai_agents_api_ai_stack_agents_get: {
         parameters: {
             query?: never;
@@ -163772,42 +163786,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_ClassificationResult_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    multi_agent_query_api_ai_stack_orchestrate_multi_agent_query_post: {
-        parameters: {
-            query: {
-                query: string;
-                coordination_mode?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": string[];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_MultiAgentQueryData_"];
                 };
             };
             /** @description Validation Error */
@@ -164384,6 +164362,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccessControlCleanupResponse"];
+                };
+            };
+        };
+    };
+    list_schedulers_api_admin_schedulers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchedulerStateResponse"];
                 };
             };
         };
