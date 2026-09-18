@@ -45,14 +45,14 @@ trigger python-suite?
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 # The matching semantics are imported, never re-implemented: two matchers that
 # drift apart would disagree silently, and this file would then certify coverage
 # the real gate does not grant. A rename breaks the import loudly instead.
+from repo_tests._paths import repo_root
 from repo_tests.python_filter_covers_its_guards_test import _filter_patterns, _is_covered
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = repo_root()
 _WRAPPER_DIR = _REPO_ROOT / "pipeline-scripts"
 
 #: A `source`/`.` line, captured whole. Deliberately NOT a pattern over the
