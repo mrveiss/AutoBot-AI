@@ -285,6 +285,7 @@ class AgentTerminalSession:
             "agent_id": self.agent_id,
             "agent_role": self.agent_role.value,
             "conversation_id": self.conversation_id,
+            "tenant_id": self.tenant_id,  # #16975/#16978: lost on reload otherwise
             "host": self.host,
             "state": self.state.value,
             "created_at": self.created_at,

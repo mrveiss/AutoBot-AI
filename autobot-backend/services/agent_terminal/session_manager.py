@@ -318,6 +318,7 @@ class SessionManager:
                         agent_id=session_data["agent_id"],
                         agent_role=AgentRole(session_data["agent_role"]),
                         conversation_id=session_data.get("conversation_id"),
+                        tenant_id=session_data.get("tenant_id"),
                         host=session_data.get("host"),
                         metadata=session_data.get("metadata", {}),
                         pty_session_id=session_data.get("pty_session_id"),
