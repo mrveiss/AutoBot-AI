@@ -72,7 +72,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "get_share_preview",
     ): "TRACKED_GAP #16671: session fact sharing reads facts through an unwired kb_manager",
     ("autobot-backend/api/knowledge.py", "search_man_pages"): _SCOPED_ADMIN_ROUTER,
-    ("autobot-backend/api/knowledge_ai_stack.py", "_search_local_knowledge_base"): _T3,
     ("autobot-backend/api/knowledge_ai_stack.py", "rag_search"): _T3,
     (
         "autobot-backend/api/knowledge_categories.py",

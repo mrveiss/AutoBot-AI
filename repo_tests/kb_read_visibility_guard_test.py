@@ -149,7 +149,9 @@ MIN_READS_FOUND = 40
 #: aliasing a KB handle (``SearchMixin._query_chromadb``, ``FactsMixin._find_duplicate``; both IMPL).
 #: Then 103 -> 97 (#16691, #16706): several routes reclassified from TRACKED_GAP to SCOPED once
 #: their admin gate or caller-independent filter was confirmed -- a measured shrink, not new debt.
-UNFILTERED_READ_CEILING = 97
+#: Then 97 -> 96 (#16908): knowledge_ai_stack.py's _search_local_knowledge_base deleted along
+#: with its dead, unsafe /search endpoint (#15745), not reclassified -- the read is gone, not fixed.
+UNFILTERED_READ_CEILING = 96
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
