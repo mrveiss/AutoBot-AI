@@ -1851,7 +1851,11 @@ class BulkOperationsMixin:
 
         embedding = fact_data.get("embedding")
         if restore_embeddings and embedding and self.vector_store:
-            return await self._restore_fact_embedding(result.get("fact_id", fact_id), content, embedding)
+            # #13708 round 4: use what store_fact actually persisted (result["content"]),
+            # not the backup's own original -- a backup taken before this fix, or one
+            # from an ingestion path that never redacted, can carry a raw credential.
+            stored_content = result.get("content", content)
+            return await self._restore_fact_embedding(result.get("fact_id", fact_id), stored_content, embedding)
 
         return {"action": "restored", "embedding": False}
 

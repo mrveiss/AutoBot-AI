@@ -50,7 +50,7 @@ import math
 import re
 from dataclasses import dataclass
 from typing import Any, ClassVar, FrozenSet, Iterable, Tuple
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 # Masked stand-in for a populated credential value.  Fixed width so the mask
 # never discloses the length of the real secret.
@@ -128,6 +128,45 @@ def redact_url_userinfo(value: str, mask_username: bool = False) -> str:
     if parsed.port:
         netloc += f":{parsed.port}"
     return urlunsplit(parsed._replace(netloc=netloc))
+
+
+def _redact_credential_query_params(query: str) -> str:
+    """Mask credential-shaped query-param values (``?api_key=X``, ``&token=Y``).
+
+    Reuses :func:`is_credential_field` on each param NAME -- the same rule
+    that already decides a config field is credential-shaped decides a query
+    param is too, so ``api_key``/``token``/``secret``/... are caught without
+    a second, drifting list of credential-ish names.
+    """
+    if not query:
+        return query
+    pairs = parse_qsl(query, keep_blank_values=True)
+    if not pairs:
+        return query
+    redacted = [(k, REDACTED_PLACEHOLDER if v and is_credential_field(k) else v) for k, v in pairs]
+    return urlencode(redacted)
+
+
+def redact_url_credentials(url: str) -> str:
+    """Mask both userinfo (``user:pass@``) and credential-shaped query params
+    in a URL (#13708 round 4) -- ``redact_url_userinfo`` alone leaves
+    ``?api_key=X``/``&token=Y`` untouched, and those are exactly how most
+    REST APIs and webhook URLs carry a credential instead of Basic-Auth.
+
+    Preserves scheme/host/port/path and every non-credential query param, so
+    a redacted URL is still diagnosable, same principle as
+    ``redact_url_userinfo``.
+    """
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return REDACTED_PLACEHOLDER
+    stripped_userinfo = redact_url_userinfo(url)
+    reparsed = urlsplit(stripped_userinfo) if stripped_userinfo != url else parsed
+    new_query = _redact_credential_query_params(reparsed.query)
+    if new_query == reparsed.query:
+        return stripped_userinfo
+    return urlunsplit(reparsed._replace(query=new_query))
 
 
 def redact_value(name: str, value: Any) -> Any:
