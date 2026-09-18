@@ -79,9 +79,10 @@ CLAUDE_CODE_ADAPTERS = frozenset({"claude_code", "claude_code_subscription"})
 NO_TOOL_FLAG_ADAPTERS = frozenset({"copilot_local", "copilot_subscription", "codex_subscription"})
 #: The in-process adapter: attributed, with no seam to enforce against.
 IN_PROCESS_ADAPTER = "autobot_agent"
-#: Every adapter this module has a decision for. A *registered* adapter outside it fails
-#: test_org_role_authority, so a new one cannot run bounded roles unbounded unnoticed.
-#: An unregistered type falls through to the scheduler's own "no adapter" skip.
+#: Every adapter this module has a decision for. Any other adapter refuses a bounded
+#: role (fail closed): adapters can be registered at runtime, so a test over the
+#: built-in set cannot be the only line. That test still fails on an unclassified
+#: built-in adapter, so the refusal is not the first anyone hears of it.
 CLASSIFIED_ADAPTERS = CLAUDE_CODE_ADAPTERS | NO_TOOL_FLAG_ADAPTERS | {IN_PROCESS_ADAPTER}
 
 
@@ -144,7 +145,11 @@ def describe_role_bound(role: str | None, adapter_type: str | None) -> Dict[str,
             "runs": False,
             "reason": f"{adapter} takes no tool-permission flags, so it refuses bounded roles",
         }
-    return {**view, "runs": True, "unenforced_on_adapter": [f"unknown: {adapter} is not a registered adapter"]}
+    return {
+        **view,
+        "runs": False,
+        "reason": f"{adapter} has no enforcement decision, so it refuses bounded roles (fail closed)",
+    }
 
 
 def apply_org_role_bound(agent: Dict[str, Any]) -> Dict[str, Any]:

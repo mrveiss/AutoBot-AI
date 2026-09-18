@@ -566,8 +566,14 @@ class TestCliAvailabilityGate:
         mock_reg.assert_awaited_once()
 
     async def test_non_subprocess_adapter_bypasses_cli_gate(self):
-        """Non-subprocess adapters (is_subprocess_adapter=False) are not gated."""
-        agent = _make_agent(adapter_type="http_adapter")
+        """Non-subprocess adapters (is_subprocess_adapter=False) are not gated.
+
+        #16950: an adapter type with no org-role enforcement decision is refused
+        before this gate is reached, so the test uses a classified type and lets the
+        patched ``is_subprocess_adapter`` make it non-subprocess, which is the gate
+        under test.
+        """
+        agent = _make_agent(adapter_type="claude_code")
         fake_adapter = MagicMock()
 
         with (

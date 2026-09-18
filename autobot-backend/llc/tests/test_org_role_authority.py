@@ -74,6 +74,16 @@ class TestAdapters:
 
         assert view["runs"] is False and "no tool-permission flags" in view["reason"]
 
+    def test_an_unclassified_adapter_refuses_a_bounded_role(self):
+        """#16969 review, applied here too: adapters register at runtime, so an unknown one fails closed."""
+        view = describe_role_bound("worker", "plugin_adapter")
+
+        assert view["runs"] is False and "no enforcement decision" in view["reason"]
+
+    def test_an_unclassified_adapter_is_refused_at_dispatch(self):
+        with pytest.raises(HeartbeatDispatchSkipped, match="no enforcement decision"):
+            apply_org_role_bound(_agent("worker", adapter="plugin_adapter"))
+
 
 def test_every_registered_adapter_has_a_decision():
     """A new adapter must be classified before it can run a bounded role."""
