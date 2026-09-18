@@ -31,7 +31,7 @@ from api.schemas_code import (
     LogSourcesResponse,
 )
 from api.schemas_common import AgentMessageResponse
-from api.ws_security import enforce_ws_origin
+from api.ws_security import open_authenticated_ws
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -853,9 +853,8 @@ async def stream_log(
 )
 async def tail_log(websocket: WebSocket, filename: str):
     """WebSocket endpoint to tail log file in real-time"""
-    if not await enforce_ws_origin(websocket):
+    if not await open_authenticated_ws(websocket, admin=True):  # #17009: admin, like its REST twin
         return
-    await websocket.accept()
 
     try:
         try:

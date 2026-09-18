@@ -10,7 +10,7 @@
  * For the global singleton WebSocket, use useGlobalWebSocket instead.
  */
 
-import { ref, computed, onScopeDispose, getCurrentScope, watch, unref, type Ref } from 'vue'
+import { ref, computed, onScopeDispose, getCurrentScope, watch, unref, toValue, type Ref, type MaybeRefOrGetter } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
 
@@ -73,6 +73,20 @@ export interface UseWebSocketOptions {
   parseJSON?: boolean
 
   /**
+   * WebSocket subprotocols to offer on the handshake (#16457) -- e.g. the
+   * `['bearer', '<jwt>']` pair from `buildAuthenticatedWsSubprotocols()`, so
+   * an auth token travels via `Sec-WebSocket-Protocol` instead of the URL.
+   * Accepts a reactive ref or a getter (re-read on every `connect()`, since a
+   * token can change between calls -- #17009's callers pass
+   * `() => buildAuthenticatedWsSubprotocols() ?? undefined`) or a plain array.
+   * `undefined` (no token yet) or omitted entirely -> `new
+   * WebSocket(url)`, the unauthenticated single-argument form, unchanged for
+   * every existing caller that does not pass it.
+   * @default undefined
+   */
+  protocols?: MaybeRefOrGetter<string[] | undefined>
+
+  /**
    * Callback when connection opens
    */
   onOpen?: (event: Event) => void
@@ -103,6 +117,7 @@ const DEFAULT_OPTIONS: Required<UseWebSocketOptions> = {
   heartbeatInterval: 0,
   heartbeatMessage: 'ping',
   parseJSON: false,
+  protocols: undefined,
   onOpen: () => {},
   onMessage: () => {},
   onError: () => {},
@@ -199,7 +214,9 @@ export function useWebSocket(
     errors.value = []
 
     try {
-      ws.value = new WebSocket(wsUrl)
+      // #16457: an auth token travels as a subprotocol, never in the URL.
+      const subprotocols = toValue(opts.protocols)
+      ws.value = subprotocols ? new WebSocket(wsUrl, subprotocols) : new WebSocket(wsUrl)
 
       // Connection timeout
       if (opts.connectionTimeout > 0) {

@@ -77,7 +77,7 @@ the one read-side gate · `validate_ownership` (:613).
 **Canonical enforcement:** every route in
 [`autobot-backend/plugin_manager.py`](../../autobot-backend/plugin_manager.py) carries a
 `Depends` on [`auth_middleware.py`](../../autobot-backend/auth_middleware.py)
-`check_admin_permission` (:967).
+`check_admin_permission` (:965).
 Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-backend/archive_safety.py)
 — `validate_zip_metadata` (:27), `safe_extract` (:58), `MAX_UPLOAD_BYTES` (:19).
 
@@ -101,7 +101,7 @@ response, a log line, an issue, a PR comment — is already redacted.
 **Canonical enforcement:** [`encryption_service.py`](../../autobot-backend/encryption_service.py) AES-GCM + PBKDF2 for data at rest ·
 [`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns ·
 [`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py) `ConnectorCredentialStore` (:178) for connector/OAuth creds, ownership via `_require_owner` (:604) ·
-[`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:954) for service-to-service ·
+[`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:952) for service-to-service ·
 [`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:121) for SLM token revocation.
 
 **Invariants**

@@ -16,7 +16,7 @@ import { ref, reactive, watch, type Ref } from 'vue'
 import { DEFAULT_CONFIG } from '@/config/defaults.js'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
-import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
+import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
 import { whenPiniaReady } from '@/utils/whenPiniaReady'
 
@@ -224,10 +224,12 @@ class GlobalWebSocketService {
       // Health check failed but continue with WebSocket attempt
     })
 
-    // #2818/#6700: append JWT via shared helper. Defer when no token is
-    // available so we don't bombard the backend with guaranteed-403 handshakes.
-    const wsUrl = buildAuthenticatedWsUrl(this.state.url)
-    if (wsUrl === null) {
+    // #16457: token via the Sec-WebSocket-Protocol subprotocol, not the URL --
+    // it no longer lands in server access logs or browser history. Defer when
+    // no token is available so we don't bombard the backend with guaranteed-403
+    // handshakes.
+    const subprotocols = buildAuthenticatedWsSubprotocols()
+    if (subprotocols === null) {
       logger.debug(
         'GlobalWebSocketService: no token, deferring connect until login',
       )
@@ -246,7 +248,7 @@ class GlobalWebSocketService {
 
     return new Promise<void>((resolve, reject) => {
       try {
-        this.ws = new WebSocket(wsUrl)
+        this.ws = new WebSocket(this.state.url, subprotocols)
         this._setupEventHandlers(resolve, reject)
         this._setupConnectionTimeout(reject)
       } catch (error: unknown) {
