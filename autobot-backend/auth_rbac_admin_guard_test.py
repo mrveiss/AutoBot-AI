@@ -34,6 +34,7 @@ import ast
 import functools
 import os
 import pathlib
+import sys
 
 import pytest
 
@@ -248,3 +249,57 @@ class TestGuardDetection:
     )
     def test_ignores_acceptable_shapes(self, source):
         assert _offenders_in(ast.parse(source)) == []
+
+
+# ---------------------------------------------------------------------------
+# Does the walk actually PRUNE a SKIP_DIR_PARTS directory, or merely filter it
+# out of the result afterward? (#16601)
+#
+# ``BACKEND_ROOT.rglob("*.py")`` filtered post-hoc and ``os.walk()`` with
+# ``dirnames[:] = [...]`` pruning produce the identical final file list --
+# that identity is exactly why no assertion on ``_python_files()``'s RETURN
+# VALUE can tell them apart, and why the shard-10 hang (rglob descending into
+# a huge excluded directory regardless) shipped without any test noticing.
+# This test instead watches which directories ``os.walk`` is fed to next: a
+# SKIP_DIR_PARTS directory holding a sentinel file must never be YIELDED by
+# the walk at all, which is true only when ``dirnames`` is mutated in place
+# before the walk continues past it.
+# ---------------------------------------------------------------------------
+
+
+def test_python_files_prunes_skip_dirs_during_the_walk_not_after(tmp_path, monkeypatch) -> None:
+    skip_name = next(iter(SKIP_DIR_PARTS))
+    skip_dir = tmp_path / skip_name
+    skip_dir.mkdir()
+    # A file that would be collected if this directory were ever descended
+    # into -- its mere presence in the returned files, or its directory being
+    # visited at all, is the tell.
+    (skip_dir / "sentinel.py").write_text("role = 'admin'\n", encoding="utf-8")
+    kept_dir = tmp_path / "kept"
+    kept_dir.mkdir()
+    (kept_dir / "kept.py").write_text("role = 'admin'\n", encoding="utf-8")
+
+    visited_dirpaths: list[str] = []
+    real_walk = os.walk
+
+    def spying_walk(root, *args, **kwargs):
+        for dirpath, dirnames, filenames in real_walk(root, *args, **kwargs):
+            visited_dirpaths.append(dirpath)
+            yield dirpath, dirnames, filenames
+
+    monkeypatch.setattr(sys.modules[__name__], "BACKEND_ROOT", tmp_path)
+    monkeypatch.setattr(os, "walk", spying_walk)
+
+    files = list(_python_files())
+
+    assert str(skip_dir) not in visited_dirpaths, (
+        f"os.walk descended into {skip_dir}, a directory in SKIP_DIR_PARTS -- "
+        "pruning must mutate `dirnames` in place BEFORE the walk continues past "
+        "it, not filter the results afterward (#16601). A post-hoc filter would "
+        "leave this directory out of the returned files just the same, which is "
+        "exactly the negative-control gap this test closes."
+    )
+    assert files == [kept_dir / "kept.py"], (
+        "the sentinel file under the SKIP_DIR_PARTS directory must never reach "
+        "the returned generator either"
+    )
