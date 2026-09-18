@@ -37,6 +37,7 @@ from threading import Lock
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from protocols.agent_kind import AgentKind
+from protocols.idle_notice import notify_agent_idle
 
 logger = get_logger(__name__)
 
@@ -156,7 +157,10 @@ class AgentPresenceRegistry:
                     f"{name!r} ({kind.value}, tenant={tenant_id!r}) is already live under instance "
                     f"{existing.instance_id!r}; refusing instance {instance_id!r}"
                 )
+            was_busy = existing.busy if existing is not None else None
             self._entries[key] = _Record(instance_id=instance_id, busy=busy, detail=detail, last_seen=now)
+        if was_busy is True and busy is False:
+            notify_agent_idle(kind=kind, tenant_id=tenant_id, name=name)
 
     def deregister(self, *, kind: AgentKind, tenant_id: str | None, name: str, instance_id: str) -> None:
         """Explicit removal (clean shutdown) -- only the reporting instance may do this."""
