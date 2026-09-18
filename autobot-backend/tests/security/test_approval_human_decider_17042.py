@@ -63,6 +63,8 @@ _HUMAN = {
 _ADVANTAGE = {"user_id": str(_CALLER), "org_id": str(_ORG)}
 _LOGIN = {**_HUMAN, "token_type": LOGIN_TOKEN_TYPE}
 _DEVICE_CLAIMS = {"aud": _DEVICE_AUD, "device_id": "dev-1", "scope": "write", **_ADVANTAGE}
+#: A run JWT's real shape (services/run_jwt.py): no user identity claim at all.
+_RUN_CLAIMS = {"aud": _RUN_AUD, "run_id": "run-1", "agent_id": "agent-1", "tenant_id": str(_ORG), "scope": []}
 
 
 def _bearer(claims: dict, secret: str = _PLATFORM_SECRET) -> dict:
@@ -78,7 +80,9 @@ def _credentials() -> dict:
         "pre_17042_login_jwt": _bearer(_HUMAN),
         "session": {"X-Session-ID": _SESSION_ID},
         "internal_service_key": {"X-Internal-API-Key": _INTERNAL_KEY},
-        "run_jwt": _bearer({"aud": _RUN_AUD, "run_id": "run-1", "agent_id": "agent-1", "scope": []}, _RUN_SECRET),
+        "run_jwt": _bearer(_RUN_CLAIMS, _RUN_SECRET),
+        # RUN_JWT_SECRET unset: run_jwt falls back to the platform key too.
+        "run_jwt_on_platform_key": _bearer(_RUN_CLAIMS),
         "device_jwt": _bearer(_DEVICE_CLAIMS, _DEVICE_SECRET),
         # DEVICE_JWT_SECRET unset: device_jwt falls back to the platform key.
         "device_jwt_on_platform_key": _bearer(_DEVICE_CLAIMS),
@@ -102,6 +106,7 @@ _LLC_EXPECTED = {
     "pre_17042_login_jwt": (403, _REFUSED_BY_HUMAN_CHECK),
     "internal_service_key": (401, "resolution"),
     "run_jwt": (401, "resolution"),
+    "run_jwt_on_platform_key": (401, "resolution"),
     "device_jwt": (401, "resolution"),
     "device_jwt_on_platform_key": (403, _REFUSED_BY_HUMAN_CHECK),
     "slm_mfa_pending_token": (403, _REFUSED_BY_HUMAN_CHECK),
@@ -114,6 +119,7 @@ _GATE_EXPECTED = {
     "pre_17042_login_jwt": (403, _REFUSED_BY_HUMAN_CHECK),
     "internal_service_key": (403, _REFUSED_BY_HUMAN_CHECK),
     "run_jwt": (403, "run-JWT path allow-list"),
+    "run_jwt_on_platform_key": (403, "run-JWT path allow-list"),
     "device_jwt": (403, "device-JWT path allow-list"),
     "device_jwt_on_platform_key": (403, _REFUSED_BY_HUMAN_CHECK),
     "slm_mfa_pending_token": (403, _REFUSED_BY_HUMAN_CHECK),
@@ -124,9 +130,15 @@ _GATE_EXPECTED = {
 }
 
 
-def _token_validator(secret: str, audience: str):
+#: Gate route -> the ApprovalGateService method it records a decision through.
+_GATE_ACTIONS = {"approve": "approve", "reject": "reject", "request-revision": "request_revision"}
+
+
+def _token_validator(secret_of, audience: str):
+    """The run/device validator, verifying with whichever secret the deployment configured."""
+
     async def _validate(token: str) -> dict:
-        return decode_jwt(token, secret, audience=audience)
+        return decode_jwt(token, secret_of(), audience=audience)
 
     return _validate
 
@@ -187,10 +199,13 @@ def harness(real_auth_middleware, monkeypatch):
     disabled, debug on); ``decide``/``gates`` are the service doubles whose
     awaits prove whether a decision was recorded.
     """
-    state = SimpleNamespace(middleware=_real_middleware(real_auth_middleware, enable_auth=True))
+    state = SimpleNamespace(middleware=None, run_secret=_RUN_SECRET, device_secret=_DEVICE_SECRET)
 
     def configure(kind: str) -> None:
         state.middleware = _real_middleware(real_auth_middleware, enable_auth=kind != "auth_disabled")
+        on_platform_key = kind.endswith("_on_platform_key")
+        state.run_secret = _PLATFORM_SECRET if on_platform_key else _RUN_SECRET
+        state.device_secret = _PLATFORM_SECRET if on_platform_key else _DEVICE_SECRET
         debug = kind == "dev_header"
 
         def _config_get(key, default=None):
@@ -202,8 +217,8 @@ def harness(real_auth_middleware, monkeypatch):
     monkeypatch.setattr(user_deps, "get_auth_middleware", lambda: state.middleware)
     monkeypatch.setattr(real_auth_middleware, "verify_internal_api_key", lambda provided: provided == _INTERNAL_KEY)
     monkeypatch.setattr(real_auth_middleware, "reject_if_revoked_by_password_change", AsyncMock())
-    run_jwt = SimpleNamespace(validate_run_jwt=_token_validator(_RUN_SECRET, _RUN_AUD))
-    device_jwt = SimpleNamespace(validate_device_jwt=_token_validator(_DEVICE_SECRET, _DEVICE_AUD))
+    run_jwt = SimpleNamespace(validate_run_jwt=_token_validator(lambda: state.run_secret, _RUN_AUD))
+    device_jwt = SimpleNamespace(validate_device_jwt=_token_validator(lambda: state.device_secret, _DEVICE_AUD))
     monkeypatch.setitem(sys.modules, "services.run_jwt", run_jwt)
     monkeypatch.setitem(sys.modules, "services.device_jwt", device_jwt)
     configure("login_jwt")
@@ -230,8 +245,8 @@ def harness(real_auth_middleware, monkeypatch):
 
     decide = AsyncMock(return_value=_llc_approval())
     gates = MagicMock()
-    gates.return_value.approve = AsyncMock(return_value=_gate_approval())
-    gates.return_value.reject = AsyncMock(return_value=_gate_approval())
+    for method in _GATE_ACTIONS.values():
+        setattr(gates.return_value, method, AsyncMock(return_value=_gate_approval()))
     logger = MagicMock()
     with (
         patch.object(llc_api.ApprovalService, "decide", new=decide),
@@ -289,13 +304,13 @@ def test_a_body_without_a_decider_logs_no_warning(harness):
     harness.logger.warning.assert_not_called()
 
 
-@pytest.mark.parametrize("action", ["approve", "reject"])
+@pytest.mark.parametrize("action", sorted(_GATE_ACTIONS))
 @pytest.mark.parametrize("kind", _HUMAN_KINDS)
 def test_a_person_can_decide_an_approval_gate_as_themselves(harness, kind, action):
     response = _gate(harness, kind, action)
 
     assert response.status_code == 200, response.text
-    assert getattr(harness.gates.return_value, action).await_args.args[1] == "alice"
+    assert getattr(harness.gates.return_value, _GATE_ACTIONS[action]).await_args.args[1] == "alice"
 
 
 # --- negative controls, one per credential type (AC2) --------------------------
@@ -313,7 +328,7 @@ def test_llc_decision_refuses_a_non_interactive_credential(harness, kind):
     harness.decide.assert_not_awaited()
 
 
-@pytest.mark.parametrize("action", ["approve", "reject"])
+@pytest.mark.parametrize("action", sorted(_GATE_ACTIONS))
 @pytest.mark.parametrize("kind", sorted(_GATE_EXPECTED))
 def test_approval_gate_refuses_a_non_interactive_credential(harness, kind, action):
     status, refuser = _GATE_EXPECTED[kind]
@@ -323,7 +338,7 @@ def test_approval_gate_refuses_a_non_interactive_credential(harness, kind, actio
     assert response.status_code == status, response.text
     if refuser == _REFUSED_BY_HUMAN_CHECK:
         assert response.json()["detail"] == HUMAN_DECISION_REQUIRED
-    getattr(harness.gates.return_value, action).assert_not_awaited()
+    getattr(harness.gates.return_value, _GATE_ACTIONS[action]).assert_not_awaited()
 
 
 def test_auth_disabled_deployment_is_refused(harness):

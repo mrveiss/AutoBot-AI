@@ -263,7 +263,8 @@ async def request_revision(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Request revision on a pending approval gate (#1402)."""
+    """Request revision on a pending approval gate (#1402); only a person may (#17042)."""
+    require_interactive_human(current_user, "approval gate request_revision")
     svc = ApprovalGateService(session)
     username = current_user.get("username", "unknown")
     try:
