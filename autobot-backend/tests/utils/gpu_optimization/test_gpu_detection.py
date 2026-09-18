@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autobot_shared.gpu_telemetry import ROCM_SMI_ARGV
 from utils.gpu_optimization.gpu_detection import (
     _check_amd_gpu,
     _check_apple_gpu,
@@ -42,86 +43,66 @@ def _reset_state():
 # _check_nvidia_gpu
 # ---------------------------------------------------------------------------
 class TestCheckNvidiaGpu:
-    """Tests for _check_nvidia_gpu subprocess wrapper."""
+    """Tests for _check_nvidia_gpu (#16289: nvidia-smi run by autobot_shared.gpu_telemetry).
 
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_returns_gpu_name_on_success(self, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="NVIDIA GeForce RTX 4070\n",
-        )
+    A missing, failing or hung nvidia-smi all reach this function as None; the
+    shared runner's own tests (autobot_shared/gpu_telemetry_test.py) cover each.
+    """
+
+    @patch("utils.gpu_optimization.gpu_detection.query_nvidia_gpus", return_value=[{"name": "NVIDIA GeForce RTX 4070"}])
+    def test_returns_gpu_name_on_success(self, _query):
         assert _check_nvidia_gpu() == "NVIDIA GeForce RTX 4070"
 
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_returns_none_on_nonzero_returncode(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=1, stdout="")
+    @patch("utils.gpu_optimization.gpu_detection.query_nvidia_gpus", return_value=None)
+    def test_returns_none_when_nvidia_smi_does_not_answer(self, _query):
         assert _check_nvidia_gpu() is None
 
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_returns_none_on_empty_stdout(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="")
+    @patch("utils.gpu_optimization.gpu_detection.query_nvidia_gpus", return_value=[])
+    def test_returns_none_when_no_gpu_is_listed(self, _query):
         assert _check_nvidia_gpu() is None
 
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_returns_none_when_nvidia_smi_missing(self, mock_run):
-        mock_run.side_effect = FileNotFoundError
-        assert _check_nvidia_gpu() is None
-
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_returns_none_on_timeout(self, mock_run):
-        mock_run.side_effect = subprocess.TimeoutExpired(cmd="nvidia-smi", timeout=5)
-        assert _check_nvidia_gpu() is None
-
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_returns_none_on_unexpected_exception(self, mock_run):
-        mock_run.side_effect = OSError("unexpected")
-        assert _check_nvidia_gpu() is None
-
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_first_gpu_selected_with_multiple_gpus(self, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="NVIDIA A100\nNVIDIA A100\n",
-        )
+    @patch(
+        "utils.gpu_optimization.gpu_detection.query_nvidia_gpus",
+        return_value=[{"name": "NVIDIA A100"}, {"name": "NVIDIA H100"}],
+    )
+    def test_first_gpu_selected_with_multiple_gpus(self, _query):
         assert _check_nvidia_gpu() == "NVIDIA A100"
+
+    @patch("utils.gpu_optimization.gpu_detection.query_nvidia_gpus", return_value=[{"name": "NVIDIA A100"}])
+    def test_asks_nvidia_smi_for_the_name_only(self, query):
+        _check_nvidia_gpu()
+
+        query.assert_called_once_with(("name",))
 
 
 # ---------------------------------------------------------------------------
 # _check_amd_gpu
 # ---------------------------------------------------------------------------
 class TestCheckAmdGpu:
-    """Tests for _check_amd_gpu detection."""
+    """Tests for _check_amd_gpu (#16289: rocm-smi run by autobot_shared.gpu_telemetry)."""
 
     @patch("utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False)
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_detected_via_rocm_smi(self, mock_run, _mock_sysfs):
-        mock_run.return_value = MagicMock(returncode=0, stdout="GPU[0]")
+    @patch("utils.gpu_optimization.gpu_detection.run_vendor_tool", return_value="GPU[0]")
+    def test_detected_via_rocm_smi(self, _run, mock_sysfs):
         assert _check_amd_gpu() is True
+        mock_sysfs.assert_not_called()
 
     @patch("utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False)
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_rocm_smi_failure_falls_back_to_sysfs(self, mock_run, mock_sysfs):
-        mock_run.return_value = MagicMock(returncode=1, stdout="")
+    @patch("utils.gpu_optimization.gpu_detection.run_vendor_tool", return_value=None)
+    def test_no_rocm_smi_answer_falls_back_to_sysfs(self, _run, mock_sysfs):
         assert _check_amd_gpu() is False
         mock_sysfs.assert_called_once_with("0x1002")
 
     @patch("utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=True)
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_sysfs_fallback_detects_amd(self, mock_run, _mock_sysfs):
-        mock_run.side_effect = FileNotFoundError
+    @patch("utils.gpu_optimization.gpu_detection.run_vendor_tool", return_value=None)
+    def test_sysfs_fallback_detects_amd(self, _run, _sysfs):
         assert _check_amd_gpu() is True
 
     @patch("utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False)
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_rocm_smi_timeout(self, mock_run, _mock_sysfs):
-        mock_run.side_effect = subprocess.TimeoutExpired(cmd="rocm-smi", timeout=5)
+    @patch("utils.gpu_optimization.gpu_detection.run_vendor_tool", return_value="   \n")
+    def test_blank_rocm_smi_output_falls_back_to_sysfs(self, _run, mock_sysfs):
         assert _check_amd_gpu() is False
-
-    @patch("utils.gpu_optimization.gpu_detection._check_sysfs_vendor", return_value=False)
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_rocm_smi_unexpected_error(self, mock_run, _mock_sysfs):
-        mock_run.side_effect = OSError("unexpected")
-        assert _check_amd_gpu() is False
+        mock_sysfs.assert_called_once_with("0x1002")
 
 
 # ---------------------------------------------------------------------------
@@ -382,22 +363,18 @@ class TestDetectGpuCapabilities:
 # _detect_nvidia_capabilities
 # ---------------------------------------------------------------------------
 class TestDetectNvidiaCapabilities:
-    """Tests for NVIDIA capability detection."""
+    """Tests for NVIDIA capability detection (#16289: nvidia-smi run by autobot_shared.gpu_telemetry)."""
 
-    @patch("utils.gpu_optimization.gpu_detection._detect_detailed_capabilities")
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_full_detection(self, mock_run, mock_detailed):
+    @patch("utils.gpu_optimization.gpu_detection._detect_detailed_capabilities", side_effect=lambda c: c)
+    @patch(
+        "utils.gpu_optimization.gpu_detection.query_nvidia_gpus",
+        return_value=[{"memory.total": "8192", "cuda_version": "12.4"}],
+    )
+    def test_full_detection(self, _query, _detailed):
         import utils.gpu_optimization.gpu_detection as mod
 
         mod._nvidia_gpu_name = "NVIDIA GeForce RTX 4070"
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="8192, 12.4\n",
-        )
-        mock_detailed.side_effect = lambda c: c
-
-        caps = GPUCapabilities()
-        result = _detect_nvidia_capabilities(caps)
+        result = _detect_nvidia_capabilities(GPUCapabilities())
 
         assert result.vendor == "nvidia"
         assert result.name == "NVIDIA GeForce RTX 4070"
@@ -406,119 +383,97 @@ class TestDetectNvidiaCapabilities:
         assert result.tensor_cores is True
         assert result.mixed_precision is True
 
-    @patch("utils.gpu_optimization.gpu_detection._detect_detailed_capabilities")
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_nvidia_smi_failure(self, mock_run, mock_detailed):
-        mock_run.return_value = MagicMock(returncode=1, stdout="")
-        mock_detailed.side_effect = lambda c: c
+    @patch("utils.gpu_optimization.gpu_detection._detect_detailed_capabilities", side_effect=lambda c: c)
+    @patch("utils.gpu_optimization.gpu_detection.query_nvidia_gpus", return_value=None)
+    def test_nvidia_smi_not_answering(self, _query, _detailed):
+        result = _detect_nvidia_capabilities(GPUCapabilities())
 
-        caps = GPUCapabilities()
-        result = _detect_nvidia_capabilities(caps)
         assert result.vendor == "nvidia"
         assert result.memory_gb == 0
 
-    @patch("utils.gpu_optimization.gpu_detection._detect_detailed_capabilities")
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_nvidia_smi_exception(self, mock_run, mock_detailed):
-        mock_run.side_effect = Exception("boom")
-        mock_detailed.side_effect = lambda c: c
+    @patch("utils.gpu_optimization.gpu_detection._detect_detailed_capabilities", side_effect=lambda c: c)
+    @patch(
+        "utils.gpu_optimization.gpu_detection.query_nvidia_gpus",
+        return_value=[{"memory.total": "[N/A]", "cuda_version": "12.4"}],
+    )
+    def test_an_unreadable_memory_total_sets_nothing(self, _query, _detailed):
+        fresh = GPUCapabilities()
+        result = _detect_nvidia_capabilities(GPUCapabilities())
 
-        caps = GPUCapabilities()
-        result = _detect_nvidia_capabilities(caps)
-        assert result.vendor == "nvidia"
-        assert result.memory_gb == 0
+        assert (result.name, result.memory_gb, result.cuda_version) == (fresh.name, fresh.memory_gb, fresh.cuda_version)
 
-    @patch("utils.gpu_optimization.gpu_detection._detect_detailed_capabilities")
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_fallback_gpu_name_when_stash_is_none(self, mock_run, mock_detailed):
+    @patch("utils.gpu_optimization.gpu_detection._detect_detailed_capabilities", side_effect=lambda c: c)
+    @patch(
+        "utils.gpu_optimization.gpu_detection.query_nvidia_gpus",
+        return_value=[{"memory.total": "4096", "cuda_version": "11.8"}],
+    )
+    def test_fallback_gpu_name_when_stash_is_none(self, _query, _detailed):
         import utils.gpu_optimization.gpu_detection as mod
 
         mod._nvidia_gpu_name = None
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="4096, 11.8\n",
-        )
-        mock_detailed.side_effect = lambda c: c
+        result = _detect_nvidia_capabilities(GPUCapabilities())
 
-        caps = GPUCapabilities()
-        result = _detect_nvidia_capabilities(caps)
         assert result.name == "NVIDIA GPU"
 
-    @patch("utils.gpu_optimization.gpu_detection._detect_detailed_capabilities")
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_malformed_csv_output(self, mock_run, mock_detailed):
-        """Only one value in CSV line instead of two."""
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="8192\n",
-        )
-        mock_detailed.side_effect = lambda c: c
+    @patch("utils.gpu_optimization.gpu_detection._detect_detailed_capabilities", side_effect=lambda c: c)
+    @patch("utils.gpu_optimization.gpu_detection.query_nvidia_gpus", return_value=[])
+    def test_no_rows_sets_no_memory(self, _query, _detailed):
+        """A malformed row never reaches here -- the shared parser drops it, and its tests pin that."""
+        result = _detect_nvidia_capabilities(GPUCapabilities())
 
-        caps = GPUCapabilities()
-        result = _detect_nvidia_capabilities(caps)
         assert result.memory_gb == 0
+
+    @patch("utils.gpu_optimization.gpu_detection._detect_detailed_capabilities", side_effect=lambda c: c)
+    @patch("utils.gpu_optimization.gpu_detection.query_nvidia_gpus", return_value=None)
+    def test_asks_for_memory_and_cuda_only(self, query, _detailed):
+        _detect_nvidia_capabilities(GPUCapabilities())
+
+        query.assert_called_once_with(("memory.total", "cuda_version"))
 
 
 # ---------------------------------------------------------------------------
 # _detect_amd_capabilities
 # ---------------------------------------------------------------------------
+# Modelled on rocm-smi's --json output; no AMD host was available to record one.
+_ROCM_JSON = '{"card0": {"Card series": "Radeon RX 7900 XTX", "VRAM Total Memory (B)": "25753026560"}}'
+
+
 class TestDetectAmdCapabilities:
-    """Tests for AMD capability detection."""
+    """Tests for AMD capability detection (#16289: rocm-smi's JSON, parsed by autobot_shared.gpu_telemetry)."""
 
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_full_detection(self, mock_run):
-        def side_effect(cmd, **kwargs):
-            if "--showproductname" in cmd:
-                return MagicMock(
-                    returncode=0,
-                    stdout="GPU[0]: AMD Radeon RX 7900 XTX\n",
-                )
-            if "--showmeminfo" in cmd:
-                return MagicMock(
-                    returncode=0,
-                    stdout="VRAM Total Memory (B): 25165824000\nVRAM total: 24576\n",
-                )
-            return MagicMock(returncode=1, stdout="")
+    @patch("utils.gpu_optimization.gpu_detection.run_vendor_tool", return_value=_ROCM_JSON)
+    def test_full_detection(self, _run):
+        result = _detect_amd_capabilities(GPUCapabilities(vendor="amd"))
 
-        mock_run.side_effect = side_effect
-        caps = GPUCapabilities(vendor="amd")
-        result = _detect_amd_capabilities(caps)
         assert result.vendor == "amd"
-        assert "Radeon" in result.name or "GPU" in result.name
+        assert result.name == "Radeon RX 7900 XTX"
+        assert result.memory_gb == 24.0
 
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_rocm_smi_not_found(self, mock_run):
-        mock_run.side_effect = FileNotFoundError
-        caps = GPUCapabilities(vendor="amd")
-        result = _detect_amd_capabilities(caps)
+    @patch("utils.gpu_optimization.gpu_detection.run_vendor_tool", return_value=None)
+    def test_rocm_smi_not_answering(self, _run):
+        result = _detect_amd_capabilities(GPUCapabilities(vendor="amd"))
+
         assert result.vendor == "amd"
         assert result.memory_gb == 0
 
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_rocm_smi_timeout(self, mock_run):
-        mock_run.side_effect = subprocess.TimeoutExpired(cmd="rocm-smi", timeout=10)
-        caps = GPUCapabilities(vendor="amd")
-        result = _detect_amd_capabilities(caps)
-        assert result.vendor == "amd"
+    @patch("utils.gpu_optimization.gpu_detection.run_vendor_tool", return_value="rocm-smi: command failed")
+    def test_output_that_is_not_json_sets_nothing(self, _run):
+        result = _detect_amd_capabilities(GPUCapabilities(vendor="amd"))
 
-    @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    def test_memory_parsing_skips_small_values(self, mock_run):
-        """Values <= 100 are not treated as memory in MB."""
-
-        def side_effect(cmd, **kwargs):
-            if "--showproductname" in cmd:
-                return MagicMock(returncode=0, stdout="GPU[0]: test\n")
-            if "--showmeminfo" in cmd:
-                return MagicMock(
-                    returncode=0,
-                    stdout="VRAM total: 50\n",
-                )
-            return MagicMock(returncode=1, stdout="")
-
-        mock_run.side_effect = side_effect
-        caps = GPUCapabilities(vendor="amd")
-        result = _detect_amd_capabilities(caps)
         assert result.memory_gb == 0
+
+    @patch("utils.gpu_optimization.gpu_detection.run_vendor_tool", return_value='{"card0": {"Card series": "Radeon"}}')
+    def test_a_card_without_a_vram_total_leaves_memory_unset(self, _run):
+        result = _detect_amd_capabilities(GPUCapabilities(vendor="amd"))
+
+        assert result.name == "Radeon"
+        assert result.memory_gb == 0
+
+    @patch("utils.gpu_optimization.gpu_detection.run_vendor_tool", return_value=None)
+    def test_runs_the_shared_rocm_query(self, run):
+        _detect_amd_capabilities(GPUCapabilities(vendor="amd"))
+
+        run.assert_called_once_with(ROCM_SMI_ARGV)
 
 
 # ---------------------------------------------------------------------------
