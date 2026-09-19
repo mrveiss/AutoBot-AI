@@ -90,3 +90,48 @@ def test_safe_repr():
     assert "dangerous" not in repr_str
     assert "bearer-xyz" not in repr_str
     assert "api_key" in repr_str
+
+
+# ---------------------------------------------------------------------------
+# #13708: redact_string also catches free-text shapes API_KEY_PATTERNS never
+# covered, via the cross-service content scanner (autobot_shared.secret_redaction).
+# ---------------------------------------------------------------------------
+
+
+def test_redact_string_catches_a_password_stated_in_prose():
+    text = "Welcome! Your temporary password is Xy9#mK2!Zq. Please change it after login."
+    redacted = redact_string(text)
+    assert "Xy9#mK2!Zq" not in redacted
+    assert "Welcome!" in redacted
+    assert "Please change it after login." in redacted
+
+
+def test_redact_string_catches_a_pem_private_key_block():
+    pem = "\n".join(
+        [
+            "-----BEGIN " + "RSA PRIVATE KEY-----",
+            "MIIBOgIBAAJBAK...",
+            "-----END " + "RSA PRIVATE KEY-----",
+        ]
+    )
+    text = f"Attached is our key:\n{pem}\nKeep it safe."
+    redacted = redact_string(text)
+    assert "MIIBOgIBAAJBAK" not in redacted
+    assert "Keep it safe." in redacted
+
+
+def test_redact_string_catches_a_basic_auth_url():
+    text = "Connect via https://admin:sup3rSecret1@db.example.com:5432/mydb for the migration."
+    redacted = redact_string(text)
+    assert "sup3rSecret1" not in redacted
+    assert "for the migration." in redacted
+
+
+def test_redact_string_leaves_an_ordinary_sentence_untouched():
+    text = "Hi team, the standup is moved to 10am tomorrow. Thanks, Alice."
+    assert redact_string(text) == text
+
+
+def test_redact_string_does_not_quarantine_a_forwarded_code_snippet():
+    text = "import os\napi_key = os.environ.get('SOME_KEY')\ndef getKey():\n    return apiKey"
+    assert redact_string(text) == text

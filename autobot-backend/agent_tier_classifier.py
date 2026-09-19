@@ -87,6 +87,10 @@ AGENT_TIER_MAP: Dict[str, AgentTier] = {
     "conversation-compacter": AgentTier.TIER_3_SPECIALIZED,
     "memory-curator": AgentTier.TIER_3_SPECIALIZED,
     "repo-sweeper": AgentTier.TIER_3_SPECIALIZED,
+    # #17021: one-shot external-project audit, unique research context per
+    # invocation -- low shared-prefix potential like the other narrow,
+    # analytical dev subagents above.
+    "research-to-issues": AgentTier.TIER_3_SPECIALIZED,
     # Issue #3389: task agents that call chat_completion_optimized
     "summarization": AgentTier.TIER_3_SPECIALIZED,
     "translation": AgentTier.TIER_3_SPECIALIZED,

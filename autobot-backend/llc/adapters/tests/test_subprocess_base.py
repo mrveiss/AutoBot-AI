@@ -369,6 +369,12 @@ class TestSharedStatus:
 # Graceful SIGTERM + SIGKILL with 10s grace period
 # ---------------------------------------------------------------------------
 
+# The synthetic PID the cancel path is pointed at. Low enough never to collide
+# with a real process this suite spawns, so the process-wide ``os.kill`` patch
+# below can tell its own calls apart from everyone else's.
+_CANCEL_TARGET_PID = 123
+_CANCEL_RUN_ID = f"{_CANCEL_TARGET_PID}/session-x"
+
 
 @pytest.mark.asyncio
 class TestSharedGracefulTimeout:
@@ -387,20 +393,32 @@ class TestSharedGracefulTimeout:
         """cancel() sends SIGTERM, polls 10s, then sends SIGKILL."""
         adapter = _DummyAdapter()
         kill_signals = []
+        real_kill = os.kill  # captured before the patch below replaces it
 
+        # ``patch("os.kill")`` replaces the function for the whole interpreter,
+        # not just for this adapter. Sibling modules in this very directory run
+        # real processes and reap them with ``os.kill(pid, SIGKILL)``, and a
+        # garbage-collected asyncio subprocess transport kills its child the
+        # same way -- either can land here mid-block. Recording those made
+        # ``kill_signals[0]`` a foreign (real PID, SIGKILL) pair, and swallowing
+        # them stopped the signal reaching the process it was aimed at. Scope
+        # both the recording and the simulated ProcessLookupError to the PID
+        # under test; pass every other PID through to the real ``os.kill``.
         def fake_kill(pid, sig):
+            if pid != _CANCEL_TARGET_PID:
+                return real_kill(pid, sig)
             kill_signals.append((pid, sig))
             if sig == signal.SIGKILL:
                 raise ProcessLookupError()
 
         with tempfile.TemporaryDirectory() as td:
-            state_file = _state_path(td, "123/session-x")
+            state_file = _state_path(td, _CANCEL_RUN_ID)
             os.makedirs(os.path.dirname(state_file), exist_ok=True)
             # PR#16284 review: _cancel() now loads the state file and passes
             # its create_time to terminate_pid, which never signals without
             # it verifying — record one a mocked psutil.Process will confirm.
             with open(state_file, "w", encoding="utf-8") as f:
-                json.dump({"pid": 123, "session_id": "session-x", "create_time": 100.0}, f)
+                json.dump({"pid": _CANCEL_TARGET_PID, "session_id": "session-x", "create_time": 100.0}, f)
 
             # GH#13097: force the single-PID fallback so this test stays about the
             # SIGTERM/SIGKILL sequence, not process-group resolution (covered separately).
@@ -411,11 +429,11 @@ class TestSharedGracefulTimeout:
                 patch(_PSUTIL_PROCESS) as mock_psutil_cls,
             ):
                 mock_psutil_cls.return_value.create_time.return_value = 100.0
-                await adapter.cancel({"adapter_config": {"output_dir": td}}, "123/session-x")
+                await adapter.cancel({"adapter_config": {"output_dir": td}}, _CANCEL_RUN_ID)
 
-        assert kill_signals[0] == (123, signal.SIGTERM)
+        assert kill_signals[0] == (_CANCEL_TARGET_PID, signal.SIGTERM)
         assert mock_sleep.await_count == SIGTERM_GRACE_SECONDS * 10
-        assert (123, signal.SIGKILL) in kill_signals
+        assert (_CANCEL_TARGET_PID, signal.SIGKILL) in kill_signals
 
 
 # ---------------------------------------------------------------------------

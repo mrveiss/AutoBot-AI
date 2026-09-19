@@ -219,6 +219,87 @@ class TestOneDriveConnector:
         assert change.details["last_modified"] == last_modified
 
     @pytest.mark.asyncio
+    async def test_fetch_content_pdf_redacts_a_credential(self, onedrive_config):
+        """#13708: the PDF branch never went through the redactor -- exercises the
+        real connector function end-to-end (mocked HTTP only), not the isolated
+        content_extraction.py wrapper a prior review found this gap hiding behind.
+        """
+        from media.document.extraction import ExtractedDocument, PageText
+
+        connector = OneDriveConnector(onedrive_config)
+        file_id = "pdf-secret-123"
+        source_id = f"onedrive:{connector.config.connector_id}:file:{file_id}"
+
+        mock_metadata = {
+            "status_code": 200,
+            "body": {
+                "name": "Onboarding.pdf",
+                "size": 10240,
+                "lastModifiedDateTime": "2026-06-04T10:00:00Z",
+                "webUrl": "https://onedrive.example/pdf-secret-123",
+                "parentReference": {"path": "/drive/root:"},
+            },
+        }
+        mock_content = {"status_code": 200, "content": b"%PDF-1.4\n...minimal pdf content..."}
+
+        async def mock_request(method, url, **kwargs):
+            if url.endswith("/content"):
+                return mock_content
+            return mock_metadata
+
+        secret = "sk-" + "abcdefghijklmnopqrstuvwxyz123456"
+        page_text = f"Setup instructions: your API key is {secret} -- keep it private."
+        extracted_doc = ExtractedDocument(format="pdf", text=page_text, pages=(PageText(1, page_text),), page_count=1)
+
+        with patch.object(connector, "_graph_request", side_effect=mock_request):
+            with patch("knowledge.connectors.onedrive._extract_pdf_document", return_value=extracted_doc):
+                with patch.object(connector, "_store_ts", return_value=None):
+                    result = await connector.fetch_content(source_id)
+
+        assert result is not None
+        assert secret not in result.content
+        assert "Setup instructions" in result.content
+
+    @pytest.mark.asyncio
+    async def test_fetch_content_md_redacts_a_credential(self, onedrive_config):
+        """#13708: the .md/.txt branch decodes bytes directly with no redaction call
+        anywhere on the path -- a markdown file synced from OneDrive containing a
+        credential was indexed unredacted before this fix.
+        """
+        connector = OneDriveConnector(onedrive_config)
+        file_id = "md-secret-123"
+        source_id = f"onedrive:{connector.config.connector_id}:file:{file_id}"
+
+        mock_metadata = {
+            "status_code": 200,
+            "body": {
+                "name": "notes.md",
+                "size": 128,
+                "lastModifiedDateTime": "2026-06-04T10:00:00Z",
+                "webUrl": "https://onedrive.example/md-secret-123",
+                "parentReference": {"path": "/drive/root:"},
+            },
+        }
+        secret = "sk-" + "abcdefghijklmnopqrstuvwxyz123456"
+        mock_content = {
+            "status_code": 200,
+            "content": f"# Notes\n\nyour temporary password is {secret}\n".encode("utf-8"),
+        }
+
+        async def mock_request(method, url, **kwargs):
+            if url.endswith("/content"):
+                return mock_content
+            return mock_metadata
+
+        with patch.object(connector, "_graph_request", side_effect=mock_request):
+            with patch.object(connector, "_store_ts", return_value=None):
+                result = await connector.fetch_content(source_id)
+
+        assert result is not None
+        assert secret not in result.content
+        assert "# Notes" in result.content
+
+    @pytest.mark.asyncio
     async def test_fetch_content_refuses_a_stamped_scan(self, onedrive_config):
         """#13884 finding 1 / finding 2: the live sync path, not just a mock.
 
