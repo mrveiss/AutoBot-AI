@@ -40,6 +40,7 @@ from auth_middleware import authenticate_websocket
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from services.personality_service import resolve_voice_id
 from services.tts_client import get_tts_client
 
@@ -330,10 +331,10 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
     # a real close frame (code + reason) rather than an HTTP 403 (#12366).
     user = await authenticate_websocket(websocket)
     if user is None:
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Authentication required")
         return
-    await websocket.accept()
+    await accept_websocket(websocket)
     logger.info("Voice stream WebSocket connected")
 
     cancel_tts = asyncio.Event()

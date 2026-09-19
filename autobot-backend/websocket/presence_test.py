@@ -209,6 +209,36 @@ async def test_handler_responds_to_ping() -> None:
     assert len(pong_calls) == 1
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("protocols", "expected"),
+    [("bearer, sometoken", "bearer"), ("", None)],
+)
+async def test_handler_echoes_bearer_subprotocol_when_offered(protocols: str, expected: str | None) -> None:
+    """RFC 6455 4.2.2: accept() must echo one of the client's offered subprotocols (#16457)."""
+    ws = MagicMock()
+    ws.accept = AsyncMock()
+    ws.send_json = AsyncMock()
+    ws.send_text = AsyncMock()
+    ws.headers = MagicMock()
+    ws.headers.get = MagicMock(
+        side_effect=lambda key, default="": protocols if key == "sec-websocket-protocol" else default
+    )
+
+    from fastapi import WebSocketDisconnect
+
+    ws.receive_text = AsyncMock(side_effect=WebSocketDisconnect())
+
+    with patch("websocket.presence.presence_manager") as mock_pm:
+        mock_pm.connect = AsyncMock()
+        mock_pm.disconnect = AsyncMock()
+        mock_pm.get_online_users = AsyncMock(return_value=[])
+
+        await presence_websocket_handler(ws, "sess-1", "user-X")
+
+    assert ws.accept.call_args.kwargs.get("subprotocol") == expected
+
+
 # ====================================================================
 # Activity persistence tests (#16460)
 # ====================================================================

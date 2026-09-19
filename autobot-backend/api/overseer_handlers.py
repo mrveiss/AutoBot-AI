@@ -15,7 +15,7 @@ Provides WebSocket endpoints for:
 import asyncio
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from agents.overseer import OverseerAgent, OverseerUpdate, StepExecutorAgent, StepResult
 from agents.overseer.types import (
@@ -26,7 +26,7 @@ from agents.overseer.types import (
 )
 from api.schemas_agent import OverseerQueryData
 from api.schemas_system import OverseerStatusResponse
-from api.ws_security import enforce_ws_origin
+from api.ws_security import open_authenticated_ws, owns_chat_session
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -125,10 +125,8 @@ class OverseerWebSocketHandler:
         self._current_task: asyncio.Task | None = None
 
     async def connect(self) -> bool:
-        """Accept WebSocket connection."""
+        """Set up the session's overseer on a socket its endpoint has authenticated and accepted (#17009)."""
         try:
-            await self.websocket.accept()
-
             # Get or create overseer for this session
             if self.session_id in _active_overseers:
                 self.overseer = _active_overseers[self.session_id]
@@ -432,6 +430,12 @@ class OverseerWebSocketHandler:
             )
 
 
+async def _require_session_owner(request: Request, session_id: str, user: dict) -> None:
+    """403 unless *user* owns chat session *session_id* or is an admin (#17009)."""
+    if not await owns_chat_session(request, session_id, user):
+        raise HTTPException(status_code=403, detail="Not authorized for this session")
+
+
 @router.websocket("/ws/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -447,7 +451,9 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
     - Automatic command explanations (Part 1: what it does)
     - Automatic output explanations (Part 2: what we're looking at)
     """
-    if not await enforce_ws_origin(websocket):
+    # #17009: this socket plans and runs commands in the session's PTY, so the caller
+    # must be authenticated AND own the chat session it names (or be an admin).
+    if not await open_authenticated_ws(websocket, allow=lambda user: owns_chat_session(websocket, session_id, user)):
         return
     handler = OverseerWebSocketHandler(websocket, session_id)
 
@@ -476,6 +482,7 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
 async def submit_query(
     session_id: str,
     query: str,
+    request: Request,
     context: Dict | None = None,
     current_user: dict = Depends(get_current_user),
 ):
@@ -484,8 +491,9 @@ async def submit_query(
 
     Returns immediately with plan_id. Use WebSocket for real-time updates.
 
-    Issue #744: Requires authenticated user.
+    Issue #744: Requires authenticated user. #17009: and ownership of the session.
     """
+    await _require_session_owner(request, session_id, current_user)
     try:
         # Get or create overseer
         if session_id in _active_overseers:
@@ -525,13 +533,15 @@ async def submit_query(
 )
 async def get_status(
     session_id: str,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """
     Get current overseer status for a session.
 
-    Issue #744: Requires authenticated user.
+    Issue #744: Requires authenticated user. #17009: and ownership of the session.
     """
+    await _require_session_owner(request, session_id, current_user)
     if session_id in _active_overseers:
         overseer = _active_overseers[session_id]
         return {

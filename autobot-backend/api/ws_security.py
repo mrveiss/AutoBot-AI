@@ -18,12 +18,13 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 from fastapi import WebSocket
 
 from autobot_shared.auth.device_capabilities import DeviceCapability
 from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.websocket_subprotocol import accept_websocket
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from services.device_capabilities import DeviceCapabilityDecision
@@ -59,7 +60,7 @@ def validate_ws_origin(websocket: WebSocket) -> None:
 async def enforce_ws_origin(websocket: WebSocket) -> bool:
     """Validate the Origin and, on rejection, close the socket with ``1008``.
 
-    Convenience wrapper for the common pattern: call before ``websocket.accept()``
+    Convenience wrapper for the common pattern: call before ``accept_websocket(websocket)``
     (or immediately after, per endpoint) and ``return`` when it yields ``False``.
 
     Returns ``True`` when the handshake origin is allowed (or absent), ``False``
@@ -80,12 +81,13 @@ async def enforce_ws_origin(websocket: WebSocket) -> bool:
 async def _resolve_ws_user(websocket: WebSocket) -> "dict | None":
     """Try every credential source a caller might legitimately present.
 
-    A browser JS client can only put a JWT in the query string -- it cannot
-    set custom headers on a WebSocket handshake -- so the query-param check
-    (:func:`auth_middleware.authenticate_websocket`) goes first. A
-    non-browser or service caller may instead send an ``Authorization``
-    header, an ``X-Session-ID`` session header, a dev-mode header, or the
-    internal-service key; ``get_user_from_request`` and
+    A browser JS client cannot set arbitrary custom headers on a WebSocket
+    handshake, but it can set the ``Sec-WebSocket-Protocol`` header (via the
+    `WebSocket` constructor's ``protocols`` argument) and the query string --
+    so the subprotocol/query-param check (:func:`auth_middleware.authenticate_websocket`,
+    #16457) goes first. A non-browser or service caller may instead send an
+    ``Authorization`` header, an ``X-Session-ID`` session header, a dev-mode
+    header, or the internal-service key; ``get_user_from_request`` and
     ``verify_internal_api_key`` already resolve those for HTTP requests, and
     a WebSocket exposes the same ``headers``/``cookies`` interface
     (``authenticate_ws_admin`` relies on the same fact). Trying each in turn
@@ -111,7 +113,7 @@ async def enforce_ws_authentication(websocket: WebSocket) -> "dict | None":
     """Authenticate a WebSocket handshake and, on failure, close with ``1008``.
 
     Convenience wrapper mirroring :func:`enforce_ws_origin`: call before
-    ``websocket.accept()`` and ``return`` when this yields ``None``. Closing
+    ``accept_websocket(websocket)`` and ``return`` when this yields ``None``. Closing
     before ``accept()`` rejects the handshake itself rather than the socket
     accepting then tearing down mid-stream (#14959, #14960, #14991).
 
@@ -164,7 +166,7 @@ def authenticate_ws_admin(websocket: WebSocket) -> bool:
 async def enforce_ws_admin(websocket: WebSocket) -> bool:
     """Enforce admin auth and, on rejection, accept then close with ``4001``.
 
-    Call before the endpoint's own ``websocket.accept()`` and ``return`` when
+    Call before the endpoint's own ``accept_websocket(websocket)`` and ``return`` when
     this yields ``False``. On rejection this accepts the handshake itself so
     the client receives a real WS close frame (code + reason) instead of an
     HTTP 403 that's indistinguishable from a missing route (#12366 — matches
@@ -177,7 +179,7 @@ async def enforce_ws_admin(websocket: WebSocket) -> bool:
     if authenticate_ws_admin(websocket):
         return True
     try:
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Authentication required (admin)")
     except Exception:  # already closed / handshake not completed
         pass
@@ -310,3 +312,86 @@ async def enforce_ws_desktop_auth(websocket: WebSocket) -> "dict | None":
         DeviceCapability.DESKTOP_VIEW,
         DeviceCapability.DESKTOP_INPUT,
     )
+
+
+async def open_authenticated_ws(
+    websocket: WebSocket,
+    *,
+    admin: bool = False,
+    allow: "Callable[[dict], Awaitable[bool]] | None" = None,
+) -> "dict | None":
+    """Origin, authentication, an optional admin or per-endpoint check, then accept (#17009).
+
+    The one call a WebSocket endpoint makes before serving. It replaces the
+    ``enforce_ws_origin`` + bare ``accept()`` pair that nine endpoints used, which
+    checked the Origin header only and so let any client that sends none straight
+    in (#17009). Authentication tries every credential source
+    (:func:`enforce_ws_authentication`), including the ``bearer`` subprotocol
+    that :func:`authenticate_ws_admin` does not read. ``allow`` is an endpoint's
+    own authorization of the authenticated caller, e.g. owning the session it names.
+
+    Returns the caller, or ``None`` after closing the handshake: ``1008`` for no
+    credential, a non-admin on an ``admin`` endpoint, or a refused ``allow``.
+    """
+    if not await enforce_ws_origin(websocket):
+        return None
+    user = await enforce_ws_authentication(websocket)
+    if user is None:
+        return None
+    if admin and not is_admin_role(user.get("role")):
+        logger.warning("Rejected non-admin %s on an admin WebSocket", user.get("username"))
+        await _close_policy(websocket, "Admin role required")
+        return None
+    if allow is not None and not await _allowed(allow, user):
+        logger.warning("Rejected %s: not authorized for this WebSocket resource", user.get("username"))
+        await _close_policy(websocket, "Not authorized for this resource")
+        return None
+    await accept_websocket(websocket)
+    return user
+
+
+async def _allowed(allow: "Callable[[dict], Awaitable[bool]]", user: dict) -> bool:
+    """Run an endpoint's authorization check; an error in it refuses, logged, never an unhandled drop."""
+    try:
+        return bool(await allow(user))
+    except Exception:
+        logger.exception("WebSocket authorization check failed for %s; refusing", user.get("username"))
+        return False
+
+
+async def owns_chat_session(websocket: WebSocket, session_id: str, user: dict) -> bool:
+    """Whether *user* owns chat session *session_id*, or is an admin (#17009).
+
+    Strict, unlike the flag-degradable ``validate_session_ownership`` HTTP
+    dependency: a socket that drives a PTY must never fall back to log-only. The
+    owner is the Redis ownership key, else the session file's durable owner
+    (#14018). A session with no recorded owner belongs to no one but an admin, and so
+    does one whose file exists but cannot be read (``SessionOwnerUnreadable``): the
+    owner is unknown, so it is not the caller.
+    """
+    if is_admin_role(user.get("role")):
+        return True
+    from autobot_shared.redis_client import get_redis_client  # noqa: PLC0415
+    from security.session_ownership import SessionOwnershipValidator  # noqa: PLC0415
+
+    owner = await SessionOwnershipValidator(
+        await get_redis_client(async_client=True, database="main")
+    ).get_session_owner(session_id)
+    if owner is None:
+        owner = await _durable_session_owner(websocket, session_id)
+    return bool(owner) and owner == user.get("username")
+
+
+async def _durable_session_owner(websocket: WebSocket, session_id: str) -> "str | None":
+    """The session file's owner, or None when it records none or cannot be read."""
+    from security.session_owner_errors import SessionOwnerUnreadable  # noqa: PLC0415
+    from utils.chat_utils import get_chat_history_manager  # noqa: PLC0415
+
+    manager = get_chat_history_manager(websocket)
+    if manager is None:
+        return None
+    try:
+        return await manager.get_session_owner(session_id)
+    except SessionOwnerUnreadable:
+        logger.warning("Owner of session %s... is unreadable; treating it as unowned", session_id[:8])
+        return None
