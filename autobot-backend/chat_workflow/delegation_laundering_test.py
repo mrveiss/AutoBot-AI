@@ -6,21 +6,19 @@
 
 The parent here runs under a work item that declares ``writing files`` as
 approval-gated, so its own ``write_file`` is held for a human. It then calls the
-``delegate`` tool. The child is built from the child profile alone
-(``build_governed_identity({"agent_id": agent_type}, ...)``), which drops the
-parent's approval categories and work item. So the child's ``write_file`` runs
-unapproved: the parent's refusal is laundered through the delegation.
+``delegate`` tool. The child used to be built from the child profile alone
+(``build_governed_identity({"agent_id": agent_type}, ...)``), which dropped the
+parent's approval categories and work item. So the child's ``write_file`` ran
+unapproved: the parent's refusal was laundered through the delegation.
 
 The assertion is on the outcome, not a field. The real ``enforce_work_item_approval``
 is asked about the context the child actually runs with. Any fix that carries the
 originator's authority across the hop makes it pass, however it is represented.
 
-``test_the_child_is_held_as_its_parent_is`` is a STRICT xfail on purpose, not a
-skipped test to tidy away. It reports XFAIL on ``main`` because the gap is real,
-and ``strict=True`` turns the fix's XPASS into a hard failure. The marker must
-therefore be removed in the same commit that closes the hole. ``raises=AssertionError``
-confines the expected failure to that one claim: broken setup, or a delegation that
-never ran, fails outright rather than counting as proof.
+``test_the_child_is_held_as_its_parent_is`` landed as a strict xfail (#16958),
+reporting XFAIL on ``main`` as the proof of the gap. The commit that closed the hole
+removed the marker, so it now guards the fix. The preconditions stay in their own
+ordinary test, so broken setup fails outright and can never pass for the fix.
 """
 
 from types import SimpleNamespace
@@ -84,12 +82,6 @@ async def test_the_parent_is_held_and_the_delegation_runs():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="#16950: delegation drops the parent's approval gates, so the child's write_file is not held. "
-    "Remove this marker in the commit that closes the hole.",
-)
 async def test_the_child_is_held_as_its_parent_is():
     _, captured = await _delegate_write(_held_parent())
     if "child" not in captured:

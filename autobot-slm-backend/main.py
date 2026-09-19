@@ -14,7 +14,6 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from api import (
@@ -78,7 +77,7 @@ from autobot_shared.stream_logging import (
     load_uvicorn_log_config,
 )
 from config import settings
-from middleware import ApiRequestCounterMiddleware, SecurityHeadersMiddleware
+from middleware import install_middleware
 from services.a2a_card_fetcher import start_card_refresh_task
 from services.auth import require_service_management, require_service_management_or_internal
 from services.compose_fleet import (
@@ -605,19 +604,7 @@ app = FastAPI(
     forwarded_allow_ips=settings.trusted_proxies,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-# Issue #2858 — explicit CSRF mitigation + security headers.
-# Registered after CORSMiddleware so CORS headers are already present.
-app.add_middleware(SecurityHeadersMiddleware)
-# Issue #10778 — HTTP API request counter for BI dashboard monthly operations.
-# Registered last so the route is already matched when the counter reads it.
-app.add_middleware(ApiRequestCounterMiddleware)
+install_middleware(app, cors_origins=settings.cors_origins)  # the whole stack, in its order (#16294)
 
 # Routers intentionally left open (no service.management gate):
 #   health_router   — liveness/readiness probes; must be reachable without credentials
