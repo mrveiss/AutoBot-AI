@@ -70,6 +70,7 @@ from .types import (
     VISUAL_MODALITY_TYPES,
     ConfidenceLevel,
     ModalityType,
+    PersistenceOutcome,
     ProcessingIntent,
 )
 
@@ -123,6 +124,7 @@ __all__ = [
     "ModalityType",
     "ProcessingIntent",
     "ConfidenceLevel",
+    "PersistenceOutcome",
     # Command word constants
     "LAUNCH_COMMAND_WORDS",
     "CLOSE_COMMAND_WORDS",
