@@ -51,7 +51,7 @@ EnvironmentFile=/etc/autobot/autobot-ai-stack.env
 # role, in the task immediately preceding this one, on every path that renders
 # this unit.
 EnvironmentFile={{ chromadb_authn_env_file }}
-ExecStart={{ ai_install_dir }}/venv/bin/chroma run --host {{ chromadb_host }} --port {{ chromadb_port }} --path {{ chromadb_persist_dir }}
+ExecStart={{ ai_install_dir }}/venv/bin/chroma run --host {{ chromadb_bind_host }} --port {{ chromadb_port }} --path {{ chromadb_persist_dir }}
 # #13870: on-failure, matching the redis role's unit. These differed
 # (always vs on-failure), so the unit's FAILURE BEHAVIOUR changed with
 # role order too, not just its path — and #4090 was about a unit that
