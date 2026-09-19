@@ -276,7 +276,11 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "autobot_shared/secret_redaction_test.py",
         "Hex High Entropy String",
         "d17f9b8dad106518f4a99222bfa0a316c004e252",  # pragma: allowlist secret
-    ): ("line 109's PEM-shaped constructed fixture, built via string concatenation (see the entries above)."),
+    ): (
+        "line 109's `_FALSE_POSITIVES` commit-SHA fixture (`\"commit_sha\"`), split via string "
+        "concatenation, proving scan_content_for_credentials does NOT flag ordinary commit-SHA-shaped "
+        "text -- not the PEM fixture; correcting an earlier mislabel in this entry (review)."
+    ),
 }
 
 _LEGACY_KEYS_PATH = Path(__file__).with_name("secrets_baseline_legacy_keys.json")
