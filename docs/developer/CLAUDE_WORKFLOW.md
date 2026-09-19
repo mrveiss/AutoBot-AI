@@ -227,7 +227,8 @@ issue or five, so the default unit of delivery is a *batch*, and a running suite
 a reason to stop working.
 
 - **Group before branching.** Same files/module/layer, same kind of change, same risk →
-  one worktree, one branch, one PR, `Closes #A, #B, #C` in the body, one commit per issue.
+  one worktree, one branch, one PR, one `Closes #N` line per issue in the body (`Closes #A, #B` links
+  only #A), one commit per issue.
 - **Every batched issue is fully delivered or dropped from the PR.** Partial delivery
   closes nothing; an unfinished issue leaves the batch, it does not leave the checklist.
 - **Split when** the changes are independent, touch unrelated modules, carry different

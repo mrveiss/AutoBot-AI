@@ -14,6 +14,12 @@ away from the tree by the time anyone looked.
 The test that matters here is the path resolution one: it reads the path out of
 the hook rather than restating it, so moving the entry point without moving the
 hook fails, which is exactly the mistake that was made.
+
+#16934: the hook this module reads moved from `post-commit-doc-sync` to
+`post-merge-doc-sync` (still doc-sync, now triggered by a merge landing
+origin/main's tip rather than by every commit in every worktree) -- same
+INDEX_SCRIPT assignment and not-found message, so every assertion below
+still holds against the new file.
 """
 
 import importlib.util
@@ -24,7 +30,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 REPO_ROOT = repo_root()
-HOOK = REPO_ROOT / "autobot-infrastructure/shared/scripts/hooks/post-commit-doc-sync"
+HOOK = REPO_ROOT / "autobot-infrastructure/shared/scripts/hooks/post-merge-doc-sync"
 RESEARCH_DIR = REPO_ROOT / "docs/research"
 
 #: Reach floor for the research sweep. Set below the count at the time of
