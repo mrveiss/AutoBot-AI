@@ -15,6 +15,21 @@
 name: Set up Python suite environment
 description: Install the CI-safe Python dependency set and write the CI config fixture.
 
+outputs:
+  venv:
+    description: >-
+      Path to the shared backend virtualenv -- the one this action also
+      activates onto $GITHUB_PATH for the rest of the job.
+    value: ${{ steps.env.outputs.venv }}
+  slm-venv:
+    description: >-
+      Path to the SLM backend's own virtualenv (#16394), built from
+      autobot-slm-backend/requirements.txt instead of the shared
+      requirements-ci.txt. Deliberately NOT activated onto $GITHUB_PATH --
+      reach it by this path explicitly so it coexists with the backend venv
+      above without either clobbering the other's ambient state.
+    value: ${{ steps.env-slm.outputs.slm-venv }}
+
 runs:
   using: composite
   steps:
@@ -270,6 +285,95 @@ runs:
         echo "Installing testing dependencies..."
         "$VENV/bin/python" -m pip install -r requirements-ci-test.txt --prefer-binary \
           --extra-index-url https://download.pytorch.org/whl/cpu
+
+    # #16394: a SECOND, PARALLEL venv for the SLM backend's tests, built from
+    # its own requirements.txt instead of the shared requirements-ci.txt the
+    # backend venv above installs. autobot-backend/requirements.txt's
+    # langgraph-sdk caps websockets<16; autobot-slm-backend/requirements.txt
+    # declares websockets>=17.1,<18 -- the version already running in SLM
+    # production. One venv cannot satisfy both floors, so before this, ci.yml's
+    # "Run unit tests — slm-backend" step (#13300) always ran SLM's tests
+    # against websockets 15.0.1, a version SLM's own manifest forbids and
+    # production never runs. #16391 tried lowering SLM's floor to fit the
+    # shared venv; a reviewer rejected that as downgrading SLM production for a
+    # CI convenience, and carried a named exemption in
+    # pipeline-scripts/check_dependency_floors.py instead, pointing at this
+    # issue for the real fix. This block, plus ci.yml pointing the slm-backend
+    # test step at $SLM_VENV instead of the ambient `python`, is that fix --
+    # and it is what lets that exemption be removed.
+    #
+    # Placed BEFORE "Activate virtualenv for subsequent steps" below on
+    # purpose: that step swaps the ambient `python` on $GITHUB_PATH for the
+    # BACKEND venv's interpreter, and `python -m venv` below must still resolve
+    # to the plain system interpreter actions/setup-python@v7 provisioned --
+    # the same one "Resolve environment paths" and "Install Python
+    # dependencies" above already used -- not to a venv nested inside another
+    # venv.
+    - name: Resolve SLM environment paths
+      id: env-slm
+      shell: bash
+      run: |
+        echo "slm-venv=$HOME/.venv-python-suite-slm" >> "$GITHUB_OUTPUT"
+
+    - name: Restore cached SLM virtualenv
+      id: venv-cache-slm
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.env-slm.outputs.slm-venv }}
+        # Mirrors "Restore cached virtualenv" above: no `restore-keys` -- exact
+        # hit or full reinstall, so a partial match can never hand back an
+        # environment built from a DIFFERENT autobot-slm-backend/requirements.txt.
+        #
+        # Keyed on requirements-ci-test.txt (the shared pytest/xdist/pytest-split
+        # toolchain both venvs need), NOT requirements-ci.txt -- that file is the
+        # backend's own combined set, and installing it here is exactly the
+        # venv-sharing this split exists to undo. Same pyversion as the backend
+        # key: this step runs before the backend venv is activated onto
+        # $GITHUB_PATH (see the comment above), so `steps.env.outputs.pyversion`
+        # already names the same interpreter this venv is about to be built
+        # from -- recomputing it here would just repeat that same command.
+        key: venv-python-suite-slm-${{ runner.os }}-py${{ steps.env.outputs.pyversion }}-${{ hashFiles('autobot-slm-backend/requirements.txt', 'requirements-ci-test.txt', 'constraints/*.txt') }}
+
+    - name: Install SLM Python dependencies
+      # Only on a miss, same as the backend install above.
+      if: steps.venv-cache-slm.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        SLM_VENV: ${{ steps.env-slm.outputs.slm-venv }}
+      run: |
+        set -euo pipefail
+        rm -rf "$SLM_VENV"
+        python -m venv "$SLM_VENV"
+        "$SLM_VENV/bin/python" -m pip install --upgrade pip setuptools wheel
+
+        echo "Installing SLM-safe requirements..."
+        # Unlike requirements-ci.txt, autobot-slm-backend/requirements.txt names
+        # no torch-pulling package -- checked, it declares no torch,
+        # sentence-transformers, transformers or onnx entry at all. So unlike
+        # the backend install above, there is no CUDA-build-off-PyPI problem
+        # for a --extra-index-url to solve here; adding one anyway would be
+        # cargo-culting a fix for a problem this file does not have.
+        "$SLM_VENV/bin/python" -m pip install -r autobot-slm-backend/requirements.txt --prefer-binary
+
+        echo "Installing testing dependencies..."
+        "$SLM_VENV/bin/python" -m pip install -r requirements-ci-test.txt --prefer-binary
+
+    - name: Verify the SLM environment is complete
+      shell: bash
+      env:
+        SLM_VENV: ${{ steps.env-slm.outputs.slm-venv }}
+      run: |
+        set -euo pipefail
+        # Same reasoning as "Verify the environment is complete" below: a
+        # restored cache is only useful if it actually satisfies the pinned set.
+        if [ ! -x "$SLM_VENV/bin/python" ]; then
+          echo "::error::SLM virtualenv at $SLM_VENV is missing or broken after setup."
+          exit 1
+        fi
+        "$SLM_VENV/bin/python" -m pytest --version
+        "$SLM_VENV/bin/python" -c "import xdist, pytest_split; print('xdist + pytest-split present')"
+        "$SLM_VENV/bin/python" -m pip check \
+          || echo "::warning::pip check reported dependency conflicts (pre-existing, not introduced by the cache)"
 
     - name: Activate virtualenv for subsequent steps
       shell: bash
