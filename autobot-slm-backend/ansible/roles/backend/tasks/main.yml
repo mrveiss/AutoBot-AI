@@ -153,6 +153,38 @@
   no_log: true
   tags: ['backend', 'config']
 
+# #16299: backend_secret_key's own role default (below in this file) was the
+# guessable literal "change-me-in-production". slm_manager generates a real one
+# once and persists it here, the same #10400 pattern as SLM_SECRET_KEY above. A
+# backend deployed standalone, with no slm-secrets.env ever reaching it, keeps
+# its own role default as a documented fallback.
+- name: "Backend | Read AUTOBOT_BACKEND_SECRET_KEY from slm-secrets.env (#16299)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_BACKEND_SECRET_KEY=\K.*'
+      /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _backend_secret_key_read
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags: ['backend', 'config']
+
+# #16299 review: guarded to replace ONLY the known shipped default, not
+# whatever backend_secret_key already resolved to here -- backend commonly
+# runs on a different host/play than slm_manager (the whole reason this reads
+# from a file instead of a live fact), so an operator who set a real value in
+# THIS role's own inventory (host_vars/group_vars for the backend host) must
+# not have it silently replaced by slm_manager's generated one just because
+# the file happens to carry a value. Only the literal default is eligible.
+- name: "Backend | Align backend_secret_key with AUTOBOT_BACKEND_SECRET_KEY when present (#16299)"
+  ansible.builtin.set_fact:
+    backend_secret_key: "{{ _backend_secret_key_read.stdout | trim }}"
+  when:
+    - (_backend_secret_key_read.stdout | default('') | trim) | length > 0
+    - backend_secret_key == 'change-me-in-production'
+  no_log: true
+  tags: ['backend', 'config']
+
 # #11507: Derive AUTOBOT_INTERNAL_API_KEY from /etc/autobot/slm-secrets.env (the
 # single source of truth — the SLM SystemSecret; slm_manager writes it there) and
 # set autobot_internal_api_key BEFORE rendering EITHER env file. Previously the
@@ -1426,12 +1458,70 @@
   when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['backend', 'nginx']
 
+# #16979 (PR review): the render above only touches sites-available. This
+# role's own main.yml always runs render+enable together (no `tasks_from`
+# self-update seam splits them -- see repo_tests/nginx_sites_enabled_link_
+# enforced_16979_test.py), so this was never the *reachability* gap #16979
+# fixed elsewhere. But the "Enable vhost" task below had no non-symlink
+# handling at all: a stale regular file at sites-enabled/autobot-backend.conf
+# would make `state: link` hard-fail a full re-provision, where the SLM/
+# frontend sites instead silently kept serving stale content. Same fix here
+# for consistency -- every render site behaves the same way.
+- name: "Backend nginx | Stat sites-enabled file to detect non-symlink (#16979)"
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/autobot-backend.conf
+  register: _backend_nginx_sites_enabled_stat
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['backend', 'nginx']
+
+# nginx loads every file under sites-enabled/, so a backup left there would
+# be served as a second site -- move it beside the sites-available/ backup
+# a re-render would leave (#16979 AC2, same reasoning as
+# roles/slm_manager/tasks/nginx_site.yml).
+- name: "Backend nginx | Back up non-symlink sites-enabled file before replacing it (#16979)"
+  ansible.builtin.command:
+    cmd: >-
+      mv /etc/nginx/sites-enabled/autobot-backend.conf
+      /etc/nginx/sites-available/autobot-backend.conf.enabled-backup.{{
+      _backend_nginx_sites_enabled_stat.stat.mtime | int }}
+  when:
+    - not (slm_colocated_frontend | default(false) | bool)
+    - _backend_nginx_sites_enabled_stat.stat.exists
+    # order-independent (#16979 review): default(false) instead of relying
+    # on the list's short-circuit order.
+    - not (_backend_nginx_sites_enabled_stat.stat.islnk | default(false))
+  changed_when: true
+  tags: ['backend', 'nginx']
+
 - name: "Backend nginx | Enable vhost (symlink)"
   ansible.builtin.file:
     src: /etc/nginx/sites-available/autobot-backend.conf
     dest: /etc/nginx/sites-enabled/autobot-backend.conf
     state: link
   notify: reload nginx backend
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Stat sites-enabled after linking (#16979)"
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/autobot-backend.conf
+  register: _backend_nginx_sites_enabled_check
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['backend', 'nginx']
+
+# AC3-equivalent (#16979 review): fail loudly rather than let nginx quietly
+# serve the wrong file.
+- name: "Backend nginx | Assert sites-enabled resolves to the rendered site (#16979)"
+  ansible.builtin.assert:
+    that:
+      - _backend_nginx_sites_enabled_check.stat.exists
+      - _backend_nginx_sites_enabled_check.stat.islnk
+      - _backend_nginx_sites_enabled_check.stat.lnk_source == '/etc/nginx/sites-available/autobot-backend.conf'
+    fail_msg: >-
+      /etc/nginx/sites-enabled/autobot-backend.conf is not a symlink resolving to
+      /etc/nginx/sites-available/autobot-backend.conf -- nginx is not serving the
+      rendered backend site config (#16979).
+    success_msg: "sites-enabled/autobot-backend.conf resolves to the rendered site config."
   when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['backend', 'nginx']
 
