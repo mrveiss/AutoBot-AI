@@ -16,6 +16,7 @@ import { ref, computed, onScopeDispose, getCurrentScope } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 
 const logger = createLogger('useOverseerAgent')
 
@@ -151,6 +152,8 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
     disconnect: wsDisconnect,
   } = useWebSocket(getWebSocketUrl(), {
     autoConnect: false,
+    // #17009: the endpoint authenticates; the token travels as the bearer subprotocol (#16457)
+    protocols: () => buildAuthenticatedWsSubprotocols() ?? undefined,
     autoReconnect: true,
     maxReconnectAttempts: 5,
     reconnectDelay: 1000,
