@@ -6,8 +6,8 @@
 Documentation Indexer Service
 
 Issue #1385: Consolidated documentation indexing with ChromaDB as single source of truth.
-Extracted from autobot-infrastructure/shared/tools/index_documentation.py and adapted
-for service use (SSOT config, proper path constants, thread-safe singleton).
+Extracted from autobot-infrastructure/shared/tools/index_documentation.py and adapted for
+service use (SSOT config, proper path constants, thread-safe singleton).
 
 Replaces the dual Redis KB + ChromaDB CLI approach with a single ChromaDB-based system.
 """
@@ -29,6 +29,7 @@ from autobot_shared.doc_chunking import create_chunk as _create_chunk
 from autobot_shared.doc_chunking import estimate_tokens as _estimate_tokens
 from autobot_shared.doc_chunking import process_h2_sections as _process_h2_sections
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import shared_cache_path
 
 if TYPE_CHECKING:
     from services.knowledge.sync_queue import SyncQueueEntry, SyncReason  # noqa: F401
@@ -378,7 +379,9 @@ def _discover_files(root_dir: Path, tier: int | None = None) -> List[Tuple[str, 
 # HASH CACHE for incremental indexing
 # ============================================================================
 
-HASH_CACHE_FILE = PATH.DATA_DIR / ".doc_index_hashes.json"
+# #16934: shared git-common-dir, not per-checkout PATH.DATA_DIR -- one shared collection.
+_HASH_CACHE_FALLBACK = PATH.DATA_DIR / ".doc_index_hashes.json"
+HASH_CACHE_FILE = shared_cache_path("autobot-doc-index", ".doc_index_hashes.json", fallback=_HASH_CACHE_FALLBACK)
 
 
 def _compute_file_hash(file_path: str) -> str:
@@ -909,10 +912,7 @@ class DocIndexerService:
         return False
 
     async def _index_file_chunks(self, file_str: str, content: str, rel_path: str, tier: int) -> tuple[int, int]:
-        """Chunk content and index all chunks; return (success_count, chunk_count). Issue #2735.
-
-        Extracted from index_file to keep parent under 65 lines.
-        """
+        """Chunk content and index all chunks; return (success_count, chunk_count). Issue #2735."""
         import asyncio
 
         body, fm_tags, fm_aliases = _parse_frontmatter(content)
@@ -932,16 +932,7 @@ class DocIndexerService:
         return indexed, len(chunks)
 
     async def index_file(self, file_path: Path, tier: int = 3, force: bool = False) -> IndexResult:
-        """Index a single documentation file into ChromaDB.
-
-        Args:
-            file_path: Path to the markdown file.
-            tier: Priority tier (1=critical, 2=high, 3=medium).
-            force: If True, skip hash check.
-
-        Returns:
-            IndexResult with counts.
-        """
+        """Index a single markdown file at the given priority tier; force skips the hash check."""
         if not self._initialized:
             await self.initialize()
 
@@ -1088,14 +1079,7 @@ class DocIndexerService:
             logger.exception("DocIndexerService: KB synthesis failed (non-fatal)")
 
     async def index_all(self, force: bool = False) -> IndexResult:
-        """Index all documentation files.
-
-        Args:
-            force: If True, re-index all files regardless of hash cache.
-
-        Returns:
-            IndexResult with aggregate counts.
-        """
+        """Index every documentation file; force ignores the hash cache and re-indexes all of them."""
         start_time = time.time()
 
         if not self._initialized:
@@ -1160,6 +1144,22 @@ class DocIndexerService:
         )
 
         return total_result
+
+    async def rebuild_from_scratch(self) -> IndexResult:
+        """Delete the collection and re-index only what the current tree contains (#16934).
+
+        Even ``index_all(force=True)`` never removes a chunk: discovery walks files
+        that exist now, so a chunk from a file absent here (e.g. one indexed from a
+        branch before Issue #16934 gated indexing to main-at-origin-tip) survives
+        indefinitely. Deleting the collection first is the only way to guarantee that.
+        """
+        if not self._initialized:
+            if not await self.initialize():
+                return IndexResult(errors=["Failed to initialize"])
+        self._client.delete_collection(self.COLLECTION_NAME)
+        self._initialized = False
+        self._collection = None
+        return await self.index_all(force=True)
 
     async def enqueue_reindex(
         self,

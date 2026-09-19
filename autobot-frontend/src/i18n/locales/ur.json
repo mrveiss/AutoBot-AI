@@ -198,6 +198,8 @@
     "systemHealth": "سسٹم کی صحت",
     "providerFallback": "فراہم کنندہ فال بیک",
     "advancedControl": "ایڈوانسڈ کنٹرول",
+    "adminPricing": "ماڈل قیمت",
+    "adminMcpServers": "MCP سرورز",
     "llcRoles": "کردار"
   },
   "llcCompanyStatus": {
