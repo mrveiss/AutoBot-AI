@@ -778,6 +778,14 @@ CQEOF
   # docker compose --env-file docker/.env.docker up -d
   skip_check "smoke-test" \
     "needs a Docker daemon to build 3 images and start the full compose stack, health-polled up to 15 min (docker-smoke-test.yml) -- not attempted here regardless of Docker's availability, because CI's own worst case (45 min) would defeat a fast preflight; reproduce manually: docker compose --env-file docker/.env.docker up -d"
+  # python-suite (#17129): CI runs it as 12 parallel shards; the same tree run
+  # unsharded locally measures ~33 minutes (repo_tests/ alone), which defeats
+  # this script's fast-path premise the same way smoke-test's 45-minute worst
+  # case does above. Running only some shards would validate a different
+  # partition than CI's own, not a faster proxy for it. Reproduce manually:
+  # nice -n 19 python3 -m pytest repo_tests/ -q
+  skip_check "python-suite" \
+    "runs as 12 parallel CI shards; the unsharded equivalent takes ~33 min locally, which would defeat a fast preflight -- reproduce manually: nice -n 19 python3 -m pytest repo_tests/ -q"
   skip_check "No open blocks-merge issues reference this PR" "reads GitHub issue state, not the working tree"
 
   # `No commit trailers` is already predicted by the commit-message section

@@ -377,16 +377,17 @@ async def live_events_endpoint(websocket: WebSocket):
     # #9963: use the canonical WS auth (JWT), same as /api/ws — the local
     # raw-JWT check was too strict and rejected valid deployments.
     from auth_middleware import authenticate_websocket
+    from autobot_shared.websocket_subprotocol import accept_websocket
 
     user_payload: dict | None = await authenticate_websocket(websocket)
     if _auth_required() and user_payload is None:
         # accept() before close(4001) so clients see a clean close frame
         # instead of a handshake 403 (project WS rule).
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Unauthorized")
         logger.info("Live events WebSocket rejected: invalid token")
         return
-    await websocket.accept()
+    await accept_websocket(websocket)
     logger.info(
         "Live events WebSocket connected: %s (user=%s)",
         websocket.client,

@@ -232,4 +232,13 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/services/semantic_query_cache.py", "SemanticQueryCache.clear"): _RAW_ADMIN,
     ("autobot-backend/services/topic_retrieval_cache.py", "TopicRetrievalCache.lookup"): _RAG_CACHE,
     ("autobot-backend/services/topic_retrieval_cache.py", "TopicRetrievalCache._maybe_evict"): _CACHE_EVICT,
+    (
+        "autobot-backend/knowledge/claude_memory_importer.py",
+        "import_memory_file",
+    ): (
+        "SCOPED: fact_id is `f'{CATEGORY}:{owner_id}:{slug}'` (#17124) -- the existence check "
+        "this read feeds can only ever find a fact already scoped to the same owner_id "
+        "the importer is running as, so it can't read (or the subsequent update_fact "
+        "can't overwrite) a fact belonging to a different owner"
+    ),
 }

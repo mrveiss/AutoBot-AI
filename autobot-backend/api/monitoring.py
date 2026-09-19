@@ -54,7 +54,7 @@ from api.schemas_system import (
 )
 
 # Hardware monitor moved to monitoring_hardware.py (Issue #213)
-from api.ws_security import enforce_ws_origin
+from api.ws_security import open_authenticated_ws
 from auth_middleware import check_admin_permission
 
 # Import AutoBot monitoring system
@@ -337,8 +337,7 @@ class MonitoringWebSocketManager:
         self._connect_lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket):
-        """Accept WebSocket connection and start periodic update task if first."""
-        await websocket.accept()
+        """Register an authenticated, accepted connection; start the update task if first (#17009)."""
         async with self._connect_lock:
             self.active_connections.append(websocket)
             logger.info(
@@ -1156,7 +1155,7 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
 
     Issue #315: Refactored to use dictionary dispatch for command handling.
     """
-    if not await enforce_ws_origin(websocket):
+    if not await open_authenticated_ws(websocket):  # #17009
         return
     await ws_manager.connect(websocket)
     try:

@@ -5,7 +5,10 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
+import {
+  buildAuthenticatedWsUrl,
+  buildAuthenticatedWsSubprotocols
+} from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
 
 describe('buildAuthenticatedWsUrl', () => {
@@ -45,5 +48,28 @@ describe('buildAuthenticatedWsUrl', () => {
     const store = useUserStore()
     store.authState.token = ''
     expect(buildAuthenticatedWsUrl('ws://localhost/api/ws/live')).toBeNull()
+  })
+})
+
+describe('buildAuthenticatedWsSubprotocols (#16457)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('returns null when no token is present', () => {
+    expect(buildAuthenticatedWsSubprotocols()).toBeNull()
+  })
+
+  it('returns null for empty-string token (treated as no auth)', () => {
+    const store = useUserStore()
+    store.authState.token = ''
+    expect(buildAuthenticatedWsSubprotocols()).toBeNull()
+  })
+
+  it("returns ['bearer', <value>] verbatim, unlike the URL form -- a subprotocol is not a URL component", () => {
+    const placeholderValue = ['xyz', 'plus+slash/equals='].join('')
+    const store = useUserStore()
+    store.authState.token = placeholderValue
+    expect(buildAuthenticatedWsSubprotocols()).toEqual(['bearer', placeholderValue])
   })
 })
