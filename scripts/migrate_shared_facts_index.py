@@ -22,9 +22,14 @@ through the old, broken path with no data loss:
 
 Idempotent: a second run finds no legacy keys left and does nothing.
 
+This rewrites stored user data, so it is never run automatically -- a human
+runs it, reviews the dry-run summary, and only then re-runs it with --apply.
+Defaults to a dry-run preview; nothing is written unless --apply is given.
+
 Usage:
     cd autobot-backend
-    python ../scripts/migrate_shared_facts_index.py [--dry-run]
+    python ../scripts/migrate_shared_facts_index.py           # preview only
+    python ../scripts/migrate_shared_facts_index.py --apply   # writes changes
 """
 
 import asyncio
@@ -74,7 +79,7 @@ async def _migrate_one_user(redis, user_id: str, legacy_key: str, dry_run: bool)
     return migrated, visibility_fixed
 
 
-async def migrate(dry_run: bool = False) -> dict:
+async def migrate(dry_run: bool = True) -> dict:
     """Migrate every legacy shared-facts index. Returns a summary dict."""
     from autobot_shared.redis_client import get_async_redis_client
 
@@ -109,5 +114,16 @@ async def migrate(dry_run: bool = False) -> dict:
     return summary
 
 
+def _cli_dry_run(argv: list[str]) -> bool:
+    """Preview-only unless --apply is given explicitly (#16709).
+
+    This rewrites stored user data, and the owner's cleanup rule requires a
+    human to see the dry-run summary before anything is written -- never run
+    this unattended. A pure function so the default direction is testable
+    without invoking the CLI entry point itself.
+    """
+    return "--apply" not in argv
+
+
 if __name__ == "__main__":
-    asyncio.run(migrate(dry_run="--dry-run" in sys.argv))
+    asyncio.run(migrate(dry_run=_cli_dry_run(sys.argv)))

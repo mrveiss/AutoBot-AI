@@ -98,3 +98,19 @@ async def test_dry_run_makes_no_changes():
     assert "f1" in redis._sets["user:shared_facts:u2"]  # legacy key untouched
     metadata = json.loads(redis._hashes["fact:f1"]["metadata"])
     assert metadata["visibility"] == "private"  # not promoted
+
+
+def test_migrate_defaults_to_dry_run():
+    """This rewrites stored user data -- it must never run live by omission (#16709)."""
+    import inspect
+
+    assert inspect.signature(migrate).parameters["dry_run"].default is True
+
+
+def test_cli_requires_explicit_apply_flag_to_write():
+    """`python migrate_shared_facts_index.py` with no flags previews only;
+    only `--apply` writes. Never the other way around (#16709)."""
+    from migrate_shared_facts_index import _cli_dry_run
+
+    assert _cli_dry_run(["migrate_shared_facts_index.py"]) is True
+    assert _cli_dry_run(["migrate_shared_facts_index.py", "--apply"]) is False
