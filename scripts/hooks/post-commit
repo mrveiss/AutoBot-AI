@@ -5,14 +5,18 @@
 #
 # Post-commit hook:
 #   1. Auto-heal stash-pop conflict markers in working tree (Issue #2416)
-#   2. Chain to doc-sync post-commit hook (Issue #250)
 #
 # When pre-commit's stash push/pop cycle conflicts with PostToolUse
 # formatting changes (Black + isort), the working tree can end up with
 # merge conflict markers even though the committed content is correct.
 # This hook detects and restores those files from HEAD.
-
-GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+#
+# #16934: doc-sync used to chain from here (step 2). It ran on every commit
+# in every worktree, indexing that worktree's own doc tree into the shared,
+# live autobot_docs collection -- a fresh worktree's first commit wrote its
+# unmerged docs into production. Moved to post-merge (scripts/hooks/post-
+# merge), which fires only after a local `git merge`/`git pull`, not a plain
+# commit.
 
 # ---------------------------------------------------------------------------
 # 1. Auto-heal stash-pop conflict markers (Issue #2416)
@@ -40,16 +44,6 @@ if [ -n "$changed_files" ]; then
         echo "Working tree restored from committed versions."
         echo ""
     fi
-fi
-
-# ---------------------------------------------------------------------------
-# 2. Chain to doc-sync post-commit hook (Issue #250)
-# ---------------------------------------------------------------------------
-DOC_SYNC="$GIT_ROOT/autobot-infrastructure/shared/scripts/hooks/post-commit-doc-sync"
-if [ -x "$DOC_SYNC" ]; then
-    "$DOC_SYNC"
-elif [ -f "$DOC_SYNC" ]; then
-    bash "$DOC_SYNC"
 fi
 
 exit 0
