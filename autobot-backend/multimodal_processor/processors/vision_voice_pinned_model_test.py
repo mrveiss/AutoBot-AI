@@ -135,3 +135,102 @@ def test_voice_processor_pins_whisper_and_wav2vec_revisions(voice_module):
         (("openai/whisper-base",),),
         (("facebook/wav2vec2-base-960h",),),
     ]
+
+
+# ---------------------------------------------------------------------------
+# #17124 -- fail-open regression: a failed integrity check must never leave
+# a tampered model assigned and reachable.
+# ---------------------------------------------------------------------------
+
+
+def test_vision_processor_clip_failure_leaves_both_clip_attrs_none(vision_module):
+    from autobot_shared.pinned_model_registry import ModelIntegrityError
+
+    proc = _bare_instance(vision_module.VisionProcessor)
+    proc.clip_model = None
+    proc.clip_processor = None
+    proc.blip_model = None
+    proc.blip_processor = None
+
+    with (
+        patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="1" * 40),
+        patch("autobot_shared.pinned_model_registry.verify_cached_model", side_effect=ModelIntegrityError("tampered clip")),
+    ):
+        proc._load_models()  # must not raise -- caught and logged internally
+
+    assert proc.clip_model is None, "a tampered CLIP model must never be assigned"
+    assert proc.clip_processor is None
+    assert proc.blip_model is None, "BLIP-2 is never reached when CLIP's own verify fails"
+    assert proc.blip_processor is None
+
+
+def test_vision_processor_blip2_failure_leaves_blip2_none_but_keeps_verified_clip(vision_module):
+    from autobot_shared.pinned_model_registry import ModelIntegrityError
+
+    proc = _bare_instance(vision_module.VisionProcessor)
+    proc.clip_model = None
+    proc.clip_processor = None
+    proc.blip_model = None
+    proc.blip_processor = None
+
+    with (
+        patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="1" * 40),
+        patch(
+            "autobot_shared.pinned_model_registry.verify_cached_model",
+            side_effect=[None, ModelIntegrityError("tampered blip2")],
+        ),
+    ):
+        proc._load_models()  # must not raise
+
+    assert proc.clip_model is not None, "CLIP already passed its own verify and must stay usable"
+    assert proc.clip_processor is not None
+    assert proc.blip_model is None, "a tampered BLIP-2 model must never be assigned"
+    assert proc.blip_processor is None
+
+
+def test_voice_processor_whisper_failure_leaves_both_whisper_attrs_none(voice_module):
+    from autobot_shared.pinned_model_registry import ModelIntegrityError
+
+    proc = _bare_instance(voice_module.VoiceProcessor)
+    proc.whisper_model = None
+    proc.whisper_processor = None
+    proc.wav2vec_model = None
+    proc.wav2vec_processor = None
+
+    with (
+        patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="3" * 40),
+        patch(
+            "autobot_shared.pinned_model_registry.verify_cached_model",
+            side_effect=ModelIntegrityError("tampered whisper"),
+        ),
+    ):
+        proc._load_models()  # must not raise
+
+    assert proc.whisper_model is None, "a tampered Whisper model must never be assigned"
+    assert proc.whisper_processor is None
+    assert proc.wav2vec_model is None, "Wav2Vec2 is never reached when Whisper's own verify fails"
+    assert proc.wav2vec_processor is None
+
+
+def test_voice_processor_wav2vec_failure_leaves_wav2vec_none_but_keeps_verified_whisper(voice_module):
+    from autobot_shared.pinned_model_registry import ModelIntegrityError
+
+    proc = _bare_instance(voice_module.VoiceProcessor)
+    proc.whisper_model = None
+    proc.whisper_processor = None
+    proc.wav2vec_model = None
+    proc.wav2vec_processor = None
+
+    with (
+        patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="3" * 40),
+        patch(
+            "autobot_shared.pinned_model_registry.verify_cached_model",
+            side_effect=[None, ModelIntegrityError("tampered wav2vec")],
+        ),
+    ):
+        proc._load_models()  # must not raise
+
+    assert proc.whisper_model is not None, "Whisper already passed its own verify and must stay usable"
+    assert proc.whisper_processor is not None
+    assert proc.wav2vec_model is None, "a tampered Wav2Vec2 model must never be assigned"
+    assert proc.wav2vec_processor is None

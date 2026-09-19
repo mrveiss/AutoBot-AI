@@ -122,34 +122,49 @@ class VoiceProcessor(BaseModalProcessor):
         wav2vec_repo_id = "facebook/wav2vec2-base-960h"
         wav2vec_revision = get_pinned_revision(wav2vec_repo_id)
 
+        from autobot_shared.pinned_model_registry import ModelIntegrityError
+
         try:
-            # Load Whisper model for speech recognition
+            # Load Whisper model for speech recognition.
+            # #17124: load into locals and verify BEFORE assigning to self.* --
+            # assigning first (the prior shape) left a tampered model reachable
+            # if verify_cached_model raised and the broad except below swallowed
+            # it (fail-open).
             self.logger.info("Loading Whisper model...")
-            self.whisper_processor = WhisperProcessor.from_pretrained(whisper_repo_id, revision=whisper_revision)
-            self.whisper_model = WhisperForConditionalGeneration.from_pretrained(
+            whisper_processor = WhisperProcessor.from_pretrained(whisper_repo_id, revision=whisper_revision)
+            whisper_model = WhisperForConditionalGeneration.from_pretrained(
                 whisper_repo_id,
                 revision=whisper_revision,
                 torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
             ).to(self.device)
             verify_cached_model(whisper_repo_id)
+            whisper_model.eval()
+            self.whisper_processor = whisper_processor
+            self.whisper_model = whisper_model
 
             # Load Wav2Vec2 model for audio embeddings and feature extraction
             self.logger.info("Loading Wav2Vec2 model...")
-            self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(
+            wav2vec_processor = Wav2Vec2Processor.from_pretrained(
                 wav2vec_repo_id, revision=wav2vec_revision, use_fast=True
             )
-            self.wav2vec_model = Wav2Vec2ForCTC.from_pretrained(
+            wav2vec_model = Wav2Vec2ForCTC.from_pretrained(
                 wav2vec_repo_id,
                 revision=wav2vec_revision,
                 torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
             ).to(self.device)
             verify_cached_model(wav2vec_repo_id)
-
-            # Set models to evaluation mode
-            self.whisper_model.eval()
-            self.wav2vec_model.eval()
+            wav2vec_model.eval()
+            self.wav2vec_processor = wav2vec_processor
+            self.wav2vec_model = wav2vec_model
 
             self.logger.info("Audio models loaded successfully")
+        except ModelIntegrityError as e:
+            # #17124: named, distinct from a generic load failure -- a tampered
+            # cached model was detected. Whichever model's verify raised never
+            # assigned its self.* attributes; a model that already verified
+            # successfully in this call stays assigned and usable.
+            self.logger.error("SECURITY: audio model integrity check failed, refusing to serve: %s", e)
+            self.logger.warning("VoiceProcessor will raise errors when processing - models unavailable")
         except Exception as e:
             self.logger.error("Failed to load audio models: %s", e)
             # Issue #466: Will raise error on process() - no placeholder fallback

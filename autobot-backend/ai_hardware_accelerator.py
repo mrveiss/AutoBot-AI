@@ -615,14 +615,19 @@ class AIHardwareAccelerator:
 
         torch = _get_torch()
         revision = get_pinned_revision("openai/clip-vit-base-patch32")
-        self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", revision=revision)
-        self.clip_model = CLIPModel.from_pretrained(
+        # #17124: load into locals and verify BEFORE assigning to self.* -- assigning
+        # first (the prior shape) left a tampered model reachable if verify_cached_model
+        # raised and the caller's broad except swallowed it (fail-open).
+        clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", revision=revision)
+        clip_model = CLIPModel.from_pretrained(
             "openai/clip-vit-base-patch32",
             revision=revision,
             torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
         ).to(device)
         verify_cached_model("openai/clip-vit-base-patch32")
-        self.clip_model.eval()
+        clip_model.eval()
+        self.clip_processor = clip_processor
+        self.clip_model = clip_model
 
     def _initialize_wav2vec_model(self, device: Any) -> None:
         """
@@ -635,14 +640,18 @@ class AIHardwareAccelerator:
 
         torch = _get_torch()
         revision = get_pinned_revision("facebook/wav2vec2-base-960h")
-        self.wav2vec_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h", revision=revision)
-        self.wav2vec_model = Wav2Vec2Model.from_pretrained(
+        # #17124: load into locals and verify BEFORE assigning to self.* -- see the
+        # matching comment in _initialize_clip_model for why.
+        wav2vec_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h", revision=revision)
+        wav2vec_model = Wav2Vec2Model.from_pretrained(
             "facebook/wav2vec2-base-960h",
             revision=revision,
             torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
         ).to(device)
         verify_cached_model("facebook/wav2vec2-base-960h")
-        self.wav2vec_model.eval()
+        wav2vec_model.eval()
+        self.wav2vec_processor = wav2vec_processor
+        self.wav2vec_model = wav2vec_model
 
     def _initialize_projection_matrices(self, device: Any) -> None:
         """
@@ -670,11 +679,19 @@ class AIHardwareAccelerator:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info("Initializing multi-modal models on %s", device)
 
+        from autobot_shared.pinned_model_registry import ModelIntegrityError
+
         try:
             self._initialize_clip_model(device)
             self._initialize_wav2vec_model(device)
             self._initialize_projection_matrices(device)
             logger.info("Multi-modal models initialized successfully")
+        except ModelIntegrityError as e:
+            # #17124: named, distinct from a generic init failure -- a tampered cached
+            # model was detected. The failing _initialize_*_model call never assigned
+            # its self.* attributes (verify happens before assignment), so they are
+            # still None here; never silently continue as if initialization succeeded.
+            logger.error("SECURITY: multi-modal model integrity check failed, refusing to serve: %s", e)
         except Exception as e:
             logger.error("Failed to initialize multi-modal models: %s", e)
 

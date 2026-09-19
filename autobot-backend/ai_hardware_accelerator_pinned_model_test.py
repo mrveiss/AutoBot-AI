@@ -90,3 +90,70 @@ def test_initialize_wav2vec_model_passes_the_pinned_revision(aha_module):
     assert aha_module.Wav2Vec2Model.from_pretrained.call_args.args == ("facebook/wav2vec2-base-960h",)
     assert aha_module.Wav2Vec2Model.from_pretrained.call_args.kwargs["revision"] == "cafebabe" * 5
     mock_verify.assert_called_once_with("facebook/wav2vec2-base-960h")
+
+
+# ---------------------------------------------------------------------------
+# #17124 -- fail-open regression: a failed integrity check must never leave
+# a tampered model assigned and reachable.
+# ---------------------------------------------------------------------------
+
+
+def test_initialize_clip_model_never_assigns_when_integrity_check_fails(aha_module):
+    from autobot_shared.pinned_model_registry import ModelIntegrityError
+
+    accel = aha_module.AIHardwareAccelerator.__new__(aha_module.AIHardwareAccelerator)
+    accel.clip_model = None
+    accel.clip_processor = None
+
+    with (
+        patch.object(aha_module, "_get_torch", return_value=MagicMock(cuda=MagicMock(is_available=lambda: False))),
+        patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="deadbeef" * 5),
+        patch("autobot_shared.pinned_model_registry.verify_cached_model", side_effect=ModelIntegrityError("tampered")),
+        pytest.raises(ModelIntegrityError),
+    ):
+        accel._initialize_clip_model(device="cpu")
+
+    assert accel.clip_model is None, "a tampered model must never be assigned to self.clip_model"
+    assert accel.clip_processor is None, "a tampered processor must never be assigned to self.clip_processor"
+
+
+def test_initialize_wav2vec_model_never_assigns_when_integrity_check_fails(aha_module):
+    from autobot_shared.pinned_model_registry import ModelIntegrityError
+
+    accel = aha_module.AIHardwareAccelerator.__new__(aha_module.AIHardwareAccelerator)
+    accel.wav2vec_model = None
+    accel.wav2vec_processor = None
+
+    with (
+        patch.object(aha_module, "_get_torch", return_value=MagicMock(cuda=MagicMock(is_available=lambda: False))),
+        patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="cafebabe" * 5),
+        patch("autobot_shared.pinned_model_registry.verify_cached_model", side_effect=ModelIntegrityError("tampered")),
+        pytest.raises(ModelIntegrityError),
+    ):
+        accel._initialize_wav2vec_model(device="cpu")
+
+    assert accel.wav2vec_model is None, "a tampered model must never be assigned to self.wav2vec_model"
+    assert accel.wav2vec_processor is None, "a tampered processor must never be assigned to self.wav2vec_processor"
+
+
+async def test_initialize_multimodal_models_swallows_integrity_error_but_leaves_attributes_none(aha_module):
+    """The caller logs and continues (so one bad model doesn't crash the whole
+    accelerator), but it must never end up with a tampered model reachable."""
+    from autobot_shared.pinned_model_registry import ModelIntegrityError
+
+    accel = aha_module.AIHardwareAccelerator.__new__(aha_module.AIHardwareAccelerator)
+    accel.clip_model = None
+    accel.clip_processor = None
+    accel.wav2vec_model = None
+    accel.wav2vec_processor = None
+
+    with (
+        patch.object(aha_module, "_get_torch", return_value=MagicMock(cuda=MagicMock(is_available=lambda: False))),
+        patch.object(accel, "_initialize_clip_model", side_effect=ModelIntegrityError("tampered clip")),
+        patch.object(accel, "_initialize_wav2vec_model"),
+        patch.object(accel, "_initialize_projection_matrices"),
+    ):
+        await accel._initialize_multimodal_models()  # must not raise -- logged and swallowed
+
+    assert accel.clip_model is None
+    assert accel.clip_processor is None
