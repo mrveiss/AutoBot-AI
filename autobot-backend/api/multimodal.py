@@ -22,13 +22,13 @@ from api.schemas_ai_stack import (
     MultimodalOptimizeData,
     MultimodalPerfStatsData,
     MultimodalPerfSummaryData,
+    MultiModalResponse,
     MultimodalStatsData,
 )
 from api.schemas_knowledge import (
     CrossModalSearchRequest,
     CrossModalSearchResponse,
     EmbeddingRequest,
-    MultiModalResponse,
     TextProcessingRequest,
 )
 from api.system_health import ComponentHealth, register_health_probe
@@ -40,6 +40,7 @@ from multimodal_processor import (
     ModalityType,
     MultiModalInput,
     ProcessingIntent,
+    ProcessingResult,
     processor,
 )
 
@@ -90,6 +91,22 @@ def _principal_id(current_user: dict | None) -> str | None:
     which would let a caller write into another tenant's memory.
     """
     return resolve_principal_id(current_user)
+
+
+def _processed_response(result: ProcessingResult, processing_time: float) -> MultiModalResponse:
+    """One builder for the three /process endpoints, so none can drop ``persistence`` (#16926)."""
+    metadata = result.metadata or {}
+    return MultiModalResponse(
+        success=result.success,
+        result_id=result.result_id,
+        modality=result.modality_type.value,
+        processing_time=processing_time,
+        confidence=result.confidence,
+        result_data=result.result_data or {},
+        device_used=metadata.get("device_used"),
+        error_message=result.error_message,
+        persistence=metadata.get("persistence"),
+    )
 
 
 def _build_image_modal_input(image_data, file, intent: str, question, user_id: str | None) -> MultiModalInput:
@@ -145,18 +162,7 @@ async def process_image(
         # Process with unified processor
         result = await processor.process(modal_input)
 
-        processing_time = time.time() - start_time
-
-        return MultiModalResponse(
-            success=result.success,
-            result_id=result.result_id,
-            modality=result.modality_type.value,
-            processing_time=processing_time,
-            confidence=result.confidence,
-            result_data=result.result_data or {},
-            device_used=result.metadata.get("device_used") if result.metadata else None,
-            error_message=result.error_message,
-        )
+        return _processed_response(result, time.time() - start_time)
 
     except HTTPException:
         raise
@@ -218,18 +224,7 @@ async def process_audio(
         # Process with unified processor
         result = await processor.process(modal_input)
 
-        processing_time = time.time() - start_time
-
-        return MultiModalResponse(
-            success=result.success,
-            result_id=result.result_id,
-            modality=result.modality_type.value,
-            processing_time=processing_time,
-            confidence=result.confidence,
-            result_data=result.result_data or {},
-            device_used=result.metadata.get("device_used") if result.metadata else None,
-            error_message=result.error_message,
-        )
+        return _processed_response(result, time.time() - start_time)
 
     except HTTPException:
         raise
@@ -280,18 +275,7 @@ async def process_text(
         # Process with unified processor
         result = await processor.process(modal_input)
 
-        processing_time = time.time() - start_time
-
-        return MultiModalResponse(
-            success=result.success,
-            result_id=result.result_id,
-            modality=result.modality_type.value,
-            processing_time=processing_time,
-            confidence=result.confidence,
-            result_data=result.result_data or {},
-            device_used=result.metadata.get("device_used") if result.metadata else None,
-            error_message=result.error_message,
-        )
+        return _processed_response(result, time.time() - start_time)
 
     except Exception as e:
         logger.error("Text processing failed: %s", e)
@@ -650,6 +634,7 @@ async def combine_multimodal_inputs(
                     "modality": r.modality_type.value,
                     "confidence": r.confidence,
                     "data": r.result_data,
+                    "persistence": (r.metadata or {}).get("persistence"),
                 }
                 for r in results
             ],

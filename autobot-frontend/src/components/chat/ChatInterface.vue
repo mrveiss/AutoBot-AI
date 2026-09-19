@@ -111,6 +111,10 @@
             >
               <Icon name="users" />
             </button>
+            <!-- #16470 follow-up: always-mountable, independent of session
+                 mode -- an invitee usually has no collaborative session of
+                 their own yet, so this can't be gated the same way. -->
+            <PendingInvitationsBell />
           </template>
         </ChatHeader>
 
@@ -318,6 +322,7 @@ import ChatTabs from './ChatTabs.vue'
 import ChatTabContent from './ChatTabContent.vue'
 import ChatFilePanel from './ChatFilePanel.vue'
 import ChatCollaborationPanel from './ChatCollaborationPanel.vue'
+import PendingInvitationsBell from '@/components/collaboration/PendingInvitationsBell.vue'
 import KnowledgePersistenceDialog from '@/components/knowledge/KnowledgePersistenceDialog.vue'
 import CommandPermissionDialog from '@/components/ui/CommandPermissionDialog.vue'
 import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget.vue'
@@ -1069,6 +1074,16 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
 
 // STREAMLINED: Simplified initialization without complex timeout racing
 // Issue #671: Added initialization state tracking for loading feedback
+// #16274: the init outlives the component without these. The 10s race timer
+// below was never cleared — not when it lost the race, and not on unmount — so
+// every successful mount left a pending timer that rejected 10s later, ran the
+// fallback, and wrote to the store of a component that no longer exists. In
+// tests that landed in a LATER test, after `mockReset: true` had stripped the
+// mock the fallback depends on, which is why it surfaced as an unrelated
+// failure rather than here (vitest.config.ts:71, #3070).
+let initTimeoutHandle: ReturnType<typeof setTimeout> | null = null
+let isUnmounted = false
+
 const initializeChatInterface = async () => {
   // Issue #671: Set initializing state to show loading indicator
   store.setInitializing(true)
@@ -1081,12 +1096,14 @@ const initializeChatInterface = async () => {
     // renders because BatchApiService uses Promise.allSettled.
     const loadPromise = batchApiService.initializeChatInterface()
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Initialization timeout')), 10000)
+      initTimeoutHandle = setTimeout(() => reject(new Error('Initialization timeout')), 10000)
     })
 
     try {
       // Race initialization with timeout
       const data = await Promise.race([loadPromise, timeoutPromise])
+      // #16274: nothing after this await may touch the store once unmounted.
+      if (isUnmounted) return
 
       // Process results - sync with backend (source of truth)
       // Explicitly check for error to distinguish API failures from empty responses
@@ -1097,6 +1114,10 @@ const initializeChatInterface = async () => {
         // pushed (empty placeholders are skipped).
         const backendIds = new Set<string>((sessions as Array<{ id: string }>).map(s => s.id))
         await controller.pushLocalOnlySessions(backendIds)
+        // #16274: same rule as the Promise.race guard above — this await does
+        // real network I/O, and a component that unmounted while it was in
+        // flight must not write to the store below.
+        if (isUnmounted) return
         // Issue #4352: intentional_empty=true means the backend confirmed 0 sessions
         // is correct (user deleted all). Pass this through so syncSessionsWithBackend
         // can bypass the #4328 defensive guard and clear local sessions as intended.
@@ -1125,14 +1146,26 @@ const initializeChatInterface = async () => {
       logger.debug('⏱️ Initialization timed out, using fallback:',
         error instanceof Error ? error.message : error)
 
+      // #16274: the fallback is the path that crashed a later test. An init
+      // that has lost its component must not retry on its behalf.
+      if (isUnmounted) return
+
       // Fallback to individual loading (this is the chat-history retry path).
       if (store.sessions.length === 0) {
         await controller.loadChatSessions().catch((err) =>
           logger.debug('Fallback chat session load failed:', err instanceof Error ? err.message : err))
       }
+      if (isUnmounted) return
 
       // Issue #671: Clear initialization state after fallback attempt
       store.setInitializing(false)
+    } finally {
+      // #16274: cleared whether the init won the race or lost it. Previously
+      // only the losing timer ever stopped mattering, and it stopped by firing.
+      if (initTimeoutHandle !== null) {
+        clearTimeout(initTimeoutHandle)
+        initTimeoutHandle = null
+      }
     }
 
     logger.debug('✅ Chat interface initialization completed')
@@ -1159,9 +1192,15 @@ function _onLgBreakpoint(e: MediaQueryListEvent): void {
 onMounted(async () => {
   // Initialize chat interface with streamlined loading
   await initializeChatInterface()
+  // #16274: initializeChatInterface() guards its own internals but still
+  // resolves normally on an early return — this await always completes, so
+  // onMounted must check the same flag before resuming, or it re-adds the
+  // listener/poller that onUnmounted already cleaned up.
+  if (isUnmounted) return
 
   // Load NoVNC URL after initialization
   await loadNovncUrl()
+  if (isUnmounted) return
 
   // #6773: connection state mirrors appStore.backendStatus (driven by
   // HealthMonitor). Seed once from current store state so initial
@@ -1182,6 +1221,14 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  // #16274: stop the in-flight init before anything else — the awaits inside it
+  // check this flag, and the race timer must not outlive the component.
+  isUnmounted = true
+  if (initTimeoutHandle !== null) {
+    clearTimeout(initTimeoutHandle)
+    initTimeoutHandle = null
+  }
+
   // Clean up event listeners
   document.removeEventListener('keydown', handleKeyboardShortcuts)
   _lgMediaQuery?.removeEventListener('change', _onLgBreakpoint)

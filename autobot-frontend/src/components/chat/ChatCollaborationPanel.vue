@@ -43,6 +43,9 @@
         <span v-if="tab.id === 'notifications' && secretNotifications.length > 0" class="ml-1 text-electric-500">
           ({{ secretNotifications.length }})
         </span>
+        <span v-if="tab.id === 'invitations' && pendingInvitations.length > 0" class="ml-1 text-electric-500">
+          ({{ pendingInvitations.length }})
+        </span>
       </button>
     </div>
 
@@ -57,6 +60,7 @@
       />
       <ActivityFeed v-else-if="activeTab === 'activity'" />
       <SecretNotifications v-else-if="activeTab === 'notifications'" />
+      <PendingInvitations v-else-if="activeTab === 'invitations'" />
     </div>
 
     <InviteUserDialog
@@ -76,6 +80,12 @@
  * mirroring ChatFilePanel's existing pattern. Shown only for a
  * collaborative session (session.mode === 'collaborative'), gated by the
  * parent that mounts this panel.
+ *
+ * #16470: added the Invitations tab (PendingInvitations.vue). Note
+ * `pendingInvitations` itself is NOT scoped to the panel's current
+ * session -- it lists invitations to every session addressed to the
+ * current user, so this tab is reachable (and useful) even though the
+ * panel that hosts it only opens for an already-collaborative session.
  */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -83,6 +93,7 @@ import Icon from '@/components/ui/Icon.vue'
 import ParticipantList from '@/components/collaboration/ParticipantList.vue'
 import ActivityFeed from '@/components/collaboration/ActivityFeed.vue'
 import SecretNotifications from '@/components/collaboration/SecretNotifications.vue'
+import PendingInvitations from '@/components/collaboration/PendingInvitations.vue'
 import InviteUserDialog from '@/components/collaboration/InviteUserDialog.vue'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 import { apiService } from '@/services/api'
@@ -92,19 +103,20 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('ChatCollaborationPanel')
 const { t } = useI18n()
 const chatStore = useChatStore()
-const { secretNotifications } = useSessionCollaboration()
+const { secretNotifications, pendingInvitations } = useSessionCollaboration()
 
 defineEmits<{
   close: []
 }>()
 
-const activeTab = ref<'participants' | 'activity' | 'notifications'>('participants')
+const activeTab = ref<'participants' | 'activity' | 'notifications' | 'invitations'>('participants')
 const showInviteDialog = ref(false)
 
 const tabs = [
   { id: 'participants' as const, get label() { return t('collaboration.panel.tabParticipants') } },
   { id: 'activity' as const, get label() { return t('collaboration.panel.tabActivity') } },
-  { id: 'notifications' as const, get label() { return t('collaboration.panel.tabNotifications') } }
+  { id: 'notifications' as const, get label() { return t('collaboration.panel.tabNotifications') } },
+  { id: 'invitations' as const, get label() { return t('collaboration.panel.tabInvitations') } }
 ]
 
 const handleInvited = (_userId: string, username: string) => {
