@@ -12,6 +12,7 @@ import {
 } from '../../test/utils/test-utils'
 import { webSocketTestUtil } from '../../test/mocks/websocket-mock'
 import { ServiceURLs } from '@/constants/network'
+import { useChatStore } from '@/stores/useChatStore'
 
 // #14613/#14842: this file's per-test budget, and only this file's.
 //
@@ -140,14 +141,19 @@ vi.mock('@/config/AppConfig.js', () => ({
 }))
 
 // Mock composables that may cause side effects
+//
+// #16274: a shared object (not a fresh one per call) so tests can assert on
+// `mockMessagePoller.start`/`.stop` after render — the component holds its
+// own reference, but it's the same instance every time useBackoffPoller() runs.
+const mockMessagePoller = {
+  start: vi.fn(),
+  stop: vi.fn(),
+  isCircuitOpen: { value: false },
+  consecutiveFailures: { value: 0 },
+  currentInterval: { value: 10000 },
+}
 vi.mock('@/composables/useBackoffPoller', () => ({
-  useBackoffPoller: () => ({
-    start: vi.fn(),
-    stop: vi.fn(),
-    isCircuitOpen: { value: false },
-    consecutiveFailures: { value: 0 },
-    currentInterval: { value: 10000 },
-  }),
+  useBackoffPoller: () => mockMessagePoller,
 }))
 
 vi.mock('@/composables/useVoiceOutput', () => ({
@@ -240,6 +246,24 @@ describe('ChatInterface', () => {
       chat_sessions: { data: [] },
       system_health: { data: { status: 'healthy' } },
     })
+
+    // #16274/#3070: vitest.config.ts sets `mockReset: true`, which strips
+    // vi.fn() implementations before every test — including the ones set
+    // once at `mockController`'s module-scope literal above. Left unmocked,
+    // a call like `controller.loadChatSessions().catch(...)` returns
+    // `undefined` instead of a promise and throws `Cannot read properties of
+    // undefined (reading 'catch')`, which is exactly the "Chat initialization
+    // failed" crash this file must never log (see the Error Handling suite).
+    // Re-applying every default here, not just the one that happened to
+    // crash, closes the whole landmine class instead of one instance of it.
+    mockController.loadChatSessions.mockResolvedValue(undefined)
+    mockController.loadChatMessages.mockResolvedValue(undefined)
+    mockController.deleteChatSession.mockResolvedValue(undefined)
+    mockController.getSessionFacts.mockResolvedValue([])
+    mockController.preserveSessionFacts.mockResolvedValue({})
+    mockController.pushLocalOnlySessions.mockResolvedValue(undefined)
+    mockController.sendMessage.mockResolvedValue(undefined)
+    mockController.clearSession.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -310,6 +334,126 @@ describe('ChatInterface', () => {
 
       // Sidebar should still render with refresh button available
       expect(screen.getByLabelText('chat.sidebar.refreshList')).toBeInTheDocument()
+    })
+
+    // #16274: the init raced a 10s timer that onUnmounted never cancelled, so
+    // an unmounted component still reached its fallback and wrote to the store.
+    // In this suite the rejection landed in a LATER test, after `mockReset: true`
+    // had stripped the mock the fallback calls, surfacing as a crash somewhere
+    // unrelated while this file stayed green (vitest.config.ts:71, #3070).
+    //
+    // Asserted on the fallback never running, not on the timer being cleared:
+    // clearing the handle is the mechanism, and a future rewrite may cancel the
+    // init differently. What must stay true is that nothing after an await runs
+    // once the component is gone.
+    //
+    // Rewritten from a version that mocked init to never settle and advanced
+    // fake timers 11s past unmount, expecting the race's own 10s timer to fire
+    // it into the fallback. But onUnmounted clears that timer synchronously on
+    // unmount, before the advance ever runs — so Promise.race never settled,
+    // the code after it (including the isUnmounted guard under test) was never
+    // reached, and the assertion below passed whether or not that guard
+    // existed. Rejecting the mocked init directly, after unmount, is what
+    // actually drives execution into the guarded catch block.
+    it('does not run the init fallback after the component unmounts', async () => {
+      let rejectInit: (reason?: unknown) => void = () => {}
+      mockInitializeChatInterface.mockImplementation(
+        () => new Promise((_resolve, reject) => { rejectInit = reject })
+      )
+      mockController.loadChatSessions.mockClear()
+
+      const { unmount } = renderComponent(ChatInterface, { pinia: true, router: true })
+      unmount()
+
+      // The kind of rejection a real slow/unavailable backend produces —
+      // after unmount, the way the original 10s race timer used to.
+      rejectInit(new Error('Simulated backend timeout'))
+      await waitForUpdate()
+
+      expect(mockController.loadChatSessions).not.toHaveBeenCalled()
+    })
+
+    // Review on #16911: pushLocalOnlySessions does real network I/O
+    // (Promise.allSettled over chatRepository calls) but, unlike the awaits
+    // immediately before and after it in the same function, wasn't checked
+    // against isUnmounted before the store write that follows it.
+    it('does not write to the store when unmounted while pushing local-only sessions', async () => {
+      let resolvePush: (value?: unknown) => void = () => {}
+      mockInitializeChatInterface.mockResolvedValue({
+        chat_sessions: { data: mockChatSessions },
+        system_health: { data: { status: 'healthy' } },
+      })
+      mockController.pushLocalOnlySessions.mockImplementation(
+        () => new Promise(resolve => { resolvePush = resolve })
+      )
+
+      const { unmount } = renderComponent(ChatInterface, { pinia: true, router: true })
+      const store = useChatStore()
+
+      await waitFor(() => {
+        expect(mockController.pushLocalOnlySessions).toHaveBeenCalled()
+      })
+
+      unmount()
+      resolvePush(undefined)
+      await waitForUpdate()
+
+      expect(store.syncSessionsWithBackend).not.toHaveBeenCalled()
+    })
+
+    // Review on #16911: initializeChatInterface() resolves normally even when
+    // it takes its own isUnmounted early exit, so `await initializeChatInterface()`
+    // in onMounted always completes — onMounted must check the same flag before
+    // it resumes, or it re-adds the keydown listener and restarts the message
+    // poller that onUnmounted already cleaned up moments earlier.
+    it('does not start polling or add the keydown listener when mount resumes after unmount', async () => {
+      let resolveInit: (value?: unknown) => void = () => {}
+      mockInitializeChatInterface.mockImplementation(
+        () => new Promise(resolve => { resolveInit = resolve })
+      )
+      const addEventListenerSpy = vi.spyOn(document, 'addEventListener')
+      mockMessagePoller.start.mockClear()
+
+      const { unmount } = renderComponent(ChatInterface, { pinia: true, router: true })
+      unmount()
+
+      // A slow init that eventually succeeds, resolving after the component
+      // is already gone — the same race initializeChatInterface() itself
+      // guards against, one call frame up.
+      resolveInit({
+        chat_sessions: { data: [] },
+        system_health: { data: { status: 'healthy' } },
+      })
+      await waitForUpdate()
+
+      expect(addEventListenerSpy).not.toHaveBeenCalledWith('keydown', expect.any(Function))
+      expect(mockMessagePoller.start).not.toHaveBeenCalled()
+
+      addEventListenerSpy.mockRestore()
+    })
+
+    // Review on #16911: onUnmounted's own cleanup — verified directly, since
+    // the tests above only ever exercise the path where mount never finishes.
+    it('removes the keydown listener and stops the poller on a normal unmount', async () => {
+      const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener')
+      mockMessagePoller.stop.mockClear()
+
+      const { unmount } = renderComponent(ChatInterface, { pinia: true, router: true })
+
+      // Waits for the poller to start rather than just for init to be called:
+      // onMounted adds the keydown listener in the same synchronous slice as
+      // starting the poller (no await between them), so this also guarantees
+      // the listener registration this test unmounts past has already run.
+      await waitFor(() => {
+        expect(mockMessagePoller.start).toHaveBeenCalled()
+      })
+
+      unmount()
+
+      expect(removeEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
+      expect(mockMessagePoller.stop).toHaveBeenCalled()
+
+      removeEventListenerSpy.mockRestore()
     })
   })
 
@@ -521,6 +665,7 @@ describe('ChatInterface', () => {
     it('handles API errors gracefully', async () => {
       // Make initialization fail
       mockInitializeChatInterface.mockRejectedValue(new Error('Network error'))
+      const errorSpy = vi.spyOn(console, 'error')
 
       const { container } = renderComponent(ChatInterface, { pinia: true, router: true })
 
@@ -528,6 +673,19 @@ describe('ChatInterface', () => {
       await waitFor(() => {
         expect(container).toBeInTheDocument()
       })
+
+      // #16274 AC3: this test used to crash the fallback it exercises —
+      // mockController.loadChatSessions had its module-scope mock stripped
+      // by `mockReset: true` before this test ran and was never re-applied
+      // per-test, so `controller.loadChatSessions().catch(...)` called
+      // `.catch` on `undefined` and threw, surfacing here as "Chat
+      // initialization failed" (fixed in this file's beforeEach).
+      const loggedInitFailed = errorSpy.mock.calls.some(args =>
+        args.some(arg => typeof arg === 'string' && arg.includes('Chat initialization failed'))
+      )
+      expect(loggedInitFailed).toBe(false)
+
+      errorSpy.mockRestore()
     })
 
     it('handles empty chat history response', async () => {
