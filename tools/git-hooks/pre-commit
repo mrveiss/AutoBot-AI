@@ -3,24 +3,45 @@
 # Copyright (c) 2025-2026 mrveiss
 # Author: mrveiss
 #
-# pre-commit: Target Branch Guard — block direct commits to protected branches
+# pre-commit: Target Branch Guard, then formatter dispatch
 # ============================================================================
 #
-# Self-contained standalone git hook (no pre-commit framework, no lib sourcing)
-# so it works when copied verbatim into .git/hooks/pre-commit by
-# scripts/install-git-hooks.sh. The enforcement logic mirrors the canonical
-# pre-commit-target-branch-guard (Issue #4113) — kept identical on purpose.
+# TARGET BRANCH GUARD (below, unchanged): self-contained, no pre-commit
+# framework, no lib sourcing, so it works when copied verbatim into
+# .git/hooks/pre-commit by scripts/install-git-hooks.sh. Mirrors the
+# canonical pre-commit-target-branch-guard (Issue #4113) — kept identical on
+# purpose.
 #
-# Sync source (keep IDENTICAL to avoid drift):
+# Sync source for the guard section only (keep IDENTICAL to avoid drift):
 #   autobot-infrastructure/shared/scripts/hooks/pre-commit-target-branch-guard
 #
 # PROTECTED (commits forbidden): release, master
 # ALLOWED: main, issue-*, hotfix-*, and any other feature branch
 #
+# FORMATTER DISPATCH (#16923, after the guard): .pre-commit-config.yaml
+# declares black/isort/flake8/autoflake/mypy and this repo's own local
+# guards, but nothing ran any of them locally -- this hook's own slot held
+# only the branch guard above, so the first thing that ever ran black was
+# CI. Chains to the `pre-commit` framework binary (already installed
+# separately, `pip install pre-commit && pre-commit install` -- this file
+# does not install it) against exactly the staged files, so a commit that
+# would fail code-quality in CI is corrected or refused here instead.
+# Skips gracefully (does not block) when the `pre-commit` binary is not on
+# PATH, since this hook must still be a self-contained file that works
+# without that dependency present -- same fallback framing as #11598's
+# original standalone design.
+#
+# Never fires for a hookless automation commit: github-actions[bot]'s
+# .github/workflows/auto-fix-generated-types.yml runs `git commit` inside a
+# fresh GitHub Actions checkout, which never has scripts/install-git-hooks.sh
+# run against it -- there is no hooks dir entry to bypass, so no `--no-verify`
+# is needed and none is used there.
+#
 # Bypass (only when you truly must, e.g. an automated release back-merge):
 #   git commit --no-verify
 #
-# Issue #11598 (installer + standalone hook). Related: #4113, #11581, #11593.
+# Issue #11598 (installer + standalone hook), #16923 (formatter dispatch).
+# Related: #4113, #11581, #11593.
 
 set -uo pipefail
 
@@ -55,6 +76,33 @@ case "$CURRENT_BRANCH" in
         exit 1
         ;;
     *)
-        exit 0
+        # Falls through to the formatter dispatch below (#16923) rather than
+        # exiting here -- the only change to this arm versus the sync source.
         ;;
 esac
+
+# ----------------------------------------------------------------------------
+# Formatter dispatch (#16923)
+# ----------------------------------------------------------------------------
+# Not reached when the branch guard above already exited (protected branch or
+# detached HEAD), so it never runs on a commit that was already going to be
+# blocked or on one with no branch to report against.
+
+if ! command -v pre-commit >/dev/null 2>&1; then
+    printf "${CYAN}[pre-commit]${NC} 'pre-commit' not on PATH -- skipping formatter dispatch (#16923).\n" >&2
+    printf "${CYAN}[pre-commit]${NC}   Install it to get black/isort/flake8 feedback before pushing: pip install pre-commit\n" >&2
+    exit 0
+fi
+
+# NUL-delimited so a staged path containing a space or newline still round-
+# trips correctly into the array below.
+STAGED_FILES=()
+while IFS= read -r -d '' f; do
+    STAGED_FILES+=("$f")
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+
+if [ "${#STAGED_FILES[@]}" -eq 0 ]; then
+    exit 0
+fi
+
+pre-commit run --hook-stage pre-commit --files "${STAGED_FILES[@]}"

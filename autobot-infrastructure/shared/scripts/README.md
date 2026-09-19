@@ -88,8 +88,8 @@ each is listed here so an operator can find it (#15127).
 - `network/fix-wsl-networking.sh` — diagnose and repair WSL2 port forwarding between frontend and
   backend. See [`docs/developer/WSL2_NETWORKING.md`](../../../docs/developer/WSL2_NETWORKING.md)
   for the failure mode it addresses.
-- `install-doc-sync-hook.sh` — install the `post-commit-doc-sync` git hook into this checkout, so
-  documentation edits reindex the knowledge base on commit. Run once per clone.
+- `install-doc-sync-hook.sh` — install the `post-merge-doc-sync` git hook into this checkout, so
+  documentation edits on `main` reindex the knowledge base once merged/pulled. Run once per clone.
   ```bash
   bash autobot-infrastructure/shared/scripts/install-doc-sync-hook.sh
   ```
