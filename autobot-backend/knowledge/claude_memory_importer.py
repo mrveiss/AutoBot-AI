@@ -148,6 +148,12 @@ def fact_id_for(slug: str, owner_id: str) -> str:
     return f"{CATEGORY}:{owner_id}:{slug}"
 
 
+def _legacy_fact_id_for(slug: str) -> str:
+    """Pre-#17124 unscoped id. Kept only to detect and carry forward a fact
+    imported before owner-scoping existed -- never used to create a new one."""
+    return f"{CATEGORY}:{slug}"
+
+
 def _fact_content(memory: ParsedMemory) -> str:
     if memory.description:
         return f"{memory.description}\n\n{memory.body}"
@@ -247,6 +253,35 @@ async def import_memory_file(kb: Any, path: Path, owner_id: str) -> str:
         if result.get("status") != "success":
             raise MemoryWriteError(f"{path.name}: update_fact failed: {result.get('message')}")
         return "updated"
+
+    # #17124: the scoped fact doesn't exist yet. Check for a pre-scoping
+    # (legacy) fact under the same slug first -- otherwise every file
+    # already imported before this fix creates a duplicate and orphans the
+    # original the moment it ships.
+    legacy_fact_id = _legacy_fact_id_for(memory.slug)
+    legacy_fact = kb.get_fact(legacy_fact_id)
+    if legacy_fact is not None:
+        legacy_owner = (legacy_fact.get("metadata") or {}).get("owner_id")
+        if legacy_owner == owner_id:
+            # Same owner: carry forward in place under the legacy id rather
+            # than create a second copy of a fact this owner already has.
+            result = await kb.update_fact(legacy_fact_id, content=content, metadata=metadata)
+            if result.get("status") != "success":
+                raise MemoryWriteError(
+                    f"{path.name}: update_fact (legacy carry-forward) failed: {result.get('message')}"
+                )
+            return "updated"
+        # Different owner: the legacy fact isn't this importer's to touch --
+        # create the new scoped fact and leave the legacy one exactly as is.
+        # No update, no delete. Cleanup, if any, goes through the human
+        # approval queue (#17038), never automatically.
+        logger.warning(
+            "claude_memory_importer: legacy fact %s is owned by %r, not the current owner %r -- "
+            "creating a new scoped fact and leaving the legacy fact untouched",
+            legacy_fact_id,
+            legacy_owner,
+            owner_id,
+        )
 
     result = await kb.store_fact(content, metadata=metadata, fact_id=fact_id)
     status = result.get("status")
