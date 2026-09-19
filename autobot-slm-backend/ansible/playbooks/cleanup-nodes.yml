@@ -201,8 +201,8 @@
 # ---------------------------------------------------------------------------
 # Play 4: NPU Worker — remove wrong-node and legacy dirs
 # ---------------------------------------------------------------------------
-- name: "Cleanup: npu-worker"
-  hosts: npu-worker
+- name: "Cleanup: npu-worker (.22)"
+  hosts: npu_worker
   gather_facts: false
   become: true
 
@@ -285,8 +285,8 @@
 # ---------------------------------------------------------------------------
 # Play 7: Browser — remove legacy browser-service and wrong-node dirs
 # ---------------------------------------------------------------------------
-- name: "Cleanup: browser-automation"
-  hosts: browser-automation
+- name: "Cleanup: browser-automation (.25)"
+  hosts: browser
   gather_facts: false
   become: true
 
