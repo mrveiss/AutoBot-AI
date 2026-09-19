@@ -87,7 +87,7 @@ async def wait_for_idle(
     if current is not None and not current.busy:
         return
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     resolved: asyncio.Future[None] = loop.create_future()
 
     async def _listener(event_data: dict) -> None:
