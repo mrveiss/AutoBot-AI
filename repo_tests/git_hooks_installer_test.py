@@ -35,7 +35,7 @@ from autobot_shared.paths import scrubbed_git_env
 _REPO_ROOT = repo_root()
 _INSTALLER = _REPO_ROOT / "scripts" / "install-git-hooks.sh"
 _TEMPLATES = _REPO_ROOT / "tools" / "git-hooks"
-_MANAGED = ("pre-commit", "pre-push")
+_MANAGED = ("pre-commit", "pre-push", "commit-msg")
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
