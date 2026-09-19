@@ -38,6 +38,7 @@ from models.database import (
     ServiceStatus,
     Setting,
 )
+from services.db_transaction_errors import is_connection_level_db_error
 from services.service_categorizer import categorize_service
 from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
 from services.service_remediation_tracker import (
@@ -1906,53 +1907,41 @@ class ReconcilerService:
         Helper for _sync_discovered_services. Ref: #1088.
 
         Returns whether this service is managed and CURRENTLY churning --
-        see `_restart_churn_active` (#14465).
-
-        #14465 review: the broad `except Exception` below (pre-existing --
-        Ref #1088 -- kept broad so one service's sync failure never aborts
-        the whole heartbeat) also swallows a transient failure of the row
-        SELECT itself, not just the upsert logic after it. On that beat this
-        returns `False` ("not churning") regardless of the service's real
-        state -- the churn signal is a function of DB availability for that
-        one heartbeat, not just of the service. Self-healing (the next
-        heartbeat tries again, and the level design means one missed beat
-        does not by itself end an already-armed window), but not something
-        this fix eliminates.
+        see `_restart_churn_active` (#14465). DB work runs in its own
+        SAVEPOINT (#17070) so a row-level failure can't poison the session.
         """
         service_name = svc_data.get("name")
         if not service_name:
             return False
 
         try:
-            result = await db.execute(
-                select(Service).where(
-                    Service.node_id == node_id,
-                    Service.service_name == service_name,
+            async with db.begin_nested():
+                result = await db.execute(
+                    select(Service).where(
+                        Service.node_id == node_id,
+                        Service.service_name == service_name,
+                    )
                 )
-            )
-            service = result.scalar_one_or_none()
+                service = result.scalar_one_or_none()
 
-            status = svc_data.get("status", "unknown")
-            if status not in [s.value for s in ServiceStatus]:
-                status = ServiceStatus.UNKNOWN.value
+                status = svc_data.get("status", "unknown")
+                if status not in [s.value for s in ServiceStatus]:
+                    status = ServiceStatus.UNKNOWN.value
 
-            # Issue #1019: Capture error context for failed services
-            error_msg = svc_data.get("error_message", "")
-            svc_extra = {"error_message": error_msg} if error_msg else {}
-            svc_extra.update(engine_degraded_fields(svc_data))
+                # Issue #1019: Capture error context for failed services
+                error_msg = svc_data.get("error_message", "")
+                svc_extra = {"error_message": error_msg} if error_msg else {}
+                svc_extra.update(engine_degraded_fields(svc_data))
 
-            if service:
-                return self._update_existing_service(service, svc_data, status, error_msg, now)
-            service = self._create_new_service(node_id, service_name, svc_data, status, svc_extra, now)
-            db.add(service)
-            return False
+                if service:
+                    return self._update_existing_service(service, svc_data, status, error_msg, now)
+                service = self._create_new_service(node_id, service_name, svc_data, status, svc_extra, now)
+                db.add(service)
+                return False
         except Exception as exc:
-            logger.warning(
-                "service sync failed node=%s service=%s error=%s",
-                node_id,
-                service_name,
-                exc,
-            )
+            if is_connection_level_db_error(exc):
+                raise
+            logger.warning("service sync failed node=%s service=%s error=%s", node_id, service_name, exc)
             return False
 
     async def _remove_stale_services(
@@ -1961,22 +1950,26 @@ class ReconcilerService:
         node_id: str,
         discovered_services: list,
     ) -> None:
-        """Delete services no longer reported by the agent for a node.
-
-        Helper for _sync_discovered_services. Ref: #1088.
-        """
+        """Delete stale services. Helper for _sync_discovered_services (#1088).
+        Same savepoint protection as `_upsert_service` (#17070)."""
         discovered_names = {s.get("name") for s in discovered_services if s.get("name")}
         if not discovered_names:
             return
 
-        stale_result = await db.execute(
-            select(Service).where(
-                Service.node_id == node_id,
-                Service.service_name.notin_(discovered_names),
-            )
-        )
-        for stale_svc in stale_result.scalars().all():
-            await db.delete(stale_svc)
+        try:
+            async with db.begin_nested():
+                stale_result = await db.execute(
+                    select(Service).where(
+                        Service.node_id == node_id,
+                        Service.service_name.notin_(discovered_names),
+                    )
+                )
+                for stale_svc in stale_result.scalars().all():
+                    await db.delete(stale_svc)
+        except Exception as exc:
+            if is_connection_level_db_error(exc):
+                raise
+            logger.warning("stale service removal failed node=%s error=%s", node_id, exc)
 
     async def _sync_discovered_services(
         self,
@@ -1984,12 +1977,11 @@ class ReconcilerService:
         node_id: str,
         discovered_services: list,
     ) -> bool:
-        """
-        Sync discovered services from agent heartbeat to database.
-
-        Related to Issue #728.
+        """Sync discovered services from agent heartbeat to database (#728).
 
         Returns whether ANY managed service is CURRENTLY churning (#14465).
+        A connection-level failure aborts immediately with one log line
+        naming node/stage/exception class, then re-raises (#17070).
         """
         if not discovered_services:
             return False
@@ -1997,12 +1989,20 @@ class ReconcilerService:
         now = datetime.now(timezone.utc)
 
         any_churning = False
-        for svc_data in discovered_services:
-            if await self._upsert_service(db, node_id, svc_data, now):
-                any_churning = True
+        stage = "service sync"
+        try:
+            for svc_data in discovered_services:
+                if await self._upsert_service(db, node_id, svc_data, now):
+                    any_churning = True
 
-        # Remove stale services no longer reported by the agent (#1018)
-        await self._remove_stale_services(db, node_id, discovered_services)
+            # Remove stale services no longer reported by the agent (#1018)
+            stage = "stale service removal"
+            await self._remove_stale_services(db, node_id, discovered_services)
+        except Exception as exc:
+            if not is_connection_level_db_error(exc):
+                raise
+            logger.error("Aborting service sync node=%s stage=%r %s: %s", node_id, stage, type(exc).__name__, exc)
+            raise
 
         # Note: commit happens in the calling method (update_node_heartbeat)
         return any_churning
