@@ -20,6 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.websocket_subprotocol import accept_websocket
 from models.collaboration_event import CollaborationEvent
 from user_management.database import get_async_session_factory
 
@@ -326,7 +327,7 @@ async def presence_websocket_handler(
         session_id: Session identifier
         user_id: User identifier
     """
-    await websocket.accept()
+    await accept_websocket(websocket)
     try:
         await presence_manager.connect(session_id, user_id, websocket)
         await _send_presence_sync(websocket, session_id)

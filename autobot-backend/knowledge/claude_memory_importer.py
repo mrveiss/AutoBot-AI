@@ -135,8 +135,22 @@ def iter_memory_files(memory_dir: Path) -> Iterator[Path]:
         yield path
 
 
-def fact_id_for(slug: str) -> str:
-    """Deterministic knowledge_facts id for a memory slug — makes re-import idempotent."""
+def fact_id_for(slug: str, owner_id: str) -> str:
+    """Deterministic knowledge_facts id for a memory slug — makes re-import idempotent.
+
+    Scoped by owner_id (#17124): an unscoped id let two different owners whose
+    memory files share a slug collide on the same fact, so importer B's
+    ``update_fact`` would silently overwrite importer A's content and
+    owner_id with no access check in between. Scoping makes each owner's
+    facts live under disjoint ids by construction, so the existence check
+    this id feeds (`kb.get_fact`) can never cross an ownership boundary.
+    """
+    return f"{CATEGORY}:{owner_id}:{slug}"
+
+
+def _legacy_fact_id_for(slug: str) -> str:
+    """Pre-#17124 unscoped id. Kept only to detect and carry forward a fact
+    imported before owner-scoping existed -- never used to create a new one."""
     return f"{CATEGORY}:{slug}"
 
 
@@ -224,7 +238,7 @@ async def import_memory_file(kb: Any, path: Path, owner_id: str) -> str:
     knowledge_facts write path itself rejects the write.
     """
     memory = parse_memory_file(path)
-    fact_id = fact_id_for(memory.slug)
+    fact_id = fact_id_for(memory.slug, owner_id)
     raw_content = _fact_content(memory)
     content, blocked, hit_types = _redact(raw_content)
     if blocked:
@@ -239,6 +253,35 @@ async def import_memory_file(kb: Any, path: Path, owner_id: str) -> str:
         if result.get("status") != "success":
             raise MemoryWriteError(f"{path.name}: update_fact failed: {result.get('message')}")
         return "updated"
+
+    # #17124: the scoped fact doesn't exist yet. Check for a pre-scoping
+    # (legacy) fact under the same slug first -- otherwise every file
+    # already imported before this fix creates a duplicate and orphans the
+    # original the moment it ships.
+    legacy_fact_id = _legacy_fact_id_for(memory.slug)
+    legacy_fact = kb.get_fact(legacy_fact_id)
+    if legacy_fact is not None:
+        legacy_owner = (legacy_fact.get("metadata") or {}).get("owner_id")
+        if legacy_owner == owner_id:
+            # Same owner: carry forward in place under the legacy id rather
+            # than create a second copy of a fact this owner already has.
+            result = await kb.update_fact(legacy_fact_id, content=content, metadata=metadata)
+            if result.get("status") != "success":
+                raise MemoryWriteError(
+                    f"{path.name}: update_fact (legacy carry-forward) failed: {result.get('message')}"
+                )
+            return "updated"
+        # Different owner: the legacy fact isn't this importer's to touch --
+        # create the new scoped fact and leave the legacy one exactly as is.
+        # No update, no delete. Cleanup, if any, goes through the human
+        # approval queue (#17038), never automatically.
+        logger.warning(
+            "claude_memory_importer: legacy fact %s is owned by %r, not the current owner %r -- "
+            "creating a new scoped fact and leaving the legacy fact untouched",
+            legacy_fact_id,
+            legacy_owner,
+            owner_id,
+        )
 
     result = await kb.store_fact(content, metadata=metadata, fact_id=fact_id)
     status = result.get("status")
