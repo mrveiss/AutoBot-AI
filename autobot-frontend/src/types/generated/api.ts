@@ -36634,7 +36634,7 @@ export interface paths {
         put?: never;
         /**
          * Approve Command
-         * @description Approve or deny a pending command execution
+         * @description Approve or deny a pending command execution; a person decides and is recorded (#17052).
          */
         post: operations["approve_command_api_security_approve_command_post"];
         delete?: never;
@@ -98087,7 +98087,7 @@ export interface components {
             approved: boolean;
             /**
              * User Id
-             * @description User who made the decision
+             * @description Ignored (#17052): the approver is the verified caller
              */
             user_id?: string | null;
             /**
@@ -98385,9 +98385,9 @@ export interface components {
         TerminalInterruptRequest: {
             /**
              * User Id
-             * @description User requesting control
+             * @description Ignored (#17052): the actor is the verified caller
              */
-            user_id: string;
+            user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -139327,7 +139327,10 @@ export interface operations {
     };
     request_host_selection_api_agent_terminal_host_selection_request_post: {
         parameters: {
-            query?: never;
+            query?: {
+                async_client?: boolean;
+                database?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -139618,8 +139621,8 @@ export interface operations {
     };
     execute_agent_command_api_agent_terminal_execute_post: {
         parameters: {
-            query?: {
-                session_id?: string;
+            query: {
+                session_id: string;
                 async_client?: boolean;
                 database?: string;
             };
@@ -139874,7 +139877,10 @@ export interface operations {
     };
     get_command_state_api_agent_terminal_commands__command_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                async_client?: boolean;
+                database?: string;
+            };
             header?: never;
             path: {
                 command_id: string;
