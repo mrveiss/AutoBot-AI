@@ -198,6 +198,8 @@
     "systemHealth": "سلامت سیستم",
     "providerFallback": "جایگزینی ارائه‌دهنده",
     "advancedControl": "کنترل پیشرفته",
+    "adminPricing": "قیمت‌گذاری مدل‌ها",
+    "adminMcpServers": "سرورهای MCP",
     "llcRoles": "نقش‌ها"
   },
   "llcCompanyStatus": {

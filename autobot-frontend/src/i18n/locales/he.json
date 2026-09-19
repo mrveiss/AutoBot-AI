@@ -198,6 +198,8 @@
     "systemHealth": "בריאות המערכת",
     "providerFallback": "גיבוי ספק",
     "advancedControl": "בקרה מתקדמת",
+    "adminPricing": "תמחור דגמים",
+    "adminMcpServers": "שרתוני MCP",
     "llcRoles": "תפקידים"
   },
   "llcCompanyStatus": {
