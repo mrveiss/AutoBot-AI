@@ -154,6 +154,46 @@ def _high_entropy(s: str, threshold: float = 4.2) -> bool:
 _DetectorEntry = Tuple[PIIType, re.Pattern, Callable[[str], bool] | None]
 
 
+def _build_credential_detectors() -> Tuple[re.Pattern, re.Pattern]:
+    """Construct the API-key/generic-credential and PEM-block detectors.
+
+    Extracted from _build_detectors() (#620 function-length guideline) —
+    also the natural seam for the #16642 security review round 2 widening:
+    key_name_alts was scoped to API-key-shaped names only, so a generic
+    ``password = "..."`` or ``token: "..."`` assignment passed through
+    untouched even though it's exactly as sensitive. Widened to the common
+    credential-assignment vocabulary; still BLOCK-tier via the existing
+    API_KEY policy entry — no new PIIType, no policy-table change. The PEM
+    header line alone is enough to trigger that same policy; deliberately
+    not trying to match the full multi-line base64 body (unbounded width,
+    no redaction benefit over blocking on the header).
+    """
+    key_prefixes = "|".join(["sk", "pk", "rk", "ak"])
+    key_name_alts = "|".join(
+        [
+            "api[-_]?key",
+            "apikey",
+            "api[-_]?secret",
+            "access[-_]?token",
+            "auth[-_]?token",
+            "token",
+            "secret",
+            "password",
+            "passwd",
+            "private[-_]?key",
+        ]
+    )
+    api_key_re = re.compile(
+        rf"(?:"
+        rf"\b(?:{key_prefixes})[-_][A-Za-z0-9]{{20,}}\b"
+        rf"|(?:{key_name_alts})\s*[=:]\s*['\"]?[A-Za-z0-9\-_/+]{{20,}}['\"]?"
+        rf")",
+        re.IGNORECASE,
+    )
+    pem_key_re = re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----")
+    return api_key_re, pem_key_re
+
+
 def _build_detectors() -> List[_DetectorEntry]:
     """Construct the ordered list of regex + validator pairs."""
     # JWT — three base64url segments (header.payload.signature)
@@ -169,16 +209,9 @@ def _build_detectors() -> List[_DetectorEntry]:
     aws_prefixes = "|".join(["AKIA", "ASIA", "AROA", "AIDA", "ANPA", "ANVA", "APKA"])
     aws_re = re.compile(rf"\b({aws_prefixes})[A-Z0-9]{{16}}\b")
 
-    # API key shapes: sk-..., pk-..., or assignment form key = "..."
-    key_prefixes = "|".join(["sk", "pk", "rk", "ak"])
-    key_name_alts = "|".join(["api[-_]?key", "apikey", "api[-_]?secret", "access[-_]?token"])
-    api_key_re = re.compile(
-        rf"(?:"
-        rf"\b(?:{key_prefixes})[-_][A-Za-z0-9]{{20,}}\b"
-        rf"|(?:{key_name_alts})\s*[=:]\s*['\"]?[A-Za-z0-9\-_/+]{{20,}}['\"]?"
-        rf")",
-        re.IGNORECASE,
-    )
+    # API key shapes: sk-..., pk-..., assignment form key = "...", or a PEM
+    # private-key block header — see _build_credential_detectors().
+    api_key_re, pem_key_re = _build_credential_detectors()
 
     # SSN (US format — excludes 000, 666, 900–999 first segment)
     ssn_re = re.compile(r"\b(?!000|666|9\d\d)\d{3}[-\s](?!00)\d{2}[-\s](?!0000)\d{4}\b")
@@ -225,6 +258,7 @@ def _build_detectors() -> List[_DetectorEntry]:
         (PIIType.BEARER_TOKEN, bearer_re, None),
         (PIIType.AWS_ACCESS_KEY, aws_re, None),
         (PIIType.API_KEY, api_key_re, None),
+        (PIIType.API_KEY, pem_key_re, None),
         (PIIType.SSN, ssn_re, None),
         (PIIType.CREDIT_CARD, cc_re, _luhn),
         (PIIType.EMAIL, email_re, None),

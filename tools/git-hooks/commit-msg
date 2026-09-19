@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# AutoBot commit-msg hook. scripts/install-git-hooks.sh copies it into the shared
+# hooks dir (git-common-dir), so it applies to every worktree.
+#
+# 1. Strip tool and co-author trailers: mrveiss is sole author (owner policy
+#    2026-07-03). Removes Co-authored-by, "Generated with [Claude Code]",
+#    Claude-Session: and robot-emoji promo lines. Stripping only some trailers is
+#    worse than stripping none: the survivor looks vetted by a sanitiser that
+#    never considered it.
+# 2. Require the subject convention, issue reference included (#17029):
+#    `<type>(scope): <description> (#NNNN)`. The check is
+#    `scripts/lint-conventions.sh --commit-msg`, the one implementation of that
+#    rule (the pre-commit framework's `lint-commit-subject` runs the same script),
+#    so this hook cannot drift from it, and its exemptions (Merge, Revert,
+#    fixup!, squash!, worktree claims) apply. git runs commit-msg for `git
+#    commit` (including --amend), a real merge commit, and a rebase reword or
+#    conflict --continue; a plain revert or cherry-pick does not run it.
+set -euo pipefail
+msg_file="${1:?commit-msg: missing message file arg}"
+[ -f "$msg_file" ] || exit 0
+
+# 1) drop trailer lines (case-insensitive Co-authored-by; Claude Code promo line)
+grep -viE '^[[:space:]]*Co-authored-by:[[:space:]]' "$msg_file" \
+  | grep -viE '^[[:space:]]*(🤖[[:space:]]*)?Generated with \[?Claude' \
+  | grep -viE '^[[:space:]]*Claude-Session:' \
+  > "$msg_file.strip" || true
+
+# 2) collapse trailing blank lines to a single newline
+awk 'NF{p=NR} {a[NR]=$0} END{for(i=1;i<=p;i++)print a[i]}' "$msg_file.strip" > "$msg_file.tmp"
+mv "$msg_file.tmp" "$msg_file"
+rm -f "$msg_file.strip"
+
+# 3) the subject convention (#17029). git runs every hook from the top of the
+#    working tree (githooks(5)), so $PWD is the checkout's root -- no bare
+#    `git rev-parse --show-toplevel`, which an inherited GIT_DIR can redirect
+#    (#15783). A checkout that predates the script (an old branch) cannot be
+#    checked; say so rather than block every commit on it.
+lint="$PWD/scripts/lint-conventions.sh"
+if [ ! -f "$lint" ]; then
+  echo "commit-msg: $lint not found in this checkout; subject convention not checked" >&2
+  exit 0
+fi
+msg_abs="$(cd "$(dirname "$msg_file")" && pwd)/$(basename "$msg_file")"
+bash "$lint" --commit-msg "$msg_abs"

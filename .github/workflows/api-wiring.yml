@@ -143,8 +143,13 @@ jobs:
             fi
             export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
 
+            # #16816: --dead-surface lists backend capability no part of the
+            # frontend reaches. The flag has existed for the life of the script
+            # and CI had never passed it, so the number was never known. It does
+            # not contribute to the exit code -- report-only until the first
+            # real count has been read and triaged.
             python scripts/audit_api_wiring.py --openapi openapi.json "${SLM_ARGS[@]}" \
-              --baseline scripts/api_wiring_baseline.txt --fail-on-unwired
+              --baseline scripts/api_wiring_baseline.txt --dead-surface --fail-on-unwired
           else
             echo "::warning::App build failed in CI — falling back to static (heuristic) audit."
             python scripts/audit_api_wiring.py
