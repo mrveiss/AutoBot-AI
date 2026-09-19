@@ -56,6 +56,7 @@ from api.knowledge_audit import router as knowledge_audit_router
 from api.knowledge_boards import router as knowledge_boards_router
 from api.knowledge_categories import router as knowledge_categories_router
 from api.knowledge_chroma import router as knowledge_chroma_router  # MVA-2046
+from api.knowledge_claude_memory import router as knowledge_claude_memory_router
 from api.knowledge_cognition import router as knowledge_cognition_router
 from api.knowledge_collaboration import router as knowledge_collaboration_router
 from api.knowledge_collections import router as knowledge_collections_router
@@ -300,6 +301,12 @@ def _get_knowledge_organization_routers() -> list:
             "/knowledge_base",
             ["knowledge-population"],
             "knowledge_population",
+        ),
+        (
+            knowledge_claude_memory_router,
+            "/knowledge_base",
+            ["knowledge-population"],
+            "knowledge_claude_memory",
         ),
     ]
 

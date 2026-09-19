@@ -59,6 +59,11 @@ python:
   # omits the inputs it guards" shape flagged in review.
   - 'docker/backend/Dockerfile'
   - 'docker/slm/Dockerfile'
+  # #17096: repo_tests/secrets_baseline_reasons.py reads this file by literal
+  # path (its SPECIFIC_REASONS entries name it directly) -- the same
+  # filter-gap shape as the five entries above, caught by
+  # python_filter_covers_its_guards_test.py.
+  - 'docker/.env.docker'
   - 'autobot-slm-backend/ansible/roles/slm_manager/templates/autobot-slm-backend.service.j2'
   - 'autobot-slm-backend/ansible/roles/slm_agent/templates/slm-agent.service.j2'
   - 'autobot-slm-backend/ansible/roles/ai-stack/templates/ai-stack.env.j2'

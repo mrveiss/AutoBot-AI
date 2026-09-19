@@ -81,7 +81,9 @@ def test_parse_rejects_unusable_scopes(raw):
 
 
 def test_parse_accepts_every_valid_kind():
-    for kind in ("path", "kb", "device", "project", "config"):
+    # provider/cpu/queue (#16951): flat, contended-resource kinds, not
+    # filesystem-shaped trees -- parsed and overlap-checked identically.
+    for kind in ("path", "kb", "device", "project", "config", "provider", "cpu", "queue"):
         assert Scope.parse(f"{kind}:a/b").kind == kind
 
 

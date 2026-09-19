@@ -218,6 +218,13 @@ celery_app.conf.beat_schedule = {
         "task": "llc.scheduler.project_disposal_sweep.run_disposal_sweep",
         "schedule": crontab(hour=1, minute=0),
     },
+    # #16817: close out runs whose agent stopped reporting. Hourly rather than
+    # nightly: a stalled run holds whatever it claimed, and the cost of noticing
+    # late is a workspace nobody can reclaim until someone spots it by hand.
+    "llc-stalled-run-sweep": {
+        "task": "llc.scheduler.stalled_run_sweep.run_stalled_run_sweep",
+        "schedule": crontab(minute=20),
+    },
     # GH#7356: background audit daemon — testgaps, dead-code, claims
     # Beat pidfile must NOT reside on tmpfs (/run/autobot/ is wiped on reboot).
     "audit-testgaps-6h": {

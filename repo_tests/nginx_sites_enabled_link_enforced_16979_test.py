@@ -58,6 +58,7 @@ from pathlib import Path
 
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 _REPO_ROOT = repo_root()
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
@@ -430,11 +431,34 @@ def test_role_with_only_a_reload_handler_is_not_flagged() -> None:
 # of its position relative to whichever task notified that handler.
 # --------------------------------------------------------------------------
 
-_PLAY_YML_VACUITY_FLOOR = 100  # *.yml files anywhere under the ansible tree
+
+def _all_ansible_yml_files(repo_root: Path) -> list[Path]:
+    """Every *.yml file under the ansible tree, addressed from *repo_root*.
+
+    Takes the REPO root, not the ansible root, and resolves the subtree
+    internally: `reach_declarations_test` always calls a declaration's
+    `discover` with `_REPO_ROOT` uniformly, so a `discover` scoped to a
+    narrower argument would find nothing there and its floor could never
+    pass the empty-tree mutation (#15928).
+    """
+    return sorted((repo_root / "autobot-slm-backend" / "ansible").rglob("*.yml"))
 
 
-def _all_ansible_yml_files(ansible_root: Path) -> list[Path]:
-    return sorted(ansible_root.rglob("*.yml"))
+#: MEASURED 2026-09-19 against this tree: 336 *.yml files anywhere under the
+#: ansible tree. Migrated from a hand-rolled `_PLAY_YML_VACUITY_FLOOR = 100`
+#: (#15928 review, #17096) to `_reach.declare`, so the empty-tree case is
+#: proven by `reach_declarations_test` instead of asserted once and never
+#: exercised. `growth=34` (~10% of the population) absorbs ordinary new
+#: playbook/role files; `skips=0` since discovery is a bare glob, nothing to
+#: fail parsing.
+_PLAY_YML_REACH = declare(
+    "nginx-play-level-yml-sweep",
+    discover=_all_ansible_yml_files,
+    floor=336,
+    growth=34,
+    skips=0,
+    what="*.yml files under the ansible tree",
+)
 
 
 def _plays_with_own_handlers(path: Path) -> list[dict]:
@@ -505,17 +529,11 @@ def _play_reload_gap(play: dict) -> str | None:
 
 
 def test_play_level_yml_files_vacuity_floor() -> None:
-    files = _all_ansible_yml_files(_ANSIBLE_ROOT)
-    assert len(files) >= _PLAY_YML_VACUITY_FLOOR, (
-        f"only {len(files)} *.yml files found under {_ANSIBLE_ROOT} -- expected at least "
-        f"{_PLAY_YML_VACUITY_FLOOR}. The scan did not reach the ansible tree -- this is "
-        "'did not look', not 'found nothing to fix'."
-    )
+    _PLAY_YML_REACH.examined(_REPO_ROOT)
 
 
 def test_play_level_nginx_reload_handlers_are_safely_ordered() -> None:
-    files = _all_ansible_yml_files(_ANSIBLE_ROOT)
-    assert len(files) >= _PLAY_YML_VACUITY_FLOOR, "vacuity floor failed -- see test_play_level_yml_files_vacuity_floor"
+    files = _PLAY_YML_REACH.examined(_REPO_ROOT)
 
     reload_plays = []
     gaps = []
