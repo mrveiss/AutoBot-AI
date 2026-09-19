@@ -85,6 +85,15 @@ _SANDBOX_TOOLS = (
     "dirname",
     "basename",
     "env",
+    # #16728's prepush_selection error-capture path (pre-push:387,395) needs
+    # these three -- missing from this list until the vehicle merge that
+    # first combined it with this test exercised that path. Without python3,
+    # `python3 -m tools.lint.prepush_selection` exits 127 unconditionally,
+    # which the hook treats as "selection failed" regardless of whether the
+    # synthetic repo has any Python files changed.
+    "mktemp",
+    "rm",
+    "python3",
 )
 
 _GH_STUB = """#!/usr/bin/env bash
@@ -178,6 +187,12 @@ def _base_env(tmp_path: Path, bin_dir: Path) -> dict:
             "HOME": str(tmp_path),
             "GIT_CONFIG_GLOBAL": "/dev/null",
             "GIT_CONFIG_SYSTEM": "/dev/null",
+            # #16728's `python3 -m tools.lint.prepush_selection` call resolves
+            # `tools` via PYTHONPATH, not cwd -- cwd is the synthetic repo
+            # below, which has no `tools/` package of its own. Runs the REAL
+            # selection tool's code against the synthetic repo's git state,
+            # same split as HOOK_PATH itself (real script, fake repo).
+            "PYTHONPATH": str(repo_root()),
         }
     )
 
@@ -196,7 +211,12 @@ def _seed_repo(tmp_path: Path, env: dict, branch: str, *, second_commit: bool) -
     _git(local, "config", "user.email", "t@t", env=env)
     _git(local, "config", "user.name", "t", env=env)
     (local / "README.md").write_text("seed\n", encoding="utf-8")
-    _git(local, "add", "README.md", env=env)
+    # prepush_selection.py's main() reads `(Path.cwd() / "pytest.ini")` --
+    # needs SOME pytest.ini in the synthetic repo, or it raises before ever
+    # looking at PYTHONPATH. Real defaults so the selection logic behaves
+    # like this repo's own.
+    (local / "pytest.ini").write_text("[pytest]\npython_files = test_*.py *_test.py\n", encoding="utf-8")
+    _git(local, "add", "README.md", "pytest.ini", env=env)
     _git(local, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "seed", env=env)
     _git(local, "remote", "add", "origin", str(bare), env=env)
     _git(local, "push", "-q", "origin", "main", env=env)
