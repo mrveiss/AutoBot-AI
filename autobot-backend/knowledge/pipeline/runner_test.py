@@ -156,6 +156,43 @@ class TestPipelineRunnerExecution:
         assert len(loaded_ctx.entities) == 2
 
     @pytest.mark.asyncio
+    async def test_run_redacts_a_credential_before_the_extract_stage(self, pipeline_config):
+        """#13708 round 4: the ECL pipeline never ran the credential sanitizer at
+        all. Drives the real PipelineRunner.run() (not _run_extract_stage in
+        isolation) with a poisoned input_data; MockExtractor interpolates
+        input_data straight into each chunk's content
+        (f"Chunk {i}: {input_data}"), so if redaction happens before the extract
+        stage's task loop, no chunk -- and therefore nothing chromadb_loader.py
+        or sqlite_loader.py would persist -- carries the raw secret."""
+        secret = "sk-" + "abcdefghijklmnopqrstuvwxyz123456"
+        runner = PipelineRunner(pipeline_config)
+        context = PipelineContext()
+        context.document_id = uuid4()
+
+        result = await runner.run(f"Setup instructions: your API key is {secret}", context)
+
+        assert result.errors == []
+        loaded_ctx = MockLoader.loaded_contexts[0]
+        assert len(loaded_ctx.chunks) == 2
+        for chunk in loaded_ctx.chunks:
+            assert secret not in chunk.content
+        # Not silently emptied -- the surrounding text (and the fact something
+        # was extracted at all) survives the redaction pass.
+        assert any("Setup instructions" in chunk.content for chunk in loaded_ctx.chunks)
+
+    @pytest.mark.asyncio
+    async def test_run_a_safe_document_is_unchanged(self, pipeline_config):
+        """Negative control: the redaction pass must not mangle ordinary text."""
+        runner = PipelineRunner(pipeline_config)
+        context = PipelineContext()
+        context.document_id = uuid4()
+
+        await runner.run("Redis listens on port 6379.", context)
+
+        loaded_ctx = MockLoader.loaded_contexts[0]
+        assert any("Redis listens on port 6379." in chunk.content for chunk in loaded_ctx.chunks)
+
+    @pytest.mark.asyncio
     async def test_extract_stage_only(self):
         config = {
             "name": "extract_only",

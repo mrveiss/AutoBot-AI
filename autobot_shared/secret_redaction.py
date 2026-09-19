@@ -33,12 +33,24 @@ Redaction rules
   answers the most common diagnostic question directly.
 
 Issue: #13325
+
+Content-scanning companion (#13708)
+------------------------------------
+Everything above is *name-keyed*: it only masks a value when the field name
+already says it holds a credential. ``scan_content_for_credentials`` and
+``redact_content`` are the opposite -- they look at the *content* of free
+text (a message body, a document, a log line) with no field name to go on,
+for exactly the case a config-model redactor cannot reach: a credential
+sitting in prose ("your temporary password is X"), not behind a named field.
 """
 
 from __future__ import annotations
 
+import math
+import re
+from dataclasses import dataclass
 from typing import Any, ClassVar, FrozenSet, Iterable, Tuple
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 # Masked stand-in for a populated credential value.  Fixed width so the mask
 # never discloses the length of the real secret.
@@ -118,6 +130,45 @@ def redact_url_userinfo(value: str, mask_username: bool = False) -> str:
     return urlunsplit(parsed._replace(netloc=netloc))
 
 
+def _redact_credential_query_params(query: str) -> str:
+    """Mask credential-shaped query-param values (``?api_key=X``, ``&token=Y``).
+
+    Reuses :func:`is_credential_field` on each param NAME -- the same rule
+    that already decides a config field is credential-shaped decides a query
+    param is too, so ``api_key``/``token``/``secret``/... are caught without
+    a second, drifting list of credential-ish names.
+    """
+    if not query:
+        return query
+    pairs = parse_qsl(query, keep_blank_values=True)
+    if not pairs:
+        return query
+    redacted = [(k, REDACTED_PLACEHOLDER if v and is_credential_field(k) else v) for k, v in pairs]
+    return urlencode(redacted)
+
+
+def redact_url_credentials(url: str) -> str:
+    """Mask both userinfo (``user:pass@``) and credential-shaped query params
+    in a URL (#13708 round 4) -- ``redact_url_userinfo`` alone leaves
+    ``?api_key=X``/``&token=Y`` untouched, and those are exactly how most
+    REST APIs and webhook URLs carry a credential instead of Basic-Auth.
+
+    Preserves scheme/host/port/path and every non-credential query param, so
+    a redacted URL is still diagnosable, same principle as
+    ``redact_url_userinfo``.
+    """
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return REDACTED_PLACEHOLDER
+    stripped_userinfo = redact_url_userinfo(url)
+    reparsed = urlsplit(stripped_userinfo) if stripped_userinfo != url else parsed
+    new_query = _redact_credential_query_params(reparsed.query)
+    if new_query == reparsed.query:
+        return stripped_userinfo
+    return urlunsplit(reparsed._replace(query=new_query))
+
+
 def redact_value(name: str, value: Any) -> Any:
     """Mask ``value`` when ``name`` is credential-shaped and the value is set."""
     if value is None or value == "":
@@ -151,3 +202,174 @@ class RedactedReprMixin:
                 yield name, value
             else:
                 yield name, redact_value(name, value)
+
+
+# ---------------------------------------------------------------------------
+# Content-scanning companion (#13708)
+# ---------------------------------------------------------------------------
+
+
+#: One detected credential-shaped span in free text: which rule matched, where,
+#: and how confident the rule is. Structured so a caller can quarantine or log
+#: instead of only ever getting back a mangled string with no explanation.
+@dataclass(frozen=True)
+class ContentMatch:
+    pattern: str
+    start: int
+    end: int
+    confidence: str  # "high" | "medium"
+
+
+_PEM_BLOCK_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----")
+
+# A JWT is three base64url segments joined by dots; the first two decode to
+# JSON objects, so both start with the base64url encoding of ``{"`` (``eyJ``).
+_JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")
+
+# Provider-specific prefixes with a fixed, well-documented shape — the same
+# patterns every mainstream secret scanner (gitleaks, trufflehog, detect-secrets)
+# keys on, so a match here is unambiguous regardless of surrounding context.
+_KNOWN_PREFIX_RE = re.compile(
+    r"\b(?:"
+    r"sk-[A-Za-z0-9]{20,}"  # OpenAI/Anthropic
+    r"|gsk_[A-Za-z0-9]{20,}"  # Groq
+    r"|gh[pousr]_[A-Za-z0-9]{30,}"  # GitHub (personal/oauth/user-to-server/server-to-server/refresh)
+    r"|AKIA[0-9A-Z]{16}"  # AWS access key ID
+    r"|xox[baprs]-[A-Za-z0-9-]{10,}"  # Slack
+    r")\b"
+)
+
+# scheme://user:password@host -- credentials embedded directly in a URL. Both
+# userinfo components stop at '?' and '#' too, not just '/' and '@' -- without
+# that, "https://example.com?next=user:pass@example.org" reads its query
+# string as a username and wrongly redacts ordinary URL content (review).
+_BASIC_AUTH_URL_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@?#]+:[^\s/@?#]+@[^\s]+")
+
+# "your password is X", "here is your api key: Y" -- a signup/notification
+# email's own words pointing at the value that follows.  The value itself
+# still has to look credential-shaped (checked in code, not the regex): a
+# plain identifier like ``getKey()`` must not qualify just because it follows
+# the word "key" -- but that exclusion only applies to "api key"/"secret"/
+# "token" (ambiguous with a code identifier); a real password is routinely a
+# plain alphanumeric string like "Hunter123", so "password"/"passwd" keep the
+# keyword captured separately (group 1) to exempt them from it (review).
+_CREDENTIAL_PHRASE_RE = re.compile(
+    r"\b(password|passwd|api[ _-]?key|secret|token)\b\s*(?:is|:|=)\s*[\"']?([^\s\"'.,;]{6,})[\"']?",
+    re.IGNORECASE,
+)
+
+# A data: URI's base64 payload is long, high-entropy, and not a credential --
+# excluded up front so the generic scanner below never has to reason about it.
+_DATA_URI_RE = re.compile(r"data:[^,\s]+;base64,[A-Za-z0-9+/=]+")
+
+# A bare, contiguous run with no whitespace, long enough to plausibly be a
+# token and short enough that a base64 image (typically hundreds+ chars) is
+# excluded by length alone even before the data: URI check above catches it.
+# Deliberately excludes ``_`` and ``/``: both are legal in some token alphabets,
+# but keeping them out of this generic fallback (prefixed formats like ``ghp_``
+# are already caught by _KNOWN_PREFIX_RE) is what keeps a snake_case constant
+# name or a URL path from reading as one long "random" run -- measured against
+# real samples, that was the single biggest source of false positives here.
+_HIGH_ENTROPY_RE = re.compile(r"\b[A-Za-z0-9+-]{20,64}\b")
+_HIGH_ENTROPY_MIN_BITS_PER_CHAR = 4.0
+
+# Pure-hex runs at exactly these lengths are overwhelmingly a hash/checksum/
+# commit SHA (md5/sha1/sha256), not a credential -- and indistinguishable from
+# one by entropy alone, since both are effectively random hex to this measure.
+_HASH_LIKE_LENGTHS = frozenset({32, 40, 64})
+_PURE_HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
+
+
+def _looks_like_identifier(value: str) -> bool:
+    """A bare name or call (``getKey()``, ``apiKey``) -- not a credential value."""
+    return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\(\))?", value))
+
+
+def _is_hash_like(value: str) -> bool:
+    return len(value) in _HASH_LIKE_LENGTHS and bool(_PURE_HEX_RE.match(value))
+
+
+def _shannon_entropy(s: str) -> float:
+    """Bits per character. Higher means less like ordinary words, more like a random token."""
+    if not s:
+        return 0.0
+    counts: dict[str, int] = {}
+    for ch in s:
+        counts[ch] = counts.get(ch, 0) + 1
+    length = len(s)
+    return -sum((n / length) * math.log2(n / length) for n in counts.values())
+
+
+def scan_content_for_credentials(text: str) -> list[ContentMatch]:
+    """Find credential-shaped spans in free text with no field name to key on.
+
+    Six rule classes, checked in the order below so an overlapping later match
+    (e.g. the generic high-entropy scan) never re-reports a span an earlier,
+    more specific rule already explains: PEM private-key blocks, JWTs, known
+    provider key prefixes, basic-auth URLs, "password is X"-style phrasing,
+    and finally a bounded-length high-entropy token. Returns matches sorted
+    by position; overlapping spans keep only the first (most specific) rule.
+    """
+    if not text:
+        return []
+
+    matches: list[ContentMatch] = []
+    claimed: list[tuple[int, int]] = []
+
+    def _claim(start: int, end: int) -> bool:
+        if any(start < c_end and end > c_start for c_start, c_end in claimed):
+            return False
+        claimed.append((start, end))
+        return True
+
+    for m in _PEM_BLOCK_RE.finditer(text):
+        if _claim(m.start(), m.end()):
+            matches.append(ContentMatch("pem_private_key", m.start(), m.end(), "high"))
+    for m in _JWT_RE.finditer(text):
+        if _claim(m.start(), m.end()):
+            matches.append(ContentMatch("jwt", m.start(), m.end(), "high"))
+    for m in _KNOWN_PREFIX_RE.finditer(text):
+        if _claim(m.start(), m.end()):
+            matches.append(ContentMatch("known_key_prefix", m.start(), m.end(), "high"))
+    for m in _BASIC_AUTH_URL_RE.finditer(text):
+        if _claim(m.start(), m.end()):
+            matches.append(ContentMatch("basic_auth_url", m.start(), m.end(), "high"))
+    for m in _CREDENTIAL_PHRASE_RE.finditer(text):
+        keyword = m.group(1).lower()
+        value = m.group(2)
+        if keyword not in ("password", "passwd") and (
+            _looks_like_identifier(value) or not any(c.isdigit() or not c.isalnum() for c in value)
+        ):
+            continue  # a plain word/identifier following "key"/"secret"/"token" is not itself a value
+        if _claim(m.start(2), m.end(2)):
+            matches.append(ContentMatch("credential_phrase", m.start(2), m.end(2), "medium"))
+
+    data_uri_spans = [(m.start(), m.end()) for m in _DATA_URI_RE.finditer(text)]
+    for m in _HIGH_ENTROPY_RE.finditer(text):
+        if any(s <= m.start() < e for s, e in data_uri_spans):
+            continue
+        candidate = m.group()
+        if _is_hash_like(candidate):
+            continue
+        if _shannon_entropy(candidate) < _HIGH_ENTROPY_MIN_BITS_PER_CHAR:
+            continue
+        if _claim(m.start(), m.end()):
+            matches.append(ContentMatch("high_entropy", m.start(), m.end(), "medium"))
+
+    return sorted(matches, key=lambda mm: mm.start)
+
+
+def redact_content(text: str) -> str:
+    """Mask every credential-shaped span :func:`scan_content_for_credentials` finds.
+
+    Convenience wrapper for callers that only need the redacted text, not the
+    structured matches (e.g. logging, or a second redaction pass over content
+    a name-keyed pass already ran on).
+    """
+    matches = scan_content_for_credentials(text)
+    if not matches:
+        return text
+    out = text
+    for m in sorted(matches, key=lambda mm: mm.start, reverse=True):
+        out = out[: m.start] + REDACTED_PLACEHOLDER + out[m.end :]
+    return out

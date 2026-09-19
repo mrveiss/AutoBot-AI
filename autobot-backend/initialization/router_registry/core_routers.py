@@ -17,9 +17,9 @@ import content_reach.health  # noqa: F401 — registers KnownProbes.CONTENT_REAC
 # Core router imports - these are required for basic functionality
 from api.adapters import router as adapters_router  # Issue #1403
 from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
+from api.admin_orphan_repair import router as admin_orphan_repair_router  # #15779, #16927
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
-from api.admin_schedulers import router as admin_schedulers_router  # GH#6594
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
 from api.agent_org import router as agent_org_router  # #1405
@@ -50,6 +50,7 @@ from api.intelligent_agent import router as intelligent_agent_router
 from api.jwks import auth_router as jwks_auth_router  # #10196
 from api.knowledge import router as knowledge_router
 from api.knowledge_ai_stack import router as knowledge_ai_stack_router
+from api.knowledge_ai_stack_extraction import router as knowledge_ai_stack_extraction_router
 from api.knowledge_audit import router as knowledge_audit_router
 from api.knowledge_boards import router as knowledge_boards_router
 from api.knowledge_categories import router as knowledge_categories_router
@@ -134,17 +135,17 @@ def _get_system_routers() -> list:
         ),  # Issue #4461
         (admin_pricing_router, "", ["admin", "pricing"], "admin_pricing"),  # GH#6480
         (
+            admin_orphan_repair_router,
+            "",
+            ["admin", "orphan-repair"],
+            "admin_orphan_repair",
+        ),  # #15779
+        (
             admin_retention_policies_router,
             "",
             ["admin", "retention"],
             "admin_retention_policies",
         ),  # MVA-3145, GH#8995
-        (
-            admin_schedulers_router,
-            "",
-            ["admin", "schedulers"],
-            "admin_schedulers",
-        ),  # GH#6594
         (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
         (jwks_auth_router, "/auth", ["auth", "jwks"], "jwks_auth"),  # #10196 /api/auth/jwks
@@ -343,6 +344,12 @@ def _get_knowledge_feature_routers() -> list:
             "/knowledge_base",
             ["knowledge-enhanced", "knowledge-ai"],
             "knowledge_ai_stack",
+        ),
+        (
+            knowledge_ai_stack_extraction_router,
+            "/knowledge_base",
+            ["knowledge-ai-extraction"],
+            "knowledge_ai_stack_extraction",
         ),
         (
             knowledge_boards_router,

@@ -39,6 +39,7 @@ from typing import Any, Dict, List, Mapping, Sequence, Tuple
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from media.document.zip_formats import sniff_zip_format
 
 logger = get_logger(__name__)
 
@@ -311,8 +312,15 @@ def detect_format(raw: bytes, mime_type: str = "") -> str:
     mime = (mime_type or "").lower()
     if raw[:4] == _PDF_MAGIC:
         return "pdf"
-    if raw[:2] == _ZIP_MAGIC and _DOCX_MARKER in raw[:_DOCX_SNIFF_BYTES]:
-        return "docx"
+    if raw[:2] == _ZIP_MAGIC:
+        # #16773: all seven office/ODF formats carry the same PK prefix, so the prefix
+        # cannot tell them apart -- the archive's own members can. The marker sniff below
+        # still covers a truncated upload, whose central directory has not arrived yet.
+        verified = sniff_zip_format(raw)
+        if verified:
+            return verified
+        if _DOCX_MARKER in raw[:_DOCX_SNIFF_BYTES]:
+            return "docx"
     if "pdf" in mime:
         return "pdf"
     if "docx" in mime or "officedocument.wordprocessingml" in mime:

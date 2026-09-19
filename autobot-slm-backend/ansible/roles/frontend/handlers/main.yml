@@ -3,14 +3,23 @@
 ---
 # Frontend role handlers
 
+# #16979 (PR review): ansible runs notified handlers in DEFINITION order, not
+# notify order -- `test nginx config` must be listed before `restart nginx`
+# (which despite its name only reloads, state: reloaded) or a bad render gets
+# reloaded before nginx -t ever runs. A failing `nginx -t` here fails this
+# handler task, which aborts the play for this host before any later handler
+# (including restart nginx) runs -- no ignore_errors/failed_when on this
+# handler, so that stop-the-reload behaviour needs no extra code, only this
+# order. Mirrors roles/slm_manager/handlers/main.yml, which already lists
+# `test nginx config` before its own `reload nginx`/`restart nginx`.
+- name: test nginx config
+  command: nginx -t
+  become: true
+
 - name: restart nginx
   systemd:
     name: nginx
     state: reloaded
-  become: true
-
-- name: test nginx config
-  command: nginx -t
   become: true
 
 - name: restart frontend
