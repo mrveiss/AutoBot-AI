@@ -91,6 +91,7 @@ class TestUserState:
     @pytest.mark.parametrize(
         ("user_id", "state"),
         [(LIVE, "live"), (DELETED, "deleted"), (HARD_DELETED, "deleted"), ("admin", "unresolvable"), (None, "none")],
+        ids=["live", "deleted", "hard-deleted", "unresolvable", "none"],
     )
     async def test_each_state(self, user_id, state):
         assert await user_state(_Users(), user_id) == state
