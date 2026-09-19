@@ -18,6 +18,7 @@ import asyncio
 import json
 from typing import TYPE_CHECKING, Any, Dict, List
 
+from autobot_shared.secret_redaction import redact_content
 from autobot_shared.time_utils import utc_timestamp
 
 if TYPE_CHECKING:
@@ -204,6 +205,14 @@ class VersioningMixin:
         exists = await asyncio.to_thread(self.redis_client.exists, fact_key)
         if not exists:
             return False
+        # #13708: a version recorded before this fix (or by any path that bypassed
+        # sanitize_fact_content) can carry a raw credential -- reverting to it must
+        # not push that back into the live Redis projection. Idempotent no-op on a
+        # version whose content is already redacted. Mutates target_version IN
+        # PLACE (not just a local var): revert_to_version reads this same dict's
+        # "content" again right after this returns, to record the revert itself
+        # as a new version -- a local-only redaction left that second write raw.
+        target_version["content"] = redact_content(target_version["content"])
         await asyncio.to_thread(
             self.redis_client.hset,
             fact_key,

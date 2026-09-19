@@ -4,7 +4,9 @@
 # Author: mrveiss
 """The originator of a message survives every relay, and a peer's request keeps it (#16950)."""
 
-from typing import List
+import asyncio
+import contextvars
+from typing import Dict, List
 
 import pytest
 
@@ -15,6 +17,7 @@ from protocols.agent_communication import (
     CommunicationChannel,
     MessageHeader,
     MessagePayload,
+    MessageType,
     StandardMessage,
 )
 from protocols.message_origin import Origin, acting_for, current_origin, origin_of, stamp
@@ -148,4 +151,89 @@ async def test_a_peer_request_carries_its_originator_into_the_agent():
 
     assert (agent.seen.originator, agent.seen.chain) == ("agent_a", ["agent_a"])
     assert (agent.onward.originator, agent.onward.chain) == ("agent_a", ["agent_a", "relay_b"])
+    assert current_origin() is None
+
+
+class _Routed(CommunicationChannel):
+    """Delivers each message to its ``recipient``'s protocol, over the JSON wire format.
+
+    The real channels cannot do this yet: they put a message back on the sender's own
+    queue or Redis key, and ``recipient`` is never read (#16986). This stand-in is the
+    transport only. Sending, stamping, handling, the agent's request handler and the
+    response correlation are all the production code. Each delivery runs in a fresh
+    context, as a receiver's own poller task would, so no origin leaks from the sender.
+    """
+
+    def __init__(self, owner: str, protocols: Dict[str, AgentCommunicationProtocol]) -> None:
+        super().__init__(f"{owner}_routed")
+        self.protocols = protocols
+
+    async def send(self, message: StandardMessage) -> bool:
+        wire = StandardMessage.from_json(message.to_json())
+        target = self.protocols[message.header.recipient]
+        inbox = next(iter(target.channels))  # the receiver's own channel, as its poller would pass
+        asyncio.get_running_loop().create_task(target._handle_message(wire, inbox), context=contextvars.Context())
+        return True
+
+    async def receive(self, timeout=None):
+        return None
+
+    async def close(self):
+        return None
+
+
+class _Hop(LocalAgent):
+    """A peer that records what it was asked, and forwards to *onward* if it has one."""
+
+    def __init__(self, agent_type: str, onward: str | None = None) -> None:
+        super().__init__(agent_type)
+        self.onward, self.seen, self.origin_while_handling = onward, None, None
+
+    async def process_request(self, request: AgentRequest) -> AgentResponse:
+        self.seen, self.origin_while_handling = request, current_origin()
+        result = {"handled_by": self.agent_type}
+        if self.onward:
+            reply = await self.communication_protocol.send_request(_request_to(self.onward), timeout=5)
+            result["onward_reply"] = reply.payload.content if reply else None
+        return AgentResponse(request_id=request.request_id, agent_type=self.agent_type, status="success", result=result)
+
+    def get_capabilities(self) -> List[str]:
+        return []
+
+
+def _request_to(recipient: str) -> StandardMessage:
+    header = _header(message_type=MessageType.REQUEST, recipient=recipient)
+    return StandardMessage(header=header, payload=MessagePayload(content={"action": "process", "payload": {}}))
+
+
+def _wire(protocols: Dict[str, AgentCommunicationProtocol], agent_id: str, hop: _Hop | None = None) -> None:
+    protocol = AgentCommunicationProtocol(AgentIdentity(agent_id=agent_id, agent_type="t"))
+    protocol.add_channel(f"{agent_id}_routed", _Routed(agent_id, protocols))
+    if hop is not None:
+        hop.communication_protocol = protocol
+        protocol.register_message_handler(MessageType.REQUEST, hop._handle_communication_request)
+    protocols[agent_id] = protocol
+
+
+@pytest.mark.asyncio
+async def test_two_real_round_trips_carry_the_originator_to_the_last_hop():
+    """c0's review of #16966: A asks B, and B, while handling it, asks C. Both replies come back.
+
+    B's onward request is built with no originator at all. C must still see A, because B
+    sent it while acting for A, and the chain must name every hop in order.
+    """
+    protocols: Dict[str, AgentCommunicationProtocol] = {}
+    relay_b, agent_c = _Hop("relay_b", onward="agent_c"), _Hop("agent_c")
+    _wire(protocols, "agent_a")
+    _wire(protocols, "relay_b", relay_b)
+    _wire(protocols, "agent_c", agent_c)
+
+    reply = await protocols["agent_a"].send_request(_request_to("relay_b"), timeout=5)
+
+    assert reply is not None and reply.header.message_type is MessageType.RESPONSE
+    onward = reply.payload.content["result"]["onward_reply"]
+    assert onward["status"] == "success" and onward["result"] == {"handled_by": "agent_c"}
+    assert (relay_b.seen.originator, relay_b.seen.chain) == ("agent_a", ["agent_a"])
+    assert (agent_c.seen.originator, agent_c.seen.chain) == ("agent_a", ["agent_a", "relay_b"])
+    assert agent_c.origin_while_handling == Origin("agent_a", ("agent_a", "relay_b"))
     assert current_origin() is None
