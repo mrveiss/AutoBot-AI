@@ -154,7 +154,9 @@ def test_vision_processor_clip_failure_leaves_both_clip_attrs_none(vision_module
 
     with (
         patch("autobot_shared.pinned_model_registry.get_pinned_revision", return_value="1" * 40),
-        patch("autobot_shared.pinned_model_registry.verify_cached_model", side_effect=ModelIntegrityError("tampered clip")),
+        patch(
+            "autobot_shared.pinned_model_registry.verify_cached_model", side_effect=ModelIntegrityError("tampered clip")
+        ),
     ):
         proc._load_models()  # must not raise -- caught and logged internally
 
