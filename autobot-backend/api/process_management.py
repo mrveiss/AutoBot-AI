@@ -28,6 +28,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from constants.threshold_constants import TimingConstants
 from services.process_adapter_service import ProcessAdapterService
 
@@ -193,14 +194,17 @@ async def stream_process_logs(
     choose one of the client's offered subprotocols, and a browser fails the
     handshake if none is echoed (matches the convention in
     ``autobot-slm-backend/api/websocket.py``'s ``ConnectionManager.connect``).
+
+    #16457 review: the echo selection used to be a local ``startswith("bearer")``
+    check, which echoed ``bearer`` for an offer like ``bearerX`` that was never
+    actually made -- the browser would then refuse the handshake it caused.
+    ``accept_websocket`` does the exact-match negotiation instead.
     """
     if not await enforce_ws_origin(websocket):
         return
     import asyncio
 
-    protocols = websocket.headers.get("sec-websocket-protocol", "")
-    subprotocol = "bearer" if protocols.startswith("bearer") else None
-    await websocket.accept(subprotocol=subprotocol)
+    await accept_websocket(websocket)
     svc = _get_service()
     offset = 0
     try:

@@ -119,6 +119,35 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "already uses for the DB password (#16299)."
     ),
     (
+        "repo_tests/ansible_generated_secrets_16299_test.py",
+        "Secret Keyword",
+        "a5c01e694764bcf09315443c6476e283e6f77906",  # pragma: allowlist secret
+    ): (
+        "Same literal 'change-me-in-production' as the backend/defaults/main.yml "
+        "entry above (identical hash) -- this test asserts the align-guard clause "
+        "quotes that exact literal, so the guard fires only against the known "
+        "shipped default and never against an operator's own override (#17129)."
+    ),
+    (
+        "autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml",
+        "Secret Keyword",
+        "d033e22ae348aeb5660fc2140aec35850c4da997",  # pragma: allowlist secret
+    ): (
+        "grafana_admin_password generate-or-reuse guard compares against the "
+        "literal 'admin' (monitoring role's own shipped default), not a real "
+        "credential -- the guard exists so an operator-set password is never "
+        "silently regenerated (#17129)."
+    ),
+    (
+        "repo_tests/ansible_generated_secrets_16299_test.py",
+        "Secret Keyword",
+        "d033e22ae348aeb5660fc2140aec35850c4da997",  # pragma: allowlist secret
+    ): (
+        "Same literal 'admin' as the slm_manager/tasks/main.yml entry above "
+        "(identical hash) -- this test asserts the generate-or-reuse guard "
+        "clause quotes that exact literal, statically (#17129)."
+    ),
+    (
         "autobot-slm-backend/ansible/roles/backend/defaults/main.yml",
         "Secret Keyword",
         "2a440124839a727bdffd380853a93a09212783e8",  # pragma: allowlist secret
