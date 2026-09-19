@@ -4138,17 +4138,6 @@ class EmbeddingRequest(BaseModel):
     preferred_device: str | None = Field(default=None, description="Preferred processing device")
 
 
-class MultiModalResponse(BaseModel):
-    success: bool
-    result_id: str
-    modality: str
-    processing_time: float
-    confidence: float
-    result_data: Metadata
-    device_used: str | None = None
-    error_message: str | None = None
-
-
 class CrossModalSearchResponse(BaseModel):
     query: str
     query_modality: str
