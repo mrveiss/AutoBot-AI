@@ -7,6 +7,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import services.resource_grant_store as store  # dotted import bypasses the MagicMock services stub
+import services.resource_visibility as rv  # dotted import bypasses the MagicMock services stub
 from autobot_shared.scoping.visibility import Principal
 from models.resource_grant import ResourceGrant
 
@@ -52,3 +53,33 @@ async def test_revoke_removes_access(db_session):
     assert await store.revoke(db_session, "skill", "s4", "user", "u1") is True
     p = Principal(user_id="u1", company_id="c1", group_ids=frozenset())
     assert await store.has_grant(db_session, "skill", "s4", p) is False
+
+
+@pytest.mark.asyncio
+async def test_grant_invalidates_visibility_cache_without_restart(db_session):
+    """#15779 AC3: grant() must invalidate resource_visibility's cache itself --
+    no explicit rv.invalidate() call here, unlike the pre-#15779 test pattern.
+    """
+    from autobot_shared.scoping.scope_level import ScopeLevel
+    from autobot_shared.scoping.visibility import ResourceDescriptor
+
+    p = Principal(user_id="u1", company_id="c2", group_ids=frozenset())
+    r = ResourceDescriptor(owner_id="owner", company_id="c1", scope=ScopeLevel.USER)
+    assert await rv.can_access(db_session, p, "skill", "s5", r) is False  # cached: no grant yet
+
+    await store.grant(db_session, "skill", "s5", "user", "u1", "use", None)
+    assert await rv.can_access(db_session, p, "skill", "s5", r) is True  # sees the grant, no restart
+
+
+@pytest.mark.asyncio
+async def test_revoke_invalidates_visibility_cache_without_restart(db_session):
+    from autobot_shared.scoping.scope_level import ScopeLevel
+    from autobot_shared.scoping.visibility import ResourceDescriptor
+
+    await store.grant(db_session, "skill", "s6", "user", "u1", "use", None)
+    p = Principal(user_id="u1", company_id="c2", group_ids=frozenset())
+    r = ResourceDescriptor(owner_id="owner", company_id="c1", scope=ScopeLevel.USER)
+    assert await rv.can_access(db_session, p, "skill", "s6", r) is True  # cached: grant exists
+
+    assert await store.revoke(db_session, "skill", "s6", "user", "u1") is True
+    assert await rv.can_access(db_session, p, "skill", "s6", r) is False  # sees the revoke, no restart
