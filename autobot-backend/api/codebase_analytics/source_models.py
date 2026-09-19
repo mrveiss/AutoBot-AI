@@ -28,6 +28,10 @@ class SourceStatus(str, Enum):
     SYNCING = "syncing"
     READY = "ready"
     ERROR = "error"
+    #: A delete's clone-directory removal failed (#17036) -- the record is
+    #: kept, not dropped, so the surviving directory stays visible instead
+    #: of becoming an orphan with no record pointing at it.
+    CLEANUP_FAILED = "cleanup_failed"
 
 
 class SourceAccess(str, Enum):

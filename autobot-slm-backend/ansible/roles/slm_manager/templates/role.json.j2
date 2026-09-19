@@ -6,7 +6,7 @@
   "ansible_playbook": "deploy-slm-manager.yml",
   "build_steps": [
     "pip install -r requirements.txt",
-    "cd {{ slm_base_dir }}/autobot-slm-frontend && npm install && npm run build:slm"
+    "npm install && npm run build:slm into a fresh dist-<id>/, verified for a real index.html, then published by atomically flipping the served `current` symlink to it (roles/_shared/tasks/build_publish_slm_frontend.yml, #15557/#15610) — not a flat build-in-place"
   ],
   "depends_on": [],
   "required": true,

@@ -86,10 +86,12 @@ def test_wrong_headings_fail():
     assert validate(_MISSING_HEADINGS_BODY) is False
 
 
-def test_single_closing_keyword_without_rationale_fails():
-    """The batching gate's own rule: even one Closes needs a stated reason."""
+def test_single_closing_keyword_without_rationale_now_passes_with_a_warning():
+    """#17128: the batching gate's own rule is advisory now -- a single Closes
+    with no stated reason still gets the guidance (as a `::warning::`, printed
+    by ``check_batching`` itself), but no longer fails the local validator."""
     body = "## Thinking Path\nx\n\n## What Changed\nx\n\n## Verification\nx\n\n" "## Model Used\nx\n\nCloses #1\n"
-    assert validate(body) is False
+    assert validate(body) is True
 
 
 # ---------------------------------------------------------------------------
