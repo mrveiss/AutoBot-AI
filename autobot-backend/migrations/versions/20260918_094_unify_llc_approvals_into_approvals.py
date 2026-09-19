@@ -69,18 +69,36 @@ def upgrade() -> None:
         raise RuntimeError(f"llc_approvals migration incomplete: {before} source rows, {after} copied onto approvals")
 
 
+_UNSAFE_COPIED_ROWS_SQL = """
+    SELECT COUNT(*)
+    FROM approvals a
+    JOIN llc_approvals la ON la.id = a.id
+    WHERE a.updated_at > la.updated_at
+       OR EXISTS (SELECT 1 FROM approval_comments c WHERE c.approval_id = a.id)
+       OR EXISTS (SELECT 1 FROM task_approval_links t WHERE t.approval_id = a.id)
+"""
+
+
 def downgrade() -> None:
-    """Refused (#17043 review): no cutover marker exists to tell a copied row
-    apart from one that has since been decided, commented on, or task-linked
-    through the unified table. A blind ``DELETE ... WHERE id IN (SELECT id
-    FROM llc_approvals)`` would cascade away any such newer data along with
-    the row itself -- the no-data-loss rule means this must not run
-    unattended. Reversing this migration is a manual, reviewed operation:
-    confirm no unified row has changed since the copy, then hand-run the
-    DELETE and the three ``op.drop_*`` calls this function used to make.
+    """Conditionally refused (#17043 review, #17072 CI follow-up): a copied
+    row is safe to drop only when nothing has touched it through the unified
+    table since the copy -- no comment, no task link, and no decision (its
+    ``updated_at`` still matches the source row's). On an untouched DB
+    (including a fresh migration-test one) that holds for every row, so the
+    downgrade round-trips; once anything has happened through the unified
+    path, it refuses rather than cascade that data away.
     """
-    raise NotImplementedError(
-        "20260918_094 downgrade is refused: undoing it could silently drop comments, task "
-        "links or decisions recorded on a migrated row since the copy ran. Reverse by hand "
-        "after confirming no unified row has changed since cutover -- see this function's docstring."
-    )
+    bind = op.get_bind()
+    unsafe = bind.execute(sa.text(_UNSAFE_COPIED_ROWS_SQL)).scalar()
+    if unsafe:
+        raise NotImplementedError(
+            f"20260918_094 downgrade is refused: {unsafe} copied row(s) have a comment, a task "
+            "link, or a decision recorded since the copy ran. Undoing this migration would drop "
+            "that data. Reverse by hand after confirming no unified row has changed since "
+            "cutover -- see this function's docstring."
+        )
+
+    bind.execute(sa.text("DELETE FROM approvals WHERE id IN (SELECT id FROM llc_approvals)"))
+    op.drop_index("ix_approvals_company_status", table_name="approvals")
+    op.drop_index("ix_approvals_company_id", table_name="approvals")
+    op.drop_column("approvals", "company_id")

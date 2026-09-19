@@ -63,7 +63,7 @@ async def _seed_llc_approvals(url: str) -> None:
                         "(id, company_id, type, status, requested_by_agent_id, payload, "
                         "decided_by_agent_id, decided_at) "
                         "VALUES (:id, :company_id, :type, :status, :requested_by_agent_id, "
-                        ":payload::jsonb, :decided_by_agent_id, :decided_at)"
+                        "CAST(:payload AS jsonb), :decided_by_agent_id, :decided_at)"
                     ),
                     row,
                 )
@@ -151,3 +151,47 @@ async def test_094_is_idempotent_on_rerun(fresh_db_url):
         await engine.dispose()
 
     assert await _count(fresh_db_url, "approvals") == after_first
+
+
+async def test_downgrade_succeeds_when_no_copied_row_was_touched(fresh_db_url):
+    """The safe branch (#17072 CI follow-up): an untouched copy round-trips
+    cleanly, dropping the rows it added and the ``company_id`` column.
+    """
+    assert run_alembic(["upgrade", _PRE_094], fresh_db_url).returncode == 0
+    await _seed_llc_approvals(fresh_db_url)
+    assert run_alembic(["upgrade", _REV_094], fresh_db_url).returncode == 0
+
+    down = run_alembic(["downgrade", _PRE_094], fresh_db_url)
+    assert down.returncode == 0, f"downgrade of an untouched copy should round-trip:\n{down.stderr}"
+
+    for row in _ROWS:
+        assert await _fetch_approval(fresh_db_url, row["id"]) is None, "the copied row must be gone"
+    assert await _count(fresh_db_url, "llc_approvals") == len(_ROWS), "the source table is untouched"
+
+
+async def test_downgrade_refuses_when_a_copied_rows_decision_is_newer_than_the_copy(fresh_db_url):
+    """The refuse branch: a decision made through the unified table since the
+    copy ran must not be silently dropped by an unconditional downgrade.
+    """
+    assert run_alembic(["upgrade", _PRE_094], fresh_db_url).returncode == 0
+    await _seed_llc_approvals(fresh_db_url)
+    assert run_alembic(["upgrade", _REV_094], fresh_db_url).returncode == 0
+
+    touched_id = _ROWS[0]["id"]
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("UPDATE approvals SET status = 'approved', updated_at = now() WHERE id = :id"),
+                {"id": touched_id},
+            )
+    finally:
+        await engine.dispose()
+
+    down = run_alembic(["downgrade", _PRE_094], fresh_db_url)
+    assert down.returncode != 0, "a decision recorded since the copy must block the downgrade"
+    assert "20260918_094 downgrade is refused" in (down.stdout + down.stderr)
+
+    # Refused means nothing moved: the row is still on both sides.
+    assert await _fetch_approval(fresh_db_url, touched_id) is not None
+    assert await _count(fresh_db_url, "llc_approvals") == len(_ROWS)
