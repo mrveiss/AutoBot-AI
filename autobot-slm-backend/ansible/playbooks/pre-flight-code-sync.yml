@@ -90,7 +90,7 @@
       ansible.builtin.command:
         cmd: >-
           /opt/autobot/autobot-slm-backend/venv/bin/python3
-          /opt/autobot/autobot-slm-backend/scripts/sync_deletion_planner.py
+          {{ git_repo_root }}/autobot-slm-backend/scripts/sync_deletion_planner.py
           ensure-full-history --repo-root {{ git_repo_root }}
       changed_when: false
       when: github_sync is not failed
