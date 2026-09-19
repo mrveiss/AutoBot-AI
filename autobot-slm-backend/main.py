@@ -70,6 +70,7 @@ from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
+from autobot_shared.fastapi_validation_handlers import register_validation_error_handlers
 from autobot_shared.integrity_manifest import verify_integrity_at_startup
 from autobot_shared.stream_logging import (
     build_stderr_handler,
@@ -603,6 +604,10 @@ app = FastAPI(
     proxy_headers=True,
     forwarded_allow_ips=settings.trusted_proxies,
 )
+# #16428 review: FastAPI's default 422 body echoes the submitted payload --
+# UserCreate.password and VNCCredentialCreate.password have the same
+# exposure the audit found on autobot-backend's secrets endpoint.
+register_validation_error_handlers(app)
 
 install_middleware(app, cors_origins=settings.cors_origins)  # the whole stack, in its order (#16294)
 

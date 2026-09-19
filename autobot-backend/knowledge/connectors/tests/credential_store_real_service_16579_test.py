@@ -20,6 +20,7 @@ is the half a naive fix would quietly delete.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 import pytest
@@ -98,6 +99,33 @@ class TestTheOwnerIsNotLockedOut:
         assert merged["key"] == "sk-rotated"
 
     @pytest.mark.asyncio
+    async def test_rotate_validates_the_merged_bundle_like_store_does(self, svc) -> None:
+        """#16428 review: create() validates via validate_config_against_schema;
+        rotate() previously did not, so a credential that reached an incomplete
+        state (a pre-#16428 row, or a bug elsewhere) could stay incomplete
+        forever, discovered only when the connector next tries to authenticate.
+
+        Seeds a row missing the auth_type's required token_url directly
+        through the real service (bypassing store()'s own validation, the
+        same way an old or corrupted row would exist) rather than asserting
+        against update()'s field-presence semantics, which cannot itself
+        drop a key that store() already validated as present.
+        """
+        store_ = ConnectorCredentialStore(svc)
+        incomplete = {"client_id": "cid", "client_secret": "csecret", "refresh_token": "rtok"}
+        created = svc.create_secret(
+            name="connector:oauth:auth",
+            secret_type="connector_oauth_token",  # pragma: allowlist secret
+            value=json.dumps(incomplete),
+            scope="user",
+            metadata={"auth_type": "OAuthRefreshAuth"},
+            created_by=OWNER,
+        )
+
+        with pytest.raises(ValueError, match="missing required auth field: token_url"):
+            await store_.rotate(created["id"], {}, OWNER)
+
+    @pytest.mark.asyncio
     async def test_the_owner_revokes_their_own_credential(self, store) -> None:
         secret_id, sanitized = await _store_for_owner(store)
         await store.revoke(secret_id, OWNER)
@@ -118,7 +146,7 @@ class TestTheBoundaryStillHolds:
     async def test_a_stranger_cannot_rotate(self, store) -> None:
         secret_id, _ = await _store_for_owner(store)
         with pytest.raises(PermissionError, match="owner_id mismatch"):
-            await store.rotate(secret_id, {"key": "sk-hijacked"}, STRANGER)
+            await store.rotate(secret_id, {"key": "sk-hijacked"}, STRANGER)  # pragma: allowlist secret
 
     @pytest.mark.asyncio
     async def test_a_stranger_cannot_revoke(self, store) -> None:

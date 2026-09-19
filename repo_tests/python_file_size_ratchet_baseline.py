@@ -140,9 +140,9 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/schemas_chat.py": 725,
     "autobot-backend/api/schemas_code.py": 3266,
     "autobot-backend/api/schemas_knowledge.py": 5156,
-    "autobot-backend/api/schemas_system.py": 4306,
+    "autobot-backend/api/schemas_system.py": 4346,  # #16444 review: RequestValidationError import comment
     "autobot-backend/api/schemas_workflows.py": 3011,
-    "autobot-backend/api/secrets.py": 1048,
+    "autobot-backend/api/secrets.py": 1216,  # #16444 review: except HTTPException, ValueError handlers
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
     "autobot-backend/api/system.py": 1112,
@@ -234,7 +234,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
     "autobot-backend/knowledge/connectors/base.py": 676,
-    "autobot-backend/knowledge/connectors/credential_store.py": 739,
+    "autobot-backend/knowledge/connectors/credential_store.py": 761,  # #16444 review: rotate() validates the merged bundle
     "autobot-backend/knowledge/connectors/gdrive.py": 702,
     "autobot-backend/knowledge/connectors/gitlab.py": 873,
     "autobot-backend/knowledge/connectors/onedrive.py": 642,
@@ -458,7 +458,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/api/stateful.py": 688,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1129,
-    "autobot-slm-backend/main.py": 793,  # #15728: local admin socket lifespan wiring
+    "autobot-slm-backend/main.py": 798,  # merge #16444+#17113: local admin socket lifespan wiring + shared 422 handler
     "autobot-slm-backend/models/database.py": 1140,
     "autobot-slm-backend/models/schemas.py": 2181,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,
