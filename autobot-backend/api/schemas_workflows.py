@@ -527,12 +527,6 @@ class AdvancedControlActiveTakeoversResponse(BaseModel):
     count: int
 
 
-class AdvancedControlEmergencyStopResponse(SuccessMessageResponse):
-    """Response for POST /system/emergency-stop."""
-
-    takeover_request_id: str
-
-
 class AdvancedControlSystemHealthResponse(BaseModel):
     """Response for GET /system/health."""
 

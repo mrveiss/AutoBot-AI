@@ -21,7 +21,6 @@ from api.schemas_system import (
 )
 from api.schemas_workflows import (
     AdvancedControlActiveTakeoversListResponse,
-    AdvancedControlEmergencyStopResponse,
     AdvancedControlHealthResponse,
     AdvancedControlInfoResponse,
     AdvancedControlPendingTakeoversListResponse,
@@ -43,6 +42,7 @@ from constants.threshold_constants import TimingConstants
 from desktop_streaming_manager import get_desktop_streaming
 from memory import TaskPriority  # canonical enum (#10626)
 from metrics.system_monitor import evaluate_resource_thresholds
+from services.emergency_stop import AdvancedControlEmergencyStopResponse, request_emergency_stop
 from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
@@ -50,9 +50,8 @@ from type_defs.common import Metadata
 logger = get_logger(__name__)
 router = APIRouter(tags=["advanced_control"])
 
-# Map the resource classifier's verdict to this control plane's health vocabulary
-# (#12243). "warning" (approaching a threshold) is a soft degrade; "critical"
-# (over a threshold) is unhealthy.
+# Map the resource classifier's verdict to this control plane's health vocabulary (#12243). "warning" (approaching a
+# threshold) is a soft degrade; "critical" (over a threshold) is unhealthy.
 _RESOURCE_STATUS_TO_HEALTH = {"ok": "healthy", "warning": "degraded", "critical": "unhealthy"}
 
 
@@ -167,9 +166,8 @@ async def request_takeover(
 
     Issue #744: Requires admin authentication.
     """
-    # Convert request strings to enums via direct name lookup so each enum is the
-    # single source of truth (#12208 — the old hand-maintained maps mirrored every
-    # member by hand and silently dropped any new one, rejecting a valid trigger
+    # Convert request strings to enums via direct name lookup so each enum is the single source of truth (#12208 — the
+    # old hand-maintained maps mirrored every member by hand and silently dropped any new one, rejecting a valid trigger
     # with a 400). Enum member names are the UPPER strings the client sends.
     try:
         trigger = TakeoverTrigger[request.trigger.upper()]
@@ -417,14 +415,12 @@ async def get_system_status(
     # Get takeover data
     pending_takeovers = await get_takeover_manager().get_pending_requests()
     active_takeovers = await get_takeover_manager().get_active_sessions()
-    # #12177: both fields were mistakenly set to psutil.boot_time() (an absolute
-    # boot epoch). timestamp is when this snapshot was taken; uptime_seconds is a
-    # duration (now - boot).
+    # #12177: both fields were mistakenly set to psutil.boot_time() (an absolute boot epoch). timestamp is when this
+    # snapshot was taken; uptime_seconds is a duration (now - boot).
     now = time.time()
-    # #12243: derive status from the metrics this response actually reports rather
-    # than a hardcoded "healthy". Grade the already-collected resource_usage against
-    # the canonical thresholds; if desktop streaming (this panel's core capability)
-    # is unavailable, that is at least a degraded control plane.
+    # #12243: derive status from the metrics this response actually reports rather than a hardcoded "healthy". Grade the
+    # already-collected resource_usage against the canonical thresholds; if desktop streaming (this panel's core
+    # capability) is unavailable, that is at least a degraded control plane.
     resource_verdict = evaluate_resource_thresholds(
         {
             "cpu_percent": resource_usage["cpu_percent"],
@@ -466,25 +462,22 @@ async def emergency_system_stop(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
-    Emergency stop for all autonomous operations
+    Emergency stop for all autonomous operations.
 
-    Issue #744: Requires admin authentication.
+    Requires: admin permission.
     """
-    # Request emergency takeover
-    request_id = await get_takeover_manager().request_takeover(
-        trigger=TakeoverTrigger.CRITICAL_ERROR,
-        reason="Emergency stop activated",
-        requesting_agent="emergency_system",
-        priority=TaskPriority.CRITICAL,
-        auto_approve=True,
-    )
+    # #16843/#16854: enumeration and rationale live in services/emergency_stop.py --
+    # this module is at its size ceiling and its only slack is inside published route docstrings.
+    request_id, affected_task_ids = await request_emergency_stop()
 
-    logger.warning("Emergency stop activated: %s", request_id)
-    return {
-        "success": True,
-        "message": "Emergency stop activated",
-        "takeover_request_id": request_id,
-    }
+    paused = len(affected_task_ids)
+    logger.warning("Emergency stop activated: %s (%d task(s) marked paused)", request_id, paused)
+    message = (
+        f"Emergency stop activated -- {paused} task(s) marked paused"
+        if paused
+        else "Emergency stop activated -- no autonomous tasks were running"
+    )
+    return {"success": True, "message": message, "takeover_request_id": request_id, "tasks_paused": affected_task_ids}
 
 
 @router.get("/system/health", response_model=AdvancedControlHealthResponse)
@@ -505,9 +498,8 @@ async def get_system_health(
     try:
         dsm = get_desktop_streaming()
         tm = get_takeover_manager()
-        # #12243: reflect the real subsystem state instead of a constant "healthy".
-        # Desktop streaming (VNC) is this control plane's core capability — when it
-        # is unavailable the panel is degraded, not healthy.
+        # #12243: reflect the real subsystem state instead of a constant "healthy". Desktop streaming (VNC) is this
+        # control plane's core capability — when it is unavailable the panel is degraded, not healthy.
         streaming_available = dsm.vnc_manager.vnc_available
         health_status = {
             "status": "healthy" if streaming_available else "degraded",
