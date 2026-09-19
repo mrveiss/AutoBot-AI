@@ -46,6 +46,17 @@ logger = get_logger(__name__)
 KB_RELATION_TYPES: Set[str] = set(CORE_RELATION_TYPES)
 
 
+def relations_by_direction(relations: List[Dict[str, Any]], direction: str) -> List[Dict[str, Any]]:
+    """Filter a `get_fact_relations()` result's flat list to one direction.
+
+    The result has always been one flat "relations" list with each item's own
+    "direction" field -- never separate top-level "outgoing"/"incoming" keys,
+    a shape every caller in api/knowledge_search_aggregator.py assumed
+    incorrectly until #16708.
+    """
+    return [rel for rel in relations if rel.get("direction") == direction]
+
+
 class RelationsMixin:
     """
     Mixin providing fact-to-fact relation operations for KnowledgeBase.
