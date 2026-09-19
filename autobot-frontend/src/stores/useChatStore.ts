@@ -738,9 +738,11 @@ export const useChatStore = defineStore('chat', () => {
 
     // Generate per-chat desktop URL with session context
     const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.VNC_DESKTOP_PORT}/vnc.html`
+    // #16299: no password here -- the backend now authenticates to the real
+    // VNC server itself and offers this browser security-type "None"
+    // (api/vnc_handshake_bridge.py), so the client never needs one.
     const params = new URLSearchParams({
       autoconnect: 'true',
-      password: import.meta.env.VITE_DESKTOP_VNC_PASSWORD || 'autobot',
       resize: 'remote',
       reconnect: 'true',
       quality: '9',

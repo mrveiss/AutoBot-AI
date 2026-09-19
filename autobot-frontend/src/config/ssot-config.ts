@@ -142,17 +142,14 @@ export interface VNCConfig {
   desktop: {
     host: string;
     port: number;
-    password: string;
   };
   terminal: {
     host: string;
     port: number;
-    password: string;
   };
   playwright: {
     host: string;
     port: number;
-    password: string;
   };
 }
 
@@ -459,21 +456,21 @@ function buildConfig(): AutoBotConfig {
 
   // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
   // VNC configuration
+  // #16299: no password fields -- the backend authenticates to the real VNC
+  // server itself and offers the browser security-type "None"
+  // (api/vnc_handshake_bridge.py).
   const vnc: VNCConfig = {
     desktop: {
       host: getEnv('VITE_DESKTOP_VNC_HOST', vm.main),
       port: getEnvNumber('VITE_DESKTOP_VNC_PORT', 6080),
-      password: getEnv('VITE_DESKTOP_VNC_PASSWORD', 'autobot'),
     },
     terminal: {
       host: getEnv('VITE_TERMINAL_VNC_HOST', vm.main),
       port: getEnvNumber('VITE_TERMINAL_VNC_PORT', 6080),
-      password: getEnv('VITE_TERMINAL_VNC_PASSWORD', 'autobot'),
     },
     playwright: {
       host: getEnv('VITE_PLAYWRIGHT_VNC_HOST', vm.browser),
       port: getEnvNumber('VITE_PLAYWRIGHT_VNC_PORT', 6081),
-      password: getEnv('VITE_PLAYWRIGHT_VNC_PASSWORD', 'playwright'),
     },
   };
 

@@ -50,7 +50,15 @@ jobs:
           # The depth is a guess about the future, so the scan refuses to run rather
           # than trust it: the reachability check below turns "too shallow" into a
           # loud failure instead of an empty range that reports clean.
-          fetch-depth: ${{ github.event_name == 'merge_group' && '0' || '100' }}
+          #
+          # #16931: sized per PR. A release promotion (main -> release) carries every
+          # commit since the last release -- #16801 had 808 -- so it exceeds any fixed
+          # depth chosen for ordinary PRs, and the guard below refused it. Full history
+          # is fetched only for a PR deeper than 90 commits: exactly the set for which
+          # depth 100 is guaranteed to fail anyway, so this never spends the #16207 cost
+          # on a PR that would have passed. Ordinary PRs keep depth 100. Expressions
+          # have comparison but no arithmetic, hence a threshold, not `commits + N`.
+          fetch-depth: ${{ (github.event_name == 'merge_group' || github.event.pull_request.commits > 90) && '0' || '100' }}
 
       - name: Scan PR commits for banned trailers
         env:
@@ -67,7 +75,7 @@ jobs:
           # seconds the shallow fetch saves, so it is checked explicitly (#16207).
           for _endpoint in "${BASE_SHA}" "${HEAD_SHA}"; do
             if ! git cat-file -e "${_endpoint}^{commit}" 2>/dev/null; then
-              echo "::error::${_endpoint} is not present at fetch-depth 100 -- this PR is"
+              echo "::error::${_endpoint} is not present in the checkout -- this PR is"
               echo "::error::deeper than the checkout. Raise fetch-depth in this workflow;"
               echo "::error::do NOT widen it back to 0 without re-measuring (#16207)."
               exit 1
