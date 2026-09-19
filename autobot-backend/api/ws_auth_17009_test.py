@@ -25,7 +25,7 @@ USER = {"username": "alice", "user_id": "u-alice", "role": "user"}
 ADMIN = {"username": "root", "user_id": "u-root", "role": "admin"}
 
 
-def _connect(router, path: str, caller):
+def _connect(module, path: str, caller):
     """Open the socket; raises ``WebSocketDisconnect`` if the endpoint closed it before accepting.
 
     What an endpoint does after accepting is not under test. A streaming loop still
@@ -33,7 +33,7 @@ def _connect(router, path: str, caller):
     one cancellation is tolerated there, and only there.
     """
     app = FastAPI()
-    app.include_router(router)
+    app.include_router(module.router)
     with patch("api.ws_security._resolve_ws_user", new=AsyncMock(return_value=caller)):
         session = TestClient(app).websocket_connect(path)
         session.__enter__()
@@ -44,9 +44,9 @@ def _connect(router, path: str, caller):
         return "accepted"
 
 
-def _refused(router, path: str, caller) -> int:
+def _refused(module, path: str, caller) -> int:
     with pytest.raises(WebSocketDisconnect) as closed:
-        _connect(router, path, caller)
+        _connect(module, path, caller)
     return closed.value.code
 
 
@@ -54,12 +54,12 @@ def _routers():
     from api import analytics, analytics_quality, knowledge_research_ws, logs, monitoring
 
     return {
-        "analytics realtime": (analytics.router, "/ws/realtime", False),
-        "analytics live": (analytics.router, "/ws/analytics/live", False),
-        "quality": (analytics_quality.router, "/ws", True),
-        "knowledge research": (knowledge_research_ws.router, "/ws/knowledge/research", False),
-        "log tail": (logs.router, "/tail/backend.log", True),
-        "monitoring": (monitoring.router, "/realtime", False),
+        "analytics realtime": (analytics, "/ws/realtime", False),
+        "analytics live": (analytics, "/ws/analytics/live", False),
+        "quality": (analytics_quality, "/ws", True),
+        "knowledge research": (knowledge_research_ws, "/ws/knowledge/research", False),
+        "log tail": (logs, "/tail/backend.log", True),
+        "monitoring": (monitoring, "/realtime", False),
     }
 
 
@@ -68,21 +68,21 @@ CASES = ["analytics realtime", "analytics live", "quality", "knowledge research"
 
 @pytest.mark.parametrize("name", CASES)
 def test_an_unauthenticated_client_is_refused_before_accept(name):
-    router, path, _admin = _routers()[name]
-    assert _refused(router, path, None) == 1008
+    module, path, _admin = _routers()[name]
+    assert _refused(module, path, None) == 1008
 
 
 @pytest.mark.parametrize("name", CASES)
 def test_the_right_caller_is_accepted(name):
-    router, path, admin = _routers()[name]
+    module, path, admin = _routers()[name]
     with patch("api.analytics_quality.get_quality_snapshot", new=AsyncMock(return_value={})):  # no scan in a test
-        assert _connect(router, path, ADMIN if admin else USER) == "accepted"
+        assert _connect(module, path, ADMIN if admin else USER) == "accepted"
 
 
 @pytest.mark.parametrize("name", ["quality", "log tail"])
 def test_a_non_admin_is_refused_where_the_rest_twin_is_admin_only(name):
-    router, path, _admin = _routers()[name]
-    assert _refused(router, path, USER) == 1008
+    module, path, _admin = _routers()[name]
+    assert _refused(module, path, USER) == 1008
 
 
 @pytest.fixture
@@ -99,14 +99,14 @@ def operations(monkeypatch):
 
 def test_operation_progress_is_for_its_creator_or_an_admin(operations):
     """#17009 row 8, scoped by #17017: the creator and an admin, never another user or an anonymous caller."""
-    assert _refused(operations.router, "/op-1/progress", None) == 1008
-    assert _refused(operations.router, "/op-1/progress", USER) == 1008  # not their operation (none exists)
-    assert _connect(operations.router, "/op-1/progress", ADMIN) == "accepted"
+    assert _refused(operations, "/op-1/progress", None) == 1008
+    assert _refused(operations, "/op-1/progress", USER) == 1008  # not their operation (none exists)
+    assert _connect(operations, "/op-1/progress", ADMIN) == "accepted"
     lookup = operations.operation_integration_manager.operation_manager.get_operation
     lookup.return_value = SimpleNamespace(metadata={"created_by": "bob"})
-    assert _refused(operations.router, "/op-1/progress", USER) == 1008  # bob's, and alice is not an admin
+    assert _refused(operations, "/op-1/progress", USER) == 1008  # bob's, and alice is not an admin
     lookup.return_value = SimpleNamespace(metadata={"created_by": USER["username"]})
-    assert _connect(operations.router, "/op-1/progress", USER) == "accepted"
+    assert _connect(operations, "/op-1/progress", USER) == "accepted"
 
 
 def test_an_unauthenticated_probe_learns_nothing_about_the_framework(monkeypatch):
@@ -115,8 +115,8 @@ def test_an_unauthenticated_probe_learns_nothing_about_the_framework(monkeypatch
 
     monkeypatch.setattr(lro, "_OPERATIONS_AVAILABLE", False)
 
-    assert _refused(lro.router, "/op-1/progress", None) == 1008
-    assert _refused(lro.router, "/op-1/progress", USER) == 1008
+    assert _refused(lro, "/op-1/progress", None) == 1008
+    assert _refused(lro, "/op-1/progress", USER) == 1008
 
 
 def test_every_long_running_http_route_authenticates_and_starting_work_is_admin():
@@ -145,17 +145,17 @@ class TestTheOverseerSocket:
 
     def test_unauthenticated_is_refused(self):
         module = self._router()
-        assert _refused(module.router, "/ws/s-1", None) == 1008
+        assert _refused(module, "/ws/s-1", None) == 1008
 
     def test_another_users_session_is_refused(self):
         module = self._router()
         with patch.object(module, "owns_chat_session", new=AsyncMock(return_value=False)):
-            assert _refused(module.router, "/ws/s-1", USER) == 1008
+            assert _refused(module, "/ws/s-1", USER) == 1008
 
     def test_the_owner_is_accepted(self):
         module = self._router()
         with patch.object(module, "owns_chat_session", new=AsyncMock(return_value=True)):
-            assert _connect(module.router, "/ws/s-1", USER) == "accepted"
+            assert _connect(module, "/ws/s-1", USER) == "accepted"
 
 
 class TestOwnsChatSession:
@@ -279,9 +279,9 @@ class TestTheWorkflowSocket:
     def test_unauthenticated_is_refused_before_accept(self):
         from services.workflow_automation import routes
 
-        assert _refused(routes.router, "/workflow_ws/s-1", None) == 1008
+        assert _refused(routes, "/workflow_ws/s-1", None) == 1008
 
     def test_an_authenticated_caller_is_accepted(self):
         from services.workflow_automation import routes
 
-        assert _connect(routes.router, "/workflow_ws/s-1", USER) == "accepted"
+        assert _connect(routes, "/workflow_ws/s-1", USER) == "accepted"
