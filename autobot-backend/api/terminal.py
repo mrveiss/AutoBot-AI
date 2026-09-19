@@ -158,6 +158,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import CommandRisk
+from autobot_shared.websocket_subprotocol import accept_websocket
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from security.session_ownership import build_owner_metadata
@@ -824,8 +825,7 @@ async def terminal_websocket(websocket: WebSocket, session_id: str):
     Primary WebSocket endpoint for consolidated terminal access.
 
     Replaces both /ws/simple and /ws/secure endpoints.
-    Issue #1088: Extracted _init_terminal_handler and _run_terminal_message_loop
-    helpers to reduce to <=65 lines.
+    Issue #1088: Extracted _init_terminal_handler and _run_terminal_message_loop helpers to reduce to <=65 lines.
     Issue #14960/#14961/#14964: authenticates (capability-scoping a paired-device
     credential) and validates ownership before accept() -- see enforce_ws_terminal_auth.
     """
@@ -841,7 +841,7 @@ async def terminal_websocket(websocket: WebSocket, session_id: str):
         await websocket.close(code=1008, reason="Unknown or unauthorized terminal session")
         return
 
-    await websocket.accept()
+    await accept_websocket(websocket)
 
     try:
         terminal = await _init_terminal_handler(websocket, session_id, config)
@@ -910,7 +910,7 @@ async def ssh_terminal_websocket(
         await websocket.close(code=1008, reason="Unknown host_id")
         return
 
-    await websocket.accept()
+    await accept_websocket(websocket)
     session_id = f"ssh-{host_id}-{uuid.uuid4().hex[:8]}"
 
     try:

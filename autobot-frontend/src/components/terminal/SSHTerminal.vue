@@ -26,7 +26,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { createLogger } from '@/utils/debugUtils'
-import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
+import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useWebSocket } from '@/composables/useWebSocket'
 
@@ -59,24 +59,26 @@ let fitAddon: FitAddon | null = null
 
 // Reactive WebSocket URL — updated when hostId changes
 const wsUrl = ref('')
+// Reactive subprotocols — updated alongside wsUrl in connect() below (#16457).
+const wsProtocols = ref<string[] | undefined>(undefined)
 
-// #14991: the backend now authenticates this handshake -- attach the JWT via
-// the shared helper (#6700) rather than connecting unauthenticated. Returns
-// null when no token is available; callers must not connect in that case.
-const buildWsUrl = (): string | null => {
+// #14991: the backend now authenticates this handshake. Bare URL, no token --
+// the token travels via the Sec-WebSocket-Protocol subprotocol instead
+// (#16457), built separately by buildAuthenticatedWsSubprotocols() below.
+const buildWsUrl = (): string => {
   const params = props.chatSessionId
     ? `?conversation_id=${props.chatSessionId}`
     : ''
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.host
-  const rawUrl = `${protocol}//${host}/api/terminal/ws/ssh/${props.hostId}${params}`
-  return buildAuthenticatedWsUrl(rawUrl)
+  return `${protocol}//${host}/api/terminal/ws/ssh/${props.hostId}${params}`
 }
 
 const { send: wsSend, connect: wsConnect, disconnect: wsDisconnect, isConnected: wsIsConnected } = useWebSocket(wsUrl, {
   autoConnect: false,
   autoReconnect: false,
   parseJSON: false,
+  protocols: wsProtocols,
   onOpen: () => {
     logger.info('SSH WebSocket connected')
     connectionState.value = 'connected'
@@ -186,8 +188,8 @@ const connect = () => {
   connectionState.value = 'connecting'
   errorMessage.value = ''
 
-  const url = buildWsUrl()
-  if (url === null) {
+  const subprotocols = buildAuthenticatedWsSubprotocols()
+  if (subprotocols === null) {
     logger.warn('No auth token available, cannot connect to SSH WebSocket')
     connectionState.value = 'error'
     errorMessage.value = 'Not authenticated'
@@ -195,7 +197,8 @@ const connect = () => {
     return
   }
   logger.info('Connecting to SSH WebSocket')
-  wsUrl.value = url
+  wsUrl.value = buildWsUrl()
+  wsProtocols.value = subprotocols
   wsConnect()
 }
 
