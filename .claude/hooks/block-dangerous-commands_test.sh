@@ -43,7 +43,7 @@ mkdir -p "$EMPTY_TEMPLATE"
 git_sandbox() {
   local root="$1"
   mkdir -p "$root"
-  git -c init.defaultBranch=Dev_new_gui init -q --template="$EMPTY_TEMPLATE" "$root" >/dev/null 2>&1 || return 1
+  git -c init.defaultBranch=main init -q --template="$EMPTY_TEMPLATE" "$root" >/dev/null 2>&1 || return 1
   git -C "$root" -c user.email=test@example.invalid -c user.name=test \
     -c commit.gpgsign=false commit -q --allow-empty -m init >/dev/null 2>&1
 }
@@ -70,7 +70,7 @@ DIRTY_BRANCH=issue-dirty
 CLEAN_BRANCH=issue-clean
 DIRTY_WT="$SANDBOX/dirty-worktree"
 CLEAN_WT="$SANDBOX/clean-worktree"
-ORIGIN_REF=origin/Dev_new_gui
+ORIGIN_REF=origin/main
 
 printf 'committed content\n' >"$THIS_REPO/tracked.txt"
 git -C "$THIS_REPO" add tracked.txt >/dev/null 2>&1
@@ -91,8 +91,12 @@ printf 'in-flight work, never committed\n' >>"$DIRTY_WT/tracked.txt"
 printf 'in-flight work on the main tree, never committed\n' >>"$THIS_REPO/tracked.txt"
 
 mkdir -p "$THIS_REPO/.claude/hooks"
+# Every sibling the hook loads at runtime. A file missing here does not fail
+# loudly: `invokes` falls back to the unconditional verdict, so the guard keeps
+# working and only the #14144 allow cases break — which reads as "the scanner is
+# wrong" rather than "the scanner is absent". preflight() proves it below.
 cp "$SOURCE_DIR/block-dangerous-commands.sh" "$SOURCE_DIR/git_invocation_parse.py" \
-  "$SOURCE_DIR/git_shell_tokenize.py" \
+  "$SOURCE_DIR/git_shell_tokenize.py" "$SOURCE_DIR/command_position_scan.py" \
   "$THIS_REPO/.claude/hooks/" || { echo "FATAL: could not stage the hook"; exit 1; }
 HOOK="$THIS_REPO/.claude/hooks/block-dangerous-commands.sh"
 
@@ -109,6 +113,16 @@ preflight() {
   echo "  sandbox common-dir: $common"
   echo "  sandbox git-dir:    $gitdir"
   records=$(python3 "$THIS_REPO/.claude/hooks/git_invocation_parse.py" "git checkout some-branch" | tr '\037' '|')
+  # #14144's scanner, proven the same way and for the same reason. Absent, it
+  # cannot report an invocation, `invokes` keeps the unconditional verdict, and
+  # every non-git guard silently returns to matching quoted prose.
+  local positions
+  positions=$(python3 "$THIS_REPO/.claude/hooks/command_position_scan.py" "ls -la | grep foo" 2>&1 | tr '\037' '|' | tr '\n' ';')
+  echo "  command-position scan: [$positions]"
+  case "$positions" in
+    *"ls|-la"*grep*) : ;;
+    *) echo "FATAL: command_position_scan.py did not report the two invocations in a known-good command — refusing to report clean"; exit 1 ;;
+  esac
   echo "  parser records for a real branch switch: [$records]"
   if [ -z "$records" ]; then
     echo "FATAL: the parser reports nothing for a real invocation — the suite cannot test the guard"
@@ -194,8 +208,8 @@ preflight
 
 echo ""
 echo "--- Checkout: must allow ---"
-expect_allow "git checkout Dev_new_gui"              "git checkout Dev_new_gui"
-expect_allow "git checkout -b issue-9999 origin/..." "git checkout -b issue-9999 origin/Dev_new_gui"
+expect_allow "git checkout main"                     "git checkout main"
+expect_allow "git checkout -b issue-9999 origin/..." "git checkout -b issue-9999 origin/main"
 expect_allow "git checkout -- file.py"               "git checkout -- file.py"
 expect_allow "git checkout . (file restore)"         "git checkout ."
 expect_allow "git checkout 7-char SHA"               "git checkout abc1234"
@@ -209,17 +223,17 @@ echo "--- Checkout: must block ---"
 expect_block "git checkout feature-branch"           "git checkout feature-branch"
 expect_block "git checkout issue-1234"               "git checkout issue-1234"
 expect_block "git switch some-branch"                "git switch some-branch"
-expect_block "git checkout main"                     "git checkout main"
+expect_block "git checkout release"                  "git checkout release"
 expect_block "git checkout master"                   "git checkout master"
 expect_block "git switch master"                     "git switch master"
 expect_block "git checkout hotfix-something"         "git checkout hotfix-something"
 # Global options between `git` and the subcommand must not bypass the guard (#10434).
 expect_block "git -c foo=bar checkout some-branch"   "git -c core.foo=bar checkout some-branch"
-expect_block "git -c x=y checkout main"              "git -c http.sslVerify=false checkout main"
+expect_block "git -c x=y checkout release"           "git -c http.sslVerify=false checkout release"
 expect_block "git --git-dir=.git checkout feature"   "git --git-dir=.git checkout feature-branch"
 # Benign global-option commands (not a branch switch) must still pass.
 expect_allow "git -c x=y status (benign)"            "git -c core.pager=cat status"
-expect_allow "git -c x=y checkout -b (new branch)"   "git -c core.foo=bar checkout -b issue-9999 origin/Dev_new_gui"
+expect_allow "git -c x=y checkout -b (new branch)"   "git -c core.foo=bar checkout -b issue-9999 origin/main"
 
 # ── #15296 defect 1: the branch argument was read from the whole shell line, so
 # a redirection or a pipeline argument became the "branch name". The documented
@@ -233,10 +247,10 @@ expect_allow "toggle switch, output to a file"       "git switch - > /tmp/switch
 # The inverse: a redirect must not turn a real switch into an allowed one.
 expect_block "real switch, piped"                    "git switch release 2>&1 | tail -2"
 expect_block "real switch, stderr redirected"        "git switch release >/dev/null 2>&1"
-expect_block "checkout main, piped"                  "git checkout main 2>&1 | tail -2"
+expect_block "checkout release, piped"               "git checkout release 2>&1 | tail -2"
 expect_block "switch after another command"          "echo starting && git switch release"
 expect_block "switch on the second line"             "$(printf 'echo starting\ngit switch release\n')"
-expect_block "switch inside a substitution"          'echo "$(git switch main)"'
+expect_block "switch inside a substitution"          'echo "$(git switch release)"'
 
 # ── #15296 defect 2: `-C` was tolerated as a global option but its value was
 # ignored, so a switch in an unrelated repository — or in a linked worktree,
@@ -244,13 +258,13 @@ expect_block "switch inside a substitution"          'echo "$(git switch main)"'
 echo ""
 echo "--- #15296 defect 2: resolve -C and check the target repository ---"
 expect_allow "switch in an unrelated repo"           "git -C $OTHER_REPO switch release"
-expect_allow "checkout main in an unrelated repo"    "git -C $OTHER_REPO checkout main"
+expect_allow "checkout release in an unrelated repo" "git -C $OTHER_REPO checkout release"
 expect_allow "switch in a directory that is no repo" "git -C $NOT_A_REPO switch release"
 expect_allow "switch inside a linked worktree"       "git -C $LINKED_WORKTREE switch release"
 expect_allow "cd into an unrelated repo, then switch" "cd $OTHER_REPO && git switch release"
 # The inverse: naming this repository's main tree explicitly is still denied.
 expect_block "-C at this repo's main tree"           "git -C $THIS_REPO switch release"
-expect_block "-C at this repo's main tree, checkout main" "git -C $THIS_REPO checkout main"
+expect_block "-C at this repo's main tree, checkout release" "git -C $THIS_REPO checkout release"
 expect_block "cd to this repo's main tree, then switch" "cd $THIS_REPO && git switch release"
 # A directory only the shell could resolve is treated as this tree, not waved through.
 expect_block "cd through a variable, then switch"    'cd $SOMEWHERE && git switch release'
@@ -290,11 +304,11 @@ expect_allow "bare git (no subcommand at all)"                   "git"
 echo ""
 echo "--- #15296 defect 3: quoted prose is not an invocation ---"
 expect_allow "issue body quoting a switch"           'gh issue create --title "guard bug" --body "git switch - is allowed but the same command with a redirect is not"'
-expect_allow "commit message quoting a checkout"     'git commit -m "docs: explain why git checkout main is blocked"'
-expect_allow "grep pattern quoting a switch"         'git status | grep -c "git switch main"'
-expect_allow "heredoc body quoting a switch"         "$(printf 'gh issue create --body "$(cat <<%sEOF%s\nreproduce with git switch main on the main tree\nEOF\n)"\n' "'" "'")"
+expect_allow "commit message quoting a checkout"     'git commit -m "docs: explain why git checkout release is blocked"'
+expect_allow "grep pattern quoting a switch"         'git status | grep -c "git switch release"'
+expect_allow "heredoc body quoting a switch"         "$(printf 'gh issue create --body "$(cat <<%sEOF%s\nreproduce with git switch release on the main tree\nEOF\n)"\n' "'" "'")"
 # The inverse: real invocations next to quoted prose are still denied.
-expect_block "prose plus a real switch"              'echo "git switch main is blocked" && git switch release'
+expect_block "prose plus a real switch"              'echo "git switch release is blocked" && git switch release'
 
 echo ""
 echo "--- #15296: an unparseable command gets a refusal, not a guess ---"
@@ -303,6 +317,9 @@ expect_block "unbalanced quote"                      'git switch " unbalanced'
 echo ""
 echo "--- Push protections ---"
 expect_block "git push origin main"                  "git push origin main"
+# Dev_new_gui: temporary mirror of main for the live updater (#16461) -- a direct
+# push would break its fast-forward-only mirror workflow and cut the updater off.
+expect_block "git push origin Dev_new_gui"           "git push origin Dev_new_gui"
 expect_block "git push --force"                      "git push --force origin feature"
 expect_allow "git push --force-with-lease"           "git push --force-with-lease"
 expect_allow "git push origin issue-9999"            "git push origin issue-9999"
@@ -324,7 +341,7 @@ expect_allow "clean -n is untouched"                 "git clean -n"
 # ── #15835: a path-scoped checkout or restore that names a SOURCE takes its
 # content from another commit, not from the index. The allow-list called both
 # "file restore" and permitted the second by design; `git checkout
-# origin/Dev_new_gui -- .` destroyed 147 lines of uncommitted work. Refused now
+# origin/main -- .` destroyed 147 lines of uncommitted work. Refused now
 # — but only where there is work to lose, because a guard that refuses harmless
 # commands is a guard people switch off.
 echo ""
@@ -336,7 +353,7 @@ expect_block "restore --source=<ref> -- <path>"              "git -C $DIRTY_WT r
 expect_block "restore --source <ref> (separate word)"        "git -C $DIRTY_WT restore --source $ORIGIN_REF -- ."
 expect_block "restore -s <ref> <path>"                       "git -C $DIRTY_WT restore -s $ORIGIN_REF tracked.txt"
 expect_block "cd into the dirty tree, then overwrite"        "cd $DIRTY_WT && git checkout $ORIGIN_REF -- ."
-# The sandbox's main tree sits on Dev_new_gui, so $ORIGIN_REF is ITS own
+# The sandbox's main tree sits on main, so $ORIGIN_REF is ITS own
 # upstream and therefore its recovery form — a foreign ref is what the rule
 # refuses there. Both directions asserted, since getting this backwards is how
 # the allow-list landed in the first place.
@@ -369,9 +386,9 @@ expect_allow "recovery: restore --source=origin/<own branch>" "git -C $DIRTY_WT 
 expect_allow "recovery: checkout origin/<own branch> -- ."   "git -C $DIRTY_WT checkout origin/$DIRTY_BRANCH -- ."
 # Not a path op at all: -b forks a branch, and the ref is its start point.
 expect_allow "checkout -b <new> <ref> in a dirty tree"       "git -C $DIRTY_WT checkout -b issue-fresh $ORIGIN_REF"
-# A path-scoped checkout never moves HEAD, so the main/master branch-move rule
+# A path-scoped checkout never moves HEAD, so the release/master branch-move rule
 # does not apply to it; the overwrite rule above is what judges it.
-expect_allow "checkout main -- <path> on a clean tree"       "git -C $CLEAN_WT checkout main -- tracked.txt"
+expect_allow "checkout release -- <path> on a clean tree"   "git -C $CLEAN_WT checkout release -- tracked.txt"
 
 # ── #15835 defect 3: the destructive-git rules were greps over the raw command
 # text, so a heredoc WRITING a file about these patterns tripped them. Measured
@@ -383,7 +400,7 @@ expect_allow "heredoc writing a file about a hard reset" "$(printf 'cat > notes.
 expect_allow "issue body describing the clean rule"          'gh issue create --body "git clean -fd is refused, which is correct"'
 expect_allow "commit message describing the patterns"        "$(printf 'git commit -m "$(cat <<%sEOF%s\nfix(safety): a ref-sourced checkout (see #15835) overwrites the tree, and git reset --hard discards it\nEOF\n)"\n' "'" "'")"
 expect_allow "grep pattern for a hard reset"                 'git log --oneline | grep -c "git reset --hard"'
-expect_allow "issue body quoting the overwrite command"      'gh issue create --body "git checkout origin/Dev_new_gui -- . destroyed 147 lines"'
+expect_allow "issue body quoting the overwrite command"      'gh issue create --body "git checkout origin/main -- . destroyed 147 lines"'
 # The inverse: real invocations beside prose are still refused.
 expect_block "a real hard reset after prose"                 'echo "documented above" && git reset --hard HEAD'
 expect_block "a real clean after prose"                      'echo "a mention" && git clean -fd'
@@ -413,10 +430,85 @@ expect_block "write to /dev/nvme0n1"                 "cat img > /dev/nvme0n1"
 expect_block "dd if= to device"                      "dd if=/dev/zero of=/dev/sda"
 expect_block "mkfs on partition"                     "mkfs.ext4 /dev/sdb1"
 
+echo ""
+echo "--- #14144: the non-git guards distinguish invoking from naming ---"
+# Each guard below gets BOTH halves. The block case proves the guard still
+# fires; the allow case proves it no longer fires on a command that merely
+# contains the trigger in an argument. Without the block half this section
+# would pass just as happily against a guard that was deleted outright.
+expect_block "chmod 777 on a real path"           "chmod 777 /etc/passwd"
+expect_allow "chmod 777 inside a search list"     'for p in "chmod 777" x; do grep -c -- "$p" f; done'
+expect_allow "chmod 777 quoted in an issue body"  'gh issue create --body "chmod 777 is refused, which is correct"'
+
+expect_block "npm publish"                              "npm publish"
+expect_allow "npm publish named in a grep"              'grep -rn "npm publish" .github/workflows'
+expect_block "twine upload"                            "twine upload dist/pkg.whl"
+expect_allow "twine upload quoted in prose"            'gh pr comment 1 --body "twine upload is CI-only here"'
+
+expect_block "recursive delete of home"               "rm -rf ~/"
+expect_allow "recursive delete named in prose"        'gh issue create --body "rm -rf ~/ would be catastrophic"'
+
+expect_block "dd to a device"                     "dd if=/dev/zero of=/dev/sda"
+expect_block "mkfs on a partition"                   "mkfs.ext4 /dev/sdb1"
+expect_allow "mkfs named in a search list"           'for p in "dd if=" "mkfs"; do grep -c -- "$p" notes.md; done'
+
+# The redirect half of the disk guard is deliberately NOT invocation-gated: a
+# redirection is not a command position, so nothing could confirm it. It must
+# keep firing exactly as before.
+expect_block "redirect to a block device still blocked" "echo x > /dev/sda1"
+
+# Uncertainty must not narrow a denial. A command position the scanner cannot
+# name means there may be an invocation it never reported, so the guard keeps
+# its unconditional verdict rather than trusting an empty result.
+expect_block "trigger behind eval"                    'eval "chmod 777 /etc/passwd"'
+# A command whose NAME sits in a variable -- `C=chmod; $C 777 /etc/passwd` -- is
+# deliberately NOT asserted here. It is not blocked on this branch and it is not
+# blocked on unmodified main either: the guard's outer textual pre-filter never
+# matches when the command name and its argument are not adjacent in the raw
+# text, so the `&&`-chained invocation check below it is never reached. #14144
+# does not change that, and a case asserting it would be asserting behaviour
+# nothing implements. The gap is real and tracked as #16921 -- fix it there, in
+# the pre-filter, rather than re-adding a case here.
+
+echo ""
+echo "--- Untrusted-repo clone safety (#16488) ---"
+# The hooks-path key is held in a variable so these fixtures are commands handed to
+# the hook, not hooks-path override invocations to the #15961 guard. The strings
+# the hook receives are unchanged.
+HOOKS_PATH_KEY="core.hooksPath"
+expect_block "bare git clone"                        "git clone https://example.com/o/r.git"
+expect_block "clone missing every safe flag"         "git clone --depth 1 https://example.com/o/r.git"
+expect_block "clone missing protocol flags only"     "git -c ${HOOKS_PATH_KEY}=/dev/null -c core.fsmonitor=false clone --depth 1 --no-tags --single-branch https://example.com/o/r.git"
+expect_block "recurse-submodules, even with every other safe flag" \
+  "git clone --recurse-submodules --depth 1 --no-tags --single-branch -c ${HOOKS_PATH_KEY}=/dev/null -c core.fsmonitor=false -c protocol.file.allow=never -c protocol.ext.allow=never https://example.com/o/r.git"
+expect_block "-C at an unrelated directory does not excuse it" "git -C /tmp clone https://example.com/o/r.git"
+# The exact invocation build_clone_command() itself produces, spelled out by
+# hand -- the one shape a hand-typed `git clone` may take.
+expect_allow "clone carrying every one of its own safe flags" \
+  "git -c ${HOOKS_PATH_KEY}=/dev/null -c core.fsmonitor=false -c protocol.file.allow=never -c protocol.ext.allow=never clone --depth 1 --no-tags --single-branch -- https://example.com/o/r.git /cache/dest"
+# The helper's own invocation never contains a literal `git clone` at all --
+# it runs a fixed argv from a `python3` process -- so it is left alone with no
+# special-case exemption in the guard itself.
+expect_allow "the helper's own command"               "python3 scripts/research/safe_clone.py https://example.com/o/r.git --id owner__repo__deadbeef"
+expect_allow "git clone quoted in prose"               'gh issue create --body "run git clone https://example.com/x to reproduce"'
+expect_allow "git clone mentioned in a grep pattern"   'git log --oneline | grep -c "git clone"'
+# Mentioning the helper's path elsewhere on the line must not excuse a real,
+# unsafe clone sitting next to it -- the exemption this guard deliberately
+# does NOT have (see the hook's own comment).
+expect_block "helper mentioned elsewhere does not excuse an unsafe clone" \
+  "echo scripts/research/safe_clone.py && git clone https://example.com/untrusted-repo"
+expect_block "helper mentioned in a trailing comment does not excuse it" \
+  "git clone https://example.com/untrusted-repo # see scripts/research/safe_clone.py"
+
 # Reach floor: a suite that silently stopped executing cases — a mis-copied
 # hook, a sandbox that failed to build, an early `return` in a helper — would
 # otherwise finish with 0 failures and report clean. Assert the population.
-MIN_CASES=100
+# Raised 100 -> 139 with the #14144 section. A floor only ratchets UP: it exists
+# so a case that quietly stops running is caught, and slack is exactly the room in
+# which that can happen unnoticed. Lower it only alongside a deliberate removal --
+# the 140 -> 139 step is one: the variable-command case above was withdrawn to
+# #16921 because it asserted behaviour this branch does not implement.
+MIN_CASES=139
 TOTAL=$((PASS + FAIL))
 
 echo ""

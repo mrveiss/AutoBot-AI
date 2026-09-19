@@ -66,16 +66,16 @@ _LOCALES = _REPO_ROOT / "autobot-frontend" / "src" / "i18n" / "locales"
 # Lower these as translations land. Never raise one to admit a new untranslated
 # string: translate it, or leave the key out until it can be translated.
 BASELINE = {
-    "ar": 3754,
-    "de": 1631,
-    "es": 1680,
-    "fa": 3818,
-    "fr": 1877,
-    "he": 3818,
-    "lv": 2272,
-    "pl": 2238,
-    "pt": 2075,
-    "ur": 3818,
+    "ar": 3722,  # #16973: recounted, main had drifted 3 below the frozen figure
+    "de": 1615,  # #16973: recounted, main had drifted 1 below the frozen figure
+    "es": 1663,  # #16973: recounted, main had drifted 2 below the frozen figure
+    "fa": 3785,  # #16973: recounted, main had drifted 3 below the frozen figure
+    "fr": 1860,  # #16973: recounted, main had drifted 2 below the frozen figure
+    "he": 3785,  # #16973: recounted, main had drifted 3 below the frozen figure
+    "lv": 2255,  # #16973: recounted, main had drifted 2 below the frozen figure
+    "pl": 2221,  # #16973: recounted, main had drifted 2 below the frozen figure
+    "pt": 2058,  # #16973: recounted, main had drifted 2 below the frozen figure
+    "ur": 3785,  # #16973: recounted, main had drifted 3 below the frozen figure
 }
 
 # Below this length a match is far more likely to be a shared token than an

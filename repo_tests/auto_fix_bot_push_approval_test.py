@@ -28,7 +28,6 @@ PR's run gets approved through.
 
 from __future__ import annotations
 
-
 import yaml
 from repo_tests._paths import repo_root
 
@@ -42,10 +41,22 @@ _PUSH_WORKFLOWS = [
 _APPROVAL_JOB_ID = "approve-parked-runs"
 _SAME_REPO_GUARD = "github.event.pull_request.head.repo.full_name == github.repository"
 
+# #16360 AC3 added a summary step and a cancelled()-only hand-off step after
+# this one, so it is no longer the job's last step -- find it by name.
+_APPROVAL_STEP_NAME = "Approve the run this push just parked"
+
 
 def _jobs(filename: str) -> dict:
     document = yaml.safe_load((_WORKFLOWS_DIR / filename).read_text(encoding="utf-8"))
     return document["jobs"]
+
+
+def _approval_step(filename: str) -> dict:
+    steps = _jobs(filename)[_APPROVAL_JOB_ID]["steps"]
+    for step in steps:
+        if step.get("name") == _APPROVAL_STEP_NAME:
+            return step
+    raise AssertionError(f"{filename}: no {_APPROVAL_JOB_ID} step named {_APPROVAL_STEP_NAME!r}")
 
 
 def test_there_is_a_bot_push_workflow_to_check():
@@ -110,17 +121,13 @@ def test_the_approval_job_scopes_to_only_this_pr():
     the parking eventually, but only this PR's run needs releasing right now,
     and a full sweep from every push-triggered run multiplies API cost."""
     for filename, _ in _PUSH_WORKFLOWS:
-        jobs = _jobs(filename)
-        step = jobs[_APPROVAL_JOB_ID]["steps"][-1]
-        env = step.get("env", {})
+        env = _approval_step(filename).get("env", {})
         assert env.get("WATCHDOG_ONLY_PR") == "${{ github.event.pull_request.number }}", filename
 
 
 def test_the_approval_job_reuses_the_watchdog_script_rather_than_reimplementing_it():
     for filename, _ in _PUSH_WORKFLOWS:
-        jobs = _jobs(filename)
-        step = jobs[_APPROVAL_JOB_ID]["steps"][-1]
-        run = step["run"]
+        run = _approval_step(filename)["run"]
         assert "pipeline-scripts/ci_dispatch_watchdog.py" in run, filename
         assert "--check dispatch" in run, filename
 

@@ -9,10 +9,10 @@ on:
   merge_group:
   push:
     branches:
-      - Dev_new_gui
+      - main
   pull_request:
     branches:
-      - Dev_new_gui
+      - main
     # Required status check via branch protection (#6723) — must run on PR
   schedule:
     - cron: '0 10 * * 0'  # Every Sunday at 10 AM UTC
@@ -214,7 +214,7 @@ jobs:
 
       - name: Upload failure logs
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: docker-compose-logs
           path: failure-logs.txt

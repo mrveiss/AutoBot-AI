@@ -84,10 +84,7 @@ def _parse_fact_timestamp(timestamp_str: Any) -> datetime | None:
 
 
 def _normalize_tags(tags: Any) -> List[str]:
-    """
-    Normalize tags to list of lowercase strings.
-
-    Issue #398: Extracted from _validate_fact_for_import.
+    """Normalize tags to list of lowercase strings. Issue #398: Extracted from _validate_fact_for_import.
 
     Args:
         tags: Tags as string, list, or other
@@ -757,7 +754,7 @@ class BulkOperationsMixin:
 
                 result = await self.store_fact(
                     content=fact_data.get("content", ""),
-                    metadata=fact_data.get("metadata", {}),
+                    metadata={**fact_data.get("metadata", {}), "ingest_route": "bulk_import"},
                     fact_id=fact_id,
                 )
 
@@ -1851,7 +1848,9 @@ class BulkOperationsMixin:
 
         embedding = fact_data.get("embedding")
         if restore_embeddings and embedding and self.vector_store:
-            return await self._restore_fact_embedding(result.get("fact_id", fact_id), content, embedding)
+            # #13708: use what store_fact persisted -- an unredacted backup can carry a raw credential.
+            stored_content = result.get("content", content)
+            return await self._restore_fact_embedding(result.get("fact_id", fact_id), stored_content, embedding)
 
         return {"action": "restored", "embedding": False}
 

@@ -45,6 +45,10 @@ if "llm_shared.fallback_events" not in sys.modules:
 _llm_service_mod = _load_real_module("_real_llm_service_11995", "services/llm_service.py")
 LLMService = _llm_service_mod.LLMService
 
+# services.llm_fallback_chain (#16526/#620 extraction) is a normal, lightweight
+# import — no private-loader trick needed — and is the module that actually
+# calls emit_fallback_event now, so that's what tests must patch.
+import services.llm_fallback_chain as _fallback_chain_mod  # noqa: E402
 from llm_shared.models import LLMRequest, LLMResponse  # noqa: E402
 
 
@@ -118,7 +122,7 @@ async def test_chat_emits_provider_fallback_event_on_success(monkeypatch):
     svc = _make_service(provider)
     monkeypatch.setattr(_llm_service_mod, "get_fallback_chain_manager", lambda: _FakeFallbackChainManager())
     mock_emit = AsyncMock()
-    monkeypatch.setattr(_llm_service_mod, "emit_fallback_event", mock_emit)
+    monkeypatch.setattr(_fallback_chain_mod, "emit_fallback_event", mock_emit)
 
     messages: List[Dict[str, str]] = [{"role": "user", "content": "hi"}]
     response = await svc.chat(messages, model_name="primary-model", conversation_id="conv-1", use_cache=False)
@@ -138,7 +142,7 @@ async def test_chat_emits_provider_fallback_event_on_exhaustion(monkeypatch):
     svc = _make_service(provider)
     monkeypatch.setattr(_llm_service_mod, "get_fallback_chain_manager", lambda: _FakeFallbackChainManager())
     mock_emit = AsyncMock()
-    monkeypatch.setattr(_llm_service_mod, "emit_fallback_event", mock_emit)
+    monkeypatch.setattr(_fallback_chain_mod, "emit_fallback_event", mock_emit)
 
     messages: List[Dict[str, str]] = [{"role": "user", "content": "hi"}]
     response = await svc.chat(messages, model_name="primary-model", conversation_id="conv-2", use_cache=False)
@@ -154,7 +158,7 @@ async def test_stream_emits_provider_fallback_event_on_success(monkeypatch):
     svc = _make_service(provider)
     monkeypatch.setattr(_llm_service_mod, "get_fallback_chain_manager", lambda: _FakeFallbackChainManager())
     mock_emit = AsyncMock()
-    monkeypatch.setattr(_llm_service_mod, "emit_fallback_event", mock_emit)
+    monkeypatch.setattr(_fallback_chain_mod, "emit_fallback_event", mock_emit)
 
     chunks = [c async for c in svc.stream([{"role": "user", "content": "hi"}], model_name="primary-model")]
 
@@ -175,9 +179,33 @@ async def test_chat_no_event_when_primary_succeeds(monkeypatch):
 
     svc = _make_service(_OkProvider())
     mock_emit = AsyncMock()
-    monkeypatch.setattr(_llm_service_mod, "emit_fallback_event", mock_emit)
+    monkeypatch.setattr(_fallback_chain_mod, "emit_fallback_event", mock_emit)
 
     response = await svc.chat([{"role": "user", "content": "hi"}], model_name="primary-model", use_cache=False)
 
     assert response.content == "ok"
     mock_emit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stream_emits_exhausted_event_and_raises(monkeypatch):
+    """stream()'s fallback-chain exhaustion path (#620/#16526 extraction into
+    _attempt_stream_once/_mark_exhausted) still emits exhausted=True and
+    raises, mirroring test_chat_emits_provider_fallback_event_on_exhaustion."""
+    provider = _AlwaysLimitedProvider()
+    svc = _make_service(provider)
+    monkeypatch.setattr(_llm_service_mod, "get_fallback_chain_manager", lambda: _FakeFallbackChainManager())
+    mock_emit = AsyncMock()
+    monkeypatch.setattr(_fallback_chain_mod, "emit_fallback_event", mock_emit)
+
+    # The fake fallback chain has one hop: 1st attempt is rate-limited and
+    # retries on the fallback model, 2nd attempt is rate-limited with no
+    # further hop, so the original provider exception propagates (same
+    # shape as the pre-extraction code — the chain never reaches the
+    # true 10-attempt ceiling here, mirroring test_chat_..._on_exhaustion).
+    with pytest.raises(RuntimeError, match="429 rate limit exceeded"):
+        async for _ in svc.stream([{"role": "user", "content": "hi"}], model_name="primary-model"):
+            pass
+
+    mock_emit.assert_awaited_once()
+    assert mock_emit.await_args.kwargs["exhausted"] is True

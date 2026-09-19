@@ -167,6 +167,44 @@ for _m in [
 ]:
     _stub(_m)
 
+# #16025: role_registry.seed_default_roles() now filters each DEFAULT_ROLES
+# entry through `Role.__table__.columns` before writing it. `__table__` is a
+# dunder-shaped name Mock's __getattr__ refuses to auto-vivify (it raises
+# AttributeError rather than fake a magic method it does not implement), so
+# a bare MagicMock cannot even reach that attribute, let alone stand in for
+# it. Set `__table__` directly -- a plain attribute assignment, not a nested
+# get-then-set through the Mock -- to a real object carrying the real Role
+# model's column names, so the filter is exercised against something that
+# behaves like the real table would. Registered under sys.modules (not just
+# a local variable) so test_role_registry.py's own, separately-built Role
+# stub -- it evicts this whole models.database stub and builds a fresh one,
+# see its module docstring -- can reuse the same column set instead of a
+# second literal that can drift from this one.
+_role_columns_mod = types.ModuleType("_role_cols")
+_role_columns_mod.COLUMNS = frozenset(
+    {
+        "id",
+        "name",
+        "display_name",
+        "sync_type",
+        "source_paths",
+        "target_path",
+        "systemd_service",
+        "auto_restart",
+        "health_check_port",
+        "health_check_path",
+        "pre_sync_cmd",
+        "post_sync_cmd",
+        "required",
+        "degraded_without",
+        "ansible_playbook",
+        "created_at",
+        "updated_at",
+    }
+)
+sys.modules["_role_cols"] = _role_columns_mod
+sys.modules["models.database"].Role.__table__ = types.SimpleNamespace(columns=_role_columns_mod.COLUMNS)
+
 # #13139: models/schemas_secrets.py must be REAL, not stubbed. It carries
 # response_model classes, and FastAPI rejects a MagicMock as a response field
 # ("Invalid args for response field!") the moment a test builds the app. It
@@ -182,6 +220,18 @@ _ss_mod = _ss_importlib_util.module_from_spec(_ss_spec)
 _ss_spec.loader.exec_module(_ss_mod)
 sys.modules["models.schemas_secrets"] = _ss_mod
 setattr(sys.modules["models"], "schemas_secrets", _ss_mod)
+
+# #16281: models/npu_schemas.py and models/gpu_schemas.py are REAL for the same
+# reason -- services/node_gpu.py builds pydantic responses from them, and a
+# MagicMock model validates nothing. Both import only pydantic; gpu_schemas also
+# imports npu_schemas, hence the order and the sys.modules entry before exec.
+for _schema in ("npu_schemas", "gpu_schemas"):
+    _schema_path = Path(__file__).parent / "models" / f"{_schema}.py"
+    _schema_spec = _ss_importlib_util.spec_from_file_location(f"models.{_schema}", _schema_path)
+    _schema_mod = _ss_importlib_util.module_from_spec(_schema_spec)
+    sys.modules[f"models.{_schema}"] = _schema_mod
+    _schema_spec.loader.exec_module(_schema_mod)
+    setattr(sys.modules["models"], _schema, _schema_mod)
 
 
 # ── services ──────────────────────────────────────────────────────────────────
@@ -226,6 +276,16 @@ _EXTRA_SERVICE_MODULES = (
     "services.service_restart",
     "services.tls_credentials",
     "services.vnc_credentials",
+    # #16310: api/full_tree_drift.py imports this at module scope, and
+    # api/code_sync.py imports api/full_tree_drift.py unconditionally at the
+    # bottom of the file to register its route -- so every test collecting
+    # api.code_sync needs services.full_tree_drift resolvable, even though the
+    # AST scan above (which only reads code_sync.py/setup_wizard.py directly)
+    # never sees it. Its own real coroutines are exercised by
+    # tests/services/full_tree_drift_test.py's self-contained real-load
+    # (#16310 review round 10: moved out of services/ itself, see that
+    # file's module docstring), not here.
+    "services.full_tree_drift",
 )
 
 # Parent package first so each child stub binds onto it (see _stub docstring).
@@ -280,6 +340,15 @@ for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_M
 # outgrown "eight" twice already (#15462), and a stale number reads as a rule.
 import importlib.util as _importlib_util  # noqa: E402
 
+# #16281: the SLM's top-level status vocabulary (#15495), loaded by path. On
+# pytest.ini's pythonpath `autobot_shared/` itself is a root, so a bare
+# `import status_enums` finds autobot_shared/status_enums.py -- a different
+# module with no NodeStatus. Production resolves the SLM's own; so does the suite.
+_se_spec = _importlib_util.spec_from_file_location("status_enums", Path(__file__).parent / "status_enums.py")
+_se_mod = _importlib_util.module_from_spec(_se_spec)
+_se_spec.loader.exec_module(_se_mod)
+sys.modules["status_enums"] = _se_mod
+
 _REAL_SERVICE_MODULES = (
     "ssh_utils",
     "deploy_artifacts",
@@ -299,6 +368,12 @@ _REAL_SERVICE_MODULES = (
     # line-count ceiling, #14236) into this module; its own tests import it
     # directly and need the real coroutines, not MagicMocks.
     "slm_frontend_build",
+    # #16040: the permission decision, including API-key authority. It is pure
+    # (stdlib + autobot_shared), so its co-located test exercises the real
+    # decision without importing services/auth.py.
+    "api_key_authority",
+    # #16281: its co-located test drives the real publish/retract logic.
+    "node_gpu",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for

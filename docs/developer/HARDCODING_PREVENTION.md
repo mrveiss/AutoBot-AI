@@ -42,7 +42,7 @@ git commit ...
 **Run the same check locally** before pushing:
 
 ```bash
-GITHUB_BASE_REF=Dev_new_gui bash pipeline-scripts/check-hardcoded-values-pr.sh
+GITHUB_BASE_REF=main bash pipeline-scripts/check-hardcoded-values-pr.sh
 ```
 
 **What it blocks** (by category, see hook source for full patterns):
@@ -68,7 +68,7 @@ GITHUB_BASE_REF=Dev_new_gui bash pipeline-scripts/check-hardcoded-values-pr.sh
 - Lines containing `config.`, `getenv`, `CONFIG[`, or `AUTOBOT_` (already routed through SSOT)
 - Comments (any line starting with `#` / `//` / ` *`)
 - File types other than `.py` / `.ts` / `.vue` / `.js` / `.sh` / `.yml` / `.yaml` (`HV_SCAN_EXTENSIONS` in `scripts/lib/hardcoded-value-rules.sh`) — JSON, for one, is not scanned. YAML *is* scanned, workflows included; an earlier version of this list said otherwise. Markdown is not scanned by *this* hook; since #15208 `docs/**/*.md` is gated by `tools/lint/check_docs_no_fleet_addressing.py`, which looks for fleet node addresses only and reads its pattern from the same `HV_VM_IP` rule this hook uses.
-- URLs in `.github/workflows/` (#16260) — a CI workflow's vendor downloads and dashboard links are not deployment config. Only the generic URL rule stands down there: the IP and port rules still run on workflow files, so an AutoBot address in a workflow is still reported. Outside `.github/workflows/` the same URL is still a finding.
+- URLs in `.github/workflows/` and `.github/actions/` (#16260) — a CI workflow's vendor downloads and dashboard links are not deployment config, and a composite action is a piece of a workflow (#15515). Only the generic URL rule stands down there: the IP and port rules still run on those files, so an AutoBot address in either is still reported. Outside those two directories the same URL is still a finding.
 - `192.168.x.x` and `127.0.0.x` literals (RFC 1918 example space and loopback — used in SSRF guards, network-tooling examples, test fixtures, i18n placeholders)
 
 <!-- fleet-addressing-exempt: quotes the exact call the hook's `getenv` filter lets through, which is the false negative being described -->
@@ -181,7 +181,7 @@ Run the detection script manually to audit the entire codebase:
 # Machine-readable, as ssot-coverage.yml consumes it
 ./pipeline-scripts/detect-hardcoded-values.sh --json
 
-# Fail if a baseline entry no longer matches anything
+# Fail if a baseline entry claims more findings than the scan finds
 ./pipeline-scripts/detect-hardcoded-values.sh --audit-baseline
 
 # Scan a specific file list (the staged-files entry point takes argv)
@@ -234,18 +234,28 @@ and printed while the verdict read `ssot_violations` alone, so nine hardcoded
 
 ### "STALE baseline entry" — what to do (#14912)
 
-If `ssot-coverage` fails with `N baseline entr(ies) … no longer match anything`,
-you have almost certainly just **fixed or moved** a hardcoded value. That is the
-outcome the guard wants; the baseline simply still lists it. Recover with one
-command:
+If `ssot-coverage` fails with `N baseline entr(ies) … claim more findings than
+the scan found`, you have almost certainly just **fixed or moved** a hardcoded
+value. That is the outcome the guard wants; the baseline simply still lists it.
+The audit lists two cases apart (#16334), and they need different edits:
+
+- `STALE … (matched 0 of N: delete this entry)`: the entry matches nothing any
+  more, so it goes.
+- `OVER … (matched k of N: lower it to k, do not delete)`: the entry still
+  exempts `k` live findings. **Deleting it un-baselines them.** #16298 did
+  exactly that, because the audit used to call this case "no longer match
+  anything" too. Lower the count instead.
+
+Recover from both with one command:
 
 ```bash
 ./pipeline-scripts/detect-hardcoded-values.sh --prune-baseline
 ```
 
-then commit the changed baseline alongside your fix.
+then commit the changed baseline alongside your fix. It deletes the first kind
+and lowers the second.
 
-`--prune-baseline` **only ever removes**. It cannot add a key or raise a count,
+`--prune-baseline` **only ever removes or lowers**. It cannot add a key or raise a count,
 by construction: it iterates the keys already in the baseline and writes
 `min(baseline_count, found_count)`. So it cannot be used to silence a new
 finding — that direction is blocked independently by

@@ -14,13 +14,13 @@ async def test_import_http_catalog_rejects_invalid_scheme():
     """SSRF guard: reject non-HTTP(S) schemes."""
     importer = ExternalSkillImporter()
 
-    with pytest.raises(RuntimeError, match="must use http or https scheme"):
+    with pytest.raises(RuntimeError, match="not allowed; only http/https permitted"):
         await importer.import_http_catalog("file:///etc/passwd")
 
-    with pytest.raises(RuntimeError, match="must use http or https scheme"):
+    with pytest.raises(RuntimeError, match="not allowed; only http/https permitted"):
         await importer.import_http_catalog("ftp://example.com/catalog")
 
-    with pytest.raises(RuntimeError, match="must use http or https scheme"):
+    with pytest.raises(RuntimeError, match="not allowed; only http/https permitted"):
         await importer.import_http_catalog("gopher://example.com/catalog")
 
 
@@ -29,19 +29,19 @@ async def test_import_http_catalog_rejects_missing_hostname():
     """SSRF guard: reject URLs without hostname."""
     importer = ExternalSkillImporter()
 
-    with pytest.raises(RuntimeError, match="missing hostname"):
+    with pytest.raises(RuntimeError, match="URL has no hostname"):
         await importer.import_http_catalog("http://")
 
-    with pytest.raises(RuntimeError, match="missing hostname"):
+    with pytest.raises(RuntimeError, match="URL has no hostname"):
         await importer.import_http_catalog("https://")
 
 
 @pytest.mark.asyncio
 async def test_import_http_catalog_rejects_private_ips():
-    """SSRF guard: reject private/internal IPs (via is_public_url_async)."""
+    """SSRF guard: reject private/internal IPs (via resolve_safe_ip)."""
     importer = ExternalSkillImporter()
 
-    # These should be blocked by is_public_url_async
+    # These should be blocked by resolve_safe_ip
     private_urls = [
         "http://127.0.0.1/catalog",
         "http://localhost/catalog",
@@ -93,7 +93,8 @@ async def test_import_http_catalog_public_url_passes_and_pins_ip():
 
     mock_response = MagicMock()
     mock_response.status = 200
-    mock_response.json = AsyncMock(return_value={"skills": [{"name": "demo"}]})
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_response.content.read = AsyncMock(return_value=b'{"skills": [{"name": "demo"}]}')
     mock_response.__aenter__ = AsyncMock(return_value=mock_response)
     mock_response.__aexit__ = AsyncMock(return_value=False)
 
@@ -116,15 +117,12 @@ async def test_import_http_catalog_public_url_passes_and_pins_ip():
 
 @pytest.mark.asyncio
 async def test_import_http_catalog_blocks_dns_rebind_to_private():
-    """is_public passes on check, but the pinned resolve sees a private IP → blocked."""
-    from unittest.mock import AsyncMock, patch
+    """A hostname that resolves to a private IP is rejected before any connection is pinned."""
+    from unittest.mock import patch
 
     importer = ExternalSkillImporter()
 
     fake_private = [(2, 1, 6, "", ("10.0.0.1", 0))]
-    # First-stage is_public check is forced True; the pinned resolve then sees a
-    # private IP and must reject (defence-in-depth against DNS-rebind).
-    with patch("autobot_shared.url_safety.is_public_url_async", AsyncMock(return_value=True)):
-        with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_private):
-            with pytest.raises(RuntimeError, match="blocked by SSRF guard"):
-                await importer.import_http_catalog("https://rebind.example.com/skills")
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_private):
+        with pytest.raises(RuntimeError, match="blocked by SSRF guard"):
+            await importer.import_http_catalog("https://rebind.example.com/skills")

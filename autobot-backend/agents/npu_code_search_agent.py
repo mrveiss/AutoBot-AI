@@ -30,6 +30,12 @@ from npu_semantic_search import get_npu_search_engine
 from worker_node import WorkerNode
 
 from .base_agent import AgentRequest
+from .npu_code_search_patterns import (
+    LANGUAGE_PATTERNS,
+    detect_language,
+    extract_code_elements,
+    extract_element_code,
+)
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -148,27 +154,12 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
     @staticmethod
     def _get_language_patterns() -> Dict[str, Dict[str, str]]:
-        """Get language-specific code patterns for parsing."""
-        return {
-            "python": {
-                "function": r"def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(",
-                "class": r"class\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[\(:]",
-                "import": r"(?:from\s+\S+\s+)?import\s+([^#\n]+)",
-                "variable": r"([a-zA-Z_][a-zA-Z0-9_]*)\s*=",
-            },
-            "javascript": {
-                "function": (
-                    r"(?:function\s+([a-zA-Z_][a-zA-Z0-9_]*)|"
-                    r"([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*function|"
-                    r"\bconst\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(?:\(.*?\)\s*=>|\bfunction))"
-                ),
-                "class": r"class\s+([a-zA-Z_][a-zA-Z0-9_]*)",
-                "import": (
-                    r'(?:import|require)\s*\(\s*[\'"]([^\'"]+)[\'"]|' r'import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]'
-                ),
-                "variable": r"(?:const|let|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)",
-            },
-        }
+        """Get language-specific code patterns for parsing.
+
+        Issue #16173: patterns moved to `npu_code_search_patterns.py`; this
+        stays as a thin wrapper because the class-level call is pinned by test.
+        """
+        return LANGUAGE_PATTERNS
 
     def _init_communication(self) -> None:
         """Initialize communication protocol for agent-to-agent messaging."""
@@ -302,6 +293,30 @@ class NPUCodeSearchAgent(StandardizedAgent):
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities this agent supports"""
         return self.capabilities
+
+    def declared_scopes(self, request: AgentRequest) -> List[str]:
+        """The code-index rebuild this run will touch, if it rebuilds one (#15950).
+
+        Only `index_directory` declares. `search_code` and `get_capabilities`
+        are reads; a read taking an exclusive claim would serialise every
+        search behind one indexer.
+
+        The scope is a hash of the directory, never the directory. A raw path
+        would put an internal filesystem location into the claim table and
+        into the `work_claim_acquired` events #15949 publishes, which reach an
+        operator's browser -- against the "nothing internal in outward
+        artifacts" rule. The hash still collides for two runs indexing the
+        same tree, which is the only collision that matters, and `_get_index_key`
+        already keys this agent's own Redis index by `md5(root_path)`, so the
+        two agree by construction rather than by coincidence.
+        """
+        if request.action != "index_directory":
+            return []
+        directory = (request.payload or {}).get("directory")
+        if not directory:
+            return []
+        digest = hashlib.md5(str(directory).encode(), usedforsecurity=False).hexdigest()[:16]
+        return [f"project:code-index-{digest}"]
 
     def _is_ignored_dir(self, dirname: str) -> bool:
         """Check if directory should be ignored (Issue #334 - extracted helper)."""
@@ -438,40 +453,12 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 self.redis_client.expire(element_key, TTL_24_HOURS)
 
     def _extract_element_code(self, content: str, line_number: int, element_type: str, max_lines: int = 50) -> str:
+        """Extract code for a specific element with context.
+
+        Issue #16173: moved to `npu_code_search_patterns.py`; this stays as a
+        thin wrapper because it is pinned by test as an instance method.
         """
-        Extract code for a specific element with context.
-
-        Issue #207: Extract function/class code for embedding generation.
-
-        Args:
-            content: Full file content
-            line_number: Starting line of the element
-            element_type: 'function' or 'class'
-            max_lines: Maximum lines to extract
-
-        Returns:
-            Code snippet for the element
-        """
-        lines = content.splitlines()
-        if line_number < 1 or line_number > len(lines):
-            return ""
-
-        start_idx = line_number - 1
-        end_idx = min(start_idx + max_lines, len(lines))
-
-        start_line = lines[start_idx]
-        base_indent = len(start_line) - len(start_line.lstrip())
-
-        for i in range(start_idx + 1, end_idx):
-            line = lines[i]
-            if not line.strip():
-                continue
-            current_indent = len(line) - len(line.lstrip())
-            if current_indent <= base_indent and line.strip():
-                end_idx = i
-                break
-
-        return "\n".join(lines[start_idx:end_idx])
+        return extract_element_code(content, line_number, element_type, max_lines)
 
     async def _store_single_element_embedding(
         self,
@@ -561,8 +548,8 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 return
 
             file_ext = os.path.splitext(file_path)[1]
-            language = self._detect_language(file_ext)
-            elements = self._extract_code_elements(content, language)
+            language = detect_language(file_ext)
+            elements = extract_code_elements(content, language, self.language_patterns)
 
             embedding_count = await self._generate_and_store_embeddings(content, relative_path, language, elements)
 
@@ -588,102 +575,6 @@ class NPUCodeSearchAgent(StandardizedAgent):
             raise OSError(f"Failed to read file {file_path}: {e}")
         except Exception as e:
             raise Exception(f"Failed to index file {file_path}: {e}")
-
-    def _detect_language(self, file_ext: str) -> str:
-        """Detect programming language from file extension"""
-        language_map = {
-            ".py": "python",
-            ".js": "javascript",
-            ".ts": "typescript",
-            ".jsx": "javascript",
-            ".tsx": "typescript",
-            ".java": "java",
-            ".cpp": "cpp",
-            ".c": "c",
-            ".h": "c",
-            ".cs": "csharp",
-            ".rb": "ruby",
-            ".go": "go",
-            ".rs": "rust",
-            ".php": "php",
-            ".swift": "swift",
-            ".kt": "kotlin",
-            ".scala": "scala",
-            ".sh": "bash",
-            ".bash": "bash",
-            ".zsh": "zsh",
-            ".ps1": "powershell",
-            ".yaml": "yaml",
-            ".yml": "yaml",
-            ".json": "json",
-            ".xml": "xml",
-            ".html": "html",
-            ".css": "css",
-            ".sql": "sql",
-            ".md": "markdown",
-        }
-        return language_map.get(file_ext.lower(), "unknown")
-
-    def _extract_elements_by_pattern(
-        self,
-        lines: List[str],
-        pattern: str,
-        use_first_group: bool = False,
-    ) -> List[Dict]:
-        """
-        Extract code elements matching a regex pattern from source lines.
-
-        Issue #281: Extracted helper to reduce repetition in _extract_code_elements.
-
-        Args:
-            lines: Source code lines to search
-            pattern: Regex pattern to match
-            use_first_group: If True, use first non-None group; otherwise use group(1)
-
-        Returns:
-            List of element dicts with name, line_number, and context
-        """
-        import re
-
-        elements = []
-        for i, line in enumerate(lines):
-            matches = re.finditer(pattern, line)
-            for match in matches:
-                if use_first_group:
-                    name = next((g for g in match.groups() if g), None)
-                else:
-                    name = match.group(1)
-                if name:
-                    elements.append(
-                        {
-                            "name": name.strip(),
-                            "line_number": i + 1,
-                            "context": line.strip(),
-                        }
-                    )
-        return elements
-
-    def _extract_code_elements(self, content: str, language: str) -> Dict[str, List[Dict]]:
-        """Extract code elements (functions, classes, etc.) from content"""
-        elements = {"functions": [], "classes": [], "imports": [], "variables": []}
-
-        if language not in self.language_patterns:
-            return elements
-
-        patterns = self.language_patterns[language]
-        lines = content.splitlines()
-
-        # Issue #281: Use extracted helper for all element types
-        if "function" in patterns:
-            elements["functions"] = self._extract_elements_by_pattern(lines, patterns["function"], use_first_group=True)
-
-        if "class" in patterns:
-            elements["classes"] = self._extract_elements_by_pattern(lines, patterns["class"], use_first_group=False)
-
-        if "import" in patterns:
-            elements["imports"] = self._extract_elements_by_pattern(lines, patterns["import"], use_first_group=True)
-
-        return elements
 
     def _get_search_cache_key(self, query: str, search_type: str, language: str | None) -> str:
         """Generate search cache key (Issue #398: extracted)."""
@@ -1321,7 +1212,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
     def _file_matches_language(self, file_path: str, language: str) -> bool:
         """Check if file matches the specified language"""
         file_ext = os.path.splitext(file_path)[1]
-        detected_language = self._detect_language(file_ext)
+        detected_language = detect_language(file_ext)
         return detected_language == language
 
     async def _get_file_context(self, file_path: str, line_number: int, context_size: int = 3) -> List[str]:

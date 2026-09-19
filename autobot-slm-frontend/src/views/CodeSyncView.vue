@@ -32,6 +32,7 @@ import { formatDateTime } from '@/composables/useTimezone'
 import { getCommitHashDisplay, getCommitUrl } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import CodeSourceModal from '@/components/CodeSourceModal.vue'
+import FullTreeDriftPanel from '@/components/FullTreeDriftPanel.vue' // #16310
 import { useCodeSource } from '@/composables/useCodeSource'
 
 const logger = createLogger('CodeSyncView')
@@ -167,6 +168,10 @@ function stageStatusClass(stageStatus: string): string {
     failed: 'bg-red-100 text-red-700',
     skipped: 'bg-gray-100 text-gray-400',
     current: 'bg-green-50 text-green-600',
+    // #16640: SLM current, but a co-located component failed -- amber, not
+    // the green `current`/`success` classes, so a scan of the stage row
+    // reads "needs attention" rather than "done".
+    partial: 'bg-amber-100 text-amber-700',
   }
   return map[stageStatus] ?? 'bg-gray-100 text-gray-500'
 }
@@ -185,9 +190,19 @@ function stageStatusI18nKey(stage: UpdateAllStage): string {
     failed: 'codeSyncView.pipelineStageFailed',
     skipped: 'codeSyncView.pipelineStageSkipped',
     current: 'codeSyncView.pipelineStageCurrent',
+    partial: 'codeSyncView.pipelineStagePartial',
   }
   return keyMap[stage.status] ?? stage.status
 }
+
+// #16640: `updateAllJob.status === 'partial'` has two unrelated causes -- one
+// or more skipped (non-operational) fleet nodes, or the SLM control plane
+// being current while a co-located component (browser-service, npu-worker,
+// ...) failed to deploy. The generic fleet-skip banner names a node count
+// that reads as 0 for the second cause, so the two need separate copy.
+const colocatedPartial = computed(
+  () => updateAllJob.value?.stages.find((s) => s.name === 'slm_self_update')?.status === 'partial'
+)
 
 // Keep stageStatusText for the fleet progress fraction (non-i18n interpolation)
 function stageStatusText(stage: UpdateAllStage): string | null {
@@ -1080,13 +1095,29 @@ onUnmounted(() => {
              without this branch the run ended with no outcome at all — neither
              the failure banner above nor the success banner below matched. -->
         <div
-          v-if="updateAllJob.status === 'partial'"
+          v-if="updateAllJob.status === 'partial' && !colocatedPartial"
           class="mt-3 flex items-center gap-2 text-sm text-amber-700"
         >
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z" />
           </svg>
           {{ $t('codeSyncView.pipelinePartial', { count: updateAllJob.skipped_fleet_nodes }) }}
+        </div>
+
+        <!-- Partial, co-located cause (#16640): SLM control plane is current,
+             but a co-located component (browser-service, npu-worker, ...)
+             failed its own deploy. Distinct from the fleet-skip banner above
+             — this node count would read 0 and mislead. The per-stage
+             message (rendered with the pipeline stages below) names which
+             component and why. -->
+        <div
+          v-if="updateAllJob.status === 'partial' && colocatedPartial"
+          class="mt-3 flex items-center gap-2 text-sm text-amber-700"
+        >
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z" />
+          </svg>
+          {{ $t('codeSyncView.pipelineColocatedPartial') }}
         </div>
 
         <!-- Completed success: F2 use i18n for both terminal labels -->
@@ -1578,6 +1609,12 @@ onUnmounted(() => {
       <div v-else class="text-sm text-gray-400">
         {{ $t('codeSyncView.clickCheckDriftTo') }}
       </div>
+    </div>
+
+    <!-- Full-Tree Drift Check (#16310 owner requirement) — additive to the
+         per-component card above; independent state, independent endpoint. -->
+    <div class="mb-6">
+      <FullTreeDriftPanel />
     </div>
 
     <!-- Error Display -->

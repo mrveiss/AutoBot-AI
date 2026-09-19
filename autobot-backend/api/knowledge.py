@@ -46,6 +46,7 @@ from fastapi import (
     Request,
 )
 
+from api.knowledge_office_upload import OFFICE_EXTENSIONS, extract_office_upload, verified_upload_extension
 from api.schemas_knowledge import (
     AddFactsRequest,
     AddUrlRequest,
@@ -62,8 +63,10 @@ from api.system_health import ComponentHealth, KnownProbes, register_health_prob
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import redact_content
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
+from knowledge.ingestion_visibility import stamp_if_document
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from knowledge.schemas.documents import (
     DocsBrowseResponse,
@@ -122,7 +125,7 @@ from utils.path_validation import contains_path_traversal
 # File upload constants (Issue #549 Code Review)
 MAX_FILE_SIZE_MB = 10
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".json", ".csv", ".html"}
+ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".json", ".csv", ".html"} | OFFICE_EXTENSIONS  # #16775
 
 # Import RAG Agent for enhanced search capabilities
 try:
@@ -141,42 +144,14 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:  # pragma: no cover - type-only import, avoids a module-level dependency
     from media.document.extraction import ExtractedDocument
 
-# Cache TTL constants (seconds)
-CATEGORY_CACHE_TTL = 3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
-
 # Performance optimization: O(1) lookup for metadata types (Issue #326)
 MANUAL_PAGE_TYPES = {"manual_page", "system_command"}
 
-
-def _get_fact_source(fact: dict) -> str:
-    """Extract source identifier from fact for categorization (Issue #315: extracted).
-
-    Args:
-        fact: Fact dictionary with metadata
-
-    Returns:
-        Source string for category lookup
-    """
-    source = fact.get("metadata", {}).get("source", "") or fact.get("source", "")
-    if not source:
-        # Try filename or title as fallback
-        source = fact.get("metadata", {}).get("filename", "") or fact.get("title", "")
-    return source
-
-
-async def _compute_category_counts(all_facts: list, get_category_for_source, category_counts: dict) -> None:
-    """Compute category counts from facts (Issue #315: extracted).
-
-    Args:
-        all_facts: List of fact dictionaries
-        get_category_for_source: Function to map source to category
-        category_counts: Dict to update with counts (mutated in place)
-    """
-    for fact in all_facts:
-        source = _get_fact_source(fact)
-        main_category = get_category_for_source(source)
-        if main_category in category_counts:
-            category_counts[main_category] += 1
+# Import category-count computation/caching (extracted from this file - Issue #16665)
+from api.knowledge_category_counts import (
+    _get_category_cache_keys,
+    _get_or_compute_category_counts,
+)
 
 
 def _format_knowledge_entry(fact_id: bytes | str, fact: dict) -> dict:
@@ -361,35 +336,6 @@ async def get_knowledge_stats_basic(
         categories=stats.get("categories", []),
         status="online" if stats.get("initialized", False) else "offline",
     )
-
-
-def _get_category_cache_keys(KnowledgeCategory) -> dict:
-    """Get cache keys for category counts (Issue #398: extracted)."""
-    return {
-        KnowledgeCategory.AUTOBOT_DOCUMENTATION: "kb:stats:category:autobot-documentation",
-        KnowledgeCategory.SYSTEM_KNOWLEDGE: "kb:stats:category:system-knowledge",
-        KnowledgeCategory.USER_KNOWLEDGE: "kb:stats:category:user-knowledge",
-    }
-
-
-async def _get_or_compute_category_counts(kb, cache_keys: dict, get_category_for_source, category_counts: dict) -> None:
-    """Get cached counts or compute from facts (Issue #398: extracted)."""
-    cached_values = await kb.redis().mget(list(cache_keys.values()))
-    if all(v is not None for v in cached_values):
-        # Use cached values
-        for i, cat_id in enumerate(cache_keys.keys()):
-            category_counts[cat_id] = int(cached_values[i])
-        logger.debug("Using cached category counts: %s", category_counts)
-    else:
-        # Cache miss - compute counts
-        logger.info("Cache miss - computing category counts from all facts")
-        all_facts = await kb.get_all_facts()
-        logger.info("Categorizing %s facts into main categories", len(all_facts))
-        await _compute_category_counts(all_facts, get_category_for_source, category_counts)
-        logger.info("Category counts: %s", category_counts)
-        # Cache for 1 hour
-        for cat_id, cache_key in cache_keys.items():
-            await kb.redis().set(cache_key, category_counts[cat_id], ex=CATEGORY_CACHE_TTL)
 
 
 def _build_main_categories(CATEGORY_METADATA, category_counts: dict) -> list:
@@ -732,17 +678,10 @@ async def add_text_to_knowledge(
 
 
 async def _store_fact_in_kb(kb, content: str, metadata: dict) -> str:
-    """
-    Helper to store a fact in the knowledge base (Issue #549 Code Review: Extract duplication).
-
-    Args:
-        kb: Knowledge base instance
-        content: Text content to store
-        metadata: Metadata dict with title, source, category, tags, etc.
-
-    Returns:
-        Fact ID of stored content
-    """
+    """Store *content* under *metadata* and return the fact id (#549). An admin file upload, the only
+    caller writing ``type: file``, is a document: SYSTEM unless something already claims it (#16693)."""
+    if metadata.get("type") == "file":
+        stamp_if_document(metadata)
     if hasattr(kb, "store_fact"):
         result = await kb.store_fact(content=content, metadata=metadata)
     else:
@@ -984,10 +923,9 @@ async def _fetch_and_extract_url(url: str, fallback_title: str) -> "tuple[str, s
 
     from autobot_shared.security.ssrf_guard import SSRFError, fetch_safe_url
 
-    # Imported locally rather than at module scope: `config` is already a local
-    # name in add_watch_folder (a WatchFolderConfig), so a module-level import
-    # would be silently shadowed there. Kept outside the try so an ImportError
-    # surfaces as itself instead of as a fetch failure.
+    # Imported locally rather than at module scope: `config` is already a local name in add_watch_folder (a
+    # WatchFolderConfig), so a module-level import would be silently shadowed there. Kept outside the try so an
+    # ImportError surfaces as itself instead of as a fetch failure.
     from autobot_shared.ssot_config import config
 
     try:
@@ -1151,9 +1089,11 @@ def _extract_file_content(filename: str, file_content: bytes) -> "tuple[str, Ext
     Raises:
         HTTPException: If file cannot be parsed or library is missing
     """
-    import os
 
-    ext = os.path.splitext(filename.lower())[1]
+    ext = verified_upload_extension(filename, file_content)  # #16773: the bytes outrank the name
+
+    if ext in OFFICE_EXTENSIONS:
+        return extract_office_upload(filename, file_content, ext), None
 
     if ext in {".txt", ".md", ".csv"}:
         return file_content.decode("utf-8", errors="replace"), None
@@ -1314,10 +1254,9 @@ async def upload_file_to_knowledge(
     category = form.get("category", "uploads")
     tags = _parse_upload_tags(form.get("tags", "[]"))
 
-    # #14754: _extract_file_content does blocking CPU work — PDF parsing plus
-    # pdfplumber layout analysis on every page — and this handler is async, so a
-    # large upload held the worker's event loop for the whole extraction and
-    # stalled every other coroutine on it, health endpoints included.
+    # #14754: _extract_file_content does blocking CPU work — PDF parsing plus pdfplumber layout analysis on every page
+    # — and this handler is async, so a large upload held the worker's event loop for the whole extraction and stalled
+    # every other coroutine on it, health endpoints included.
     from media.document.ocr import extraction_timeout
 
     _deadline = extraction_timeout()
@@ -1327,9 +1266,8 @@ async def upload_file_to_knowledge(
             timeout=_deadline,
         )
     except asyncio.TimeoutError:
-        # The deadline is what makes the offload safe: to_thread frees the loop
-        # but the default executor's slots are process-wide and shared with the
-        # OCR path, so an extraction that never returns holds one indefinitely.
+        # The deadline is what makes the offload safe: to_thread frees the loop but the default executor's slots are
+        # process-wide and shared with the OCR path, so an extraction that never returns holds one indefinitely.
         # Reported as a rejected upload rather than left to hang (#14754).
         logger.warning("Extraction of %s exceeded %ss", filename, _deadline)
         raise HTTPException(
@@ -1345,9 +1283,9 @@ async def upload_file_to_knowledge(
         # with no way to tell that OCR — not a different file — is what is needed.
         raise HTTPException(status_code=400, detail=_no_text_detail(extracted_doc))
 
-    # Issue #5064: sanitize uploaded document content against prompt injection
-    # before the text reaches the KB / embedding pipeline.
-    content = _sanitize_document(content, source="file_upload").sanitized_text
+    # Issue #5064: sanitize against prompt injection; #13708: also the redact_content chokepoint,
+    # since this endpoint's own extraction path skips content_extraction.py's redacted wrappers.
+    content = redact_content(_sanitize_document(content, source="file_upload").sanitized_text)
 
     logger.info("Uploading file: filename='%s', size=%d", filename, len(file_content))
 
@@ -2388,10 +2326,9 @@ async def get_facts_by_category(
     try:
         category_fact_ids, category_totals = await _fetch_category_fact_ids(kb, categories_to_fetch, limit, offset)
         if not category_totals:
-            # Issue #12394: fall back only when NO category index exists at all.
-            # (Previously this checked `category_fact_ids`, which is also empty
-            # for a legitimate out-of-range page on an existing index, wrongly
-            # triggering the expensive full-keyspace SCAN fallback.)
+            # Issue #12394: fall back only when NO category index exists at all. (Previously this checked
+            # `category_fact_ids`, which is also empty for a legitimate out-of-range page on an existing index,
+            # wrongly triggering the expensive full-keyspace SCAN fallback.)
             logger.warning("No category indexes - falling back to SCAN method")
             return await _get_facts_by_category_legacy(kb, category, limit, offset)
 

@@ -46,6 +46,15 @@ LEGACY_UNSCOPED_OWNER = "__unscoped__"
 SYSTEM_OWNER = "__system__"
 
 
+class OwnerScopeError(ValueError):
+    """The tenancy guard refused an owner scope (#16926).
+
+    A ValueError subclass so every existing ``except ValueError`` still catches
+    it, while a caller that must tell a tenancy refusal from ordinary input
+    validation (``store_memory`` raises ValueError for both) can catch this alone.
+    """
+
+
 def _require_user_id(user_id: str, *, for_write: bool = False) -> str:
     """Validate a caller-supplied owner scope (#13688).
 
@@ -57,13 +66,13 @@ def _require_user_id(user_id: str, *, for_write: bool = False) -> str:
     under it would re-create the shared unscoped bucket this issue removes.
 
     Raises:
-        ValueError: when the scope is missing, blank, or (on a write) reserved.
+        OwnerScopeError: when the scope is missing, blank, or (on a write) reserved.
     """
     if not isinstance(user_id, str) or not user_id.strip():
-        raise ValueError("user_id is required — memory queries cannot be unscoped")
+        raise OwnerScopeError("user_id is required — memory queries cannot be unscoped")
     scoped = user_id.strip()
     if for_write and scoped == LEGACY_UNSCOPED_OWNER:
-        raise ValueError(f"{LEGACY_UNSCOPED_OWNER!r} is reserved for pre-migration rows and cannot be written")
+        raise OwnerScopeError(f"{LEGACY_UNSCOPED_OWNER!r} is reserved for pre-migration rows and cannot be written")
     return scoped
 
 
@@ -465,4 +474,4 @@ class GeneralStorage:
         )
 
 
-__all__ = ["GeneralStorage", "LEGACY_UNSCOPED_OWNER", "SYSTEM_OWNER"]
+__all__ = ["GeneralStorage", "LEGACY_UNSCOPED_OWNER", "OwnerScopeError", "SYSTEM_OWNER"]

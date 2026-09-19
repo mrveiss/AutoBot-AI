@@ -395,7 +395,7 @@ def _install_scoped_stubs() -> None:
             continue  # real package already loaded — leave it intact
         sys.modules[key] = module
     # services.llm_service is imported at module level by llc/kb/handoff_brief.py
-    # (merged to Dev_new_gui after issue-8238). Guarded per-name, so the root
+    # (merged to main after issue-8238). Guarded per-name, so the root
     # autobot-backend/conftest.py's richer setup always wins; the attribute
     # binds it performs are required on every call (see its docstring).
     _make_services_stub()

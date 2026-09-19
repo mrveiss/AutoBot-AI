@@ -11,7 +11,7 @@ Provides endpoints for managing web research configuration and preferences.
 import asyncio
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
@@ -26,12 +26,17 @@ from api.schemas_workflows import (
     WebResearchUsageStatsData,
 )
 from api.system_health import HEALTH_PROBE_TIMEOUT_S
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/web-research", tags=["web-research"])
+# #16375: mounted with no auth dependency. Reading status, settings and usage
+# needs a signed-in caller; enabling, disabling, changing the persisted settings,
+# running a test search, clearing the cache and resetting the circuit breakers
+# also need admin.
+router = APIRouter(prefix="/web-research", tags=["web-research"], dependencies=[Depends(get_current_user)])
 
 _RESEARCHER_UNAVAILABLE_DETAIL = (
     "web researcher unavailable — browser/Playwright initialization failed at startup; see logs"
@@ -121,7 +126,7 @@ async def get_research_status(request: Request):
     operation="enable_web_research",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def enable_web_research(request: Request):
+async def enable_web_research(request: Request, _: bool = Depends(check_admin_permission)):
     """Enable web research functionality"""
     integration = _require_web_researcher(request)
     try:
@@ -172,7 +177,7 @@ async def enable_web_research(request: Request):
     operation="disable_web_research",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def disable_web_research(request: Request):
+async def disable_web_research(request: Request, _: bool = Depends(check_admin_permission)):
     """Disable web research functionality"""
     integration = _require_web_researcher(request)
     try:
@@ -269,7 +274,7 @@ async def get_research_settings():
     operation="update_research_settings",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def update_research_settings(settings: WebResearchSettings):
+async def update_research_settings(settings: WebResearchSettings, _: bool = Depends(check_admin_permission)):
     """Update web research settings"""
     try:
         from config import unified_config_manager
@@ -315,7 +320,7 @@ async def update_research_settings(settings: WebResearchSettings):
     operation="test_web_research",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def test_web_research(request: Request, query: str = "test query"):
+async def test_web_research(request: Request, query: str = "test query", _: bool = Depends(check_admin_permission)):
     """Test web research functionality"""
     integration = _require_web_researcher(request)
     try:
@@ -357,7 +362,7 @@ async def test_web_research(request: Request, query: str = "test query"):
     operation="clear_research_cache",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def clear_research_cache(request: Request):
+async def clear_research_cache(request: Request, _: bool = Depends(check_admin_permission)):
     """Clear web research cache"""
     integration = _require_web_researcher(request)
     try:
@@ -386,7 +391,7 @@ async def clear_research_cache(request: Request):
     operation="reset_circuit_breakers",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def reset_circuit_breakers(request: Request):
+async def reset_circuit_breakers(request: Request, _: bool = Depends(check_admin_permission)):
     """Reset all circuit breakers for web research"""
     integration = _require_web_researcher(request)
     try:

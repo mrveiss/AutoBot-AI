@@ -494,7 +494,7 @@ class ToolRegistry:
             }
 
         try:
-            result = await kb.store_fact(content, metadata or {})
+            result = await kb.store_fact(content, {**(metadata or {}), "ingest_route": "agent_tool"})
             return {
                 "tool_name": "store_fact",
                 "tool_args": {"content": content, "metadata": metadata},

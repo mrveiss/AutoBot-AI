@@ -5,7 +5,7 @@
 # body. The body must (a) carry a Resolves/Closes/Fixes keyword and (b) name
 # the branch's issue as a #N / MVA-N token — so batch PRs that close several
 # issues with one keyword ("Closes #A, #B, #C") still pass. Manual, promotion
-# (Dev_new_gui) and dependabot branches carry no issue token and are skipped,
+# (main) and dependabot branches carry no issue token and are skipped,
 # so this never blocks the promotion or dependency-update flows. Not required.
 # Issue: #9464  ·  Umbrella: #9927
 name: Validate PR Issue Link
@@ -23,7 +23,7 @@ on:
 # #13432 found that cancelling base-branch runs meant each merge cancelled the
 # previous merge's verification, and merges arrive faster than a suite completes -
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
-# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

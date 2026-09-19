@@ -79,7 +79,7 @@ _ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(
 #: returning nothing would otherwise pass this module having read zero guards --
 #: the exact failure it exists to catch, inside itself.
 #:
-#: MEASURED 2026-09-10 against `origin/Dev_new_gui`: 201 tracked
+#: MEASURED 2026-09-10 against `origin/main`: 201 tracked
 #: `repo_tests/*_test.py`, of which 101 matched `_ENUMERATOR` (80 before
 #: `.glob(` was added, 21 reachable only through it). The previous value of 60
 #: sat 20 below the then-current 80 and 41 below the true population, so it

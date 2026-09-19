@@ -21,10 +21,10 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, AsyncIterator, Dict, List, Sequence
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import select, tuple_, update
+from sqlalchemy import func, select, tuple_, update
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.store_authority import Store, system_of_record
@@ -47,39 +47,50 @@ def content_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()[:_CONTENT_HASH_WIDTH]
 
 
-def _row_values(content: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-    """The columns a fact's content and metadata determine."""
+def _row_values(content: str, metadata: Dict[str, Any], *, hash_content: str | None = None) -> Dict[str, Any]:
+    """The columns a fact's content and metadata determine.
+
+    Args:
+        hash_content: raw, pre-redaction content the ``content_hash`` column
+            keys off instead (#13708 round 4) -- see ``knowledge/facts.py``'s
+            ``_check_for_duplicates`` for why: two different secrets both
+            redact to the identical placeholder and must not hash the same.
+            Defaults to `content` (post-redaction) when not given.
+    """
     return {
         "content": content,
         "metadata_json": metadata,
-        "content_hash": content_hash(content),
+        "content_hash": content_hash(hash_content if hash_content is not None else content),
         "unique_key": metadata.get("unique_key"),
         "owner_id": metadata.get("owner_id") or metadata.get("user_id"),
         "source_session_id": metadata.get("source_session_id"),
     }
 
 
-async def persist_fact(fact_id: str, content: str, metadata: Dict[str, Any]) -> None:
+async def persist_fact(
+    fact_id: str, content: str, metadata: Dict[str, Any], *, hash_content: str | None = None
+) -> None:
     """Write the durable row. Raises when the fact could not be recorded."""
     factory = get_async_session_factory()
     async with factory() as session:
         row = await session.get(KnowledgeFact, fact_id)
+        row_values = _row_values(content, metadata, hash_content=hash_content)
         if row is None:
-            session.add(KnowledgeFact(id=fact_id, **_row_values(content, metadata)))
+            session.add(KnowledgeFact(id=fact_id, **row_values))
         else:
-            for column, value in _row_values(content, metadata).items():
+            for column, value in row_values.items():
                 setattr(row, column, value)
         await session.commit()
 
 
-async def update_fact(fact_id: str, content: str, metadata: Dict[str, Any]) -> bool:
+async def update_fact(fact_id: str, content: str, metadata: Dict[str, Any], *, hash_content: str | None = None) -> bool:
     """Update an existing row. ``False`` when no such fact is recorded."""
     factory = get_async_session_factory()
     async with factory() as session:
         row = await session.get(KnowledgeFact, fact_id)
         if row is None:
             return False
-        for column, value in _row_values(content, metadata).items():
+        for column, value in _row_values(content, metadata, hash_content=hash_content).items():
             setattr(row, column, value)
         await session.commit()
         return True
@@ -118,7 +129,45 @@ async def fact_id_for_unique_key(unique_key: str) -> str | None:
         return found.scalar_one_or_none()
 
 
-async def iter_facts(batch_size: int = 500) -> AsyncIterator[List[Dict[str, Any]]]:
+def backfill_candidates() -> tuple:
+    """Rows the #16693 backfill may change: flagged by its migration, still unowned and unset.
+
+    Only migration 20260914_092 sets the flag, so a fact stored after deploy is never a
+    candidate, whatever its metadata imitates. ``->>`` is NULL when a key is absent or
+    holds JSON null.
+    """
+    return (
+        KnowledgeFact.visibility_backfill_candidate.is_(True),
+        KnowledgeFact.owner_id.is_(None),
+        KnowledgeFact.metadata_json["visibility"].astext.is_(None),
+    )
+
+
+async def clear_backfill_candidates(fact_ids: Sequence[str]) -> None:
+    """Drop the backfill flag from *fact_ids*, which the backfill has decided for good.
+
+    Row-only by design: the flag lives in this column and nowhere else, so clearing it
+    moves no projection out of step.
+    """
+    if not fact_ids:
+        return
+    factory = get_async_session_factory()
+    async with factory() as session:
+        await session.execute(
+            update(KnowledgeFact).where(KnowledgeFact.id.in_(list(fact_ids))).values(visibility_backfill_candidate=None)
+        )
+        await session.commit()
+
+
+async def count_facts(*conditions) -> int:
+    """How many recorded facts satisfy every one of *conditions*."""
+    factory = get_async_session_factory()
+    async with factory() as session:
+        found = await session.execute(select(func.count()).select_from(KnowledgeFact).where(*conditions))
+        return int(found.scalar_one())
+
+
+async def iter_facts(batch_size: int = 500, *, where: tuple = ()) -> AsyncIterator[List[Dict[str, Any]]]:
     """Every fact recorded when iteration began, oldest first, a batch at a time.
 
     Keyset-paged on ``(created_at, id)`` under a captured ceiling, not on ``id``
@@ -130,14 +179,15 @@ async def iter_facts(batch_size: int = 500) -> AsyncIterator[List[Dict[str, Any]
     ``created_at`` supplies the order and the ceiling excludes anything created
     after the walk started, which needs no chasing: a fact created now is
     projected by its own write path. ``id`` breaks ties so two rows sharing a
-    timestamp cannot hide each other.
+    timestamp cannot hide each other. *where* narrows the walk to rows satisfying every
+    clause in it, such as :func:`backfill_candidates`.
     """
     factory = get_async_session_factory()
     ceiling = datetime.now(tz=timezone.utc)
     after: tuple[datetime, str] | None = None
     while True:
         async with factory() as session:
-            query = select(KnowledgeFact).where(KnowledgeFact.created_at <= ceiling)
+            query = select(KnowledgeFact).where(KnowledgeFact.created_at <= ceiling, *where)
             if after is not None:
                 query = query.where(tuple_(KnowledgeFact.created_at, KnowledgeFact.id) > after)
             rows = await session.execute(query.order_by(KnowledgeFact.created_at, KnowledgeFact.id).limit(batch_size))

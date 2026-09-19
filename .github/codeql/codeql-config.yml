@@ -37,11 +37,22 @@ name: "AutoBot CodeQL Configuration"
 # the reviewed record; a dismissal comment cites the pair's issue.
 #
 # py/full-ssrf — autobot-backend/skills/external_importer.py
-#   URL is validated via _validate_git_url() which enforces SSRF protections:
-#   1) Scheme allowlist (https, ssh, git+ssh only)
-#   2) For https: is_public_url_async() rejects private IPs
-#   3) For ssh: resolve_safe_ip_async() blocks RFC1918/loopback/link-local ranges
-#   The validation happens before any use in _run_git(). See #MVA-2605.
+#   Alert #1030's live instance is the HTTP catalog fetch,
+#   ExternalSkillImporter.import_http_catalog's `session.get(url, params=params,
+#   allow_redirects=False)` — not the git-clone path (import_git_repo), which is
+#   separately guarded by _validate_git_url(). The catalog fetch's guard:
+#   1) _validate_catalog_url() requires an http(s) scheme and a present hostname,
+#      then calls autobot_shared.url_safety.is_public_url_async(), which rejects
+#      loopback, link-local addresses (including the 169.254.169.254 metadata
+#      address), multicast, reserved and unspecified addresses, handles
+#      IPv4-mapped IPv6 in _ip_is_hard_blocked(), and blocks RFC 1918 and IPv6
+#      unique-local ranges in _ip_is_private().
+#   2) autobot_shared.security.ssrf_guard.pinned_connector() pins the resolved
+#      public IP into the connector's resolver, defeating DNS rebinding.
+#   3) Redirects are disabled (`allow_redirects=False`), so a redirect cannot
+#      be used to reach a blocked target; a redirect response just fails the
+#      200 check.
+#   See #16302.
 #
 # py/full-ssrf — autobot_shared/security/ssrf_guard.py
 #   This module IS the SSRF guard. Both outbound call sites (fetch_safe_url,
@@ -63,6 +74,18 @@ name: "AutoBot CodeQL Configuration"
 #   4) Symlink rejection (L143)
 #   5) File existence and type validation (L147-150)
 #   These checks prevent path traversal attacks. See #9214.
+#
+# py/clear-text-logging-sensitive-data — autobot-backend/services/llm_fallback_chain.py:123
+#   (alert #1139, fallback_model arg to track_fallback_event()'s logger.debug call)
+#   CodeQL's message cites config/defaults.py:77,304,335 as the "password" source —
+#   three unrelated _get_*_config() dict builders (memory/default-redis/task-transport
+#   config). fallback_model/primary_model are plain LLM model-name strings: traced the
+#   full chain, track_fallback_event(fallback_model=...) <- emit_fallback_success
+#   (current_model=...) <- _attempt_chat_once/_attempt_stream_once(current_model=...)
+#   <- chat()/stream()'s loop state <- the model_name/selected_model caller args on
+#   LLMService.chat()/stream(). No code path reaches any of the three config dict
+#   builders; this is the taint tracker over-generalizing a "password" key that exists
+#   elsewhere in the program, not a real flow. See #16526, #16527, PR #16546.
 
 packs:
   python:

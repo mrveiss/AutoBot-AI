@@ -29,7 +29,6 @@ const emit = defineEmits<{
 }>()
 
 // Local state
-const expiresIn = ref<number>(24) // hours
 const sharing = ref(false)
 
 const dialogRef = ref<HTMLElement | null>(null)
@@ -55,9 +54,12 @@ const selection = useBatchSelection<typeof participants.value[number], string>(
 const share = async () => {
   sharing.value = true
   try {
-    shareSecretWithSession(props.secretId, props.secretName, props.secretType)
-    emit('shared')
-    closeDialog()
+    const participantIds = selection.selectedItems.value.map(p => p.userId)
+    const success = await shareSecretWithSession(props.secretId, participantIds)
+    if (success) {
+      emit('shared')
+      closeDialog()
+    }
   } finally {
     sharing.value = false
   }
@@ -68,7 +70,6 @@ const closeDialog = () => {
   emit('update:modelValue', false)
   setTimeout(() => {
     selection.clear()
-    expiresIn.value = 24
   }, 300)
 }
 
@@ -163,22 +164,6 @@ const getInitials = (username: string): string => {
               </div>
             </div>
 
-            <!-- Expiry -->
-            <div>
-              <label class="block text-sm font-medium text-autobot-text-secondary mb-2">
-                {{ $t('secrets.share.expiresIn') }}
-              </label>
-              <select
-                v-model="expiresIn"
-                class="w-full px-3 py-2 bg-autobot-bg-secondary border border-autobot-border rounded-lg text-autobot-text-primary focus:outline-none focus:ring-2 focus:ring-electric-500"
-              >
-                <option :value="1">{{ $t('secrets.share.expire1Hour') }}</option>
-                <option :value="6">{{ $t('secrets.share.expire6Hours') }}</option>
-                <option :value="24">{{ $t('secrets.share.expire24Hours') }}</option>
-                <option :value="168">{{ $t('secrets.share.expire1Week') }}</option>
-                <option :value="0">{{ $t('secrets.share.expireNever') }}</option>
-              </select>
-            </div>
           </div>
 
           <!-- Footer -->

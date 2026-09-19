@@ -265,3 +265,122 @@ register_env_var(
         component="slm",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_API_KEY_LEGACY_GRACE_DAYS",
+        type=int,
+        default=90,
+        description=(
+            "Days an API key created before scope enforcement keeps its owner's full "
+            "authority, with a warning on every use, before it is refused until re-issued "
+            "with explicit scopes (#16040 AC5; owner ruling: 90)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_API_KEY_SCOPES_ENFORCED_FROM",
+        type=str,
+        default="2026-09-11",
+        description=(
+            "ISO date from which API-key scopes are enforced; keys created before it get "
+            "the legacy grace period. Set it to the day enforcement reached this "
+            "deployment if that was later (#16040 AC5)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_GPU_PROBE_TIMEOUT_S",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds a GPU vendor tool (nvidia-smi, rocm-smi) may run before the probe gives up. "
+            "Read by autobot_shared.gpu_telemetry for the SLM agent's heartbeat GPU telemetry (#16280)."
+        ),
+        component="slm",
+        range=(0.5, 60.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_POST_SYNC_TIMEOUT_S",
+        type=float,
+        default=120.0,
+        description=(
+            "Timeout, in seconds, for the one-shot pricing refresh a code-sync "
+            "of autobot-backend runs immediately after install/update. A "
+            "refresh that does not finish within it is recorded as timed out "
+            "and the sync proceeds regardless — prices stay unknown until the "
+            "next refresh (autobot-slm-backend/api/_pricing_post_sync.py, #16231)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SYNC_GIT_TIMEOUT_S",
+        type=float,
+        default=30.0,
+        description=(
+            "Timeout, in seconds, for a single git subprocess (`rev-parse`, "
+            "`diff --name-status`) during the builtin updater's git-aware "
+            "deletion pass. Raising it tolerates a slower repository; lowering "
+            "it fails a wedged git process sooner rather than stalling a sync "
+            "(autobot-slm-backend/services/sync_deletions.py, #16310)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONSTRAINTS_RSYNC_TIMEOUT_S",
+        type=float,
+        default=30.0,
+        description=(
+            "Timeout, in seconds, for the top-level constraints/ rsync a "
+            "backend component sync runs before pip so a requirements.txt "
+            "`-c ../constraints/shared.txt` reference resolves "
+            "(autobot-slm-backend/api/code_sync_paths.py, #16713)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ROOT_REQS_CP_TIMEOUT_S",
+        type=float,
+        default=10.0,
+        description=(
+            "Timeout, in seconds, for copying a single top-level repo-root "
+            "file (e.g. requirements.txt) a backend component sync runs before "
+            "pip so a `-r ../requirements.txt` reference resolves "
+            "(autobot-slm-backend/api/code_sync_paths.py, #16713)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ALEMBIC_UPGRADE_TIMEOUT_S",
+        type=float,
+        default=300.0,
+        description=(
+            "Timeout, in seconds, for `alembic upgrade heads` during a "
+            "component's post-sync migration step. Raising it tolerates a "
+            "slower migration; lowering it fails a wedged migration sooner "
+            "(autobot-slm-backend/api/code_sync_paths.py, #11255, #16713)."
+        ),
+        component="slm",
+    )
+)

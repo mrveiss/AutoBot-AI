@@ -99,7 +99,7 @@ MIN_CANDIDATE_FILES_EXAMINED = 250
 #: MEASURED 2026-09-11 (see `_hand_rolled_floors` below, re-run against this
 #: tree rather than trusted). SHRINKS ONLY: an entry leaves this set only when
 #: its floor becomes a `declare()` call, verified with
-#: `git show origin/Dev_new_gui:<path>` naming the `REACH = declare(...)` that
+#: `git show origin/main:<path>` naming the `REACH = declare(...)` that
 #: replaced it -- never a quiet drop.
 GRANDFATHERED = frozenset(
     {

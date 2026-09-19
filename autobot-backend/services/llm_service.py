@@ -25,37 +25,40 @@ from autobot_shared.logging_manager import get_logger
         provider_name="openai",         # optional
         model_name="gpt-4o-mini",       # optional
     )
-    print(response.content)
+    print(response.content)  # noqa: print
 
     async for chunk in svc.stream(
         messages=[{"role": "user", "content": "Explain async/await"}],
         conversation_id="conv-abc123",
     ):
-        print(chunk, end="", flush=True)
+        print(chunk, end="", flush=True)  # noqa: print
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
 import time
 import uuid
 from typing import Any, AsyncIterator, Dict, List
 
-from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
-from autobot_shared.ssot_constants import TTL_1_HOUR
 from autobot_shared.tracing import get_tracer
 from llm_shared import ProviderRegistry, get_provider_registry
 from llm_shared.cache import CachedResponse, get_llm_cache
 from llm_shared.fallback_chain import get_fallback_chain_manager
-from llm_shared.fallback_events import emit_fallback_event
 from llm_shared.models import LLMRequest, LLMResponse
+from llm_shared.optimization.prompt_compressor import CompressionConfig, PromptCompressor
 from llm_shared.rate_limit_backoff import extract_rate_limit_info
 from llm_shared.tiered_routing import TierConfig, TieredModelRouter
 from llm_shared.types import LLMType
+from services.llm_fallback_chain import (
+    StreamRetry,
+    apply_rate_limit_fallback,
+    emit_exhausted_fallback,
+    emit_fallback_success,
+    resolve_attempt_provider,
+    track_attempt,
+)
 
 try:
     from services.provider_health import ProviderHealthManager, ProviderStatus
@@ -70,10 +73,6 @@ except Exception:  # pragma: no cover
 _llm_tracer = get_tracer("autobot.llm")
 
 logger = get_logger(__name__)
-
-# Cap on honoring a provider-suggested Retry-After before a same-provider retry,
-# so a hostile/huge value can't stall the request indefinitely (#10601).
-_MAX_RETRY_AFTER_SECONDS = env_float("AUTOBOT_LLM_MAX_RETRY_AFTER_SECONDS", 30)
 
 # Default parameters per task type.  These are applied when the caller does
 # not supply explicit temperature / max_tokens values.
@@ -153,6 +152,13 @@ class LLMService:
         # Shared response cache (L1 in-memory + L2 Redis) for clear_cache /
         # get_cache_metrics and the optimized chat path (#3185).
         self._response_cache = get_llm_cache()
+        # Extractive prompt compression for chat()/stream() (#16526). The
+        # enabled/min-chars config is read LIVE in _compress_messages, not
+        # baked in here -- this is a process-wide singleton, so a flag read
+        # only at construction would miss every later config change. Pinned
+        # to min_length_to_compress=0 so this instance never gates on a stale
+        # threshold of its own.
+        self._prompt_compressor = PromptCompressor(CompressionConfig(min_length_to_compress=0))
         # Runtime provider override set via switch_provider() (#3185).
         self._active_provider: str | None = None
         # Tiered model routing — mirrors LLMInterface._init_tiered_routing() (#3185).
@@ -225,6 +231,7 @@ class LLMService:
         # #10597: when the caller doesn't pin a model, optionally select one via
         # task-type/complexity routing (gated off by default; precision-sensitive).
         selected_model = model_name or self._select_chat_model(messages, resolved_type)
+        messages = self._compress_messages(messages)
 
         request = LLMRequest(
             messages=messages,
@@ -240,155 +247,55 @@ class LLMService:
         # hitting any provider — but only when the request is safely reusable:
         # caching off, streaming, tool/structured/thinking calls, or
         # higher-temperature (non-deterministic) requests are never cached.
-        cache_key: str | None = None
-        if self._is_cacheable(request, temp, use_cache):
-            cached, cache_key = await self._optimized_check_cache(
-                messages,
-                selected_model or "",
-                provider_name or "auto",
-                request.request_id,
-                start_time,
-                temperature=temp,
-                max_tokens=tokens,
-                structured_output=request.structured_output,
-            )
-            if cached is not None:
-                self._calculate_cache_hit_rate(cached)
-                return cached
+        cached, cache_key = await self._check_response_cache(
+            request, messages, selected_model, provider_name, temp, tokens, use_cache, start_time
+        )
+        if cached is not None:
+            return cached
 
         # GH#8998: Track attempted models to avoid infinite loops
-        attempted_models = []
+        attempted_models: List[str] = []
         fallback_manager = get_fallback_chain_manager()
         current_provider_name = provider_name
         current_model = selected_model
         max_fallback_attempts = 10  # Safety limit
 
         while len(attempted_models) < max_fallback_attempts:
-            provider = await self._registry.get_provider_for_request(
-                provider_name=current_provider_name,
-                conversation_id=conversation_id,
-            )
+            provider = await resolve_attempt_provider(self._registry, current_provider_name, conversation_id)
             if provider is None:
                 self._error_count += 1
                 logger.error("No available provider for chat request")
                 return _build_error_response(request, "No available LLM provider", "none")
 
-            # Update request with current model
             request.model_name = current_model
-
-            # Track this attempt
-            attempt_key = f"{provider.provider_name}:{current_model or 'default'}"
-            if attempt_key in attempted_models:
-                # Avoid infinite loop - this model was already tried
-                logger.warning(
-                    "Fallback chain loop detected at %s, breaking",
-                    attempt_key,
-                )
+            attempt_key = track_attempt(
+                attempted_models, provider, current_model, max_fallback_attempts, "chat completion"
+            )
+            if attempt_key is None:
                 break
-            attempted_models.append(attempt_key)
 
-            logger.debug(
-                "Attempting chat completion with %s (attempt %d/%d)",
+            response, next_model, next_provider = await self._attempt_chat_once(
+                request,
+                provider,
                 attempt_key,
-                len(attempted_models),
-                max_fallback_attempts,
+                attempted_models,
+                conversation_id,
+                current_model,
+                current_provider_name,
+                fallback_manager,
+                cache_key,
             )
-
-            response = await provider.chat_completion(request)
-
-            # Success case
-            if not response.error:
-                if len(attempted_models) > 1:
-                    logger.info(
-                        "Fallback successful: %s worked after %d attempts (tried: %s)",
-                        attempt_key,
-                        len(attempted_models),
-                        " → ".join(attempted_models),
-                    )
-                    # GH#8998 - MVA-2999: Track successful fallback in Redis
-                    primary_attempt = attempted_models[0]
-                    primary_provider_name = primary_attempt.split(":")[0]
-                    primary_model_name = primary_attempt.split(":", 1)[1] if ":" in primary_attempt else ""
-                    self._track_fallback_event(
-                        conversation_id=conversation_id,
-                        primary_model=primary_model_name,
-                        fallback_model=current_model or "",
-                        primary_provider=primary_provider_name,
-                        fallback_provider=provider.provider_name,
-                    )
-                    await emit_fallback_event(
-                        conversation_id=conversation_id,
-                        primary_model=primary_model_name,
-                        fallback_model=current_model,
-                        primary_provider=primary_provider_name,
-                        fallback_provider=provider.provider_name,
-                        chain_tried=list(attempted_models),
-                        request_id=request.request_id,
-                    )
-                # #10597: cache successful responses for identical future requests.
-                if cache_key and response.content:
-                    await self._optimized_store_cache(cache_key, response, request.request_id)
-                self._track_usage(response, conversation_id)
+            if response is not None:
                 return response
-
-            # GH#8998: Check if this is a rate limit error that should trigger fallback
-            is_rate_limited, retry_after = extract_rate_limit_info(response)
-
-            if is_rate_limited:
-                # Try to find a fallback model
-                fallback_result = fallback_manager.get_next_fallback(
-                    current_model or provider.provider_name,
-                    provider.provider_name,
-                )
-
-                if fallback_result:
-                    next_model, next_provider = fallback_result
-                    logger.info(
-                        "Rate limit hit on %s, falling back to %s:%s",
-                        attempt_key,
-                        next_provider or current_provider_name,
-                        next_model,
-                    )
-                    current_model = next_model
-                    # #10601: when the fallback stays on the same (rate-limited)
-                    # provider, honor the server-suggested Retry-After (capped)
-                    # before retrying instead of hammering it immediately.
-                    same_provider = (not next_provider) or next_provider == current_provider_name
-                    if next_provider:
-                        current_provider_name = next_provider
-                    if retry_after and same_provider:
-                        await asyncio.sleep(min(retry_after, _MAX_RETRY_AFTER_SECONDS))
-                    continue
-                else:
-                    logger.warning(
-                        "Rate limit hit on %s but no fallback chain configured, returning error",
-                        attempt_key,
-                    )
-
-            # Non-rate-limit error or no fallback available
-            self._error_count += 1
-            logger.warning(
-                "Provider %s returned error: %s (attempted: %s)",
-                provider.provider_name,
-                response.error,
-                " → ".join(attempted_models),
-            )
-            if len(attempted_models) > 1:
-                await self._emit_exhausted_fallback(
-                    conversation_id, attempted_models, current_model, request.request_id
-                )
-            self._track_usage(response, conversation_id)
-            return response
+            current_model, current_provider_name = next_model, next_provider
 
         # Max attempts reached
-        self._error_count += 1
+        await self._mark_exhausted(conversation_id, attempted_models, current_model, request.request_id)
         logger.error(
             "Exhausted fallback chain after %d attempts: %s",
             len(attempted_models),
             " → ".join(attempted_models),
         )
-        if len(attempted_models) > 1:
-            await self._emit_exhausted_fallback(conversation_id, attempted_models, current_model, request.request_id)
         return _build_error_response(
             request,
             f"All fallback models exhausted ({len(attempted_models)} attempts)",
@@ -426,6 +333,7 @@ class LLMService:
         self._request_count += 1
         resolved_type = _normalize_llm_type(llm_type)
         temp, tokens = _apply_task_defaults(resolved_type, temperature, max_tokens)
+        messages = self._compress_messages(messages)
 
         request = LLMRequest(
             messages=messages,
@@ -439,146 +347,49 @@ class LLMService:
         )
 
         # GH#8998: Track attempted models to avoid infinite loops
-        attempted_models = []
+        attempted_models: List[str] = []
         fallback_manager = get_fallback_chain_manager()
         current_provider_name = provider_name
         current_model = model_name
         max_fallback_attempts = 10  # Safety limit
 
         while len(attempted_models) < max_fallback_attempts:
-            provider = await self._registry.get_provider_for_request(
-                provider_name=current_provider_name,
-                conversation_id=conversation_id,
-            )
+            provider = await resolve_attempt_provider(self._registry, current_provider_name, conversation_id)
             if provider is None:
                 self._error_count += 1
                 raise RuntimeError("No available LLM provider for streaming request")
 
-            # Update request with current model
             request.model_name = current_model
-
-            # Track this attempt
-            attempt_key = f"{provider.provider_name}:{current_model or 'default'}"
-            if attempt_key in attempted_models:
-                # Avoid infinite loop - this model was already tried
-                logger.warning(
-                    "Fallback chain loop detected at %s, breaking",
-                    attempt_key,
-                )
-                break
-            attempted_models.append(attempt_key)
-
-            logger.debug(
-                "Attempting stream completion with %s (attempt %d/%d)",
-                attempt_key,
-                len(attempted_models),
-                max_fallback_attempts,
+            attempt_key = track_attempt(
+                attempted_models, provider, current_model, max_fallback_attempts, "stream completion"
             )
+            if attempt_key is None:
+                break
 
             try:
-                chunks_yielded = False
-                async for chunk in provider.stream_completion(request):
-                    chunks_yielded = True
+                async for chunk in self._attempt_stream_once(
+                    request,
+                    provider,
+                    attempt_key,
+                    attempted_models,
+                    conversation_id,
+                    current_model,
+                    current_provider_name,
+                    fallback_manager,
+                ):
                     yield chunk
-
-                # Success - stream completed without errors
-                if len(attempted_models) > 1:
-                    logger.info(
-                        "Fallback successful: %s worked after %d attempts (tried: %s)",
-                        attempt_key,
-                        len(attempted_models),
-                        " → ".join(attempted_models),
-                    )
-                    # GH#8998 - MVA-2999: Track successful fallback in Redis
-                    primary_attempt = attempted_models[0]
-                    primary_provider_name = primary_attempt.split(":")[0]
-                    primary_model_name = primary_attempt.split(":", 1)[1] if ":" in primary_attempt else ""
-                    self._track_fallback_event(
-                        conversation_id=conversation_id,
-                        primary_model=primary_model_name,
-                        fallback_model=current_model or "",
-                        primary_provider=primary_provider_name,
-                        fallback_provider=provider.provider_name,
-                    )
-                    await emit_fallback_event(
-                        conversation_id=conversation_id,
-                        primary_model=primary_model_name,
-                        fallback_model=current_model,
-                        primary_provider=primary_provider_name,
-                        fallback_provider=provider.provider_name,
-                        chain_tried=list(attempted_models),
-                        request_id=request.request_id,
-                    )
                 return
-
-            except Exception as exc:
-                # If we already yielded chunks, we can't retry - raise immediately
-                if chunks_yielded:
-                    self._error_count += 1
-                    logger.error(
-                        "Stream error from provider %s after yielding chunks: %s",
-                        provider.provider_name,
-                        exc,
-                    )
-                    raise
-
-                # Check if this is a rate limit error that should trigger fallback
-                error_str = str(exc).lower()
-                is_rate_limited = (
-                    "429" in error_str
-                    or "rate limit" in error_str
-                    or "quota" in error_str
-                    or "too many requests" in error_str
-                )
-
-                if is_rate_limited:
-                    # Try to find a fallback model
-                    fallback_result = fallback_manager.get_next_fallback(
-                        current_model or provider.provider_name,
-                        provider.provider_name,
-                    )
-
-                    if fallback_result:
-                        next_model, next_provider = fallback_result
-                        logger.info(
-                            "Rate limit hit on %s, falling back to %s:%s",
-                            attempt_key,
-                            next_provider or current_provider_name,
-                            next_model,
-                        )
-                        current_model = next_model
-                        if next_provider:
-                            current_provider_name = next_provider
-                        continue
-                    else:
-                        logger.warning(
-                            "Rate limit hit on %s but no fallback chain configured",
-                            attempt_key,
-                        )
-
-                # Non-rate-limit error or no fallback available
-                self._error_count += 1
-                logger.error(
-                    "Stream error from provider %s: %s (attempted: %s)",
-                    provider.provider_name,
-                    exc,
-                    " → ".join(attempted_models),
-                )
-                if len(attempted_models) > 1:
-                    await self._emit_exhausted_fallback(
-                        conversation_id, attempted_models, current_model, request.request_id
-                    )
-                raise
+            except StreamRetry as retry:
+                current_model, current_provider_name = retry.next_model, retry.next_provider
+                continue
 
         # Max attempts reached
-        self._error_count += 1
+        await self._mark_exhausted(conversation_id, attempted_models, current_model, request.request_id)
         logger.error(
             "Exhausted fallback chain after %d attempts: %s",
             len(attempted_models),
             " → ".join(attempted_models),
         )
-        if len(attempted_models) > 1:
-            await self._emit_exhausted_fallback(conversation_id, attempted_models, current_model, request.request_id)
         raise RuntimeError(f"All fallback models exhausted ({len(attempted_models)} attempts)")
 
     # ------------------------------------------------------------------
@@ -612,76 +423,6 @@ class LLMService:
                 logger.warning("list_models failed for %s: %s", name, exc)
                 results[name] = []
         return results
-
-    def _track_fallback_event(
-        self,
-        conversation_id: str | None,
-        primary_model: str,
-        fallback_model: str,
-        primary_provider: str,
-        fallback_provider: str,
-    ) -> None:
-        """
-        Track a successful fallback event in Redis.
-
-        GH#8998 - MVA-2999: Store active fallback events in Redis with 1h TTL
-        for visibility in the Admin UI.
-        """
-        try:
-            redis_client = get_redis_client(database="main")
-            fallback_key = f"llm:fallback:active:{conversation_id or 'system'}"
-
-            event_data = {
-                "conversation_id": conversation_id or "system",
-                "primary_model": primary_model,
-                "fallback_model": fallback_model,
-                "primary_provider": primary_provider,
-                "fallback_provider": fallback_provider,
-                "timestamp": int(time.time()),
-            }
-
-            # Store with 1 hour TTL
-            redis_client.setex(
-                fallback_key,
-                TTL_1_HOUR,
-                json.dumps(event_data),
-            )
-
-            logger.debug(
-                "Tracked fallback event: %s → %s (conversation: %s)",
-                primary_model,
-                fallback_model,
-                conversation_id or "system",
-            )
-        except Exception as exc:
-            logger.warning(
-                "Failed to track fallback event in Redis: %s",
-                exc,
-                exc_info=True,
-            )
-
-    @staticmethod
-    async def _emit_exhausted_fallback(
-        conversation_id: str | None,
-        attempted_models: list,
-        current_model: str | None,
-        request_id: str,
-    ) -> None:
-        """Emit PROVIDER_FALLBACK(exhausted=True). #11995: chat()/stream() never
-        tracked the exhaustion case at all (only successful fallbacks were)."""
-        primary_attempt = attempted_models[0]
-        primary_provider_name = primary_attempt.split(":")[0]
-        primary_model_name = primary_attempt.split(":", 1)[1] if ":" in primary_attempt else ""
-        await emit_fallback_event(
-            conversation_id=conversation_id,
-            primary_model=primary_model_name,
-            fallback_model=current_model,
-            primary_provider=primary_provider_name,
-            fallback_provider=attempted_models[-1].split(":")[0],
-            chain_tried=list(attempted_models),
-            exhausted=True,
-            request_id=request_id,
-        )
 
     def get_stats(self) -> Dict[str, Any]:
         """Return service-level statistics."""
@@ -1108,6 +849,208 @@ class LLMService:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _compress_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Compress message content via the extractive PromptCompressor (#16526).
+
+        Strips filler phrases/redundant whitespace; code blocks and URLs are
+        preserved verbatim. config.llm_prompt_compression_enabled/_min_chars
+        are read live every call (like config.llm_response_cache elsewhere in
+        this class), so toggling either takes effect on the next request, not
+        just before this singleton was first constructed.
+
+        Not applied to chat_optimized(): its system-prompt prefix is static
+        for vLLM prefix-cache reuse, and rewriting it would defeat that cache.
+
+        Fails open like the sibling quota_headroom/provider_degradation
+        checks in this class (review on #16546 at eefaafb28): compression is
+        a cost optimisation, not a correctness requirement, so a
+        `compress()` exception must never fail the chat/stream request --
+        it falls back to the message's original content instead.
+        """
+        if not config.llm_prompt_compression_enabled:
+            return messages
+        min_chars = config.llm_prompt_compression_min_chars
+        compressed_messages: List[Dict[str, str]] = []
+        for msg in messages:
+            content = msg.get("content")
+            if not content or len(content) < min_chars:
+                compressed_messages.append(msg)
+                continue
+            try:
+                result = self._prompt_compressor.compress(content)
+                compressed_text = result.compressed_text
+            except Exception as exc:
+                logger.warning("Prompt compression failed, using original content: %s", exc)
+                compressed_messages.append(msg)
+                continue
+            if compressed_text == content:
+                compressed_messages.append(msg)
+            else:
+                compressed_messages.append({**msg, "content": compressed_text})
+        return compressed_messages
+
+    async def _check_response_cache(
+        self,
+        request: LLMRequest,
+        messages: List[Dict[str, str]],
+        selected_model: str | None,
+        provider_name: str | None,
+        temp: float,
+        tokens: int | None,
+        use_cache: bool,
+        start_time: float,
+    ) -> tuple[LLMResponse | None, str | None]:
+        """Look up the L1/L2 response cache for chat() (#10597, extracted for
+        function-length compliance — #16526/#620). Returns
+        ``(cached_response_or_None, cache_key_or_None)``.
+        """
+        if not self._is_cacheable(request, temp, use_cache):
+            return None, None
+        cached, cache_key = await self._optimized_check_cache(
+            messages,
+            selected_model or "",
+            provider_name or "auto",
+            request.request_id,
+            start_time,
+            temperature=temp,
+            max_tokens=tokens,
+            structured_output=request.structured_output,
+        )
+        if cached is not None:
+            self._calculate_cache_hit_rate(cached)
+        return cached, cache_key
+
+    async def _mark_exhausted(
+        self,
+        conversation_id: str | None,
+        attempted_models: List[str],
+        current_model: str | None,
+        request_id: str,
+    ) -> None:
+        """Increment the error counter and emit the exhausted-fallback event
+        when more than one model was tried; shared by chat()/stream(), used
+        both per-attempt and at final exhaustion (extracted for
+        function-length compliance — #16526/#620).
+        """
+        self._error_count += 1
+        if len(attempted_models) > 1:
+            await emit_exhausted_fallback(conversation_id, attempted_models, current_model, request_id)
+
+    async def _attempt_chat_once(
+        self,
+        request: LLMRequest,
+        provider: Any,
+        attempt_key: str,
+        attempted_models: List[str],
+        conversation_id: str | None,
+        current_model: str | None,
+        current_provider_name: str | None,
+        fallback_manager: Any,
+        cache_key: str | None,
+    ) -> tuple[LLMResponse | None, str | None, str | None]:
+        """Run one fallback-chain attempt for chat() (GH#8998, extracted for
+        function-length compliance — #16526/#620).
+
+        Returns ``(terminal_response, next_model, next_provider)``: when
+        ``terminal_response`` is not None the caller returns it immediately;
+        otherwise the loop continues with ``(next_model, next_provider)``.
+        """
+        response = await provider.chat_completion(request)
+
+        if not response.error:
+            await emit_fallback_success(
+                conversation_id, attempted_models, attempt_key, current_model, provider, request.request_id
+            )
+            # #10597: cache successful responses for identical future requests.
+            if cache_key and response.content:
+                await self._optimized_store_cache(cache_key, response, request.request_id)
+            self._track_usage(response, conversation_id)
+            return response, None, None
+
+        # GH#8998: Check if this is a rate limit error that should trigger fallback
+        is_rate_limited, retry_after = extract_rate_limit_info(response)
+        if is_rate_limited:
+            fallback = await apply_rate_limit_fallback(
+                fallback_manager, attempt_key, current_model, current_provider_name, provider, retry_after
+            )
+            if fallback is not None:
+                return None, fallback[0], fallback[1]
+
+        # Non-rate-limit error or no fallback available
+        logger.warning(
+            "Provider %s returned error: %s (attempted: %s)",
+            provider.provider_name,
+            response.error,
+            " → ".join(attempted_models),
+        )
+        await self._mark_exhausted(conversation_id, attempted_models, current_model, request.request_id)
+        self._track_usage(response, conversation_id)
+        return response, None, None
+
+    async def _attempt_stream_once(
+        self,
+        request: LLMRequest,
+        provider: Any,
+        attempt_key: str,
+        attempted_models: List[str],
+        conversation_id: str | None,
+        current_model: str | None,
+        current_provider_name: str | None,
+        fallback_manager: Any,
+    ) -> AsyncIterator[str]:
+        """Run one fallback-chain attempt for stream() (GH#8998, extracted for
+        function-length compliance — #16526/#620).
+
+        Yields chunks as they arrive. Returns normally (after emitting the
+        fallback-success event) once the provider's stream completes without
+        error. On a rate-limited error before any chunk was yielded, raises
+        ``StreamRetry`` with the next ``(model, provider)`` to try; any
+        other error — including a rate limit after chunks were already
+        yielded, which cannot be retried — re-raises the original exception.
+        """
+        chunks_yielded = False
+        try:
+            async for chunk in provider.stream_completion(request):
+                chunks_yielded = True
+                yield chunk
+            await emit_fallback_success(
+                conversation_id, attempted_models, attempt_key, current_model, provider, request.request_id
+            )
+        except Exception as exc:
+            # If we already yielded chunks, we can't retry - raise immediately
+            if chunks_yielded:
+                self._error_count += 1
+                logger.error(
+                    "Stream error from provider %s after yielding chunks: %s",
+                    provider.provider_name,
+                    exc,
+                )
+                raise
+
+            error_str = str(exc).lower()
+            is_rate_limited = (
+                "429" in error_str
+                or "rate limit" in error_str
+                or "quota" in error_str
+                or "too many requests" in error_str
+            )
+            if is_rate_limited:
+                fallback = await apply_rate_limit_fallback(
+                    fallback_manager, attempt_key, current_model, current_provider_name, provider
+                )
+                if fallback is not None:
+                    raise StreamRetry(*fallback) from exc
+
+            # Non-rate-limit error or no fallback available
+            logger.error(
+                "Stream error from provider %s: %s (attempted: %s)",
+                provider.provider_name,
+                exc,
+                " → ".join(attempted_models),
+            )
+            await self._mark_exhausted(conversation_id, attempted_models, current_model, request.request_id)
+            raise
 
     def _is_cacheable(self, request: LLMRequest, temperature: float, use_cache: bool) -> bool:
         """Whether a chat request may be served from / stored in the cache (#10597).

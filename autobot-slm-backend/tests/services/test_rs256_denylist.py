@@ -8,10 +8,10 @@ Tests for services/rs256_denylist.py — cross-service RS256 jti denylist (#1027
 Covers:
 - revoke_rs256_jti writes to correct Redis key with TTL
 - TTL is clamped to minimum 1
-- Redis unavailable → no crash (fail-open)
+- Redis unavailable → no crash (fail-open, write path stays open per #16412)
 - is_rs256_jti_revoked returns True after revoke
 - is_rs256_jti_revoked returns False when key absent
-- is_rs256_jti_revoked returns False when Redis unavailable (fail-open)
+- is_rs256_jti_revoked raises when Redis unavailable (fail-closed, #16412)
 - Key prefix is the shared cross-service namespace
 """
 
@@ -130,12 +130,23 @@ class TestIsRS256JtiRevoked:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_returns_false_when_redis_unavailable(self):
-        """Fail-open: Redis down must not block valid tokens."""
+    async def test_raises_when_redis_unavailable(self):
+        """Fail-closed (#16412): no client available raises, never returns False."""
         get_client = AsyncMock(return_value=None)
         with patch.object(_dl_mod, "get_async_redis_client", get_client):
-            result = await is_rs256_jti_revoked("jti-redis-down")
-        assert result is False
+            with pytest.raises(ConnectionError):
+                await is_rs256_jti_revoked("jti-redis-down")
+
+    @pytest.mark.asyncio
+    async def test_raises_when_exists_call_errors(self):
+        """Fail-closed (#16412): a Redis error mid-command (not just an absent
+        client) must also raise, never be reported as "not revoked"."""
+        redis_mock = AsyncMock()
+        redis_mock.exists = AsyncMock(side_effect=ConnectionError("connection reset"))
+        get_client = AsyncMock(return_value=redis_mock)
+        with patch.object(_dl_mod, "get_async_redis_client", get_client):
+            with pytest.raises(ConnectionError):
+                await is_rs256_jti_revoked("jti-mid-command-failure")
 
 
 # ---------------------------------------------------------------------------

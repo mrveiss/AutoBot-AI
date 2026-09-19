@@ -35,14 +35,8 @@ from fastapi.testclient import TestClient
 from api.knowledge_grounding import router as grounding_router
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.status_enums import Severity
-from services.grounded_agent import (
-    Claim,
-    ClaimStatus,
-    GroundedAgent,
-    GroundedResponse,
-    VerifiedClaim,
-    get_grounded_agent,
-)
+from services.grounded_agent import GroundedAgent, get_grounded_agent
+from services.grounded_agent_models import Claim, ClaimStatus, GroundedResponse, VerifiedClaim
 from services.knowledge_grounding_models import VerificationMethod
 
 
@@ -711,8 +705,8 @@ async def test_api_get_stats_endpoint(mock_app):
         return_value={
             "total_responses_grounded": "10",
             "total_claims_extracted": "42",
-            "claims_verified": "0.9",
-            "average_confidence": "0.87",
+            "claims_verified_count": "21",
+            "confidence_sum": "8.7",
         }
     )
 
@@ -725,7 +719,8 @@ async def test_api_get_stats_endpoint(mock_app):
     assert response.status_code == 200
     body = response.json()
     assert body["total_responses_grounded"] == 10
-    assert body["average_confidence"] == 0.87
+    assert body["claims_verified"] == pytest.approx(21 / 42)
+    assert body["average_confidence"] == pytest.approx(8.7 / 10)
 
 
 # ===== INTEGRATION TESTS =====

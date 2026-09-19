@@ -60,6 +60,7 @@ from .sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from .template import TemplateCategory
 from .work_item import LLCWorkItem, LLCWorkItemComment, LLCWorkItemRelation
 from .work_product import LLCWorkProduct
+from .workspace_lease import LLCWorkspaceLease
 
 __all__ = [
     "ActivityEventType",
@@ -88,6 +89,7 @@ __all__ = [
     "LLCAgentStatus",
     "HeartbeatInvocationSource",
     "LLCHeartbeatRun",
+    "LLCWorkspaceLease",
     "LLCRunReplayLog",
     "LLCApproval",
     "LLCBase",

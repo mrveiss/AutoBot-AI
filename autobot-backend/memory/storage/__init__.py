@@ -6,10 +6,11 @@
 Memory Storage Components - Task and General Storage
 """
 
-from .general_storage import GeneralStorage
+from .general_storage import GeneralStorage, OwnerScopeError
 from .task_storage import TaskStorage
 
 __all__ = [
     "TaskStorage",
     "GeneralStorage",
+    "OwnerScopeError",
 ]

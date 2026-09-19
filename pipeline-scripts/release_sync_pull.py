@@ -18,9 +18,9 @@ from __future__ import annotations
 
 from typing import AbstractSet, Any, Dict, List, Protocol
 
-#: The branch sync-main-to-dev.yml force-pushes Dev_new_gui to and opens the PR from.
-RELEASE_SYNC_HEAD = "release-sync-main"
-RELEASE_SYNC_BASE = "main"
+#: The branch sync-main-to-release.yml force-pushes main to and opens the PR from.
+RELEASE_SYNC_HEAD = "release-sync-release"
+RELEASE_SYNC_BASE = "release"
 
 
 class PullLister(Protocol):
@@ -45,10 +45,10 @@ def is_sync_pull(pull: Dict[str, Any], repository: str, heads: AbstractSet[str],
 
 
 def release_sync_pulls(api: PullLister, swept_base: str) -> List[Dict[str, Any]]:
-    """The open release-sync PR into ``main``, for a watchdog sweeping *swept_base* (#16272).
+    """The open release-sync PR into ``release``, for a watchdog sweeping *swept_base* (#16272).
 
     At most one PR: GitHub allows one open PR per head and base. Empty when
-    *swept_base* is already ``main``, because that sweep lists the PR itself. A
+    *swept_base* is already ``release``, because that sweep lists the PR itself. A
     listing error propagates: an unreadable listing is not "no sync PR open".
     """
     if swept_base == RELEASE_SYNC_BASE:

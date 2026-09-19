@@ -2,7 +2,7 @@
 
 Single source of truth for **every component × 4 lifecycle phases** (Install · Backup · Update · Restore),
 with the *verified-in-code* current procedure or the gap. Every cell cites the exact file so claims are
-checkable (per the verify-in-exact-commit discipline). Last verified: 2026-07 against `Dev_new_gui`.
+checkable (per the verify-in-exact-commit discipline). Last verified: 2026-07 against `main`.
 
 Legend: ✅ implemented (file cited) · ⚠️ partial (gap noted) · ❌ none.
 
