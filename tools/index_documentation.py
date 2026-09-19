@@ -57,10 +57,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Re-index and re-embed every file, ignoring the hash cache.",
     )
+    mode.add_argument(
+        "--rebuild",
+        action="store_true",
+        help=(
+            "Delete the collection first, then re-index from scratch (#16934). "
+            "The one-time fix for branch docs that reached production before "
+            "indexing was gated to main-at-origin-tip -- see "
+            "docs/operations/DOC_INDEX_REBUILD.md before running this."
+        ),
+    )
     return parser.parse_args(argv)
 
 
-async def run_index(force: bool) -> int:
+async def run_index(force: bool, rebuild: bool) -> int:
     """Run the indexer and return a process exit code."""
     _install_import_paths()
     from autobot_shared.logging_manager import get_logger
@@ -68,7 +78,7 @@ async def run_index(force: bool) -> int:
 
     logger = get_logger(__name__)
     service = get_doc_indexer_service()
-    result = await service.index_all(force=force)
+    result = await (service.rebuild_from_scratch() if rebuild else service.index_all(force=force))
 
     if result.errors:
         # Report every error: a partial index that reports only the first is
@@ -77,8 +87,7 @@ async def run_index(force: bool) -> int:
             logger.error("Documentation indexing error: %s", error)
 
     logger.info(
-        "Documentation indexing finished: %d indexed, %d failed, %d unchanged, "
-        "%d discovered, %.2fs",
+        "Documentation indexing finished: %d indexed, %d failed, %d unchanged, " "%d discovered, %.2fs",
         result.success,
         result.failed,
         result.skipped,
@@ -91,7 +100,7 @@ async def run_index(force: bool) -> int:
 def main(argv: list[str] | None = None) -> int:
     """Entry point. `--incremental` is the default when no mode is given."""
     args = parse_args(argv)
-    return asyncio.run(run_index(force=args.force))
+    return asyncio.run(run_index(force=args.force, rebuild=args.rebuild))
 
 
 if __name__ == "__main__":
