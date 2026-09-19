@@ -84,8 +84,13 @@ async def read_imported_json_secret_in_session(session, secret_id: str, root_key
         KeyError,
         ValueError,
     ) as exc:
-        safe_id = secret_log_ref(secret_id) if secret_id else secret_id  # #16444: main:#1046
-        logger.warning("Envelope read unusable for imported JSON secret %s: %s — falling back", safe_id, exc)
+        # Class name only, never str(exc): SecretNotFoundError/SecretAccessError
+        # embed the raw id in their own message (envelope_secrets_service.py),
+        # which would re-leak it here even with safe_id already hashed (#16444).
+        safe_id = secret_log_ref(secret_id) if secret_id else "none"
+        logger.warning(
+            "Envelope read unusable for imported JSON secret %s: %s — falling back", safe_id, type(exc).__name__
+        )
         return None
     return _to_legacy_shape(row, plaintext.decode("utf-8"))
 

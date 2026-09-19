@@ -3537,6 +3537,13 @@ class SecretCreateRequest(BaseModel):
     org_id: str | None = Field(None, max_length=128, description="Organization ID for org-level secrets")
     team_ids: List[str] = Field(default_factory=list, description="Team IDs for group-level secrets")
     shared_with: List[str] = Field(default_factory=list, description="User IDs to share with")
+    # #17099: the UI has offered "System" here since #685, but this field never
+    # existed -- Pydantic silently dropped it (no extra="forbid"), so every
+    # choice, System included, went through the legacy per-user file store
+    # unrouted. Only "system" gets special handling in create_secret(); every
+    # other value's current (unrouted) behaviour is unchanged by this field's
+    # mere existence.
+    visibility: str | None = Field(None, max_length=32, description="private/shared/group/organization/system")
 
     # #16428: bridges this secret to a connector's ConnectorCredentialStore
     # entry (ADR-007) instead of this store's own file, per #13632's decision

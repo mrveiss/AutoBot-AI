@@ -544,7 +544,7 @@ def audit_log(
     """Log security-relevant operations for audit trail"""
     client_id = get_client_id(request)
     status = "SUCCESS" if success else "FAILED"
-    safe_id = secret_log_ref(secret_id) if secret_id else secret_id  # #16444: main:#1049
+    safe_id = secret_log_ref(secret_id) if secret_id else "none"  # #16444: main:#1049, no raw fallback
     logger.info(
         "[Secrets Audit] %s | Operation: %s | " "SecretID: %s | Client: %s",
         status,
@@ -665,6 +665,51 @@ async def _create_connector_bridged_secret(request: SecretCreateRequest, owner_i
     return _connector_secret_metadata(secret_id, request)
 
 
+async def _create_system_vault_secret(request: SecretCreateRequest, owner_id: str) -> Dict:
+    """Route a SYSTEM-visibility secret to EnvelopeSecretsService (#17099).
+
+    The legacy file store this endpoint otherwise writes to never declared a
+    `visibility` field, so every choice in the UI's dropdown -- System
+    included -- was silently dropped by Pydantic and landed in the same
+    per-user file no service reads for vault-owned credentials. This is the
+    only vault services like the audit worker (#13859) actually query.
+
+    Raises ValueError (-> 400) when `value` is missing, and SecretAccessError
+    (-> the caller's own mapping) when the caller isn't an admin --
+    `authorize()` grants SYSTEM-vault writes to admins only.
+    """
+    from api.envelope_secrets import get_coordinator
+    from autobot_shared.secrets_vault import VaultKind, VaultRef
+    from llc.deps import get_session
+    from user_management.middleware.rbac_middleware import rbac_middleware
+
+    if not request.value:
+        raise ValueError("value is required for a system-visibility secret")
+
+    user_id = uuid.UUID(owner_id)
+    permissions = set(await rbac_middleware.get_user_permissions(user_id))
+    coordinator = get_coordinator()
+    async for session in get_session():
+        secret = await coordinator.create(
+            session,
+            user_id=user_id,
+            permissions=permissions,
+            owner_vault=VaultRef(VaultKind.SYSTEM),
+            name=request.name,
+            secret_type=request.type.value,
+            plaintext=request.value.encode("utf-8"),
+        )
+        await session.commit()
+        return {
+            "id": str(secret.id),
+            "name": secret.name,
+            "type": secret.type,
+            "owner_vault": secret.owner_vault,
+            "version": secret.version,
+        }
+    raise RuntimeError("get_session() yielded no session")  # pragma: no cover -- defensive, generator always yields
+
+
 @router.post("/", response_model=DataResponse[SecretCreatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -686,6 +731,12 @@ async def create_secret(
             # store's own file -- #13632's one-store decision.
             owner_id = str((_user or {}).get("user_id", "unknown"))
             secret_data = await _create_connector_bridged_secret(request, owner_id)
+            secret_id = secret_data["id"]
+        elif request.visibility == "system":
+            # #17099: routed to the vault services actually read, not this
+            # store's own file -- see _create_system_vault_secret.
+            owner_id = str((_user or {}).get("user_id", "unknown"))
+            secret_data = await _create_system_vault_secret(request, owner_id)
             secret_id = secret_data["id"]
         else:
             # Issue #666: Wrap blocking file I/O in asyncio.to_thread

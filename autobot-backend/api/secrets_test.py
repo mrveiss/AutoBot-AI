@@ -420,3 +420,17 @@ class TestAuditLog:
         second_id = re.search(r"SecretID: (\S+)", second).group(1)
         assert first_id == second_id
         assert first_id != "same-id"
+
+    def test_a_falsy_secret_id_never_passes_through_unhashed(self, caplog):
+        """No branch may pass secret_id itself to the log call, not even an
+        empty one -- the prior `else secret_id` fallback did exactly that."""
+        from api.secrets import audit_log
+
+        fake_request = MagicMock()
+        with patch("api.secrets.get_client_id", return_value="client-1"), caplog.at_level("INFO"):
+            audit_log("read", "", fake_request)
+
+        import re
+
+        logged_id = re.search(r"SecretID: (\S+)", caplog.text).group(1)
+        assert logged_id == "none"
