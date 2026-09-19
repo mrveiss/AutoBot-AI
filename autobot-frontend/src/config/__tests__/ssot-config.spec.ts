@@ -113,21 +113,20 @@ describe('SSOT Config Types', () => {
 
   describe('VNCConfig interface', () => {
     it('should have desktop, terminal, and playwright configs', () => {
+      // #16299: no password fields -- the backend authenticates to the real
+      // VNC server itself and offers the browser security-type "None".
       const vncConfig = {
         desktop: {
           host: '10.0.0.1',
           port: 6080,
-          password: 'autobot',
         },
         terminal: {
           host: '10.0.0.1',
           port: 6080,
-          password: 'autobot',
         },
         playwright: {
           host: '10.0.0.6',
           port: 6081,
-          password: 'playwright',
         },
       };
 
