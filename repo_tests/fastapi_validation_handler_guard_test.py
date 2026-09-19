@@ -58,14 +58,13 @@ JUSTIFIED_EXCLUSIONS: dict[str, str] = {
     "autobot-infrastructure/shared/scripts/utilities/verify_backend_config.py": (
         "diagnostic script, constructs a disposable app to test router mounting only"
     ),
-    # Two more real, network-bound NPU worker servers found during the #16428
-    # audit, tracked separately rather than folded into that PR: unclear
-    # canonical/live status between the two (676-line diff despite the same
-    # name/purpose), and neither's request models carry a password/secret/
-    # token-shaped field today, so the concrete leak the review fixed doesn't
-    # exist here yet -- see #17112 for the finish-or-retire investigation.
-    "autobot-npu-worker/resources/windows-npu-worker/app/npu_worker.py": "tracked in #17112",
-    "autobot-infrastructure/shared/scripts/utilities/npu_worker.py": "tracked in #17112",
+    # A second, differently-shaped `npu_worker.py` under
+    # autobot-infrastructure/shared/scripts/utilities/ -- confirmed NOT the
+    # live one (no deploy manifest, installer spec or install script
+    # references it; the actual PairRequest/config exposure c0's review
+    # found lives only in the Windows package's own npu_worker.py, which is
+    # fixed). Tracked separately: #17112.
+    "autobot-infrastructure/shared/scripts/utilities/npu_worker.py": "tracked in #17112, not the live copy",
 }
 
 #: The marker a server that cannot import autobot_shared carries instead of
