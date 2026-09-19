@@ -16558,7 +16558,7 @@ export interface paths {
         put?: never;
         /**
          * Approve
-         * @description Approve a pending approval gate (#1402).
+         * @description Approve a pending approval gate (#1402); only a person may (#17042).
          */
         post: operations["approve_api_approval_gates__approval_id__approve_post"];
         delete?: never;
@@ -16578,7 +16578,7 @@ export interface paths {
         put?: never;
         /**
          * Reject
-         * @description Reject a pending approval gate (#1402).
+         * @description Reject a pending approval gate (#1402); only a person may (#17042).
          */
         post: operations["reject_api_approval_gates__approval_id__reject_post"];
         delete?: never;
@@ -16598,7 +16598,7 @@ export interface paths {
         put?: never;
         /**
          * Request Revision
-         * @description Request revision on a pending approval gate (#1402).
+         * @description Request revision on a pending approval gate (#1402); only a person may (#17042).
          */
         post: operations["request_revision_api_approval_gates__approval_id__request_revision_post"];
         delete?: never;
@@ -49431,7 +49431,7 @@ export interface paths {
         put?: never;
         /**
          * Decide Approval
-         * @description Approve or reject a pending approval.
+         * @description Approve or reject a pending approval, attributed to the verified caller (#17042).
          */
         post: operations["decide_approval_api_llc_approvals__approval_id__decide_post"];
         delete?: never;
