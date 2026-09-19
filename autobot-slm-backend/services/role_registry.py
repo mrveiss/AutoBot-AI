@@ -56,8 +56,8 @@ _SLM_ROLES = [
             f"cd {_BASE_DIR}/autobot-slm-backend && "
             f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
             f"requirements.txt {_BASE_DIR}/code_source "
-            "> /tmp/requirements-filtered-slm.txt && "
-            "venv/bin/pip install -r /tmp/requirements-filtered-slm.txt && "
+            "> /tmp/requirements-filtered-slm-backend.txt && "
+            "venv/bin/pip install -r /tmp/requirements-filtered-slm-backend.txt && "
             "venv/bin/alembic upgrade head"
         ),
         "required": True,
