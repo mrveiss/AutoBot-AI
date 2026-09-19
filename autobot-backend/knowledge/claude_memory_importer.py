@@ -135,9 +135,17 @@ def iter_memory_files(memory_dir: Path) -> Iterator[Path]:
         yield path
 
 
-def fact_id_for(slug: str) -> str:
-    """Deterministic knowledge_facts id for a memory slug — makes re-import idempotent."""
-    return f"{CATEGORY}:{slug}"
+def fact_id_for(slug: str, owner_id: str) -> str:
+    """Deterministic knowledge_facts id for a memory slug — makes re-import idempotent.
+
+    Scoped by owner_id (#17124): an unscoped id let two different owners whose
+    memory files share a slug collide on the same fact, so importer B's
+    ``update_fact`` would silently overwrite importer A's content and
+    owner_id with no access check in between. Scoping makes each owner's
+    facts live under disjoint ids by construction, so the existence check
+    this id feeds (`kb.get_fact`) can never cross an ownership boundary.
+    """
+    return f"{CATEGORY}:{owner_id}:{slug}"
 
 
 def _fact_content(memory: ParsedMemory) -> str:
@@ -224,7 +232,7 @@ async def import_memory_file(kb: Any, path: Path, owner_id: str) -> str:
     knowledge_facts write path itself rejects the write.
     """
     memory = parse_memory_file(path)
-    fact_id = fact_id_for(memory.slug)
+    fact_id = fact_id_for(memory.slug, owner_id)
     raw_content = _fact_content(memory)
     content, blocked, hit_types = _redact(raw_content)
     if blocked:

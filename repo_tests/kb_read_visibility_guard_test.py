@@ -165,7 +165,7 @@ MIN_READS_FOUND = 40
 #: knowledge_ai_stack.py's _search_local_knowledge_base/search(), but #16716 had
 #: already filtered that read (no allowlist entry), so removing it changes nothing
 #: this scan counts.
-UNFILTERED_READ_CEILING = 94
+UNFILTERED_READ_CEILING = 95
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)

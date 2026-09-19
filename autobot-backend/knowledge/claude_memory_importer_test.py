@@ -221,8 +221,15 @@ def test_iter_memory_files_on_missing_dir_yields_nothing(tmp_path):
 
 
 def test_fact_id_for_is_deterministic_and_namespaced():
-    assert fact_id_for("feedback-example") == "claude_code_memory:feedback-example"
-    assert fact_id_for("feedback-example") == fact_id_for("feedback-example")
+    assert fact_id_for("feedback-example", _OWNER) == "claude_code_memory:admin-test-user:feedback-example"
+    assert fact_id_for("feedback-example", _OWNER) == fact_id_for("feedback-example", _OWNER)
+
+
+def test_fact_id_for_is_scoped_by_owner():
+    """#17124: two owners with the same memory slug must not collide on one
+    fact id -- that collision is exactly what let one owner's import
+    silently overwrite another's via update_fact with no access check."""
+    assert fact_id_for("feedback-example", "owner-a") != fact_id_for("feedback-example", "owner-b")
 
 
 # ---------------------------------------------------------------------------
@@ -248,14 +255,14 @@ async def test_import_memory_file_creates_when_fact_absent(tmp_path):
     kb.store_fact.assert_awaited_once()
     kb.update_fact.assert_not_called()
     _, kwargs = kb.store_fact.call_args
-    assert kwargs["fact_id"] == "claude_code_memory:feedback-example"
+    assert kwargs["fact_id"] == "claude_code_memory:admin-test-user:feedback-example"
     assert kwargs["metadata"]["category"] == "claude_code_memory"
     assert kwargs["metadata"]["memory_type"] == "feedback"
 
 
 async def test_import_memory_file_updates_when_fact_present(tmp_path):
     path = _write(tmp_path, "feedback_example.md", _VALID_MEMORY)
-    kb = _make_kb(get_fact_return={"fact_id": "claude_code_memory:feedback-example"})
+    kb = _make_kb(get_fact_return={"fact_id": "claude_code_memory:admin-test-user:feedback-example"})
 
     action = await import_memory_file(kb, path, _OWNER)
 
@@ -263,7 +270,7 @@ async def test_import_memory_file_updates_when_fact_present(tmp_path):
     kb.update_fact.assert_awaited_once()
     kb.store_fact.assert_not_awaited()
     args, kwargs = kb.update_fact.call_args
-    assert args[0] == "claude_code_memory:feedback-example"
+    assert args[0] == "claude_code_memory:admin-test-user:feedback-example"
     assert kwargs["content"].startswith("An example feedback memory for tests.")
 
 
@@ -310,7 +317,7 @@ async def test_import_claude_memory_is_idempotent_on_rerun(tmp_path):
     first = await import_claude_memory(kb_first, tmp_path, _OWNER)
     assert first.created == 1
 
-    kb_second = _make_kb(get_fact_return={"fact_id": "claude_code_memory:feedback-example"})
+    kb_second = _make_kb(get_fact_return={"fact_id": "claude_code_memory:admin-test-user:feedback-example"})
     second = await import_claude_memory(kb_second, tmp_path, _OWNER)
     assert second.created == 0
     assert second.updated == 1
@@ -461,19 +468,19 @@ async def test_imported_fact_metadata_is_honoured_by_ownership_check_access():
     ownership = KnowledgeOwnership(redis_client=MagicMock())
 
     owner_can_read = await ownership.check_access(
-        fact_id="claude_code_memory:feedback-example",
+        fact_id="claude_code_memory:admin-test-user:feedback-example",
         user_id=_OWNER,
         fact_metadata=metadata,
         is_authenticated=True,
     )
     other_authenticated_user_denied = await ownership.check_access(
-        fact_id="claude_code_memory:feedback-example",
+        fact_id="claude_code_memory:admin-test-user:feedback-example",
         user_id="someone-else",
         fact_metadata=metadata,
         is_authenticated=True,
     )
     unauthenticated_denied = await ownership.check_access(
-        fact_id="claude_code_memory:feedback-example",
+        fact_id="claude_code_memory:admin-test-user:feedback-example",
         user_id="anon",
         fact_metadata=metadata,
         is_authenticated=False,
