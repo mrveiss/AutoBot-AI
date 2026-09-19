@@ -210,3 +210,60 @@ async def test_downgrade_refuses_when_a_copied_rows_decision_is_newer_than_the_c
     # Refused means nothing moved: the row is still on both sides.
     assert await _fetch_approval(fresh_db_url, touched_id) is not None
     assert await _count(fresh_db_url, "llc_approvals") == len(_ROWS)
+
+
+async def test_decided_at_upgrade_preserves_the_instant_on_a_non_utc_session(fresh_db_url):
+    """#17072 review: ``ALTER COLUMN ... TYPE timestamptz`` has no meaning for
+    an existing naive value without an explicit ``AT TIME ZONE`` -- Postgres
+    reads it in the connection's own ``TimeZone`` setting, UTC in CI and
+    Europe/Riga on the live install. Pins the throwaway database's default
+    TimeZone to a non-UTC zone before running the upgrade (alembic runs in
+    its own subprocess/connection, so this must be a database-level default,
+    not just this test's own session), so an unqualified ALTER -- which would
+    shift a pre-existing platform approval's ``decided_at`` by the Riga
+    offset on the live install -- is caught here instead.
+    """
+    assert run_alembic(["upgrade", _PRE_094], fresh_db_url).returncode == 0
+
+    db_name = fresh_db_url.rsplit("/", 1)[-1]
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(f"ALTER DATABASE \"{db_name}\" SET timezone TO 'Europe/Riga'"))
+    finally:
+        await engine.dispose()
+
+    approval_id = uuid.uuid4()
+    naive_decided_at = datetime(2026, 6, 15, 9, 30)  # a UTC instant, stored naive pre-094
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO approvals (id, title, approval_type, decided_at) "
+                    "VALUES (:id, 'pre-existing approval', 'hire', :decided_at)"
+                ),
+                {"id": approval_id, "decided_at": naive_decided_at},
+            )
+    finally:
+        await engine.dispose()
+
+    result = run_alembic(["upgrade", _REV_094], fresh_db_url)
+    assert result.returncode == 0, result.stderr
+
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.connect() as conn:
+            row = (
+                (await conn.execute(text("SELECT decided_at FROM approvals WHERE id = :id"), {"id": approval_id}))
+                .mappings()
+                .first()
+            )
+    finally:
+        await engine.dispose()
+
+    assert row is not None
+    assert row["decided_at"].astimezone(timezone.utc) == naive_decided_at.replace(tzinfo=timezone.utc), (
+        "ALTER COLUMN shifted the instant by the session's TimeZone offset instead of treating "
+        "the naive value as UTC"
+    )

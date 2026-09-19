@@ -27,6 +27,15 @@ caught by #17072 CI, not by review, since a same-instant UTC value compares
 unequal only as Python objects, not in the stored bytes. Fixed at the
 schema, not by normalising the test's comparison: the naive type was wrong
 the moment this table started receiving tz-aware data.
+
+The ``ALTER COLUMN ... TYPE timestamptz`` this needs has no implicit,
+session-independent meaning for an existing naive value: plain Postgres
+reads it in the connection's ``TimeZone`` setting, which is UTC in CI and
+Europe/Riga on the live install (#17072 review) -- an unqualified ALTER
+would shift every existing ``decided_at`` by the Riga offset on that
+install alone, invisibly, since the migration test only ever runs with a
+UTC session. Both directions pin ``AT TIME ZONE 'UTC'`` explicitly instead,
+so the instant is read as UTC regardless of the session's zone.
 """
 
 from typing import Sequence, Union
@@ -68,7 +77,12 @@ def upgrade() -> None:
     op.add_column("approvals", sa.Column("company_id", postgresql.UUID(as_uuid=True), nullable=True))
     op.create_index("ix_approvals_company_id", "approvals", ["company_id"])
     op.create_index("ix_approvals_company_status", "approvals", ["company_id", "status"])
-    op.alter_column("approvals", "decided_at", type_=sa.DateTime(timezone=True))
+    op.alter_column(
+        "approvals",
+        "decided_at",
+        type_=sa.DateTime(timezone=True),
+        postgresql_using="decided_at AT TIME ZONE 'UTC'",
+    )
 
     bind = op.get_bind()
     before = bind.execute(sa.text("SELECT COUNT(*) FROM llc_approvals")).scalar()
@@ -108,7 +122,12 @@ def downgrade() -> None:
         )
 
     bind.execute(sa.text("DELETE FROM approvals WHERE id IN (SELECT id FROM llc_approvals)"))
-    op.alter_column("approvals", "decided_at", type_=sa.DateTime(timezone=False))
+    op.alter_column(
+        "approvals",
+        "decided_at",
+        type_=sa.DateTime(timezone=False),
+        postgresql_using="decided_at AT TIME ZONE 'UTC'",
+    )
     op.drop_index("ix_approvals_company_status", table_name="approvals")
     op.drop_index("ix_approvals_company_id", table_name="approvals")
     op.drop_column("approvals", "company_id")
