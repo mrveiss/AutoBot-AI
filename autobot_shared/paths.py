@@ -348,3 +348,54 @@ def git_repo_root(start: Path | str | None = None) -> Path:
     if result.returncode != 0 or not result.stdout.strip():
         raise GitRepoRootUnavailable(f"git rev-parse --show-toplevel exit {result.returncode}: {result.stderr.strip()}")
     return Path(result.stdout.strip())
+
+
+def git_common_dir(start: Path | str | None = None) -> Path:
+    """The ``.git`` directory shared by every worktree of the checkout containing *start*.
+
+    Unlike :func:`git_repo_root` -- deliberately worktree-relative, since each
+    worktree's own config/log/results state must not collide with another's
+    (#13149) -- some state genuinely IS shared: a lock file, or a cache keyed
+    to something that lives outside any one worktree (a database collection,
+    a remote service). ``git rev-parse --git-common-dir`` is that one location,
+    resolvable identically from any worktree of the same checkout (#16934).
+
+    Raises:
+        GitRepoRootUnavailable: git is absent, failed, or named nothing.
+    """
+    try:
+        result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+            ["git", "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=None if start is None else str(start),
+            env=scrubbed_git_env(),
+            check=False,
+        )
+    except OSError as exc:
+        raise GitRepoRootUnavailable(f"could not run git rev-parse: {exc}") from exc
+    if result.returncode != 0 or not result.stdout.strip():
+        raise GitRepoRootUnavailable(
+            f"git rev-parse --git-common-dir exit {result.returncode}: {result.stderr.strip()}"
+        )
+    common_dir = Path(result.stdout.strip())
+    # A relative answer is relative to *start* (or the cwd), not to wherever
+    # the caller resolves paths against next.
+    if not common_dir.is_absolute():
+        common_dir = (Path(start) if start is not None else Path.cwd()) / common_dir
+    return common_dir.resolve()
+
+
+def shared_cache_path(*parts: str, fallback: Path, start: Path | str | None = None) -> Path:
+    """``git_common_dir()/*parts``, or *fallback* when git is unavailable (#16934).
+
+    For state that must be ONE location across every worktree of a checkout
+    (a lock, a cache keyed to a collection outside any one worktree) but
+    still has to work somewhere with no ``.git`` at all -- a real production
+    install, which :func:`project_root` resolves by ``.env`` instead.
+    """
+    try:
+        return git_common_dir(start).joinpath(*parts)
+    except GitRepoRootUnavailable:
+        return fallback

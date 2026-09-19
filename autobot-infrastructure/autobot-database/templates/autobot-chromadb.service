@@ -32,9 +32,11 @@ Environment="ANONYMIZED_TELEMETRY=FALSE"
 #   Environment="CHROMA_SERVER_AUTHN_CREDENTIALS=<token-from-vault>"
 EnvironmentFile=-/opt/autobot/autobot-db-stack/.env
 
+# #15317: static reference copy of the real deploy source's bind, kept in step
+# so this file cannot be copy-pasted forward as a stale, wide-open example.
 # Start ChromaDB server
 ExecStart=/opt/autobot/autobot-db-stack/chromadb/venv/bin/chroma run \
-    --host 0.0.0.0 \
+    --host 127.0.0.1 \
     --port 8100 \
     --path /opt/autobot/autobot-db-stack/chromadb/data
 
