@@ -144,7 +144,9 @@ def test_every_discovered_connector_class_routes_through_the_chokepoint():
     assert subclasses, "no AbstractConnector subclasses found after importing every connector module"
 
     overriding = {
-        cls.__module__ + "." + cls.__qualname__ for cls in subclasses if _overrides_ingest_content(cls, AbstractConnector)
+        cls.__module__ + "." + cls.__qualname__
+        for cls in subclasses
+        if _overrides_ingest_content(cls, AbstractConnector)
     }
     assert not overriding, (
         f"connector class(es) override _ingest_content instead of inheriting the store_fact "
