@@ -19,6 +19,14 @@ resolves after the merge.
 ``llc_approvals`` itself is left in place, untouched, read-only from here
 on: dropping it is a separate, later, reviewed step once the unified path
 is verified live, not bundled into the same change that migrates off it.
+
+``approvals.decided_at`` was ``TIMESTAMP WITHOUT TIME ZONE`` (#006), while
+``llc_approvals.decided_at`` was always ``TIMESTAMP WITH TIME ZONE`` (#027).
+Copying tz-aware values into a naive column silently drops the offset --
+caught by #17072 CI, not by review, since a same-instant UTC value compares
+unequal only as Python objects, not in the stored bytes. Fixed at the
+schema, not by normalising the test's comparison: the naive type was wrong
+the moment this table started receiving tz-aware data.
 """
 
 from typing import Sequence, Union
@@ -60,6 +68,7 @@ def upgrade() -> None:
     op.add_column("approvals", sa.Column("company_id", postgresql.UUID(as_uuid=True), nullable=True))
     op.create_index("ix_approvals_company_id", "approvals", ["company_id"])
     op.create_index("ix_approvals_company_status", "approvals", ["company_id", "status"])
+    op.alter_column("approvals", "decided_at", type_=sa.DateTime(timezone=True))
 
     bind = op.get_bind()
     before = bind.execute(sa.text("SELECT COUNT(*) FROM llc_approvals")).scalar()
@@ -99,6 +108,7 @@ def downgrade() -> None:
         )
 
     bind.execute(sa.text("DELETE FROM approvals WHERE id IN (SELECT id FROM llc_approvals)"))
+    op.alter_column("approvals", "decided_at", type_=sa.DateTime(timezone=False))
     op.drop_index("ix_approvals_company_status", table_name="approvals")
     op.drop_index("ix_approvals_company_id", table_name="approvals")
     op.drop_column("approvals", "company_id")

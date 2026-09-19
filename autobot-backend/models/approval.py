@@ -104,7 +104,9 @@ class Approval(Base):
     )
     workflow_step = Column(String(255), nullable=True)
     context = Column(JSONB, nullable=True, default=dict)
-    decided_at = Column(DateTime, nullable=True)
+    # timezone=True (#17072 CI): the unified table now also receives
+    # llc_approvals' tz-aware decided_at values (migration 20260918_094).
+    decided_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     comments = relationship(

@@ -88,6 +88,21 @@ async def _fetch_approval(url: str, approval_id: uuid.UUID) -> dict | None:
         await engine.dispose()
 
 
+async def _approval_row_exists(url: str, approval_id: uuid.UUID) -> bool:
+    """Existence-only check that survives a downgrade (#17072 CI): unlike
+    ``_fetch_approval``, this never selects ``company_id``, which a
+    downgrade to pre-094 has already dropped -- selecting it there raised
+    ``UndefinedColumnError`` instead of proving the row was gone.
+    """
+    engine = create_async_engine(url)
+    try:
+        async with engine.connect() as conn:
+            result = await conn.execute(text("SELECT 1 FROM approvals WHERE id = :id"), {"id": approval_id})
+            return result.first() is not None
+    finally:
+        await engine.dispose()
+
+
 async def _count(url: str, table: str) -> int:
     engine = create_async_engine(url)
     try:
@@ -165,7 +180,7 @@ async def test_downgrade_succeeds_when_no_copied_row_was_touched(fresh_db_url):
     assert down.returncode == 0, f"downgrade of an untouched copy should round-trip:\n{down.stderr}"
 
     for row in _ROWS:
-        assert await _fetch_approval(fresh_db_url, row["id"]) is None, "the copied row must be gone"
+        assert not await _approval_row_exists(fresh_db_url, row["id"]), "the copied row must be gone"
     assert await _count(fresh_db_url, "llc_approvals") == len(_ROWS), "the source table is untouched"
 
 
