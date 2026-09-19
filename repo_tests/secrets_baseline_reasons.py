@@ -277,9 +277,120 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "Hex High Entropy String",
         "d17f9b8dad106518f4a99222bfa0a316c004e252",  # pragma: allowlist secret
     ): (
-        "line 109's `_FALSE_POSITIVES` commit-SHA fixture (`\"commit_sha\"`), split via string "
+        'line 109\'s `_FALSE_POSITIVES` commit-SHA fixture (`"commit_sha"`), split via string '
         "concatenation, proving scan_content_for_credentials does NOT flag ordinary commit-SHA-shaped "
         "text -- not the PEM fixture; correcting an earlier mislabel in this entry (review)."
+    ),
+    # #13708's redaction-feature test files (carried by #17102 into #17108):
+    # 7 of the 8 files below share one local fixture, an OpenAI-key-shaped
+    # literal (same value as autobot_shared/secret_redaction_test.py's own
+    # _OPENAI_SHAPED constant) assigned to a local `_SECRET`/`secret` name,
+    # flagged twice each (Base64 High Entropy String + Secret Keyword) --
+    # verified per file at its own flagged line, not assumed from the others.
+    (
+        "autobot-backend/api/knowledge_upload_redaction_test.py",
+        "Base64 High Entropy String",
+        "18fdf21db6a592dac66e4bcefad19d6b8d0428f4",  # pragma: allowlist secret
+    ): ("line 25's local `_SECRET` fixture (see the module note above SPECIFIC_REASONS)."),
+    (
+        "autobot-backend/api/knowledge_upload_redaction_test.py",
+        "Secret Keyword",
+        "7ce6ed3727ece51d2219f2bdc7f6db3594dc4d7f",  # pragma: allowlist secret
+    ): ("line 25's local `_SECRET` fixture -- same line as the entry above, second plugin match."),
+    (
+        "autobot-backend/knowledge/bulk_restore_redaction_test.py",
+        "Base64 High Entropy String",
+        "18fdf21db6a592dac66e4bcefad19d6b8d0428f4",  # pragma: allowlist secret
+    ): ("line 22's local `_SECRET` fixture (see the module note above SPECIFIC_REASONS)."),
+    (
+        "autobot-backend/knowledge/bulk_restore_redaction_test.py",
+        "Secret Keyword",
+        "7ce6ed3727ece51d2219f2bdc7f6db3594dc4d7f",  # pragma: allowlist secret
+    ): ("line 22's local `_SECRET` fixture -- same line as the entry above, second plugin match."),
+    (
+        "autobot-backend/knowledge/connectors/gdrive_test.py",
+        "Base64 High Entropy String",
+        "18fdf21db6a592dac66e4bcefad19d6b8d0428f4",  # pragma: allowlist secret
+    ): ("line 259's local `secret` fixture (see the module note above SPECIFIC_REASONS)."),
+    (
+        "autobot-backend/knowledge/connectors/gdrive_test.py",
+        "Secret Keyword",
+        "7ce6ed3727ece51d2219f2bdc7f6db3594dc4d7f",  # pragma: allowlist secret
+    ): ("line 259's local `secret` fixture -- same line as the entry above, second plugin match."),
+    (
+        "autobot-backend/knowledge/connectors/onedrive_test.py",
+        "Base64 High Entropy String",
+        "18fdf21db6a592dac66e4bcefad19d6b8d0428f4",  # pragma: allowlist secret
+    ): ("line 250's local `secret` fixture (see the module note above SPECIFIC_REASONS)."),
+    (
+        "autobot-backend/knowledge/connectors/onedrive_test.py",
+        "Secret Keyword",
+        "7ce6ed3727ece51d2219f2bdc7f6db3594dc4d7f",  # pragma: allowlist secret
+    ): ("line 250's local `secret` fixture -- same line as the entry above, second plugin match."),
+    (
+        "autobot-backend/knowledge/pipeline/runner_test.py",
+        "Base64 High Entropy String",
+        "18fdf21db6a592dac66e4bcefad19d6b8d0428f4",  # pragma: allowlist secret
+    ): ("line 167's local `secret` fixture (see the module note above SPECIFIC_REASONS)."),
+    (
+        "autobot-backend/knowledge/pipeline/runner_test.py",
+        "Secret Keyword",
+        "7ce6ed3727ece51d2219f2bdc7f6db3594dc4d7f",  # pragma: allowlist secret
+    ): ("line 167's local `secret` fixture -- same line as the entry above, second plugin match."),
+    (
+        "autobot-backend/knowledge/versioning_redaction_16985_test.py",
+        "Base64 High Entropy String",
+        "18fdf21db6a592dac66e4bcefad19d6b8d0428f4",  # pragma: allowlist secret
+    ): ("line 21's local `_SECRET` fixture (see the module note above SPECIFIC_REASONS)."),
+    (
+        "autobot-backend/knowledge/versioning_redaction_16985_test.py",
+        "Secret Keyword",
+        "7ce6ed3727ece51d2219f2bdc7f6db3594dc4d7f",  # pragma: allowlist secret
+    ): ("line 21's local `_SECRET` fixture -- same line as the entry above, second plugin match."),
+    (
+        "autobot-backend/tests/knowledge/test_facts_redaction_16985.py",
+        "Base64 High Entropy String",
+        "18fdf21db6a592dac66e4bcefad19d6b8d0428f4",  # pragma: allowlist secret
+    ): ("line 23's local `_SECRET` fixture (see the module note above SPECIFIC_REASONS)."),
+    (
+        "autobot-backend/tests/knowledge/test_facts_redaction_16985.py",
+        "Secret Keyword",
+        "7ce6ed3727ece51d2219f2bdc7f6db3594dc4d7f",  # pragma: allowlist secret
+    ): ("line 23's local `_SECRET` fixture -- same line as the entry above, second plugin match."),
+    # store_fact_sanitize_16770_test.py: 3 test functions, each a fake
+    # credential-bearing URL proving add_url_to_knowledge's metadata fields
+    # (source/source_url/url) are redacted -- #13708 round 4's own named gap.
+    (
+        "autobot-backend/knowledge/store_fact_sanitize_16770_test.py",
+        "Secret Keyword",
+        "57d40f23cf6cb173ee25dde2b72251a6d90b8521",  # pragma: allowlist secret
+    ): (
+        "line 184's fake `?api_key=sk-...` query-string fixture for "
+        "test_a_credential_bearing_source_url_is_redacted."
+    ),
+    (
+        "autobot-backend/knowledge/store_fact_sanitize_16770_test.py",
+        "Secret Keyword",
+        "c7b9112565446bcfff5788d3f3df8d7c0b06aed8",  # pragma: allowlist secret
+    ): (
+        "line 194's fake `user:hunter2@` basic-auth URL fixture for "
+        "test_basic_auth_userinfo_in_source_url_is_redacted."
+    ),
+    (
+        "autobot-backend/knowledge/store_fact_sanitize_16770_test.py",
+        "Basic Auth Credentials",
+        "f3bbbd66a63d4bf1747940578ec3d0103530e21d",  # pragma: allowlist secret
+    ): (
+        "line 194's fake `user:hunter2@` basic-auth URL fixture -- same line as the entry "
+        "above, second plugin match. Independently re-hashed plain SHA1('hunter2') and confirmed."
+    ),
+    (
+        "autobot-backend/knowledge/store_fact_sanitize_16770_test.py",
+        "Secret Keyword",
+        "ebf1b4b932ed9187ba915cf0cdd8e4fff883932c",  # pragma: allowlist secret
+    ): (
+        "line 204's fake `user:hunter2@` basic-auth URL fixture (the source_url/url field-name "
+        "variant) for test_source_url_and_url_fields_are_also_redacted."
     ),
 }
 
