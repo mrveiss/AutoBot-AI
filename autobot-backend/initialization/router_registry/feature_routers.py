@@ -201,10 +201,10 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "llm_optimization",
     ),
     ("api.llm_awareness", "/llm-awareness", ["llm-awareness"], "llm_awareness"),
-    # Issue #4258: Dynamic endpoint capability discovery for LLM self-awareness
+    # Issue #4258: LLM self-awareness. Prefix corrected to /self (#16908 PR body).
     (
         "api.self_capabilities",
-        "",
+        "/self",
         ["self-capabilities"],
         "self_capabilities",
     ),
@@ -549,7 +549,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["admin", "feature-flags"],
         "feature_flags",
     ),
-    # Issue #12820: Operator toggles for background schedulers
+    # Issue #12820: Operator toggles; shadowing admin_schedulers.py deleted (#16908).
     (
         "api.scheduler_toggles",
         "/admin",
