@@ -6,9 +6,14 @@
 #
 # Install documentation sync git hook
 # Issue #250: Enable Chat Agent Self-Awareness
+# Issue #16934: moved from post-commit to post-merge -- a plain commit in
+# any worktree used to trigger this and index that worktree's own,
+# possibly-unmerged docs into the shared, live collection. post-merge fires
+# only after a local `git merge`/`git pull`; the hook itself further checks
+# that the merge actually landed origin/main's own tip.
 #
-# This script installs the post-commit hook that automatically
-# triggers documentation indexing when docs/ files are changed.
+# This script installs the post-merge hook that automatically
+# triggers documentation indexing when docs/ files change on main.
 
 set -e
 
@@ -37,8 +42,8 @@ fi
 # a directory the #781 restructure removed, so the installer could only ever
 # print "Hook source not found" and exit 1 -- from any directory, on any
 # checkout. The hook it installs still exists, one tree over.
-HOOK_SOURCE="$PROJECT_ROOT/autobot-infrastructure/shared/scripts/hooks/post-commit-doc-sync"
-HOOK_DEST="$PROJECT_ROOT/.git/hooks/post-commit"
+HOOK_SOURCE="$PROJECT_ROOT/autobot-infrastructure/shared/scripts/hooks/post-merge-doc-sync"
+HOOK_DEST="$PROJECT_ROOT/.git/hooks/post-merge"
 
 # Check if source hook exists
 if [ ! -f "$HOOK_SOURCE" ]; then
@@ -46,9 +51,9 @@ if [ ! -f "$HOOK_SOURCE" ]; then
     exit 1
 fi
 
-# Check if post-commit hook already exists
+# Check if post-merge hook already exists
 if [ -f "$HOOK_DEST" ]; then
-    echo -e "${YELLOW}⚠️ Existing post-commit hook found${NC}"
+    echo -e "${YELLOW}⚠️ Existing post-merge hook found${NC}"
 
     # Check if it's already our hook
     if grep -q "AutoBot Documentation Sync" "$HOOK_DEST" 2>/dev/null; then
