@@ -54,6 +54,8 @@ class LLCApproval(Base):
         server_default=sa.text("'{}'::jsonb"),
     )
 
+    # From 2026-09-18 (#17042): the verified human caller's user id. Earlier rows
+    # hold whatever the client sent, or the board sentinel, and are not rewritten.
     decided_by_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 

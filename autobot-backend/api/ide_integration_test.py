@@ -350,17 +350,43 @@ def test_pattern_relevance_filtering(engine):
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("elapsed_ms", [37.5, 240.0])
 @patch("api.ide_integration._get_context_analyzer")
 @patch("api.ide_integration._get_redis_client")
-async def test_completion_performance(mock_get_redis, mock_get_analyzer, engine, sample_request, sample_context):
-    """Test completion response time."""
-    # Setup mocks
-    mock_redis = mock_get_redis.return_value
-    mock_analyzer = mock_get_analyzer.return_value
-    mock_redis.get.return_value = None
-    mock_analyzer.analyze.return_value = sample_context
+async def test_completion_reports_the_elapsed_time_it_measured(
+    mock_get_redis, mock_get_analyzer, engine, sample_request, sample_context, elapsed_ms
+):
+    """`completion_time_ms` is the engine's own measurement, on a clock this test moves.
 
-    response = await engine.complete(sample_request)
+    Was `test_completion_performance`, whose whole body ended at
+    `assert response.completion_time_ms < 200`. That asserted the host was fast
+    enough at that instant and nothing about the engine: `complete()` derives the
+    figure from `(_time.time() - start_time) * 1000`. Under `-n auto --dist
+    loadscope` a loaded worker duly reddened it at 1253ms, on a PR whose diff
+    contained no Python at all (#16928) -- the same defect #15861 fixed in this
+    module's ML tests, with the same clock, for the same reason.
 
-    # Should complete within reasonable time (< 200ms)
-    assert response.completion_time_ms < 200
+    Raising the threshold would only have bought time: the number that stops it
+    failing is the number that stops it testing. Freezing the clock alone would
+    make it vacuous. So the clock moves by a known amount and the assertion pins
+    the property actually worth having -- that the engine reports the time it
+    measured. Two values, because a single one also passes against an engine that
+    reports a constant.
+    """
+    clock = _ControlledClock()
+    mock_get_redis.return_value.get.return_value = None
+
+    def _analyze_taking_elapsed_ms(**_kwargs):
+        clock.advance_ms(elapsed_ms)
+        return sample_context
+
+    mock_get_analyzer.return_value.analyze.side_effect = _analyze_taking_elapsed_ms
+
+    with patch("time.time", clock):
+        response = await engine.complete(sample_request)
+
+    # The analysis call is the only thing that moved the clock, so the reported
+    # figure is exactly the work the engine timed. 240.0 sits past the old 200ms
+    # threshold deliberately: this is a measurement being checked for accuracy,
+    # not a budget being met.
+    assert response.completion_time_ms == pytest.approx(elapsed_ms)
