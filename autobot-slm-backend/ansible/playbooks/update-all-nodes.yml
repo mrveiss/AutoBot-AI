@@ -1345,14 +1345,18 @@
       register: frontend_npm_install
       tags: [frontend, deps]
 
-    - name: "[PLAY 2] Frontend | Rebuild production dist"
-      command:
-        cmd: npx vite build
-        chdir: /opt/autobot/autobot-frontend
-      become_user: autobot
-      become: true
+    # #15603: staged build-then-swap (#15557, #15610's mechanism) — a failed
+    # build no longer empties the served directory while nginx below still
+    # restarts and starts answering 403 for every path.
+    - name: "[PLAY 2] Frontend | Build and publish production dist, staged (#15603)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
+      vars:
+        slm_frontend_publish_label: "Fleet update (user frontend)"
+        slm_frontend_publish_dir: /opt/autobot/autobot-frontend
+        slm_frontend_publish_user: autobot
+        slm_frontend_publish_build_script: "build"
+        slm_frontend_publish_build_env: {}
       when: "'frontend' in group_names"
-      register: frontend_build
       tags: [frontend]
 
     - name: "[PLAY 2] Frontend | Restart nginx"

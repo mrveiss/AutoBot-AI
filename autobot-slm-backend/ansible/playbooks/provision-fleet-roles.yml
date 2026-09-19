@@ -466,7 +466,7 @@
 
     - name: "SLM | Stat user frontend package.json for co-location detection"
       ansible.builtin.stat:
-        path: "{{ frontend_dist_dir | default('/opt/autobot/autobot-frontend/dist') | dirname }}/package.json"
+        path: "{{ frontend_dist_dir | default('/opt/autobot/autobot-frontend/current') | dirname }}/package.json"
       register: _post_frontend_colocated_check
       when: _slm_nginx_config_stat.stat.exists
       tags: ['frontend', 'slm-nginx', 'provision']
