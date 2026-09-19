@@ -92,13 +92,18 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
     return found
 
 
-#: Ratcheted well below the live population (3133 non-test files under
-#: autobot-backend/ as of #16561) so ordinary churn never trips it, while
-#: still catching a narrowed glob or a broken git env (#15826).
+#: Ratcheted well below the live population (3212 non-test files under
+#: autobot-backend/ once #17009's ws-auth train merges: 3210 measured on this
+#: branch alone + 2 new files that PR adds -- `services/workflow_automation/
+#: ws_endpoint.py` and `utils/long_running_operations/views.py`, confirmed
+#: absent from `origin/main`) so ordinary churn never trips it, while still
+#: catching a narrowed glob or a broken git env (#15826). Previously 2900
+#: against a 3133 population at #16561, then 2910 against 3210 at #17129;
+#: re-pinned again rather than widened.
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2900,
+    floor=2912,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )
