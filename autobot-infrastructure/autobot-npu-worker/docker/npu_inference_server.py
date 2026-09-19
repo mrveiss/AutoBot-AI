@@ -10,7 +10,9 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
 import structlog
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from npu_model_manager import NPUModelManager
 from pydantic import BaseModel
 
@@ -72,6 +74,19 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+# #16428 review: FastAPI's default 422 body echoes the submitted payload
+# verbatim (Pydantic v2 puts it in each error's "input"/"ctx"). Duplicated
+# from autobot_shared.fastapi_validation_handlers.register_validation_error_handlers
+# rather than imported: this container ships its own dependency set
+# (requirements-npu.txt) with no autobot_shared on the image.
+@app.exception_handler(RequestValidationError)
+async def _validation_error_without_input(request: Request, exc: RequestValidationError) -> JSONResponse:
+    safe_errors = [
+        {"loc": list(e.get("loc", [])), "msg": e.get("msg", ""), "type": e.get("type", "")} for e in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": safe_errors})
 
 
 # Request/Response Models

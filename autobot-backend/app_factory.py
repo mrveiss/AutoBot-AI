@@ -23,6 +23,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+# Import initialization modules
+from autobot_shared.fastapi_validation_handlers import register_validation_error_handlers
+
 # Issue #697: OpenTelemetry distributed tracing
 from autobot_shared.tracing import init_tracing, instrument_fastapi
 from constants.network_constants import (  # noqa: F401 - used in docstring example
@@ -35,10 +38,7 @@ from initialization import (
     load_optional_routers,
     register_root_endpoints,
 )
-
-# Import initialization modules
 from initialization.integrity_handlers import register_integrity_handlers
-from initialization.validation_error_handlers import register_validation_error_handlers
 
 # Store logger for app usage
 logger = get_logger(__name__)

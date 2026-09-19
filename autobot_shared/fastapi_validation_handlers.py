@@ -12,16 +12,27 @@ field-level constraint (``max_length``) prevents this: the raw value the
 caller sent is already in ``ValidationError.errors()`` before any field type
 gets a chance to redact it, and the default handler responds with that verbatim.
 
-Concretely: ``SecretCreateRequest``'s connector-bridge validator raises on
-``connector_id`` set without ``auth_type``, and the default handler's 422
-then contains the real ``credentials`` dict (OAuth ``client_secret``,
-``refresh_token``) submitted alongside it. The sibling case is a ``value``
-over its ``max_length`` -- the oversized secret itself comes back in ``input``.
+Concretely: ``autobot-backend``'s ``SecretCreateRequest`` connector-bridge
+validator raises on ``connector_id`` set without ``auth_type``, and the
+default handler's 422 then contains the real ``credentials`` dict (OAuth
+``client_secret``, ``refresh_token``) submitted alongside it. ``UserCreate``
+and ``VNCCredentialCreate`` on ``autobot-slm-backend`` have the same exposure
+for their own ``password`` fields. The sibling case is any ``value`` over its
+``max_length`` -- the oversized secret itself comes back in ``input``.
 
-Fixed once, for every router, rather than per-endpoint: any current or future
-request model with a secret-shaped field has the same exposure the moment its
-validation fails, and a field-level workaround only ever covers the field
-someone thought to guard.
+Fixed once here rather than per-endpoint or per-app: any current or future
+request model anywhere with a secret-shaped field has the same exposure the
+moment its validation fails, and a field-level workaround only ever covers
+the field someone thought to guard. Every FastAPI app in the tree that can
+import ``autobot_shared`` calls :func:`register_validation_error_handlers`
+from its own app-construction site -- see
+``repo_tests/fastapi_validation_handler_guard_test.py`` for the guard that
+keeps a new app from missing it. The two standalone infra Docker servers
+(``autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py``,
+``autobot-infrastructure/autobot-npu-worker/docker/npu_inference_server.py``)
+cannot import this module at all -- each ships its own dependency set with no
+``autobot_shared`` on the image -- so they carry a local, duplicated copy of
+the same handler instead, deliberately, with a comment pointing back here.
 """
 
 from __future__ import annotations
