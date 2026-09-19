@@ -243,7 +243,12 @@ def _discover_compose_chromadb_services(root: Path) -> list[tuple[str, str, dict
     ChromaDB, across every file COMPOSE_FILES reaches -- the shared basis for
     both the ports check and the network_mode check below."""
     found: list[tuple[str, str, dict]] = []
-    for rel in COMPOSE_FILES.examined(root):
+    # .population(), not .examined(): this is a nested discovery, and .examined()'s
+    # floor check belongs to the guard actually being tested, not a dependency it
+    # calls internally -- raising here instead breaks callers (reach_declarations_test's
+    # test_discovery_honours_the_root_it_is_given) that expect discover() to return a
+    # plain (possibly empty) sequence rather than propagate a sibling's floor failure.
+    for rel in COMPOSE_FILES.population(root):
         services = _load_yaml_mapping(root / rel).get("services") or {}
         for name, service in services.items():
             service = service or {}
@@ -258,7 +263,9 @@ def _discover_compose_chromadb_port_sites(root: Path) -> list[tuple[str, str, ob
     reaches."""
     return [
         (rel, name, entry)
-        for rel, name, service in COMPOSE_CHROMADB_SERVICES.examined(root)
+        # .population(), not .examined() -- see the matching comment in
+        # _discover_compose_chromadb_services.
+        for rel, name, service in COMPOSE_CHROMADB_SERVICES.population(root)
         for entry in service.get("ports") or []
     ]
 
@@ -346,7 +353,8 @@ def test_the_ai_stack_and_redis_templates_share_one_bind_variable() -> None:
 def test_chromadb_bind_host_default_resolves_to_a_non_wildcard() -> None:
     """The gap the PR #16882 review named: the old guard never looked at what
     chromadb_bind_host actually resolves to, only at whether the templates
-    named it. A future edit widening group_vars/all.yml:426 must fail here."""
+    named it. A future edit widening chromadb_bind_host's default in
+    group_vars/all.yml must fail here."""
     value = _bind_host_value_in_file(_REPO_ROOT / _GROUP_VARS_ALL)
     assert value is not None, f"chromadb_bind_host not found in {_GROUP_VARS_ALL} -- this guard would be vacuous"
     assert not _is_wildcard_bind(value), (
@@ -407,10 +415,10 @@ def test_the_compose_sweep_reaches_a_chromadb_port_site() -> None:
 
 
 def test_no_compose_chromadb_port_binds_a_wildcard_or_bare_port() -> None:
-    """docker-compose.yml:132 publishes ChromaDB at "127.0.0.1:8100:8000" --
-    safe today, but a bare "8100:8000" (host segment omitted -> every
-    interface) or an explicit "0.0.0.0:8100:8000" edit must fail here
-    (#15317 review round 2)."""
+    """The chromadb service in docker-compose.yml publishes at
+    "127.0.0.1:8100:8000" -- safe today, but a bare "8100:8000" (host segment
+    omitted -> every interface) or an explicit "0.0.0.0:8100:8000" edit must
+    fail here (#15317 review round 2)."""
     offenders = []
     for rel, svc, entry in COMPOSE_CHROMADB_PORT_SITES.examined(_REPO_ROOT):
         reason = _compose_port_offender(entry)
