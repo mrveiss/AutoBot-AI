@@ -277,20 +277,12 @@ class TestNeedsIndexing:
 class TestIndexAll:
     """Tests for DocIndexerService.index_all()."""
 
-    # ------------------------------------------------------------------
-    # Helper: fake filesystem of markdown files
-    # ------------------------------------------------------------------
-
     def _make_md_files(self, root: Path) -> None:
         """Create a minimal set of discoverable markdown files."""
         docs = root / "docs" / "features"
         docs.mkdir(parents=True)
         (docs / "feature_a.md").write_text("# Feature A\n\nContent here.\n", encoding="utf-8")
         (docs / "feature_b.md").write_text("# Feature B\n\nOther content.\n", encoding="utf-8")
-
-    # ------------------------------------------------------------------
-    # Test: empty collection forces full index (#4350 fix)
-    # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
     async def test_empty_collection_forces_full_index(self, tmp_path) -> None:
@@ -470,6 +462,65 @@ class TestIndexAll:
             result = await svc.index_all(force=False)
 
         assert result.elapsed_seconds >= 0
+
+
+class TestRebuildFromScratch:
+    """Tests for DocIndexerService.rebuild_from_scratch() (#16934)."""
+
+    @pytest.mark.asyncio
+    async def test_deletes_the_collection_before_reindexing(self) -> None:
+        """The one guarantee ordinary --force cannot make: nothing pre-existing survives."""
+        svc = _make_service(initialized=True, collection_count=50)
+        svc.index_all = AsyncMock(return_value="index_all result")
+
+        result = await svc.rebuild_from_scratch()
+
+        svc._client.delete_collection.assert_called_once_with(DocIndexerService.COLLECTION_NAME)
+        svc.index_all.assert_called_once_with(force=True)
+        assert result == "index_all result"
+
+    @pytest.mark.asyncio
+    async def test_resets_initialization_state_before_reindexing(self) -> None:
+        """A stale `_collection` handle must be cleared before index_all runs.
+
+        Asserts from inside the stubbed index_all itself, proving ordering
+        rather than just that both calls eventually happened.
+        """
+        svc = _make_service(initialized=True, collection_count=50)
+
+        async def _fake_index_all(force: bool) -> str:
+            assert svc._initialized is False
+            assert svc._collection is None
+            return "ok"
+
+        svc.index_all = _fake_index_all
+
+        await svc.rebuild_from_scratch()
+
+    @pytest.mark.asyncio
+    async def test_initializes_first_if_not_already(self) -> None:
+        """A service that was never initialized must still be able to delete."""
+        svc = _make_service(initialized=False)
+        svc.initialize = AsyncMock(return_value=True)
+        svc.index_all = AsyncMock(return_value="ok")
+
+        await svc.rebuild_from_scratch()
+
+        svc.initialize.assert_awaited_once()
+        svc._client.delete_collection.assert_called_once_with(DocIndexerService.COLLECTION_NAME)
+
+    @pytest.mark.asyncio
+    async def test_failed_initialization_skips_delete_and_reindex(self) -> None:
+        """If init fails there is no client to call delete_collection on."""
+        svc = _make_service(initialized=False)
+        svc.initialize = AsyncMock(return_value=False)
+        svc.index_all = AsyncMock()
+
+        result = await svc.rebuild_from_scratch()
+
+        svc._client.delete_collection.assert_not_called()
+        svc.index_all.assert_not_called()
+        assert result.errors == ["Failed to initialize"]
 
 
 class TestIndexFile:
@@ -681,10 +732,6 @@ class TestEdgeCases:
 class TestHashCacheEdgeCases4382:
     """Edge case tests for hash cache — Issue #4382."""
 
-    # ------------------------------------------------------------------
-    # Symlinks
-    # ------------------------------------------------------------------
-
     def test_compute_file_hash_follows_symlink(self, tmp_path) -> None:
         """_compute_file_hash hashes the target content, not the symlink path."""
         target = tmp_path / "real.md"
@@ -710,10 +757,6 @@ class TestHashCacheEdgeCases4382:
         changed, new_hashes = _filter_changed_files([(str(link), 1)], {link_rel: target_hash}, tmp_path)
         # Hash matches → file should NOT appear as changed
         assert len(changed) == 0
-
-    # ------------------------------------------------------------------
-    # Permissions
-    # ------------------------------------------------------------------
 
     def test_compute_file_hash_returns_empty_on_permission_error(self, tmp_path) -> None:
         """_compute_file_hash returns '' on PermissionError without raising."""
@@ -749,10 +792,6 @@ class TestHashCacheEdgeCases4382:
             assert new_hashes.get("locked.md") == existing_hash
         finally:
             f.chmod(0o644)
-
-    # ------------------------------------------------------------------
-    # Path normalization
-    # ------------------------------------------------------------------
 
     def test_normalize_path_returns_relative_key(self, tmp_path) -> None:
         """_normalize_path returns a relative path key under root_dir."""
@@ -792,10 +831,6 @@ class TestHashCacheEdgeCases4382:
         changed, _ = _filter_changed_files([(str(f), 1)], {rel: current_hash}, tmp_path)
         assert len(changed) == 0
 
-    # ------------------------------------------------------------------
-    # Circular symlinks (#4433)
-    # ------------------------------------------------------------------
-
     def test_compute_file_hash_returns_empty_on_circular_symlink(self, tmp_path) -> None:
         """_compute_file_hash returns '' for a circular symlink without raising (#4433)."""
         link_a = tmp_path / "a.md"
@@ -834,10 +869,6 @@ class TestIndexChunkOversized4665:
             "title": "Test Doc",
         }
 
-    # ------------------------------------------------------------------
-    # _is_oversized_error
-    # ------------------------------------------------------------------
-
     def test_is_oversized_error_too_large(self) -> None:
         """'too large' in error message → oversized."""
         assert DocIndexerService._is_oversized_error(ValueError("input too large"))
@@ -870,10 +901,6 @@ class TestIndexChunkOversized4665:
         """KeyError → not oversized."""
         assert not DocIndexerService._is_oversized_error(KeyError("missing_key"))
 
-    # ------------------------------------------------------------------
-    # _index_chunk: normal success path
-    # ------------------------------------------------------------------
-
     def test_index_chunk_returns_true_on_success(self) -> None:
         """_index_chunk returns True when embed+upsert succeed."""
         svc = _make_service()
@@ -881,10 +908,6 @@ class TestIndexChunkOversized4665:
         ok = svc._index_chunk(chunk, 0, 1, "docs/test.md", [], 2)
         assert ok is True
         svc._embed_model.get_text_embedding.assert_called_once()
-
-    # ------------------------------------------------------------------
-    # _index_chunk: non-oversized error → logged, returns False, no split
-    # ------------------------------------------------------------------
 
     def test_index_chunk_returns_false_on_non_oversized_error(self) -> None:
         """Non-oversized error → returns False, no split attempted."""
@@ -895,10 +918,6 @@ class TestIndexChunkOversized4665:
         assert ok is False
         # upsert must NOT be called (error happened before it)
         svc._collection.upsert.assert_not_called()
-
-    # ------------------------------------------------------------------
-    # _index_chunk: oversized → split, both halves succeed
-    # ------------------------------------------------------------------
 
     def test_index_chunk_splits_on_oversized_both_halves_succeed(self):
         """Oversized embed error → content split in half, both halves stored, returns True."""
@@ -923,10 +942,6 @@ class TestIndexChunkOversized4665:
         assert call_count[0] == 3
         # Two successful upserts (one per half)
         assert svc._collection.upsert.call_count == 2
-
-    # ------------------------------------------------------------------
-    # _index_chunk: oversized → split, one half fails (still non-silent)
-    # ------------------------------------------------------------------
 
     def test_index_chunk_splits_on_oversized_one_half_still_oversized(self):
         """Oversized: first half OK, second half oversized → recursion splits second half further.
@@ -958,10 +973,6 @@ class TestIndexChunkOversized4665:
         assert ok is True
         assert svc._collection.upsert.call_count == 3
 
-    # ------------------------------------------------------------------
-    # _index_chunk: oversized → split, BOTH halves fail → returns False
-    # ------------------------------------------------------------------
-
     def test_index_chunk_splits_on_oversized_both_halves_fail(self) -> None:
         """Oversized: both halves fail → returns False (no silent drop — warning logged)."""
         svc = _make_service()
@@ -972,14 +983,6 @@ class TestIndexChunkOversized4665:
 
         assert ok is False
         svc._collection.upsert.assert_not_called()
-
-    # ------------------------------------------------------------------
-    # Warning is logged (not silently dropped) — #4665 regression guard
-    # ------------------------------------------------------------------
-
-    # ------------------------------------------------------------------
-    # _split_and_embed: empty-string guard (#4921)
-    # ------------------------------------------------------------------
 
     def test_split_and_embed_returns_false_on_empty_string(self) -> None:
         """_split_and_embed returns False immediately for empty content (#4921)."""
@@ -1055,10 +1058,6 @@ class TestIndexChunkMultiLevelSplit4702:
             "title": "Test Doc",
         }
 
-    # ------------------------------------------------------------------
-    # Two-level split: halves are still too large, quarters succeed
-    # ------------------------------------------------------------------
-
     def test_two_level_split_all_quarters_succeed(self):
         """Chunk too large → halves too large → quarters succeed → returns True."""
         svc = _make_service()
@@ -1082,10 +1081,6 @@ class TestIndexChunkMultiLevelSplit4702:
         # 3 failed + 4 successful = 7 total embed calls
         assert call_count[0] == 7
         assert svc._collection.upsert.call_count == 4
-
-    # ------------------------------------------------------------------
-    # Three-level split: only some leaf nodes succeed
-    # ------------------------------------------------------------------
 
     def test_three_level_split_partial_success(self):
         """Three-level split where some deepest pieces succeed → True (partial)."""
@@ -1111,11 +1106,6 @@ class TestIndexChunkMultiLevelSplit4702:
         # At least one piece stored
         assert svc._collection.upsert.call_count >= 1
 
-    # ------------------------------------------------------------------
-    # max_depth=4 cap: beyond depth 4, chunk is dropped (returns False
-    # only if no sibling succeeded)
-    # ------------------------------------------------------------------
-
     def test_always_oversized_drops_at_max_depth(self) -> None:
         """If every embed call raises oversized, chunk is dropped at max_depth → False."""
         svc = _make_service()
@@ -1125,10 +1115,6 @@ class TestIndexChunkMultiLevelSplit4702:
 
         assert ok is False
         svc._collection.upsert.assert_not_called()
-
-    # ------------------------------------------------------------------
-    # Chunk IDs at each depth carry the _L/_R suffix chain
-    # ------------------------------------------------------------------
 
     def test_split_chunk_ids_carry_depth_suffix(self):
         """Sub-chunk IDs at depth 1 must end with _L0 or _R0."""
@@ -1155,10 +1141,6 @@ class TestIndexChunkMultiLevelSplit4702:
         # Both sub-IDs must end with the depth-0 suffix
         assert any(uid.endswith("_L0") for uid in upserted_ids), f"Expected _L0 suffix in {upserted_ids}"
         assert any(uid.endswith("_R0") for uid in upserted_ids), f"Expected _R0 suffix in {upserted_ids}"
-
-    # ------------------------------------------------------------------
-    # Non-oversized error at any depth stops recursion immediately
-    # ------------------------------------------------------------------
 
     def test_non_oversized_error_at_depth_1_drops_that_branch(self):
         """Non-oversized error at depth 1 → that branch is dropped, no deeper recursion."""

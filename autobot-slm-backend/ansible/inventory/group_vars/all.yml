@@ -415,6 +415,16 @@ role_redis_active: >-
 # ai-stack fallback exists solely for a topology that runs ai-stack alone.
 chromadb_service_owner: "{{ 'redis' if (role_redis_active | default(false) | bool) else 'ai-stack' }}"
 
+# #15317: separate from chromadb_host (the DIAL address handed to clients via
+# CHROMADB_HOST). Both templates that render the unit used chromadb_host as the
+# BIND address too, and one of the two hardcoded 0.0.0.0 directly — in front of
+# four unpatchable chromadb advisories, one a pre-auth RCE. Loopback by default
+# (Option A): a multi-node install must set this explicitly and add a
+# subnet-scoped firewall rule, which fails loud (unreachable) rather than silent
+# (exposed). Matches the bind the bare-metal installer already uses
+# (install-bare-metal.sh's own heredoc unit).
+chromadb_bind_host: "127.0.0.1"
+
 role_vnc_active: >-
   {{ ('vnc' in (node_roles | default([]))) or
      (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}

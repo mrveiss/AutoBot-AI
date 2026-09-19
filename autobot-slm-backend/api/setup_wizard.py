@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.websocket import ws_manager
+from autobot_shared.async_compat import fire_and_forget
 from config import settings
 from services.ansible_secrets import fetch_deploy_secrets
 from services.auth import get_current_user
@@ -1250,12 +1251,9 @@ async def provision_fleet(
             "error": None,
         }
 
-    logger.info(
-        "Starting fleet provisioning (nodes: %s)",
-        request.node_ids or "all",
-    )
+    logger.info("Starting fleet provisioning (nodes: %s)", request.node_ids or "all")
 
-    asyncio.create_task(_run_provisioning_task(request.node_ids))
+    fire_and_forget(_run_provisioning_task(request.node_ids), name="fleet-provisioning")
 
     return {
         "status": "started",
