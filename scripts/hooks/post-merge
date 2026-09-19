@@ -1,0 +1,25 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025-2026 mrveiss
+# Author: mrveiss
+#
+# Post-merge hook:
+#   1. Chain to doc-sync post-merge hook (Issue #250, #16934)
+#
+# #16934: doc-sync moved here from post-commit. post-commit fired on every
+# commit in every worktree and indexed that worktree's own tree into the
+# shared, live autobot_docs collection -- post-merge fires only after a
+# local `git merge`/`git pull`, so a fresh worktree's first commit (a plain
+# `git commit`) no longer reaches this at all. The chained script itself
+# further gates on the merge actually landing origin/main's own tip.
+
+GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+DOC_SYNC="$GIT_ROOT/autobot-infrastructure/shared/scripts/hooks/post-merge-doc-sync"
+if [ -x "$DOC_SYNC" ]; then
+    "$DOC_SYNC"
+elif [ -f "$DOC_SYNC" ]; then
+    bash "$DOC_SYNC"
+fi
+
+exit 0

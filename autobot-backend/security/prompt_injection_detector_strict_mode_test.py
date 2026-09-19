@@ -92,13 +92,16 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
     return found
 
 
-#: Ratcheted well below the live population (3133 non-test files under
-#: autobot-backend/ as of #16561) so ordinary churn never trips it, while
-#: still catching a narrowed glob or a broken git env (#15826).
+#: Ratcheted well below the live population (3210 non-test files under
+#: autobot-backend/ as of #17129, re-measured via `git ls-files -- 'autobot-backend/*.py'`
+#: minus `_test.py` files) so ordinary churn never trips it, while still
+#: catching a narrowed glob or a broken git env (#15826). Previously 2900
+#: against a 3133 population at #16561; organic growth (+77 files) closed
+#: the growth=300 headroom to 10 over -- re-pinned rather than widened.
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2900,
+    floor=2910,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )
