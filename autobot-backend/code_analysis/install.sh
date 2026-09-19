@@ -24,33 +24,41 @@ echo "📦 Installing system dependencies..."
 # Detect OS
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     # Linux
+    # Redis is deliberately absent from these lists (#16071). This tool talks
+    # to AutoBot's Redis through autobot_shared.redis_client -- it does not want
+    # a second local instance, and the apt/yum/dnf packages are plain Redis with
+    # none of the modules the platform uses.
     if command -v apt-get &> /dev/null; then
         sudo apt-get update
-        sudo apt-get install -y redis-server python3-pip python3-venv
+        sudo apt-get install -y python3-pip python3-venv
     elif command -v yum &> /dev/null; then
-        sudo yum install -y redis python3-pip python3-venv
+        sudo yum install -y python3-pip python3-venv
     elif command -v dnf &> /dev/null; then
-        sudo dnf install -y redis python3-pip python3-venv
+        sudo dnf install -y python3-pip python3-venv
     fi
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS
     if command -v brew &> /dev/null; then
-        brew install redis python3
+        brew install python3
     else
-        echo "❌ Homebrew not found. Please install Redis manually."
+        echo "❌ Homebrew not found. Please install Python 3 manually."
         exit 1
     fi
 fi
 
-# Start Redis
-echo "🔄 Starting Redis server..."
-if command -v systemctl &> /dev/null; then
-    sudo systemctl start redis
-    sudo systemctl enable redis
-elif command -v brew &> /dev/null; then
-    brew services start redis
+# Redis is provisioned by roles/redis, not by this script (#16071). It owns the
+# Redis Stack repository, the suite pin (#7178) and the package, and a second
+# copy of that logic here would drift out of step invisibly. Report whether the
+# service this tool needs is reachable; do not try to create it.
+echo "🔄 Checking Redis Stack..."
+if command -v systemctl &> /dev/null && systemctl is-active --quiet redis-stack-server; then
+    echo "✅ redis-stack-server is running"
 else
-    echo "⚠️  Please start Redis manually: redis-server"
+    echo "⚠️  redis-stack-server is not running here."
+    echo "    This tool connects through autobot_shared.redis_client, so it needs"
+    echo "    AutoBot's Redis Stack -- provision it with roles/redis, or point the"
+    echo "    client at an existing instance. Plain Redis from apt/brew will not do:"
+    echo "    it has no RediSearch, RedisJSON or RedisTimeSeries."
 fi
 
 # Create virtual environment
@@ -72,9 +80,10 @@ fi
 # Optional: Install NPU support
 if [ "$1" = "--npu" ]; then
     echo "🧠 Installing NPU support..."
-    # #14476: floor raised to match the SSOT (autobot-npu-worker/requirements.txt),
-    # constraints applied so no future dependency can drag numpy below its floor.
-    pip install -c ../../constraints/shared.txt "openvino>=2026.3.0" onnxruntime
+    # #15408: floor no longer restated here -- constraints/shared.txt is the single
+    # source of truth (openvino floor, and numpy so no dependency can drag it below
+    # its pinned floor). A bare package name plus -c lets pip resolve both from it.
+    pip install -c ../../constraints/shared.txt openvino onnxruntime
 fi
 
 # Create necessary directories
@@ -87,7 +96,12 @@ echo "⚙️ Setting up configuration..."
 # Check for existing AutoBot configuration or use defaults
 REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
 REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
-REDIS_DB="${AUTOBOT_REDIS_DB:-0}"
+# AUTOBOT_REDIS_DB_MAIN: 11 of the 12 code_analysis Redis call sites default
+# to get_async_redis_client() with no `database` arg, which resolves to
+# "main" (autobot_shared/redis_client.py) -- so the installer's fallback
+# tracks that default rather than the retired, unset bare-name variable
+# this replaced (#15577).
+REDIS_DB="${AUTOBOT_REDIS_DB_MAIN:-0}"
 
 cat > .env << EOF
 # AutoBot Code Analysis Suite Configuration
@@ -126,7 +140,7 @@ import redis
 import os
 redis_host = os.getenv('AUTOBOT_REDIS_HOST', 'localhost')
 redis_port = int(os.getenv('AUTOBOT_REDIS_PORT', '6379'))
-redis_db = int(os.getenv('AUTOBOT_REDIS_DB', '0'))
+redis_db = int(os.getenv('AUTOBOT_REDIS_DB_MAIN', '0'))
 r = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
 r.ping()
 print('✅ Redis connection successful')

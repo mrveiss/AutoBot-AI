@@ -73,7 +73,10 @@ async def probe_llc(request: Request | None = None) -> ComponentHealth:
         return ComponentHealth(
             name=_PROBE_NAME,
             status="down",
-            detail=f"probe error: {type(exc).__name__}: {exc}",
+            # #14126: type only. `/api/system/health` is public, so an
+            # exception message here is reachable unauthenticated; the full
+            # message is logged instead. Matches every other probe.
+            detail=f"probe error: {type(exc).__name__}",
             latency_ms=round(latency_ms, 1),
         )
 

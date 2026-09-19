@@ -167,6 +167,73 @@ for _m in [
 ]:
     _stub(_m)
 
+# #16025: role_registry.seed_default_roles() now filters each DEFAULT_ROLES
+# entry through `Role.__table__.columns` before writing it. `__table__` is a
+# dunder-shaped name Mock's __getattr__ refuses to auto-vivify (it raises
+# AttributeError rather than fake a magic method it does not implement), so
+# a bare MagicMock cannot even reach that attribute, let alone stand in for
+# it. Set `__table__` directly -- a plain attribute assignment, not a nested
+# get-then-set through the Mock -- to a real object carrying the real Role
+# model's column names, so the filter is exercised against something that
+# behaves like the real table would. Registered under sys.modules (not just
+# a local variable) so test_role_registry.py's own, separately-built Role
+# stub -- it evicts this whole models.database stub and builds a fresh one,
+# see its module docstring -- can reuse the same column set instead of a
+# second literal that can drift from this one.
+_role_columns_mod = types.ModuleType("_role_cols")
+_role_columns_mod.COLUMNS = frozenset(
+    {
+        "id",
+        "name",
+        "display_name",
+        "sync_type",
+        "source_paths",
+        "target_path",
+        "systemd_service",
+        "auto_restart",
+        "health_check_port",
+        "health_check_path",
+        "pre_sync_cmd",
+        "post_sync_cmd",
+        "required",
+        "degraded_without",
+        "ansible_playbook",
+        "created_at",
+        "updated_at",
+    }
+)
+sys.modules["_role_cols"] = _role_columns_mod
+sys.modules["models.database"].Role.__table__ = types.SimpleNamespace(columns=_role_columns_mod.COLUMNS)
+
+# #13139: models/schemas_secrets.py must be REAL, not stubbed. It carries
+# response_model classes, and FastAPI rejects a MagicMock as a response field
+# ("Invalid args for response field!") the moment a test builds the app. It
+# imports only pydantic, so loading it by path is safe -- this deliberately
+# bypasses models/__init__.py, which is what the stubs above exist to avoid.
+_schemas_secrets_path = Path(__file__).parent / "models" / "schemas_secrets.py"
+if not _schemas_secrets_path.is_file():
+    raise RuntimeError("conftest: models/schemas_secrets.py is named here but does not exist")
+import importlib.util as _ss_importlib_util  # noqa: E402  -- the shared alias is bound later
+
+_ss_spec = _ss_importlib_util.spec_from_file_location("models.schemas_secrets", _schemas_secrets_path)
+_ss_mod = _ss_importlib_util.module_from_spec(_ss_spec)
+_ss_spec.loader.exec_module(_ss_mod)
+sys.modules["models.schemas_secrets"] = _ss_mod
+setattr(sys.modules["models"], "schemas_secrets", _ss_mod)
+
+# #16281: models/npu_schemas.py and models/gpu_schemas.py are REAL for the same
+# reason -- services/node_gpu.py builds pydantic responses from them, and a
+# MagicMock model validates nothing. Both import only pydantic; gpu_schemas also
+# imports npu_schemas, hence the order and the sys.modules entry before exec.
+for _schema in ("npu_schemas", "gpu_schemas"):
+    _schema_path = Path(__file__).parent / "models" / f"{_schema}.py"
+    _schema_spec = _ss_importlib_util.spec_from_file_location(f"models.{_schema}", _schema_path)
+    _schema_mod = _ss_importlib_util.module_from_spec(_schema_spec)
+    sys.modules[f"models.{_schema}"] = _schema_mod
+    _schema_spec.loader.exec_module(_schema_mod)
+    setattr(sys.modules["models"], _schema, _schema_mod)
+
+
 # ── services ──────────────────────────────────────────────────────────────────
 # The services.* modules api/code_sync.py and api/setup_wizard.py import are
 # AST-derived from their sources (#11575, #11794) — a hand-maintained list rots
@@ -202,11 +269,23 @@ _EXTRA_SERVICE_MODULES = (
     "services.encryption",
     "services.reconciler",
     "services.replication",
+    "services.replication_jobs",
     "services.role_registry",
     "services.service_categorizer",
     "services.service_orchestrator",
+    "services.service_restart",
     "services.tls_credentials",
     "services.vnc_credentials",
+    # #16310: api/full_tree_drift.py imports this at module scope, and
+    # api/code_sync.py imports api/full_tree_drift.py unconditionally at the
+    # bottom of the file to register its route -- so every test collecting
+    # api.code_sync needs services.full_tree_drift resolvable, even though the
+    # AST scan above (which only reads code_sync.py/setup_wizard.py directly)
+    # never sees it. Its own real coroutines are exercised by
+    # tests/services/full_tree_drift_test.py's self-contained real-load
+    # (#16310 review round 10: moved out of services/ itself, see that
+    # file's module docstring), not here.
+    "services.full_tree_drift",
 )
 
 # Parent package first so each child stub binds onto it (see _stub docstring).
@@ -243,10 +322,32 @@ for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_M
 #                      exactly the regression the counterweight test exists
 #                      to catch. Needs ``ansible_utils`` (also real-loaded,
 #                      above) for ``_extract_failure_summary``.
+#   journal_fetch      #15620 — ``fetch_service_journal()`` is awaited by
+#                      ``api/services.py``, and a bare MagicMock is not
+#                      awaitable. It also exports ``JournalFetchTimeout``,
+#                      which that module names in an ``except`` clause — and
+#                      ``except <MagicMock>`` raises TypeError rather than
+#                      catching, so the stub would turn the very distinction
+#                      this module exists to draw back into a crash.
+#   process_divergence #15323 — ``compute_process_divergence()`` is awaited by
+#                      ``api/code_sync.py``; a bare MagicMock is not
+#                      awaitable, and this module's whole job is to never
+#                      collapse "cannot tell" into "healthy" — a stub cannot
+#                      exercise that guarantee.
 #
-# All seven are dependency-light (stdlib plus at most yaml/httpx/autobot_shared),
-# which is the bar for being loadable here at all.
+# All of them are dependency-light (stdlib plus at most yaml/httpx/autobot_shared),
+# which is the bar for being loadable here at all. Not a count: the list has
+# outgrown "eight" twice already (#15462), and a stale number reads as a rule.
 import importlib.util as _importlib_util  # noqa: E402
+
+# #16281: the SLM's top-level status vocabulary (#15495), loaded by path. On
+# pytest.ini's pythonpath `autobot_shared/` itself is a root, so a bare
+# `import status_enums` finds autobot_shared/status_enums.py -- a different
+# module with no NodeStatus. Production resolves the SLM's own; so does the suite.
+_se_spec = _importlib_util.spec_from_file_location("status_enums", Path(__file__).parent / "status_enums.py")
+_se_mod = _importlib_util.module_from_spec(_se_spec)
+_se_spec.loader.exec_module(_se_mod)
+sys.modules["status_enums"] = _se_mod
 
 _REAL_SERVICE_MODULES = (
     "ssh_utils",
@@ -257,7 +358,37 @@ _REAL_SERVICE_MODULES = (
     "service_extra_data",
     "ansible_utils",
     "provision_progress",
+    "process_divergence",
+    "journal_fetch",
+    # #15462: has a co-located test that imports it, so it must be real-loaded
+    # here or it resolves to a MagicMock depending on shard order
+    # (tests/test_real_service_modules_14307.py enforces this).
+    "frontend_bundle_health",
+    # #15462: build/publish logic extracted out of api/code_sync.py (grandfathered
+    # line-count ceiling, #14236) into this module; its own tests import it
+    # directly and need the real coroutines, not MagicMocks.
+    "slm_frontend_build",
+    # #16040: the permission decision, including API-key authority. It is pure
+    # (stdlib + autobot_shared), so its co-located test exercises the real
+    # decision without importing services/auth.py.
+    "api_key_authority",
+    # #16281: its co-located test drives the real publish/retract logic.
+    "node_gpu",
 )
+
+# The placeholder a failed real-load falls back to (#15563). Loaded by path for
+# the same reason the modules below are: `autobot-slm-backend` is deliberately
+# NOT on pytest.ini's `pythonpath` (#13084 — `api`/`services`/`models` collide
+# with autobot-backend), so there is no import that reaches it. Kept in its own
+# file rather than inline here so the contract test can exercise the SAME object
+# without re-executing this conftest's global stub installation.
+_placeholder_path = Path(__file__).parent / "tests" / "realload_placeholder.py"
+if not _placeholder_path.is_file():
+    raise RuntimeError("conftest: tests/realload_placeholder.py is named here but does not exist")
+_ph_spec = _importlib_util.spec_from_file_location("_realload_placeholder", _placeholder_path)
+_ph_mod = _importlib_util.module_from_spec(_ph_spec)
+_ph_spec.loader.exec_module(_ph_mod)
+_unavailable_module = _ph_mod.unavailable_module
 
 for _name in _REAL_SERVICE_MODULES:
     _path = Path(__file__).parent / "services" / f"{_name}.py"
@@ -270,20 +401,37 @@ for _name in _REAL_SERVICE_MODULES:
         _spec.loader.exec_module(_mod)
     except ImportError as _exc:
         # A third-party dependency this module needs is absent here (#14326).
-        # Leave the name ABSENT rather than stubbed: a MagicMock is what
-        # #14307 removed, because it iterates as empty and turns a missing
-        # dependency into a silently wrong result instead of an error.
+        # Bind a placeholder that raises ImportError naming BOTH this module and
+        # that dependency on any attribute access.
         #
-        # Absent means a test that genuinely needs the module fails with a
-        # plain ImportError naming it, while unrelated tests in the same
-        # directory still run. Eager real-loading otherwise imposes every
-        # listed module's dependencies on every environment that loads this
-        # conftest — the deliberately-minimal migration gate hit exactly that,
-        # first with `yaml` (inventory_builder) and then `aiohttp`
-        # (a2a_card_fetcher), taking down tests unrelated to either.
-        sys.modules.pop(f"services.{_name}", None)
-        print(f"conftest: services.{_name} not real-loaded ({_exc}) — left absent, not stubbed")
-        continue
+        # Not a MagicMock (#14307): it is truthy and iterates empty, so a missing
+        # dependency becomes a silently wrong result instead of an error.
+        #
+        # Not a deletion either (#15563). Deleting the name does NOT produce the
+        # "plain ImportError naming it" this comment used to promise: `services`
+        # is itself a MagicMock(unsafe=True) for most of the suite and fabricates
+        # the attribute on demand, so `patch("services.x.y")` and
+        # `getattr(services, "x")` hand back an auto-created mock — the #14307
+        # trap again. Where the parent has been swapped for a real-path package
+        # (tests/services/conftest.py) the deletion degrades instead into
+        # "module 'services' has no attribute 'x'. Did you mean: 'x_test'?",
+        # which names the stub package and points at the co-located test file
+        # rather than at the missing dependency; two separate investigations read
+        # that hint and filed the wrong cause.
+        #
+        # The placeholder keeps the original tolerance: only a test that actually
+        # touches the module fails, and it fails naming the dependency, while
+        # unrelated tests in the same directory still run. Eager real-loading
+        # otherwise imposes every listed module's dependencies on every
+        # environment that loads this conftest — the deliberately-minimal
+        # migration gate hit exactly that, first with `yaml` (inventory_builder)
+        # and then `aiohttp` (a2a_card_fetcher), taking down tests unrelated to
+        # either.
+        _mod = _unavailable_module(f"services.{_name}", _exc)
+        sys.modules[f"services.{_name}"] = _mod
+        print(f"conftest: services.{_name} not real-loaded ({_exc}) — bound as an unavailable-module placeholder")
+    # Bound for BOTH paths: the placeholder has to be reachable through the
+    # parent, or the MagicMock parent fabricates a child mock over it.
     setattr(sys.modules["services"], _name, _mod)
 
 # ── python-multipart ─────────────────────────────────────────────────────────
@@ -292,11 +440,24 @@ for _name in _REAL_SERVICE_MODULES:
 # at route-registration time (import time for the router module).  Stub it
 # so that code_source_test.py can import code_source.py without the package
 # being installed in the dev environment.  Issue: #3525
-_pm_mod = types.ModuleType("python_multipart")
-_pm_mod.__version__ = "9.9.99"  # type: ignore[attr-defined]  # high sentinel — immune to future FastAPI threshold bumps
-# Legacy `multipart` shim re-exports `from python_multipart import __all__` (#10023).
-_pm_mod.__all__ = []  # type: ignore[attr-defined]
-sys.modules.setdefault("python_multipart", _pm_mod)
+#
+# #15531: probe for the real package FIRST. This stub carries only
+# ``__version__``/``__all__`` — it has no ``.multipart`` submodule — so
+# inserting it where the real ``python_multipart`` IS installed shadows the
+# working package for the whole session and breaks starlette's
+# ``from python_multipart.multipart import parse_options_header``. ``setdefault``
+# does not protect against that: nothing has imported the real package this
+# early, so the key is absent and the crippled stub always won. Only the import
+# probe can tell "absent" from "not yet imported".
+try:
+    import python_multipart as _real_python_multipart  # noqa: F401
+except Exception:  # noqa: BLE001 — any import failure means "genuinely absent"
+    _pm_mod = types.ModuleType("python_multipart")
+    # High sentinel version, immune to future FastAPI threshold bumps.
+    _pm_mod.__version__ = "9.9.99"  # type: ignore[attr-defined]
+    # Legacy `multipart` shim re-exports `from python_multipart import __all__` (#10023).
+    _pm_mod.__all__ = []  # type: ignore[attr-defined]
+    sys.modules.setdefault("python_multipart", _pm_mod)
 
 # ── user_management ───────────────────────────────────────────────────────────
 for _m in [

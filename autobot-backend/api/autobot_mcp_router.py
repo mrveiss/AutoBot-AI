@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.proxy_utils import get_client_ip
-from mcp.autobot_server import AutoBotMCPServer
+from mcp_server.autobot_server import AutoBotMCPServer
 
 logger = get_logger(__name__)
 

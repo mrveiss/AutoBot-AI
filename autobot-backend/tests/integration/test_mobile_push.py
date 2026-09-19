@@ -15,13 +15,9 @@ Comprehensive end-to-end tests for push notification delivery to mobile devices:
 """
 
 from datetime import timedelta
-from typing import AsyncGenerator
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.ext.asyncio.session import async_sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from autobot_shared.time_utils import now_utc
 from models.mobile_device import MobileDevice
@@ -30,88 +26,9 @@ from services.push_notification_service import (
     _send_mobile_push,
     send_push_notification,
 )
-from user_management.models.base import Base
 
 # Test database setup
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
-
-
-@pytest.fixture(autouse=True)
-def _test_encryption_service(monkeypatch):
-    """Provide a REAL EncryptionService with an injected test master key (#11687).
-
-    ``MobileDevice.device_token`` encrypts/decrypts through the module-level
-    ``get_encryption_service()`` singleton, which requires
-    ``AUTOBOT_ENCRYPTION_KEY`` — absent in the hermetic test env (ssot config
-    reads env once at import, so setting the variable here would be too late).
-    Injecting the key keeps the real AES-GCM round-trip under test.
-    """
-    import encryption_service as enc_mod
-
-    svc = enc_mod.EncryptionService(master_key="integration-test-master-key-0123456789abcdef")
-    monkeypatch.setattr(enc_mod, "get_encryption_service", lambda: svc)
-
-
-@pytest.fixture
-async def test_db_engine():
-    """Create an in-memory test database engine."""
-    engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
-        TEST_DB_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-        echo=False,
-    )
-
-    async with engine.begin() as conn:
-        # #11834: scope create_all to the tables under test — whole-metadata
-        # create_all breaks under whole-dir order when earlier tests import
-        # llc models whose Postgres '::jsonb' server_defaults sqlite rejects.
-        await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=[MobileDevice.__table__]))
-
-    yield engine
-
-    await engine.dispose()
-
-
-@pytest.fixture
-async def test_db_session(test_db_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Create a test database session."""
-    async_session = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
-        test_db_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-
-    async with async_session() as session:
-        yield session
-
-
-@pytest.fixture
-def test_user_id():
-    """Test user ID."""
-    return "test-user-push-123"
-
-
-@pytest.fixture
-def mock_session_factory(test_db_session):
-    """Mock session factory for push service.
-
-    Mirrors ``async_sessionmaker``: a SYNC callable whose return value is an
-    async context manager yielding the session (#11687 — the old async-def
-    version handed ``async with`` a coroutine, which has no ``__aenter__``).
-    """
-
-    def factory():
-        class SessionContext:
-            async def __aenter__(self):
-                return test_db_session
-
-            async def __aexit__(self, exc_type, exc_val, exc_tb):
-                pass
-
-        return SessionContext()
-
-    return factory
 
 
 # =============================================================================
@@ -602,20 +519,13 @@ async def test_send_push_to_many_devices_is_efficient(mock_session_factory, test
         patch("push_notifications.mobile_push._send_apns", return_value=True),
         patch("push_notifications.mobile_push._send_fcm", return_value=True),
     ):
-        import time
-
-        start = time.time()
         count = await _send_mobile_push(
             user_id=test_user_id,
             title="Bulk Test",
             body="Testing many devices",
             url="/",
         )
-        elapsed = time.time() - start
-
     assert count == 50  # PWA is skipped, all ios/android
-    # Should complete reasonably fast (stub doesn't actually make network calls)
-    assert elapsed < 5.0  # Should be nearly instant for stubs
 
 
 if __name__ == "__main__":

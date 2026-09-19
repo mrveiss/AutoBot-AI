@@ -66,7 +66,7 @@ The AutoBot Memory Graph is an enhanced memory system that provides graph-based 
 
 ### 1.2 Technology Stack
 
-- **Storage Backend**: Redis Stack 7.4 on VM3 (<database-ip>:6379)
+- **Storage Backend**: Redis Stack 7.4 on the database role's host (<database-ip>:6379)
 - **Database**: DB 9 (dedicated for Memory Graph)
 - **Redis Modules**:
   - **RedisGraph**: Native graph operations for entity relationships

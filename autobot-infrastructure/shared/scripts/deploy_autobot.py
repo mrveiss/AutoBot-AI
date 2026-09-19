@@ -439,7 +439,7 @@ class AutoBotDeployer:
             k8s_dir.mkdir(exist_ok=True)
 
             # Create sample namespace manifest
-            namespace_manifest = """
+            namespace_manifest = f"""
 apiVersion: v1
 kind: Namespace
 metadata:

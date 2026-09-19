@@ -153,6 +153,38 @@
   no_log: true
   tags: ['backend', 'config']
 
+# #16299: backend_secret_key's own role default (below in this file) was the
+# guessable literal "change-me-in-production". slm_manager generates a real one
+# once and persists it here, the same #10400 pattern as SLM_SECRET_KEY above. A
+# backend deployed standalone, with no slm-secrets.env ever reaching it, keeps
+# its own role default as a documented fallback.
+- name: "Backend | Read AUTOBOT_BACKEND_SECRET_KEY from slm-secrets.env (#16299)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_BACKEND_SECRET_KEY=\K.*'
+      /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _backend_secret_key_read
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags: ['backend', 'config']
+
+# #16299 review: guarded to replace ONLY the known shipped default, not
+# whatever backend_secret_key already resolved to here -- backend commonly
+# runs on a different host/play than slm_manager (the whole reason this reads
+# from a file instead of a live fact), so an operator who set a real value in
+# THIS role's own inventory (host_vars/group_vars for the backend host) must
+# not have it silently replaced by slm_manager's generated one just because
+# the file happens to carry a value. Only the literal default is eligible.
+- name: "Backend | Align backend_secret_key with AUTOBOT_BACKEND_SECRET_KEY when present (#16299)"
+  ansible.builtin.set_fact:
+    backend_secret_key: "{{ _backend_secret_key_read.stdout | trim }}"
+  when:
+    - (_backend_secret_key_read.stdout | default('') | trim) | length > 0
+    - backend_secret_key == 'change-me-in-production'
+  no_log: true
+  tags: ['backend', 'config']
+
 # #11507: Derive AUTOBOT_INTERNAL_API_KEY from /etc/autobot/slm-secrets.env (the
 # single source of truth — the SLM SystemSecret; slm_manager writes it there) and
 # set autobot_internal_api_key BEFORE rendering EITHER env file. Previously the
@@ -208,6 +240,24 @@
   ansible.builtin.set_fact:
     backend_chromadb_auth_token: "{{ _chromadb_auth_token_read }}"
   when: (_chromadb_auth_token_read | default('') | trim) | length > 0
+  no_log: true
+  tags: ['backend', 'config']
+
+# #16627 (P1b of #13568): the backend authenticates to Redis as `default` with the
+# SLM-generated password while the server stays nopass. Adopted only when no
+# password is set, so a password a server may already enforce is never replaced,
+# and always together with the username (a password alone is refused by nopass).
+- name: "Backend | Read the SLM-generated Redis credential (#16627)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/read_redis_password.yml
+  tags: ['backend', 'config']
+
+- name: "Backend | Adopt the SLM-generated Redis credential when none is set (#16627)"
+  ansible.builtin.set_fact:
+    backend_redis_password: "{{ _redis_password_read }}"
+    backend_redis_username: "{{ backend_redis_username | default('', true) or _redis_username_read }}"
+  when:
+    - (_redis_password_read | default('') | trim) | length > 0
+    - (backend_redis_password | default('') | trim) | length == 0
   no_log: true
   tags: ['backend', 'config']
 
@@ -552,6 +602,28 @@
       - restart celery
     tags: ['backend', 'deploy']
 
+  # #16310: files deleted from source pile up forever otherwise -- the
+  # synchronize task above never deletes (no `delete: true`), by design, to
+  # protect host state it cannot enumerate itself.
+  - name: "Backend | Delete files removed from source (#16310)"
+    ansible.builtin.include_tasks: ../../_shared/tasks/sync_deletions.yml
+    vars:
+      sync_deletions_label: "Backend"
+      sync_deletions_source_dir: "{{ code_source_dir }}/autobot-backend"
+      sync_deletions_target_dir: "{{ backend_code_dir }}"
+      sync_deletions_owner: "{{ backend_user }}"
+    tags: ['backend', 'deploy']
+
+  # #16310 AC4, moved to its own file (review round 6, reachability): the
+  # update path never runs this main.yml (see npu_workers_cleanup.yml's own
+  # header), so it must also be reachable from PLAY 2 via
+  # `include_role: {name: backend, tasks_from: npu_workers_cleanup}`. This
+  # include covers the provisioning path (site.yml, provision-fleet-roles.yml
+  # Phase 4a run main.yml in full).
+  - name: "Backend | Clean up legacy npu_workers.yaml duplicate (#16310)"
+    ansible.builtin.include_tasks: npu_workers_cleanup.yml
+    tags: ['backend', 'deploy']
+
   - name: "Backend | Fix ownership of backend code dir after sync"
     ansible.builtin.file:
       path: "{{ backend_code_dir }}"
@@ -643,7 +715,13 @@
   # destination is already a symlink pointing elsewhere (e.g. old partial-path symlinks).
   - name: "Backend | Symlink embedded autobot_shared to standalone canonical copy (#10020)"
     ansible.builtin.file:
-      src: "{{ backend_shared_standalone_dir }}"
+      # #13539/B4: was "{{ backend_shared_standalone_dir }}" (absolute,
+      # /opt/autobot/autobot_shared) -- escapes to the live tree under a
+      # relocated deploy root. backend_install_dir and
+      # backend_shared_standalone_dir are always siblings under the same
+      # root, so the relative form resolves identically today and stays
+      # correct under a relocation.
+      src: ../autobot_shared
       dest: "{{ backend_install_dir }}/autobot_shared"
       state: link
       force: true
@@ -699,6 +777,7 @@
         - "--exclude=logs"
         - "--exclude=/config/"
         - "--exclude=/.deployed_commit"
+        - "--exclude=/.autobot_sync_deletions_commit"
         - "--exclude=/ansible/enroll.yml"
     tags: ['backend', 'deploy']
 
@@ -806,7 +885,7 @@
 
   - name: "Backend | Enforce venv target Python version (env-drift fix)"
     ansible.builtin.include_role:
-      name: python314
+      name: python_interpreter
       tasks_from: ensure_venv_version
     vars:
       venv_path: "{{ backend_code_dir }}/venv"
@@ -831,6 +910,11 @@
       name: pip
       state: latest
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: without this, pip falls back to shelling out to the
+      # standalone `virtualenv` executable, absent from these hosts --
+      # matches the interpreter "Create Python 3.14 virtual environment via
+      # deadsnakes" above already targets.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -841,6 +925,8 @@
       name: "{{ backend_install_dir }}/autobot_shared"
       editable: true
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -875,6 +961,8 @@
     ansible.builtin.pip:
       requirements: "/tmp/requirements-filtered.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -913,10 +1001,45 @@
     ansible.builtin.pip:
       requirements: "{{ code_source_dir }}/requirements-gpu-torch.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
     timeout: 1800  # CUDA-built torch is large
+    when: backend_gpu_available | default(false) | bool
+
+  # Install GPU-built faiss whenever a GPU is present, the same gate as CUDA
+  # torch above and independent of vLLM (#15163: gpu_vector_search.py's
+  # GPU-accelerated search has been unreachable since #387, because every
+  # automated install path only ever provided faiss-cpu).
+  #
+  # Unlike torch (one package name, CPU vs CUDA build selected by index-url --
+  # see the Dockerfile's --index-url .../whl/cpu), faiss-cpu and faiss-gpu are
+  # two DIFFERENT package names that both provide the top-level `faiss`
+  # module. Installing faiss-gpu on top of an existing faiss-cpu without
+  # removing the latter first risks two packages' files fighting over the
+  # same import -- so faiss-cpu is explicitly uninstalled first.
+  - name: "Backend | Remove CPU-only faiss before installing the GPU build (#15163)"
+    ansible.builtin.pip:
+      name: faiss-cpu
+      state: absent
+      virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
+    become_user: "{{ backend_user }}"
+    when: backend_gpu_available | default(false) | bool
+
+  - name: "Backend | Install GPU faiss requirements (requirements-gpu-faiss.txt) (#15163)"
+    ansible.builtin.pip:
+      requirements: "{{ code_source_dir }}/requirements-gpu-faiss.txt"
+      virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
+    become_user: "{{ backend_user }}"
+    environment:
+      PIP_DEFAULT_TIMEOUT: "120"
+    timeout: 1800  # GPU-built faiss is large
     when: backend_gpu_available | default(false) | bool
 
   # Install vLLM only when vLLM is enabled AND a GPU is present. vLLM remains
@@ -927,6 +1050,8 @@
     ansible.builtin.pip:
       requirements: "{{ code_source_dir }}/requirements-gpu.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -941,6 +1066,7 @@
   - name: "Backend | Resolve GPU/CUDA-torch deploy decision (#15162)"
     ansible.builtin.set_fact:
       backend_cuda_torch_installed: "{{ backend_gpu_available | default(false) | bool }}"
+      backend_faiss_gpu_installed: "{{ backend_gpu_available | default(false) | bool }}"
       backend_vllm_installed: >-
         {{ (backend_vllm_enabled | bool) and
            (backend_gpu_available | default(false) | bool) }}
@@ -958,6 +1084,8 @@
         GPU deploy decision: gpu_available={{ backend_gpu_available | default(false) }}
         (backend_has_gpu={{ backend_has_gpu }}) ->
         cuda_torch={{ 'installed' if backend_cuda_torch_installed
+          else 'skipped (' ~ backend_gpu_skip_reason ~ ')' }};
+        faiss_gpu={{ 'installed' if backend_faiss_gpu_installed
           else 'skipped (' ~ backend_gpu_skip_reason ~ ')' }};
         vllm_enabled={{ backend_vllm_enabled | bool }} ->
         vllm={{ 'installed' if backend_vllm_installed
@@ -979,6 +1107,8 @@
       virtualenv: "{{ backend_code_dir }}/venv"
       state: forcereinstall
       extra_args: "--no-deps"
+      # #16641: see "Upgrade pip" above.
+      virtualenv_command: "python3.14 -m venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
@@ -1025,43 +1155,26 @@
     tags: ['backend', 'postgresql']
 
   # ==========================================================
-  # TLS Certificate Generation (Issue #892)
+  # TLS Certificate Generation (Issue #892, consolidated #16020)
   # ==========================================================
-  - name: Create TLS certificate directory
-    ansible.builtin.file:
-      path: /etc/autobot/certs
-      state: directory
-      mode: "0755"
-      owner: root
-      group: root
+  - name: "Backend | Ensure the shared node TLS keypair exists (#16020)"
+    ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
+    tags: ['backend', 'tls']
 
-  - name: Check if TLS certificate exists
-    ansible.builtin.stat:
-      path: /etc/autobot/certs/server-cert.pem
-    register: backend_cert_stat
-
-  - name: Check certificate expiry
-    ansible.builtin.command:
-      cmd: openssl x509 -checkend 604800 -noout -in /etc/autobot/certs/server-cert.pem
-    register: backend_cert_valid
-    changed_when: false
-    # (#2872) Intentional: openssl exits rc=1 when cert expires within the
-    # check window — that is a valid "needs renewal" signal, not an error.
-    failed_when: false
-    when: backend_cert_stat.stat.exists
-
-  - name: Generate self-signed TLS certificate
-    ansible.builtin.command:
-      cmd: >-
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048
-        -keyout /etc/autobot/certs/server-key.pem
-        -out /etc/autobot/certs/server-cert.pem
-        -subj '/C=US/ST=State/L=City/O=AutoBot/CN=autobot-backend'
-    when: >-
-      not backend_cert_stat.stat.exists
-      or (backend_cert_valid.rc | default(1)) != 0
+  # #16020: the shared task has no restart handler of its own -- it also
+  # serves nginx, Redis and PostgreSQL, none of which restart the same way.
+  # Reuses the shared task's own registered vars (the exact condition it used
+  # to decide whether to (re)generate) rather than re-deriving the check, so
+  # backend keeps restarting on a cert rotation as it did before consolidation.
+  - name: "Backend | Flag a cert rotation for the restart handler"
+    ansible.builtin.set_fact:
+      _backend_cert_rotated: "{{ not autobot_node_cert_stat.stat.exists or (autobot_node_cert_valid.rc | default(1)) != 0 }}"
+    changed_when: _backend_cert_rotated
     notify: restart backend
 
+  # #16020: EXISTENCE is consolidated above; ownership stays here, since the
+  # backend process reads the key as backend_user, not root like the shared
+  # task's other consumers (nginx, Redis, PostgreSQL).
   - name: Set certificate key permissions
     ansible.builtin.file:
       path: "{{ item }}"
@@ -1136,7 +1249,8 @@
   # backend_install_dir which diverges when playbooks override
   # backend_code_dir (e.g. setup-user-backend.yml sets it to
   # backend_install_dir/autobot-backend).  The path expression here
-  # mirrors the one used in autobot-backend.service.j2 line 15.
+  # mirrors the `EnvironmentFile=` directive in autobot-backend.service.j2
+  # (named, not line-numbered -- it had moved from :15 to :62; #15877).
   - name: "Backend | Deploy .env to code dir (matches systemd EnvironmentFile) (#2824)"
     ansible.builtin.template:
       src: backend.env.j2
@@ -1344,12 +1458,70 @@
   when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['backend', 'nginx']
 
+# #16979 (PR review): the render above only touches sites-available. This
+# role's own main.yml always runs render+enable together (no `tasks_from`
+# self-update seam splits them -- see repo_tests/nginx_sites_enabled_link_
+# enforced_16979_test.py), so this was never the *reachability* gap #16979
+# fixed elsewhere. But the "Enable vhost" task below had no non-symlink
+# handling at all: a stale regular file at sites-enabled/autobot-backend.conf
+# would make `state: link` hard-fail a full re-provision, where the SLM/
+# frontend sites instead silently kept serving stale content. Same fix here
+# for consistency -- every render site behaves the same way.
+- name: "Backend nginx | Stat sites-enabled file to detect non-symlink (#16979)"
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/autobot-backend.conf
+  register: _backend_nginx_sites_enabled_stat
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['backend', 'nginx']
+
+# nginx loads every file under sites-enabled/, so a backup left there would
+# be served as a second site -- move it beside the sites-available/ backup
+# a re-render would leave (#16979 AC2, same reasoning as
+# roles/slm_manager/tasks/nginx_site.yml).
+- name: "Backend nginx | Back up non-symlink sites-enabled file before replacing it (#16979)"
+  ansible.builtin.command:
+    cmd: >-
+      mv /etc/nginx/sites-enabled/autobot-backend.conf
+      /etc/nginx/sites-available/autobot-backend.conf.enabled-backup.{{
+      _backend_nginx_sites_enabled_stat.stat.mtime | int }}
+  when:
+    - not (slm_colocated_frontend | default(false) | bool)
+    - _backend_nginx_sites_enabled_stat.stat.exists
+    # order-independent (#16979 review): default(false) instead of relying
+    # on the list's short-circuit order.
+    - not (_backend_nginx_sites_enabled_stat.stat.islnk | default(false))
+  changed_when: true
+  tags: ['backend', 'nginx']
+
 - name: "Backend nginx | Enable vhost (symlink)"
   ansible.builtin.file:
     src: /etc/nginx/sites-available/autobot-backend.conf
     dest: /etc/nginx/sites-enabled/autobot-backend.conf
     state: link
   notify: reload nginx backend
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Stat sites-enabled after linking (#16979)"
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/autobot-backend.conf
+  register: _backend_nginx_sites_enabled_check
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['backend', 'nginx']
+
+# AC3-equivalent (#16979 review): fail loudly rather than let nginx quietly
+# serve the wrong file.
+- name: "Backend nginx | Assert sites-enabled resolves to the rendered site (#16979)"
+  ansible.builtin.assert:
+    that:
+      - _backend_nginx_sites_enabled_check.stat.exists
+      - _backend_nginx_sites_enabled_check.stat.islnk
+      - _backend_nginx_sites_enabled_check.stat.lnk_source == '/etc/nginx/sites-available/autobot-backend.conf'
+    fail_msg: >-
+      /etc/nginx/sites-enabled/autobot-backend.conf is not a symlink resolving to
+      /etc/nginx/sites-available/autobot-backend.conf -- nginx is not serving the
+      rendered backend site config (#16979).
+    success_msg: "sites-enabled/autobot-backend.conf resolves to the rendered site config."
   when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['backend', 'nginx']
 

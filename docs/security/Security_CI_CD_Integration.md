@@ -9,8 +9,8 @@ AutoBot now includes comprehensive automated security scanning integrated into b
 ### 1. GitHub Actions Workflow (`.github/workflows/security.yml`)
 
 Comprehensive security scanning workflow that runs on:
-- **Push events**: `main`, `dev`, `Dev_new_gui` branches
-- **Pull requests**: targeting `main` branch
+- **Push events**: `release`, `dev`, `main` branches
+- **Pull requests**: targeting `release` branch
 - **Scheduled**: Daily at 2 AM UTC
 
 #### Workflow Jobs

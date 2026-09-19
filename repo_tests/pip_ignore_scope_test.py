@@ -34,8 +34,9 @@ from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _CONFIG = _REPO_ROOT / ".github" / "dependabot.yml"
 
 # `openai>=2.53.0`, `openai==2.53.0  # note`, `pkg[extra]>=1 ; marker`
@@ -78,7 +79,7 @@ def _resolve_includes(path: Path, seen: set[Path]) -> set[Path]:
     return seen
 
 
-def _manifests_of(directory: str) -> list[Path]:
+def _manifests_of(directory: str, root: Path = _REPO_ROOT) -> list[Path]:
     """The dependency manifests a pip block owns directly.
 
     `pyproject.toml` counts: dependabot's pip ecosystem updates it as readily as
@@ -86,8 +87,13 @@ def _manifests_of(directory: str) -> list[Path]:
     pin from there. Modelling only `requirements*.txt` under-approximated what a
     block reaches, and an under-approximating guard reports clean rather than
     reporting less (#14733).
+
+    `root` defaults to this repository and is a parameter only so the sibling
+    guard ``dependabot_requirements_coverage_test.py`` can drive the same
+    resolution against a synthetic tree — one definition of "what a block
+    reaches", not two (#14562).
     """
-    base = _REPO_ROOT / directory.lstrip("/")
+    base = root / directory.lstrip("/")
     if not base.is_dir():
         return []
     manifests = sorted(base.glob("requirements*.txt"))
@@ -97,17 +103,24 @@ def _manifests_of(directory: str) -> list[Path]:
     return manifests
 
 
-def _files_reachable_from(directory: str) -> set[Path]:
+def _files_reachable_from(directory: str, root: Path = _REPO_ROOT) -> set[Path]:
     """Every requirements file a block can edit, following ``-r``."""
     files: set[Path] = set()
-    for manifest in _manifests_of(directory):
+    for manifest in _manifests_of(directory, root):
         _resolve_includes(manifest, files)
     return files
 
 
 def _pyproject_specs(path: Path) -> list[str]:
     """Every PEP 508 requirement string a pyproject declares."""
-    import tomllib  # 3.11+; nothing this repo supports predates it
+    # #15177: matches the two siblings below rather than inventing a third
+    # approach. A `tomli` fallback is not available -- it is declared in no
+    # requirements or constraints file -- so skipping is the only option that
+    # does not raise ModuleNotFoundError on 3.10.
+    if sys.version_info < (3, 11):
+        pytest.skip("tomllib is 3.11+; no tomli fallback is declared in this repo")
+
+    import tomllib
 
     # Deliberately not wrapped in try/except. Returning [] on a parse error is
     # the same under-approximation this guard exists to close: a malformed

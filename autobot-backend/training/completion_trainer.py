@@ -31,7 +31,12 @@ logger = get_logger(__name__)
 # Exactly the shapes save_checkpoint() produces: the literal "best", or "v"
 # followed by its "%Y%m%d_%H%M%S" timestamp. Anything else — separators, "..",
 # absolute paths — is rejected before it reaches a filename.
-_VERSION_RE = re.compile(r"best|v\d{8}_\d{6}")
+# `[0-9]`, not `\d`: `\d` is Unicode-aware, so `v٢٠٢٦٠٨٣٠_١٢٣٤٥٦` (Arabic-Indic
+# digits) satisfied it while being nothing save_checkpoint() can write. Harmless
+# only because the iterdir() lookup below would find no such file -- but the
+# comment above claims this pattern is exactly what save_checkpoint() produces,
+# and it now is. strftime("%Y%m%d_%H%M%S") emits ASCII digits only (#15344).
+_VERSION_RE = re.compile(r"best|v[0-9]{8}_[0-9]{6}")
 
 
 class CompletionTrainer:

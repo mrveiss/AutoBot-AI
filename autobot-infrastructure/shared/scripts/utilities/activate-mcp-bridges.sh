@@ -31,7 +31,7 @@ echo -e "${BLUE}=== MCP Bridge Activation and Verification ===${NC}"
 echo ""
 
 # Change to project root
-cd "$(dirname "$0")/../.."
+cd "$SCRIPT_DIR/../../../.."
 PROJECT_ROOT=$(pwd)
 
 echo -e "${YELLOW}Project Root: ${PROJECT_ROOT}${NC}"
@@ -61,7 +61,7 @@ BRIDGES=(
 )
 
 for bridge in "${BRIDGES[@]}"; do
-    FILE="autobot-user-backend/api/${bridge}.py"
+    FILE="autobot-backend/api/${bridge}.py"
     if [ -f "$FILE" ]; then
         echo -e "  ${GREEN}✅ Found: ${FILE}${NC}"
     else
@@ -76,7 +76,7 @@ echo ""
 echo -e "${BLUE}Step 2: Verifying Router Registration${NC}"
 
 for bridge in "${BRIDGES[@]}"; do
-    if grep -q "${bridge}_router" backend/app_factory.py; then
+    if grep -q "${bridge}_router" autobot-backend/app_factory.py; then
         echo -e "  ${GREEN}✅ Router registered: ${bridge}${NC}"
     else
         echo -e "  ${RED}❌ Router not registered: ${bridge}${NC}"
@@ -90,7 +90,7 @@ echo ""
 echo -e "${BLUE}Step 3: Verifying MCP Registry Entries${NC}"
 
 for bridge in "${BRIDGES[@]}"; do
-    if grep -q "\"${bridge}\"" autobot-user-backend/api/mcp_registry.py; then
+    if grep -q "\"${bridge}\"" autobot-backend/api/mcp_registry.py; then
         echo -e "  ${GREEN}✅ Registry entry: ${bridge}${NC}"
     else
         echo -e "  ${RED}❌ Missing registry entry: ${bridge}${NC}"

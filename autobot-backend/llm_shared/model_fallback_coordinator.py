@@ -24,9 +24,9 @@ so ops dashboards can detect quota pressure before users notice.
 from __future__ import annotations
 
 import copy
-import os
 from typing import TYPE_CHECKING, Optional
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_MAX_FALLBACK_ATTEMPTS: int = int(os.environ.get("AUTOBOT_MAX_FALLBACK_ATTEMPTS", "3"))
+_MAX_FALLBACK_ATTEMPTS: int = env_int("AUTOBOT_MAX_FALLBACK_ATTEMPTS", 3)
 
 
 class ModelFallbackCoordinator:

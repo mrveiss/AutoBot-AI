@@ -1,12 +1,18 @@
 name: Docker Smoke Test
 
 on:
+  # #14054: the merge queue builds each entrant against base + the entries
+  # ahead of it and expects the required contexts to report against that
+  # temporary ref. A required context with no `merge_group:` trigger never
+  # fires, and the queue waits on it forever. Inert until the `merge_queue`
+  # ruleset rule is enabled -- this event does not exist before then.
+  merge_group:
   push:
     branches:
-      - Dev_new_gui
+      - main
   pull_request:
     branches:
-      - Dev_new_gui
+      - main
     # Required status check via branch protection (#6723) — must run on PR
   schedule:
     - cron: '0 10 * * 0'  # Every Sunday at 10 AM UTC
@@ -208,7 +214,7 @@ jobs:
 
       - name: Upload failure logs
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: docker-compose-logs
           path: failure-logs.txt

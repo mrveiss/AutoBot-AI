@@ -57,6 +57,10 @@ class Finding:
     severity: str
     identifier: str
     location: str
+    #: Other names the scanner gives the same advisory. An advisory database can
+    #: re-key an advisory (CVE -> PYSEC) with no new vulnerability behind it, so an
+    #: allowance has to match any of its names, not only the current primary one (#16222).
+    aliases: tuple[str, ...] = ()
 
 
 def _normalise(raw: str) -> str:
@@ -65,8 +69,19 @@ def _normalise(raw: str) -> str:
 
 
 def parse_bandit(payload: str) -> list[Finding]:
-    """bandit ``-f json``: ``results[]`` with ``issue_severity`` HIGH/MEDIUM/LOW."""
+    """bandit ``-f json``: ``results[]`` with ``issue_severity`` HIGH/MEDIUM/LOW.
+
+    A document without ``results`` is an ERROR, not a clean scan (#16185). Same
+    shape as the npm defect: bandit emits well-formed JSON when it fails, and
+    ``.get("results", [])`` turned that into zero findings and a PASS.
+    """
     document = json.loads(payload)
+    if not isinstance(document, dict) or "results" not in document:
+        raise ReportError(
+            "bandit produced no `results` key"
+            + (f" ({document.get('errors') or 'unrecognised document'})" if isinstance(document, dict) else "")
+            + ". A scan that did not run is not a scan that found nothing."
+        )
     return [
         Finding(
             severity=_normalise(result.get("issue_severity", "")),
@@ -85,12 +100,29 @@ def parse_pip_audit(payload: str) -> list[Finding]:
     severity the tool never emits would silently pass everything.
     """
     document = json.loads(payload)
-    dependencies = document.get("dependencies", document if isinstance(document, list) else [])
+    # A MAPPING with no `dependencies` is an error document, not an empty scan
+    # (#16185). The bare-list form is pip-audit's real alternative shape and stays
+    # valid. This matters more here than anywhere else in this module: the gate
+    # runs pip-audit at `--fail-on any` precisely because the tool emits no
+    # severity, and a FAILED scan cleared that gate at every setting.
+    if isinstance(document, dict) and "dependencies" not in document:
+        raise ReportError(
+            f"pip-audit produced no `dependencies` key ({document.get('error') or 'unrecognised document'}). "
+            "A scan that did not run is not a scan that found nothing -- and this gate runs at "
+            "--fail-on any, so a silent pass here means nothing was checked at all."
+        )
+    # PRE-EXISTING BUG, found by testing the branch this line claims to support:
+    # `document.get(...)` is called on `document`, so a BARE LIST -- the alternative
+    # shape the default is written for -- raised AttributeError instead of being
+    # used. The fallback lived inside the call it was meant to protect, so the list
+    # form has never worked.
+    dependencies = document if isinstance(document, list) else document.get("dependencies", [])
     return [
         Finding(
             severity="unknown",
             identifier=str(vuln.get("id", "?")),
             location=f"{dependency.get('name', '?')}=={dependency.get('version', '?')}",
+            aliases=tuple(str(alias) for alias in vuln.get("aliases") or ()),
         )
         for dependency in dependencies
         for vuln in dependency.get("vulns", [])
@@ -98,8 +130,33 @@ def parse_pip_audit(payload: str) -> list[Finding]:
 
 
 def parse_npm_audit(payload: str) -> list[Finding]:
-    """npm ``audit --json`` (npm 7+): the ``vulnerabilities`` map, one per package."""
+    """npm ``audit --json`` (npm 7+): the ``vulnerabilities`` map, one per package.
+
+    A DOCUMENT WITHOUT THAT MAP IS AN ERROR, NOT A CLEAN RESULT (#16131 review).
+    ``npm audit`` emits valid JSON on failure -- ``{"error": {"code": "ENOLOCK"}}``
+    for a corrupt lockfile, ``{"message": "...ECONNREFUSED...", "error": {...}}``
+    for an unreachable registry. Neither carries ``vulnerabilities``, so reading
+    it with ``.get("vulnerabilities") or {}`` returned an empty list and the gate
+    reported **PASS - 0 findings**.
+
+    That is this module's own docstring being contradicted four lines down: it
+    says an absent or unparseable report is a hard failure, and this made a
+    *failed scan* indistinguishable from a *clean scan*. It applies to the
+    blocking frontend gate too, not only the reporting ones -- a transient
+    registry error there passed silently on a step whose header says security
+    checks are blocking.
+    """
     document = json.loads(payload)
+    if not isinstance(document, dict) or "vulnerabilities" not in document:
+        detail = ""
+        if isinstance(document, dict):
+            error = document.get("error")
+            code = error.get("code") if isinstance(error, dict) else None
+            detail = f" (npm reported {code or document.get('message') or 'no vulnerabilities key'})"
+        raise ReportError(
+            "npm audit produced no `vulnerabilities` map" + detail + ". A scan that did not "
+            "run is not a scan that found nothing -- fix the audit, do not read this as clean."
+        )
     return [
         Finding(
             severity=_normalise(entry.get("severity", "")),
@@ -158,9 +215,14 @@ def at_or_above(findings: list[Finding], threshold: str) -> list[Finding]:
     return [f for f in findings if SEVERITIES.index(f.severity) <= ceiling]
 
 
+def _names(finding: Finding) -> set[str]:
+    """Every identifier a finding answers to: its primary id and its aliases (#16222)."""
+    return {finding.identifier, *finding.aliases}
+
+
 def not_allowed(findings: list[Finding], allowed_ids: set[str]) -> list[Finding]:
     """The findings the gate still judges after the recorded allowance is applied."""
-    return [finding for finding in findings if finding.identifier not in allowed_ids]
+    return [finding for finding in findings if not _names(finding) & allowed_ids]
 
 
 def stale_allowances(findings: list[Finding], allowed_ids: set[str]) -> list[str]:
@@ -171,7 +233,7 @@ def stale_allowances(findings: list[Finding], allowed_ids: set[str]) -> list[str
     removes that, but only if the list is forced to shrink: an entry the scanner
     has stopped reporting is a failure here, not a harmless leftover.
     """
-    return sorted(allowed_ids - {finding.identifier for finding in findings})
+    return sorted(allowed_ids - set().union(*(_names(finding) for finding in findings)))
 
 
 def _verdict_line(threshold: str, judged: int, allowed_ids: set[str]) -> str:

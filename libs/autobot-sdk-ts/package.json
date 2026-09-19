@@ -15,7 +15,8 @@
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:live": "node --experimental-vm-modules node_modules/.bin/jest --testPathIgnorePatterns=/node_modules/"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

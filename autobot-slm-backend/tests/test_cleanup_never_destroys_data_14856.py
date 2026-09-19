@@ -308,7 +308,18 @@ def _evaluate(conditions: str, scope: dict[str, Any]) -> bool:
 
 
 def _render_value(value: Any, scope: dict[str, Any]) -> Any:
-    """Render a `set_fact` value the way Ansible would, keeping non-templates as-is."""
+    """Render a `set_fact` value the way Ansible would, keeping non-templates as-is.
+
+    Recurses into mappings and sequences because `Task.post_validate` does: a
+    template nested inside a dict argument is rendered before the action plugin
+    ever sees it. Stopping at the top level would leave a nested token as its
+    literal `{{ ... }}` source and quietly turn every scenario below into a
+    comparison against a string that no host ever holds.
+    """
+    if isinstance(value, dict):
+        return {k: _render_value(v, scope) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_render_value(v, scope) for v in value]
     if not isinstance(value, str) or "{{" not in value:
         return value
     env = jinja2.Environment(undefined=jinja2.ChainableUndefined, autoescape=False)
@@ -327,13 +338,42 @@ def _render_value(value: Any, scope: dict[str, Any]) -> Any:
     return env.from_string(value).render(**scope)
 
 
+# #15822: `set_fact` does not store what the template produced. A TOP-LEVEL
+# argument whose rendered value is one of these four spellings is converted
+# back into a Python bool before it becomes a fact — ansible-core 2.17.14,
+# lib/ansible/plugins/action/set_fact.py:54:
+#
+#   if not C.DEFAULT_JINJA2_NATIVE and isinstance(v, string_types) \
+#      and v.lower() in ('true', 'false', 'yes', 'no'):
+#       v = boolean(v, strict=False)
+#
+# Measured on ansible-core 2.17.14 (the fleet version): a bare
+# `x: "{{ ... | string | lower }}"` rendering to "false" arrives as `False`,
+# while the same template one level down inside a mapping arrives as the
+# string "false". `isinstance(v, string_types)` is why — the coercion never
+# looks inside a dict or a list.
+#
+# Modelling this is the whole reason #15822 reached a user. Every behavioural
+# scenario in this file rendered the template and stored the string, so the
+# allowlist gate was fed a value production never produces, and 15 green rows
+# said the cleanup worked while it had not fired on any host since 2026-08-24.
+_SET_FACT_COERCED_SPELLINGS = ("true", "false", "yes", "no")
+
+
+def _set_fact_store(value: Any) -> Any:
+    """What Ansible actually puts in the fact cache for one set_fact argument."""
+    if isinstance(value, str) and value.lower() in _SET_FACT_COERCED_SPELLINGS:
+        return value.lower() in ("true", "yes")
+    return value
+
+
 def _apply_set_fact(task: dict, scope: dict[str, Any]) -> dict[str, Any]:
     """Run a real set_fact task against a scenario, so the gate reads what the
     playbook would actually have put in front of it."""
     spec = _module(task, "ansible.builtin.set_fact", "set_fact")
     assert spec, f"'{task.get('name')}' is not a set_fact task"
     for key, value in spec.items():
-        scope[key] = _render_value(value, scope)
+        scope[key] = _set_fact_store(_render_value(value, scope))
     return scope
 
 
@@ -831,71 +871,6 @@ def test_primitive_takes_the_right_branch(data_exists: bool | None, expect_remov
 def test_primitive_refuses_when_the_probe_never_ran() -> None:
     """Guard order is a thing people get wrong. Unknown must still mean keep."""
     assert _and(_primitive_when(), {"remove_dir_path": "/opt/autobot/autobot-backend"}) is False
-
-
-# (fact value, data/ present?, must the directory be removed?)
-#
-# `MISSING` is the state #14856 is named for: `services/deployment.py` runs
-# playbooks with a bare `-i "<host>,"` inventory, so group_vars is never
-# discovered and these facts simply are not there.
-MISSING = object()
-
-_WRONG_NODE_SCENARIOS = [
-    pytest.param(MISSING, False, False, id="fact_undefined__keeps"),
-    pytest.param(MISSING, True, False, id="fact_undefined_with_data__keeps"),
-    pytest.param("false", False, True, id="role_inactive_string__removes"),
-    pytest.param(False, False, True, id="role_inactive_bool__removes"),
-    pytest.param("no", False, True, id="role_inactive_yamlish__removes"),
-    pytest.param("false", True, False, id="role_inactive_but_holds_data__keeps"),
-    pytest.param(False, None, False, id="role_inactive_but_probe_silent__keeps"),
-    pytest.param("true", False, False, id="role_active_string__keeps"),
-    pytest.param(True, False, False, id="role_active_bool__keeps"),
-    pytest.param("", False, False, id="fact_empty_string__keeps"),
-    pytest.param("  ", False, False, id="fact_whitespace_only__keeps"),
-    pytest.param("None", False, False, id="fact_rendered_as_none__keeps"),
-    pytest.param("{{ unresolved }}", False, False, id="fact_half_rendered_jinja__keeps"),
-    pytest.param("FALSE", False, True, id="role_inactive_uppercase__removes"),
-    pytest.param("false\n", False, True, id="role_inactive_folded_scalar__removes"),
-]
-
-
-@pytest.mark.parametrize("fact, data_exists, expect_removed", _WRONG_NODE_SCENARIOS)
-def test_wrong_node_cleanup_takes_the_right_branch(fact: Any, data_exists: bool | None, expect_removed: bool) -> None:
-    """The whole wiring: the caller's gate AND the primitive's, as Ansible ANDs them.
-
-    Both directions are asserted. `fact_undefined__keeps` is the bug; the two
-    `role_inactive_*__removes` rows are the behaviour that must survive the fix,
-    and they are what makes this a guard rather than a blanket refusal.
-    """
-    scope: dict[str, Any] = {
-        "role_check_fact": "role_backend_active",
-        "dir_name": "autobot-backend",
-        "_remove_dir_data": _stat(data_exists),
-    }
-    if fact is not MISSING:
-        scope["role_backend_active"] = fact
-
-    _apply_set_fact(_wrong_node_normalise(), scope)
-    removed = _and(_wrong_node_when() + _primitive_when(), scope)
-    assert removed is expect_removed, (
-        f"role_backend_active={fact!r}, data/={data_exists!r} -> "
-        f"{'REMOVED' if removed else 'kept'}, expected {'REMOVED' if expect_removed else 'kept'}"
-    )
-
-
-def test_wrong_node_undefined_fact_would_hard_error_rather_than_delete() -> None:
-    """Belt and braces: the gate never reads the fact without an explicit default.
-
-    A bare `lookup('vars', name)` on an undefined fact raises in Ansible. If the
-    gate ever grew one, this surfaces it here instead of on a host.
-    """
-    scope: dict[str, Any] = {"role_check_fact": "role_backend_active", "_remove_dir_data": _stat(False)}
-    try:
-        _apply_set_fact(_wrong_node_normalise(), scope)
-        removed = _and(_wrong_node_when() + _primitive_when(), scope)
-    except _FactUndefined:
-        return  # a hard error is an acceptable non-destructive outcome
-    assert removed is False, "an undefined role fact reached the delete branch — this is #14856 itself"
 
 
 # --------------------------------------------------------------------------

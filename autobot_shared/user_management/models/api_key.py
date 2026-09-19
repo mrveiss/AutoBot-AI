@@ -28,6 +28,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from autobot_shared.auth.key_scopes import scope_granted
 from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.models.base import Base
 
@@ -190,22 +191,20 @@ class APIKey(Base):
         self.revoked_by = revoked_by_user_id
 
     def has_scope(self, scope: str) -> bool:
-        """Check if this key has a specific scope."""
-        # Check exact match
-        if scope in self.scopes:
-            return True
+        """Check if this key has a specific scope.
 
-        # Check wildcard (e.g., "chat:*" matches "chat:use")
-        resource = scope.split(":")[0] if ":" in scope else scope
-        wildcard = f"{resource}:*"
-        if wildcard in self.scopes:
-            return True
+        Delegates to ``autobot_shared.auth.key_scopes.scope_granted`` (#16270),
+        the one implementation of the matching rule. ``key_permissions`` uses
+        the same function to turn a key's scopes into ``Permission`` members,
+        so the two cannot disagree.
 
-        # Check global admin scope
-        if "*" in self.scopes or "admin:*" in self.scopes:
-            return True
-
-        return False
+        It fails **closed** on a malformed ``scopes`` value; see that function
+        for why (#16040). The HTTP path is defended, because
+        ``APIKeyCreate.scopes: List[str]`` validates at the boundary. A
+        migration, a backfill or a second writer is not, and this method is
+        load-bearing for an authorisation decision (``get_api_key_user``).
+        """
+        return scope_granted(self.scopes, scope)
 
 
 # Available API key scopes

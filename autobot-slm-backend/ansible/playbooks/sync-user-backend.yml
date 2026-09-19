@@ -11,7 +11,12 @@
   vars:
     local_autobot_root: "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
     backend_user: "autobot"
-    backend_install_dir: "/opt/autobot"
+    # #13539/B3: this play never renders roles/backend templates, but the
+    # var name backend_install_dir is reserved elsewhere in this repo for the
+    # BACKEND COMPONENT directory (roles/backend/defaults/main.yml) -- using it
+    # here for the deploy root is exactly the two-meanings hazard B3 exists to
+    # remove, so this play names the root explicitly instead.
+    backend_deployed_root: "/opt/autobot"
     backend_host: "{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}"
 
   tasks:
@@ -44,14 +49,14 @@
           --exclude=data \
           --exclude=logs \
           {{ local_autobot_root }}/autobot-backend/ \
-          {{ backend_install_dir }}/autobot-backend/
+          {{ backend_deployed_root }}/autobot-backend/
 
         sudo rsync -a --delete \
           --exclude=.git \
           --exclude=__pycache__ \
           --exclude='*.pyc' \
           {{ local_autobot_root }}/autobot_shared/ \
-          {{ backend_install_dir }}/autobot_shared/
+          {{ backend_deployed_root }}/autobot_shared/
       register: sync_result
       changed_when: true
 
@@ -62,8 +67,8 @@
         group: "{{ backend_user }}"
         recurse: true
       loop:
-        - "{{ backend_install_dir }}/autobot-backend"
-        - "{{ backend_install_dir }}/autobot_shared"
+        - "{{ backend_deployed_root }}/autobot-backend"
+        - "{{ backend_deployed_root }}/autobot_shared"
       become: true
 
     - name: Start backend service

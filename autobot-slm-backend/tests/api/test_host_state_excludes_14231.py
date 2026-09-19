@@ -21,6 +21,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from autobot_shared.paths import scrubbed_git_env
+
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SLM_BACKEND = _REPO_ROOT / "autobot-slm-backend"
 
@@ -140,6 +142,7 @@ def _tracked_files(component: str) -> list[str]:
         capture_output=True,
         text=True,
         check=False,
+        env=scrubbed_git_env(),
     )
     if result.returncode != 0:
         pytest.fail(f"git ls-files failed for {component}: {result.stderr}")

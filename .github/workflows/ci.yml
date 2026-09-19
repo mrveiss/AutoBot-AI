@@ -4,13 +4,31 @@ name: AutoBot CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
+  merge_group:
+    # #14353: every one of the ten required contexts already carries this. The
+    # two workflows that publish `python-suite` -- this one and
+    # python-required-context.yml -- were the only ones without it, so the
+    # context could never report inside a merge queue. A required context that
+    # never reports blocks forever, which is why the queue (#15937 / #14054)
+    # could not be enabled while this was missing.
   pull_request:
-    # Dev_new_gui is the integration branch every PR targets; without it the
-    # backend suite below only ran post-merge on the push trigger, so backend
+    # #14747: NO `branches:` FILTER, DELIBERATE. It used to read
+    # `[ release, main ]`, which excluded STACKED pull requests -- one whose
+    # base is another feature branch. Those never triggered this workflow, so
+    # `python-suite` never ran and the Python tests for that change never
+    # executed, while the PR still showed a set of green checks from the
+    # workflows that did run. Measured on PR #14641: zero CI/CD runs.
+    #
+    # The complement shim has no `branches:` filter, so on a stacked PR WITH
+    # Python changes it correctly skips -- and with this workflow not triggering
+    # either, the context went unreported. Harmless while `python-suite` is not
+    # required; a permanent hard block the moment it is.
+    #
+    # main is the integration branch every PR targets; without a trigger
+    # here the backend suite below only ran post-merge on push, so backend
     # regressions were only discovered once already on the shared branch
-    # (#10691). main kept for promotion PRs.
-    branches: [ main, Dev_new_gui ]
+    # (#10691).
     #
     # NO `pull_request.paths` FILTER — REMOVED BY #14353, DELIBERATE.
     #
@@ -42,17 +60,17 @@ concurrency:
   # #13432: cancel superseded PR runs, but let a push to a base branch finish.
   #
   # On a pull request a new push makes the previous run obsolete, so cancelling
-  # is right. On a push to Dev_new_gui it meant each merge cancelled the previous
+  # is right. On a push to main it meant each merge cancelled the previous
   # merge's verification, and merges arrive faster than the suite completes: of
   # the last 39 completed base runs, 26 were cancelled and NONE succeeded. The
   # base branch was effectively never verified, and measuring the #13162 backlog
   # repeatedly meant hunting for a run that happened to survive.
   #
-  # This does not queue unboundedly. With cancel-in-progress false, GitHub keeps
-  # at most one run in progress plus one pending per group — a newly queued run
-  # cancels the previously pending one. So base runs serialise, each completes,
-  # and at most one waits. Under a burst you get a verdict for a recent commit
-  # rather than for every commit, which is the useful half.
+  # This does not queue unboundedly. This group keeps GitHub's default
+  # `queue: single` (python-shard opts into `queue: max`, #16320): with
+  # cancel-in-progress false, at most one run is in progress and one pending per
+  # group, and a newly queued run cancels the pending one. Base runs serialise and
+  # at most one waits; under a burst you get a verdict for a recent commit.
   #
   # Cost is bounded to GitHub-hosted capacity: every job in THIS workflow is
   # ubuntu-latest (the twelve python-suite shards included, see the note above
@@ -111,11 +129,59 @@ jobs:
     needs: changes
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
+    # #16320: first in, first out across PRs.
+    #
+    # Every push used to start all twelve shards at once, and GitHub interleaved
+    # them with every other PR's jobs, so no suite finished early. Over five PRs
+    # on 2026-09-11 the median push-to-green was 132.6 min, and 44-98 min of it
+    # passed before the first shard even started.
+    #
+    # A job-level group per shard with `queue: max` holds up to 100 pending shard
+    # jobs and starts them in turn, so a PR that pushed earlier gets its shards
+    # through ahead of one that pushed later.
+    #
+    # - The shard number is in the key. One shared key would make a PR's own
+    #   twelve shards wait on each other.
+    # - Pushes and merge groups key on the ref as well, so a post-merge
+    #   verification never queues behind PR work.
+    # - `queue: max` can't be combined with cancel-in-progress, and doesn't need
+    #   to be. A superseded push is still cancelled by the workflow-level group
+    #   above, and its pending shards go with it.
+    # - A shard waiting here is `pending`, not `queued`: it holds a place in
+    #   line and isn't waiting for a runner. Watchdogs must not read it as an
+    #   outage (#16309).
+    concurrency:
+      group: ${{ github.event_name == 'pull_request' && format('python-suite-shard-{0}', matrix.shard) || format('python-suite-shard-{0}-{1}', matrix.shard, github.ref) }}
+      queue: max
+      cancel-in-progress: false
     # A twelfth of a ~51-minute run, with generous headroom: observed runner
     # variance on this suite is roughly 2x for identical work (12m18s and
     # 1h24m have both been recorded), and a shard whose durations have drifted
     # can run long without being broken.
     timeout-minutes: 60
+    # #16516: a hung test used this job's whole hour and printed nothing: `-q`
+    # prints bare dots, so the log could not say which test was stuck. Both
+    # pytest invocations below pass `-o faulthandler_timeout` from this ONE
+    # setting. A test still running after this many seconds gets every thread's
+    # traceback dumped into the log, naming the test and the frame it blocks in.
+    # The dump neither fails nor stops the test (faulthandler_exit_on_timeout
+    # stays off), so a spurious one costs a few log lines, never a red shard.
+    #
+    # 600s against the slowest recorded tests: 180.6s in .test_durations_slm and
+    # 10.8s in .test_durations. That clears the ~2x runner variance noted above,
+    # and a hang still dumps within ten minutes of starting, well inside the hour.
+    #
+    # Under xdist the dump still reaches this log. execnet starts each worker
+    # with stdin and stdout piped and stderr inherited from this step, and
+    # pytest's faulthandler plugin writes to a dup of the worker's stderr taken
+    # while capture is suspended, so per-test output capture does not swallow it.
+    #
+    # timeout-minutes is NOT derived from this setting: a job-level
+    # timeout-minutes cannot read the `env` context, and expressions have no
+    # arithmetic to turn seconds into minutes.
+    # repo_tests/ci_faulthandler_timeout_16516_test.py pins the wiring.
+    env:
+      PYTEST_FAULTHANDLER_TIMEOUT_S: 600
 
     strategy:
       # Never cancel sibling shards. Cancelling them would hide every failure
@@ -149,6 +215,18 @@ jobs:
     - uses: actions/checkout@v7
 
     - uses: ./.github/actions/setup-python-suite
+
+    # #16264: requirements-ci.txt drifted below two declared floors
+    # (websockets, langchain-community) with nothing here noticing --
+    # pipeline-scripts/check_dependency_floors.py has carried a --strict mode
+    # since #15091, but no workflow ever called it. Gated to shard 1 only:
+    # every shard restores the identical cached venv keyed off the same
+    # requirements-ci.txt (see setup-python-suite's cache key), so checking
+    # all twelve would report the same drift twelve times for one PR-blocking
+    # signal.
+    - name: Fail on a declared dependency floor the CI install does not meet (#16264)
+      if: matrix.shard == 1
+      run: python pipeline-scripts/check_dependency_floors.py --strict
 
     # #13927: repo_tests/promtool_rules_test.py runs `promtool check rules` over
     # every deployed rule file and `promtool test rules` over every behavioural
@@ -187,7 +265,7 @@ jobs:
         # about indicators whose red carries no information must not add that.
         curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 \
           -o "/tmp/${TARBALL}.tar.gz" \
-          "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/${TARBALL}.tar.gz"
+          "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/${TARBALL}.tar.gz"  # noqa: pinned upstream release URL (#14053); the version is PROM_VERSION above
         tar xzf "/tmp/${TARBALL}.tar.gz" -C /tmp
         sudo install -m 0755 "/tmp/${TARBALL}/promtool" /usr/local/bin/promtool
 
@@ -300,6 +378,7 @@ jobs:
           --shard-durations .test_durations \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
+          -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
           --durations=25 \
           --durations-min=10.0 \
           -q
@@ -343,6 +422,7 @@ jobs:
           --shard-durations .test_durations_slm \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
+          -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
           --durations=25 \
           --durations-min=10.0 \
           -q
@@ -407,7 +487,13 @@ jobs:
         exit 1
 
     - name: Report success
-      run: echo "All 6 python-suite shards passed."
+      # The number here must equal the python-shard matrix length. It said "All
+      # 6" against a 12-way matrix (#14353). `strategy.job-total` is not usable
+      # -- this is the aggregate job, not a matrix job, so it expands to empty
+      # here. The agreement is enforced instead by
+      # repo_tests/ci_shard_count_message_test.py, which reads both numbers out
+      # of this file; update them together or that test fails.
+      run: echo "All 12 python-suite shards passed."
 
 
   frontend-tests:
@@ -479,7 +565,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, python-suite, frontend-tests]
     if: |
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui') &&
+      (github.ref == 'refs/heads/release' || github.ref == 'refs/heads/main') &&
       (needs.python-suite.result == 'success' || needs.python-suite.result == 'skipped') &&
       (needs.frontend-tests.result == 'success' || needs.frontend-tests.result == 'skipped')
 
@@ -487,12 +573,12 @@ jobs:
     - uses: actions/checkout@v7
 
     # #13162: the step was named "Set up Python 3.12" while pinning 3.14. The
-    # version lives in `python-version:` and nowhere else, so the name carries
-    # no version at all rather than a second copy to drift.
+    # name carries no version at all rather than a second copy to drift.
+    # #13842: `python-version-file` reads the SSOT instead of restating it.
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.14'
+        python-version-file: '.python-version'
         cache: 'pip'
         cache-dependency-path: |
           requirements*.txt
@@ -590,7 +676,7 @@ jobs:
         cat DEPLOYMENT_SUMMARY.md
 
     - name: Upload deployment artifact
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: deployment-summary
         path: DEPLOYMENT_SUMMARY.md

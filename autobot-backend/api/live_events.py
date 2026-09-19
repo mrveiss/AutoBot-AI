@@ -278,32 +278,15 @@ async def _handle_subscribe(
     last_event_id: int = 0,
 ) -> None:
     """Process a subscribe action, optionally replaying from ``last_event_id`` (#14818)."""
-    if user_payload and channel.startswith("agent:"):
-        claimed_id = channel.split(":", 1)[1]
-        user_id = str(user_payload.get("user_id", ""))
-        username = user_payload.get("username", "")
-        is_admin = "admin" in user_payload.get("roles", [])
-        if not is_admin and claimed_id not in (user_id, username):
-            await _send_error(ws, f"Not authorized to subscribe to {channel}")
-            return
-    elif user_payload and (channel.startswith("company:") or channel.startswith("board:")):
-        # Tenant-scoped LLC channels: enforce company membership (#11386).
-        if not await _authorize_llc_channel(channel, user_payload):
-            await _send_error(ws, f"Not authorized to subscribe to {channel}")
-            return
-    elif user_payload and (channel.startswith("session:") or channel.startswith("chat:")):
-        # #14819: conversation channels are per-user; without this branch any
-        # authenticated caller could subscribe to anyone's conversation.
-        if not await _authorize_conversation_channel(channel, user_payload):
-            await _send_error(ws, f"Not authorized to subscribe to {channel}")
-            return
-    elif user_payload and (
-        channel.startswith("workflow:") or channel.startswith("heartbeat:") or channel.startswith("task:")
-    ):
-        # Per-resource owner resolution for the remaining scoped prefixes (#11396).
-        if not await _authorize_resource_channel(channel, user_payload):
-            await _send_error(ws, f"Not authorized to subscribe to {channel}")
-            return
+    # #14893: subscribe used to carry its own inline copy of these branches,
+    # which drifted from _authorize_channel's rules within a single commit
+    # (#14826 tightened the command path's unknown-prefix default to deny and
+    # left this copy on the old default-allow). Sharing the one function is
+    # what keeps a future authorization change from silently applying to only
+    # one of the two paths again.
+    if not await _authorize_channel(channel, user_payload):
+        await _send_error(ws, f"Not authorized to subscribe to {channel}")
+        return
     ok = await get_event_bus().subscribe_ws(ws, channel)
     if not ok:
         await _send_error(ws, f"Invalid channel: {channel}")
@@ -394,16 +377,17 @@ async def live_events_endpoint(websocket: WebSocket):
     # #9963: use the canonical WS auth (JWT), same as /api/ws — the local
     # raw-JWT check was too strict and rejected valid deployments.
     from auth_middleware import authenticate_websocket
+    from autobot_shared.websocket_subprotocol import accept_websocket
 
     user_payload: dict | None = await authenticate_websocket(websocket)
     if _auth_required() and user_payload is None:
         # accept() before close(4001) so clients see a clean close frame
         # instead of a handshake 403 (project WS rule).
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Unauthorized")
         logger.info("Live events WebSocket rejected: invalid token")
         return
-    await websocket.accept()
+    await accept_websocket(websocket)
     logger.info(
         "Live events WebSocket connected: %s (user=%s)",
         websocket.client,

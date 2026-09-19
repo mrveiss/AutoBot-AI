@@ -113,10 +113,14 @@ def _validate_agent_status(agent_cfg: Dict[str, Any]) -> None:
         )
 
 
-async def _validate_budget(session: AsyncSession, agent_id: str) -> None:
-    """Reject replay when the agent is over its budget limit (H2d)."""
+async def _validate_budget(session: AsyncSession, agent_id: str, company_id: str) -> None:
+    """Reject replay when the agent is over its budget limit (H2d).
+
+    Scoped by company: the caller has already been shown to own this agent, and
+    the slug alone does not identify a budget row (#15812).
+    """
     svc = _get_budget_svc()
-    _remaining, is_over, _alert = await svc.check_budget(session, agent_id)
+    _remaining, is_over, _alert = await svc.check_budget(session, agent_id, company_id)
     if is_over:
         raise HTTPException(
             status_code=402,
@@ -201,7 +205,7 @@ async def trigger_replay(
     await _validate_no_active_run(session, agent_id)
 
     # H2d: budget gate.
-    await _validate_budget(session, agent_id)
+    await _validate_budget(session, agent_id, str(ctx.org_id))
 
     # Load the replay log (validates company scope + existence).
     svc = _get_replay_svc()
@@ -258,10 +262,12 @@ async def get_replay_log(
     """Return the recorded timeline for a run (for step-browser).
 
     Raw inputs are stored in the DB; use ``?redact_pii=true`` to have
-    credentials stripped from the response on read.  Emails are NOT
-    separately redacted (the credential_redaction module covers API keys
-    and bearer tokens; email redaction would require regex patterns not
-    currently present in that module).
+    credentials stripped from the response on read.  Free text (an email
+    body, a document) is covered too (#13708): ``credential_redaction``'s
+    ``redact_string`` now also runs the cross-service content scanner
+    (``autobot_shared.secret_redaction``), which catches a credential sitting
+    in prose -- PEM blocks, basic-auth URLs, "password is X" phrasing -- not
+    just the API-key/bearer-token shapes this module's own patterns cover.
     """
     await _check_admin(ctx, current_user, session)
 

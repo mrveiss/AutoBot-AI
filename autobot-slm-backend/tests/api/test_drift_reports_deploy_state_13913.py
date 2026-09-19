@@ -143,7 +143,7 @@ def _capture_report(monkeypatch):
     monkeypatch.setattr(code_sync, "FileDriftReport", _recorder)
     monkeypatch.setattr(code_sync, "VISIBILITY_COMPONENTS", {"autobot-slm-backend"})
     monkeypatch.setattr(code_sync, "get_default_source_dir", lambda c: "/s")
-    monkeypatch.setattr(code_sync, "get_default_deployed_dir", lambda c: "/d")
+    monkeypatch.setattr(code_sync, "get_live_dir", lambda c: "/d")
     return captured
 
 

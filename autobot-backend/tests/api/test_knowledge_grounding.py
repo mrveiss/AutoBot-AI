@@ -14,7 +14,6 @@ Tests the full grounding pipeline:
 - Tier 3 integration
 
 Issue: #4070 (Knowledge Grounding Tier 4)
-
 Test coverage:
 - End-to-end grounded response generation (40+ tests)
 - Claims from KB only
@@ -36,14 +35,9 @@ from fastapi.testclient import TestClient
 from api.knowledge_grounding import router as grounding_router
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.status_enums import Severity
-from services.grounded_agent import (
-    Claim,
-    ClaimStatus,
-    GroundedAgent,
-    GroundedResponse,
-    VerifiedClaim,
-    get_grounded_agent,
-)
+from services.grounded_agent import GroundedAgent, get_grounded_agent
+from services.grounded_agent_models import Claim, ClaimStatus, GroundedResponse, VerifiedClaim
+from services.knowledge_grounding_models import VerificationMethod
 
 
 @pytest.fixture
@@ -81,7 +75,7 @@ def sample_verified_claim(sample_claim):
         kb_source="fact-123",
         confidence=0.95,
         evidence=["Found in KB monitoring facts"],
-        verification_method="kb_lookup",
+        verification_method=VerificationMethod.KB_LOOKUP.value,
     )
 
 
@@ -201,7 +195,7 @@ async def test_classify_claim_found_in_kb(grounded_agent, sample_claim):
     assert verified.kb_status == ClaimStatus.IN_KB
     assert verified.confidence > 0.85
     assert verified.kb_source == "fact-123"
-    assert verified.verification_method == "kb_lookup"
+    assert verified.verification_method == VerificationMethod.KB_LOOKUP.value
 
 
 @pytest.mark.asyncio
@@ -634,7 +628,7 @@ def _sample_verified_claim() -> VerifiedClaim:
         kb_source="fact-1",
         confidence=0.9,
         evidence=["Found in KB monitoring facts"],
-        verification_method="kb_lookup",
+        verification_method=VerificationMethod.KB_LOOKUP.value,
     )
 
 
@@ -711,8 +705,8 @@ async def test_api_get_stats_endpoint(mock_app):
         return_value={
             "total_responses_grounded": "10",
             "total_claims_extracted": "42",
-            "claims_verified": "0.9",
-            "average_confidence": "0.87",
+            "claims_verified_count": "21",
+            "confidence_sum": "8.7",
         }
     )
 
@@ -725,7 +719,8 @@ async def test_api_get_stats_endpoint(mock_app):
     assert response.status_code == 200
     body = response.json()
     assert body["total_responses_grounded"] == 10
-    assert body["average_confidence"] == 0.87
+    assert body["claims_verified"] == pytest.approx(21 / 42)
+    assert body["average_confidence"] == pytest.approx(8.7 / 10)
 
 
 # ===== INTEGRATION TESTS =====

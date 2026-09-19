@@ -9,6 +9,7 @@ Enables reloading of chat workflow modules without backend restart
 """
 
 import asyncio
+import concurrent.futures
 import importlib
 import sys
 import time
@@ -18,6 +19,7 @@ from typing import Any, Callable, Dict, FrozenSet, Set
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+from autobot_shared.async_compat import fire_and_forget_threadsafe
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -52,14 +54,19 @@ class ModuleReloadHandler(FileSystemEventHandler):
 
         # Debounce rapid file changes
         now = time.time()
-        if file_path in self.last_reload_time:
-            if now - self.last_reload_time[file_path] < self.reload_debounce:
-                return
+        last_seen = self.last_reload_time.get(file_path)
+        if last_seen is not None and now - last_seen < self.reload_debounce:
+            return
+
+        # #15636: on_modified runs on the watchdog Observer thread, which has no
+        # running event loop, so ``asyncio.create_task`` raised RuntimeError on
+        # every .py modification and the hot-reload path never fired at all. The
+        # debounce stamp is written only once the hand-off has scheduled the
+        # coroutine, so a failed dispatch is not swallowed as a duplicate.
+        if self.reload_manager.dispatch_file_change(file_path) is None:
+            return
 
         self.last_reload_time[file_path] = now
-
-        # Schedule async reload
-        asyncio.create_task(self.reload_manager._handle_file_change(file_path))
 
 
 class HotReloadManager:
@@ -75,6 +82,9 @@ class HotReloadManager:
         self.observer: Observer | None = None
         self.watched_paths: Set[Path] = set()
         self.reload_lock = asyncio.Lock()
+        # The loop ``start()`` ran on; the Observer thread hands work back to it
+        # because it cannot schedule onto a loop it does not run (#15636).
+        self._loop: asyncio.AbstractEventLoop | None = None
 
         # Chat workflow specific modules to watch.
         # Note: Obsolete modules removed in Issue #567 archive cleanup.
@@ -91,6 +101,7 @@ class HotReloadManager:
     async def start(self) -> None:
         """Start the hot reload manager"""
         try:
+            self._loop = asyncio.get_running_loop()
             self.observer = Observer()
             handler = ModuleReloadHandler(self)
 
@@ -123,6 +134,7 @@ class HotReloadManager:
                     self.observer.stop()
                     self.observer.join(timeout=5)
                     self.observer = None
+                self._loop = None
 
                 self.watched_modules.clear()
                 self.module_callbacks.clear()
@@ -202,6 +214,18 @@ class HotReloadManager:
         logger.info(f"Chat workflow reload complete: {successful_reloads}/{len(results)} modules reloaded")
 
         return results
+
+    def dispatch_file_change(self, file_path: Path) -> concurrent.futures.Future | None:
+        """Hand a file event from the Observer thread to this manager's loop.
+
+        Returns the retained future, or ``None`` when nothing was scheduled --
+        the caller must not record the event as handled in that case (#15636).
+        """
+        return fire_and_forget_threadsafe(
+            self._handle_file_change(file_path),
+            name=f"hot-reload-{file_path.name}",
+            loop=self._loop,
+        )
 
     async def _handle_file_change(self, file_path: Path) -> None:
         """Handle a file change event"""

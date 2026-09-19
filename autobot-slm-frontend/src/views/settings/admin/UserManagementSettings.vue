@@ -18,7 +18,6 @@ import { getSlmApiBase } from '@/config/ssot-config'
 import {
   useAutobotApi,
   autobotApiErrorMessage,
-  type UserResponse,
 } from '@/composables/useAutobotApi'
 import {
   useSlmUserApi,
@@ -47,13 +46,12 @@ const success = ref<string | null>(null)
 const activeTab = ref<'slm-admins' | 'autobot-users' | 'teams' | 'sso'>('slm-admins')
 
 // User list state
-const legacyUsers = ref<UserResponse[]>([])
 const slmUsers = ref<SlmUserResponse[]>([])
 const autobotUsers = ref<SlmUserResponse[]>([])
 const teams = ref<TeamResponse[]>([])
 const ssoProviders = ref<SSOProviderResponse[]>([])
-const selectedUser = ref<UserResponse | SlmUserResponse | null>(null)
-const selectedUserType = ref<'slm' | 'autobot' | 'legacy'>('legacy')
+const selectedUser = ref<SlmUserResponse | null>(null)
+const selectedUserType = ref<'slm' | 'autobot'>('slm')
 const showCreateUserModal = ref(false)
 const showCreateTeamModal = ref(false)
 const showCreateProviderModal = ref(false)
@@ -120,8 +118,14 @@ const rbacInitOptions = reactive({
 // Computed
 const isAdmin = computed(() => authStore.isAdmin)
 
+// #15533: the signed-in identity of this frontend is an SLM user — `POST
+// /api/auth/login` on the SLM authenticates against the SLM user table and
+// `/api/auth/me` reports `user_type: "slm_admin"`. Resolving it from the main
+// backend's user list (the pre-#15533 source) produced a main-backend id that
+// was then posted to the SLM, under a `/api/users/...` namespace the SLM does
+// not serve. `slmUsers` is the list the id has to come from.
 const currentUser = computed(() => {
-  return legacyUsers.value.find((u: UserResponse) => u.username === authStore.user?.username) || null
+  return slmUsers.value.find((u: SlmUserResponse) => u.username === authStore.user?.username) || null
 })
 
 const isAdminReset = computed(() => {
@@ -132,13 +136,17 @@ const passwordChangeUserId = computed(() => {
   return selectedUser.value?.id || currentUser.value?.id || ''
 })
 
+// Both branches name a route the SLM serves — see `/api/slm-users/{user_id}/
+// change-password` and `/api/autobot-users/{user_id}/change-password` in
+// `autobot-slm-frontend/openapi.json`. There is no third namespace: the
+// `legacy` branch this used to carry named `/api/users/...`, which no SLM
+// router mounts (#15533).
 const passwordChangeApiEndpoint = computed(() => {
   const uid = passwordChangeUserId.value
   if (!uid) return ''
   const base = getSlmApiBase()
-  if (selectedUserType.value === 'slm') return `${base}/slm-users/${uid}/change-password`
   if (selectedUserType.value === 'autobot') return `${base}/autobot-users/${uid}/change-password`
-  return `${base}/users/${uid}/change-password`
+  return `${base}/slm-users/${uid}/change-password`
 })
 
 // ===========================================================================
@@ -181,14 +189,6 @@ async function loadSsoProviders(): Promise<void> {
   }
 }
 
-async function loadLegacyUsers(): Promise<void> {
-  try {
-    legacyUsers.value = await autobotApi.getUsers()
-  } catch {
-    // Legacy API may not be available - not critical
-  }
-}
-
 async function loadAllData(): Promise<void> {
   if (!isAdmin.value) return
 
@@ -201,7 +201,6 @@ async function loadAllData(): Promise<void> {
       loadAutobotUsers(),
       loadTeams(),
       loadSsoProviders(),
-      loadLegacyUsers(),
     ])
   } finally {
     loading.value = false
@@ -321,8 +320,8 @@ async function deleteTeam(teamId: string): Promise<void> {
 // ===========================================================================
 
 function openPasswordChangeModal(
-  user?: UserResponse | SlmUserResponse,
-  type: 'slm' | 'autobot' | 'legacy' = 'legacy',
+  user?: SlmUserResponse,
+  type: 'slm' | 'autobot' = 'slm',
 ): void {
   selectedUser.value = user ?? currentUser.value
   selectedUserType.value = type
@@ -333,7 +332,7 @@ function handlePasswordChangeSuccess(message: string): void {
   showSuccess(message)
   showChangePasswordModal.value = false
   selectedUser.value = null
-  selectedUserType.value = 'legacy'
+  selectedUserType.value = 'slm'
 }
 
 function handlePasswordChangeError(errorMsg: string): void {
@@ -1042,7 +1041,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
     <!-- Change Password Modal -->
     <div v-if="showChangePasswordModal" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="showChangePasswordModal = false; selectedUser = null; selectedUserType = 'legacy'"></div>
+      <div class="absolute inset-0 bg-black/50" @click="showChangePasswordModal = false; selectedUser = null; selectedUserType = 'slm'"></div>
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
           {{ isAdminReset ? `Reset Password for ${selectedUser?.username}` : $t('settings.admin.userManagementSettings.changePassword') }}
@@ -1059,7 +1058,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
         />
 
         <div class="flex justify-end mt-4">
-          <button @click="showChangePasswordModal = false; selectedUser = null; selectedUserType = 'legacy'" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+          <button @click="showChangePasswordModal = false; selectedUser = null; selectedUserType = 'slm'" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
             {{ $t('settings.admin.userManagementSettings.cancel') }}
           </button>
         </div>

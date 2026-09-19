@@ -57,8 +57,8 @@ def test_allowed_branch_permits_commit(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_main_branch_blocks_commit(tmp_path: Path) -> None:
-    repo = _init_repo(tmp_path, branch="main")
+def test_release_branch_blocks_commit(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, branch="release")
     result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
     assert result.returncode != 0, result.stdout + result.stderr
     assert "COMMIT BLOCKED" in result.stdout
@@ -70,7 +70,7 @@ class TestFailsClosedWhenDependencyMissing:
     unset."""
 
     def test_a_missing_common_lib_does_not_report_clean(self, tmp_path: Path) -> None:
-        repo = _init_repo(tmp_path, branch="main")  # a genuine violation present
+        repo = _init_repo(tmp_path, branch="release")  # a genuine violation present
 
         isolated = tmp_path.parent / "isolated-target-branch-guard"
         isolated.mkdir()
@@ -111,7 +111,7 @@ class TestFailsClosedWhenGitCannotAnswer:
         return fake_bin
 
     def test_a_git_branch_failure_does_not_report_clean(self, tmp_path: Path) -> None:
-        repo = _init_repo(tmp_path, branch="main")  # a genuine violation present
+        repo = _init_repo(tmp_path, branch="release")  # a genuine violation present
 
         fake_bin = self._make_fake_git(tmp_path)
         env = dict(_test_git_env())

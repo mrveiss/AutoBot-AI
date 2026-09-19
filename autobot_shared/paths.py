@@ -219,7 +219,22 @@ def resolve_project_root(start: Path) -> Path:
 #: somewhere else -- a helper passing ``cwd=``, a test module, a CI step
 #: invoking a guard directly. That is the whole distance between "correct today"
 #: and "correct".
-AMBIENT_GIT_VARS = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")
+#: The two object-directory variables joined the list in #15783, measured on
+#: git 2.34.1 the same way the rest were. In a repository that does NOT contain
+#: an object, ``git cat-file -p <sha>`` exits 128 ("Not a valid object name");
+#: with either variable pointing at another repository's ``objects``, the same
+#: command exits **0 and prints that repository's content**. Both are therefore
+#: the ``GIT_DIR`` shape — a wrong answer with a successful exit — and neither
+#: is the loud failure they are sometimes assumed to be, which is why both are
+#: listed rather than only the one that looks more obviously dangerous.
+AMBIENT_GIT_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+)
 
 
 class GitRepoRootUnavailable(RuntimeError):
@@ -236,10 +251,69 @@ def scrubbed_git_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
     """*env* (default :data:`os.environ`) minus every :data:`AMBIENT_GIT_VARS` entry.
 
     Use for **any** git subprocess whose answer depends on the work tree, not
-    only ``rev-parse``: ``ls-files`` inherits the same confusion.
+    only ``rev-parse``: ``ls-files`` inherits the same confusion, and so does
+    ``status``.
+
+    THE FAMILY THIS ENDS (#15783)
+    -----------------------------
+    Four independent fixes were written for one defect before anything gated
+    it, each correct and local, none of them preventing the next:
+
+    * #13882 / #13983 — ``code_evolution_miner.git_env()``: a crawler reported
+      another repository's history.
+    * #15176 — two pre-commit guards resolved the wrong root and printed their
+      success line having inspected nothing.
+    * #15245 / #15303 — the same in shell root resolution.
+    * #15777 — a destructive-delete guard's ``git status`` answered about a
+      different tree. That one is the sharpest: the others produced a wrong
+      *answer*, this produced a wrong *permission*, because a guard that asks
+      "is this tree clean?" and hears "yes" about somewhere else does not fail
+      — it consents.
+
+    WHOLESALE VS DENYLIST, DECIDED ONCE
+    -----------------------------------
+    This helper strips the four variables measured to override ``-C``/``cwd=``.
+    A caller that also clones, fetches or authenticates has no reason to keep
+    the rest either, and may narrow further to every ``GIT_`` name — that is
+    what ``code_evolution_miner.git_env()`` does, composing this function
+    rather than repeating it. What is *not* acceptable is a fifth hand-written
+    list: #13882 found one of seven names beside one of nine, both correct for
+    the failure already seen and silently short for the next.
+
+    ``tools/lint/check_git_toplevel_env_scrubbed.py`` is the gate that makes a
+    sixth recurrence a blocked commit rather than a later incident.
     """
     source = os.environ if env is None else env
     return {key: value for key, value in source.items() if key not in AMBIENT_GIT_VARS}
+
+
+def strict_git_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """*env* minus **every** ``GIT_`` variable, not only the ambient four.
+
+    :func:`scrubbed_git_env` answers "which repository does git act on"; this
+    answers "what else can the environment make git do". They are different
+    questions and the second one only matters for a subset of callers -- but
+    that subset is the dangerous one:
+
+    * ``GIT_CONFIG_COUNT`` / ``GIT_CONFIG_KEY_n`` / ``GIT_CONFIG_VALUE_n`` set
+      arbitrary config for the child, including ``core.sshCommand`` -- which is
+      a command git then executes
+    * ``GIT_SSH_COMMAND`` and ``GIT_PROXY_COMMAND`` redirect transport. This
+      repository already classifies the first as a hijack variable and strips it
+      from executed environments (``services/execution/env_sanitizer.py``)
+    * ``GIT_NAMESPACE`` silently changes which refs a fetch or push sees
+
+    So anything that fetches, pulls, or resolves refs over a transport uses this
+    rather than the ambient scrub (#15783 review, CWE-15). It is a prefix rule,
+    not a list, because a denylist of these is the mistake #13882 already made
+    once: git gains variables between releases and the list is only ever
+    extended one incident at a time.
+
+    Wholesale is safe for that subset because none of them commit: stripping
+    ``GIT_AUTHOR_*`` / ``GIT_COMMITTER_*`` costs nothing when nothing authors.
+    SSH agent auth is unaffected -- ``SSH_AUTH_SOCK`` is not a ``GIT_`` name.
+    """
+    return {key: value for key, value in scrubbed_git_env(env).items() if not key.startswith("GIT_")}
 
 
 def git_repo_root(start: Path | str | None = None) -> Path:
@@ -274,3 +348,54 @@ def git_repo_root(start: Path | str | None = None) -> Path:
     if result.returncode != 0 or not result.stdout.strip():
         raise GitRepoRootUnavailable(f"git rev-parse --show-toplevel exit {result.returncode}: {result.stderr.strip()}")
     return Path(result.stdout.strip())
+
+
+def git_common_dir(start: Path | str | None = None) -> Path:
+    """The ``.git`` directory shared by every worktree of the checkout containing *start*.
+
+    Unlike :func:`git_repo_root` -- deliberately worktree-relative, since each
+    worktree's own config/log/results state must not collide with another's
+    (#13149) -- some state genuinely IS shared: a lock file, or a cache keyed
+    to something that lives outside any one worktree (a database collection,
+    a remote service). ``git rev-parse --git-common-dir`` is that one location,
+    resolvable identically from any worktree of the same checkout (#16934).
+
+    Raises:
+        GitRepoRootUnavailable: git is absent, failed, or named nothing.
+    """
+    try:
+        result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+            ["git", "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=None if start is None else str(start),
+            env=scrubbed_git_env(),
+            check=False,
+        )
+    except OSError as exc:
+        raise GitRepoRootUnavailable(f"could not run git rev-parse: {exc}") from exc
+    if result.returncode != 0 or not result.stdout.strip():
+        raise GitRepoRootUnavailable(
+            f"git rev-parse --git-common-dir exit {result.returncode}: {result.stderr.strip()}"
+        )
+    common_dir = Path(result.stdout.strip())
+    # A relative answer is relative to *start* (or the cwd), not to wherever
+    # the caller resolves paths against next.
+    if not common_dir.is_absolute():
+        common_dir = (Path(start) if start is not None else Path.cwd()) / common_dir
+    return common_dir.resolve()
+
+
+def shared_cache_path(*parts: str, fallback: Path, start: Path | str | None = None) -> Path:
+    """``git_common_dir()/*parts``, or *fallback* when git is unavailable (#16934).
+
+    For state that must be ONE location across every worktree of a checkout
+    (a lock, a cache keyed to a collection outside any one worktree) but
+    still has to work somewhere with no ``.git`` at all -- a real production
+    install, which :func:`project_root` resolves by ``.env`` instead.
+    """
+    try:
+        return git_common_dir(start).joinpath(*parts)
+    except GitRepoRootUnavailable:
+        return fallback

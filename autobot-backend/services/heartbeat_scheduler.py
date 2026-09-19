@@ -20,6 +20,7 @@ from typing import Any, Dict, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from events.bus import publish_event
@@ -164,7 +165,7 @@ class HeartbeatScheduler:
 
         logger.info("Wakeup request %s queued for agent %s", req_id, agent_id)
         if agent_id not in self._tasks and self._running:
-            asyncio.create_task(
+            fire_and_forget(
                 self._run_once(agent_id, WakeupTrigger.EVENT),
                 name=f"hb-adhoc-{agent_id}",
             )

@@ -11,8 +11,14 @@
 name: Backend Startup Import Smoke
 
 on:
+  # #14054: the merge queue builds each entrant against base + the entries
+  # ahead of it and expects the required contexts to report against that
+  # temporary ref. A required context with no `merge_group:` trigger never
+  # fires, and the queue waits on it forever. Inert until the `merge_queue`
+  # ruleset rule is enabled -- this event does not exist before then.
+  merge_group:
   push:
-    branches: [main, Dev_new_gui, develop]
+    branches: [release, main, develop]
     #
     # #12986: the backend-Python entries are the canonical `backend-python` set
     # from .github/filters/backend-python-paths.yml; GitHub cannot include a file here, so
@@ -25,15 +31,23 @@ on:
       - '**/requirements*.txt'
       - 'requirements-ci/**'
       - '.github/workflows/startup-import-smoke.yml'
+      - '.github/workflows/backend-required-context.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
   # required-check context ("startup-import-smoke") always reports a conclusion.
   # A path-filtered required check that never triggers leaves the PR deadlocked
   # on "Expected — Waiting for status". The real work is gated on the `changes`
-  # job below and self-skips (reporting success) when no backend paths are
-  # touched. Branch-protection promotion to required is the separate
-  # owner-confirmed follow-up (#10022).
+  # job below.
+  #
+  # That gating job SKIPS when no backend paths are touched — it does NOT report
+  # success, which is what this comment used to claim. A skipped job publishes a
+  # check run whose conclusion is `skipped`, and branch protection does not accept
+  # that for a required context, so a pull request touching no backend Python sat
+  # blocked on a context nothing could turn green. The green in that case comes
+  # from the complement shim in backend-required-context.yml, exactly as
+  # python-required-context.yml serves `python-suite` (#14353).
+  # Branch-protection promotion to required happened separately (#10022).
   pull_request:
-    branches: [main, Dev_new_gui, develop]
+    branches: [release, main, develop]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -53,12 +67,18 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
+          # #14054: dorny/paths-filter errors on an event it does not
+          # recognise unless `base` is given, and a failed `changes` job
+          # skips every job that needs it -- i.e. the required context
+          # never reports and the queue deadlocks. Empty on push/PR, so
+          # their existing behaviour is unchanged.
+          base: ${{ github.event.merge_group.base_sha || '' }}
           # #12986: `backend` is defined in the canonical filter file.
           filters: .github/filters/backend-python-paths.yml
 
   startup-import-smoke:
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

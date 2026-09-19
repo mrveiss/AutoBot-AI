@@ -59,13 +59,27 @@ def test_fact_id_extraction() -> None:
 
 
 def test_filter_pending_facts_returns_completed_keys() -> None:
+    """#15663: membership in the vector store decides, not a stamp beside the fact."""
     v = BackgroundVectorizer()
     batch = ["fact:a", "fact:b", "fact:c"]
-    status = [b"completed", None, b"failed"]
-    to_process, skipped, completed = v._filter_pending_facts(batch, status)
+    to_process, skipped, completed = v._filter_pending_facts(batch, {"a"})
     assert to_process == ["fact:b", "fact:c"]
     assert skipped == 1
     assert completed == ["fact:a"]
+
+
+def test_filter_pending_facts_processes_everything_when_store_unreachable() -> None:
+    """A "don't know" must not read as "nothing is vectorized" -- nor as "all are".
+
+    Skipping on an unreachable store would leave a fact out of search
+    indefinitely; the cost of the other direction is one redundant embedding.
+    """
+    v = BackgroundVectorizer()
+    batch = ["fact:a", "fact:b"]
+    to_process, skipped, completed = v._filter_pending_facts(batch, None)
+    assert to_process == batch
+    assert skipped == 0
+    assert completed == []
 
 
 def test_first_cycle_does_full_scan() -> None:

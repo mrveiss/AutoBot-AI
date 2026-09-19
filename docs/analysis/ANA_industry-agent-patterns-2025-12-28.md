@@ -511,7 +511,7 @@ Update all agent prompts with:
 
 ## References
 
-- Manus Agent Prompt: `docs/external_apps/.../Manus Agent Tools & Prompt/`
-- Cursor Agent Prompt: `docs/external_apps/.../Cursor Prompts/`
-- Devin Agent Prompt: `docs/external_apps/.../Devin AI/`
-- Windsurf Agent Prompt: `docs/external_apps/.../Windsurf/`
+- Manus Agent Prompt: Manus Agent Tools & Prompt (archived outside the repository, #15223)
+- Cursor Agent Prompt: Cursor Prompts (archived outside the repository, #15223)
+- Devin Agent Prompt: Devin AI (archived outside the repository, #15223)
+- Windsurf Agent Prompt: Windsurf (archived outside the repository, #15223)

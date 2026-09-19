@@ -1,8 +1,25 @@
 # Document processing and text extraction
 python-docx==1.2.0
-pypdf==6.16.1
+pypdf==6.18.1
 reportlab>=5.0.1            # MVA-2174: PDF export for transcripts
-markdown==3.10.3
+# #15600: `markdown` was declared here and required by nothing. It is the
+# mirror image of the nltk entry below, and the same instrument settled both:
+# the 343 distributions pip actually resolved into the deployed venvs contain
+# nltk (llama-index pulls it) and do NOT contain markdown. Every
+# `Requires-Dist: markdown*` across those venvs is a different distribution
+# (markdown-it-py, markdown2) or an extra nothing selects. The nine CI-only
+# packages absent from deployment were closed over separately (29 nodes,
+# extras excluded): none reach markdown either. Zero files import it.
+# So removing this line unpins nothing -- unlike nltk, where removal would
+# have left an unpinned transitive. Do not re-add it without an import.
+# #15551: nltk is imported nowhere in this repository (`import nltk` / `from nltk`
+# match 0 files), but it is NOT removable: llama-index-core declares
+# `nltk>=3.9.3` in its distribution metadata, and requirements-ci.txt pulls in
+# requirements-ci/llama-index.txt alongside this file. Dropping this line would
+# leave nltk installed and merely unpinned -- strictly worse, and it would not
+# retire the PYSEC-2026-3740 allowance in .github/workflows/security.yml, which
+# has no patched release to bump to. Keep the pin; it is what bounds the
+# transitive version.
 nltk==3.10.3
 beautifulsoup4==4.15.0
 markdownify==1.2.3
@@ -11,7 +28,7 @@ markdownify==1.2.3
 # reaches a test runner: pytesseract was declared in #13885 and still absent
 # here months later, which is why every OCR test skipped.
 # pytesseract is the binding; the tesseract binary is installed by the
-# "Install OCR system packages" step in .github/actions/setup-python-suite.
+# "Install CI system packages" step in .github/actions/setup-python-suite.
 pytesseract>=0.3.13
 pypdfium2>=5.13.0          # renders PDF pages for OCR; Apache-2.0/BSD, bundles pdfium
 pdfplumber>=0.11.10         # PDF table extraction (#14232); see the note above on why both files need it

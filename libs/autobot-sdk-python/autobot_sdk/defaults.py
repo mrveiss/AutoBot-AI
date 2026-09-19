@@ -25,10 +25,28 @@ DEFAULT_PAGE_SIZE: int = 50
 
 #: Where an offset-paginated list starts when the caller does not say.
 #:
-#: No route this SDK targets is offset-paginated: ``/knowledge_base/entries`` is
-#: cursor-paginated and ``/chat/sessions`` is not paginated at all, which is why
-#: the ``offset=`` both used to be called with was dropped by FastAPI and their
-#: paging silently did nothing (#15119). The constant stays because it is part of
-#: the published surface and because ``QueryDefaults`` carries its counterpart --
-#: ``sdk_defaults_match_ssot_test.py`` keeps the two pinned to each other.
+#: This constant used to argue that no route the SDK targets is offset-paginated.
+#: That is wrong, and #15170 was filed to settle it either way. Measured: the
+#: search route the SDK already calls -- ``POST /knowledge_base/search``, reached
+#: by :meth:`autobot_sdk.resources.knowledge.KnowledgeResource.search` -- declares
+#: ``offset`` on its request model (``SearchRequest`` in the backend's
+#: ``api/schemas_knowledge.py``) and defaults it to ``QueryDefaults.DEFAULT_OFFSET``,
+#: the very SSOT key this constant mirrors. So offset pagination is the declared
+#: shape of a route in the SDK's own surface, not a shape it left behind: the
+#: constant is kept (#15170, option (a)), and that route is where it belongs.
+#:
+#: ``search()`` does not send it **yet**, and that is deliberate rather than an
+#: oversight. The handler declares ``offset`` and never reads it -- the only
+#: mention in ``api/knowledge_search.py`` is a docstring line -- so an ``offset=``
+#: argument here would be dropped exactly as ``max_results`` was, which is the
+#: defect #15119 removed. The client half lands when the server half does.
+#:
+#: What ``/knowledge_base/entries`` and ``/chat/sessions`` do is unchanged and was
+#: never the whole story: the first is cursor-paginated, the second is not
+#: paginated at all, which is why the ``offset=`` both used to be called with was
+#: dropped by FastAPI (#15119).
+#:
+#: ``sdk_defaults_match_ssot_test.py`` pins this to ``QueryDefaults``;
+#: ``sdk_request_body_test.py`` pins the claim above to the route that carries it,
+#: so this docstring cannot go stale the way the one it replaces did.
 DEFAULT_OFFSET: int = 0

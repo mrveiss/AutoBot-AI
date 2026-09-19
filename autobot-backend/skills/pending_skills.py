@@ -22,13 +22,13 @@ restart are lost; the plan stays BLOCKED until manual try_resume_blocked_plan
 or restart-time discovery picks it up.
 """
 
-import asyncio
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -181,5 +181,5 @@ async def trigger_gap_fill(
                 exc,
             )
 
-    asyncio.create_task(_background_phase3())
+    fire_and_forget(_background_phase3(), name="pending-skill-gap-fill")
     return binding

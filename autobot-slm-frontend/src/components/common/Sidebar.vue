@@ -58,14 +58,16 @@ interface NavItem {
 const navItems: NavItem[] = [
   { name: t('common.sidebar.fleetOverview'), path: '/fleet', icon: 'grid' },
   // Issue #850: Consolidated Services and Roles into Orchestration
+  // Issue #15224: /services retired — per-node service control lives in the
+  // Orchestration per-node tab, so the standalone nav entry is removed too.
   { name: t('common.sidebar.orchestration'), path: '/orchestration', icon: 'orchestration' },
   // Issue #4706: Wire RolesView into router
   { name: t('common.sidebar.roles'), path: '/roles', icon: 'roles' },
-  // Issue #4762: Wire ServicesView as direct /services route
-  { name: t('common.sidebar.services'), path: '/services', icon: 'services' },
   { name: t('common.sidebar.deployments'), path: '/deployments', icon: 'rocket' },
   { name: t('common.sidebar.backups'), path: '/backups', icon: 'database' },
-  { name: t('common.sidebar.replication'), path: '/replications', icon: 'replicate' },
+  // Issue #15225: points directly at the consolidated Orchestration tab
+  // rather than the /replications compat redirect.
+  { name: t('common.sidebar.replication'), path: '/orchestration/replication', icon: 'replicate' },
   // Issue #760: Agents — local + external (merged)
   { name: t('common.sidebar.agents'), path: '/agents', icon: 'agents' },
   // Issue #731: Skills system management
@@ -301,10 +303,8 @@ onUnmounted(() => {
               <svg v-else-if="item.icon === 'roles'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
-              <!-- Issue #4762: Services icon (server stack with list) -->
-              <svg v-else-if="item.icon === 'services'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-              </svg>
+              <!-- Issue #15224: 'services' icon retired along with the
+                   standalone /services nav item it illustrated. -->
               <svg v-else-if="item.icon === 'wrench'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

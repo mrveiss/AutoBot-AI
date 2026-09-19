@@ -10,10 +10,20 @@ import json
 import logging
 import os
 import subprocess
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
 import requests
+
+from autobot_shared.slm_rest_url import rest_url
+
+# #14039: the report path is the handoff between this producer and
+# scripts/post_health_check.py, which reads it. Defined once here and imported
+# there so the two cannot drift, and env-var-backed rather than a literal.
+HEALTH_REPORT_PATH = Path(
+    os.environ.get("AUTOBOT_HEALTH_REPORT_PATH", str(Path(tempfile.gettempdir()) / "autobot-health-check.md"))
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -109,7 +119,7 @@ class HealthCheck:
         """Check 4: SLM health"""
         logger.info("Checking SLM health...")
         try:
-            response = requests.get(f"{self.slm_url}/api/health", timeout=5)
+            response = requests.get(rest_url(self.slm_url, "/api/health"), timeout=5)
             is_healthy = response.status_code == 200
             self.results["slm_health"] = {
                 "status": "OK" if is_healthy else f"FAILED ({response.status_code})",
@@ -212,7 +222,7 @@ class HealthCheck:
         try:
             import redis
 
-            r = redis.Redis(host="localhost", port=6379, db=0, socket_connect_timeout=5)
+            r = redis.Redis(host="localhost", port=6379, db=0, socket_connect_timeout=5)  # noqa: redis
             r.ping()
             self.results["redis"] = {"status": "OK", "timestamp": datetime.now().isoformat()}
             return True
@@ -283,7 +293,7 @@ def main():
     print(report)
 
     # Save report
-    report_file = Path("/tmp/autobot-health-check.md")
+    report_file = HEALTH_REPORT_PATH
     report_file.write_text(report)
     logger.info(f"Report saved to {report_file}")
 

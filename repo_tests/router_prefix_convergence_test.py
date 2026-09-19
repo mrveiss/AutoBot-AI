@@ -27,10 +27,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.api_routing import router_prefixes as routing
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
 
 

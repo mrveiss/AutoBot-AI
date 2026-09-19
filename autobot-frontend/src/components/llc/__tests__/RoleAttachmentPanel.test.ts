@@ -110,3 +110,56 @@ describe('RoleAttachmentPanel (#14221)', () => {
     expect(wrapper.find('.attachment-remove').attributes('aria-label')).toBe('Revoke: a.read')
   })
 })
+
+describe('RoleAttachmentPanel picker (#14852)', () => {
+  const options = [
+    { value: 'crm.salesforce', label: 'crm.salesforce — Customer records' },
+    { value: 'chat.slack', label: 'chat.slack — Team chat' },
+  ]
+
+  it('keeps the text box when no options are supplied', () => {
+    const wrapper = mountPanel()
+
+    expect(wrapper.find('input[type="text"]').exists()).toBe(true)
+    expect(wrapper.find('select').exists()).toBe(false)
+  })
+
+  it('renders a picker instead of the text box when options are supplied', () => {
+    const wrapper = mountPanel({ options, items: [] })
+
+    expect(wrapper.find('select').exists()).toBe(true)
+    expect(wrapper.find('input[type="text"]').exists()).toBe(false)
+    // The placeholder is the empty first option, so the control opens on
+    // "choose one" rather than silently pre-selecting the first tool.
+    const values = wrapper.findAll('option').map((o) => o.attributes('value'))
+    expect(values).toEqual(['', 'crm.salesforce', 'chat.slack'])
+  })
+
+  it('disables an already-attached option rather than hiding it', () => {
+    const wrapper = mountPanel({ options, items: ['crm.salesforce'] })
+
+    const attached = wrapper.findAll('option').find((o) => o.attributes('value') === 'crm.salesforce')
+    const free = wrapper.findAll('option').find((o) => o.attributes('value') === 'chat.slack')
+    // Hiding it would make "already attached" look like "does not exist".
+    expect(attached?.attributes('disabled')).toBeDefined()
+    expect(free?.attributes('disabled')).toBeUndefined()
+  })
+
+  it('emits the chosen option and clears the picker', async () => {
+    const wrapper = mountPanel({ options, items: [] })
+
+    await wrapper.find('select').setValue('chat.slack')
+    await wrapper.find('form').trigger('submit')
+
+    expect(wrapper.emitted('add')?.[0]).toEqual(['chat.slack'])
+    expect((wrapper.find('select').element as HTMLSelectElement).value).toBe('')
+  })
+
+  it('does not emit when the placeholder option is still selected', async () => {
+    const wrapper = mountPanel({ options, items: [] })
+
+    await wrapper.find('form').trigger('submit')
+
+    expect(wrapper.emitted('add')).toBeUndefined()
+  })
+})

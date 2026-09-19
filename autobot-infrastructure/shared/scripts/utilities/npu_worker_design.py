@@ -6,14 +6,29 @@
 """
 Native NPU Worker Design for AutoBot
 Hybrid architecture: WSL2 main system + Windows NPU worker for optimal performance
+
+#14563: this generator writes ``NPU_WORKER_ARCHITECTURE.json`` at the resolved
+project root and, before #14517 fixed its project-root resolution, could never
+reach that target (the ``open()`` call always raised ``FileNotFoundError``).
+Once it became reachable, it still wrote in place with no preview and no
+opt-out -- the same "was inert, now writes" shape #14546 named for
+``optimize_agents.py``. Following that precedent: dry run is the default, the
+tool prints what it would write, and ``--apply`` is required to write it.
 """
 
+import argparse
 import json
+import os
+import tempfile
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import project_root
+
+logger = get_logger(__name__)
 
 
 class TaskType(Enum):
@@ -321,18 +336,90 @@ class NPUWorkerArchitecture:
         print(f"   Availability: {perf['availability']}")
 
 
-if __name__ == "__main__":
+def write_atomically(file_path: Path, content: str) -> None:
+    """Replace ``file_path``'s contents with ``content`` via temp-then-rename.
+
+    A write that fails or is interrupted partway through would otherwise
+    leave a truncated architecture file on disk (#14563, following #14546).
+    Writing to a sibling temp file first and renaming it into place means
+    ``file_path`` is only ever replaced once the new content is fully
+    written -- the rename is atomic on the same filesystem, and a crash
+    before it leaves any pre-existing file untouched.
+    """
+    original_mode = file_path.stat().st_mode if file_path.exists() else 0o644
+    fd, tmp_name = tempfile.mkstemp(dir=file_path.parent, prefix=f".{file_path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+            tmp_file.write(content)
+        os.chmod(tmp_name, original_mode)
+        os.replace(tmp_name, file_path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+
+
+def report_output(target: Path, content: str, apply_changes: bool) -> None:
+    """Print what generating ``target`` would change (or just changed)."""
+    verb = "Wrote" if apply_changes else "Would write"
+    if not target.exists():
+        print(f"  {verb} {target} ({len(content)} bytes, new file)")
+        return
+
+    existing = target.read_text(encoding="utf-8")
+    if existing == content:
+        print(f"  (unchanged) {target}: content already up to date")
+        return
+
+    print(f"  {verb} {target} ({len(existing)} -> {len(content)} bytes, existing file would be replaced)")
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser. Dry-run is the default; --apply opts into writing."""
+    parser = argparse.ArgumentParser(
+        description="Generate NPU_WORKER_ARCHITECTURE.json (safe by default: dry-run)."
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the generated content without writing anything (default; explicit for scripting clarity).",
+    )
+    mode.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write the generated architecture file to disk. Without this flag nothing on disk is touched.",
+    )
+    return parser
+
+
+def main() -> int:
+    """Generate the NPU worker architecture design, previewing by default."""
+    args = build_arg_parser().parse_args()
+    apply_changes = args.apply
+
     architecture = NPUWorkerArchitecture()
     architecture.print_summary()
 
-    # Generate full architecture file
-    # #14517: was a shell placeholder in a plain string literal, so this open()
-    # raised FileNotFoundError and the architecture file was never written.
-    with open(
-        project_root() / "NPU_WORKER_ARCHITECTURE.json",
-        "w",
-        encoding="utf-8",
-    ) as f:
-        f.write(architecture.generate_architecture_file())
+    content = architecture.generate_architecture_file()
+    target = project_root() / "NPU_WORKER_ARCHITECTURE.json"
 
-    print("\n📄 Full architecture saved to NPU_WORKER_ARCHITECTURE.json")
+    mode_label = "APPLY (file will be written)" if apply_changes else "DRY RUN (default; pass --apply to write)"
+    print(f"\nGenerating architecture file - mode: {mode_label}\n")
+    report_output(target, content, apply_changes)
+
+    if not apply_changes:
+        print("\nThis was a dry run: no file was changed. Re-run with --apply to write it.")
+        return 0
+
+    try:
+        write_atomically(target, content)
+    except OSError as exc:
+        logger.error("Failed to write %s: %s", target, exc)
+        return 1
+
+    print(f"\n📄 Full architecture saved to {target}")
+    return 0
+
+
+if __name__ == "__main__":
+    exit(main())

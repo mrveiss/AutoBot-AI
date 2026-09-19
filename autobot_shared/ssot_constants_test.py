@@ -15,6 +15,7 @@ same role ``ssot-parity.spec.ts`` plays for the TypeScript mirror
 value as a hard string, not via the symbol under test.
 """
 
+from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.ssot_constants import CategoryDefaults
 
 
@@ -87,7 +88,7 @@ def test_no_tracked_python_file_carries_a_literal_ttl() -> None:
 
     repo = Path(__file__).resolve().parents[1]
     listing = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*.py"], cwd=str(repo), capture_output=True, text=True
+        ["git", "ls-files", "*.py"], cwd=str(repo), capture_output=True, text=True, env=scrubbed_git_env()
     )
     assert listing.returncode == 0, "git ls-files failed — refusing to report clean"
     files = listing.stdout.split()

@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from constants.path_constants import PATH
@@ -159,7 +160,7 @@ def _start_next_queued_job() -> None:
         return
     next_job = _index_queue.popleft()
     # Remove from Redis queue (#1717: keep in-memory and Redis in sync)
-    asyncio.get_running_loop().create_task(_pop_queue_entry_redis())
+    fire_and_forget(_pop_queue_entry_redis(), name="codebase-index-pop-queue-entry")
     next_path = next_job.get("root_path", str(PATH.PROJECT_ROOT))
     next_source_id = next_job.get("source_id")
     next_task_id = str(uuid.uuid4())
@@ -221,7 +222,7 @@ async def index_codebase(http_request: Request, request: IndexCodebaseRequest | 
         source = path_or_sync.source
         from .sources import _do_sync
 
-        asyncio.create_task(_do_sync(source))
+        fire_and_forget(_do_sync(source), name="codebase-index-source-sync")
         logger.info("Source %s needs sync before indexing", source.id)
         return JSONResponse(
             {

@@ -1,20 +1,29 @@
 # TypeScript SDK Quickstart
 
-This guide shows how to integrate with AutoBot using TypeScript or JavaScript. Until the official `@autobot/sdk` package is published, you can call the API directly with `fetch` or any HTTP client.
+This guide shows how to integrate with AutoBot using TypeScript or JavaScript.
+It calls the API directly with `fetch`, which is what you want for the endpoints
+the SDK does not cover — chat, streaming, workflows, models, collections and
+file upload all have no SDK method.
+
+For sessions, agents, the knowledge base and analytics, prefer the `@autobot/sdk`
+package (see [the SDK overview](README.md)) — but note that it has not yet had the
+request-contract corrections its Python counterpart received, so until that lands
+the Python SDK is the guarded one.
 
 ---
 
 ## Installation
 
-### Official SDK (planned)
+### The SDK
+
+`@autobot/sdk` is **not published to npm yet**. It is checked in at
+`libs/autobot-sdk-ts` and is installed from there:
 
 ```bash
-npm install @autobot/sdk
-# or
-yarn add @autobot/sdk
+npm install ./libs/autobot-sdk-ts
 ```
 
-### Direct HTTP (available now)
+### Direct HTTP
 
 No additional dependencies needed -- the native `fetch` API works in Node.js 18+ and all modern browsers. For older environments:
 
@@ -209,10 +218,11 @@ async function createSession(title: string = 'New conversation') {
   );
 }
 
-async function listSessions(limit: number = 50): Promise<SessionListResponse> {
-  return apiRequest<SessionListResponse>(
-    'GET', `/chats?limit=${limit}`,
-  );
+// GET /api/chats (list_chats) declares no query parameters at all, so a `limit`
+// would be dropped by FastAPI and the caller's paging would silently not apply.
+// It returns the caller's whole list; slice the result instead.
+async function listSessions(): Promise<SessionListResponse> {
+  return apiRequest<SessionListResponse>('GET', '/chats');
 }
 
 async function getSession(sessionId: string) {

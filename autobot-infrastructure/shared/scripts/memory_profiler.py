@@ -83,7 +83,9 @@ class MemoryProfiler:
         }
 
         logger.info(
-            f"💾 System Memory: {system_info['virtual_memory']['used_gb']}GB used / {system_info['virtual_memory']['total_gb']}GB total ({system_info['virtual_memory']['percentage']:.1f}%)"
+            f"💾 System Memory: {system_info['virtual_memory']['used_gb']}GB used / "
+            f"{system_info['virtual_memory']['total_gb']}GB total "
+            f"({system_info['virtual_memory']['percentage']:.1f}%)"
         )
 
         return system_info
@@ -106,7 +108,8 @@ class MemoryProfiler:
         }
 
         logger.info(
-            f"⚡ Process Memory: {process_info['rss_mb']}MB RSS, {process_info['vms_mb']}MB VMS ({process_info['percentage']:.1f}%)"
+            f"⚡ Process Memory: {process_info['rss_mb']}MB RSS, {process_info['vms_mb']}MB VMS "
+            f"({process_info['percentage']:.1f}%)"
         )
 
         return process_info
@@ -215,7 +218,8 @@ class MemoryProfiler:
         }
 
         logger.info(
-            f"📂 Files: {file_count:,} total files, {file_analysis['total_size_gb']}GB total, {len(large_files)} files >1MB"
+            f"📂 Files: {file_count:,} total files, {file_analysis['total_size_gb']}GB total, "
+            f"{len(large_files)} files >1MB"
         )
 
         return file_analysis
@@ -382,27 +386,29 @@ class MemoryProfiler:
 
     def generate_markdown_report(self) -> str:
         """Generate markdown memory profiling report"""
-        self.profile_results.get("system_memory", {})
-        self.profile_results.get("process_memory", {})
+        system_memory = self.profile_results.get("system_memory", {})
+        process_memory = self.profile_results.get("process_memory", {})
         object_analysis = self.profile_results.get("object_analysis", {})
         file_analysis = self.profile_results.get("file_analysis", {})
         recommendations = self.profile_results.get("recommendations", [])
 
-        report = """# 💾 AutoBot Memory Usage Report
+        report = f"""# 💾 AutoBot Memory Usage Report
 
-**Profile Date:** {self.profile_results["timestamp"]}
+**Profile Date:** {self.profile_results['timestamp']}
 
 ## 📊 System Memory Status
 
 ### Virtual Memory
 - **Total:** {system_memory.get('virtual_memory', {}).get('total_gb', 0)}GB
-- **Used:** {system_memory.get('virtual_memory', {}).get('used_gb', 0)}GB ({system_memory.get('virtual_memory', {}).get('percentage', 0):.1f}%)
+- **Used:** {system_memory.get('virtual_memory', {}).get('used_gb', 0)}GB
+({system_memory.get('virtual_memory', {}).get('percentage', 0):.1f}%)
 - **Available:** {system_memory.get('virtual_memory', {}).get('available_gb', 0)}GB
 - **Free:** {system_memory.get('virtual_memory', {}).get('free_gb', 0)}GB
 
 ### Swap Memory
 - **Total:** {system_memory.get('swap_memory', {}).get('total_gb', 0)}GB
-- **Used:** {system_memory.get('swap_memory', {}).get('used_gb', 0)}GB ({system_memory.get('swap_memory', {}).get('percentage', 0):.1f}%)
+- **Used:** {system_memory.get('swap_memory', {}).get('used_gb', 0)}GB
+({system_memory.get('swap_memory', {}).get('percentage', 0):.1f}%)
 
 ## ⚡ Process Memory Usage
 
@@ -425,7 +431,7 @@ class MemoryProfiler:
         object_lines = [f"- **{obj_type}:** {count:,} instances" for obj_type, count in list(top_objects.items())[:10]]
         report += "\n".join(object_lines) + "\n" if object_lines else ""
 
-        report += """
+        report += f"""
 ### Garbage Collector Stats
 - **Generation 0:** {object_analysis.get('garbage_collector_stats', {}).get('generation_0', 0)} objects
 - **Generation 1:** {object_analysis.get('garbage_collector_stats', {}).get('generation_1', 0)} objects
@@ -500,9 +506,12 @@ class MemoryProfiler:
         process_mem = self.profile_results["process_memory"]
 
         logger.info(
-            f"🖥️  System Memory: {system_mem['used_gb']}GB / {system_mem['total_gb']}GB ({system_mem['percentage']:.1f}%)"
+            f"🖥️  System Memory: {system_mem['used_gb']}GB / {system_mem['total_gb']}GB "
+            f"({system_mem['percentage']:.1f}%)"
         )
-        logger.info(f"⚡ Process Memory: {process_mem['rss_mb']}MB RSS ({process_mem['percentage']:.1f}%)")
+        logger.info(
+            f"⚡ Process Memory: {process_mem['rss_mb']}MB RSS ({process_mem['percentage']:.1f}%)"
+        )
         logger.info(f"🐍 Python Objects: {self.profile_results['object_analysis']['total_objects']:,} total")
         logger.info(f"📁 Large Files: {self.profile_results['file_analysis']['large_files_count']} files >1MB")
 

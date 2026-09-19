@@ -56,8 +56,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 SCRIPT_DIR = REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts"
 LIB = SCRIPT_DIR / "lib" / "db-update-classify.sh"
 SYNC_SCRIPT = SCRIPT_DIR / "utilities" / "sync-to-slm.sh"

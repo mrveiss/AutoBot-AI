@@ -64,8 +64,8 @@ cd "$PROJECT_ROOT"
 
 # Base resolution is the canonical one built in this same change (#13984): the
 # merge-commit rule, the payload fallback, the branch-name fallback and "an
-# unresolvable ref is FATAL". A hardcoded origin/main would be wrong on every
-# pull request in this repository, which targets Dev_new_gui.
+# unresolvable ref is FATAL". A hardcoded origin/release would be wrong on every
+# pull request in this repository, which targets main.
 base=$(git_scope_resolve_base "$HEAD_SHA" "${BASE_SHA:-}") || exit 1
 git_scope_require_commits "$base" "$HEAD_SHA" || exit 1
 

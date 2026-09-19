@@ -19,13 +19,13 @@ from __future__ import annotations
 
 import importlib
 import re
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml")
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _CONFIG = _REPO_ROOT / "autobot-infrastructure" / "shared" / "config" / "logging.yml"
 _AGGREGATOR = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "log_aggregator.py"
 

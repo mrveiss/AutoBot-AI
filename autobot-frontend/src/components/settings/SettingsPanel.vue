@@ -21,7 +21,6 @@
         v-if="isSettingsLoaded"
         :settings="settings"
         :isSettingsLoaded="isSettingsLoaded"
-        :healthStatus="healthStatus"
         :cacheConfig="cacheConfig"
         :cacheActivity="cacheActivity"
         :cacheStats="cacheStats"
@@ -66,6 +65,15 @@
 </template>
 
 <script setup lang="ts">
+// #16465: this component is not mounted anywhere in the app today -- only
+// its own test and story reach it, and its GET/POST /settings/ calls hit
+// the now admin-gated backend route (#16240). Left in place rather than
+// retired: #16245 owns its actual disposition (relocating the detailed
+// system-health and Redis-service-management parts into the SLM before
+// removing this component's entry points), and that migration hasn't
+// happened yet. Its plain settings get/save is already superseded
+// elsewhere (utils/ApiClient.ts, live via AgentSettingsPanel.vue and
+// BatchApiService.ts) -- see #16465 for the parity evidence.
 import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, onMounted, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -103,7 +111,6 @@ import type {
   PromptsSettings as PromptsSettingsType,
   DeveloperSettings as DeveloperSettingsType,
   BackendSettings as BackendSettingsType,
-  HealthStatus,
   CacheActivityItem,
   CacheStats,
   CacheConfig,
@@ -120,7 +127,6 @@ const isSettingsLoaded = ref<boolean>(false)
 const settingsLoadingStatus = ref<'loading' | 'loaded' | 'offline'>('loading')
 const isSaving = ref<boolean>(false)
 const isClearing = ref<boolean>(false)
-const healthStatus = ref<HealthStatus | null>(null)
 const cacheApiAvailable = ref<boolean>(false)
 
 const activeBackendSubTab = ref('agents')
@@ -373,7 +379,6 @@ const getCurrentLLMDisplay = (): string => {
 provide('settingsData', {
   settings,
   isSettingsLoaded,
-  healthStatus,
   getCurrentLLMDisplay
 })
 
@@ -783,56 +788,12 @@ const revertPromptToDefault = async (promptId: string) => {
   await postRevert()
 }
 
-// Load health status with corrected endpoint
-const loadHealthStatus = async () => {
-  // Try detailed health endpoint first
-  const { execute: getDetailedHealth } = useAsyncHandler(
-    async () => apiClient.get<HealthStatus>(`${getApiBase()}/system/health/detailed`, GET_OPTS),
-    {
-      logErrors: true,
-      errorPrefix: '[SettingsPanel]',
-      onSuccess: (response) => {
-        healthStatus.value = response
-      },
-      onError: async () => {
-        // Fallback to basic health endpoint
-        const { execute: getBasicHealth } = useAsyncHandler(
-          async () => apiClient.get<Record<string, unknown>>(`${getApiBase()}/system/health`, GET_OPTS),
-          {
-            logErrors: true,
-            errorPrefix: '[SettingsPanel]',
-            onSuccess: (fallbackResponse) => {
-              healthStatus.value = {
-                basic_health: fallbackResponse,
-                detailed_available: false
-              } as HealthStatus
-            },
-            onError: () => {
-              healthStatus.value = {
-                status: 'unavailable',
-                message: 'Health endpoints not available'
-              } as HealthStatus
-            }
-          }
-        )
-
-        await getBasicHealth()
-      }
-    }
-  )
-
-  await getDetailedHealth()
-}
-
 onMounted(async () => {
   // Load settings first
   loadSettings()
 
   // Check cache API availability
   await checkCacheApiAvailability()
-
-  // Load health status
-  loadHealthStatus()
 
   // Load cache data only if API is available
   if (cacheApiAvailable.value) {

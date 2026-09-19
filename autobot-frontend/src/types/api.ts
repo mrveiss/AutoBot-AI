@@ -233,7 +233,13 @@ export type ServiceHealthStatusValue =
   | 'online'
   | 'offline';
 
-export interface ServiceStatus {
+/**
+ * One service's health, as the main GUI's status surfaces render it (#15401).
+ * Named `ServiceStatus` until #15401 -- the SLM's `ServiceStatus` is a run-state
+ * union, a different concept, and keeps the name. `types/system.ts` carried a
+ * drifted copy of this row; it now re-exports this one.
+ */
+export interface ServiceHealthEntry {
   name: string;
   version?: string;
   status: ServiceHealthStatusValue;
@@ -252,7 +258,7 @@ export interface SystemAlert {
   title: string;
   message: string;
   visible: boolean;
-  statusDetails?: ServiceStatus;
+  statusDetails?: ServiceHealthEntry;
   timestamp: number;
   type?: string;
 }

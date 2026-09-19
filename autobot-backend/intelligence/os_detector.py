@@ -519,37 +519,37 @@ if __name__ == "__main__":
         logger.info("=== OS Detection Test ===")
         os_info = await detector.detect_system()
 
-        logger.info("OS Type: {os_info.os_type.value}")
+        logger.info(f"OS Type: {os_info.os_type.value}")
         if os_info.distro:
-            logger.info("Distribution: {os_info.distro.value}")
-        logger.info("Version: {os_info.version}")
-        logger.info("Architecture: {os_info.architecture}")
-        logger.info("User: {os_info.user}")
-        logger.info("Root Access: {os_info.is_root}")
-        logger.info("WSL: {os_info.is_wsl}")
-        logger.info("Package Manager: {os_info.package_manager}")
-        logger.info("Shell: {os_info.shell}")
+            logger.info(f"Distribution: {os_info.distro.value}")
+        logger.info(f"Version: {os_info.version}")
+        logger.info(f"Architecture: {os_info.architecture}")
+        logger.info(f"User: {os_info.user}")
+        logger.info(f"Root Access: {os_info.is_root}")
+        logger.info(f"WSL: {os_info.is_wsl}")
+        logger.info(f"Package Manager: {os_info.package_manager}")
+        logger.info(f"Shell: {os_info.shell}")
 
         # Test installation capability
         can_install, reason = await detector.validate_installation_capability()
-        logger.info("Can Install Tools: {can_install}")
-        logger.info("Reason: {reason}")
+        logger.info(f"Can Install Tools: {can_install}")
+        logger.info(f"Reason: {reason}")
 
         # Show capabilities summary
         capabilities_info = await detector.get_capabilities_info()
         logger.info("=== Capabilities Summary ===")
-        logger.info("Total Tools: {capabilities_info['total_count']}")
-        logger.info("Network Tools: {capabilities_info['network_tools']}")
-        logger.info("System Tools: {capabilities_info['system_tools']}")
-        logger.info("File Tools: {capabilities_info['file_tools']}")
-        logger.info("Development Tools: {capabilities_info['development_tools']}")
+        logger.info(f"Total Tools: {capabilities_info['total_count']}")
+        logger.info(f"Network Tools: {capabilities_info['network_tools']}")
+        logger.info(f"System Tools: {capabilities_info['system_tools']}")
+        logger.info(f"File Tools: {capabilities_info['file_tools']}")
+        logger.info(f"Development Tools: {capabilities_info['development_tools']}")
 
         # Show some examples
         logger.info("=== Available Tools (Examples) ===")
         for category, tools in capabilities_info["by_category"].items():
             if tools:
-                logger.info("{category.title()}: {', '.join(tools[:5])}")
+                logger.info(f"{category.title()}: {', '.join(tools[:5])}")
                 if len(tools) > 5:
-                    logger.info("  ... and {len(tools) - 5} more")
+                    logger.info(f"  ... and {len(tools) - 5} more")
 
     run_or_schedule(test_detector())

@@ -23,6 +23,10 @@ ai_port: 8080
 
 # ChromaDB
 chromadb_persist_dir: /var/lib/autobot/chromadb
+# #15317: DIAL address only now (ai-stack.env.j2's CHROMADB_HOST=) -- the unit's
+# BIND address is the separate chromadb_bind_host in group_vars/all.yml. Left at
+# its pre-existing value rather than changed here: this variable's actual
+# consumers were not fully traced, and 0.0.0.0 as a dial value pre-dates #15317.
 chromadb_host: "0.0.0.0"
 chromadb_port: 8100
 # CHROMA_SERVER_AUTHN_* token auth (#12513). Empty (default) = auth disabled,
@@ -48,6 +52,9 @@ ai_classification_endpoint: "http://{{ ollama_host }}:{{ ollama_port }}"
 ai_redis_host: "{{ redis_host | default(ansible_host) }}"
 ai_redis_port: "{{ redis_port | default(6379) }}"
 ai_redis_password: "{{ vault_redis_password | default('') }}"
+# #16627: ACL user sent with ai_redis_password; adopted as `default` together with
+# the SLM-generated password (tasks/main.yml)
+ai_redis_username: ""
 
 # Agent LLM model names — required by get_agent_model_explicit() in ssot_config.py.
 # Defaults mirror the 6-tier constants in autobot-backend/autobot_shared/ssot_config.py.

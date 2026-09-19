@@ -22,18 +22,23 @@ from typing import Dict, List
 
 import psutil
 
+from autobot_shared.env_utils import env_float
+from autobot_shared.gpu_telemetry import probe_gpus
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.service_discovery import SERVICE_DISCOVERY_TTL_S
+from autobot_shared.ssot_config import get_config
 from autobot_shared.time_utils import utc_timestamp
 
 # App-level /health probes for services that expose engine state beyond
 # systemd (#11723/#11777). Local-only URLs, short timeout, never fatal to
-# service discovery. Env-overridable so a non-default port needs no code change.
-TTS_HEALTH_URL = os.getenv("SLM_AGENT_TTS_HEALTH_URL", "http://127.0.0.1:8083/health")
+# service discovery. The port is the SSOT's (AUTOBOT_TTS_WORKER_PORT), so a
+# re-homed worker needs no second edit; SLM_AGENT_TTS_HEALTH_URL still
+# overrides the whole URL.
+TTS_HEALTH_URL = os.getenv("SLM_AGENT_TTS_HEALTH_URL") or f"http://127.0.0.1:{get_config().port.tts}/health"
 APP_HEALTH_PROBES: Dict[str, str] = {
     "autobot-tts-worker": TTS_HEALTH_URL,
 }
-APP_HEALTH_TIMEOUT_SECONDS = float(os.getenv("SLM_AGENT_APP_HEALTH_TIMEOUT", "2.0"))
+APP_HEALTH_TIMEOUT_SECONDS = env_float("SLM_AGENT_APP_HEALTH_TIMEOUT", 2.0)
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +98,8 @@ class HealthCollector:
             "disk_percent": psutil.disk_usage("/").percent,
             "load_avg": (list(os.getloadavg()) if hasattr(os, "getloadavg") else [0.0, 0.0, 0.0]),
             "uptime_seconds": int(datetime.now().timestamp() - psutil.boot_time()),
+            # #16280: NVIDIA/AMD GPUs, measured where the vendor tool answers.
+            "gpu": probe_gpus(),
         }
 
         # Collect service statuses
@@ -229,8 +236,15 @@ class HealthCollector:
         if len(parts) < 4:
             return None
         unit_name = parts[0]
-        if "@" in unit_name or not unit_name.endswith(".service"):
+        if not unit_name.endswith(".service"):
             return None
+        # #16020/#16019: a templated unit is NOT a phantom. `postgresql@16-main`
+        # IS the running PostgreSQL on this fleet -- the bare `postgresql.service`
+        # is a oneshot wrapper that exits. Dropping every name containing `@`
+        # discarded the unit doing the work and kept the one that looks stopped,
+        # so PostgreSQL reported `unknown` on a healthy node. The instance is
+        # kept in the reported name so two instances of one template stay
+        # distinguishable.
 
         service_name = unit_name.replace(".service", "")
         load_state = parts[1]
@@ -249,14 +263,38 @@ class HealthCollector:
         }
 
     def _map_status_from_states(self, active_state: str, sub_state: str) -> str:
-        """Map systemd active/sub states to our status enum. Issue #620."""
+        """Map systemd active/sub states to our status enum. Issue #620.
+
+        `unknown` means **the probe got no usable answer** -- it must never mean
+        "systemd told me something I have no branch for". Those are opposite
+        situations and the UI renders them identically, so a oneshot that
+        finished successfully looked exactly like an unreachable node (#16019).
+
+        The gap was `active (exited)`: a completed oneshot, which is what
+        `slm-admin-ui` and the `postgresql` wrapper report on every healthy
+        node. It matched no branch and fell through to `unknown`.
+        """
         if active_state == "active" and sub_state == "running":
             return "running"
-        elif active_state == "failed" or sub_state == "failed":
+        if active_state == "active" and sub_state == "exited":
+            # A oneshot that ran to completion. Distinct from `running` (nothing
+            # is resident) and emphatically not `unknown` -- systemd is telling
+            # us it SUCCEEDED.
+            return "completed"
+        if active_state == "active":
+            # Any other active sub-state (start-pre, reload, mounting...) is a
+            # live unit. Reporting the sub-state's novelty as `unknown` is what
+            # this method exists to stop doing.
+            return "running"
+        if active_state == "failed" or sub_state == "failed":
             return "failed"
-        elif active_state == "activating" and sub_state == "auto-restart":
+        if active_state == "activating" and sub_state == "auto-restart":
             return "crash-loop"  # Issue #1604
-        elif active_state == "inactive":
+        if active_state == "activating":
+            return "starting"
+        if active_state == "deactivating":
+            return "stopping"
+        if active_state == "inactive":
             return "stopped"
         return "unknown"
 

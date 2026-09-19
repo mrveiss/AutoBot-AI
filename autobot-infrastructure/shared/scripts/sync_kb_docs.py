@@ -18,8 +18,11 @@ from autobot_shared.paths import project_root
 
 logger = logging.getLogger(__name__)
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# knowledge_base / knowledge_sync_incremental live in autobot-backend, not
+# under this script's own directory tree (#16710: neither module resolved
+# from the previous two-levels-up path -- this script could only ever run if
+# the backend happened to already be on sys.path some other way).
+sys.path.insert(0, str(project_root() / "autobot-backend"))
 
 from knowledge_base import KnowledgeBase
 from knowledge_sync_incremental import run_incremental_sync
@@ -149,7 +152,7 @@ async def _test_search_functionality(kb) -> None:
 
     for query in test_queries:
         try:
-            results = await kb.get_fact(query=query)
+            results = await kb.search(query=query)  # #16710: get_fact() never took a query
             logger.info(f"Search '{query}': {len(results)} results found")
         except Exception as e:
             logger.error(f"Search '{query}': error - {str(e)}")
@@ -242,7 +245,7 @@ async def incremental_sync():
 
             for query in test_queries:
                 try:
-                    results = await kb.get_fact(query=query)
+                    results = await kb.search(query=query)  # #16710: get_fact() never took a query
                     logger.info(f"Search '{query}': {len(results)} results found")
                 except Exception as e:
                     logger.error(f"Search '{query}': error - {str(e)}")

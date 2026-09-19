@@ -63,12 +63,11 @@ from api.schemas_chat import (
     KbCleanupResult,
     SessionCreateData,
     SessionDeleteData,
-    SessionListData,
-    SessionMessagesData,
     SessionUpdateData,
     TerminalCleanupResult,
     TranscriptCleanupResult,
 )
+from api.schemas_chat_rows import SessionListData, SessionMessage, SessionMessagesData, SessionSummary
 from knowledge.schemas.entries import KnowledgeEntriesResponse
 from knowledge.schemas.entries import KnowledgeEntry as BackendKnowledgeEntry
 from knowledge.schemas.ingestion import AddTextResponse
@@ -101,6 +100,10 @@ CONTRACT: tuple[Pair, ...] = (
     Pair(sdk.AgentHealth, AgentHealthResponse, "GET /agent/health/detailed"),
     Pair(sdk.SessionList, SessionListData, "GET /chat/sessions"),
     Pair(sdk.SessionMessages, SessionMessagesData, "GET /chat/sessions/{id}"),
+    # #15138: both rows are now described by a model instead of List[Any], so
+    # they move out of UNPAIRED and are compared like every other pair.
+    Pair(sdk.Session, SessionSummary, "GET /chat/sessions[].sessions"),
+    Pair(sdk.ChatMessage, SessionMessage, "GET /chat/sessions/{id}[].messages"),
     Pair(sdk.SessionCreate, SessionCreateData, "POST /chat/sessions"),
     Pair(sdk.SessionUpdate, SessionUpdateData, "PUT /chat/sessions/{id}"),
     Pair(sdk.SessionDelete, SessionDeleteData, "DELETE /chat/sessions/{id}"),
@@ -125,15 +128,6 @@ CONTRACT: tuple[Pair, ...] = (
 #: rather than omitted: an omitted model is indistinguishable from a forgotten
 #: one, which is the silence this file exists to end.
 UNPAIRED: dict[type[BaseModel], str] = {
-    sdk.Session: (
-        "SessionListData.sessions is declared List[Any] in api/schemas_chat.py, so the backend "
-        "describes a row nowhere (#15138). These names are the literal keys "
-        "chat_history/session_listing.py writes; repo_tests/sdk_response_parsing_test.py pins them against that literal."
-    ),
-    sdk.ChatMessage: (
-        "SessionMessagesData.messages is declared List[Any] for the same reason (#15138). These names are "
-        "the literal keys chat_history/messages.py writes; repo_tests/sdk_response_parsing_test.py pins them against that literal."
-    ),
     sdk.DataResponse: "The envelope itself; it mirrors schemas_common.DataResponse, not one route.",
 }
 

@@ -12,6 +12,7 @@
  */
 
 import { ref, computed, onMounted, toRef, watch } from 'vue'
+import { displayNameOf } from '@/utils/displayName'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
@@ -101,7 +102,7 @@ const getInitials = (username: string): string => {
 
 // Get display name or username
 const getDisplayName = (user: CollaborationUser): string => {
-  return user.display_name || user.username
+  return displayNameOf(user)
 }
 
 // Select user
@@ -122,7 +123,7 @@ const sendInvitation = async () => {
 
   try {
     // Call composable to send invitation
-    const success = inviteCollaborator(selectedUserId.value, selectedRole.value)
+    const success = await inviteCollaborator(selectedUserId.value, selectedRole.value)
 
     if (success) {
       const user = users.value.find(u => u.id === selectedUserId.value)

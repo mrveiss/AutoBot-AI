@@ -16,9 +16,10 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_system import InfrastructureHostsResponse
-from auth_middleware import get_current_user
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from security.secrets_store_errors import SecretsStoreUnavailable
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["infrastructure"])
@@ -53,9 +54,13 @@ def _load_secrets_hosts() -> List[Dict[str, Any]]:
                 }
             )
         return hosts
-    except Exception:
+    except Exception as exc:
+        # #14126: returning [] here is indistinguishable from "the user has
+        # configured no hosts", so a broken or unreachable secrets store
+        # rendered as an empty, healthy-looking list. The operator saw nothing
+        # wrong and no host to connect to.
         logger.exception("Failed to load infrastructure host secrets")
-        return []
+        raise SecretsStoreUnavailable("infrastructure host secrets") from exc
 
 
 @router.get("/hosts", response_model=InfrastructureHostsResponse)
@@ -67,14 +72,27 @@ def _load_secrets_hosts() -> List[Dict[str, Any]]:
 async def get_infrastructure_hosts(
     capability: str | None = Query(None, description="Filter by capability (ssh, vnc)"),
     chat_id: str | None = Query(None, description="Associated chat session (unused, for context)"),
-    _user: Any = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Return user-configured hosts from secrets, filtered by capability.
 
     Issue #1310: Fleet/system hosts removed — they belong in SLM only.
     Only hosts explicitly added by the user via Secrets are returned.
+    Requires: admin permission.
     """
-    hosts = _load_secrets_hosts()
+    # #16426: admin-only because this returns connection metadata -- host, ports,
+    # username, os, capabilities -- for every host, not just the caller's own.
+    #
+    # Deliberately a comment and not part of the docstring: FastAPI publishes a
+    # route's docstring as the OpenAPI `description`, which reaches
+    # autobot-frontend/src/types/generated/api.ts and anything served from the
+    # schema. An endpoint description is client-facing documentation, so it is no
+    # place to narrate the access-control defect this route used to have (#16827).
+    try:
+        hosts = _load_secrets_hosts()
+    except SecretsStoreUnavailable as exc:
+        # #14126: a store failure is not an empty configuration.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     if capability:
         hosts = [h for h in hosts if capability in h.get("capabilities", [])]
@@ -90,7 +108,7 @@ async def get_infrastructure_hosts(
 )
 async def delete_infrastructure_host(
     host_id: str,
-    _user: Any = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Delete a user-configured infrastructure host.
 
@@ -98,7 +116,11 @@ async def delete_infrastructure_host(
     ``infrastructure_host``; deleting the host removes its Secrets entry.
     Mirrors the GET read-shim — the host id IS the secret id. Returns 404
     when no matching infrastructure host exists.
+    Requires: admin permission.
     """
+    # #16426: admin-only. The previous dependency was `get_current_user`, which
+    # gated on being signed in and nothing else. See the GET route above for why
+    # this rationale is a comment rather than docstring text (#16827).
     if not any(h["id"] == host_id for h in _load_secrets_hosts()):
         raise HTTPException(status_code=404, detail="Infrastructure host not found")
 

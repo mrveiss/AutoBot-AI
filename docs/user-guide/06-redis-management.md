@@ -45,7 +45,7 @@ Redis is a critical component of AutoBot that provides:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Frontend UI (VM1)                         │
+│                    Frontend UI (Frontend Role)               │
 │              http://<frontend-ip>:5173                       │
 │                                                              │
 │  [Redis Service Controls]                                   │
@@ -70,7 +70,7 @@ Redis is a critical component of AutoBot that provides:
                        │ SSH Commands (systemctl)
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                Redis VM (VM3)                                │
+│                Redis (Database Role)                         │
 │           <database-ip>:6379                                │
 │                                                              │
 │  [Redis Service]                                            │
@@ -453,13 +453,13 @@ Failure → Try next level or alert admin
 
 #### Level 2: Standard Recovery (10-20 seconds)
 - **Scenario:** Redis service stopped
-- **Action:** Execute `systemctl start redis-server`
+- **Action:** Execute `systemctl start redis-stack-server`
 - **Impact:** Brief startup time
 - **User Notification:** Warning level
 
 #### Level 3: Hard Recovery (20-30 seconds)
 - **Scenario:** Redis service failed to start
-- **Action:** Execute `systemctl restart redis-server`
+- **Action:** Execute `systemctl restart redis-stack-server`
 - **Impact:** Moderate (connections reset)
 - **User Notification:** Warning level
 
@@ -657,7 +657,7 @@ To request elevated permissions:
 **Symptoms:**
 - Start operation fails with error
 - Service status shows "Failed"
-- Error message: "Job for redis-server.service failed"
+- Error message: "Job for redis-stack-server.service failed"
 
 **Possible Causes & Solutions:**
 

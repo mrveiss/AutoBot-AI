@@ -51,8 +51,11 @@ from repo_tests.credential_vault_resolution_allowlist import ALLOWLIST, _AUTH_BO
 #: The recorded TRACKED_GAP count. THIS RATCHET TURNS BOTH WAYS: raise it only by
 #: adding a new, correctly TRACKED_GAP-marked entry in the same change, and lower it
 #: whenever a TRACKED_GAP entry is fixed and removed -- never leave it stale in
-#: either direction (#15278).
-TRACKED_GAP_CEILING = 2
+#: either direction (#15278). Lowered to 0 in #15276: the last two sites
+#: (``claude_code_backend.py``'s ``anthropic_api_key``,
+#: ``notification_service.py``'s ``smtp_password``) were closed with a
+#: line-neutral edit apiece, so neither ``KNOWN_LARGE`` ceiling had to move.
+TRACKED_GAP_CEILING = 0
 
 _TRACKED_GAP_MARKER_RE = re.compile(rf"^{re.escape(_TRACKED)} #(\d+):\s+\S")
 

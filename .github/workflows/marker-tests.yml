@@ -18,9 +18,14 @@
 #   * Scheduled, not per-PR. These are the tests that were excluded because they
 #     are slow or need external services; putting them in the PR gate is the
 #     change #10691 owns and is owner-gated.
-#   * Non-blocking by construction — it is not a `pull_request` workflow, so it
-#     is not a required context and cannot block a merge. It still FAILS (red in
-#     the Actions tab) when a test fails.
+#   * Non-blocking by construction. It DOES carry a `pull_request` trigger, but
+#     one filtered to `paths: ['.github/workflows/marker-tests.yml']`, so it runs
+#     only when this file itself changes and is a required context on no other
+#     PR. #15183: this header used to read "it is not a `pull_request` workflow",
+#     which the `on:` block contradicts and which the note above the trigger
+#     already stated correctly — a reader who checked the header and stopped got
+#     the wrong answer about why it cannot block. It still FAILS (red in the
+#     Actions tab) when a test fails.
 #
 #     A red run here is a DEFECT TO TRIAGE, never an accepted steady state. A
 #     workflow that is expected to be red is a workflow nobody reads — that is
@@ -37,7 +42,8 @@
 #     reported as a hard result instead of a stated non-result.
 #       * 19 errors — `redis_service_api_integration_test.py` had no
 #         `backend_url` fixture on this tree at all, so every test in it errored
-#         at setup. The fixture is now defined in the module.
+#         at setup. The fixture was then defined in the module. #16245 later
+#         removed the module, with the unreachable client it exercised.
 #       * 16 failures — `infrastructure_integration_test.py` (6) and
 #         `voice_integration_test.py` (10) dial a backend on :8001 and a TTS
 #         worker on :8083 over real HTTP. Both now skip, naming the absent
@@ -129,7 +135,7 @@ on:
   # This is what turns "a nightly nobody has ever seen run" into a workflow with
   # an observed conclusion — the standing objection to shipping it.
   push:
-    branches: [Dev_new_gui]
+    branches: [main]
     paths:
       - '.github/workflows/marker-tests.yml'
   pull_request:
@@ -400,7 +406,7 @@ jobs:
 
       - name: Upload marker reports
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: marker-suite-reports
           path: marker-report-*.xml

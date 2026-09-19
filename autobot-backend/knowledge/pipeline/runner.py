@@ -11,6 +11,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import redact_content
 from autobot_shared.time_utils import now_utc
 
 from .base import PipelineContext, PipelineResult
@@ -81,6 +82,19 @@ class PipelineRunner:
         Returns:
             List of extracted data objects
         """
+        # #13708 round 4: the ECL pipeline never ran the credential sanitizer at
+        # all -- every extract task below (classify_document, chunk_text,
+        # extract_metadata) receives the same input_data, so redacting it once
+        # here, before chunking, means every chunk, RAPTOR summary and
+        # entity/relationship derived from those chunks is already clean by the
+        # time chromadb_loader.py/sqlite_loader.py persist them. Guarded to a str
+        # the same way SemanticChunker.process() itself checks input_data's shape.
+        # This closes the credential leak only -- the pipeline still never runs
+        # the #16770 prompt-injection sanitizer (sanitize_for_storage); tracked
+        # separately as #17033, found by review after this fix landed.
+        if isinstance(input_data, str):
+            input_data = redact_content(input_data)
+
         extract_config = self.config.get("extract", [])
         extracted_data = []
 

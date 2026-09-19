@@ -23,9 +23,27 @@
   gather_facts: true
 
   vars:
-    backend_install_dir: /opt/autobot
-    backend_code_dir: "{{ backend_install_dir }}/autobot-backend"
-    backend_shared_dir: "{{ backend_install_dir }}/autobot_shared"
+    # #13539/B3: `backend_install_dir` means the BACKEND COMPONENT directory
+    # everywhere else it is defined (roles/backend/defaults/main.yml,
+    # roles/ai-stack/defaults/main.yml) and every template that consumes it
+    # derives the deploy root back out via `| dirname` -- so overriding it
+    # here with the deploy root silently broke that derivation (the
+    # autobot_shared PYTHONPATH entry and uvicorn's --log-config resolved to
+    # /opt/autobot_shared instead of /opt/autobot/autobot_shared). Declare the
+    # root under its own name and derive backend_install_dir FROM it, so the
+    # role's `| dirname` convention still lands on /opt/autobot.
+    backend_deployed_root: /opt/autobot
+    backend_install_dir: "{{ backend_deployed_root }}/autobot-backend"
+    backend_code_dir: "{{ backend_install_dir }}"
+    # #15560/3: this was `backend_shared_dir` -- the right value under a name
+    # nothing consumes. The `backend` role (and the `autobot_shared` role it
+    # sits beside) reads `backend_shared_standalone_dir`, whose default is a
+    # hardcoded /opt/autobot/autobot_shared that does NOT follow the
+    # backend_deployed_root this play declares. So the play's deploy root was
+    # silently not reaching the one directory the standalone PYTHONPATH copy
+    # lands in. Renamed to the consumed name rather than deleted: the omission
+    # was the bug.
+    backend_shared_standalone_dir: "{{ backend_deployed_root }}/autobot_shared"
     backend_user: autobot
     backend_group: autobot
     backend_port: 8001
@@ -74,6 +92,13 @@
     - role: vnc
       tags: [vnc, desktop]
       when: enable_vnc | default(true)
+      vars:
+        # #16299 review round 3: this role's own tasks run before this
+        # play's post_tasks migration sequence, so its secrets-vault
+        # registration cannot succeed yet here -- defer it (see
+        # roles/vnc/defaults/main.yml) to the explicit post-migration call
+        # below instead of letting it fail every time.
+        vnc_defer_vault_registration: true
 
   post_tasks:
     # Strict migration sequence (#10001/#10026): the old task invoked alembic
@@ -120,6 +145,32 @@
       register: health_check
       failed_when: false
       tags: [verify]
+
+    # #16299 review round 2: the vnc role's own inline registration attempt
+    # (roles: phase, before migrations run in this post_tasks: block) cannot
+    # succeed on a fresh host and is deliberately best-effort there (see
+    # roles/vnc/tasks/main.yml's comment). This is the authoritative attempt:
+    # the backend is confirmed up (health check above) and migrations have
+    # already run, so the secrets vault exists. register-vnc-password.yml's own
+    # vault-read-back check makes re-running it here safe regardless of
+    # whether the earlier roles:-phase attempt ran, skipped, or failed.
+    # Still wrapped in block/rescue -- VNC registration failing must never
+    # fail the overall provisioning run.
+    # #16299 review round 3: no rescue here -- migrations have already run
+    # and the health check above confirmed the backend is up, so a failure
+    # at this point is real (wrong API key, backend actually down) and must
+    # fail the play, not degrade into a debug line nobody reads. Recovery is
+    # re-running this playbook through the builtin updater; there is no
+    # manual recovery path.
+    - name: "VNC | Register the VNC password now that migrations have run (#16299)"
+      ansible.builtin.include_role:
+        name: vnc
+        tasks_from: register-vnc-password
+      when:
+        - enable_vnc | default(true)
+        - vnc_password_result is defined
+        - vnc_password_result.stdout | default('') | length > 0
+      tags: [vnc, migrations]
 
     - name: Display setup summary
       debug:

@@ -43,6 +43,7 @@ redis:
   host: "10.0.0.4"
   port: 6379
   password: null
+  username: null  # optional ACL username, sent with the password (#16626)
   db: 0
   max_connections: 20
   socket_timeout: 5
@@ -58,6 +59,7 @@ redis:
 import asyncio
 import logging
 import ssl
+
 import redis.asyncio as async_redis
 from redis.asyncio.connection import ConnectionPool, SSLConnection
 from redis.backoff import ExponentialBackoff
@@ -153,6 +155,7 @@ class RedisConnectionManager:
             "host": self.redis_config.get("host", "localhost"),
             # CodeQL: false positive — password must be passed to Redis connection
             "password": self.redis_config.get("password"),  # noqa: S105
+            "username": self.redis_config.get("username"),
             "db": self.redis_config.get("db", 0),
             "max_connections": self.redis_config.get("max_connections", 20),
             "socket_timeout": self.redis_config.get("socket_timeout", 5),
@@ -178,6 +181,7 @@ class RedisConnectionManager:
             "port": config_params["port"],
             # CodeQL: false positive — password required for Redis auth
             "password": config_params["password"],  # noqa: S105
+            "username": config_params.get("username"),
             "db": config_params["db"],
             "max_connections": config_params["max_connections"],
             "socket_timeout": config_params["socket_timeout"],

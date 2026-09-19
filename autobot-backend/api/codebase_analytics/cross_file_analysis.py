@@ -23,7 +23,7 @@ import asyncio
 from pathlib import Path
 from typing import Any, Dict, List  # noqa: F401  (List used in pub API)
 
-from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.async_compat import fire_and_forget, run_or_schedule
 from autobot_shared.logging_manager import get_logger
 
 from .chromadb_storage import make_problem_dict
@@ -152,8 +152,8 @@ def schedule_cross_file_analysis(
     finalization must not fail because the cross-file pass had a hiccup.
     """
     try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(run_cross_file_analysis(root_path, source_id))
+        asyncio.get_running_loop()
+        fire_and_forget(run_cross_file_analysis(root_path, source_id), name="cross-file-analysis")
     except RuntimeError:
         try:
             run_or_schedule(run_cross_file_analysis(root_path, source_id))

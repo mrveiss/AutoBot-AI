@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Re-export shim — the implementation lives in `@autobot/vnc` (#12653).
  *

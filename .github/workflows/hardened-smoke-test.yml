@@ -7,10 +7,10 @@ name: Hardened Smoke Test
 on:
   push:
     branches:
-      - Dev_new_gui
+      - main
   pull_request:
     branches:
-      - Dev_new_gui
+      - main
     # #13388: SAFE — this workflow publishes `hardened-smoke-test`, which is NOT
     # one of the ten required contexts (the required `smoke-test` comes from
     # docker-smoke-test.yml, which is deliberately left unfiltered).
@@ -340,7 +340,7 @@ jobs:
 
       - name: Upload failure logs
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: hardened-docker-compose-logs
           path: failure-logs.txt

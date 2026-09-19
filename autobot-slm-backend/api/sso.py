@@ -9,7 +9,6 @@ Admin endpoints for managing SSO provider configurations.
 """
 
 import logging
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -18,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.env_utils import env_int
 from models.database import AuditLog
 from services.auth import require_permission
 from services.database import get_db
@@ -42,7 +42,7 @@ from user_management.services.sso_service import (
 )
 
 # Configurable look-back window for the health dashboard (no hard-coded literal).
-SSO_HEALTH_WINDOW_DAYS = int(os.getenv("SSO_HEALTH_WINDOW_DAYS", "7"))
+SSO_HEALTH_WINDOW_DAYS = env_int("SSO_HEALTH_WINDOW_DAYS", 7)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sso-providers", tags=["sso-providers"])

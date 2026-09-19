@@ -47,8 +47,13 @@ class AgentsResource:
         action = "enable" if enabled else "disable"
         return await self._c.post(f"/agent_config/agents/{agent_id}/{action}")
 
-    async def send_command(self, command: str, session_id: str | None = None) -> dict[str, Any]:
-        body: dict[str, Any] = {"command": command}
-        if session_id:
-            body["session_id"] = session_id
-        return await self._c.post("/agent/execute_command", body)
+    async def send_command(self, command: str) -> dict[str, Any]:
+        """Run a shell command through the agent (#15527).
+
+        The route reads one field, ``command``. It used to publish
+        ``application/x-www-form-urlencoded`` because of a stray ``Form``
+        default, so no body this method could build was ever accepted; the
+        ``session_id`` it also sent named nothing the route has — there is no
+        session behind ``/execute_command`` — and it went with the fix.
+        """
+        return await self._c.post("/agent/execute_command", {"command": command})

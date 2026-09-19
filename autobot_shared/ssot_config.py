@@ -45,6 +45,7 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import ClassVar, Dict, FrozenSet, List
+from urllib.parse import quote
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -161,15 +162,15 @@ class RedactedSettings(RedactedReprMixin, BaseSettings):
 
 class VMConfig(RedactedSettings):
     """
-    VM IP address configuration.
+    Service host configuration, resolved per role.
 
-    Supports the 6-VM distributed architecture:
-    - Main (WSL) - Backend API + VNC Desktop
-    - Frontend (VM1) - Web interface
-    - NPU Worker (VM2) - Hardware AI acceleration
-    - Redis (VM3) - Data layer
-    - AI Stack (VM4) - AI processing
-    - Browser (VM5) - Web automation
+    Role-based, count-agnostic placement (ADR-010): co-located or split hosts.
+    - Main (backend role) - Backend API + VNC Desktop
+    - Frontend (frontend role) - Web interface
+    - NPU Worker (aiml role) - Hardware AI acceleration
+    - Redis (database role) - Data layer
+    - AI Stack (aiml role) - AI processing
+    - Browser (browser role) - Web automation
     """
 
     model_config = SettingsConfigDict(
@@ -273,17 +274,17 @@ class LLMConfig(RedactedSettings):
     # Default provider for all models (can be overridden per-model)
     provider: str = Field(default="ollama", alias="AUTOBOT_LLM_PROVIDER")
 
-    # LLM cost-efficiency toggles (#10597)
-    # Prompt caching is a pure cost win → default on.  Chat tiered routing
-    # downgrades models by complexity (precision-sensitive) → default off until
-    # validated via knowledge/rag_benchmarks.py.
+    # LLM cost-efficiency toggles (#10597). Chat tiered routing downgrades models by
+    # complexity (precision-sensitive) so it defaults off until validated via
+    # knowledge/rag_benchmarks.py; the rest are pure cost wins, default on.
     llm_prompt_cache_default: bool = Field(default=True, alias="AUTOBOT_LLM_PROMPT_CACHE_DEFAULT")
     chat_tiered_routing: bool = Field(default=False, alias="AUTOBOT_CHAT_TIERED_ROUTING")
-    # Response cache for chat(): only near-deterministic, safely-reusable
-    # requests are cached (low temperature, no tools/structured-output/thinking).
-    # Above this temperature responses must vary, so they are never cached.
+    # Response cache for chat(): only near-deterministic, safely-reusable requests are cached.
     llm_response_cache: bool = Field(default=True, alias="AUTOBOT_LLM_RESPONSE_CACHE")
     llm_cache_max_temperature: float = Field(default=0.3, alias="AUTOBOT_LLM_CACHE_MAX_TEMPERATURE")
+    # Extractive prompt compression on chat()/stream() (#16526) — pure token-cost win, default on.
+    llm_prompt_compression_enabled: bool = Field(default=True, alias="AUTOBOT_LLM_PROMPT_COMPRESSION_ENABLED")
+    llm_prompt_compression_min_chars: int = Field(default=100, alias="AUTOBOT_LLM_PROMPT_COMPRESSION_MIN_CHARS")
 
     # Cross-vendor second-opinion verifier tier (#12618). A second LLM call on a
     # genuinely distinct provider doubles spend on the verification path, so this
@@ -759,6 +760,7 @@ class RedisConfig(RedactedSettings):
 
     # Security
     password: str | None = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
+    username: str | None = Field(default=None, alias="AUTOBOT_REDIS_USERNAME")  # ACL user (#16626)
 
 
 class CacheCoordinatorConfig(RedactedSettings):
@@ -1491,7 +1493,7 @@ class MiscConfig(RedactedSettings):
     # data-retention decision rather than a wiring change.
     mesh_brain_scheduler_enabled: bool = Field(default=False, alias="AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED")
 
-    anthropic_api_base_url: str = Field(default="", alias="ANTHROPIC_API_BASE_URL")
+    anthropic_api_base_url: str = Field(default="https://api.anthropic.com/v1", alias="ANTHROPIC_API_BASE_URL")
     api_key: str = Field(default="", alias="API_KEY")
     # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
     ast_cache_max_size: int = Field(default=1000, alias="AST_CACHE_MAX_SIZE")
@@ -1565,10 +1567,7 @@ class MiscConfig(RedactedSettings):
     # layer before the extraction is treated as usable. Below it the document is
     # reported as having no usable text layer rather than as a successful
     # extraction that happens to be empty.
-    document_min_text_page_ratio: str = Field(
-        default="",
-        alias="AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO",
-    )
+    document_min_text_page_ratio: str = Field(default="", alias="AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO")
     # #13884: minimum average characters per page, alongside the ratio above.
     # The ratio alone counts a page as readable when it carries a single
     # character, which a page-number stamp, Bates number, or filename footer
@@ -1592,6 +1591,9 @@ class MiscConfig(RedactedSettings):
     document_ocr_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_TIMEOUT")
     document_extraction_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_EXTRACTION_TIMEOUT")
     document_max_table_pages: str = Field(default="", alias="AUTOBOT_DOCUMENT_MAX_TABLE_PAGES")
+    # #14970: bounds the *rendered* table text folded into ingest content, the
+    # way document_max_table_pages bounds the extraction work that produces it.
+    document_max_table_chars: str = Field(default="", alias="AUTOBOT_DOCUMENT_MAX_TABLE_CHARS")
     # #13896: master switch for the OCR fallback. Default on where the toolchain
     # is present, since it only runs on pages that produced no text at all — a
     # born-digital document never rasterizes. Set to "false" to trade scanned
@@ -1651,7 +1653,7 @@ class MiscConfig(RedactedSettings):
         default="",
         validation_alias=AliasChoices("AUTOBOT_ENCRYPTION_KEY", "ENCRYPTION_KEY"),
     )
-    env: str = Field(default="", alias="AUTOBOT_ENV")
+    env: str = Field(default="development", alias="AUTOBOT_ENV")  # #13264 batch 3
     error_resolved_ttl_seconds: str = Field(
         default="",
         alias="AUTOBOT_ERROR_RESOLVED_TTL_SECONDS",
@@ -1663,9 +1665,9 @@ class MiscConfig(RedactedSettings):
         ),
     )
     feature_routers_strict: str = Field(default="1", alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
-    gc_threshold_0: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_0")
-    gc_threshold_1: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_1")
-    gc_threshold_2: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_2")
+    gc_threshold_0: int = Field(default=700, alias="AUTOBOT_GC_THRESHOLD_0")  # #13264 batch 3
+    gc_threshold_1: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_1")  # #13264 batch 3
+    gc_threshold_2: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_2")  # #13264 batch 3
     hnsw_construction_ef: str = Field(default="", alias="AUTOBOT_HNSW_CONSTRUCTION_EF")
     hnsw_m: str = Field(default="", alias="AUTOBOT_HNSW_M")
     hnsw_quantization_type: str = Field(
@@ -1783,11 +1785,11 @@ class MiscConfig(RedactedSettings):
     meta_agent_max_module_lines: int = Field(default=500, alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES")
     meta_agent_test_timeout: int = Field(default=60, alias="AUTOBOT_META_AGENT_TEST_TIMEOUT")
     ollama_url: str = Field(default="", alias="AUTOBOT_OLLAMA_URL")
-    postgres_db: str = Field(default="", alias="AUTOBOT_POSTGRES_DB")
+    postgres_db: str = Field(default="autobot", alias="AUTOBOT_POSTGRES_DB")  # #13264 batch 3
     postgres_host: str = Field(default="", alias="AUTOBOT_POSTGRES_HOST")
     postgres_password: str = Field(default="", alias="AUTOBOT_POSTGRES_PASSWORD")
-    postgres_port: int = Field(default=0, alias="AUTOBOT_POSTGRES_PORT")
-    postgres_user: str = Field(default="", alias="AUTOBOT_POSTGRES_USER")
+    postgres_port: int = Field(default=5432, alias="AUTOBOT_POSTGRES_PORT")  # #13264 batch 3
+    postgres_user: str = Field(default="autobot", alias="AUTOBOT_POSTGRES_USER")  # #13264 batch 3
     project_root: str = Field(default="", alias="AUTOBOT_PROJECT_ROOT")
     project_state_db_path: str = Field(default="", alias="AUTOBOT_PROJECT_STATE_DB_PATH")
     prompt_compression_enabled: bool = Field(default=False, alias="AUTOBOT_PROMPT_COMPRESSION_ENABLED")
@@ -1878,11 +1880,11 @@ class MiscConfig(RedactedSettings):
     schema_dir: str = Field(default="", alias="AUTOBOT_SCHEMA_DIR")
     secrets_key: str = Field(default="", alias="AUTOBOT_SECRETS_KEY")
     skip_tls_verify: str = Field(default="", alias="AUTOBOT_SKIP_TLS_VERIFY")
-    smtp_from: str = Field(default="", alias="AUTOBOT_SMTP_FROM")
-    smtp_host: str = Field(default="", alias="AUTOBOT_SMTP_HOST")
+    smtp_from: str = Field(default="autobot@localhost", alias="AUTOBOT_SMTP_FROM")
+    smtp_host: str = Field(default="localhost", alias="AUTOBOT_SMTP_HOST")
     smtp_password: str = Field(default="", alias="AUTOBOT_SMTP_PASSWORD")
-    smtp_port: int = Field(default=0, alias="AUTOBOT_SMTP_PORT")
-    smtp_tls: str = Field(default="", alias="AUTOBOT_SMTP_TLS")
+    smtp_port: int = Field(default=587, alias="AUTOBOT_SMTP_PORT")
+    smtp_tls: str = Field(default="true", alias="AUTOBOT_SMTP_TLS")
     smtp_user: str = Field(default="", alias="AUTOBOT_SMTP_USER")
     speculation_draft_model: str = Field(default="", alias="AUTOBOT_SPECULATION_DRAFT_MODEL")
     speculation_enabled: bool = Field(default=False, alias="AUTOBOT_SPECULATION_ENABLED")
@@ -1896,7 +1898,7 @@ class MiscConfig(RedactedSettings):
     tls_cert_path: str = Field(default="", alias="AUTOBOT_TLS_CERT_PATH")
     tls_key_path: str = Field(default="", alias="AUTOBOT_TLS_KEY_PATH")
     trace_console: str = Field(default="", alias="AUTOBOT_TRACE_CONSOLE")
-    trace_sample_rate: float = Field(default=0.0, alias="AUTOBOT_TRACE_SAMPLE_RATE")
+    trace_sample_rate: float = Field(default=1.0, alias="AUTOBOT_TRACE_SAMPLE_RATE")  # #13264 batch 3
     tts_stream_probe_ttl: str = Field(
         default="",
         alias="AUTOBOT_TTS_STREAM_PROBE_TTL",
@@ -1931,13 +1933,13 @@ class MiscConfig(RedactedSettings):
     ci: str = Field(default="", alias="CI")
     codebase_index_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_BATCH_SIZE")
     codebase_index_embedding_mode: str = Field(default="precompute", alias="CODEBASE_INDEX_EMBEDDING_MODE")
-    codebase_index_embed_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
+    codebase_index_embed_batch_size: int = Field(default=100, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
     codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
     codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
-    codebase_index_parallel_files: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_FILES")
+    codebase_index_parallel_files: str = Field(default="50", alias="CODEBASE_INDEX_PARALLEL_FILES")
     # #12392: restore pre-#7437 default (True) — "" silently disabled parallel indexing
     codebase_parallel_mode: str = Field(default="true", alias="CODEBASE_PARALLEL_MODE")
-    codebase_scan_parallel_files: str = Field(default="", alias="CODEBASE_SCAN_PARALLEL_FILES")
+    codebase_scan_parallel_files: str = Field(default="50", alias="CODEBASE_SCAN_PARALLEL_FILES")
     config: str = Field(default="", alias="CONFIG")
     # #11681: restore pre-#7437 default (500) — 0 silently disabled the content cache
     content_cache_max_size: int = Field(default=500, alias="CONTENT_CACHE_MAX_SIZE")
@@ -1965,22 +1967,23 @@ class MiscConfig(RedactedSettings):
     # #11681: restore pre-#7437 default (300 s) — 0 made every file-list entry expire instantly
     file_cache_ttl_seconds: int = Field(default=300, alias="FILE_CACHE_TTL_SECONDS")
     gateway_enable_sandbox: str = Field(default="", alias="GATEWAY_ENABLE_SANDBOX")
-    gateway_heartbeat_interval: str = Field(default="", alias="GATEWAY_HEARTBEAT_INTERVAL")
+    gateway_heartbeat_interval: str = Field(default="30", alias="GATEWAY_HEARTBEAT_INTERVAL")
     # #14028: ingest governance stage in front of MessageRouter/agent routing —
     # dedup TTL, recursion-depth ceiling, and the recursion counter's sliding
     # window. See services/gateway/ingest_governor.py.
     gateway_ingest_chain_window_seconds: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_CHAIN_WINDOW_SECONDS")
     gateway_ingest_dedup_ttl_seconds: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_DEDUP_TTL_SECONDS")
     gateway_ingest_max_chain_depth: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_MAX_CHAIN_DEPTH")
-    gateway_max_message_size: int = Field(default=0, alias="GATEWAY_MAX_MESSAGE_SIZE")
-    gateway_max_sessions_user: str = Field(default="", alias="GATEWAY_MAX_SESSIONS_USER")
-    gateway_message_retention_hours: str = Field(default="", alias="GATEWAY_MESSAGE_RETENTION_HOURS")
-    gateway_rate_limit_channel: int = Field(default=0, alias="GATEWAY_RATE_LIMIT_CHANNEL")
-    gateway_rate_limit_user: int = Field(default=0, alias="GATEWAY_RATE_LIMIT_USER")
-    gateway_session_timeout: int = Field(default=0, alias="GATEWAY_SESSION_TIMEOUT")
+    gateway_max_message_size: int = Field(default=1048576, alias="GATEWAY_MAX_MESSAGE_SIZE")
+    gateway_max_sessions_user: str = Field(default="5", alias="GATEWAY_MAX_SESSIONS_USER")
+    gateway_message_retention_hours: str = Field(default="24", alias="GATEWAY_MESSAGE_RETENTION_HOURS")
+    gateway_rate_limit_channel: int = Field(default=100, alias="GATEWAY_RATE_LIMIT_CHANNEL")
+    gateway_rate_limit_user: int = Field(default=60, alias="GATEWAY_RATE_LIMIT_USER")
+    gateway_session_timeout: int = Field(default=1800, alias="GATEWAY_SESSION_TIMEOUT")
     github_actions: str = Field(default="", alias="GITHUB_ACTIONS")
     google_api_key: str = Field(default="", alias="GOOGLE_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
+    grounding_stats_ttl: str = Field(default="", alias="AUTOBOT_GROUNDING_STATS_TTL")
     hf_hub_cache: str = Field(default="", alias="HF_HUB_CACHE")
     hf_hub_disable_progress_bars: bool = Field(default=False, alias="HF_HUB_DISABLE_PROGRESS_BARS")
     hf_token: str = Field(default="", alias="HF_TOKEN")
@@ -1990,9 +1993,9 @@ class MiscConfig(RedactedSettings):
     jenkins_url: str = Field(default="", alias="JENKINS_URL")
     keras_backend: str = Field(default="", alias="KERAS_BACKEND")
     layer_inference_model: str = Field(default="", alias="LAYER_INFERENCE_MODEL")
-    log_level: str = Field(default="", alias="LOG_LEVEL")
+    log_level: str = Field(default="INFO", alias="LOG_LEVEL")  # #13264 batch 3
     master_key: str = Field(default="", alias="MASTER_KEY")
-    mcp_isolation_mode: str = Field(default="", alias="MCP_ISOLATION_MODE")
+    mcp_isolation_mode: str = Field(default="inprocess", alias="MCP_ISOLATION_MODE")
     mcp_registry_cache_enabled: bool = Field(default=True, alias="MCP_REGISTRY_CACHE_ENABLED")
     mcp_registry_cache_ttl: str = Field(default="60", alias="MCP_REGISTRY_CACHE_TTL")
     mcp_run_jwt: str = Field(default="", alias="MCP_RUN_JWT")
@@ -2012,7 +2015,7 @@ class MiscConfig(RedactedSettings):
     # Restoring the "1" default is #13263's call and is left to that issue.
     mcp_run_jwt_enforce: str = Field(default="", alias="MCP_RUN_JWT_ENFORCE")
     mcp_worker_cpu_seconds: int = Field(default=0, alias="MCP_WORKER_CPU_SECONDS")
-    mcp_worker_log_level: str = Field(default="", alias="MCP_WORKER_LOG_LEVEL")
+    mcp_worker_log_level: str = Field(default="INFO", alias="MCP_WORKER_LOG_LEVEL")
     mcp_worker_mem_mb: int = Field(default=0, alias="MCP_WORKER_MEM_MB")
     mcp_worker_nofile: str = Field(default="", alias="MCP_WORKER_NOFILE")
     mistral_api_base_url: str = Field(default="", alias="MISTRAL_API_BASE_URL")
@@ -2027,7 +2030,7 @@ class MiscConfig(RedactedSettings):
     openai_api_base_url: str = Field(default="", alias="OPENAI_API_BASE_URL")
     openrouter_api_base_url: str = Field(default="", alias="OPENROUTER_API_BASE_URL")
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
-    openrouter_default_model: str = Field(default="", alias="OPENROUTER_DEFAULT_MODEL")
+    openrouter_default_model: str = Field(default="gpt-3.5-turbo", alias="OPENROUTER_DEFAULT_MODEL")
     password: str = Field(default="", alias="PASSWORD")
     pytest_current_test: str = Field(default="", alias="PYTEST_CURRENT_TEST")
     pytest_running: str = Field(default="", alias="PYTEST_RUNNING")
@@ -2144,11 +2147,11 @@ class MiscConfig(RedactedSettings):
     vertex_ai_location: str = Field(default="us-central1", alias="VERTEX_AI_LOCATION")
     vertex_ai_project: str = Field(default="", alias="VERTEX_AI_PROJECT")
     vertex_ai_service_account_json: str = Field(default="", alias="VERTEX_AI_SERVICE_ACCOUNT_JSON")
-    vllm_dtype: str = Field(default="", alias="VLLM_DTYPE")
-    vllm_gpu_memory_utilization: str = Field(default="", alias="VLLM_GPU_MEMORY_UTILIZATION")
-    vllm_host: str = Field(default="", alias="VLLM_HOST")
+    vllm_dtype: str = Field(default="auto", alias="VLLM_DTYPE")
+    vllm_gpu_memory_utilization: str = Field(default="0.9", alias="VLLM_GPU_MEMORY_UTILIZATION")
+    vllm_host: str = Field(default="http://127.0.0.1:8000", alias="VLLM_HOST")
     vllm_model: str = Field(default="", alias="VLLM_MODEL")
-    vllm_tensor_parallel_size: int = Field(default=0, alias="VLLM_TENSOR_PARALLEL_SIZE")
+    vllm_tensor_parallel_size: int = Field(default=1, alias="VLLM_TENSOR_PARALLEL_SIZE")
     vnc_resolution: str = Field(default="", alias="VNC_RESOLUTION")
 
 
@@ -2546,15 +2549,13 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def redis_url_with_auth(self) -> str:
-        """Get the full Redis URL with password if configured."""
-        if self.tls.redis_tls_enabled:
-            scheme = "rediss"
-            port = self.tls.redis_tls_port
-        else:
-            scheme = "redis"
-            port = self.port.redis
+        """Get the full Redis URL with credentials if configured (URL-encoded)."""
+        tls = self.tls.redis_tls_enabled
+        scheme, port = ("rediss", self.tls.redis_tls_port) if tls else ("redis", self.port.redis)
         if self.redis.password:
-            return f"{scheme}://:{self.redis.password}@{self.vm.redis}:{port}"
+            # #16626: userinfo carries the ACL username when set; unset keeps ":<password>"
+            userinfo = f"{quote(self.redis.username or '', safe='')}:{quote(self.redis.password, safe='')}"
+            return f"{scheme}://{userinfo}@{self.vm.redis}:{port}"
         return f"{scheme}://{self.vm.redis}:{port}"
 
     @property

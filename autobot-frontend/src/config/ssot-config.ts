@@ -40,21 +40,21 @@
 // =============================================================================
 
 /**
- * VM IP address configuration.
- * Supports the 6-VM distributed architecture.
+ * Service host configuration, resolved per role.
+ * Supports AutoBot's role-based, count-agnostic architecture (ADR-010).
  */
 export interface VMConfig {
-  /** Main machine (WSL) - Backend API + VNC Desktop */
+  /** Main machine (backend role) - Backend API + VNC Desktop */
   main: string;
-  /** VM1 Frontend - Web interface */
+  /** Frontend role - Web interface */
   frontend: string;
-  /** VM2 NPU Worker - Hardware AI acceleration */
+  /** NPU Worker role (aiml) - Hardware AI acceleration */
   npu: string;
-  /** VM3 Redis - Data layer */
+  /** Database role - Redis data layer */
   redis: string;
-  /** VM4 AI Stack - AI processing */
+  /** AI Stack role (aiml) - AI processing */
   aistack: string;
-  /** VM5 Browser - Web automation */
+  /** Browser role - Web automation */
   browser: string;
   /** Ollama host (typically localhost) */
   ollama: string;
@@ -142,17 +142,14 @@ export interface VNCConfig {
   desktop: {
     host: string;
     port: number;
-    password: string;
   };
   terminal: {
     host: string;
     port: number;
-    password: string;
   };
   playwright: {
     host: string;
     port: number;
-    password: string;
   };
 }
 
@@ -459,21 +456,21 @@ function buildConfig(): AutoBotConfig {
 
   // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
   // VNC configuration
+  // #16299: no password fields -- the backend authenticates to the real VNC
+  // server itself and offers the browser security-type "None"
+  // (api/vnc_handshake_bridge.py).
   const vnc: VNCConfig = {
     desktop: {
       host: getEnv('VITE_DESKTOP_VNC_HOST', vm.main),
       port: getEnvNumber('VITE_DESKTOP_VNC_PORT', 6080),
-      password: getEnv('VITE_DESKTOP_VNC_PASSWORD', 'autobot'),
     },
     terminal: {
       host: getEnv('VITE_TERMINAL_VNC_HOST', vm.main),
       port: getEnvNumber('VITE_TERMINAL_VNC_PORT', 6080),
-      password: getEnv('VITE_TERMINAL_VNC_PASSWORD', 'autobot'),
     },
     playwright: {
       host: getEnv('VITE_PLAYWRIGHT_VNC_HOST', vm.browser),
       port: getEnvNumber('VITE_PLAYWRIGHT_VNC_PORT', 6081),
-      password: getEnv('VITE_PLAYWRIGHT_VNC_PASSWORD', 'playwright'),
     },
   };
 

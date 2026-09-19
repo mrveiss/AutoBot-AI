@@ -29,7 +29,7 @@ docs/
 │   ├── WEBSOCKET_INTEGRATION_GUIDE.md
 │   └── comprehensive_api_documentation.md
 ├── architecture/ (10 files)
-│   ├── DISTRIBUTED_ARCHITECTURE.md (6-VM system design)
+│   ├── DISTRIBUTED_ARCHITECTURE.md (distributed, role-based system design)
 │   ├── AGENT_SYSTEM_ARCHITECTURE.md
 │   ├── COMMUNICATION_ARCHITECTURE.md
 │   ├── FRONTEND_ARCHITECTURE_ASSESSMENT.md
@@ -65,7 +65,6 @@ docs/
 ├── agents/ (multiple subdirectories)
 ├── development/ (7 files)
 ├── guides/ (5 files)
-├── external_apps/ (4 files)
 └── [50+ additional documentation files]
 
 Root Level:
@@ -106,7 +105,7 @@ Root Level:
    - Authentication and rate limiting
 
 4. **docs/architecture/DISTRIBUTED_ARCHITECTURE.md**
-   - 6-VM distributed system design
+   - Distributed, role-based system design
    - Hardware optimization rationale
    - Network configuration and ports
 
@@ -586,7 +585,7 @@ Success Criteria: Returns mandatory file placement rules and directory structure
 Query: "Explain the distributed architecture and VM setup"
 Expected Results:
 - docs/architecture/DISTRIBUTED_ARCHITECTURE.md (primary)
-- 6-VM system design rationale
+- Distributed, role-based system design rationale
 - Component distribution and network topology
 Success Criteria: Returns architecture overview with VM assignments and justification
 ```

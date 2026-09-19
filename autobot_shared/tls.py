@@ -16,7 +16,11 @@ from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
 
-logger = get_logger(__name__)
+# #14039: acquired lazily, never at module scope. This module is imported by
+# autobot-slm-backend, whose conftest stubs the config LoggingManager reads --
+# constructing a rotating handler at import time then compares a MagicMock to an
+# int and every SLM shard fails at collection. A logger bound at import in a
+# low-level shared module is a constraint here, not a style choice.
 
 # Canonical minimum TLS version for every AutoBot SSL context (#12285).
 # CodeQL py/insecure-protocol: pinning this rejects the broken TLSv1/TLSv1_1
@@ -40,6 +44,23 @@ def _is_loopback_target(target_url: Optional[str]) -> bool:
     except Exception:
         return False
     return host in _LOOPBACK_HOSTS
+
+
+def tls_verify_enabled() -> bool:
+    """Whether internal TLS verification is on — the ``verify=`` bool for httpx.
+
+    The same switch as step 3 of :func:`get_internal_tls_context`, in the shape
+    httpx wants, so an httpx caller cannot end up reading the variable itself
+    and inverting it. Verification is ON unless ``AUTOBOT_SKIP_TLS_VERIFY=true``
+    is set explicitly; the polarity is the whole point. #14653 caught a node
+    proxy one commit before merge whose own flag defaulted to *false* — TLS
+    verification off unless an operator opted in, on the channel carrying the
+    internal API key. A default that has to be opted into is not a default.
+
+    Returns:
+        True to verify (the default); False only on an explicit opt-out.
+    """
+    return os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
 
 
 def get_internal_tls_context(
@@ -88,7 +109,7 @@ def get_internal_tls_context(
         return ctx
 
     # 3. Dev/test override — skip verification entirely
-    if os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() == "true":
+    if not tls_verify_enabled():
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
@@ -107,7 +128,7 @@ def get_internal_tls_context(
     if _is_loopback_target(target_url):
         global _loopback_permissive_warned
         if not _loopback_permissive_warned:
-            logger.warning(
+            get_logger(__name__).warning(
                 "TLS verification disabled for loopback target %s — no CA configured "
                 "(set AUTOBOT_TLS_CA_PATH for strict verification, #6654)",
                 target_url,

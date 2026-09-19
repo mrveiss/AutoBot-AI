@@ -6,6 +6,8 @@
 **Status:** 🟡 PENDING APPROVAL
 **Security Level:** CRITICAL - CVSS 10.0 Vulnerability Closure
 
+> **Historical record:** this plan describes one specific install's 6-machine layout at the time. AutoBot's architecture is role-based and count-agnostic — deployments run in Docker, on one VM, or scaled across any number of machines.
+
 ---
 
 ## 📋 Executive Summary
@@ -744,13 +746,13 @@ curl http://<npu-ip>:8081/health
    ```bash
    # Generate random 256-bit override token
    python3 -c "import secrets; print(secrets.token_hex(32))"
-   # Example: 7a9f3e8b2c1d4f6a8b9c2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b
+   # Example: <64-hex-token-printed-by-the-command-above>
    ```
 
    Store securely:
    ```bash
    # Add to .env (main backend only)
-   echo "SERVICE_AUTH_OVERRIDE_TOKEN=7a9f3e8b2c1d4f6a8b9c2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b" >> .env
+   echo "SERVICE_AUTH_OVERRIDE_TOKEN=<your-generated-token>" >> .env
 
    # CRITICAL: Never commit to git, store in secure vault
    ```

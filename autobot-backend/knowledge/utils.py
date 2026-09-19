@@ -89,5 +89,28 @@ def sanitize_metadata_for_chromadb(metadata: Dict[str, Any]) -> Dict[str, Any]:
     return sanitized
 
 
+def decode_id_list(value: Any) -> list[str]:
+    """Read back an ID list stored through sanitize_metadata_for_chromadb (#16662).
+
+    Redis-backed metadata keeps a real list, but ChromaDB hands back the
+    comma-joined string ``_encode_sequence`` wrote (or a JSON array). Treating
+    that string as a list turns a membership test into a substring test --
+    ``"bob" in "bobby, alice"`` is True -- so every consumer decodes it first.
+    """
+    if value is None or value == "":
+        return []
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [str(item) for item in value]
+    text = str(value).strip()
+    if text.startswith("["):
+        try:
+            decoded = json.loads(text)
+        except ValueError:
+            decoded = None  # not JSON after all: fall through to the comma form
+        if isinstance(decoded, list):
+            return [str(item) for item in decoded]
+    return [part.strip() for part in text.split(",") if part.strip()]
+
+
 # Backward compatibility alias
 _sanitize_metadata_for_chromadb = sanitize_metadata_for_chromadb

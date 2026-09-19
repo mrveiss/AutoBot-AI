@@ -60,6 +60,7 @@ import rumPlugin from './plugins/rum'
 import errorHandlerPlugin from './plugins/errorHandler'
 import ApiPlugin from './plugins/api'
 import { mountAllPlugins } from '@/plugins/registry'
+import { registerDirectives } from '@/directives'
 
 // Import global services
 import './services/GlobalWebSocketService'
@@ -88,6 +89,17 @@ if (typeof window !== 'undefined') {
   }
 }
 
+// #15749: ApexCharts animates unless told otherwise, and a chart that never
+// mentions `animations` gives the reduced-motion guard nothing to see. This
+// global default covers those raw `<apexchart>` users; BaseChart re-decides per
+// render, so a mid-session change of the setting reaches its charts too.
+import { isReducedMotion } from '@/composables/useReducedMotion'
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { Apex?: object }).Apex = {
+    chart: { animations: { enabled: !isReducedMotion() } },
+  }
+}
+
 // Create Pinia store with persistence
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
@@ -102,6 +114,9 @@ app.use(router)
 app.use(rumPlugin, { router })
 app.use(errorHandlerPlugin)
 app.use(ApiPlugin)
+
+// v-permission (#683) was defined but never registered -- #16243 wires it in.
+registerDirectives(app)
 
 // Register plugin UI components from the plugin mount registry (#6972 / #7793)
 mountAllPlugins(app)

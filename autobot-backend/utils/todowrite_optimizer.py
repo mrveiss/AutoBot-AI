@@ -193,7 +193,7 @@ class TodoWriteOptimizer:
         logger.debug("Added todo for optimization: %s...", content[:50])
 
         if self._should_trigger_optimization():
-            asyncio.create_task(self._process_optimization_batch())
+            fire_and_forget(self._process_optimization_batch(), name="todowrite-optimization-batch")
 
     def _is_duplicate_or_similar(self, todo_item: OptimizedTodoItem) -> bool:
         """Check if todo item is duplicate or too similar to existing items"""
@@ -720,7 +720,7 @@ class TodoWriteInterceptor:
         return success_count > 0
 
 
-from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.async_compat import fire_and_forget, run_or_schedule
 
 # Global optimizer instance for easy access (thread-safe)
 from autobot_shared.singleton_factory import lazy_singleton

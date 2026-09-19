@@ -44,8 +44,15 @@ audit_backends:
 # not end up with different postures. Pinned by
 # repo_tests/access_control_enforcement_provisioning_test.py.
 access_control_enforcement_mode: log_only
+# #15726: resolved against the code checkout, NOT project_root. Nothing deploys
+# `{{ project_root }}/autobot-infrastructure/` -- on a provisioned host that tree
+# dates from the install and is never refreshed, so the seeder added by #15088 in
+# August was invisible there and this role hard-failed every self-update since.
+# The four other consumers of this tree (roles/ai-stack, roles/slm_manager,
+# roles/monitoring, playbooks/enroll-node) all read the controller checkout; this
+# was the only one reading a path nothing maintains.
 access_control_enforcement_seeder: >-
-  {{ project_root }}/autobot-infrastructure/shared/scripts/security/seed_enforcement_mode.py
+  {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-infrastructure/shared/scripts/security/seed_enforcement_mode.py
 # The seeder imports services.feature_flags and autobot_shared, so it needs the
 # BACKEND venv, not `{{ project_root }}/venv` -- that path does not exist on a
 # provisioned host (roles/backend installs into

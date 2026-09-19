@@ -7,9 +7,10 @@
 # Canonical base/head resolution and changed-file scoping for CI guards (#13984).
 #
 # Five changed-files guards each resolved a base ref and status-checked their
-# own git calls: pipeline-scripts/check-pre-commit-hook-pr.sh (5 call sites),
-# .github/workflows/code-quality.yml (two inline copies),
-# .github/workflows/enforce-precommit.yml (one more), scripts/lint-conventions.sh
+# own git calls, and now all source this instead:
+# pipeline-scripts/check-pre-commit-hook-pr.sh,
+# .github/workflows/code-quality.yml,
+# .github/workflows/enforce-precommit.yml, scripts/lint-conventions.sh
 # and scripts/verify-done.sh. All of them encode the same hard-won rules, so the
 # next correction had to be applied five times or the copies drifted.
 #

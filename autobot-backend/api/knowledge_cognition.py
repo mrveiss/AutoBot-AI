@@ -13,7 +13,7 @@ Provides endpoints for the Cognition Store seeding layer:
 
 import os
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from api.schemas_knowledge import (
     KnowledgeCognitionSeedResponse,
@@ -81,7 +81,7 @@ async def _run_seed(manifest_path: str) -> None:
 async def trigger_cognition_seed(
     request: SeedRequest,
     background_tasks: BackgroundTasks,
-    _user=check_admin_permission,
+    _user: bool = Depends(check_admin_permission),
 ):
     """Trigger a (re-)seed of ChromaDB from the cognition_seed.yaml manifest.
 

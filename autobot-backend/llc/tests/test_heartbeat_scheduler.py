@@ -368,7 +368,7 @@ class TestRegistryAdapterKeyLifecycle:
         assert "api_base" in captured
         assert captured["agent_id"] == agent["agent_id"]
         # Key revoked after completion.
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_key_revoked_even_when_invoke_raises(self):
         agent = _make_agent(adapter_type="claude_code")
@@ -385,7 +385,7 @@ class TestRegistryAdapterKeyLifecycle:
             with pytest.raises(RuntimeError, match="boom"):
                 await _dispatch_registry_adapter(fake_adapter, agent, {})
 
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_no_company_id_dispatches_without_key(self):
         agent = _make_agent(adapter_type="claude_code", company_id=None)
@@ -458,7 +458,7 @@ class TestRegistryAdapterTerminalStatus:
             with pytest.raises(AdapterRunFailed):
                 await _dispatch_registry_adapter(fake_adapter, agent, {})
 
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_completed_terminal_status_does_not_raise(self):
         agent = _make_agent(adapter_type="claude_code")
@@ -493,7 +493,7 @@ class TestRegistryAdapterTerminalStatus:
                 await _dispatch_registry_adapter(fake_adapter, agent, {})
 
         fake_adapter.cancel.assert_awaited_once()
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
 
 @pytest.mark.asyncio
@@ -854,7 +854,7 @@ class TestClaudeCodeAdapterNoResume:
 
         with (
             patch("llc.adapters.claude_code_adapter._resolve_claude_cli", return_value="/usr/bin/claude"),
-            patch("llc.adapters.claude_code_adapter.asyncio.create_subprocess_exec") as mock_exec,
+            patch("llc.adapters.claude_code_adapter.spawn_with_workspace_retry") as mock_exec,
             patch("builtins.open", create=True),
             patch("llc.adapters.claude_code_adapter.os.makedirs"),
             patch.object(adapter, "_build_prompt", return_value="prompt text"),
@@ -863,7 +863,7 @@ class TestClaudeCodeAdapterNoResume:
         ):
             mock_proc = MagicMock()
             mock_proc.pid = 999
-            mock_exec.return_value = mock_proc
+            mock_exec.return_value = (mock_proc, None)
             try:
                 await adapter._invoke(agent_config, context)
             except Exception:
@@ -893,7 +893,7 @@ class TestClaudeCodeAdapterNoResume:
 
         with (
             patch("llc.adapters.claude_code_adapter._resolve_claude_cli", return_value="/usr/bin/claude"),
-            patch("llc.adapters.claude_code_adapter.asyncio.create_subprocess_exec") as mock_exec,
+            patch("llc.adapters.claude_code_adapter.spawn_with_workspace_retry") as mock_exec,
             patch("builtins.open", create=True),
             patch("llc.adapters.claude_code_adapter.os.makedirs"),
             patch.object(adapter, "_build_prompt", return_value="prompt text"),
@@ -902,7 +902,7 @@ class TestClaudeCodeAdapterNoResume:
         ):
             mock_proc = MagicMock()
             mock_proc.pid = 999
-            mock_exec.return_value = mock_proc
+            mock_exec.return_value = (mock_proc, None)
             try:
                 await adapter._invoke(agent_config, context)
             except Exception:
@@ -934,7 +934,7 @@ class TestIngestAdapterUsage:
 
         mock_ingest.assert_awaited_once()
         args = mock_ingest.await_args.args
-        assert args[1] == agent["agent_id"] and args[2] == 120 and args[3] == 40 and args[4] == "claude-x"
+        assert args[1:6] == (agent["agent_id"], str(agent["company_id"]), 120, 40, "claude-x")
 
     async def test_noop_when_usage_unknown(self):
         agent = _make_agent(adapter_type="claude_code")
@@ -1000,7 +1000,7 @@ class TestQuotaExhausted:
         ):
             await _dispatch_registry_adapter(fake_adapter, agent, {})
         # Key still revoked even on the quota path.
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_handle_quota_exhausted_records_and_pauses(self):
         scheduler = HeartbeatScheduler()

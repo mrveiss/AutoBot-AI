@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import time
 from typing import Any, List, Optional
 
@@ -34,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import client_get, client_getdel, client_setex, get_redis_client
 from autobot_shared.url_safety import get_oauth_allowed_hosts, require_allowlisted_https
@@ -122,7 +122,7 @@ _SYSTEM_VAULT = "system"
 
 # OAuth authorize state is single-use and short-lived — a security window, not a
 # cache (#11297). Overridable via env; keyed to the initiating admin in Redis.
-_OAUTH_STATE_TTL_SECONDS = int(os.getenv("AUTOBOT_PROVIDER_OAUTH_STATE_TTL_SECONDS", "600"))
+_OAUTH_STATE_TTL_SECONDS = env_int("AUTOBOT_PROVIDER_OAUTH_STATE_TTL_SECONDS", 600)
 _OAUTH_STATE_PREFIX = "llm-auth:oauth:state:"
 
 
@@ -133,10 +133,10 @@ def _state_key(state: str) -> str:
 # Device-code poll limiter (#11061): honor RFC-8628 server-side — reject polls
 # faster than the current interval, back off +5s on ``slow_down``, and cap total
 # attempts per device_code. All overridable via env.
-_DEVICE_POLL_MIN_INTERVAL = int(os.getenv("AUTOBOT_DEVICE_POLL_MIN_INTERVAL_SECONDS", "5"))
-_DEVICE_POLL_BACKOFF = int(os.getenv("AUTOBOT_DEVICE_POLL_BACKOFF_SECONDS", "5"))
-_DEVICE_POLL_MAX_ATTEMPTS = int(os.getenv("AUTOBOT_DEVICE_POLL_MAX_ATTEMPTS", "360"))
-_DEVICE_POLL_WINDOW = int(os.getenv("AUTOBOT_DEVICE_POLL_WINDOW_SECONDS", "1800"))
+_DEVICE_POLL_MIN_INTERVAL = env_int("AUTOBOT_DEVICE_POLL_MIN_INTERVAL_SECONDS", 5)
+_DEVICE_POLL_BACKOFF = env_int("AUTOBOT_DEVICE_POLL_BACKOFF_SECONDS", 5)
+_DEVICE_POLL_MAX_ATTEMPTS = env_int("AUTOBOT_DEVICE_POLL_MAX_ATTEMPTS", 360)
+_DEVICE_POLL_WINDOW = env_int("AUTOBOT_DEVICE_POLL_WINDOW_SECONDS", 1800)
 _DEVICE_POLL_PREFIX = "llm-auth:device:poll:"
 
 

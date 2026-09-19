@@ -40,7 +40,7 @@
 # So a change confined to autobot_shared/ could alter either generated api.ts
 # while this workflow computed "nothing to verify" and self-skipped — and
 # `verify-generated-types` is a REQUIRED context, so that reported green over a
-# check that never ran. 46 of the last 300 first-parent commits on Dev_new_gui
+# check that never ran. 46 of the last 300 first-parent commits on main
 # touch only autobot_shared/**/*.py; that is the blind spot's size, and it is
 # also the added cost of closing it.
 #
@@ -61,8 +61,14 @@
 name: Verify Generated Types
 
 on:
+  # #14054: the merge queue builds each entrant against base + the entries
+  # ahead of it and expects the required contexts to report against that
+  # temporary ref. A required context with no `merge_group:` trigger never
+  # fires, and the queue waits on it forever. Inert until the `merge_queue`
+  # ruleset rule is enabled -- this event does not exist before then.
+  merge_group:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     paths:
       - 'autobot-backend/**/*.py'
       # #14885: both products' schemas are dumped by importing the application,
@@ -82,7 +88,7 @@ on:
   # job below; #13862 made the required context a separate reporting job so that
   # "nothing to verify" is stated rather than inferred from a skip.
   pull_request:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -104,6 +110,12 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
+          # #14054: dorny/paths-filter errors on an event it does not
+          # recognise unless `base` is given, and a failed `changes` job
+          # skips every job that needs it -- i.e. the required context
+          # never reports and the queue deadlocks. Empty on push/PR, so
+          # their existing behaviour is unchanged.
+          base: ${{ github.event.merge_group.base_sha || '' }}
           filters: |
             types:
               - 'autobot-backend/**/*.py'
@@ -143,7 +155,7 @@ jobs:
       - name: Set up Python 3.14
         uses: actions/setup-python@v7
         with:
-          python-version: '3.14'
+          python-version-file: '.python-version'
           cache: 'pip'
           cache-dependency-path: |
             requirements*.txt
@@ -226,7 +238,7 @@ jobs:
       - name: Set up Python 3.14
         uses: actions/setup-python@v7
         with:
-          python-version: '3.14'
+          python-version-file: '.python-version'
           cache: 'pip'
           cache-dependency-path: |
             requirements*.txt

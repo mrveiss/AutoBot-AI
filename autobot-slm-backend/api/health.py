@@ -9,23 +9,35 @@ SLM Health API Routes
 import logging
 import os
 import time
+from pathlib import Path
 
 import psutil
 from fastapi import APIRouter, Depends
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from models.database import Node, NodeStatus
-from models.schemas import HealthResponse, SystemMetrics
+from models.schemas import SystemMetrics
+from models.schemas_health import HealthResponse
 from services.auth import get_current_user
 from services.database import get_db
+from services.frontend_bundle_health import frontend_bundle_status
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
 
 START_TIME = time.time()
 VERSION = "1.0.0"
+
+# #15462: the static, dependency-free recovery page. This router already owns
+# "is the served frontend broken" (frontend_bundle_status below, wired into
+# /api/health as the `frontend` field) — the recovery surface for that exact
+# condition belongs beside the probe that detects it, on the same ungated
+# router, rather than a separate router main.py has to know about and the
+# #14339 ungated-router registry has to track a second entry for.
+_RECOVERY_PAGE = Path(__file__).resolve().parent.parent / "static" / "recovery.html"
 
 
 async def _check_redis_health() -> str:
@@ -83,13 +95,22 @@ async def health_check(
         db_status = "unhealthy"
 
     redis_status = await _check_redis_health()
+    # #15462: a filesystem stat, so it stays cheap enough for a public endpoint
+    # polled by monitoring — no thread hop needed.
+    frontend_status = frontend_bundle_status()
 
+    # #15462: `not_applicable` (this node serves no UI) is not a fault, so it
+    # does not degrade the response — only a bundle that should be servable and
+    # is not.
+    frontend_ok = frontend_status.startswith(("healthy", "not_applicable"))
+    healthy = db_status == "healthy" and redis_status == "healthy" and frontend_ok
     return HealthResponse(
-        status="healthy" if db_status == "healthy" and redis_status == "healthy" else "degraded",
+        status="healthy" if healthy else "degraded",
         version=VERSION,
         uptime_seconds=time.time() - START_TIME,
         database=db_status,
         redis=redis_status,
+        frontend=frontend_status,
         nodes_online=nodes_online,
         nodes_total=nodes_total,
     )
@@ -132,3 +153,19 @@ async def database_health_check() -> dict:
     from services.database import db_service
 
     return await db_service.health_check()
+
+
+@router.get("/recovery", include_in_schema=False)
+async def recovery_page() -> FileResponse:
+    """Serve the static recovery page (#15462).
+
+    No auth dependency — this router is mounted ungated in main.py (see the
+    "Routers intentionally left open" registry there), and the page must be
+    reachable when the SLM frontend build itself is broken. It performs its
+    own login against /api/auth/login and calls /api/code-sync/self-update
+    with the resulting token, so it needs no session to already exist. See
+    `static/recovery.html` for the page itself and
+    `docs/developer/ARCHITECTURE_EXCEPTIONS.md` for why it is not wired into
+    the i18n runtime.
+    """
+    return FileResponse(_RECOVERY_PAGE, media_type="text/html")

@@ -49,7 +49,7 @@ log() {
 # Main execution
 main() {
     log "INFO" "🚀 AutoBot Native Deployment - Seamless Setup"
-    log "INFO" "This will deploy AutoBot natively across your 6-machine infrastructure"
+    log "INFO" "This will deploy AutoBot natively across your infrastructure, one host per role"
     log "INFO" "You'll be asked for VM credentials once - everything else is automated"
 
     echo

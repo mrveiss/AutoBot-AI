@@ -22,7 +22,7 @@ the whole directory so the next regression is caught too, not just these two.
 `xfail`-marked are fixed, the `KNOWN_BROKEN_AT_GUARD_INTRODUCTION` list is gone with
 them (an undefined name may not be grandfathered — that would exempt the exact defect
 the guard exists for), and the sweep now has a commit-time and a required-check home.
-The static half below therefore imports `tools/lint/check_infra_scripts_undefined_names.py`
+The static half below therefore imports `tools/lint/check_undefined_names.py`
 rather than restating it: the copy `code-quality` runs is the one that blocks a merge,
 and a test agreeing with a second copy of the rule proves nothing about it.
 
@@ -52,11 +52,12 @@ import sys
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _SCRIPTS_DIR = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts"
 _BACKEND_DIR = _REPO_ROOT / "autobot-backend"
-_CHECKER = _REPO_ROOT / "tools" / "lint" / "check_infra_scripts_undefined_names.py"
+_CHECKER = _REPO_ROOT / "tools" / "lint" / "check_undefined_names.py"
 
 
 def _load_checker():
@@ -65,7 +66,7 @@ def _load_checker():
     Restating the sweep here would give it two definitions that could drift, and
     the copy CI executes is the one that blocks a merge.
     """
-    spec = importlib.util.spec_from_file_location("check_infra_scripts_undefined_names", _CHECKER)
+    spec = importlib.util.spec_from_file_location("check_undefined_names", _CHECKER)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -85,7 +86,11 @@ _OPERATOR_ENTRYPOINTS = (
 
 
 def _discover_scripts() -> list[Path]:
-    return sorted(p for p in _SCRIPTS_DIR.rglob("*.py") if "__pycache__" not in p.parts)
+    # #15510: relative to the scan root, so an ancestor named `__pycache__`
+    # above the checkout cannot empty the sweep.
+    return sorted(
+        p for p in _SCRIPTS_DIR.rglob("*.py") if "__pycache__" not in p.relative_to(_SCRIPTS_DIR).parts
+    )
 
 
 def _relative_key(path: Path) -> str:

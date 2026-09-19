@@ -27,9 +27,10 @@ reads exactly like a clean tree.
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+_REPO_ROOT = repo_root()
 _HOOKS = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "hooks"
 
 # Callables that hand argv straight to execve, so a builtin can never be found.

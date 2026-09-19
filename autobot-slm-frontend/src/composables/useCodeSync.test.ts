@@ -66,11 +66,30 @@ describe('useCodeSync — async drift/resolve job (#11303)', () => {
     const codeSync = useCodeSync()
     const result = await codeSync.startResolveDriftAsync('autobot-slm-backend')
 
+    // #13851 added the `force` override (a resolve is a delete-style rsync, so
+    // the backend refuses when it would remove deployed paths). It defaults to
+    // false and is always sent; #15667 corrected this expectation, which had
+    // been asserting the pre-#13851 body ever since — invisibly, because this
+    // app's vitest suite ran in no workflow.
     expect(mockRawRequest).toHaveBeenCalledWith('/code-sync/drift/resolve-async', {
       method: 'POST',
-      body: { component: 'autobot-slm-backend' },
+      body: { component: 'autobot-slm-backend', force: false },
     })
     expect(result).toEqual({ job_id: 'job-1', component: 'autobot-slm-backend', status: 'running' })
+  })
+
+  it('startResolveDriftAsync forwards force=true so the GUI can override the deletion guard (#13851)', async () => {
+    mockRawRequest.mockResolvedValue(
+      mockResponse(200, { job_id: 'job-2', component: 'autobot-slm-backend', status: 'running' }),
+    )
+
+    const codeSync = useCodeSync()
+    await codeSync.startResolveDriftAsync('autobot-slm-backend', true)
+
+    expect(mockRawRequest).toHaveBeenCalledWith('/code-sync/drift/resolve-async', {
+      method: 'POST',
+      body: { component: 'autobot-slm-backend', force: true },
+    })
   })
 
   it('startResolveDriftAsync surfaces a 409 (restart in flight) detail verbatim without throwing', async () => {

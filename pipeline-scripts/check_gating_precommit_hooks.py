@@ -19,14 +19,34 @@ the same shape as the defect it exists to catch (#14878).
 
 THE CRITERION, written down rather than implied
 -----------------------------------------------
-A hook belongs in ``GATING_HOOK_IDS`` when its entry is a **test suite
-asserting the repository's own shipped behaviour**, so its verdict is
-independent of the diff under review. Everything else — style, formatting, and
-the "no new X" pattern bans whose subject is the changed lines — stays
-informational, which is what the surrounding step already decided.
+A hook belongs in ``GATING_HOOK_IDS`` when it **asserts the repository's own
+shipped state, so its verdict is independent of the diff under review**.
+Everything else — style, formatting, and the "no new X" pattern bans whose
+subject is the changed lines — stays informational, which is what the
+surrounding step already decided.
 
-That criterion currently selects exactly one hook. It is written as a list, and
-guarded, so the next one is an append rather than a redesign.
+The criterion was first written as "its entry is a test suite". That named the
+implementation of the one hook it then selected rather than the property doing
+the work: independence from the diff is what makes a warning the wrong
+disposition, and pytest is not the only way to reach it. #14895 widened the
+wording to the property, and the list grew from one to two.
+
+``no-root-clutter`` (#14216, admitted in #14895) is the second. It qualifies on
+the same property by a different route:
+
+* ``pass_filenames: false`` and a full ``git ls-files`` sweep — it rules on the
+  whole tracked tree, never on the staged subset, so the answer does not move
+  with the diff.
+* Its subject is repository *state*, not code style: a session report at the
+  root, or a ``MagicMock/`` artifact tree committed by the #14217 path bug.
+  Neither is an opinion, and neither goes away by being warned about — the
+  file stays in the tree, and the next run warns again.
+* It was already non-advisory in intent: it exits 2 (not 1) when its own scan
+  loses reach, precisely so an empty result cannot read as clean. A hook that
+  careful about false-clean, wired to a ``::warning::``, blocked nothing.
+
+The list is guarded in both directions, so the next append is an append rather
+than a redesign.
 
 WHY THE ALLOWLIST IS KEYED BY HOOK ``id``, NOT BY NAME
 ------------------------------------------------------
@@ -70,8 +90,9 @@ from check_precommit_hooks_executed import _RAN_AT_ALL  # noqa: E402
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _CONFIG = _REPO_ROOT / ".pre-commit-config.yaml"
 
-# See "THE CRITERION" above before adding to this.
-GATING_HOOK_IDS: tuple[str, ...] = ("ssot-config-lib-guard",)
+# See "THE CRITERION" above before adding to this. Both entries assert
+# repository state independently of the diff; neither is a style opinion.
+GATING_HOOK_IDS: tuple[str, ...] = ("ssot-config-lib-guard", "no-root-clutter")
 
 # pre-commit colours only a tty; the workflow redirects to a file. Stripped
 # anyway so a future `--color always` cannot turn this gate into a false alarm
@@ -147,7 +168,26 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Gate on behavioural pre-commit hooks (#14878)")
     parser.add_argument("logfile", nargs="?", help="pre-commit output; stdin when omitted")
     parser.add_argument("--config", default=str(_CONFIG), help="path to .pre-commit-config.yaml")
+    parser.add_argument(
+        "--print-ids",
+        action="store_true",
+        help=(
+            "print the gating hook ids, one per line, and exit. #15358 scopes the "
+            "main sweep to the pull request diff, which makes every hook the diff "
+            "does not touch report Skipped -- and Skipped FAILS this gate by "
+            "design. The gating hooks therefore run in a second, full-scope "
+            "invocation, and the workflow asks for their ids here rather than "
+            "hard-coding them: a copy in YAML is a second thing to go stale, the "
+            "same reasoning that made check_precommit_hooks_executed import its "
+            "dormant list instead of duplicating it (#14202)."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.print_ids:
+        for hook_id in GATING_HOOK_IDS:
+            print(hook_id)  # noqa: print
+        return 0
 
     raw = Path(args.logfile).read_text(encoding="utf-8") if args.logfile else sys.stdin.read()
     output = _ANSI.sub("", raw)

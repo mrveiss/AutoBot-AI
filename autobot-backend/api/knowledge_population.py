@@ -29,6 +29,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
+from knowledge.ingestion_visibility import INGESTED_DOCUMENT_VISIBILITY
 from knowledge.schemas.population import (
     JobStatusResponse,
     PopulateManPagesResponse,
@@ -86,6 +87,7 @@ def _get_command_metadata(cmd_info: dict) -> dict:
         "category": "commands",
         "command": cmd_info["command"],
         "type": "system_command",
+        "visibility": INGESTED_DOCUMENT_VISIBILITY,  # #16693: reference docs for every signed-in user
     }
 
 
@@ -343,7 +345,7 @@ def _get_system_admin_commands() -> list:
             "usage": "systemctl [options] COMMAND [service]",
             "examples": [
                 "systemctl status nginx",
-                "systemctl start redis-server",
+                "systemctl start redis-stack-server",
                 "systemctl enable docker",
                 "systemctl restart apache2",
             ],
@@ -470,6 +472,7 @@ def _get_man_page_metadata(command: str) -> dict:
         "category": "manpages",
         "command": command,
         "type": "manual_page",
+        "visibility": INGESTED_DOCUMENT_VISIBILITY,
     }
 
 
@@ -785,6 +788,7 @@ def _get_doc_metadata(doc_file: str, file_path, category: str) -> dict:
         "filename": doc_file,
         "type": f"{category}_documentation",
         "file_path": str(file_path),
+        "visibility": INGESTED_DOCUMENT_VISIBILITY,
     }
 
 
@@ -867,16 +871,16 @@ def _build_system_config_info() -> str:
 
     return f"""AutoBot System Configuration
 
-Network Layout:
-- Main Machine (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API
+Network Layout (role-based, count-agnostic -- any host count; SSOT-resolved):
+- Backend role (Main Machine): {NetworkConstants.MAIN_MACHINE_IP} - Backend API
   (port {NetworkConstants.BACKEND_PORT}) + NPU Worker (port 8082) +
   Desktop/Terminal VNC (port 6080)
-- VM1 Frontend: {NetworkConstants.FRONTEND_VM_IP}:5173 - Web interface
+- Frontend role: {NetworkConstants.FRONTEND_VM_IP}:5173 - Web interface
   (SINGLE FRONTEND SERVER)
-- VM2 NPU Worker: {NetworkConstants.NPU_WORKER_VM_IP}:8081 - Secondary NPU worker (Linux)
-- VM3 Redis: {NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT} - Data layer
-- VM4 AI Stack: {NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT} - AI processing
-- VM5 Browser: {NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT} -
+- NPU Worker role: {NetworkConstants.NPU_WORKER_VM_IP}:8081 - Secondary NPU worker (Linux)
+- Database role (Redis): {NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT} - Data layer
+- AI Stack role: {NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT} - AI processing
+- Browser role: {NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT} -
   Web automation (Playwright)
 
 Key Commands:
@@ -884,10 +888,10 @@ Key Commands:
 - Run: SLM GUI (https://<SLM_HOST>/orchestration) or scripts/start-services.sh
 
 Critical Rules:
-- NEVER edit code directly on remote VMs (VM1-VM5)
+- NEVER edit code directly on remote role hosts
 - ALL code edits MUST be made locally in {PATH.PROJECT_ROOT}/
 - Use ./sync-frontend.sh or sync scripts to deploy changes
-- Frontend ONLY runs on VM1 ({NetworkConstants.FRONTEND_VM_IP}:5173)
+- Frontend ONLY runs on its designated role host ({NetworkConstants.FRONTEND_VM_IP}:5173)
 - NO temporary fixes or workarounds allowed
 
 Source: AutoBot System Configuration
@@ -905,6 +909,7 @@ async def _store_system_config(kb_to_use) -> bool:
             "source": "autobot_docs_population",
             "category": "configuration",
             "type": "system_configuration",
+            "visibility": INGESTED_DOCUMENT_VISIBILITY,
         }
 
         if hasattr(kb_to_use, "store_fact"):
@@ -1058,10 +1063,7 @@ async def _index_autobot_docs_background(task_id: str, force_reindex: bool):
         if not await indexer.initialize():
             logger.error("[%s] Indexer initialization failed", task_id)
             elapsed = time.time() - start_time
-            await TaskStatusManager.fail_task(
-                task_id=task_id,
-                error_message="Indexer initialization failed",
-            )
+            await TaskStatusManager.fail_task(task_id=task_id, error_message="Indexer initialization failed")
             return
 
         # Update status: starting indexing
@@ -1098,10 +1100,7 @@ async def _index_autobot_docs_background(task_id: str, force_reindex: bool):
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error("[%s] Background indexing failed: %s", task_id, e)
-        await TaskStatusManager.fail_task(
-            task_id=task_id,
-            error_message=str(e),
-        )
+        await TaskStatusManager.fail_task(task_id=task_id, error_message=str(e))
 
 
 @router.get("/populate_autobot_docs/status/{task_id}", response_model=TaskStatusResponse)
@@ -1128,18 +1127,7 @@ async def get_populate_status(task_id: str):
             "task_id": task_id,
         }
 
-    return {
-        "task_id": task_status.task_id,
-        "status": task_status.status,
-        "message": task_status.message,
-        "progress_percent": task_status.progress_percent,
-        "items_processed": task_status.items_processed,
-        "items_total": task_status.items_total,
-        "error": task_status.error,
-        "elapsed_seconds": task_status.elapsed_seconds,
-        "created_at": task_status.created_at,
-        "updated_at": task_status.updated_at,
-    }
+    return task_status.to_response_dict()
 
 
 # =========================================================================
@@ -1213,18 +1201,7 @@ async def get_index_code_status(task_id: str):
             "task_id": task_id,
         }
 
-    return {
-        "task_id": task_status.task_id,
-        "status": task_status.status,
-        "message": task_status.message,
-        "progress_percent": task_status.progress_percent,
-        "items_processed": task_status.items_processed,
-        "items_total": task_status.items_total,
-        "error": task_status.error,
-        "elapsed_seconds": task_status.elapsed_seconds,
-        "created_at": task_status.created_at,
-        "updated_at": task_status.updated_at,
-    }
+    return task_status.to_response_dict()
 
 
 async def _index_code_background(task_id: str, root_dir: str, force: bool):

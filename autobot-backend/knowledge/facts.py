@@ -18,6 +18,10 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.fact_projection import FactProjectionMixin
+from knowledge.fact_sharing import FactSharingMixin
+from knowledge.ingest_sanitize import redact_url_metadata_fields, sanitize_fact_content
+from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 
 if TYPE_CHECKING:
     import aioredis
@@ -26,7 +30,6 @@ if TYPE_CHECKING:
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
 logger = get_logger(__name__)
-
 
 # =============================================================================
 # NPU-ACCELERATED EMBEDDING GENERATION (Issue #165)
@@ -287,11 +290,10 @@ def _env_float_safe(name: str, default: float) -> float:
     return val if val == val else default  # reject NaN
 
 
-# A3 (#12554): fact-lane consolidation thresholds. Conservative by design — see
-# consolidate_facts for the full no-data-loss reasoning. A fact is prunable only
-# if it is UNPROTECTED, low-quality, never recalled since instrumentation began
-# (access_count == 0, A1 #12552), created AFTER the instrumentation epoch (so a
-# 0 count is meaningful, not "predates A1"), and aged past the floor.
+# A3 (#12554): fact-lane consolidation thresholds. Conservative by design — see consolidate_facts for the full no-
+# data-loss reasoning. A fact is prunable only if it is UNPROTECTED, low-quality, never recalled since instrumentation
+# began (access_count == 0, A1 #12552), created AFTER the instrumentation epoch (so a 0 count is meaningful, not
+# "predates A1"), and aged past the floor.
 _FACTS_PRUNE_QUALITY_FLOOR: float = _env_float_safe("AUTOBOT_FACTS_PRUNE_QUALITY_FLOOR", 0.1)
 _FACTS_PRUNE_MAX_AGE_DAYS: int = _env_int("AUTOBOT_FACTS_PRUNE_MAX_AGE_DAYS", 180)
 _FACTS_PRUNE_SCAN_LIMIT: int = _env_int("AUTOBOT_FACTS_PRUNE_SCAN_LIMIT", 5000)
@@ -409,7 +411,7 @@ def _apply_provenance_defaults(metadata: Dict[str, Any]) -> None:
             metadata[field] = default
 
 
-class FactsMixin:
+class FactsMixin(FactProjectionMixin, FactSharingMixin):
     """
     Facts management mixin for knowledge base.
 
@@ -452,79 +454,6 @@ class FactsMixin:
             asyncio.create_task(searcher.recompute_corpus_stats())
         except Exception as exc:
             logger.warning("BM25 stats refresh scheduling failed: %s", exc)
-
-    async def _find_fact_by_unique_key(self, unique_key: str) -> Dict[str, Any] | None:
-        """
-        Find an existing fact by unique key (fast Redis SET lookup).
-        Issue #315: Refactored to use helper for reduced nesting.
-
-        Args:
-            unique_key: The unique key to search for (e.g., "machine:os:command:section")
-
-        Returns:
-            Dict with fact info if found, None otherwise
-        """
-        try:
-            # Check Redis SET for unique key mapping
-            unique_key_name = "unique_key:man_page:%s" % unique_key
-            fact_id = await asyncio.to_thread(self.redis_client.get, unique_key_name)
-
-            if not fact_id:
-                return None
-
-            # Decode bytes if necessary
-            if isinstance(fact_id, bytes):
-                fact_id = fact_id.decode("utf-8")
-
-            # Get the actual fact data
-            fact_key = "fact:%s" % fact_id
-            fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
-
-            if not fact_data:
-                return None
-
-            # Use helper for decoding (Issue #315: extracted)
-            decoded_data = _decode_redis_hash(fact_data)
-
-            return {
-                "fact_id": fact_id,
-                "content": decoded_data.get("content", ""),
-                "metadata": decoded_data.get("_parsed_metadata", {}),
-            }
-
-        except Exception as e:
-            logger.debug("Error finding fact by unique key: %s", e)
-
-        return None
-
-    async def _find_existing_fact(self, content: str, metadata: Dict[str, Any]) -> str | None:
-        """
-        Check if a fact with identical content and metadata already exists.
-
-        Args:
-            content: Fact content
-            metadata: Fact metadata
-
-        Returns:
-            Existing fact_id if found, None otherwise
-        """
-        try:
-            # Create content hash for deduplication
-            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
-
-            # Check if hash exists in Redis
-            hash_key = "content_hash:%s" % content_hash
-            existing_id = await asyncio.to_thread(self.redis_client.get, hash_key)
-
-            if existing_id:
-                if isinstance(existing_id, bytes):
-                    return existing_id.decode("utf-8")
-                return existing_id
-
-        except Exception as e:
-            logger.debug("Error checking for existing fact: %s", e)
-
-        return None
 
     async def _find_duplicate(self, content: str, threshold: float = 0.92) -> Dict[str, Any] | None:
         """Check ChromaDB for near-duplicate content before inserting.
@@ -573,7 +502,9 @@ class FactsMixin:
             logger.debug("_find_duplicate: query failed, skipping check: %s", exc)
         return None
 
-    async def _check_for_duplicates(self, content: str, metadata: Dict[str, Any]) -> Dict[str, Any] | None:
+    async def _check_for_duplicates(
+        self, content: str, metadata: Dict[str, Any], *, hash_content: str | None = None
+    ) -> Dict[str, Any] | None:
         """
         Check for duplicate facts by unique_key, content hash, or semantic similarity.
 
@@ -581,8 +512,14 @@ class FactsMixin:
         Issue #3788: Added semantic similarity check via ChromaDB.
 
         Args:
-            content: Fact content text
+            content: Fact content text (redacted -- what will actually be stored/embedded;
+                used for the semantic-similarity check, which should compare against what
+                stored embeddings actually represent)
             metadata: Fact metadata dict
+            hash_content: What the exact-hash duplicate check hashes, if different from
+                `content` (#13708 round 4) -- the caller's raw, pre-redaction submission,
+                so two different secrets that both redact to the same placeholder don't
+                collide into a false "duplicate". Defaults to `content` when not given.
 
         Returns:
             Duplicate result dict if found, None otherwise
@@ -599,7 +536,7 @@ class FactsMixin:
                 }
 
         # Check for content duplicates (exact hash match)
-        existing_id = await self._find_existing_fact(content, metadata)
+        existing_id = await self._find_existing_fact(hash_content if hash_content is not None else content, metadata)
         if existing_id:
             logger.info("Duplicate content detected: %s", existing_id)
             return {
@@ -623,9 +560,17 @@ class FactsMixin:
 
         return None
 
-    async def _store_fact_in_redis(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> None:
+    async def _project_fact_to_redis(
+        self, fact_id: str, content: str, metadata: Dict[str, Any], *, hash_content: str | None = None
+    ) -> None:
         """
-        Store fact data in Redis with hash mappings.
+        Project a stored fact into Redis: the hash plus its lookup indexes.
+
+        Issue #15663: this writes a **projection**, not the fact. The durable row
+        in ``knowledge_facts`` is the fact; everything written here is derivable
+        from it and is rebuilt by :meth:`rebuild_fact_projections`. Losing these
+        keys costs a rebuild, which is the whole point — before #15663 it cost
+        the knowledge base (#12733).
 
         Issue #281: Extracted helper for Redis storage operations.
         Issue #547: Added session-fact relationship tracking for orphan cleanup.
@@ -633,8 +578,13 @@ class FactsMixin:
 
         Args:
             fact_id: Fact identifier
-            content: Fact content text
+            content: Fact content text (redacted -- what gets stored in the hash)
             metadata: Fact metadata dict
+            hash_content: raw, pre-redaction content the dedup content-hash keys
+                off instead (#13708 round 4) -- see _check_for_duplicates for why.
+                Defaults to `content` when not given (e.g. rebuild_fact_projections,
+                re-deriving from what is already durably stored -- there is no
+                separate "raw original" to recover there).
         """
         # Store in Redis
         fact_key = "fact:%s" % fact_id
@@ -649,7 +599,8 @@ class FactsMixin:
         )
 
         # Store content hash for deduplication
-        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+        hash_source = hash_content if hash_content is not None else content
+        content_hash = hashlib.sha256(hash_source.encode("utf-8")).hexdigest()[:16]
         await asyncio.to_thread(self.redis_client.set, "content_hash:%s" % content_hash, fact_id)
 
         # Store unique_key mapping if provided
@@ -664,14 +615,8 @@ class FactsMixin:
 
         # Issue #688: Track ownership indexes for user-based access control
         owner_id = metadata.get("owner_id") or metadata.get("user_id")
-        if hasattr(self, "ownership_manager") and owner_id:
-            await self.ownership_manager.set_owner(
-                fact_id=fact_id,
-                owner_id=owner_id,
-                visibility=metadata.get("visibility", "private"),
-                source_type=metadata.get("source_type", "manual"),
-                shared_with=metadata.get("shared_with", []),
-            )
+        if getattr(self, "ownership_manager", None):  # #16685: the base sets it to None
+            await index_ownership(self.ownership_manager, fact_id, metadata)  # #16663 org/group, #16693 SYSTEM
         elif owner_id:
             # Issue #689: Fallback simple tracking when ownership manager
             # is not initialized
@@ -719,9 +664,15 @@ class FactsMixin:
         and then succeeds inline is marked ``completed`` and dropped from the pending
         set immediately, rather than lingering as ``failed`` until the next reconcile
         cycle. Mirrors ``BackgroundVectorizer._mark_vectorization_complete`` (#11296).
+
+        Issue #15663: what is written here is the record of an *attempt*, not the
+        answer to "is this fact vectorized". That question is put to ChromaDB —
+        see ``knowledge.vector_membership`` — because a stamp beside the fact is
+        a claim about another store and drifts the moment the two disagree.
         """
         from background_vectorization import PENDING_SET_KEY
 
+        await self._record_vector_observation(fact_id)
         try:
             fact_key = "fact:%s" % fact_id
             await asyncio.to_thread(
@@ -766,10 +717,9 @@ class FactsMixin:
         # ChromaVectorStore.add() expects nodes with embeddings already set
         embedding = await _generate_embedding_with_npu_fallback(content, max_attempts=max_attempts)
 
-        # Issue #12312: An empty embedding means generation failed upstream (backend
-        # blip, timeout). Do NOT silently drop the vector and log success — record a
-        # queryable, retriable failure so the background reconciler backfills it once
-        # the backend recovers.
+        # Issue #12312: an empty embedding means generation failed upstream (backend blip, timeout). Do NOT
+        # silently drop the vector and log success — record a queryable, retriable failure so the background
+        # reconciler backfills it once the backend recovers.
         if not embedding:
             await self._record_failed_vectorization(fact_id, "embedding generation returned an empty result")
             return
@@ -817,33 +767,69 @@ class FactsMixin:
 
         return metadata
 
-    async def _store_and_vectorize_fact(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Store fact in Redis, vectorize, and update stats (Issue #398: extracted)."""
-        await self._store_fact_in_redis(fact_id, content, metadata)
+    async def _store_and_vectorize_fact(
+        self, fact_id: str, content: str, metadata: Dict[str, Any], *, hash_content: str | None = None
+    ) -> Dict[str, Any]:
+        """Record the fact durably, then project it into Redis and ChromaDB.
+
+        Issue #398: extracted. Issue #15663: the durable write comes first and is
+        allowed to raise. A projection that fails is repaired by the reconciler;
+        a row that was never written is a fact the user believes they stored and
+        will not find again, which is #12733.
+
+        Args:
+            hash_content: raw, pre-redaction content for the dedup content-hash
+                (#13708 round 4) -- see _check_for_duplicates for why. Defaults
+                to `content` (post-redaction) when not given.
+        """
+        # Lazy: fact_store pulls SQLAlchemy, absent from the startup-import smoke env.
+        from knowledge import fact_store
+
+        # #13708: content is already redacted -- store_fact() (this method's one
+        # caller) runs it through sanitize_fact_content() before _check_for_duplicates,
+        # which is also update_fact()'s credential chokepoint (knowledge/ingest_sanitize.py).
+        # Redacting again here would be a same-call-chain no-op, not defense in depth.
+        resolved_hash_content = hash_content if hash_content is not None else content
+        await fact_store.persist_fact(fact_id, content, metadata, hash_content=resolved_hash_content)
+        await self._project_fact_to_redis(fact_id, content, metadata, hash_content=resolved_hash_content)
         await self._vectorize_fact_in_chromadb(fact_id, content, metadata)
         await asyncio.gather(
             self._increment_stat("total_facts"),
             self._increment_stat("total_vectors"),
         )
         self._schedule_bm25_refresh()
-        return {"status": "success", "fact_id": fact_id, "action": "created"}
+        # #13708 round 4: callers that need to do something ELSE with the content
+        # after storing it (bulk.py's backup restore is the one that does) must
+        # use what was actually persisted, not their own original copy -- the
+        # original may carry a credential this call just redacted out.
+        return {"status": "success", "fact_id": fact_id, "action": "created", "content": content}
 
     async def store_fact(self, content: str, metadata: Dict[str, Any] = None, fact_id: str = None) -> Dict[str, Any]:
         """Store a new fact in Redis and vectorize it (Issue #398: refactored)."""
         self.ensure_initialized()
+        # #13708 round 4: the dedup content-hash must key on what the caller SUBMITTED,
+        # not the redacted text -- redact_content masks every credential to the same
+        # fixed placeholder, so two DIFFERENT secrets ("token: A", "token: B") redact
+        # to identical text and would otherwise collide, silently dropping the second,
+        # genuinely different fact as a "duplicate" of the first (#17005's own risk,
+        # reintroduced from the write side once redaction moved ahead of this check).
+        # Storage and embedding still use the redacted `content` below -- only the
+        # dedup hash keys off the raw original, kept just long enough to pass through.
+        raw_content = content
+        content, metadata = sanitize_fact_content(content, metadata)  # #16770: the KB write chokepoint
 
         if not content or not content.strip():
-            return {"status": "error", "message": "Empty content provided"}
+            return {"status": "error", "message": "Empty content, or nothing left after injection sanitizing"}
 
         try:
             fact_id = fact_id or str(uuid.uuid4())
             metadata = self._prepare_fact_metadata(fact_id, metadata, content)
 
-            duplicate_result = await self._check_for_duplicates(content, metadata)
+            duplicate_result = await self._check_for_duplicates(content, metadata, hash_content=raw_content)
             if duplicate_result:
                 return duplicate_result
 
-            return await self._store_and_vectorize_fact(fact_id, content, metadata)
+            return await self._store_and_vectorize_fact(fact_id, content, metadata, hash_content=raw_content)
 
         except Exception as e:
             logger.error("Failed to store fact: %s", e)
@@ -1153,7 +1139,16 @@ class FactsMixin:
             logger.warning("Could not sync metadata-only update to ChromaDB for fact %s: %s", fact_id, exc)
 
     async def _refresh_content_hash(self, fact_id: str, old_content: str, new_content: str) -> None:
-        """Refresh content_hash dedup key when content changes. Issue #1375."""
+        """Refresh content_hash dedup key when content changes. Issue #1375.
+
+        #17030: old_content is the fact's *currently stored* content, which is
+        REDACTED for any fact that ever held a credential -- the key that was
+        actually set when the fact was created hashed the raw, pre-redaction
+        submission instead, so old_hash below can miss it and leave the true
+        old key orphaned. Raw old content is never retained anywhere to
+        recompute the real key from; see that issue for why this needs a
+        design decision rather than a fix here.
+        """
         if old_content:
             old_hash = hashlib.sha256(old_content.encode("utf-8")).hexdigest()[:16]
             await asyncio.to_thread(self.redis_client.delete, "content_hash:%s" % old_hash)
@@ -1166,32 +1161,42 @@ class FactsMixin:
 
         try:
             fact_key = "fact:%s" % fact_id
-            exists = await asyncio.to_thread(self.redis_client.exists, fact_key)
-            if not exists:
+            current = await self._read_fact_for_write(fact_id)
+            if current is None:
                 return {"status": "error", "message": "Fact not found"}
+            decoded, current_metadata = current
+            previous = dict(current_metadata)  # #16663: the indexes the fact is filed under now
 
-            fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
-            decoded = self._decode_fact_data(fact_data)
-
-            current_metadata = {}
-            if "metadata" in decoded:
-                try:
-                    raw = decoded["metadata"]
-                    current_metadata = raw if isinstance(raw, dict) else json.loads(raw)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
+            # #13708 round 4 review (BLOCK 2): stays None for a metadata-only update, so
+            # _durable_update_or_adopt/fact_store fall back to hashing the (unchanged)
+            # stored content instead.
+            raw_new_content = None
             if content is not None:
+                # #13708 round 4: same reasoning as store_fact -- the new dedup hash must
+                # key on what the caller submitted, not the redacted text two different
+                # secrets would otherwise collide on.
+                raw_new_content = content
+                content, _ = sanitize_fact_content(content, current_metadata)  # keeps the fact's own route
                 # Issue #1375: Refresh dedup key + fingerprint on content change
-                await self._refresh_content_hash(fact_id, decoded.get("content", ""), content)
+                await self._refresh_content_hash(fact_id, decoded.get("content", ""), raw_new_content)
                 decoded["content"] = content
                 from services.content_fingerprint import compute_fingerprint
 
                 current_metadata["content_fingerprint"] = compute_fingerprint(content)
             if metadata is not None:
+                # #13708 round 4: sanitize_fact_content above ran against current_metadata
+                # (deliberately, to keep the fact's own route -- see that call's comment),
+                # never against this caller's OWN metadata, so a URL-shaped field in it
+                # (e.g. a re-fetch updating "source") would merge in unredacted otherwise.
+                redact_url_metadata_fields(metadata)
                 current_metadata.update(metadata)
             current_metadata["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
+            # #15663: durable row first, then projection — an update that only reached Redis is one a restart undoes.
+            if not await self._durable_update_or_adopt(
+                fact_id, decoded["content"], current_metadata, hash_content=raw_new_content
+            ):
+                return {"status": "error", "message": "Fact not found"}
             await asyncio.to_thread(
                 self.redis_client.hset,
                 fact_key,
@@ -1201,6 +1206,8 @@ class FactsMixin:
                     "timestamp": decoded.get("timestamp", ""),
                 },
             )
+            if ownership_changed(previous, current_metadata) and getattr(self, "ownership_manager", None):
+                await reindex_ownership(self.ownership_manager, fact_id, previous, current_metadata)
 
             if content is not None and self.vector_store:
                 await self._revectorize_fact(fact_id, decoded["content"], current_metadata)
@@ -1238,7 +1245,7 @@ class FactsMixin:
         await asyncio.to_thread(self.redis_client.delete, "fact:origin:session:%s" % fact_id)
 
         # Issue #688: Clean up ownership indexes
-        if hasattr(self, "ownership_manager"):
+        if getattr(self, "ownership_manager", None):  # #16685: None when not initialised -- skip, never crash
             await self.ownership_manager.cleanup_ownership_indexes(fact_id, metadata)
 
     async def _delete_fact_from_vector_store(self, fact_id: str) -> None:
@@ -1269,16 +1276,17 @@ class FactsMixin:
         self.ensure_initialized()
 
         try:
-            fact_key = "fact:%s" % fact_id
-            fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
-            if not fact_data:
+            current = await self._read_fact_for_write(fact_id)
+            if current is None:
                 return {"status": "error", "message": "Fact not found"}
 
-            decoded = _decode_redis_hash(fact_data)
+            decoded, metadata = current
             content = decoded.get("content", "")
-            metadata = decoded.get("_parsed_metadata", {})
 
-            await asyncio.to_thread(self.redis_client.delete, fact_key)
+            # #15663: the row is the fact, so removing it is what makes the
+            # delete real; the projections are cleaned up after.
+            if not await self._durable_delete(fact_id):
+                return {"status": "error", "message": "Fact not found"}
             await self._cleanup_fact_mappings(fact_id, content, metadata)
             await self._delete_fact_from_vector_store(fact_id)
 
@@ -1770,88 +1778,6 @@ class FactsMixin:
         except Exception as e:
             logger.warning("Failed to cleanup session tracking for %s: %s", session_id, e)
 
-    # =========================================================================
-    # FACT SHARING (Issue #689)
-    # =========================================================================
-
-    async def share_facts(
-        self,
-        fact_ids: List[str],
-        shared_with: List[str],
-        shared_by: str,
-    ) -> Dict[str, Any]:
-        """Share specific facts with other users.
-
-        Creates sharing indices and updates fact metadata with
-        shared_with user IDs while preserving original ownership.
-
-        Args:
-            fact_ids: List of fact IDs to share
-            shared_with: List of user IDs to share with
-            shared_by: User ID of the person sharing
-
-        Returns:
-            Dict with sharing results
-        """
-        shared_count = 0
-        errors = []
-
-        for fact_id in fact_ids:
-            try:
-                await self._share_single_fact(fact_id, shared_with, shared_by)
-                shared_count += 1
-            except Exception as e:
-                logger.error("Failed to share fact %s: %s", fact_id, e)
-                errors.append({"fact_id": fact_id, "error": "Fact sharing failed"})
-
-        return {
-            "shared_count": shared_count,
-            "errors": errors,
-        }
-
-    async def _share_single_fact(self, fact_id: str, shared_with: List[str], shared_by: str) -> None:
-        """Share a single fact with users. Helper for share_facts (#689)."""
-        fact_key = "fact:%s" % fact_id
-        raw = await asyncio.to_thread(self.redis_client.hget, fact_key, "metadata")
-        if not raw:
-            raise ValueError("Fact %s not found" % fact_id)
-
-        raw_str = raw.decode("utf-8") if isinstance(raw, bytes) else raw
-        metadata = json.loads(raw_str) if isinstance(raw_str, str) else raw_str
-
-        existing_shared = metadata.get("shared_with", [])
-        merged = list(set(existing_shared + shared_with))
-        metadata["shared_with"] = merged
-        metadata["shared_by"] = shared_by
-        metadata["shared_at"] = datetime.now(tz=timezone.utc).isoformat()
-
-        await asyncio.to_thread(self.redis_client.hset, fact_key, "metadata", json.dumps(metadata))
-
-        for user_id in shared_with:
-            await asyncio.to_thread(
-                self.redis_client.sadd,
-                "user:shared_facts:%s" % user_id,
-                fact_id,
-            )
-
-    async def get_shared_facts(self, user_id: str) -> List[Dict[str, Any]]:
-        """Get all facts shared with a user (#689).
-
-        Args:
-            user_id: Recipient user ID
-
-        Returns:
-            List of fact dicts with content and metadata
-        """
-        try:
-            raw_ids = await asyncio.to_thread(self.redis_client.smembers, "user:shared_facts:%s" % user_id)
-            fact_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in (raw_ids or [])]
-            facts = []
-            for fid in fact_ids:
-                fact = self.get_fact(fid)
-                if fact:
-                    facts.append(fact)
-            return facts
-        except Exception as e:
-            logger.error("Failed to get shared facts for %s: %s", user_id, e)
-            return []
+    # Fact sharing (Issue #689): split out to knowledge/fact_sharing.py's
+    # FactSharingMixin, one of this class's bases -- see that module's
+    # docstring for why (#14236/#13708).

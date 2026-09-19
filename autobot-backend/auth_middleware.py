@@ -17,6 +17,8 @@ from typing import Dict, Tuple
 
 from fastapi import HTTPException, Request, status
 
+from auth_revocation import reject_if_revoked_by_password_change
+from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_login_token
 from autobot_shared.auth.jwt_core import (
     decode_jwt_multi,
     encode_jwt,
@@ -29,9 +31,7 @@ from autobot_shared.principal import resolve_principal_id  # noqa: F401  (re-exp
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import parse_utc_iso
-from autobot_shared.user_management.password_epoch import (
-    is_token_revoked_by_password_change,
-)
+from autobot_shared.websocket_subprotocol import resolve_ws_token
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
@@ -128,6 +128,21 @@ class AuthenticationMiddleware:
         """
         return ssot_config.path.data_path / "service-keys" / "jwt_rsa_private.pem"
 
+    @staticmethod
+    def _write_jwt_key_file(key_file: Path, pem: str) -> None:
+        """Write PEM to the durable key file with mode 0600 (``_get_rs256_keypair``)."""
+        try:
+            key_file.parent.mkdir(parents=True, exist_ok=True)
+            key_file.write_text(pem, encoding="utf-8")
+            os.chmod(key_file, 0o600)
+            logger.info("RS256 private key written to durable file %s", key_file)
+        except Exception as exc:
+            logger.error(
+                "Failed to write RS256 key to %s: %s — key will be ephemeral this session",
+                key_file,
+                exc,
+            )
+
     def _get_rs256_keypair(self) -> Tuple[str, str, str]:
         """Load or auto-generate the RS256 keypair for signing user JWTs (#10196).
 
@@ -170,20 +185,6 @@ class AuthenticationMiddleware:
                 backend=default_backend(),
             )
 
-        def _write_key_file(pem: str) -> None:
-            """Write PEM to the durable file with mode 0600."""
-            try:
-                key_file.parent.mkdir(parents=True, exist_ok=True)
-                key_file.write_text(pem, encoding="utf-8")
-                os.chmod(key_file, 0o600)
-                logger.info("RS256 private key written to durable file %s", key_file)
-            except Exception as exc:
-                logger.error(
-                    "Failed to write RS256 key to %s: %s — key will be ephemeral this session",
-                    key_file,
-                    exc,
-                )
-
         # Tier 1: env var
         pem_private = ssot_config.misc.jwt_private_key
         if pem_private:
@@ -196,13 +197,11 @@ class AuthenticationMiddleware:
 
         # Tier 2: durable file (survives restart and code-sync deploys)
         #
-        # #13162: the existence probe belongs INSIDE the guard. Path.exists()
-        # only swallows "not there" errnos (ENOENT/ENOTDIR/ELOOP) — EACCES
-        # propagates. When the service user cannot traverse the service-keys
-        # directory (e.g. it is mode 0700 and owned by another account) the
-        # PermissionError escaped this function, out of the AuthMiddleware
-        # constructor, and turned every request behind check_admin_permission
-        # into a 500 instead of falling through to the tiers below.
+        # #13162: the existence probe belongs INSIDE the guard. Path.exists() only swallows "not there" errnos
+        # (ENOENT/ENOTDIR/ELOOP) — EACCES propagates. When the service user cannot traverse the service-keys directory
+        # (e.g. it is mode 0700 and owned by another account) the PermissionError escaped this function, out of the
+        # AuthMiddleware constructor, and turned every request behind check_admin_permission into a 500 instead of
+        # falling through to the tiers below.
         try:
             if key_file.exists():
                 pem_private = key_file.read_text(encoding="utf-8")
@@ -218,7 +217,7 @@ class AuthenticationMiddleware:
             try:
                 private_key = _load_pem(stored_pem)
                 # Migrate to the durable file so the next restart reuses it
-                _write_key_file(stored_pem)
+                self._write_jwt_key_file(key_file, stored_pem)
                 logger.info("RS256 keypair migrated from security config to durable file")
                 return stored_pem, _derive_public(private_key), kid
             except Exception as exc:
@@ -241,7 +240,7 @@ class AuthenticationMiddleware:
         ).decode("utf-8")
         pem_public = _derive_public(private_key)
 
-        _write_key_file(pem_private)
+        self._write_jwt_key_file(key_file, pem_private)
 
         return pem_private, pem_public, kid
 
@@ -309,9 +308,8 @@ class AuthenticationMiddleware:
         Returns default admin user dict when auth is disabled.
         """
         return {
-            # user_id/sub so user endpoints (e.g. /users/me/preferences) resolve
-            # the identity when auth is disabled; without them they 401'd ('User ID
-            # not found in token') → frontend logout → login redirect loop.
+            # user_id/sub so user endpoints (e.g. /users/me/preferences) resolve the identity when auth is disabled;
+            # without them they 401'd ('User ID not found in token') → frontend logout → login redirect loop.
             "user_id": "admin",
             "sub": "admin",
             "username": "admin",
@@ -400,8 +398,8 @@ class AuthenticationMiddleware:
 
         Signs with the RS256 private key and embeds the ``kid`` header so
         consumers can locate the correct public key in the JWKS response.
-        Claims are unchanged: username / role / email / iat (+ user_id / org_id
-        from #684).
+        Claims: username / role / email / iat (+ user_id / org_id from #684),
+        and token_type=login so a login is known by positive evidence (#17042).
         """
         payload = {
             "username": user_data["username"],
@@ -412,13 +410,11 @@ class AuthenticationMiddleware:
             # be an integer"), which silently broke JWT verification (every
             # /api/auth/me 401'd → login redirect loop) once real auth ran.
             "iat": int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp()),
+            "token_type": LOGIN_TOKEN_TYPE,
         }
 
         # Issue #684: Include org/user hierarchy in token
-        if user_data.get("user_id"):
-            payload["user_id"] = str(user_data["user_id"])
-        if user_data.get("org_id"):
-            payload["org_id"] = str(user_data["org_id"])
+        payload.update({claim: str(user_data[claim]) for claim in ("user_id", "org_id") if user_data.get(claim)})
 
         return encode_jwt(
             payload,
@@ -595,13 +591,11 @@ class AuthenticationMiddleware:
             "role": token_data.get("role", "user"),
             "email": token_data.get("email", ""),
             "auth_method": "jwt",
+            "login_token": is_login_token(token_data),  # #17042: minted as a login, no other purpose
         }
 
         # Issue #684: Include org hierarchy from token
-        if token_data.get("user_id"):
-            user["user_id"] = token_data["user_id"]
-        if token_data.get("org_id"):
-            user["org_id"] = token_data["org_id"]
+        user.update({claim: token_data[claim] for claim in ("user_id", "org_id") if token_data.get(claim)})
 
         # #12924: carry ``iat`` through so the async ``get_current_user`` can
         # reject tokens minted before a password change. This extraction is
@@ -902,13 +896,9 @@ async def get_current_user(request: Request) -> Dict:
         # #12924: a token minted before its subject's password changed is no
         # longer valid. This is the first point on the request path that can
         # await, which is why the check lives here rather than in the
-        # synchronous extraction above.
-        if user_data.get("auth_method") == "jwt" and await is_token_revoked_by_password_change(user_data):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token is no longer valid — password was changed. Please sign in again.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        # synchronous extraction above. A check that cannot run denies (#16411).
+        if user_data.get("auth_method") == "jwt":
+            await reject_if_revoked_by_password_change(user_data)
 
         return user_data
 
@@ -1061,7 +1051,7 @@ def require_device_jwt(min_scope: str = "read"):
 async def authenticate_websocket(websocket) -> dict | None:
     """Authenticate a WebSocket connection.
 
-    Checks for JWT token in query params. Returns None if unauthenticated.
+    Checks for JWT via Sec-WebSocket-Protocol (preferred) or query param (fallback). None if unauthenticated.
 
     Issue #2818: Add auth before websocket.accept() to reject unauthenticated
     connections at the protocol handshake level.
@@ -1072,8 +1062,9 @@ async def authenticate_websocket(websocket) -> dict | None:
     Returns:
         User dict or None if authentication fails.
     """
-    # Check query param token
-    token = websocket.query_params.get("token")
+    # #16457: prefer Sec-WebSocket-Protocol (['bearer', '<jwt>']) over the query param so the
+    # token never lands in URL access logs/browser history; query stays a fallback during migration.
+    token = resolve_ws_token(websocket)
     if token:
         try:
             # Use the singleton — a fresh AuthenticationMiddleware() generates a

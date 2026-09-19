@@ -7,6 +7,25 @@
 const DEFAULT_BASE_URL = "http://localhost:8000";
 const TOKEN_ENV = "AUTOBOT_API_TOKEN";
 
+// Every core and optional router is mounted by the backend's application
+// factory at `/api{registry_prefix}` -- a single loop, no exceptions (#15053,
+// #16495 -- the same bug found once already in the Python SDK, and found here
+// undiscovered because nothing in this package's default test run makes an
+// HTTP call). The only mounts that are NOT under `/api` are the OpenAI/
+// Anthropic compatibility routers at `/v1` and the JWKS document at
+// `/.well-known`, and this SDK exposes neither. So the prefix is a property
+// of the whole surface and belongs here, applied once, rather than repeated
+// on every resource path.
+const API_PREFIX = "/api";
+
+/** Place a resource path under the backend's API root, once, idempotently.
+ * `/chat/sessions` -> `/api/chat/sessions`. A path that already carries the
+ * prefix is not double-prefixed. */
+function apiPath(path: string): string {
+  const normalised = "/" + path.replace(/^\/+/, "");
+  return normalised === API_PREFIX || normalised.startsWith(`${API_PREFIX}/`) ? normalised : `${API_PREFIX}${normalised}`;
+}
+
 export interface ClientOptions {
   baseUrl?: string;
   token?: string;
@@ -36,7 +55,7 @@ export class AutoBotHttpClient {
   }
 
   private buildUrl(path: string, params?: Record<string, string | number | undefined>): string {
-    const url = new URL(`${this.baseUrl}${path}`);
+    const url = new URL(`${this.baseUrl}${apiPath(path)}`);
     if (params) {
       for (const [key, value] of Object.entries(params)) {
         if (value !== undefined && value !== null) {

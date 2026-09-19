@@ -7,12 +7,19 @@
 # LGTM.com retired Dec 2022, and the github/codeql-action pipeline does not
 # propagate inline-comment suppressions to alert state). See #12307.
 #
-# Reviewed false positives are suppressed by EITHER:
+# Reviewed false positives are suppressed by ONE of:
 #   • dismissing the individual alert via the Security tab / REST API
-#     (per-line granularity, persists across runs, does not hide new alerts), OR
-#   • a query-filters / paths-ignore exclusion below
-#     (per-query / per-path granularity — ALSO hides future alerts of that query
-#      in that path, so justify each entry inline).
+#     (per-alert granularity, persists across runs, does not hide new alerts) —
+#     the ONLY way to suppress one query on one file, OR
+#   • a `query-filters` exclusion, which removes a QUERY from the whole analysis
+#     (every file), OR
+#   • a `paths-ignore` entry, which removes a PATH from every query.
+#
+# A query filter matches QUERY metadata (`id`, `tags`, `kind`, `precision`, ...),
+# never a source file. An `exclude:` naming `files:` or `paths:` matches no query
+# and suppresses nothing (#16302). Keep each filter's reason in a comment above
+# it; repo_tests/codeql_query_filters_match_queries_16302_test.py fails on any
+# `query-filters` key CodeQL does not match on.
 #
 # Full guide: docs/developer/CODEQL_SUPPRESSION.md
 #
@@ -23,42 +30,62 @@
 
 name: "AutoBot CodeQL Configuration"
 
-query-filters:
-  - exclude:
-      id: py/full-ssrf
-      files: autobot-backend/skills/external_importer.py
-    reason: >-
-      URL is validated via _validate_git_url() which enforces SSRF protections:
-      1) Scheme allowlist (https, ssh, git+ssh only)
-      2) For https: is_public_url_async() rejects private IPs
-      3) For ssh: resolve_safe_ip_async() blocks RFC1918/loopback/link-local ranges
-      The validation happens before any use in _run_git(). See #MVA-2605.
-  - exclude:
-      id: py/full-ssrf
-      files: autobot_shared/security/ssrf_guard.py
-    reason: >-
-      This module IS the SSRF guard. Both outbound call sites (fetch_safe_url,
-      pinned_request_with_redirects) are immediately preceded by
-      pinned_connector(url), which runs resolve_safe_ip on that exact URL and pins
-      the resolved public IP into the connector's resolver, defeating DNS-rebind.
-      pinned_request_with_redirects additionally sets allow_redirects=False and
-      re-validates every hop itself rather than letting aiohttp follow one.
-      CodeQL models the caller-supplied URL as reaching the request and cannot
-      see the guard in between. Pre-existing on main (alerts 1042/1045, both
-      dismissed as false positives); surfaced as "new" on #13624 only because
-      that PR edits the line. See #13624.
-  - exclude:
-      id: py/path-injection
-    paths:
-      - autobot-backend/transcriber/upload_security.py
-    reason: >-
-      Path is validated via multi-layer security checks before any file operation:
-      1) Prefix check ensures path starts with user_upload_dir (L126-127)
-      2) Path.resolve() canonicalizes and follows symlinks (L132)
-      3) relative_to(user_upload_dir) confirms resolved path is still within allowed directory (L137)
-      4) Symlink rejection (L144)
-      5) File existence and type validation (L149)
-      These checks prevent path traversal attacks. See #9214.
+# ── Reviewed false positives, applied as code-scanning alert dismissals ───────
+# Each pair below is applied as a code-scanning alert dismissal, because a query
+# filter cannot scope by file (#16302). These used to be `query-filters` entries
+# carrying `files:` / `paths:`, which never suppressed anything. The reasons are
+# the reviewed record; a dismissal comment cites the pair's issue.
+#
+# py/full-ssrf — autobot-backend/skills/external_importer.py
+#   Alert #1030's live instance is the HTTP catalog fetch,
+#   ExternalSkillImporter.import_http_catalog's `session.get(url, params=params,
+#   allow_redirects=False)` — not the git-clone path (import_git_repo), which is
+#   separately guarded by _validate_git_url(). The catalog fetch's guard:
+#   1) _validate_catalog_url() requires an http(s) scheme and a present hostname,
+#      then calls autobot_shared.url_safety.is_public_url_async(), which rejects
+#      loopback, link-local addresses (including the 169.254.169.254 metadata
+#      address), multicast, reserved and unspecified addresses, handles
+#      IPv4-mapped IPv6 in _ip_is_hard_blocked(), and blocks RFC 1918 and IPv6
+#      unique-local ranges in _ip_is_private().
+#   2) autobot_shared.security.ssrf_guard.pinned_connector() pins the resolved
+#      public IP into the connector's resolver, defeating DNS rebinding.
+#   3) Redirects are disabled (`allow_redirects=False`), so a redirect cannot
+#      be used to reach a blocked target; a redirect response just fails the
+#      200 check.
+#   See #16302.
+#
+# py/full-ssrf — autobot_shared/security/ssrf_guard.py
+#   This module IS the SSRF guard. Both outbound call sites (fetch_safe_url,
+#   pinned_request_with_redirects) are immediately preceded by
+#   pinned_connector(url), which runs resolve_safe_ip on that exact URL and pins
+#   the resolved public IP into the connector's resolver, defeating DNS-rebind.
+#   pinned_request_with_redirects additionally sets allow_redirects=False and
+#   re-validates every hop itself rather than letting aiohttp follow one.
+#   CodeQL models the caller-supplied URL as reaching the request and cannot
+#   see the guard in between. Pre-existing on main (alerts 1042/1045, both
+#   dismissed as false positives); surfaced as "new" on #13624 only because
+#   that PR edits the line. See #13624.
+#
+# py/path-injection — autobot-backend/transcriber/upload_security.py
+#   validate_upload_path() checks the path before any file operation:
+#   1) Prefix check ensures path starts with user_upload_dir (L126-127)
+#   2) Path.resolve() canonicalizes and follows symlinks (L132)
+#   3) relative_to(user_upload_dir) confirms resolved path is still within allowed directory (L138)
+#   4) Symlink rejection (L143)
+#   5) File existence and type validation (L147-150)
+#   These checks prevent path traversal attacks. See #9214.
+#
+# py/clear-text-logging-sensitive-data — autobot-backend/services/llm_fallback_chain.py:123
+#   (alert #1139, fallback_model arg to track_fallback_event()'s logger.debug call)
+#   CodeQL's message cites config/defaults.py:77,304,335 as the "password" source —
+#   three unrelated _get_*_config() dict builders (memory/default-redis/task-transport
+#   config). fallback_model/primary_model are plain LLM model-name strings: traced the
+#   full chain, track_fallback_event(fallback_model=...) <- emit_fallback_success
+#   (current_model=...) <- _attempt_chat_once/_attempt_stream_once(current_model=...)
+#   <- chat()/stream()'s loop state <- the model_name/selected_model caller args on
+#   LLMService.chat()/stream(). No code path reaches any of the three config dict
+#   builders; this is the taint tracker over-generalizing a "password" key that exists
+#   elsewhere in the program, not a real flow. See #16526, #16527, PR #16546.
 
 packs:
   python:

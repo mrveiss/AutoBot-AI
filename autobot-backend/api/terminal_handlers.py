@@ -38,6 +38,7 @@ from chat_history import ChatHistoryManager
 from constants.path_constants import PATH
 from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from constants.threshold_constants import TimingConstants
+from services.agent_terminal.utils import security_warning_payload
 from services.simple_pty import simple_pty_manager
 from services.terminal_completion_service import TerminalCompletionService
 
@@ -728,14 +729,9 @@ class TerminalWebSocket:
 
         # Apply security restrictions
         if await self._should_block_command(command, risk_level):
-            await self.send_message(
-                {
-                    "type": "security_warning",
-                    "content": (f"Command blocked due to {risk_level.value} " f"risk level: {command}"),
-                    "risk_level": risk_level.value,
-                    "timestamp": time.time(),
-                }
-            )
+            # #14995: the audit log and history above keep the raw member on
+            # purpose — internal records, and more precise than the wire.
+            await self.send_message({**security_warning_payload(command, risk_level), "timestamp": time.time()})
             return True  # Command was blocked
 
         # Send to terminal

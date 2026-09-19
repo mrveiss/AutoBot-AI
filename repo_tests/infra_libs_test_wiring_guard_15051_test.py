@@ -37,8 +37,11 @@ import sys
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from autobot_shared.paths import scrubbed_git_env
+
+REPO_ROOT = repo_root()
 WATCHED_ROOTS = ("autobot-infrastructure/shared/tests", "libs")
 
 # A pytest invocation in any of this repository's spellings, plus everything on
@@ -102,6 +105,7 @@ def _tracked_modules_under(root: str) -> list[str]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     ).stdout
     return [
         path
@@ -131,8 +135,7 @@ def test_pytest_ini_names_both_roots() -> None:
     testpaths = _testpaths_roots()
     missing = [root for root in WATCHED_ROOTS if root not in testpaths]
     assert not missing, (
-        f"{missing} left pytest.ini's testpaths — a bare local `pytest` no longer reaches "
-        "them (#15051)"
+        f"{missing} left pytest.ini's testpaths — a bare local `pytest` no longer reaches " "them (#15051)"
     )
 
 

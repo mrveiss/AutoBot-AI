@@ -75,6 +75,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+# scripts/ is not a Python package; put the repository root on the path so
+# the canonical git-env scrub is importable when this runs as a bare hook.
+sys.path.insert(0, str(REPO_ROOT))
+
+from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+
 # The suppression token followed by test IDs, then a separator and prose. The separator is
 # what distinguishes this from a legitimate multi-ID annotation (``# nose<c> B603
 # B607``), and from the accepted ``# nose<c> B105  # prose`` form, where the second
@@ -99,7 +105,17 @@ _MAX_REPORTED = 15
 def _tracked_python_files() -> list[Path]:
     # Fixed argv, no shell, no caller input.
     result = subprocess.run(  # nosec B603 B607
-        ["git", "ls-files", "*.py"], cwd=REPO_ROOT, capture_output=True, text=True, check=False
+        ["git", "ls-files", "*.py"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        # Explicit, not the platform default: a non-UTF-8 locale would decode
+        # a non-ASCII tracked path into a name that matches no file.
+        encoding="utf-8",
+        check=False,
+        # An inherited GIT_DIR outranks `cwd=` and would enumerate another
+        # checkout's index while REPO_ROOT names this one (#14896).
+        env=scrubbed_git_env(),
     )
     return [REPO_ROOT / line for line in result.stdout.splitlines() if line]
 

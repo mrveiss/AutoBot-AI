@@ -6,6 +6,7 @@ import { createMockWebSocketEvent } from '../utils/test-utils'
 // Mock WebSocket class
 export class MockWebSocket {
   public url: string
+  public protocols?: string | string[]
   public readyState: number
   public onopen: ((event: Event) => void) | null = null
   public onclose: ((event: CloseEvent) => void) | null = null
@@ -23,8 +24,41 @@ export class MockWebSocket {
   // Track all instances for testing
   static instances: MockWebSocket[] = []
 
-  constructor(url: string, _protocols?: string | string[]) {
+  // #16457 review: GlobalWebSocketService._setupConnectionTimeout uses the
+  // EventTarget-style addEventListener/removeEventListener API (with `{ once
+  // }`), not just the onopen/onclose/... properties above -- a real
+  // WebSocket supports both simultaneously, and this mock previously only
+  // implemented one of them.
+  private _listeners: Record<string, Array<{ fn: EventListener; once: boolean }>> = {}
+
+  addEventListener(type: string, listener: EventListener, options?: boolean | AddEventListenerOptions) {
+    const once = typeof options === 'object' && options !== null && options.once === true
+    if (!this._listeners[type]) {
+      this._listeners[type] = []
+    }
+    this._listeners[type].push({ fn: listener, once })
+  }
+
+  removeEventListener(type: string, listener: EventListener) {
+    this._listeners[type] = (this._listeners[type] ?? []).filter((l) => l.fn !== listener)
+  }
+
+  private _dispatch(type: string, event: Event) {
+    // Snapshot before iterating: a listener added by another listener's
+    // callback during this dispatch must not fire for the current event,
+    // matching real EventTarget semantics -- addEventListener above mutates
+    // the array in place, so iterating it directly would pick that up.
+    for (const entry of Array.from(this._listeners[type] ?? [])) {
+      entry.fn(event)
+      if (entry.once) {
+        this._listeners[type] = this._listeners[type].filter((l) => l !== entry)
+      }
+    }
+  }
+
+  constructor(url: string, protocols?: string | string[]) {
     this.url = url
+    this.protocols = protocols
     this.readyState = MockWebSocket.CONNECTING
 
     MockWebSocket.instances.push(this)
@@ -32,9 +66,11 @@ export class MockWebSocket {
     // Simulate connection after a short delay
     setTimeout(() => {
       this.readyState = MockWebSocket.OPEN
+      const event = new Event('open')
       if (this.onopen) {
-        this.onopen(new Event('open'))
+        this.onopen(event)
       }
+      this._dispatch('open', event)
     }, 10)
   }
 
@@ -49,11 +85,12 @@ export class MockWebSocket {
   }
 
   public simulateError(error?: string) {
+    const event = new Event('error')
+    ;(event as Event & { error?: string }).error = error || 'Mock WebSocket error'
     if (this.onerror) {
-      const event = new Event('error')
-      ;(event as Event & { error?: string }).error = error || 'Mock WebSocket error'
       this.onerror(event)
     }
+    this._dispatch('error', event)
   }
 
   public simulateClose(code = 1000, reason = '') {

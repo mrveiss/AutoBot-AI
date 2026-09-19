@@ -180,6 +180,37 @@ class GatewaySession:
         }
 
 
+@dataclass(frozen=True)
+class GovernanceVerdict:
+    """Result of running a Gateway governance stage on one message (#14905).
+
+    Canonical union of ``ingest_governor.IngestVerdict`` and
+    ``egress_governor.EgressVerdict`` — same package, same shape, same role
+    (the result of a governance stage on one message), diverged only because
+    egress was written by copying ingest's shape without folding back. Both
+    modules alias their own name to this type rather than each declaring it,
+    so a third governance stage inherits the shape instead of copying again.
+
+    ``reason`` is the audit-facing text — always the full detail, including
+    whatever an approver's exception said. ``safe_reason`` is caller-facing —
+    anything that might end up in an API response. It defaults to ``reason``
+    and is only ever overridden explicitly, by a branch whose ``reason`` can
+    carry raw exception text. A caller building a denial response must read
+    ``safe_reason``, never ``reason``. ``rule`` names which rule decided, so
+    the audit record is a by-product of the decision rather than a second
+    thing every caller must remember to populate.
+    """
+
+    allowed: bool
+    reason: str = ""
+    rule: str = ""
+    safe_reason: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.safe_reason:
+            object.__setattr__(self, "safe_reason", self.reason)
+
+
 @dataclass
 class RoutingDecision:
     """

@@ -30,12 +30,14 @@ from constants.model_constants import (
 )
 from llm_shared.providers.anthropic import _route_sampling_kwargs
 from memory import MemoryManager, TaskPriority
+from screen_analysis_prompt import build_screen_analysis_prompts
 from task_execution_tracker import get_task_tracker as _get_task_tracker
 
 task_tracker = _get_task_tracker()
 from utils.service_registry import get_service_url
 
 logger = get_logger(__name__)
+
 
 # Issue #380: Module-level frozenset for error filtering
 _ERROR_FINISH_REASONS = frozenset({"error", "timeout"})
@@ -946,38 +948,6 @@ class ModernAIIntegration:
             "context_analysis": (content[:500] + "..." if len(content) > 500 else content),
         }
 
-    def _build_screen_analysis_prompts(self) -> tuple[str, str]:
-        """
-        Build system message and prompt template for screen analysis.
-
-        Returns:
-            Tuple of (system_message, prompt_template).
-
-        Issue #620.
-        """
-        system_message = """You are an expert at analyzing screenshots and user interfaces.
-        Provide detailed analysis of what you see, including:
-        1. UI elements and their purposes
-        2. Text content and its meaning
-        3. Available actions and interactions
-        4. Current application or website context
-        5. Suggestions for automation or user actions"""
-
-        prompt_template = """
-        Please analyze this screenshot with the following goal: {analysis_goal}
-
-        Provide a detailed analysis in JSON format with the following structure:
-        {{
-            "summary": "Brief description of what's shown",
-            "ui_elements": [list of detected UI elements with descriptions and locations],
-            "text_content": [list of readable text with context],
-            "suggested_actions": [list of possible user actions],
-            "automation_opportunities": [list of tasks that could be automated],
-            "context_analysis": "Analysis of the application/website context"
-        }}
-        """
-        return system_message, prompt_template
-
     def _build_ai_metadata(self, response: Any) -> Dict[str, Any]:
         """
         Build metadata dict from AI response.
@@ -1005,7 +975,7 @@ class ModernAIIntegration:
     ) -> Dict[str, Any]:
         """Analyze screenshot using AI vision models (Issue #620: uses extracted helpers)."""
         provider = self._select_vision_provider(preferred_provider)
-        system_message, prompt = self._build_screen_analysis_prompts()
+        system_message, prompt = build_screen_analysis_prompts(analysis_goal)
 
         response = await self.process_with_ai(
             provider=provider,

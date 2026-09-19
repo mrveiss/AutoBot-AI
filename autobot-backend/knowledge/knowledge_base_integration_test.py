@@ -11,7 +11,7 @@ Tests validate:
 - Performance metrics (P95 latency targets)
 
 Requirements:
-- Redis server running at 10.0.0.4:6379
+- A reachable Redis server (host/port from SSOT config, see the `kb` fixture's skip reason)
 - pytest-asyncio for async test support
 - Real AsyncRedisManager (no mocks)
 """
@@ -23,6 +23,7 @@ import time
 
 import pytest
 
+from autobot_shared.ssot_config import config as ssot_config
 from knowledge import KnowledgeBase
 
 
@@ -36,8 +37,11 @@ class TestKnowledgeBaseRedisIntegration:
         await kb._ensure_redis_initialized()
 
         # Verify Redis is actually connected
+        # #14203: stays on the private attribute deliberately — this asks
+        # "is Redis available?", and `redis()` raises rather than returning a
+        # falsy value, so it cannot answer that question.
         if not kb._aioredis_client:
-            pytest.skip("Redis not available at 10.0.0.4:6379")
+            pytest.skip(f"Redis not available at {ssot_config.vm.redis}:{ssot_config.port.redis}")
 
         yield kb
 
@@ -52,8 +56,8 @@ class TestKnowledgeBaseRedisIntegration:
     @pytest.mark.asyncio
     async def test_redis_connection_established(self, kb):
         """Test that Redis connection is properly established"""
-        # Verify connection exists
-        assert kb._aioredis_client is not None
+        # Verify connection exists (#14203: not raising IS the assertion)
+        assert kb.redis() is not None
         assert kb.redis_client is not None
 
         # Verify connection works with ping
@@ -65,11 +69,11 @@ class TestKnowledgeBaseRedisIntegration:
         """Test connection pool handles multiple sequential operations"""
         # Perform 10 sequential operations
         for i in range(10):
-            result = await kb.store_fact(text=f"Test fact {i}", metadata={"test": True, "iteration": i})
+            result = await kb.store_fact(content=f"Test fact {i}", metadata={"test": True, "iteration": i})
             assert result["status"] == "success"
 
-        # Verify all facts were stored
-        facts = await kb.get_fact()
+        # Verify all facts were stored (#16710: get_fact() takes only fact_id)
+        facts = await kb.get_all_facts()
         test_facts = [f for f in facts if "Test fact" in f.get("content", "")]
         assert len(test_facts) >= 10
 
@@ -80,7 +84,7 @@ class TestKnowledgeBaseRedisIntegration:
         test_content = "Integration test fact content"
         test_metadata = {"source": "integration_test", "priority": "high"}
 
-        result = await kb.store_fact(text=test_content, metadata=test_metadata)
+        result = await kb.store_fact(content=test_content, metadata=test_metadata)
 
         # Verify success
         assert result["status"] == "success"
@@ -103,28 +107,29 @@ class TestKnowledgeBaseRedisIntegration:
         """Test get_fact() retrieves specific fact by ID from real Redis"""
         # Store a fact first
         test_content = "Specific fact retrieval test"
-        store_result = await kb.store_fact(text=test_content, metadata={"test_type": "id_retrieval"})
+        store_result = await kb.store_fact(content=test_content, metadata={"test_type": "id_retrieval"})
         fact_id = store_result["fact_id"]
 
-        # Retrieve by ID
-        facts = await kb.get_fact(fact_id=fact_id)
+        # Retrieve by ID -- get_fact() is synchronous, so it's offloaded (#16710)
+        fact = await asyncio.to_thread(kb.get_fact, fact_id=fact_id)
 
         # Verify retrieval
-        assert len(facts) == 1
-        assert facts[0]["id"] == fact_id
-        assert facts[0]["content"] == test_content
-        assert facts[0]["metadata"]["test_type"] == "id_retrieval"
+        assert fact is not None
+        assert fact["fact_id"] == fact_id
+        assert fact["content"] == test_content
+        assert fact["metadata"]["test_type"] == "id_retrieval"
 
     @pytest.mark.asyncio
     async def test_get_fact_by_query_real_redis(self, kb):
-        """Test get_fact() searches by query in real Redis"""
+        """Test search() finds facts by query in real Redis (#16710: get_fact()
+        never took a query -- search() is the query-lookup API)."""
         # Store multiple facts
         await kb.store_fact("Python programming is awesome", {"lang": "python"})
         await kb.store_fact("JavaScript is versatile", {"lang": "javascript"})
         await kb.store_fact("Python for data science", {"lang": "python"})
 
         # Search by query
-        facts = await kb.get_fact(query="Python")
+        facts = await kb.search(query="Python")
 
         # Verify search results
         assert len(facts) >= 2
@@ -133,20 +138,21 @@ class TestKnowledgeBaseRedisIntegration:
 
     @pytest.mark.asyncio
     async def test_get_all_facts_real_redis(self, kb):
-        """Test get_fact() retrieves all facts using pipeline"""
+        """Test get_all_facts() retrieves all facts using pipeline (#16710:
+        get_fact() takes only a single fact_id, never "all facts")."""
         # Store known number of facts
         num_facts = 5
         stored_ids = []
 
         for i in range(num_facts):
-            result = await kb.store_fact(text=f"Bulk fact {i}", metadata={"batch": "test_all_facts"})
+            result = await kb.store_fact(content=f"Bulk fact {i}", metadata={"batch": "test_all_facts"})
             stored_ids.append(result["fact_id"])
 
         # Retrieve all facts
-        all_facts = await kb.get_fact()
+        all_facts = await kb.get_all_facts()
 
         # Verify all our facts are present
-        our_facts = [f for f in all_facts if f["id"] in stored_ids]
+        our_facts = [f for f in all_facts if f["fact_id"] in stored_ids]
         assert len(our_facts) == num_facts
 
     @pytest.mark.asyncio
@@ -157,7 +163,7 @@ class TestKnowledgeBaseRedisIntegration:
         # Create concurrent store tasks
         async def store_task(idx):
             return await kb.store_fact(
-                text=f"Concurrent store test {idx}",
+                content=f"Concurrent store test {idx}",
                 metadata={"concurrent": True, "index": idx},
             )
 
@@ -181,20 +187,22 @@ class TestKnowledgeBaseRedisIntegration:
         # Store some facts first
         fact_ids = []
         for i in range(10):
-            result = await kb.store_fact(text=f"Concurrent get test {i}", metadata={"test": "concurrent_get"})
+            result = await kb.store_fact(content=f"Concurrent get test {i}", metadata={"test": "concurrent_get"})
             fact_ids.append(result["fact_id"])
 
         # Create concurrent get tasks
         num_concurrent = 50
 
         async def get_task(idx):
-            # Mix of different get modes
+            # Mix of different get modes (#16710: get_fact() is a single-fact,
+            # synchronous lookup -- offloaded here; query/all-facts use the
+            # actual query and all-facts APIs, each returning a list)
             if idx % 3 == 0:
-                return await kb.get_fact(fact_id=fact_ids[idx % len(fact_ids)])
+                return await asyncio.to_thread(kb.get_fact, fact_id=fact_ids[idx % len(fact_ids)])
             elif idx % 3 == 1:
-                return await kb.get_fact(query="Concurrent")
+                return await kb.search(query="Concurrent")
             else:
-                return await kb.get_fact()
+                return await kb.get_all_facts()
 
         # Execute concurrently
         start_time = time.time()
@@ -204,8 +212,8 @@ class TestKnowledgeBaseRedisIntegration:
         # Verify all completed
         assert len(results) == num_concurrent
 
-        # Verify all returned data
-        assert all(isinstance(r, list) for r in results)
+        # Verify all returned data: a single get_fact() is a dict, search()/get_all_facts() a list
+        assert all(r is not None for r in results)
 
         print(f"\n✓ {num_concurrent} concurrent gets completed in {duration:.2f}s")  # noqa: print
 
@@ -218,12 +226,12 @@ class TestKnowledgeBaseRedisIntegration:
             if idx % 2 == 0:
                 # Store operation
                 return await kb.store_fact(
-                    text=f"Mixed operation {idx}",
+                    content=f"Mixed operation {idx}",
                     metadata={"type": "mixed", "op": "store"},
                 )
             else:
-                # Get operation
-                return await kb.get_fact(query="Mixed")
+                # Get operation (#16710: query lookup is search(), not get_fact())
+                return await kb.search(query="Mixed")
 
         # Execute mixed operations concurrently
         start_time = time.time()
@@ -246,18 +254,22 @@ class TestKnowledgeBaseRedisIntegration:
 
         # Measure store latencies
         store_latencies = []
+        stored_ids = []
         for i in range(num_samples):
             start = time.time()
-            result = await kb.store_fact(text=f"Latency test {i}", metadata={"test": "latency"})
+            result = await kb.store_fact(content=f"Latency test {i}", metadata={"test": "latency"})
             latency_ms = (time.time() - start) * 1000
             store_latencies.append(latency_ms)
             assert result["status"] == "success"
+            stored_ids.append(result["fact_id"])
 
-        # Measure get latencies
+        # Measure get latencies (#16710: get_fact() is a single, synchronous
+        # fact_id lookup -- offloaded, and measured per-fact to mirror the
+        # store loop above rather than growing unboundedly like get_all_facts())
         get_latencies = []
-        for i in range(num_samples):
+        for fact_id in stored_ids:
             start = time.time()
-            await kb.get_fact()
+            await asyncio.to_thread(kb.get_fact, fact_id=fact_id)
             latency_ms = (time.time() - start) * 1000
             get_latencies.append(latency_ms)
 
@@ -279,7 +291,7 @@ class TestKnowledgeBaseRedisIntegration:
         # Normal operations should complete well within timeout
 
         start_time = time.time()
-        result = await kb.store_fact(text="Timeout protection test", metadata={"test": "timeout"})
+        result = await kb.store_fact(content="Timeout protection test", metadata={"test": "timeout"})
         duration = time.time() - start_time
 
         # Should complete successfully within timeout
@@ -293,9 +305,9 @@ class TestKnowledgeBaseRedisIntegration:
         for i in range(10):
             await kb.store_fact(f"Timeout test {i}", {"test": "timeout"})
 
-        # Get all facts should complete within timeout
+        # Get all facts should complete within timeout (#16710: get_fact() takes only fact_id)
         start_time = time.time()
-        facts = await kb.get_fact()
+        facts = await kb.get_all_facts()
         duration = time.time() - start_time
 
         assert isinstance(facts, list)
@@ -304,15 +316,18 @@ class TestKnowledgeBaseRedisIntegration:
     @pytest.mark.asyncio
     async def test_connection_persistence(self, kb):
         """Test that connections are properly reused and persist across operations"""
-        # Get initial connection
-        initial_client = kb._aioredis_client
+        # #14203: through the public accessor. `redis()` returns the same
+        # object and additionally raises if the client was never initialised,
+        # so an uninitialised KB fails loudly here instead of comparing two
+        # `None`s and passing.
+        initial_client = kb.redis()
 
         # Perform multiple operations
         for i in range(20):
             await kb.store_fact(f"Persistence test {i}", {"test": "persistence"})
 
         # Verify same connection is being used
-        assert kb._aioredis_client is initial_client
+        assert kb.redis() is initial_client
 
         # Verify connection is still healthy
         assert await kb.redis().ping() is True
@@ -321,16 +336,16 @@ class TestKnowledgeBaseRedisIntegration:
     async def test_error_recovery_invalid_data(self, kb):
         """Test graceful error handling with invalid data"""
         # Try to store empty content
-        result = await kb.store_fact(text="", metadata={})
+        result = await kb.store_fact(content="", metadata={})
 
         # Should handle gracefully (may succeed with empty string or return error)
         assert "status" in result
 
-        # Try to get non-existent fact
-        facts = await kb.get_fact(fact_id="non_existent_id_12345")
+        # Try to get non-existent fact (#16710: get_fact() is synchronous, offloaded)
+        fact = await asyncio.to_thread(kb.get_fact, fact_id="non_existent_id_12345")
 
-        # Should return empty list, not crash
-        assert isinstance(facts, list)
+        # Should return None, not crash
+        assert fact is None
 
     @pytest.mark.asyncio
     async def test_concurrent_operations_no_pool_exhaustion(self, kb):
@@ -341,7 +356,7 @@ class TestKnowledgeBaseRedisIntegration:
             if idx % 2 == 0:
                 return await kb.store_fact(f"Pool test {idx}", {"idx": idx})
             else:
-                return await kb.get_fact()
+                return await kb.get_all_facts()  # #16710: get_fact() takes only fact_id
 
         # Execute all operations concurrently
         start_time = time.time()
@@ -366,15 +381,15 @@ class TestKnowledgeBaseRedisIntegration:
         # Perform other operations
         await kb.store_fact("Other fact 1", {"version": 2})
         await kb.store_fact("Other fact 2", {"version": 3})
-        await kb.get_fact()
+        await kb.get_all_facts()  # #16710: get_fact() takes only fact_id
 
-        # Retrieve original fact
-        facts = await kb.get_fact(fact_id=fact_id)
+        # Retrieve original fact (#16710: get_fact() is synchronous, offloaded)
+        fact = await asyncio.to_thread(kb.get_fact, fact_id=fact_id)
 
         # Verify original data is intact
-        assert len(facts) == 1
-        assert facts[0]["content"] == "Persistent data test"
-        assert facts[0]["metadata"]["version"] == 1
+        assert fact is not None
+        assert fact["content"] == "Persistent data test"
+        assert fact["metadata"]["version"] == 1
 
     @pytest.mark.asyncio
     async def test_json_encoding_complex_metadata(self, kb):
@@ -387,14 +402,14 @@ class TestKnowledgeBaseRedisIntegration:
         }
 
         # Store with complex metadata
-        result = await kb.store_fact(text="Complex metadata test", metadata=complex_metadata)
+        result = await kb.store_fact(content="Complex metadata test", metadata=complex_metadata)
         fact_id = result["fact_id"]
 
-        # Retrieve and verify
-        facts = await kb.get_fact(fact_id=fact_id)
+        # Retrieve and verify (#16710: get_fact() is synchronous, offloaded)
+        fact = await asyncio.to_thread(kb.get_fact, fact_id=fact_id)
 
-        assert len(facts) == 1
-        retrieved_metadata = facts[0]["metadata"]
+        assert fact is not None
+        retrieved_metadata = fact["metadata"]
 
         # Verify all complex structures preserved
         assert retrieved_metadata["nested"]["level1"]["level2"] == "deep value"
@@ -437,7 +452,7 @@ class TestKnowledgeBaseAsyncRedisManagerIntegration:
     async def test_redis_client_initialized(self, kb):
         """The knowledge base exposes an initialised Redis client."""
         assert kb.redis_client is not None
-        assert kb._aioredis_client is not None
+        assert kb.redis() is not None  # #14203
 
     @pytest.mark.asyncio
     async def test_connection_pooling_metrics(self, kb):
@@ -470,6 +485,9 @@ class TestKnowledgeBasePerformanceIntegration:
         kb = KnowledgeBase()
         await kb._ensure_redis_initialized()
 
+        # #14203: stays on the private attribute deliberately — this asks
+        # "is Redis available?", and `redis()` raises rather than returning a
+        # falsy value, so it cannot answer that question.
         if not kb._aioredis_client:
             pytest.skip("Redis not available")
 
@@ -523,7 +541,7 @@ class TestKnowledgeBasePerformanceIntegration:
 
         start_time = time.time()
         for _ in range(num_retrievals):
-            await kb.get_fact()
+            await kb.get_all_facts()  # #16710: get_fact() takes only fact_id
         duration = time.time() - start_time
 
         rate = num_retrievals / duration

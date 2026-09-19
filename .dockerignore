@@ -37,6 +37,18 @@ Thumbs.db
 # CI/CD
 .github
 pipeline-scripts
+# Backlog maintenance CLI: talks to the GitHub API, has no runtime role, and
+# reuses the HTTP client that lives in the excluded pipeline-scripts tree. It
+# was a shipped module importing an excluded one -- an ImportError waiting in
+# the image (#15439). The import is fine where it lives; what was wrong is that
+# this tool reached the image at all.
+scripts/backfill_relationships.py
+# Same reasoning, same fix: reuses the identical GitHubApi transport and has no
+# runtime role either (#15440).
+scripts/umbrella_label_drift.py
+# Same reasoning again: reads live issue bodies through the identical
+# GitHubApi transport, reports only, and has no runtime role (#15566).
+scripts/scope_box_artefact_drift.py
 
 # Documentation (not needed in containers)
 docs
@@ -78,6 +90,10 @@ docs
 # Build artifacts
 autobot-frontend/dist
 autobot-slm-frontend/dist
+# #15610 layout: per-build directories and the two pointers.
+autobot-slm-frontend/dist-*
+autobot-slm-frontend/current
+autobot-slm-frontend/previous
 
 # Data (mounted as volumes)
 data

@@ -241,7 +241,10 @@ async def test_build_fat_with_goal_ancestry(builder: HeartbeatContextBuilder) ->
         company_id="co1",
     )
 
-    builder.goal_service.get_goal_ancestry_for_work_item.assert_called_once_with(session, goal_id)
+    # #15930: the company is passed now. This assertion previously pinned the
+    # UNSCOPED call — it encoded the defect, so the fix broke it. Asserting the
+    # scoped signature turns it into the regression guard it looked like.
+    builder.goal_service.get_goal_ancestry_for_work_item.assert_called_once_with(session, goal_id, company_id="co1")
     assert len(result["goal_ancestry"]) == 2
     assert result["goal_ancestry"][0]["title"] == "Top Level"
     assert result["goal_ancestry"][1]["title"] == "Project Goal"

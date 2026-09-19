@@ -23,6 +23,28 @@ document to surface the obligation.
 
 ---
 
+## Windows NPU Worker — Standalone Background-Task Retention
+
+**File:** `autobot-npu-worker/resources/windows-npu-worker/app/async_compat.py`
+**Mirrors:** `autobot_shared/async_compat.py` (`fire_and_forget`)
+**Issue:** #15642
+
+**Reason:** Same packaging constraint as the standalone Redis client above, and established
+from the packaging files rather than assumed: `installer/npu_worker.spec` runs PyInstaller's
+`Analysis` over `app/npu_worker.py` with `pathex=[app]`, and `scripts/install.ps1` copies
+only `app`, `config`, `gui`, `installer`, `nssm`, `scripts`, `tests` and the requirements
+file. `autobot_shared/` is on none of those paths, so importing the canonical
+`fire_and_forget` would ship an `ImportError` to a Windows NPU node. The mirror replicates
+only what the worker needs: a module-level retention set, a done callback that releases the
+reference, and a failure log — the fix #15522 defines for a discarded task launch.
+
+**Sync cadence:** When `autobot_shared/async_compat.py`'s `fire_and_forget` changes,
+manually mirror the change here. `repo_tests/background_task_retention_ratchet_test.py`
+records `autobot-npu-worker/` as a proven zero, so a new discarded launch in this tree
+fails there regardless of which module the retention came from.
+
+---
+
 ## `utils/gpu_vector_search.py` — FAISS-GPU Hybrid Search Client Type
 
 **File:** `autobot-backend/utils/gpu_vector_search.py`
@@ -204,3 +226,174 @@ one edit that reaches every node on the next code-sync, not an env var an
 operator has to remember to set identically everywhere.
 
 **Grep check:** `grep -rn "SERVICE_DISCOVERY_TTL_S" autobot_shared/service_discovery.py autobot-slm-backend/slm/agent/health_collector.py autobot-slm-backend/services/reconciler.py` should show one definition and two importers, no second hardcoded literal.
+
+---
+
+## SLM → node proxy calls — not routed through the guarded fetch
+
+**File:** `autobot_shared/node_proxy.py`
+**Callers:** `autobot-slm-backend/api/voice_proxy.py`, `api/personality_proxy.py`, `api/memory_lifecycle_proxy.py`
+**Issue:** #14886 (decision), #13625 (Rule 8's origin audit)
+
+**Pattern bypassed:** Rule 8 — "outbound HTTP goes through the guarded fetch
+(egress policy)". These calls use `httpx` directly, via the shared node client.
+
+**Reason:** Rule 8's origin audit scoped `guard_egress`/`ssrf_guard` to external
+connectors whose target host arrives from *customer* configuration, where a
+hostile value is the threat being defended against. A control-plane → node call
+has neither property: the host comes from `AUTOBOT_BACKEND_URL` or the
+identity-authority base, both operator-set deployment config, and the request
+body never influences it. Nothing under `autobot-slm-backend/` routed through the
+guarded fetch before this change either — grepping for `guard_egress` or
+`ssrf_guard` there returns zero hits. So the state was undocumented rather than
+decided, which is what #14886 asked to fix. Fixing it in one proxy alone would
+have created a fourth inconsistent pattern, so it is decided once, here, and
+applied by every caller of the shared client.
+
+**What keeps it safe instead:** TLS verification is on by default
+(`autobot_shared/tls.py::tls_verify_enabled`, pinned by
+`autobot_shared/node_proxy_test.py::test_tls_verification_is_on_by_default`), the
+internal API key travels only on that verified channel, and the target host is
+never taken from a request.
+
+**Revisit when:** a node proxy's target host starts coming from anything a
+request can influence — a fleet member id resolved from a request body, a
+customer-supplied node URL. At that point the host is attacker-influenced and
+the guarded fetch applies.
+
+**Grep check:** `grep -rn "guard_egress\|ssrf_guard" autobot-slm-backend/` should
+stay empty, or this entry needs replacing with the migration.
+
+## SLM Recovery Page — No i18n Runtime, English-Only
+
+**File:** `autobot-slm-backend/static/recovery.html`
+**Served by:** `autobot-slm-backend/api/health.py`'s `health_router` (`GET /api/recovery`) — co-located with `frontend_bundle_status`, the probe for the exact condition this page recovers from, rather than a dedicated router (#15462 review, also keeps `main.py` under its grandfathered line-count ceiling, #14236)
+**Issue:** #15462
+
+**Pattern bypassed:** "No hardcoded UI strings — anything user-facing needs
+i18n across all 11 locales."
+
+**Reason:** This page exists because the SLM frontend's build output can be
+missing or broken (#15462 — a directory holding one file, no `index.html`,
+serving 403 for the whole `/slm/` tree while every service reported
+healthy). The Vue i18n runtime ships as part of that same frontend bundle,
+so wiring the recovery page into it would make the recovery surface depend
+on the exact artifact it exists to work around — reintroducing the single
+point of failure this issue is about. The page is therefore a single,
+dependency-free static HTML file with inline CSS/JS: no framework, no
+bundler, no build step, no CDN import, nothing that can itself fail to
+build. It is served directly by the SLM backend (`FileResponse`), reachable
+through `location /slm/api/` in nginx — a reverse-proxy block, not a
+static-file alias, so it does not depend on `dist/` either.
+
+**How the text is handled:** All strings are English, hand-written directly
+into `recovery.html`. This is a deliberate scope limit, not an oversight —
+an operator locked out of the dashboard by a broken build needs a page that
+loads at all, in front of a full translation matrix for a page that exists
+purely to run one action (sign in, trigger self-update).
+
+**Revisit when:** a lightweight, dependency-free i18n mechanism exists that
+does not require the frontend bundle to be servable (e.g. a tiny inline
+dictionary the backend renders server-side from `Accept-Language`) — at that
+point this page can adopt it without reintroducing the coupling described
+above.
+
+**Grep check:** `grep -c '<script' autobot-slm-backend/static/recovery.html`
+should show the page has no `<script src=` — everything it loads is inline
+in the same file, never fetched from a bundler-produced path.
+
+---
+
+## `task_claim` / `work_claims` — Two Redis Claim Primitives, Kept Separate
+
+**Files:** `autobot-backend/services/task_claim.py`, `autobot_shared/coordination/work_claims.py`
+**Issue:** #15957 (owner ruling, 2026-09-10)
+
+**Pattern bypassed:** "Reuse from `autobot_shared/` — one canonical
+implementation per concept; consolidate, never fork."
+
+**Reason:** They look like one concept implemented twice — both are
+owner-checked, TTL-bounded Redis claims — and they are two concepts.
+`task_claim` claims **the task itself**; `work_claims` claims **the work a task
+touches** (paths, kb entries, devices, projects, config). Two agents can hold
+claims on different scopes while working the same task, and one agent can hold
+a task while touching scopes it never claimed. Collapsing them would make the
+answer to one question read as the answer to the other.
+
+The structural reason makes an adapter worse, not merely unnecessary.
+`task_claim` emits audit on every outcome of `claim_task`, `renew_claim` and
+`release_claim`, including the fail-open `redis_unavailable` and `redis_error`
+(the renew and release fail-open branches emitted nothing until #16217).
+`work_claims` emits none and cannot: `autobot_shared` must not import
+from `autobot-backend`. An adapter could not move emission down, so it would
+leave a backend-side wrapper still owning audit, signatures and tests — the same
+constraint that already put `services/claim_yield.py` (#15948) in the backend
+package rather than beside the primitive it extends.
+
+The Lua an adapter could unify is smaller than it looks. Measured 2026-09-10 as
+non-blank lines: `task_claim` has 10 (release 5, renew 5); `work_claims`'
+matching release and renew scripts have 12 (4 and 8). Its 35-line acquire script
+has no counterpart, because `claim_task` uses a plain `SET NX EX`. About ten
+lines a side is not worth a migration across a live double-pickup guard.
+
+*Correction recorded rather than silently edited:* the analysis this ruling was
+made on said "every outcome" is audited, counted 8 emission sites, and put the
+shared Lua at "roughly 40 lines". Measured, there are 5 emission sites, the
+fail-open branches above are unaudited, and the comparable Lua is about ten
+lines a side. Both corrections strengthen the decision rather than weaken it.
+#16217 has since audited those four fail-open branches, so there are now 9.
+
+**How the split is enforced:** `task` is a **reserved** kind in `work_claims`,
+not merely an absent one. Absent produced "unknown scope kind" — the same
+answer a typo gets — so a caller reaching for `task:` could not tell a decision
+from a gap. `RESERVED_KINDS` now refuses it with the reason and the destination,
+through `_require_kind`, which every entry point that names a kind calls —
+`Scope.parse`, `list_claims`, and `branch_stewardship.prune` — so they cannot
+drift apart. `RESERVED_KINDS` is a read-only mapping, as `VALID_KINDS` beside it
+is a `frozenset`, so no caller can un-reserve a kind at runtime. Both module
+docstrings state the split.
+
+**Revisit when:** `autobot_shared` gains an audit sink that does not import
+from `autobot-backend`. That removes the structural half of this reason; the
+conceptual half (task identity vs work scope) would still need arguing on its
+own merits.
+
+**Grep check:** `grep -n '"task"' autobot_shared/coordination/work_claims.py`
+should show `task` only as a `RESERVED_KINDS` key, never inside `VALID_KINDS`;
+`grep -c 'from services' autobot_shared/coordination/work_claims.py` should be
+`0`.
+
+---
+
+## `utils/ollama_connection_pool.py` — Superseded, Kept In-Tree Pending Removal
+
+**File:** `autobot-backend/utils/ollama_connection_pool.py`
+**Superseded by:** `autobot-backend/llm_shared/base_provider.py` (`BaseProvider._concurrency_semaphore`),
+`autobot_shared/http_client_manager.py` (`HTTPClientManager`)
+**Issue:** #16527
+
+**Reason:** `OllamaConnectionPool` bundled two concerns — bounding concurrent
+Ollama requests (`asyncio.Semaphore` + queue/stats) and pooling the underlying
+HTTP connections — behind its own `acquire_connection()`. Both are now owned
+canonically elsewhere: `HTTPClientManager` already pools TCP connections for
+every outbound call via one `aiohttp.TCPConnector` (`acquire_connection()`
+itself borrows from it through `tracked_session()`, so the pool never owned
+its own connections), and `BaseProvider.__init__` now creates a per-provider
+`asyncio.Semaphore` sized from `LLMSettings.max_concurrent_requests`, which
+bounds Ollama's in-flight requests automatically since `OllamaProvider`
+subclasses `BaseProvider`. The pool's only caller, `llm_shared/adapters/
+ollama_adapter.py::OllamaAdapter`, is registered for diagnostics
+(`api/adapters.py`: `list_adapters`, `test_adapter_environment`,
+`probe_adapters`, `pull_model`) and never sits on the live chat/stream path —
+`services/llm_service.py` calls `OllamaProvider.chat_completion()` directly
+through the registry, so wiring the pool into the adapter would not have
+bounded anything real. Retiring it is explicitly the fix here, not a unilateral
+deletion: it is marked superseded in its module docstring rather than removed,
+pending a dedicated removal PR once the new semaphore has run in production.
+
+**Revisit when:** the new per-provider semaphore has been running in
+production long enough to trust, at which point `utils/ollama_connection_pool.py`
+and `utils/ollama_connection_pool_test.py` can be deleted outright — tracked
+in #16539.
+
+**Grep check:** `grep -rln "OllamaConnectionPool\|get_ollama_pool" autobot-backend/ | grep -v ollama_connection_pool` should show only `llm_shared/adapters/ollama_adapter_test.py` or nothing — no new production caller should appear without updating this entry.

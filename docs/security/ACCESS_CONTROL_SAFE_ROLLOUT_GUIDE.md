@@ -107,7 +107,7 @@ NO:  Block request → Return 403 Forbidden + audit log
 
 ✅ **Redis-Backed Ownership:** O(1) lookup performance (< 5ms)
 ✅ **Comprehensive Audit Logging:** All access attempts logged (authorized + denied)
-✅ **Distributed VM Support:** Works across all 6 VMs via Redis
+✅ **Distributed Support:** Works across every role/machine in a deployment via Redis, whether that is Docker, one VM, or many
 ✅ **User Session Indexing:** Efficient bulk operations
 ✅ **Legacy Session Migration:** Automatic ownership assignment for orphaned sessions
 

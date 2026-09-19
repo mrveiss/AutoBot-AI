@@ -247,7 +247,9 @@
         "description": "Response containing available API scopes.",
         "properties": {
           "scopes": {
-            "additionalProperties": true,
+            "additionalProperties": {
+              "type": "string"
+            },
             "title": "Scopes",
             "type": "object"
           }
@@ -291,6 +293,35 @@
           "message"
         ],
         "title": "ActionResponse",
+        "type": "object"
+      },
+      "ActiveProviderResponse": {
+        "description": "One entry of the login page's active-provider list.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_social": {
+            "title": "Is Social",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider_type": {
+            "title": "Provider Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "provider_type",
+          "is_social"
+        ],
+        "title": "ActiveProviderResponse",
         "type": "object"
       },
       "AgentCreateRequest": {
@@ -2870,6 +2901,14 @@
             "title": "Outdated Nodes",
             "type": "integer"
           },
+          "process_divergence": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "title": "Process Divergence",
+            "type": "object"
+          },
           "self_update_detail": {
             "anyOf": [
               {
@@ -3022,6 +3061,57 @@
           "percentage"
         ],
         "title": "ComponentBreakdown",
+        "type": "object"
+      },
+      "ComponentDriftModel": {
+        "description": "One component's full-tree drift result.",
+        "properties": {
+          "compared": {
+            "title": "Compared",
+            "type": "integer"
+          },
+          "component": {
+            "title": "Component",
+            "type": "string"
+          },
+          "drifted": {
+            "items": {
+              "$ref": "#/components/schemas/FileVerdictModel"
+            },
+            "title": "Drifted",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "exclusions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Exclusions",
+            "type": "object"
+          },
+          "skipped": {
+            "default": false,
+            "title": "Skipped",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "component",
+          "compared",
+          "drifted",
+          "exclusions"
+        ],
+        "title": "ComponentDriftModel",
         "type": "object"
       },
       "ComponentSyncJobStatus": {
@@ -3390,6 +3480,26 @@
           "reason"
         ],
         "title": "DecommissionRoleInfo",
+        "type": "object"
+      },
+      "DependentRolesResponse": {
+        "description": "Secret key to dependent-role mapping used by the apply-secrets action.",
+        "properties": {
+          "mapping": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Mapping",
+            "type": "object"
+          }
+        },
+        "required": [
+          "mapping"
+        ],
+        "title": "DependentRolesResponse",
         "type": "object"
       },
       "DeploymentCreate": {
@@ -4167,6 +4277,36 @@
         "title": "FileDriftReport",
         "type": "object"
       },
+      "FileVerdictModel": {
+        "description": "One deployed-relative path and the verdict it earned.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "verdict"
+        ],
+        "title": "FileVerdictModel",
+        "type": "object"
+      },
       "FleetHealthResponse": {
         "description": "Fleet health status response.",
         "properties": {
@@ -4585,6 +4725,228 @@
         "title": "FleetUpdateSummaryResponse",
         "type": "object"
       },
+      "FullTreeDriftReport": {
+        "description": "Every component, every file, one verdict each (#16310).",
+        "properties": {
+          "checked_at": {
+            "title": "Checked At",
+            "type": "string"
+          },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/ComponentDriftModel"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "exclusions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Exclusions",
+            "type": "object"
+          },
+          "total_compared": {
+            "title": "Total Compared",
+            "type": "integer"
+          },
+          "total_drift": {
+            "title": "Total Drift",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "components",
+          "total_compared",
+          "total_drift",
+          "exclusions",
+          "checked_at",
+          "errors"
+        ],
+        "title": "FullTreeDriftReport",
+        "type": "object"
+      },
+      "GPUDevice": {
+        "description": "One GPU. Metrics are null when the vendor tool could not read them.",
+        "properties": {
+          "device_type": {
+            "$ref": "#/components/schemas/NPUDeviceType"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "memory_total_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Total Mb"
+          },
+          "memory_used_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Used Mb"
+          },
+          "monitored": {
+            "title": "Monitored",
+            "type": "boolean"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "power_watts": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power Watts"
+          },
+          "temperature_celsius": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature Celsius"
+          },
+          "utilization_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utilization Percent"
+          }
+        },
+        "required": [
+          "device_type",
+          "monitored"
+        ],
+        "title": "GPUDevice",
+        "type": "object"
+      },
+      "GPUNodeListResponse": {
+        "description": "Every node's GPU state.",
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GPUNodeStatus"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "nodes",
+          "total"
+        ],
+        "title": "GPUNodeListResponse",
+        "type": "object"
+      },
+      "GPUNodeStatus": {
+        "description": "A node's GPU state from its latest heartbeat.",
+        "properties": {
+          "devices": {
+            "items": {
+              "$ref": "#/components/schemas/GPUDevice"
+            },
+            "title": "Devices",
+            "type": "array"
+          },
+          "hostname": {
+            "title": "Hostname",
+            "type": "string"
+          },
+          "last_heartbeat": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Heartbeat"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "node_status": {
+            "title": "Node Status",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/GPUReportState"
+          }
+        },
+        "required": [
+          "node_id",
+          "hostname",
+          "node_status",
+          "state"
+        ],
+        "title": "GPUNodeStatus",
+        "type": "object"
+      },
+      "GPUReportState": {
+        "description": "What a node's latest heartbeat said about its GPUs.",
+        "enum": [
+          "not_reported",
+          "none",
+          "present"
+        ],
+        "title": "GPUReportState",
+        "type": "string"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -4603,6 +4965,11 @@
         "properties": {
           "database": {
             "title": "Database",
+            "type": "string"
+          },
+          "frontend": {
+            "default": "unknown",
+            "title": "Frontend",
             "type": "string"
           },
           "nodes_online": {
@@ -5212,6 +5579,25 @@
         "title": "MFAVerifyRequest",
         "type": "object"
       },
+      "MFAVerifySetupResponse": {
+        "description": "Outcome of enabling MFA from the initial TOTP code.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "MFAVerifySetupResponse",
+        "type": "object"
+      },
       "MaintenanceWindowCreate": {
         "description": "Maintenance window creation request.",
         "properties": {
@@ -5692,6 +6078,17 @@
         ],
         "title": "NPUDetectionResponse",
         "type": "object"
+      },
+      "NPUDeviceType": {
+        "description": "NPU device type enumeration.",
+        "enum": [
+          "intel-npu",
+          "nvidia-gpu",
+          "amd-gpu",
+          "unknown"
+        ],
+        "title": "NPUDeviceType",
+        "type": "string"
       },
       "NPUFleetMetricsResponse": {
         "description": "Aggregate NPU fleet performance metrics.",
@@ -8674,7 +9071,10 @@
           "systemd_service": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -9029,7 +9429,10 @@
           "systemd_service": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -14431,7 +14834,10 @@
           "systemd_service": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -15346,7 +15752,7 @@
     },
     "/api/api-keys/scopes": {
       "get": {
-        "description": "Get available API key scopes (no authentication required).",
+        "description": "Get the catalogue of available API key scopes. Unauthenticated by design (#16040 AC7).\n\nThe owner ruled on 2026-09-11 to keep this route open. It returns only the\nstatic scope names and their descriptions (``API_KEY_SCOPES``): no keys,\nno users, no tenant data. The key-creation form needs that catalogue before\nit can offer a choice. ``middleware/security_headers.py`` allowlists this\npath for the same reason.",
         "operationId": "get_api_scopes_api_api_keys_scopes_get",
         "responses": {
           "200": {
@@ -15625,6 +16031,26 @@
         ]
       }
     },
+    "/api/auth/proxy-check": {
+      "get": {
+        "description": "nginx auth_request target for the /autobot-api/ internal-key gate (#16374).\n\nA side-effect-free membership check, deliberately separate from ``/me``:\n``/me`` answers \"is this a live SLM session?\", which any backend login\ntoken satisfies by design (epic #10193) -- every read-only or non-admin\nuser therefore passed the old gate too, and nginx then attached the\ntrusted internal key that ``autobot-backend/auth_middleware.py`` treats\nas full admin. This answers \"does this session hold the role the key\nactually confers?\": 204 for a session whose role grants\n``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it\n-- including SUPERADMIN, which holds no granular permissions (#13854)\nand is refused here as on every other permission-gated SLM admin route\n-- and an unknown role resolves to USER, so it also fails closed. 401\ncovers a missing Authorization header (the upstream ``HTTPBearer``'s\n``auto_error=True`` raises it before this dependency runs) or an\ninvalid/expired token (``get_current_user`` raises it). Returns no body\neither way -- an ``auth_request`` subrequest's body is discarded, only\nthe status code is read.",
+        "operationId": "proxy_check_api_auth_proxy_check_get",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Proxy Check",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/refresh": {
       "post": {
         "description": "Refresh access token.",
@@ -15721,9 +16147,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Ldap Login Api Auth Sso Ldap Login Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TokenResponse"
                 }
               }
             },
@@ -15756,8 +16180,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "additionalProperties": true,
-                    "type": "object"
+                    "$ref": "#/components/schemas/ActiveProviderResponse"
                   },
                   "title": "Response List Active Providers Api Auth Sso Providers Get",
                   "type": "array"
@@ -17740,6 +18163,61 @@
         ]
       }
     },
+    "/api/code-sync/drift/full": {
+      "get": {
+        "description": "Every file under every deployed component, checked in one run (#16310).\n\nAn empty or unreadable component tree is reported through ``errors``, not\nsilently folded into a clean result -- a run that could not look must\nnever read the same as a run that looked and found nothing.",
+        "operationId": "get_full_tree_drift_api_code_sync_drift_full_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullTreeDriftReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Full Tree Drift",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
     "/api/code-sync/drift/resolve": {
       "post": {
         "description": "Resync a single component from code_source/ to /opt/autobot/<component>/ (#7149, #9982).\n\nUses `_rsync_component_local()` to pull files from the local code_source\ncheckout and overwrite the deployed copy.  Used by the CodeSyncView\n\"Resync from Source\" button to clear drift in one click.\n\nAfter a successful rsync the handler runs component-appropriate post-steps\n(#9982) so that the synced code is immediately live:\n  - Python backend components: pip install -r requirements.txt + service restart\n  - Frontend components: npm ci + npm run build + nginx restart\n  - Library components (autobot_shared): restart every dependent service so\n    the new shared code is loaded (#10248)\n\nBody:\n    component: Sub-directory under /opt/autobot/. Must be in ALLOWED_COMPONENTS.\n               #12450: intentionally NOT VISIBILITY_COMPONENTS — the extra\n               read-only components (ai-stack, npu-worker, browser-worker,\n               slm-agent, plugins) have no per-component post-sync\n               (pip/npm/docker/symlink) wired, so resolving them would\n               rsync files but never install deps or restart the right\n               service. Deferred pending owner sign-off.\n\nReturns DriftResolveResponse with success flag, rsync output, deps_changed\nflag, and a log of post-sync steps performed.",
@@ -19060,7 +19538,7 @@
     },
     "/api/code-sync/self-update": {
       "post": {
-        "description": "Trigger an Ansible-based update of the SLM server itself (#9073).\n\nLooks up the SLM's own node record by matching the external_url IP,\nthen runs update-all-nodes.yml against it as a fire-and-forget task\n(the service restarts mid-run, so the caller should poll health).\nReturns immediately with a queued message.",
+        "description": "Trigger an Ansible-based update of the SLM server itself (#9073).\n\nLooks up the SLM's own node record by matching the external_url IP,\nthen runs update-all-nodes.yml against it as a fire-and-forget task\n(the service restarts mid-run, so the caller should poll health).\nReturns immediately with a queued message.\n\nRequires an authenticated user -- unchanged by #15728. The credential-free\non-host trigger is a completely separate listener\n(``services/local_admin_socket.py``); it does not touch this dependency.",
         "operationId": "self_update_api_code_sync_self_update_post",
         "parameters": [
           {
@@ -22361,9 +22839,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Verify Mfa Login Api Mfa Verify Login Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TokenResponse"
                 }
               }
             },
@@ -22410,9 +22886,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Verify Mfa Setup Api Mfa Verify Setup Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/MFAVerifySetupResponse"
                 }
               }
             },
@@ -22778,6 +23252,34 @@
         "summary": "Get Errors",
         "tags": [
           "monitoring"
+        ]
+      }
+    },
+    "/api/monitoring/gpu/nodes": {
+      "get": {
+        "description": "Every node's GPU state: not reported, none present, or its devices.",
+        "operationId": "list_gpu_nodes_api_monitoring_gpu_nodes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GPUNodeListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Gpu Nodes",
+        "tags": [
+          "monitoring",
+          "gpu"
         ]
       }
     },
@@ -29796,9 +30298,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Dependent Roles Mapping Api Secrets Dependent Roles Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DependentRolesResponse"
                 }
               }
             },

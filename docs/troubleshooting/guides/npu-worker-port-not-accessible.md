@@ -74,7 +74,7 @@ If missing, the worker needs to be updated.
 ```bash
 # From AutoBot repo root
 cd autobot-slm-backend/ansible
-ansible-playbook -i inventory.yml setup-npu-worker.yml --limit vm2
+ansible-playbook -i inventory.yml setup-npu-worker.yml --limit npu_workers
 
 # Or manually copy updated npu-worker.py template
 scp roles/npu-worker/templates/npu-worker.py.j2 autobot@<npu-ip>:/opt/autobot/npu-worker/npu-worker.py

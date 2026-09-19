@@ -690,7 +690,7 @@ src/events/
 
 ## 11. References
 
-- Manus Agent Loop: `docs/external_apps/.../Manus Agent Tools & Prompt/Agent loop.txt`
+- Manus Agent Loop: Manus Agent Tools & Prompt/Agent loop.txt (archived outside the repository, #15223)
 - Redis Streams: https://redis.io/docs/data-types/streams/
 - Current event manager: `src/event_manager.py`
 - Current Redis integration: `autobot-backend/utils/redis_management/`

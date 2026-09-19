@@ -47,7 +47,7 @@ This document defines the Single Source of Truth (SSOT) configuration architectu
 | | `src/constants/security_constants.py` | ~? | Security settings | |
 | | `src/constants/threshold_constants.py` | ~? | Thresholds | |
 | **Backend - Models** | | | | |
-| | `backend/models/settings.py` | ~389 | Pydantic AutoBotSettings | Separate validation |
+| | `backend/models/settings.py` | ~156 | Re-export shim onto `ssot_config` | Resolved #12750: was a parallel pydantic settings system with zero importers; now defines nothing and aliases the canonical objects |
 | | `backend/services/config_service.py` | ~502 | API layer for config CRUD | Wrapper complexity |
 | **Frontend** | | | | |
 | | `autobot-frontend/src/config/defaults.js` | ~200 | DEFAULT_CONFIG with fallbacks | Hardcoded IPs |
@@ -248,11 +248,11 @@ Layer 4: Language-Specific Loaders
 
 ### 3.1 Rationale
 
-After analyzing the current state and considering AutoBot's distributed 6-VM architecture:
+After analyzing the current state and considering AutoBot's distributed, role-based architecture:
 
 1. **Simplicity Wins**: The current 19-file fragmentation is a maintenance nightmare. A single `.env` file with clear prefixes is immediately understandable.
 
-2. **Docker/VM Friendly**: Each VM can have its own `.env` with overrides. This matches the distributed deployment model.
+2. **Docker/Role Friendly**: Each role's host can have its own `.env` with overrides — whether that's one Docker host or many machines. This matches the distributed deployment model.
 
 3. **No Build Step**: Approach A requires code generation. Approach C works immediately.
 
@@ -278,25 +278,25 @@ The canonical `.env` structure with all configuration values:
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# NETWORK INFRASTRUCTURE (6-VM Architecture)
+# NETWORK INFRASTRUCTURE (role-based, count-agnostic)
 # -----------------------------------------------------------------------------
 
 # Main Machine (WSL) - Backend API + VNC Desktop
 AUTOBOT_VM_MAIN_IP=<backend-ip>
 
-# VM1 Frontend - Web interface (SINGLE FRONTEND SERVER)
+# Frontend role - Web interface (SINGLE FRONTEND SERVER)
 AUTOBOT_VM_FRONTEND_IP=<frontend-ip>
 
-# VM2 NPU Worker - Hardware AI acceleration
+# NPU Worker role - Hardware AI acceleration
 AUTOBOT_VM_NPU_IP=<npu-ip>
 
-# VM3 Redis - Data layer
+# Database role (Redis) - Data layer
 AUTOBOT_VM_REDIS_IP=<database-ip>
 
-# VM4 AI Stack - AI processing
+# AI Stack role - AI processing
 AUTOBOT_VM_AISTACK_IP=<aiml-ip>
 
-# VM5 Browser - Web automation (Playwright)
+# Browser role - Web automation (Playwright)
 AUTOBOT_VM_BROWSER_IP=<browser-ip>
 
 # -----------------------------------------------------------------------------

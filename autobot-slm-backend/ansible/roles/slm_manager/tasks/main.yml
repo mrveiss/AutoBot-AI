@@ -136,44 +136,24 @@
   tags: ['slm', 'directories', 'backup']
 
 # ==========================================================
-# TLS certificates (idempotent - skip if valid cert exists)
+# TLS certificates (consolidated #16020 -- see _shared/tasks/ensure_node_tls_cert.yml)
 # ==========================================================
-- name: "SLM | Check if TLS certificate exists"
-  ansible.builtin.stat:
-    path: "{{ slm_tls_cert }}"
-  register: slm_cert_stat
+- name: "SLM | Ensure the shared node TLS keypair exists (#16020)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
   tags: ['slm', 'tls']
 
-- name: "SLM | Check certificate expiry"
-  ansible.builtin.command:
-    cmd: openssl x509 -checkend 604800 -noout -in {{ slm_tls_cert }}
-  register: slm_cert_valid
-  changed_when: false
-  # (#2872) Intentional: openssl exits rc=1 when cert expires within the
-  # check window — that is a valid "needs renewal" signal, not an error.
-  failed_when: false
-  when: slm_cert_stat.stat.exists
-  tags: ['slm', 'tls']
-
-- name: "SLM | Generate self-signed TLS certificate"
-  ansible.builtin.command:
-    cmd: >-
-      openssl req -x509 -nodes -days {{ slm_tls_days }} -newkey rsa:2048
-      -keyout {{ slm_tls_key }}
-      -out {{ slm_tls_cert }}
-      -subj '{{ slm_tls_subject }}'
-  when: >-
-    not slm_cert_stat.stat.exists
-    or (slm_cert_valid.rc | default(1)) != 0
+# #16020: the shared task has no restart handler of its own -- it also
+# serves backend and Redis, neither of which restart the same way. Reuses
+# the shared task's own registered vars (the exact condition it used to
+# decide whether to (re)generate) rather than re-deriving the check, so
+# nginx keeps restarting on a cert rotation as it did before consolidation.
+# The key-permission step this replaced is redundant, not dropped:
+# generate_self_signed_cert.yml already leaves the key at 0600 root:root.
+- name: "SLM | Flag a cert rotation for the restart handler"
+  ansible.builtin.set_fact:
+    _slm_cert_rotated: "{{ not autobot_node_cert_stat.stat.exists or (autobot_node_cert_valid.rc | default(1)) != 0 }}"
+  changed_when: _slm_cert_rotated
   notify: restart nginx
-  tags: ['slm', 'tls']
-
-- name: "SLM | Set certificate key permissions"
-  ansible.builtin.file:
-    path: "{{ slm_tls_key }}"
-    mode: "0600"
-    owner: root
-    group: root
   tags: ['slm', 'tls']
 
 # Issue #1103: Prevent nginx start when SSL cert missing
@@ -199,7 +179,7 @@
 # ==========================================================
 - name: "SLM | Sync SLM backend code from code_source"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-slm-backend/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend/"
     dest: "{{ slm_backend_dir }}/"
     rsync_opts:
       # Re-includes come first -- rsync applies the first matching rule, and
@@ -222,23 +202,43 @@
       - "--exclude=logs"
       - "--exclude=/config/"
       - "--exclude=/.deployed_commit"
+      - "--exclude=/.autobot_sync_deletions_commit"
       - "--exclude=/ansible/enroll.yml"
     delete: true
   notify: restart slm backend
+  tags: ['slm', 'backend', 'deploy']
+
+# #16310: the synchronize task above is already delete-style (`delete: true`)
+# with a hand-mirrored HOST_STATE_EXCLUDES copy (#14231) -- kept as-is here,
+# not removed, since it is a working pre-existing protection and consolidating
+# it into the git-aware mechanism below is a separate, larger change than this
+# fix warrants. This task additionally records the git-proven deletion plan's
+# marker on the SAME schedule as every other role, so slm_backend_dir is
+# covered by the same structural guarantee (deletion tasks run right after
+# the sync, marker written after deletion) as backend/frontend.
+- name: "SLM | Delete files removed from source (#16310)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/sync_deletions.yml
+  vars:
+    sync_deletions_label: "SLM Backend"
+    sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend"
+    sync_deletions_target_dir: "{{ slm_backend_dir }}"
+    sync_deletions_owner: "{{ slm_user }}"
   tags: ['slm', 'backend', 'deploy']
 
 # #12202: record the commit actually installed at slm_backend_dir so the
 # code-sync self-update skip-check (_get_slm_deployed_commit) reads what is
 # really deployed instead of code_source HEAD (which stage 2 of the update
 # pipeline already advances before this check runs).
-- name: "SLM | Record deployed commit marker (#12202)"
-  ansible.builtin.shell:
-    cmd: >-
-      git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}
-      -C {{ code_source_dir | default('/opt/autobot/code_source') }}
-      rev-parse HEAD
-      > {{ slm_backend_dir }}/.deployed_commit
-  changed_when: false
+#
+# #15557: the write is defined once, in
+# _shared/tasks/record_slm_deployed_commit.yml — four entry points install this
+# tree and only two of them recorded who did it.
+- name: "SLM | Record deployed commit marker (#12202, #15557)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/record_slm_deployed_commit.yml
+  vars:
+    deployed_commit_label: "SLM"
+    deployed_commit_dir: "{{ slm_backend_dir }}"
+    deployed_commit_owner: "{{ slm_user }}"
   tags: ['slm', 'backend', 'deploy']
 
 # ==========================================================
@@ -354,7 +354,12 @@
 # governed by slm_base_dir — no hardcoded /opt/autobot path (#10912).
 - name: "SLM | Symlink embedded autobot_shared to canonical SLM copy (#10912)"
   ansible.builtin.file:
-    src: "{{ slm_shared_dir }}"
+    # #13539/B4: was "{{ slm_shared_dir }}" (= {{ slm_base_dir }}/autobot_shared,
+    # absolute) -- escapes to the live tree under a relocated deploy root.
+    # slm_backend_dir and slm_shared_dir are always siblings under
+    # slm_base_dir (roles/slm_manager/defaults/main.yml), so the relative
+    # form resolves identically today and stays correct under a relocation.
+    src: ../autobot_shared
     dest: "{{ slm_backend_dir }}/autobot_shared"
     state: link
     force: true
@@ -373,10 +378,15 @@
   changed_when: true
   tags: ['slm', 'backend']
 
+# #16641: without this, pip falls back to shelling out to the standalone
+# `virtualenv` executable, absent from these hosts -- matches the
+# interpreter the earlier `python3.14 -m venv {{ slm_backend_dir }}/venv`
+# task in this file already targets.
 - name: "SLM | Install Python requirements"
   ansible.builtin.pip:
     requirements: "{{ slm_backend_dir }}/requirements.txt"
     virtualenv: "{{ slm_backend_dir }}/venv"
+    virtualenv_command: "python3.14 -m venv"
     state: present
   become_user: "{{ slm_user }}"
   environment:
@@ -415,16 +425,66 @@
       {{ chromadb_auth_token
          if (chromadb_auth_token | default('') | trim | length > 0)
          else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    # #16627 (P1b of #13568): the Redis password every consumer sends as user
+    # `default` while the server stays nopass (P2, #16628, enforces it). The SLM
+    # generates it here once; roles and the SLM itself only ever read it back.
+    # Alphanumeric, so it is URL-safe in the backend's AUTOBOT_REDIS_URL too.
+    slm_redis_password: >-
+      {{ slm_redis_password
+         if (slm_redis_password | default('') | trim | length > 0)
+         else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
     # #14758: the canonical envelope secret store's root key. Nothing generated
     # it, so the store raised at import on every provisioned deployment and each
     # consumer swallowed the failure — an absent store was indistinguishable
     # from "that secret does not exist". `load_root_key` base64-DECODES this and
     # requires exactly 32 bytes, so it is not interchangeable with the opaque
-    # 48-char secrets above: 32 chars b64-encoded decode back to 32 bytes.
+    # 48-char secrets above.
+    #
+    # #16405: the `lookup('password', ... chars=ascii_letters,digits')` this
+    # used to read only ever drew from 62 characters (~5.95 bits each), so the
+    # decoded key carried ~190 bits of entropy, not the 256 its length implied
+    # -- `load_root_key` cannot tell a weak key from a strong one, since both
+    # shapes decode to exactly 32 bytes. `openssl rand -base64 32` reads the 32
+    # bytes themselves from the OS CSPRNG, full byte range, then base64-encodes
+    # them; `replace` only maps the output alphabet to url-safe, same as every
+    # other generator here.
     autobot_secrets_root_key: >-
       {{ autobot_secrets_root_key
          if (autobot_secrets_root_key | default('') | trim | length > 0)
-         else (lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode) | replace('+', '-') | replace('/', '_') }}
+         else lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}
+    # #16299: backend_secret_key's own role default (roles/backend/defaults/main.yml)
+    # was the guessable literal "change-me-in-production", shipped unchanged on every
+    # deployment that never overrode it. Generated here, once, the same way
+    # slm_secret_key is -- the backend role reads it back from this file (#10400's
+    # SLM_SECRET_KEY pattern) since backend commonly runs on a different host than
+    # this one. A backend deployed standalone, with no SLM secrets file ever reaching
+    # it, keeps its own role default as a documented fallback.
+    backend_secret_key: >-
+      {{ backend_secret_key
+         if (backend_secret_key | default('') | trim | length > 0)
+         else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    # #16299: grafana_admin_password's own role default (roles/monitoring/defaults/main.yml)
+    # is the guessable literal "admin". monitoring is listed in this SAME play
+    # (playbooks/deploy-slm-manager.yml's roles:), and Ansible's static roles: loads
+    # every listed role's defaults/main.yml up front, for the whole play -- verified
+    # empirically, not assumed: a throwaway two-role playbook showed the first role's
+    # task already seeing the SECOND role's own default before that role had run any
+    # task. So `grafana_admin_password | default('') | length > 0` would already read
+    # "admin" as "the operator set this", and never generate -- a silent no-op. The
+    # check below must compare against the KNOWN weak literal specifically, the same
+    # way an inventory-supplied real password (which will never equal "admin") is
+    # still respected. An operator who deliberately sets their password to the
+    # literal string "admin" is indistinguishable from "nobody set it" and also
+    # gets overridden -- accepted, since both cases end up running Grafana on the
+    # same guessable password either way. On a re-run monitoring reads this file
+    # back (#10400's pattern) rather than depending on this task having run this
+    # time. deploy-monitoring.yml also runs monitoring standalone, with no SLM
+    # present at all -- that path keeps the role's own "admin" default as a
+    # documented fallback.
+    grafana_admin_password: >-
+      {{ grafana_admin_password
+         if (grafana_admin_password | default('') | trim | length > 0 and grafana_admin_password != 'admin')
+         else lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
@@ -502,6 +562,64 @@
   no_log: true
   tags: ['slm', 'secrets']
 
+# #16627: same back-fill for the Redis credential. This file is the SLM's own
+# EnvironmentFile, and while the server's default user is nopass a password sent
+# WITHOUT a username (AUTH <password>) is refused -- so a password generated here
+# always gets its username first. A password an operator already put here is
+# left exactly as it is, username included: the legacy deploy playbooks render an
+# env password as requirepass unless a username sits beside it, so adding one
+# would silently switch that enforcement off. Both lines are append-only and
+# gated on the key being absent or empty; the password is never regenerated.
+- name: "SLM | Check if AUTOBOT_REDIS_PASSWORD present in secrets file (#16627)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^AUTOBOT_REDIS_PASSWORD=.\+'
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_redis_pw_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  no_log: true
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Check if AUTOBOT_REDIS_USERNAME present in secrets file (#16627)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^AUTOBOT_REDIS_USERNAME=.\+'
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_redis_user_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Add AUTOBOT_REDIS_USERNAME to existing secrets file (#16627)"
+  ansible.builtin.lineinfile:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+    regexp: "^AUTOBOT_REDIS_USERNAME="
+    line: "AUTOBOT_REDIS_USERNAME={{ slm_redis_username }}"
+    create: false
+  when:
+    - slm_secrets_stat.stat.exists
+    - _slm_redis_user_check.rc != 0
+    - _slm_redis_pw_check.rc != 0
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Add AUTOBOT_REDIS_PASSWORD to existing secrets file (#16627)"
+  ansible.builtin.lineinfile:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+    regexp: "^AUTOBOT_REDIS_PASSWORD="
+    line: >-
+      AUTOBOT_REDIS_PASSWORD={{ slm_redis_password
+         if (slm_redis_password | default('') | trim | length > 0)
+         else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    create: false
+  when:
+    - slm_secrets_stat.stat.exists
+    - _slm_redis_pw_check.rc != 0
+  no_log: true
+  tags: ['slm', 'secrets']
+
 # #14758: same back-fill for the envelope root key. Every host provisioned
 # before this change already has the secrets file, so the template task above is
 # skipped and the key would never appear — which is the state the issue reports.
@@ -525,13 +643,31 @@
   ansible.builtin.lineinfile:
     path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
     regexp: "^AUTOBOT_SECRETS_ROOT_KEY="
-    line: "AUTOBOT_SECRETS_ROOT_KEY={{ (lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode) | replace('+', '-') | replace('/', '_') }}"
+    # #16405: same fix as the set_fact generator above -- 32 random bytes from
+    # openssl rand, not 32 characters from a password lookup.
+    line: "AUTOBOT_SECRETS_ROOT_KEY={{ lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}"
     create: false
   when:
     - slm_secrets_stat.stat.exists
     - _slm_root_key_check.rc != 0
   no_log: true
   tags: ['slm', 'secrets']
+
+# #16299: deliberately NO back-fill for AUTOBOT_BACKEND_SECRET_KEY or
+# GRAFANA_ADMIN_PASSWORD, unlike the three back-fills above. Every host
+# provisioned before this change already has the secrets file, so the
+# generate block above is skipped for it -- but unlike the root key/chromadb
+# token/Redis password (each enabling a previously-OFF security feature), a
+# backend or Grafana on an existing install is ALREADY running on its current
+# secret. Back-filling a freshly generated value here would flow through
+# backend/monitoring's read-back tasks (#16299, mirroring #10400) and silently
+# replace the secret those services are actively using -- signed sessions
+# would stop validating, and an operator logged into Grafana with the old
+# password would be locked out. That is exactly the "regenerated credential
+# breaks a running service" case the owner's 2026-09-17 ruling excludes: an
+# existing install keeps its current password, full stop. The two role
+# defaults stay the standalone/existing-install fallback forever, not just
+# until the next backfill happens to run.
 
 # ==========================================================
 # #12297: Reconcile stale DB-URL landmines in slm-secrets.env
@@ -696,21 +832,12 @@
 # Must run BEFORE frontend builds so VITE_API_URL is correct.
 # Auto-detect: if the user frontend code exists on this host,
 # enable co-located mode (SLM at /slm, user frontend at /).
+# #15610: the detection itself lives in colocated_frontend_detect.yml, because
+# tasks/nginx_site.yml needs the same flag before rendering the site config.
 # ==========================================================
   become: true
-- name: "SLM | Detect co-located user frontend (#3013)"
-  ansible.builtin.stat:
-    path: "{{ frontend_dist_dir | dirname }}/package.json"
-  register: _colocated_frontend_check
-  tags: ['slm', 'frontend', 'nginx']
-
-- name: "SLM | Set co-located frontend flag (#3013)"
-  ansible.builtin.set_fact:
-    slm_colocated_frontend: >-
-      {{
-        (slm_colocated_frontend | default(false) | bool) or
-        (_colocated_frontend_check.stat.exists | default(false) | bool)
-      }}
+- name: "SLM | Detect co-located mode before the frontend build (#3013)"
+  ansible.builtin.include_tasks: colocated_frontend_detect.yml
   tags: ['slm', 'frontend', 'nginx']
 
 # ==========================================================
@@ -724,7 +851,7 @@
 # and Vite's rolldown bundler fails to resolve the import at build time.
 - name: "SLM | Sync autobot-plugins from code_source (MVA-893)"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-plugins/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-plugins/"
     dest: "{{ slm_base_dir }}/autobot-plugins/"
     rsync_opts:
       - "--exclude=node_modules"
@@ -741,6 +868,7 @@
       - "--exclude=logs"
       - "--exclude=/config/"
       - "--exclude=/.deployed_commit"
+      - "--exclude=/.autobot_sync_deletions_commit"
       - "--exclude=/ansible/enroll.yml"
     delete: true
   tags: ['slm', 'frontend']
@@ -752,7 +880,7 @@
 # bundler fails to resolve the import at build time (same failure mode as MVA-893).
 - name: "SLM | Sync libs (shared @autobot/ui kit) from code_source (#10750 C2c)"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/libs/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/libs/"
     dest: "{{ slm_base_dir }}/libs/"
     rsync_opts:
       - "--exclude=node_modules"
@@ -769,6 +897,7 @@
       - "--exclude=logs"
       - "--exclude=/config/"
       - "--exclude=/.deployed_commit"
+      - "--exclude=/.autobot_sync_deletions_commit"
       - "--exclude=/ansible/enroll.yml"
     delete: true
   tags: ['slm', 'frontend']
@@ -801,18 +930,19 @@
 
 # #10435: SLM UI is always served under /slm (nginx `location /slm/`) and
 # vite.config sets base /slm/. The API base must always be /slm; an unset/empty
-# VITE_API_URL trips the co-located build guard and bakes the wrong base. Use
-# build:slm which exports VITE_API_URL=/slm for every deploy (co-located + standalone).
-- name: "SLM | Build frontend for production (#10435)"
-  ansible.builtin.command:
-    cmd: npm run build:slm
-    chdir: "{{ slm_frontend_dir }}"
-  become_user: "{{ slm_user }}"
+# VITE_API_URL trips the co-located build guard and bakes the wrong base.
+#
+# #15557: this used to run `npm run build:slm` straight into the served dist/,
+# with no gate — a failed build emptied dist/ and every /slm/ path answered 403
+# while the play carried on green. The staged build-then-swap is defined once,
+# in _shared/tasks/build_publish_slm_frontend.yml.
+- name: "SLM | Build and publish frontend for production (#10435, #15557)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/build_publish_slm_frontend.yml
+  vars:
+    slm_frontend_publish_label: "SLM"
+    slm_frontend_publish_dir: "{{ slm_frontend_dir }}"
+    slm_frontend_publish_user: "{{ slm_user }}"
   when: slm_frontend_build and slm_package_json.stat.exists
-  register: slm_frontend_build_result
-  changed_when: slm_frontend_build_result.rc == 0
-  environment:
-    VITE_API_URL: "/slm"
   tags: ['slm', 'frontend']
 
 # ==========================================================
@@ -904,41 +1034,17 @@
     - reload nginx
   tags: ['slm', 'nginx']
 
-- name: "SLM | Deploy nginx configuration"
-  ansible.builtin.template:
-    src: autobot-slm.conf.j2
-    dest: /etc/nginx/sites-available/{{ slm_nginx_config }}
-    mode: "0644"
-    backup: true
-  notify:
-    - test nginx config
-    - reload nginx
-  tags: ['slm', 'nginx']
-
-- name: "SLM | Stat sites-enabled file to detect non-symlink (#1122)"
-  ansible.builtin.stat:
-    path: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
-  register: nginx_sites_enabled_stat
-  become: true
-  tags: ['slm', 'nginx']
-
-- name: "SLM | Remove standalone sites-enabled file if not a symlink (#1122)"
-  ansible.builtin.file:
-    path: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
-    state: absent
-  become: true
-  when:
-    - nginx_sites_enabled_stat.stat.exists
-    - not nginx_sites_enabled_stat.stat.islnk
-  tags: ['slm', 'nginx']
-
-- name: "SLM | Enable nginx site (symlink to sites-available)"
-  ansible.builtin.file:
-    src: /etc/nginx/sites-available/{{ slm_nginx_config }}
-    dest: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
-    state: link
-  become: true
-  notify: reload nginx
+# #15610: the render lives in nginx_site.yml so playbooks/update-all-nodes.yml
+# — which deploys the SLM backend by unarchive and never runs this role — can
+# re-render the site config from the same source after it publishes a bundle.
+# #16979: nginx_site.yml also carries the steps that make the render live
+# (detect/replace a non-symlink sites-enabled entry, link, verify) -- moved
+# out of this file because both self-update playbooks include ONLY
+# nginx_site.yml, never this one, so those steps ran on a full provision but
+# not on self-update. Do not re-add them here; a copy in both places is the
+# drift #15610 already wrote a comment to warn against.
+- name: "SLM | Deploy nginx configuration (#15610, #16979)"
+  ansible.builtin.include_tasks: nginx_site.yml
   tags: ['slm', 'nginx']
 
 - name: "SLM | Remove default nginx site"
@@ -1025,6 +1131,16 @@
   when: _slm_import_check.rc | default(0) != 0
   tags: ['slm', 'service']
 
+# #15823: the socket must be bound BEFORE the service it activates.
+#
+# systemd refuses ``start`` on a socket whose ``Service=`` is already running,
+# so this cannot simply be done earlier: it has to happen in the window where
+# the backend is down. Stopping first is what creates that window, and the
+# stop is not extra downtime -- the deploy restarts the backend here regardless.
+#
+# With the socket bound first, the backend inherits the fd through its
+# ``Sockets=`` line. Started after, the socket start is refused and the
+# self-update path has no listener even though the unit is enabled.
 - name: "SLM | Start backend service"
   ansible.builtin.systemd:
     name: "{{ slm_backend_service }}"
@@ -1140,7 +1256,7 @@
 # ==========================================================
 - name: "SLM | Install autobot-admin CLI"
   ansible.builtin.copy:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-slm-backend/scripts/autobot-admin.py"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend/scripts/autobot-admin.py"
     dest: /usr/local/bin/autobot-admin
     owner: root
     group: root
@@ -1153,7 +1269,7 @@
     msg:
       - "=== SLM Manager Deployment Complete ==="
       - "Backend: {{ slm_backend_host }}:{{ slm_backend_port }}"
-      - "Frontend: {{ slm_frontend_dir }}/dist"
+      - "Frontend: {{ slm_frontend_dir }}/current -> {{ slm_frontend_dir }}/dist-<build id>"
       - "Nginx: HTTPS on port 443"
       - "TLS cert: {{ slm_tls_cert }}"
       - "Logs: {{ slm_log_dir }}/"

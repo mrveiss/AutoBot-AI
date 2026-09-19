@@ -11,6 +11,7 @@ import time
 
 from fastapi import FastAPI
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -60,6 +61,31 @@ async def _try_initialize_existing_kb(kb):
         return None
 
 
+def _adopt_legacy_facts(kb) -> None:
+    """Give a durable row to any fact that still exists only as a Redis hash (#15663).
+
+    The migration creates ``knowledge_facts`` empty and cannot do otherwise — the
+    migration gate has no Redis connection — so until this runs, a fact created
+    before #15663 is still Redis-only and the durable system of record is a
+    promise about future writes. Fire-and-forget: a slow scan must not delay the
+    knowledge base, and a failure leaves the facts exactly where they already were.
+    The ownerless-document visibility backfill (#16693) follows it.
+    """
+    if kb is not None and hasattr(kb, "adopt_legacy_facts"):
+        fire_and_forget(_adopt_then_backfill(kb), name="kb-adopt-legacy-facts")
+
+
+async def _adopt_then_backfill(kb) -> None:
+    """Adopt Redis-only facts, then make ownerless ingested documents explicitly SYSTEM (#16693).
+
+    In that order because the backfill walks the durable rows: a fact still only in
+    Redis would be missed. The builtin updater restarts the backend after an update, so
+    this is how the backfill ships; a later start retries only the updates that failed.
+    """
+    await kb.adopt_legacy_facts()
+    await kb.backfill_document_visibility()
+
+
 async def _create_new_knowledge_base(app: FastAPI):
     """Create and initialize a new knowledge base (Issue #315: extracted).
 
@@ -84,6 +110,7 @@ async def _create_new_knowledge_base(app: FastAPI):
         if result:
             _last_kb_init_failure = 0.0  # Reset cooldown on success
             app.state.knowledge_base = kb
+            _adopt_legacy_facts(kb)
             logger.info("✅ Knowledge base created and initialized (unified KnowledgeBase with ChromaDB)")
             return kb
 
@@ -191,6 +218,7 @@ async def get_knowledge_base_async() -> "KnowledgeBase" | None:  # noqa: F821
             if result:
                 _knowledge_base_instance = kb
                 logger.info("✅ Knowledge base singleton created and initialized")
+                _adopt_legacy_facts(kb)
                 return kb
             else:
                 logger.error("❌ KnowledgeBase singleton initialization returned False")

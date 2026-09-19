@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -37,8 +36,9 @@ from api.schemas_analytics import (
     QualityTrendsResponse,
 )
 from api.schemas_common import DataResponse
-from api.ws_security import enforce_ws_origin
+from api.ws_security import open_authenticated_ws
 from auth_middleware import check_admin_permission
+from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
@@ -55,7 +55,7 @@ logger = get_logger(__name__)
 _HEALTH_HISTORY_KEY = "quality:health:history"
 
 # Maximum snapshots to retain (~2 years of daily metric computations).
-QUALITY_HISTORY_MAX_POINTS: int = int(os.environ.get("QUALITY_HISTORY_MAX_POINTS", "730"))
+QUALITY_HISTORY_MAX_POINTS: int = env_int("QUALITY_HISTORY_MAX_POINTS", 730)
 
 # Redis sorted-set key for remediation delta history (written by remediation_loop).
 _DELTA_HISTORY_KEY = "remediation:delta:history"
@@ -1001,8 +1001,7 @@ class ConnectionManager:
         self.active_connections: list[WebSocket] = []
 
     async def connect(self, websocket: WebSocket):
-        """Accept new WebSocket connection."""
-        await websocket.accept()
+        """Register a connection its endpoint has already authenticated and accepted (#17009)."""
         self.active_connections.append(websocket)
         logger.info(f"WebSocket connected. Total connections: {len(self.active_connections)}")
 
@@ -1679,7 +1678,7 @@ async def websocket_quality_updates(websocket: WebSocket):
     Clients receive updates when quality metrics change.
     Issue #315: Refactored to use dictionary dispatch for message handling.
     """
-    if not await enforce_ws_origin(websocket):
+    if not await open_authenticated_ws(websocket, admin=True):  # #17009: admin, like GET /snapshot
         return
     await manager.connect(websocket)
 

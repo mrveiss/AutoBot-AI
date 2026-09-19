@@ -18,10 +18,15 @@
 # What this installer guarantees:
 #   * Real copied hook files (self-contained) — survive worktree deletion.
 #   * Portable — repo root and hooks dir are derived from git, never hardcoded.
-#   * core.hooksPath normalised back to git's default (repo .git/hooks) when it
-#     was pinned to a foreign/absolute path.
+#   * core.hooksPath removed whenever it is set at all (#16812) — including a
+#     value that already points at the default hooks dir. git behaves the same
+#     either way; `pre-commit install` refuses while the key merely exists.
 #   * Dangling symlinks in the hooks dir are detected, reported, and replaced.
 #   * Idempotent — safe to re-run; a second run is a no-op when up to date.
+#   * The installed `pre-commit` runs the branch guard, then dispatches staged
+#     files to the `pre-commit` framework binary if it's on PATH (#16923) —
+#     see tools/git-hooks/pre-commit for the logic; this installer just copies
+#     it verbatim, same as every other managed hook.
 #
 # Usage:
 #   bash scripts/install-git-hooks.sh          # install/refresh hooks
@@ -39,7 +44,7 @@ set -uo pipefail
 # repo_tests/git_hooks_installer_test.py install hooks into the live repo
 # instead of its throwaway fixture. Unset once, up front, same as
 # autobot_shared.paths.scrubbed_git_env() does for the Python side.
-unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
 info()  { printf "${CYAN}[install-hooks]${NC} %s\n" "$*"; }
@@ -48,8 +53,10 @@ warn()  { printf "${YELLOW}[install-hooks WARN]${NC} %s\n" "$*" >&2; }
 fail()  { printf "${RED}[install-hooks FAIL]${NC} %s\n" "$*" >&2; }
 
 # Hooks this installer manages. Each name must exist as a real file under
-# tools/git-hooks/<name>.
-MANAGED_HOOKS="pre-commit pre-push"
+# tools/git-hooks/<name>. commit-msg (#17029) strips co-author trailers and
+# rejects a subject without the `<type>(scope): ... (#NNNN)` convention; it was
+# a hand-installed local file until then, present on one machine and nowhere else.
+MANAGED_HOOKS="pre-commit pre-push commit-msg"
 
 # --- Locate the repo and its canonical hook templates (portable) -----------
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
@@ -86,7 +93,9 @@ HOOKS_DEST="$(resolve_hooks_dest)"
 # back to its default. We only touch the LOCAL repo config, never global.
 normalise_hooks_path() {
     local configured
-    configured="$(git config --local --get core.hooksPath 2>/dev/null || echo "")"
+    # --get-all, not --get (#16812): `--get` exits non-zero on a multi-valued
+    # key and prints nothing, so a doubled entry read as "unset" and survived.
+    configured="$(git config --local --get-all core.hooksPath 2>/dev/null | head -n 1 || true)"
     [ -z "$configured" ] && return 0
 
     local resolved="$configured"
@@ -94,12 +103,28 @@ normalise_hooks_path() {
         /*) : ;;
         *)  resolved="$REPO_ROOT/$configured" ;;
     esac
+    # #16812: unset on PRESENCE, not on failing to resolve to the default. This
+    # used to `return 0` when the value already pointed at the default hooks
+    # dir, on the reasoning that such a key changes nothing. True for git --
+    # and fatal for `pre-commit`, which refuses whenever the key exists AT ALL:
+    # "Cowardly refusing to install hooks with `core.hooksPath` set". So a
+    # redundant key silently disabled every hook in .pre-commit-config.yaml
+    # (flake8, autoflake, mypy, the local guards) while looking like hygiene,
+    # and the old equal-to-default test scored exactly that state as clean.
+    #
+    # Removing it is also what #15961 concluded on independent grounds: an
+    # override is a `--no-verify` that leaves no trace, and the premise for
+    # adding one is false because git already shares hooks with worktrees.
     if [ "$resolved" = "$HOOKS_DEST" ]; then
-        return 0
+        warn "core.hooksPath was set to the default hooks dir: $configured"
+        warn "  unsetting it — pre-commit refuses to install while the key exists at all (#16812)"
+    else
+        warn "core.hooksPath was pinned to a non-default path: $configured"
+        warn "  unsetting it so git uses the default hooks dir: $HOOKS_DEST"
     fi
-    warn "core.hooksPath was pinned to a non-default path: $configured"
-    warn "  unsetting it so git uses the default hooks dir: $HOOKS_DEST"
-    git config --local --unset core.hooksPath 2>/dev/null || true
+    # --unset-all: `--unset` fails on a multi-valued key, and `|| true` would
+    # then swallow the failure and leave the key in place.
+    git config --local --unset-all core.hooksPath 2>/dev/null || true
 }
 
 # --- Replace one hook with the real template file --------------------------
