@@ -44,7 +44,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/agents/machine_aware_system_knowledge_manager.py": 848,
     "autobot-backend/agents/man_page_knowledge_integrator.py": 696,
     "autobot-backend/agents/npu_code_search_agent.py": 1346,  # #16173: extracted helpers
-    "autobot-backend/agents/overseer/step_executor_agent.py": 810,
+    "autobot-backend/agents/overseer/step_executor_agent.py": 650,
     "autobot-backend/agents/rag_agent.py": 602,
     "autobot-backend/agents/security_scanner_agent.py": 663,
     "autobot-backend/agents/system_command_agent.py": 903,
@@ -55,7 +55,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/advanced_control.py": 626,
     "autobot-backend/api/agent.py": 1380,
     "autobot-backend/api/agent_config.py": 1371,
-    "autobot-backend/api/agent_terminal.py": 858,
+    "autobot-backend/api/agent_terminal.py": 773,
     "autobot-backend/api/analytics.py": 1285,
     "autobot-backend/api/analytics_architecture.py": 1264,
     "autobot-backend/api/analytics_bug_prediction.py": 1438,
@@ -152,9 +152,9 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/validation_dashboard.py": 671,
     "autobot-backend/api/vnc_manager.py": 1699,
     "autobot-backend/api/vnc_mcp.py": 763,
-    "autobot-backend/api/websockets.py": 1124,  # #16457: accepts routed through websocket_subprotocol.accept_websocket
+    "autobot-backend/api/websockets.py": 1120,  # #16457: accepts routed through websocket_subprotocol.accept_websocket
     "autobot-backend/api/workflow.py": 1027,
-    "autobot-backend/auth_middleware.py": 1090,  # #16457: bearer parsing moved to websocket_subprotocol.py
+    "autobot-backend/auth_middleware.py": 1088,  # #16457: bearer parsing moved to websocket_subprotocol.py
     "autobot-backend/autobot_memory_graph/property_graph.py": 630,
     "autobot-backend/autobot_memory_graph/relations.py": 641,
     "autobot-backend/autobot_memory_graph/semantic_search.py": 717,
@@ -164,8 +164,8 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1343,
-    "autobot-backend/chat_workflow/manager.py": 4068,
-    "autobot-backend/chat_workflow/tool_handler.py": 3729,  # #11542: external MCP dispatch merged into MCPDispatcher
+    "autobot-backend/chat_workflow/manager.py": 4067,
+    "autobot-backend/chat_workflow/tool_handler.py": 3722,  # #11542: external MCP dispatch merged into MCPDispatcher
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/circuit_breaker.py": 689,
@@ -215,7 +215,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/events/stream_manager.py": 654,
     "autobot-backend/events/types.py": 885,
     "autobot-backend/hardware_acceleration.py": 609,
-    "autobot-backend/initialization/lifespan.py": 2364,
+    "autobot-backend/initialization/lifespan.py": 2362,
     "autobot-backend/initialization/router_registry/feature_routers.py": 779,
     "autobot-backend/integrations/cloud_integration.py": 630,
     "autobot-backend/integrations/communication_integration.py": 605,
@@ -306,7 +306,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/plugin_manager.py": 702,
     "autobot-backend/project_state_manager.py": 998,
     "autobot-backend/prompt_manager.py": 1481,
-    "autobot-backend/protocols/agent_communication.py": 805,
+    "autobot-backend/protocols/agent_communication.py": 706,
     "autobot-backend/research_browser_manager.py": 704,
     "autobot-backend/secure_command_executor.py": 1220,
     "autobot-backend/secure_sandbox_executor.py": 1019,
@@ -324,7 +324,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/security/threat_intelligence.py": 763,
     "autobot-backend/security_layer.py": 767,
     "autobot-backend/services/agent_analytics.py": 686,
-    "autobot-backend/services/agent_terminal/service.py": 962,
+    "autobot-backend/services/agent_terminal/service.py": 951,
     "autobot-backend/services/ai_stack_client.py": 790,
     "autobot-backend/services/analytics_service.py": 838,
     "autobot-backend/services/audit_logger.py": 1022,
@@ -473,7 +473,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/services/drift_checker_test.py": 1351,
     "autobot-slm-backend/services/inventory_builder.py": 710,
     "autobot-slm-backend/services/playbook_executor.py": 1362,
-    "autobot-slm-backend/services/reconciler.py": 2222,
+    "autobot-slm-backend/services/reconciler.py": 2219,
     # Not legacy debt: created after this guard existed (#14465/#14548). Tracked
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 843,
