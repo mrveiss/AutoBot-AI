@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
+from services.approval_execution import run_post_approval_actions
 
 logger = get_logger(__name__)
 
@@ -100,14 +101,20 @@ class ApprovalGateService:
         *,
         author_type: str,
     ) -> Approval:
-        """Approve a pending approval gate."""
-        return await self._transition(
+        """Approve a pending approval gate, then run whatever it proposed (#17038/#17043).
+
+        The transition itself commits first; ``run_post_approval_actions``
+        cannot fail the approval decision, only what happens after it.
+        """
+        approval = await self._transition(
             approval_id,
             ApprovalStatus.APPROVED,
             decided_by,
             comment,
             author_type,
         )
+        await run_post_approval_actions(approval, self.session)
+        return approval
 
     async def reject(
         self,
