@@ -22,12 +22,24 @@
  * Sub-routes (children) are intentionally excluded — only the parent appears
  * in main nav. Redirects and dynamic-param routes (`:sessionId`, `:pathMatch`)
  * are also excluded.
+ *
+ * #16933: `hideInNav: true` short-circuits the rule above at `isHiddenByMeta`
+ * — by design, since that flag means "reached some other way", not "has no
+ * way". For most hideInNav routes that other way is real (login, onboarding,
+ * an LLC sub-tab, a dev-only page). For `/admin/*` routes specifically it is
+ * supposed to mean "listed in `adminMenuItems` instead of the main nav" —
+ * every sibling admin route already follows that pattern — but nothing
+ * checked it, so `/admin/pricing` and `/admin/mcp-servers` (#16825) shipped
+ * with the flag and no matching entry, reachable only by typing the URL.
+ * The second describe block below is that missing check, scoped to
+ * `/admin/*` rather than every hideInNav route, since the wider set has
+ * genuine other exposure paths this file was never meant to enumerate.
  */
 
 import { describe, it, expect } from 'vitest'
 import type { RouteRecordRaw } from 'vue-router'
 import { routes } from '@/router'
-import { navItems, profileMenuItems, filterByFeatureFlag } from '@/config/navItems'
+import { navItems, profileMenuItems, adminMenuItems, filterByFeatureFlag } from '@/config/navItems'
 
 /**
  * Routes that are intentionally NOT in main nav.
@@ -178,5 +190,61 @@ describe('navItems coverage (#6499)', () => {
     expect(checkedCount).toBeGreaterThan(5)
     // Allowlist should stay small — if it grows, prefer hideInNav meta flag
     expect(allowlistSize).toBeLessThan(15)
+  })
+})
+
+describe('adminMenuItems coverage (#16933)', () => {
+  /** Top-level routes under /admin/ that carry hideInNav: true. */
+  function hiddenAdminRoutes(): RouteRecordRaw[] {
+    return topLevelRoutes().filter(
+      (r) => typeof r.path === 'string' && r.path.startsWith('/admin/') && isHiddenByMeta(r),
+    )
+  }
+
+  it('every hideInNav /admin/* route has an adminMenuItems entry or is allowlisted', () => {
+    const adminPaths = new Set(adminMenuItems.map((n) => n.to))
+    const missing = hiddenAdminRoutes()
+      .map((r) => r.path as string)
+      .filter((p) => !(p in INTENTIONALLY_HIDDEN) && !adminPaths.has(p))
+
+    if (missing.length > 0) {
+      throw new Error(
+        `The following /admin/* routes carry hideInNav: true but have no adminMenuItems ` +
+          `entry and are not in INTENTIONALLY_HIDDEN:\n` +
+          missing.map((p) => `  - ${p}`).join('\n') +
+          `\n\nhideInNav: true does not mean "unreachable is fine" for an /admin/* route — ` +
+          `it means "listed in adminMenuItems instead of the main nav" (#16933). Add an ` +
+          `entry to src/config/navItems.ts's adminMenuItems, or add the route to ` +
+          `INTENTIONALLY_HIDDEN above with a justification.`,
+      )
+    }
+
+    expect(missing).toEqual([])
+  })
+
+  it('every adminMenuItems entry corresponds to a real route', () => {
+    const allPaths = allRoutePaths()
+    const orphans = adminMenuItems.filter((n) => !allPaths.has(n.to)).map((n) => n.to)
+
+    expect(orphans).toEqual([])
+  })
+
+  it('sanity: is checking a non-empty, real set of admin routes (mutation proof, #16933 AC4)', () => {
+    // Not a fabricated route: at least the pre-existing sibling admin pages
+    // must be present, so a change that broke discovery of /admin/* routes
+    // entirely (not just missed one entry) would also be caught here.
+    const hidden = hiddenAdminRoutes().map((r) => r.path)
+    expect(hidden).toEqual(expect.arrayContaining(['/admin/sandbox', '/admin/pricing', '/admin/mcp-servers']))
+
+    // The actual mutation proof: drop a real adminMenuItems entry and confirm
+    // the coverage check above would have caught it -- reusing the same
+    // matching logic the real test uses, not a hand-rolled re-implementation
+    // that could drift from it.
+    const withoutPricing = adminMenuItems.filter((n) => n.to !== '/admin/pricing')
+    const adminPathsWithoutPricing = new Set(withoutPricing.map((n) => n.to))
+    const missingWithoutPricing = hidden.filter(
+      (p) => !(p in INTENTIONALLY_HIDDEN) && !adminPathsWithoutPricing.has(p),
+    )
+    expect(missingWithoutPricing).toEqual(['/admin/pricing'])
   })
 })

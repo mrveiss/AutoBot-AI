@@ -66,10 +66,9 @@ from autobot_shared.api_routing import router_prefixes as _routing  # noqa: E402
 from autobot_shared.openapi_schema import normalize_pattern_anchors  # noqa: E402
 
 BACKEND = REPO_ROOT / "autobot-backend"
-# #12381: the SLM control-plane backend (autobot-slm-backend, :8000) mounts
-# its own '/api'-prefixed route table, entirely separate from autobot-backend
-# (:8001). Frontend calls made via getSLMUrl()/slmFetch() resolve against
-# THIS app, not the one BACKEND builds — see dump_slm_openapi().
+# #12381: the SLM control-plane backend (autobot-slm-backend, :8000) mounts its own '/api'-prefixed route table,
+# entirely separate from autobot-backend (:8001). Frontend calls made via getSLMUrl()/slmFetch() resolve against THIS
+# app, not the one BACKEND builds — see dump_slm_openapi().
 SLM_BACKEND = REPO_ROOT / "autobot-slm-backend"
 FRONTEND_SRC = REPO_ROOT / "autobot-frontend" / "src"
 
@@ -763,6 +762,10 @@ def audit_baseline(
     }
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # exec_module needs this; direct execution doesn't (#16816)
+from dead_surface import report_dead_surface  # noqa: E402
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--openapi", help="openapi.json path or URL (authoritative mode)")
@@ -875,12 +878,7 @@ def main() -> int:
 
     if args.dead_surface:
         fe_norm = set(fe)
-        dead = [b for b in sorted(backend) if not any(matches(f, {b}) for f in fe_norm)]
-        print(f"\n== BACKEND PATHS WITH NO FRONTEND CONSUMER: {len(dead)} ==")
-        for d in dead[:100]:
-            print(f"  {d}")
-        if len(dead) > 100:
-            print(f"  ... and {len(dead) - 100} more")
+        report_dead_surface([b for b in sorted(backend) if not any(matches(f, {b}) for f in fe_norm)])
 
     rc = 0
     if args.fail_on_unwired:

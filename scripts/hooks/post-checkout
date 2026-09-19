@@ -7,7 +7,9 @@
 #   1. Fix WSL2 symlink breakage (Issue #886)
 #   2. Fix pre-commit hook script permissions (Issue #1683)
 #   3. Auto-install prepare-commit-msg hook type (Issue #1679)
-#   4. Auto-install pre-commit branch guard wrapper (Issue #1689)
+#   4. Auto-install/sync pre-commit hook: branch-guard-only wrapper (Issue
+#      #1689) on an old checkout, or tools/git-hooks/pre-commit's branch
+#      guard + formatter dispatch (Issue #16923) when that template exists
 #   5. Inject flock wrapper into pre-commit hook (Issue #1684)
 #   6. Self-sync: keep .git/hooks/post-checkout in sync (Issue #1692)
 
@@ -85,17 +87,92 @@ if [ -d "$HOOKS_DIR" ] && [ ! -f "$HOOKS_DIR/prepare-commit-msg" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Auto-install pre-commit stash-free wrapper (Issue #2512, #1689, #2519)
+# 4. Auto-install/sync pre-commit hook (Issue #2512, #1689, #2519, #16923)
 # ---------------------------------------------------------------------------
 # Replaces pre-commit's default hook with a wrapper that calls
 # `pre-commit run --files` (bypassing the stash cycle). Also retains
 # a branch guard as a safety net.
 #
 # Layout:
-#   .git/hooks/pre-commit                   → stash-free wrapper
-#   .git/hooks/pre-commit.pre-commit-framework → original pre-commit hook (backup)
+#   .git/hooks/pre-commit                      → stash-free wrapper, or the
+#                                                 #16923 branch-guard+formatter
+#                                                 template once that exists
+#   .git/hooks/pre-commit.pre-commit-framework → original pre-commit hook,
+#                                                 backed up when wrapped (above)
+#   .git/hooks/pre-commit.pre-formatter-dispatch → whatever pre-commit hook
+#                                                 (old wrapper, or hand-
+#                                                 customized) was replaced by
+#                                                 the #16923 template (below)
+#
+# Superseded, when present in THIS checkout, by tools/git-hooks/pre-commit
+# (#16923): the same branch guard, chained into formatter dispatch, and
+# installed separately by scripts/install-git-hooks.sh (#11598) -- the
+# authoritative source for that file. "Is the installed hook already this
+# newer template" is answered below by diffing the installed hook against
+# tools/git-hooks/pre-commit's OWN tracked content, never by grepping the
+# installed hook for a marker string: a string check is exactly what broke
+# this (found in review on PR #16938, before #16923 merged). The old
+# `grep -q "Issue #1689"` below existed only to identify the WRAPPER; the
+# #16923 hook is neither the wrapper nor a raw `pre-commit install`-generated
+# hook, so it satisfied the "does not contain the marker" branch too and got
+# silently swapped for the wrapper on the very next checkout, discarding the
+# formatter dispatch this hook exists to run -- AC2 ("the Target Branch Guard
+# must not be traded away for the formatter") held only inside #16923's own
+# test fixture, which has no post-checkout hook present, never in a real
+# checkout with both hooks installed. Content-diffing against the real
+# tracked template instead means any future edit to tools/git-hooks/pre-commit
+# -- wording, sections, anything -- is picked up automatically here with
+# nothing to keep in sync.
 WRAPPER_SRC="$GIT_ROOT/scripts/hooks/pre-commit-branch-guard-wrapper"
-if [ -d "$HOOKS_DIR" ] && [ -f "$WRAPPER_SRC" ]; then
+NEW_PRECOMMIT_SRC="$GIT_ROOT/tools/git-hooks/pre-commit"
+
+if [ -d "$HOOKS_DIR" ] && [ -f "$NEW_PRECOMMIT_SRC" ]; then
+    # tools/git-hooks/pre-commit exists in this checkout, so it -- not the
+    # older wrapper -- is what .git/hooks/pre-commit is kept in sync with.
+    # Self-synced the same way section 6 below keeps post-checkout itself
+    # current: copy over whenever the two differ (mod the flock block
+    # injected separately in step 5), so a fresh clone, a genuinely stale
+    # hook, AND a stale copy of an older tools/git-hooks/pre-commit all
+    # converge on the current template through the one comparison -- a
+    # truly outdated/foreign hook still gets replaced, it is just replaced
+    # with the modern branch-guard-plus-formatter-dispatch template instead
+    # of the older branch-guard-only wrapper.
+    PRECOMMIT_HOOK="$HOOKS_DIR/pre-commit"
+    # Backup for whatever this branch supersedes -- named for what it
+    # supersedes (the pre-#16923 state), same pattern the wrapper-swap
+    # branch below uses for what IT supersedes
+    # (pre-commit -> pre-commit.pre-commit-framework).
+    BACKUP_HOOK="$HOOKS_DIR/pre-commit.pre-formatter-dispatch"
+
+    # Never clobber a hook `pre-commit install` generated itself (parity
+    # with scripts/install-git-hooks.sh's own exception, #11598): that hook
+    # already runs the full quality suite AND the target-branch-guard local
+    # hook from .pre-commit-config.yaml -- a superset of this template.
+    if [ ! -f "$PRECOMMIT_HOOK" ] || ! grep -q "generated by pre-commit" "$PRECOMMIT_HOOK" 2>/dev/null; then
+        _installed_precommit=""
+        if [ -f "$PRECOMMIT_HOOK" ]; then
+            _installed_precommit=$(sed '/^# --- AUTOBOT_FLOCK/,/^# --- END AUTOBOT_FLOCK/d' "$PRECOMMIT_HOOK")
+        fi
+        if [ "$_installed_precommit" != "$(cat "$NEW_PRECOMMIT_SRC")" ]; then
+            # Whatever is installed here is neither this template
+            # (byte-identical, just ruled out above) nor a real
+            # pre-commit-framework-generated hook (ruled out by the
+            # containing `if`) -- it is either the OLD branch-guard-only
+            # wrapper (#1689) on a first-time #16923 upgrade, or a
+            # developer's hand-customized hook. Either way it must not be
+            # silently destroyed (found in review on PR #16938): move it
+            # aside before the template replaces it.
+            if [ -f "$PRECOMMIT_HOOK" ]; then
+                mv "$PRECOMMIT_HOOK" "$BACKUP_HOOK"
+            fi
+            cp "$NEW_PRECOMMIT_SRC" "$PRECOMMIT_HOOK"
+            chmod +x "$PRECOMMIT_HOOK"
+        fi
+    fi
+elif [ -d "$HOOKS_DIR" ] && [ -f "$WRAPPER_SRC" ]; then
+    # tools/git-hooks/pre-commit does not exist in this checkout (a branch
+    # or tag from before #16923) -- fall back to the original wrapper-based
+    # install/update behaviour unchanged.
     PRECOMMIT_HOOK="$HOOKS_DIR/pre-commit"
     FRAMEWORK_HOOK="$HOOKS_DIR/pre-commit.pre-commit-framework"
 
