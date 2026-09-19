@@ -24,12 +24,11 @@ from api.schemas_system import (
     FailureAnalysisResponse,
 )
 from api.system_health import register_singleton_probe
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from services.causal_inference_engine import CausalInferenceEngine
-
-from auth_middleware import get_current_user
 
 logger = get_logger(__name__)
 

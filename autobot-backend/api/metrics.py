@@ -24,13 +24,12 @@ from api.schemas_analytics import (
     MetricsSystemSummaryResponse,
     MetricsWorkflowResponse,
 )
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
-
-from auth_middleware import check_admin_permission, get_current_user
 
 logger = get_logger(__name__)
 
