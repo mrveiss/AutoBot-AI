@@ -113,7 +113,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/knowledge_connectors.py": 929,
     "autobot-backend/api/knowledge_maintenance.py": 1979,
     "autobot-backend/api/knowledge_mcp.py": 1455,
-    "autobot-backend/api/knowledge_population.py": 1546,
+    "autobot-backend/api/knowledge_population.py": 1524,
     "autobot-backend/api/knowledge_search.py": 820,  # #16665: analytics endpoints moved out
     "autobot-backend/api/knowledge_search_aggregator.py": 951,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
@@ -353,7 +353,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/knowledge/doc_indexer.py": 1274,
     "autobot-backend/services/knowledge/service.py": 851,
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
-    "autobot-backend/services/knowledge/test_doc_indexer.py": 1486,
+    "autobot-backend/services/knowledge/test_doc_indexer.py": 1468,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1216,
     "autobot-backend/services/llm_service.py": 1206,
@@ -456,7 +456,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/api/roles.py": 691,
     "autobot-slm-backend/api/security.py": 962,
     "autobot-slm-backend/api/services.py": 1208,
-    "autobot-slm-backend/api/setup_wizard.py": 1354,
+    "autobot-slm-backend/api/setup_wizard.py": 1352,
     "autobot-slm-backend/api/stateful.py": 688,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1129,
@@ -516,7 +516,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "repo_tests/enum_union_guard_test.py": 801,
     "repo_tests/sync_deletions_ansible_wiring_16310_test.py": 674,  # #16310
     "repo_tests/sys_modules_leak_guard.py": 1164,
-    "scripts/audit_api_wiring.py": 897,
+    "scripts/audit_api_wiring.py": 895,  # #16816: reporting moved to dead_surface.py
 }
 
 #: Entries annotated by hand as live, tracked violations rather than #5060's

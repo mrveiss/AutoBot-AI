@@ -9085,6 +9085,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/import_claude_memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Claude Memory Endpoint
+         * @description Queue import of Claude Code auto-memory files into knowledge_facts (#16642).
+         *
+         *     Always imports from the configured memory directory (#16642 security
+         *     review: no caller-supplied path — nothing to confine or validate).
+         *     Returns immediately with task_id. Use /import_claude_memory/status/{task_id} to poll.
+         */
+        post: operations["import_claude_memory_endpoint_api_knowledge_base_import_claude_memory_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/import_claude_memory/status/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Import Claude Memory Status
+         * @description Poll the status of a background Claude Code memory import task (#16642).
+         */
+        get: operations["get_import_claude_memory_status_api_knowledge_base_import_claude_memory_status__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/api/knowledge/facts/{fact_id}/share": {
         parameters: {
             query?: never;
@@ -53280,12 +53324,15 @@ export interface paths {
         };
         /**
          * Quota Windows
-         * @description Return provider quota window structures for all configured providers.
+         * @description Return provider quota window structures, with real observed headroom (#16951, #15026).
          *
          *     Each entry describes the rate-limit windows applicable to the provider
          *     (e.g. RPM + TPM for OpenAI; 5-hour + 7-day output token windows for
-         *     Anthropic).  Actual headroom values require provider API key configuration
-         *     and are populated by the quota monitor (phase 3).
+         *     Anthropic), plus whatever ``QuotaHeadroomStore`` has actually observed for
+         *     it — the provider's own rate-limit response headers and 429s, recorded by
+         *     ``llm_shared/rate_limit_backoff.py`` on every LLM call. A window with no
+         *     reading yet reports none rather than a fabricated zero: "never observed"
+         *     and "confirmed empty" are different facts.
          */
         get: operations["quota_windows_api_llc_costs_quota_windows_get"];
         put?: never;
@@ -89425,6 +89472,35 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * QuotaHeadroomReading
+         * @description One observed headroom reading for a provider's rate-limit window.
+         *
+         *     Sourced from ``QuotaHeadroomStore`` (#15026), which records what the
+         *     provider itself reported (rate-limit response headers, a 429's
+         *     ``retry-after``) — never a computed guess.
+         */
+        QuotaHeadroomReading: {
+            /** Window */
+            window: string;
+            /** Limit */
+            limit?: number | null;
+            /** Remaining */
+            remaining?: number | null;
+            /** Utilization */
+            utilization?: number | null;
+            /** Resets At */
+            resets_at?: number | null;
+            /** Observed At */
+            observed_at?: number | null;
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * QuotaWindow
          * @description Quota headroom for one provider.
          */
@@ -89435,10 +89511,9 @@ export interface components {
             windows: string[];
             /** Description */
             description: string;
-            /**
-             * Note
-             * @default Headroom values require provider API key configuration to populate.
-             */
+            /** Headroom */
+            headroom?: components["schemas"]["QuotaHeadroomReading"][];
+            /** Note */
             note: string;
         } & {
             [key: string]: unknown;
@@ -116218,6 +116293,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScanManPagesChangesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_claude_memory_endpoint_api_knowledge_base_import_claude_memory_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskQueuedResponse"];
+                };
+            };
+        };
+    };
+    get_import_claude_memory_status_api_knowledge_base_import_claude_memory_status__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskStatusResponse"];
                 };
             };
             /** @description Validation Error */
