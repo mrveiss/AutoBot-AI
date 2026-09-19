@@ -39,6 +39,7 @@ import numpy as np
 from autobot_shared.logging_manager import get_logger
 from media.document.extraction import DocumentExtractionError, extract_docx, extract_pdf
 from media.document.provenance import TABLE_SECTION_MARKER, render_tables, render_text_and_tables
+from media.document.zip_formats import SUFFIX_BY_FORMAT, sniff_zip_format
 
 logger = get_logger(__name__)
 
@@ -93,7 +94,9 @@ class DocumentExtractor:
     SUPPORTED_FORMATS = {
         "pdf": [".pdf"],
         "docx": [".docx", ".doc"],
-        "text": [".txt", ".md", ".rst", ".markdown", ".text"],
+        # #16785: .csv joins this group -- the GUI upload path (api/knowledge.py
+        # _extract_file_content) treats it as plain text too, not a table format.
+        "text": [".txt", ".md", ".rst", ".markdown", ".text", ".csv"],
         # #14333: spreadsheets, presentations and OpenDocument formats, parsed by
         # DocumentParser. Listed here so get_supported_extensions() and
         # is_supported_format() — which drive directory discovery — agree with
@@ -101,6 +104,11 @@ class DocumentExtractor:
         # and a discovery pass that skips a format the extractor supports is a
         # silently smaller ingest, not an error anyone sees.
         "office": [".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".odg"],
+        # #16785: same divergence as "office" above, for the two structured/markup
+        # formats the GUI upload path (api/knowledge.py) already handles specially
+        # rather than as plain text.
+        "json": [".json"],
+        "html": [".html"],
     }
 
     @staticmethod
@@ -247,7 +255,10 @@ class DocumentExtractor:
         Supported formats:
         - .pdf: PDF documents
         - .docx, .doc: Microsoft Word documents
-        - .txt, .md, .rst, .markdown, .text: Plain text/Markdown/reStructuredText
+        - .txt, .md, .rst, .markdown, .text, .csv: Plain text
+        - .json: re-serialised with indent=2 (#16785)
+        - .html: sanitised via api.knowledge._sanitize_html_content (#16785)
+        - .xlsx, .ppt, .pptx, .odt, .ods, .odp, .odg: via DocumentParser
 
         Args:
             file_path: Path to file
@@ -267,6 +278,13 @@ class DocumentExtractor:
         file_path = Path(file_path)
         suffix = file_path.suffix.lower()
 
+        # #16773: a ZIP-based document's own members outrank a wrong name. Only the route
+        # changes here; each parser still reads the file itself.
+        verified = SUFFIX_BY_FORMAT.get(await asyncio.to_thread(sniff_zip_format, file_path) or "")
+        if verified and verified != suffix:
+            logger.info("Routing %s as %s: its content disagrees with its name", file_path.name, verified)
+            suffix = verified
+
         # Route based on file extension
         if suffix in DocumentExtractor.SUPPORTED_FORMATS["pdf"]:
             return await DocumentExtractor.extract_from_pdf(file_path)
@@ -281,6 +299,10 @@ class DocumentExtractor:
             # both routes bottom out in media/document/extraction.py for PDF and
             # DOCX, so nothing is forked here.
             return await DocumentExtractor.extract_from_office(file_path)
+        elif suffix in DocumentExtractor.SUPPORTED_FORMATS["json"]:
+            return await DocumentExtractor.extract_from_json(file_path)
+        elif suffix in DocumentExtractor.SUPPORTED_FORMATS["html"]:
+            return await DocumentExtractor.extract_from_html(file_path)
         else:
             raise ValueError(
                 f"Unsupported file type: {suffix}. "
@@ -305,6 +327,49 @@ class DocumentExtractor:
         if not metadata.get("extraction_success", False):
             raise ValueError(f"Failed to parse {file_path.name}: {metadata.get('extraction_error', 'unknown error')}")
         return text
+
+    @staticmethod
+    async def extract_from_json(file_path: str | Path) -> str:
+        """Extract text from a JSON file, matching the GUI upload path exactly (#16785).
+
+        Valid JSON is re-serialised with indent=2 so its structure survives
+        embedding; invalid-but-decodable JSON falls back to the raw text. Bytes
+        that are not valid UTF-8 raise UnicodeDecodeError rather than being
+        replaced -- api/knowledge.py's upload path has the same behavior, since
+        its fallback decode only runs after a JSONDecodeError, not a
+        UnicodeDecodeError.
+        """
+        file_path = Path(file_path)
+        if not await asyncio.to_thread(file_path.exists):
+            raise FileNotFoundError(f"JSON file not found: {file_path}")
+
+        async with aiofiles.open(file_path, "rb") as f:
+            raw = await f.read()
+        try:
+            return json.dumps(json.loads(raw.decode("utf-8")), indent=2)
+        except json.JSONDecodeError:
+            return raw.decode("utf-8", errors="replace")
+
+    @staticmethod
+    async def extract_from_html(file_path: str | Path) -> str:
+        """Extract text from an HTML file via the GUI upload path's sanitiser (#16785).
+
+        Reuses api.knowledge._sanitize_html_content rather than a second
+        sanitiser. Imported at call time: this module is reusable by any
+        component, and api.knowledge (a FastAPI router module) is not a
+        dependency a plain-text extraction should carry for callers who never
+        touch HTML.
+        """
+        from api.knowledge import _sanitize_html_content
+
+        file_path = Path(file_path)
+        if not await asyncio.to_thread(file_path.exists):
+            raise FileNotFoundError(f"HTML file not found: {file_path}")
+
+        async with aiofiles.open(file_path, "rb") as f:
+            raw = await f.read()
+        content, _title = _sanitize_html_content(raw.decode("utf-8", errors="replace"))
+        return content
 
     @staticmethod
     async def _validate_directory(directory_path: Path) -> None:
