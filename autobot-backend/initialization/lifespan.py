@@ -31,6 +31,7 @@ from autobot_shared.tracing import (
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
 from config.manager import get_config_manager
+from initialization import agent_presence_sync
 from initialization import lifespan_shutdown as shutdown_steps
 from initialization.neural_mesh_wiring import wire_neural_mesh_components
 from initialization.startup_error_file import persist_startup_error
@@ -132,10 +133,7 @@ def configure_logging():
 
 
 async def _init_cache_coordinator() -> None:
-    """Register caches with CacheCoordinator for memory optimization.
-
-    Helper for initialize_critical_services (Issue #743).
-    """
+    """Register caches with CacheCoordinator for memory optimization."""
     logger.info("✅ [ 55%] Cache: Registering caches with CacheCoordinator...")
     try:
         from cache import register_all_caches
@@ -1253,7 +1251,6 @@ async def _init_memory_graph(app: FastAPI):
         await update_app_state("memory_graph", memory_graph)
         logger.info("✅ [ 85%] Memory Graph: Memory graph initialized successfully")
 
-        # Initialize dependent services (Issue #281: uses helpers)
         await _init_graph_rag_service(app, memory_graph)
         await _init_entity_extractor(app, memory_graph)
 
@@ -2057,6 +2054,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_trigger_service(app)
         await _init_slm_reconciler(app)
         await _init_metrics_collection(app)
+        await agent_presence_sync.start(app)
         await _recover_index_queue()
         await _ensure_agent_memory_index()
         await _init_process_adapter(app)

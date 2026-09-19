@@ -52,7 +52,7 @@ from api.schemas_analytics import (
 from api.schemas_analytics_collector import AnalyticsPerformanceMetricsResponse, AnalyticsUsageStatisticsResponse
 
 # Import controller class (extracted from this file - Issue #212)
-from api.ws_security import enforce_ws_origin
+from api.ws_security import open_authenticated_ws
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -680,9 +680,8 @@ async def _realtime_loop_iteration(websocket: WebSocket) -> tuple[bool, bool]:
 )
 async def websocket_realtime_analytics(websocket: WebSocket):
     """WebSocket endpoint for real-time analytics streaming"""
-    if not await enforce_ws_origin(websocket):
+    if not await open_authenticated_ws(websocket):  # #17009
         return
-    await websocket.accept()
     analytics_state["websocket_connections"].add(websocket)
 
     try:
@@ -1103,9 +1102,8 @@ async def _live_analytics_loop_iteration(
 )
 async def websocket_live_analytics(websocket: WebSocket):
     """Enhanced WebSocket endpoint for live analytics with multiple channels"""
-    if not await enforce_ws_origin(websocket):
+    if not await open_authenticated_ws(websocket):  # #17009
         return
-    await websocket.accept()
     analytics_state["websocket_connections"].add(websocket)
 
     try:

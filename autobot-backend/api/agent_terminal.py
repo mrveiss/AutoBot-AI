@@ -251,9 +251,8 @@ async def create_agent_terminal_session(
             f"Must be one of: {[role.name.lower() for role in AgentRole]}",
         )
 
-    # Create session
-    # Issue #14989: thread the authenticated creator through as owner, so the
-    # terminal WebSocket ownership gate (#14960) recognises them.
+    # owner (#14989/#14960) and tenant_id (#16975) both come from the JWT only --
+    # owner names the WebSocket ownership gate, tenant_id its org_id claim.
     session = await service.create_session(
         agent_id=request.agent_id,
         agent_role=agent_role,
@@ -261,6 +260,7 @@ async def create_agent_terminal_session(
         host=request.host,
         metadata=request.metadata,
         owner=current_user.get("username"),
+        tenant_id=current_user.get("org_id"),
     )
 
     return {

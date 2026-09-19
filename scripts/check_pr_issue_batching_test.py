@@ -2,12 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for the same-scope batching gate (#15492).
+"""Tests for the same-scope batching gate (#15492, vehicle-aware since #17128).
 
 Each case here fails when the element it names is removed from
 ``check_pr_issue_batching.py``. The mutation matrix is recorded in the PR body:
 inverting the ``>= 2`` comparison reddens the batched case, and deleting the
 rationale detection reddens the rationale case.
+
+#17128: a single-issue or closes-nothing PR no longer fails the check -- it
+still gets the identical guidance, now as a ``::warning::`` annotation with
+exit 0. A vehicle (branch name or member table) passes outright regardless of
+how many issues it closes or refs. Tests below that used to assert ``not
+ok``/``not check(...)[0]`` for those two cases now assert ``ok`` plus the
+``::warning::`` annotation; the guidance text itself is unchanged and still
+checked.
 """
 
 from __future__ import annotations
@@ -24,8 +32,10 @@ from check_pr_issue_batching import (  # noqa: E402
     check,
     closing_issues,
     exemption,
+    is_vehicle,
     referenced_issues,
     single_issue_rationale,
+    warning_annotation,
 )
 
 TWO = "Closes #15178, #15173\n"
@@ -33,6 +43,19 @@ ONE = "Closes #15178\n"
 # The shape issue decomposition asks every child PR to write: one delivered
 # issue plus the umbrella it belongs to (#16795).
 UMBRELLA = "Closes #16775\nRefs #16772\n"
+# Real vehicle body shapes (#17128), from #17077 and #17095 respectively.
+VEHICLE_MEMBER_TABLE = (
+    "## What Changed\n\n"
+    "| Member | Head | Delivers |\n"
+    "|---|---|---|\n"
+    "| #16930 | 365ae7db4 | the chat RAG path runs the content firewall |\n"
+)
+VEHICLE_PR_TABLE = (
+    "## What Changed\n\n"
+    "| PR | Head | Closes | Title |\n"
+    "|---|---|---|---|\n"
+    "| #17093 | 23139d62e | - | fix(kb): thing |\n"
+)
 
 
 class TestReferenceCounting:
@@ -96,19 +119,24 @@ class TestTheRuleItself:
         assert ok, message
         assert "#15173" in message and "#15178" in message
 
-    def test_one_issue_fails_and_the_error_names_the_escape_hatch(self) -> None:
+    def test_one_issue_passes_advisory_and_names_the_escape_hatch(self) -> None:
+        """#17128: no rationale no longer fails -- it warns and exits 0."""
         ok, message = check(ONE)
-        assert not ok
+        assert ok, message
+        assert message.startswith("::warning::")
         assert "Single-issue rationale:" in message, message
 
-    def test_one_issue_with_a_rationale_passes(self) -> None:
+    def test_one_issue_with_a_rationale_passes_with_no_warning(self) -> None:
         ok, message = check(ONE + "Single-issue rationale: the other half is blocked on #15043\n")
         assert ok, message
+        assert "::warning::" not in message
         assert "blocked on #15043" in message
 
-    def test_a_blank_rationale_does_not_pass(self) -> None:
+    def test_a_blank_rationale_still_gets_the_advisory(self) -> None:
         """An empty line satisfies the grep but not the requirement."""
-        assert not check(ONE + "Single-issue rationale:   \n")[0]
+        ok, message = check(ONE + "Single-issue rationale:   \n")
+        assert ok, message
+        assert "::warning::" in message
 
     def test_no_reference_is_left_to_the_other_gate(self) -> None:
         ok, message = check("## What Changed\nnothing linked here\n")
@@ -176,7 +204,9 @@ class TestRationaleAsAHeading:
         """
         body = ONE + "## Single-issue rationale\n\n## What Changed\n\nunrelated prose\n"
         assert single_issue_rationale(body) is None
-        assert not check(body)[0]
+        ok, message = check(body)
+        assert ok, message
+        assert "::warning::" in message
 
     def test_a_heading_at_the_end_of_the_body_is_not_a_rationale(self) -> None:
         assert single_issue_rationale(ONE + "## Single-issue rationale\n\n") is None
@@ -224,7 +254,9 @@ class TestARationaleMayOpenWithAnIssueReference:
         let an empty section borrow the next section's text."""
         body = ONE + "## Single-issue rationale\n\n## What Changed\n\nunrelated prose\n"
         assert single_issue_rationale(body) is None
-        assert not check(body)[0]
+        ok, message = check(body)
+        assert ok, message
+        assert "::warning::" in message
 
     def test_a_single_hash_heading_still_ends_the_section(self) -> None:
         body = ONE + "## Single-issue rationale\n\n# What Changed\n\nunrelated prose\n"
@@ -236,30 +268,32 @@ class TestARationaleMayOpenWithAnIssueReference:
         assert single_issue_rationale(ONE + "## Single-issue rationale\n\n#x\n") == "#x"
 
 
-class TestTheFailureNamesWhichFailureItIs:
+class TestTheAdvisoryNamesWhichCaseItIs:
     """ "No section" and "section present but empty" want opposite fixes (#16104).
 
-    A red only self-corrects when it names its real cause. Reporting "add a
-    section" to an author who added one is what made the previous defect
-    invisible: the misleading hint routed every author to a workaround instead
-    of to the parser.
+    A vague message only self-corrects when it names its real cause. Reporting
+    "add a section" to an author who added one is what made the previous
+    defect invisible: the misleading hint routed every author to a workaround
+    instead of to the parser. #17128 made this advisory (``::warning::``,
+    exit 0), but the underlying guidance text -- and its need to distinguish
+    these two states -- did not change.
     """
 
     def test_a_missing_section_gets_the_how_to_add_one_hint(self) -> None:
         ok, message = check(ONE)
-        assert not ok
-        assert message == RATIONALE_HINT
+        assert ok, message
+        assert message == warning_annotation(RATIONALE_HINT)
 
     def test_an_empty_section_says_so_and_quotes_the_terminating_line(self) -> None:
         ok, message = check(ONE + "## Single-issue rationale\n\n## What Changed\n\nprose\n")
-        assert not ok
-        assert message != RATIONALE_HINT
+        assert ok, message
+        assert message != warning_annotation(RATIONALE_HINT)
         assert "present but reads as empty" in message
         assert "## What Changed" in message, "the author cannot see what ended the parse"
 
     def test_a_section_with_nothing_at_all_beneath_it_says_so(self) -> None:
         ok, message = check(ONE + "## Single-issue rationale\n")
-        assert not ok
+        assert ok, message
         assert "no prose" in message
 
 
@@ -282,12 +316,13 @@ class TestOnlyDeliveryCountsAsBatching:
             assert closing_issues(f"{word} #42") == {"42"}, word
             assert referenced_issues(f"{word} #42") == {"42"}, word
 
-    def test_the_umbrella_shape_now_needs_a_rationale(self) -> None:
+    def test_the_umbrella_shape_now_gets_an_advisory_without_a_rationale(self) -> None:
         """#16788's exact body shape, which passed with nothing asked of it."""
         assert referenced_issues(UMBRELLA) == {"16775", "16772"}
         assert closing_issues(UMBRELLA) == {"16775"}
         ok, message = check(UMBRELLA)
-        assert not ok, message
+        assert ok, message
+        assert "::warning::" in message
         assert "Single-issue rationale:" in message
 
     def test_the_umbrella_shape_passes_once_the_reason_is_given(self) -> None:
@@ -314,10 +349,12 @@ class TestOnlyDeliveryCountsAsBatching:
         assert "#16772" not in message, "the umbrella is not something this PR delivers"
 
     def test_mentions_alone_never_add_up_to_a_batch(self) -> None:
-        """Two `Refs` deliver nothing, so the rule still applies."""
+        """Two `Refs` deliver nothing, so the rule still applies -- as an advisory."""
         body = "Refs #15178\nPart of #15173\n"
         assert closing_issues(body) == set()
-        assert not check(body)[0]
+        ok, message = check(body)
+        assert ok, message
+        assert "::warning::" in message
 
     def test_a_body_with_no_link_at_all_is_still_the_other_gate_s_problem(self) -> None:
         """The split must not turn a mention-only body into an unlinked one."""
@@ -334,28 +371,29 @@ class TestAClosesNothingPrIsNotToldItDeliversOne:
     was delivered and that the only issue named was not a delivered one, so the
     true number -- zero -- appeared nowhere. Observed on #16834.
 
-    These assert the wording only. Whether such a PR should need a rationale at
-    all is open on #16855; the verdict tests below pin that this change did not
-    quietly answer it.
+    These assert the wording only. #16855 left open whether such a PR should
+    need a rationale at all; #17128 answers it by making the requirement
+    advisory rather than settling it either way -- the guidance is still
+    printed, it just no longer blocks the PR.
     """
 
     REFS_ONLY = "Refs #16803\n"
 
-    def test_the_failure_does_not_claim_one_delivered_issue(self) -> None:
+    def test_the_advisory_does_not_claim_one_delivered_issue(self) -> None:
         ok, message = check(self.REFS_ONLY)
-        assert not ok
+        assert ok, message
         assert "delivers exactly one issue" not in message
 
-    def test_the_failure_says_the_pr_closes_nothing(self) -> None:
+    def test_the_advisory_says_the_pr_closes_nothing(self) -> None:
         _, message = check(self.REFS_ONLY)
         assert "closes no issue" in message
 
-    def test_the_failure_names_the_issue_it_does_link(self) -> None:
+    def test_the_advisory_names_the_issue_it_does_link(self) -> None:
         """Without the number the author cannot tell which link was discounted."""
         _, message = check(self.REFS_ONLY)
         assert "#16803" in message
 
-    def test_the_two_failure_texts_are_not_the_same(self) -> None:
+    def test_the_two_advisory_texts_are_not_the_same(self) -> None:
         """The guard against collapsing them again -- the #16793 shape.
 
         A closes-one PR and a closes-nothing PR want different sentences; if
@@ -366,7 +404,7 @@ class TestAClosesNothingPrIsNotToldItDeliversOne:
         assert closes_nothing != closes_one
 
     def test_a_closing_pr_still_gets_the_unchanged_hint(self) -> None:
-        assert check(ONE)[1] == RATIONALE_HINT
+        assert check(ONE)[1] == warning_annotation(RATIONALE_HINT)
 
     def test_the_hint_forms_are_still_offered_to_both(self) -> None:
         """Rewording must not cost the author the how-to-fix half."""
@@ -376,20 +414,81 @@ class TestAClosesNothingPrIsNotToldItDeliversOne:
             assert "## Single-issue rationale" in message
 
 
-class TestTheVerdictIsUnchangedByTheRewording:
-    """#16855 changed wording, not policy. The open question -- whether a PR
-    that closes nothing should need a rationale -- stays open, so every verdict
-    here must match the behaviour before the change."""
+class TestTheAdvisorySupersedesTheOpenQuestion:
+    """#16855 changed wording, not policy, and left open whether a closes-
+    nothing PR should need a rationale at all. #17128 resolves that by making
+    both closes-nothing and single-issue advisory rather than blocking --
+    the guidance still prints, but neither case can fail the check any more.
+    A real batch, an exempt PR, and an unlinked body are unaffected.
+    """
 
-    def test_a_closes_nothing_pr_with_no_rationale_still_fails(self) -> None:
-        assert not check("Refs #16803\n")[0]
+    def test_a_closes_nothing_pr_with_no_rationale_gets_a_warning_not_a_failure(self) -> None:
+        ok, message = check("Refs #16803\n")
+        assert ok, message
+        assert "::warning::" in message
 
-    def test_a_closes_nothing_pr_with_a_rationale_still_passes(self) -> None:
+    def test_a_closes_nothing_pr_with_a_rationale_still_passes_silently(self) -> None:
         body = "Refs #16803\nSingle-issue rationale: docs only, delivers nothing\n"
-        assert check(body)[0]
+        ok, message = check(body)
+        assert ok, message
+        assert "::warning::" not in message
 
     def test_a_batched_pr_is_still_batched(self) -> None:
         assert check(TWO)[0]
 
     def test_a_body_with_no_link_is_still_the_other_gate_s_problem(self) -> None:
         assert check("## What Changed\nnothing linked\n")[0]
+
+
+class TestVehiclePrsPassOutright:
+    """#17128: batching moved to per-landing vehicles, so a vehicle PR is not
+    subject to the single-issue rule that governs how a PR is authored --
+    it passes regardless of how many issues it closes or refs, with a
+    one-line notice naming the counts.
+    """
+
+    def test_a_vehicle_branch_with_refs_only_passes(self) -> None:
+        """#17095's exact shape: a member table, no top-level `Closes`, only `Refs`."""
+        body = VEHICLE_PR_TABLE + "\nRefs #16709, #16335, #16375, #13034.\n"
+        assert closing_issues(body) == set()
+        ok, message = check(body, branch="vehicle-v090-2026-09-19-batch2")
+        assert ok, message
+        assert "::warning::" not in message
+        assert "closes 0 issue(s)" in message
+        assert "refs 4 issue(s)" in message
+
+    def test_a_vehicle_branch_with_a_closes_list_passes(self) -> None:
+        ok, message = check(TWO, branch="vehicle-v090-2026-09-18-ansible")
+        assert ok, message
+        assert "closes 2 issue(s)" in message
+        assert "#15173" in message and "#15178" in message
+
+    def test_a_vehicle_branch_closing_nothing_still_passes(self) -> None:
+        """The single-issue/closes-nothing advisory does not apply to vehicles."""
+        ok, message = check("no issue reference at all\n", branch="vehicle-empty-table")
+        assert ok, message
+        assert "::warning::" not in message
+        assert "closes 0 issue(s)" in message
+
+    def test_the_member_table_alone_is_recognised_without_a_vehicle_branch(self) -> None:
+        """#17077's exact table shape, on an ordinary branch name."""
+        assert is_vehicle("issue-16930-rag-firewall", VEHICLE_MEMBER_TABLE)
+        ok, message = check(ONE + "\n" + VEHICLE_MEMBER_TABLE, branch="issue-16930-rag-firewall")
+        assert ok, message
+        assert "::warning::" not in message
+
+    def test_the_pr_table_alone_is_recognised_without_a_vehicle_branch(self) -> None:
+        """#17095's exact table shape."""
+        assert is_vehicle("chore-batch2", VEHICLE_PR_TABLE)
+
+    def test_branch_name_matching_is_case_insensitive(self) -> None:
+        assert is_vehicle("Vehicle-V090-Batch3", "")
+
+    def test_an_ordinary_pr_mentioning_pr_and_head_in_prose_is_not_a_vehicle(self) -> None:
+        """The word "PR" and "head" appear in plenty of normal bodies -- only a
+        real pipe-delimited table header should trigger vehicle detection."""
+        body = "This PR moves the head of the branch forward.\n"
+        assert not is_vehicle("issue-1", body)
+
+    def test_a_non_vehicle_branch_with_no_table_is_not_a_vehicle(self) -> None:
+        assert not is_vehicle("issue-16930-rag-firewall", ONE)

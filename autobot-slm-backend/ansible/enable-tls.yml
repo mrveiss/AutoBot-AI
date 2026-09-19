@@ -116,14 +116,19 @@
       ansible.builtin.systemd:
         daemon_reload: true
 
-    # #10084: rebuild the SPA so the new VITE_API_BASE_URL is baked into dist/.
-    # Defined before "restart frontend" so both fire in order when notified.
+    # #10084: rebuild the SPA so the new VITE_API_BASE_URL is baked into
+    # dist/. Defined before "restart frontend" so both fire in order when
+    # notified. #15603: staged build-then-swap (#15557, #15610's mechanism)
+    # — a failed rebuild here used to empty the served directory and then
+    # still hand off to "restart frontend" below with nothing to serve.
     - name: rebuild frontend
-      ansible.builtin.command:
-        cmd: npx vite build
-        chdir: /opt/autobot/autobot-frontend
-      become: true
-      become_user: autobot
+      ansible.builtin.include_tasks: roles/_shared/tasks/build_publish_slm_frontend.yml
+      vars:
+        slm_frontend_publish_label: "TLS rebuild (user frontend)"
+        slm_frontend_publish_dir: /opt/autobot/autobot-frontend
+        slm_frontend_publish_user: autobot
+        slm_frontend_publish_build_script: "build"
+        slm_frontend_publish_build_env: {}
 
     - name: restart frontend
       ansible.builtin.systemd:

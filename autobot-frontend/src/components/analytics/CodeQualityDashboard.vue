@@ -461,6 +461,7 @@ import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars';
 import { useWebSocket } from '@/composables/useWebSocket';
+import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl';
 import { useCodeQualityData } from '@/composables/analytics/useCodeQualityData';
 import type { QualityDrillDown } from '@/composables/analytics/useCodeQualityData';
 import { useUnwiredTrackers } from '@/composables/analytics/useUnwiredTrackers';
@@ -608,6 +609,8 @@ const {
   connect: wsConnect,
 } = useWebSocket(_qualityWsUrl, {
   autoConnect: false,
+  // #17009: the endpoint authenticates; the token travels as the bearer subprotocol (#16457)
+  protocols: () => buildAuthenticatedWsSubprotocols() ?? undefined,
   autoReconnect: true,
   reconnectDelay: 5000,
   maxReconnectAttempts: 0,

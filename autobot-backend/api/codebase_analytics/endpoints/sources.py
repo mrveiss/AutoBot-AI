@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.security.safe_response import safe_error_reason
 from security.secrets_store_errors import SecretsStoreUnavailable
 
 from .. import source_service
@@ -79,11 +80,7 @@ def _sanitize_git_error(message: str) -> str:
 
 
 async def _run_git_clone(url: str, dest: str, branch: str) -> str:
-    """Clone a repo shallowly. Returns stderr on failure.
-
-    A 120-second timeout prevents the background task from hanging
-    indefinitely on large repos or network issues (#3092).
-    """
+    """Clone a repo shallowly. Returns stderr on failure (#3092: a 120s timeout guards large-repo/network hangs)."""
     proc = await asyncio.create_subprocess_exec(
         "git",
         "clone",
@@ -107,11 +104,7 @@ async def _run_git_clone(url: str, dest: str, branch: str) -> str:
 
 
 async def _run_git_pull(clone_path: str) -> str:
-    """Pull latest changes in an existing clone. Returns stderr on failure.
-
-    A 120-second timeout prevents the background task from hanging
-    indefinitely on network issues (#3092).
-    """
+    """Pull latest changes in an existing clone. Returns stderr on failure (#3092: a 120s timeout guards hangs)."""
     proc = await asyncio.create_subprocess_exec(
         "git", "-C", clone_path, "pull", "--ff-only", stderr=asyncio.subprocess.PIPE, env=scrubbed_git_env()
     )
@@ -145,9 +138,16 @@ async def _do_sync(source: CodeSource) -> None:
                 err = await _run_git_pull(clone_path)
             else:
                 if clone_dir.is_dir():
-                    shutil.rmtree(clone_path, ignore_errors=True)
-                clone_dir.mkdir(parents=True, exist_ok=True)
-                err = await _run_git_clone(url, clone_path, source.branch)
+                    try:
+                        shutil.rmtree(clone_path)
+                    except OSError as rmtree_exc:
+                        # #17036: a swallowed failure here left a stale directory
+                        # that the next clone attempt would silently write into.
+                        logger.error("Failed to clear stale clone dir %s: %s", clone_path, rmtree_exc)
+                        err = f"Could not clear existing clone directory: {safe_error_reason(rmtree_exc)}"
+                if not err:
+                    clone_dir.mkdir(parents=True, exist_ok=True)
+                    err = await _run_git_clone(url, clone_path, source.branch)
 
         if err:
             source.status = SourceStatus.ERROR
@@ -385,7 +385,13 @@ async def delete_code_source(source_id: str):
     if source is None:
         raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
     ok = await delete_source_and_cleanup(source_id, source=source)
-    return JSONResponse({"success": ok, "source_id": source_id})
+    body = {"success": ok, "source_id": source_id}
+    if not ok:
+        # delete_source_and_cleanup() mutates `source` in place on a cleanup
+        # failure (#17036) -- surface it instead of a bare 200/false.
+        body["status"] = source.status.value
+        body["error_message"] = source.error_message
+    return JSONResponse(body)
 
 
 @router.post("/sources/{source_id}/sync")
@@ -459,11 +465,7 @@ async def share_code_source(source_id: str, request: SourceShareRequest):
 
 
 async def _get_last_indexed(source_id: str) -> str | None:
-    """Read last_indexed timestamp from ChromaDB stats metadata.
-
-    Helper for get_source_summary (#1458).
-    Issue #1716: Reads per-source stats doc first, falls back to global.
-    """
+    """Read last_indexed timestamp from ChromaDB stats metadata (#1458) -- per-source doc first, then global (#1716)."""
     try:
         from ..storage import get_code_collection_async
 
@@ -492,11 +494,7 @@ async def _get_last_indexed(source_id: str) -> str | None:
 
 
 async def _get_last_commit(clone_path: str, repo: str | None, is_local: bool = False) -> dict | None:
-    """Read latest git commit info from a clone directory.
-
-    Helper for get_source_summary (#1458).
-    Issue #1756: Allow local source paths outside CODE_SOURCES_BASE.
-    """
+    """Read latest git commit info from a clone dir (#1458) -- allows local paths outside CODE_SOURCES_BASE (#1756)."""
     clone = Path(clone_path)
     if not clone.is_dir():
         return None

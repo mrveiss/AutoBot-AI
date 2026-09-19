@@ -96,14 +96,38 @@
 # the rollback target for the deploy that migrated the node.
 #
 # Contract:
-#   slm_frontend_publish_label  (str) Display label for task names, e.g. "SLM".
-#   slm_frontend_publish_dir    (str) Absolute path of the autobot-slm-frontend
-#                                     package directory (the one holding
-#                                     package.json and the served `current`).
-#   slm_frontend_publish_user   (str) Service account that owns that tree; the
-#                                     build and the flip both run as it, so the
-#                                     published bundle is never root-owned.
+#   slm_frontend_publish_label        (str) Display label for task names, e.g. "SLM".
+#   slm_frontend_publish_dir          (str) Absolute path of the frontend's own
+#                                            package directory (the one holding
+#                                            package.json and the served `current`).
+#   slm_frontend_publish_user         (str) Service account that owns that tree;
+#                                            the build and the flip both run as
+#                                            it, so the published bundle is
+#                                            never root-owned.
+#   slm_frontend_publish_build_script (str, optional) npm script to run.
+#                                            Default 'build:slm' — unchanged
+#                                            behaviour for every existing SLM
+#                                            caller. #15603 passes 'build' for
+#                                            the user frontend, which has no
+#                                            dedicated production script.
+#   slm_frontend_publish_build_env    (dict, optional) Environment for the
+#                                            build command. Default
+#                                            {VITE_API_URL: "/slm"} — unchanged
+#                                            for SLM. #15603 passes {} for the
+#                                            user frontend, which bakes its
+#                                            backend URL from a deployed
+#                                            .env.production file instead.
 # Also read: slm_frontend_release_keep (inventory/group_vars/all.yml).
+#
+# #15603: the two build_script/build_env variables generalize this file to the
+# user frontend (autobot-frontend) as well as SLM's own. The file keeps its
+# name and its slm_frontend_* variable prefix rather than being renamed —
+# every existing SLM call site already passes slm_frontend_publish_label/dir/
+# user, and renaming would touch four working call sites for no behavioural
+# gain. A sibling file duplicating the build-id/seed/verify/flip/prune
+# machinery (roughly 150 lines) for one npm-script-name difference was
+# rejected for the reason #15557's own header gives for the original
+# four-copy problem: a fix applied to one copy is not applied to the others.
 
 - name: "{{ slm_frontend_publish_label }} | Frontend: allocate a build id (#15610)"
   ansible.builtin.command:
@@ -137,17 +161,21 @@
     # build:slm = "VITE_API_URL=/slm vite build" — the SLM UI is always served
     # under `location /slm/` and vite.config sets base /slm/, so a plain
     # `npm run build` bakes in the wrong API base and the dashboard calls the
-    # user backend's endpoints instead (#9563, #9710, #10435).
+    # user backend's endpoints instead (#9563, #9710, #10435). #15603: the
+    # user frontend has no such dedicated script and passes 'build' — its
+    # backend URL is baked from a deployed .env.production instead, at the
+    # call site, before this task runs.
     #
     # The outDir is this build's own directory, never the served path: vite
     # empties the outDir before writing, so building into what nginx serves is
     # the defect itself (#15430).
-    cmd: npm run build:slm -- --outDir dist-{{ _slm_frontend_build_id.stdout }} --emptyOutDir
+    cmd: >-
+      npm run {{ slm_frontend_publish_build_script | default('build:slm') }} --
+      --outDir dist-{{ _slm_frontend_build_id.stdout }} --emptyOutDir
     chdir: "{{ slm_frontend_publish_dir }}"
   become: true
   become_user: "{{ slm_frontend_publish_user }}"
-  environment:
-    VITE_API_URL: "/slm"
+  environment: "{{ slm_frontend_publish_build_env | default({'VITE_API_URL': '/slm'}) }}"
   register: _slm_frontend_staged_build
   # Held so the next task can report the build's own stderr. Diagnosing the
   # #15430 outage needed the filesystem, because the unit exited 2 with no npm

@@ -297,6 +297,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/orphan-storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Orphan Storage
+         * @description Every orphan-storage candidate, across every registered detector.
+         *
+         *     ``provider_statuses`` names each detector that failed to run -- an
+         *     outage must read as "could not check", never as "found nothing".
+         */
+        get: operations["list_orphan_storage_api_admin_orphan_storage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/retention-policies": {
         parameters: {
             query?: never;
@@ -17107,7 +17130,7 @@ export interface paths {
          *
          *     Returns immediately with plan_id. Use WebSocket for real-time updates.
          *
-         *     Issue #744: Requires authenticated user.
+         *     Issue #744: Requires authenticated user. #17009: and ownership of the session.
          */
         post: operations["submit_query_api_overseer_query__session_id__post"];
         delete?: never;
@@ -17127,7 +17150,7 @@ export interface paths {
          * Get Status
          * @description Get current overseer status for a session.
          *
-         *     Issue #744: Requires authenticated user.
+         *     Issue #744: Requires authenticated user. #17009: and ownership of the session.
          */
         get: operations["get_status_api_overseer_status__session_id__get"];
         put?: never;
@@ -17370,6 +17393,35 @@ export interface paths {
          * @description List delegations for an agent as delegator or assignee (#1753).
          */
         get: operations["list_agent_delegations_api_agents__agent_id__delegations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/presence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Agent Presence
+         * @description Every agent visible to the caller: its own tenant's, plus shared.
+         *
+         *     Tenant comes from `require_org_context` -> `get_tenant_context`
+         *     (#10750 A5): an ordinary caller cannot see another tenant's agents by
+         *     passing one in -- a request-supplied org (header/path/query) is only
+         *     honoured after a real membership check, otherwise 403. A **platform
+         *     admin** (`is_platform_admin` or an admin role on the JWT) is the
+         *     documented exception: `get_tenant_context` trusts an admin's
+         *     request-supplied org outright, exactly as every other org-scoped route
+         *     already does -- this route adds no new admin-override path.
+         */
+        get: operations["list_agent_presence_api_agents_presence_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -42041,13 +42093,8 @@ export interface paths {
         put?: never;
         /**
          * Start Codebase Indexing
-         * @description Start comprehensive codebase indexing operation
-         *
-         *     This operation will:
-         *     - Index all source code files matching the patterns
-         *     - Extract semantic information and relationships
-         *     - Build searchable knowledge base entries
-         *     - Support checkpoint/resume for large codebases
+         * @description Not implemented: its operation called a method that exists nowhere (#17017). Wiring it to the
+         *     codebase-analytics indexer, not a second copy of it, is #17023.
          */
         post: operations["start_codebase_indexing_api_long_running_codebase_index_post"];
         delete?: never;
@@ -42093,13 +42140,8 @@ export interface paths {
         put?: never;
         /**
          * Start Knowledge Base Population
-         * @description Start knowledge base population operation
-         *
-         *     This operation will:
-         *     - Process documents from specified source paths
-         *     - Extract and chunk text content appropriately
-         *     - Generate embeddings and build searchable index
-         *     - Support incremental updates and force reindexing
+         * @description Not implemented: its operation was a placeholder that reported success (#17017). Wiring it to
+         *     ``api/knowledge_population.py`` is #17023.
          */
         post: operations["start_knowledge_base_population_api_long_running_knowledge_base_populate_post"];
         delete?: never;
@@ -42119,13 +42161,7 @@ export interface paths {
         put?: never;
         /**
          * Start Security Scan
-         * @description Start comprehensive security scan operation
-         *
-         *     This operation will:
-         *     - Scan code for security vulnerabilities
-         *     - Check dependencies for known issues
-         *     - Search for exposed secrets and credentials
-         *     - Generate detailed security report
+         * @description Not implemented: no operation handles a security scan (#17017); whether one is wanted is #17023.
          */
         post: operations["start_security_scan_api_long_running_security_scan_post"];
         delete?: never;
@@ -42166,7 +42202,7 @@ export interface paths {
         };
         /**
          * Get Operation Status
-         * @description Get detailed operation status
+         * @description Get detailed operation status: its creator's or an admin's (#17017)
          */
         get: operations["get_operation_status_api_long_running__operation_id__get"];
         put?: never;
@@ -42186,7 +42222,7 @@ export interface paths {
         };
         /**
          * List Operations
-         * @description List operations with filtering
+         * @description List operations with filtering: a non-admin sees only their own, counts included (#17017)
          */
         get: operations["list_operations_api_long_running__get"];
         put?: never;
@@ -42208,7 +42244,7 @@ export interface paths {
         put?: never;
         /**
          * Cancel Operation
-         * @description Cancel a running operation
+         * @description Cancel a running operation: its creator or an admin (#17017)
          */
         post: operations["cancel_operation_api_long_running__operation_id__cancel_post"];
         delete?: never;
@@ -42228,7 +42264,7 @@ export interface paths {
         put?: never;
         /**
          * Resume Operation
-         * @description Resume operation from latest checkpoint
+         * @description Resume operation from latest checkpoint: its creator or an admin, who then owns the resumed one (#17017)
          */
         post: operations["resume_operation_api_long_running__operation_id__resume_post"];
         delete?: never;
@@ -86293,6 +86329,65 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * OrphanStorageCandidateResponse
+         * @description One orphan-storage candidate. ``location`` is logical -- no host path.
+         */
+        OrphanStorageCandidateResponse: {
+            /** Provider */
+            provider: string;
+            /** Id */
+            id: string;
+            /** Location */
+            location: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Modified At */
+            modified_at: string;
+            /** Reason */
+            reason: string;
+            /** Deletable */
+            deletable: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanStorageListResponse
+         * @description Every candidate across every registered detector, plus totals.
+         *
+         *     ``provider_statuses`` names every detector that ran and whether it
+         *     could actually check -- an outage shows up here, never as an empty
+         *     ``candidates`` list that reads as "nothing found".
+         */
+        OrphanStorageListResponse: {
+            /** Candidates */
+            candidates: components["schemas"]["OrphanStorageCandidateResponse"][];
+            /** Total Count */
+            total_count: number;
+            /** Total Size Bytes */
+            total_size_bytes: number;
+            /** Provider Statuses */
+            provider_statuses: components["schemas"]["OrphanStorageProviderStatusResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanStorageProviderStatusResponse
+         * @description Whether one detector's listing actually ran (#17039 review).
+         *
+         *     ``available=False`` means this provider's candidates could not be
+         *     determined -- never read the response as "this provider has none".
+         */
+        OrphanStorageProviderStatusResponse: {
+            /** Provider */
+            provider: string;
+            /** Available */
+            available: boolean;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * OverseerQueryData
          * @description Response data for POST /overseer/query/{session_id}.
          */
@@ -104653,6 +104748,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_orphan_storage_api_admin_orphan_storage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrphanStorageListResponse"];
                 };
             };
         };
@@ -126872,6 +126987,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_presence_api_agents_presence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
         };

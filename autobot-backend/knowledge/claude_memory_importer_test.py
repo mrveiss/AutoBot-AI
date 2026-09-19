@@ -221,8 +221,15 @@ def test_iter_memory_files_on_missing_dir_yields_nothing(tmp_path):
 
 
 def test_fact_id_for_is_deterministic_and_namespaced():
-    assert fact_id_for("feedback-example") == "claude_code_memory:feedback-example"
-    assert fact_id_for("feedback-example") == fact_id_for("feedback-example")
+    assert fact_id_for("feedback-example", _OWNER) == "claude_code_memory:admin-test-user:feedback-example"
+    assert fact_id_for("feedback-example", _OWNER) == fact_id_for("feedback-example", _OWNER)
+
+
+def test_fact_id_for_is_scoped_by_owner():
+    """#17124: two owners with the same memory slug must not collide on one
+    fact id -- that collision is exactly what let one owner's import
+    silently overwrite another's via update_fact with no access check."""
+    assert fact_id_for("feedback-example", "owner-a") != fact_id_for("feedback-example", "owner-b")
 
 
 # ---------------------------------------------------------------------------
@@ -248,14 +255,14 @@ async def test_import_memory_file_creates_when_fact_absent(tmp_path):
     kb.store_fact.assert_awaited_once()
     kb.update_fact.assert_not_called()
     _, kwargs = kb.store_fact.call_args
-    assert kwargs["fact_id"] == "claude_code_memory:feedback-example"
+    assert kwargs["fact_id"] == "claude_code_memory:admin-test-user:feedback-example"
     assert kwargs["metadata"]["category"] == "claude_code_memory"
     assert kwargs["metadata"]["memory_type"] == "feedback"
 
 
 async def test_import_memory_file_updates_when_fact_present(tmp_path):
     path = _write(tmp_path, "feedback_example.md", _VALID_MEMORY)
-    kb = _make_kb(get_fact_return={"fact_id": "claude_code_memory:feedback-example"})
+    kb = _make_kb(get_fact_return={"fact_id": "claude_code_memory:admin-test-user:feedback-example"})
 
     action = await import_memory_file(kb, path, _OWNER)
 
@@ -263,8 +270,81 @@ async def test_import_memory_file_updates_when_fact_present(tmp_path):
     kb.update_fact.assert_awaited_once()
     kb.store_fact.assert_not_awaited()
     args, kwargs = kb.update_fact.call_args
-    assert args[0] == "claude_code_memory:feedback-example"
+    assert args[0] == "claude_code_memory:admin-test-user:feedback-example"
     assert kwargs["content"].startswith("An example feedback memory for tests.")
+
+
+# ---------------------------------------------------------------------------
+# #17124 — legacy (pre-owner-scoping) fact carry-forward
+# ---------------------------------------------------------------------------
+
+_LEGACY_ID = "claude_code_memory:feedback-example"
+_SCOPED_ID = "claude_code_memory:admin-test-user:feedback-example"
+
+
+def _make_kb_with_legacy(legacy_fact):
+    """A kb double whose get_fact distinguishes the scoped id (always absent --
+    this is the pre-fix-era-import scenario) from the legacy id."""
+    kb = MagicMock()
+
+    def _get_fact(fact_id):
+        if fact_id == _LEGACY_ID:
+            return legacy_fact
+        return None
+
+    kb.get_fact = MagicMock(side_effect=_get_fact)
+    kb.store_fact = AsyncMock(return_value={"status": "success", "fact_id": "x", "message": "m"})
+    kb.update_fact = AsyncMock(return_value={"status": "success", "fact_id": "x", "message": "m"})
+    return kb
+
+
+async def test_import_memory_file_carries_forward_legacy_fact_same_owner(tmp_path):
+    """A fact imported before #17124 (unscoped id) must be updated in place,
+    never duplicated, when the current importer is the same owner."""
+    path = _write(tmp_path, "feedback_example.md", _VALID_MEMORY)
+    kb = _make_kb_with_legacy({"fact_id": _LEGACY_ID, "metadata": {"owner_id": _OWNER}})
+
+    action = await import_memory_file(kb, path, _OWNER)
+
+    assert action == "updated"
+    kb.update_fact.assert_awaited_once()
+    kb.store_fact.assert_not_awaited()
+    args, _kwargs = kb.update_fact.call_args
+    assert args[0] == _LEGACY_ID, "must carry forward under the legacy id, never create a second copy"
+
+
+async def test_import_memory_file_leaves_other_owners_legacy_fact_untouched(tmp_path):
+    """A legacy fact owned by someone else is not this importer's to touch:
+    create the new scoped fact, and never update or delete the legacy one."""
+    path = _write(tmp_path, "feedback_example.md", _VALID_MEMORY)
+    kb = _make_kb_with_legacy({"fact_id": _LEGACY_ID, "metadata": {"owner_id": "someone-else"}})
+
+    action = await import_memory_file(kb, path, _OWNER)
+
+    assert action == "created"
+    kb.update_fact.assert_not_awaited()
+    kb.store_fact.assert_awaited_once()
+    _, kwargs = kb.store_fact.call_args
+    assert kwargs["fact_id"] == _SCOPED_ID
+
+
+async def test_import_memory_file_two_owners_same_slug_never_collide(tmp_path):
+    """The actual #17124 bug, exercised end to end: two owners importing a
+    memory file with the identical slug must each get their own fact, never
+    one silently overwriting the other's content and owner_id."""
+    path = _write(tmp_path, "feedback_example.md", _VALID_MEMORY)
+
+    kb_a = _make_kb(get_fact_return=None)
+    action_a = await import_memory_file(kb_a, path, "owner-a")
+    kb_b = _make_kb(get_fact_return=None)
+    action_b = await import_memory_file(kb_b, path, "owner-b")
+
+    assert action_a == "created" and action_b == "created"
+    _, kwargs_a = kb_a.store_fact.call_args
+    _, kwargs_b = kb_b.store_fact.call_args
+    assert kwargs_a["fact_id"] != kwargs_b["fact_id"], "two owners must never resolve to the same fact id"
+    assert kwargs_a["metadata"]["owner_id"] == "owner-a"
+    assert kwargs_b["metadata"]["owner_id"] == "owner-b"
 
 
 async def test_import_memory_file_reports_duplicate_without_raising(tmp_path):
@@ -310,7 +390,7 @@ async def test_import_claude_memory_is_idempotent_on_rerun(tmp_path):
     first = await import_claude_memory(kb_first, tmp_path, _OWNER)
     assert first.created == 1
 
-    kb_second = _make_kb(get_fact_return={"fact_id": "claude_code_memory:feedback-example"})
+    kb_second = _make_kb(get_fact_return={"fact_id": "claude_code_memory:admin-test-user:feedback-example"})
     second = await import_claude_memory(kb_second, tmp_path, _OWNER)
     assert second.created == 0
     assert second.updated == 1
@@ -461,19 +541,19 @@ async def test_imported_fact_metadata_is_honoured_by_ownership_check_access():
     ownership = KnowledgeOwnership(redis_client=MagicMock())
 
     owner_can_read = await ownership.check_access(
-        fact_id="claude_code_memory:feedback-example",
+        fact_id="claude_code_memory:admin-test-user:feedback-example",
         user_id=_OWNER,
         fact_metadata=metadata,
         is_authenticated=True,
     )
     other_authenticated_user_denied = await ownership.check_access(
-        fact_id="claude_code_memory:feedback-example",
+        fact_id="claude_code_memory:admin-test-user:feedback-example",
         user_id="someone-else",
         fact_metadata=metadata,
         is_authenticated=True,
     )
     unauthenticated_denied = await ownership.check_access(
-        fact_id="claude_code_memory:feedback-example",
+        fact_id="claude_code_memory:admin-test-user:feedback-example",
         user_id="anon",
         fact_metadata=metadata,
         is_authenticated=False,

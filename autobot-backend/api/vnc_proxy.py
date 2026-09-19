@@ -37,6 +37,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from constants.network_constants import NetworkConstants
 from security.vnc_rfb_auth import VncAuthError
 from type_defs.common import Metadata
@@ -446,7 +447,7 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     endpoint = VNC_ENDPOINTS[vnc_type]
     ws_url = endpoint.replace("http://", "wss://") + "/websockify"
 
-    await websocket.accept()
+    await accept_websocket(websocket)
     logger.info(
         "VNC WebSocket proxy connected: %s → %s (user=%s)",
         vnc_type,
