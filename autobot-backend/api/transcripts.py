@@ -32,6 +32,7 @@ from api.ws_security import enforce_ws_origin
 from auth_middleware import authenticate_websocket, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from knowledge import get_knowledge_base
 from llm_shared import LLMRequest, get_provider_registry
 from transcriber.ai.context import build_context
@@ -158,11 +159,11 @@ async def analyze_transcript_ws(websocket: WebSocket, transcript_id: str):
     # from a missing route.
     user = await authenticate_websocket(websocket)
     if user is None:
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Unauthorized")
         return
 
-    await websocket.accept()
+    await accept_websocket(websocket)
 
     try:
         await _run_analysis_session(websocket, transcript_id, user)
