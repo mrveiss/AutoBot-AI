@@ -288,13 +288,61 @@ _EXTRA_SERVICE_MODULES = (
     "services.full_tree_drift",
 )
 
-# Parent package first so each child stub binds onto it (see _stub docstring).
-for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES))):
+# #16722: the parent is a hollow package over the real directory, not a MagicMock.
+# In importlib mode pytest imports a test module's parent first and re-imports it
+# from disk when the object in sys.modules has no __path__
+# (_pytest.pathlib._import_module_using_spec), so a bare MagicMock let collecting
+# ANY test under services/ run the real services/__init__.py over it, and the
+# leak guard blamed whichever such test came first. A MagicMock given a __path__
+# is no better: it invents attributes, so Package.setup read a mock
+# pytest_plugins and `from services import x` bound a mock instead of the real
+# submodule. A hollow package -- the shape tests/services/conftest.py already
+# uses -- invents nothing: stubbed children are bound onto it below, and every
+# other submodule imports from its real file.
+if "services" not in sys.modules:
+    _services_pkg = types.ModuleType("services")
+    _services_pkg.__path__ = [str(Path(__file__).parent / "services")]
+    _services_pkg.__package__ = "services"
+    _services_pkg.__spec__ = None
+    sys.modules["services"] = _services_pkg
+
+# Each child stub binds onto the parent as it is created (see _stub docstring).
+for _m in sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES)):
     _stub(_m)
 
+# #16712: pytest.ini's --import-mode=importlib collects a services/*_test.py
+# file as the dotted module services.<name>. Before it can do that,
+# _pytest.pathlib._import_module_using_spec decides whether the existing
+# sys.modules["services"] (this stub) "looks like" a real package via
+# hasattr(parent, "__path__") -- a bare MagicMock has no __path__ (not a
+# magic method it pre-configures), so that check reads False and pytest
+# reimports services/__init__.py for REAL, permanently replacing this stub
+# for the rest of the session: the exact leak repo_tests/
+# sys_modules_leak_guard.py polices, and the first file collected under
+# services/ (whichever one that turns out to be) is what trips it. Giving it
+# a real __path__ satisfies that check without a reimport, so the stub is
+# reused as-is and never replaced.
+#
+# That in turn makes pytest treat services/ as a genuine collectible Package
+# (it already has __init__.py, so the decision to build one at all is
+# unconditional -- this only changes whether the stub survives it), whose
+# setup() (_pytest.python.Package.setup) re-imports services/__init__.py --
+# a cheap no-op here since __path__ already satisfies the check above -- and
+# reads its xunit-style setUpModule/setup_module/tearDownModule/
+# teardown_module and its pytest_plugins. A bare MagicMock auto-vivifies all
+# of those instead of leaving them absent, and
+# _pytest.python._call_with_optional_argument then reads a real function's
+# __code__ off the fabricated attribute, which a mock does not have. Pin them
+# so pytest sees "not defined" / "nothing to load", exactly as it would for
+# the real (nearly empty) services/__init__.py.
+sys.modules["services"].__path__ = [str(Path(__file__).parent / "services")]
+for _xunit_name in ("setUpModule", "setup_module", "tearDownModule", "teardown_module"):
+    setattr(sys.modules["services"], _xunit_name, None)
+sys.modules["services"].pytest_plugins = ()
+
 # ── services.* modules that must be REAL, not stubs ──────────────────────────
-# ``services`` itself is a MagicMock, not a package, so a normal import cannot
-# traverse it — each of these is loaded from its file spec and re-bound onto
+# ``services`` itself is a hollow package, not the real one (#16722) — each of
+# these is loaded from its file spec up front and re-bound onto
 # the parent stub so ``patch("services.x.Y")`` resolves to the same object.
 #
 # Each entry earns its place by a failure that a MagicMock made invisible:
@@ -374,6 +422,9 @@ _REAL_SERVICE_MODULES = (
     "api_key_authority",
     # #16281: its co-located test drives the real publish/retract logic.
     "node_gpu",
+    # #16712: reconciler.py imports this at module scope; its co-located test
+    # drives the real read/write/clear logic, not MagicMocks.
+    "service_remediation_tracker",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for

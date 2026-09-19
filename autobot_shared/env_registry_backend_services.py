@@ -547,3 +547,19 @@ register_env_var(
         component="pricing",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ORPHAN_GRACE_HOURS",
+        type=int,
+        default=24,
+        description=(
+            "An orphan-storage detector (#17038/#17039) excludes anything younger than this many hours, "
+            "so a clone or file still being written is never offered for cleanup. Clamped to at least 1 -- "
+            "0 would offer data mid-write. Raising it widens the safety window before a genuine orphan is "
+            "even listed; lowering it surfaces one sooner (services/orphan_storage.py)."
+        ),
+        component="storage",
+        range=(1, 720),
+    )
+)

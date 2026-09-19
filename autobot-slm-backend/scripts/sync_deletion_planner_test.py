@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import types
@@ -122,6 +123,15 @@ def _commit_all(repo: Path, message: str) -> str:
 def _write(path: Path, content: str = "x") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+def _shallow_clone(source: Path, dest: Path) -> None:
+    """A REAL shallow clone -- git itself decides what --depth 1 keeps."""
+    subprocess.run(
+        ["git", "clone", "-q", "--depth", "1", "--branch", "main", f"file://{source}", str(dest)],
+        check=True,
+        env=_GIT_ENV,
+    )
 
 
 def test_diff_mode_prints_the_plan_as_json_and_exits_zero(tmp_path, capsys) -> None:
@@ -231,3 +241,53 @@ def test_bootstrap_mode_reads_present_paths_from_a_file(tmp_path, capsys) -> Non
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["delete"] == ["gone.py"]
+
+
+def test_ensure_full_history_mode_unshallows_and_exits_zero(tmp_path, capsys) -> None:
+    origin = tmp_path / "origin"
+    _init_repo(origin)
+    _commit_all(origin, "one")
+    _commit_all(origin, "two")
+
+    clone = tmp_path / "clone"
+    _shallow_clone(origin, clone)
+
+    exit_code = main(["ensure-full-history", "--repo-root", str(clone)])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {"delete": [], "kept": [], "error": None, "bootstrap_required": False}
+    assert _git(clone, "rev-parse", "--is-shallow-repository") == "false"
+
+
+def test_ensure_full_history_mode_is_a_no_op_on_a_full_depth_repo(tmp_path, capsys) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit_all(repo, "seed")
+
+    exit_code = main(["ensure-full-history", "--repo-root", str(repo)])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["error"] is None
+
+
+def test_ensure_full_history_mode_exits_nonzero_when_the_unshallow_fails(tmp_path, capsys) -> None:
+    """The origin remote is gone -- `git fetch --unshallow` must fail, and
+    that failure must exit nonzero with the reason on stdout, never a
+    silent success (#16310)."""
+    origin = tmp_path / "origin"
+    _init_repo(origin)
+    _commit_all(origin, "one")
+    _commit_all(origin, "two")
+
+    clone = tmp_path / "clone"
+    _shallow_clone(origin, clone)
+    shutil.rmtree(origin)
+
+    exit_code = main(["ensure-full-history", "--repo-root", str(clone)])
+
+    assert exit_code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["error"] is not None
+    assert "unshallow" in payload["error"].lower()
