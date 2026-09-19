@@ -38,6 +38,7 @@ import aiohttp
 from autobot_shared.auth import BearerAuth
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import redact_content
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.content_extraction import extract_pdf_document as _extract_pdf_document
@@ -108,10 +109,9 @@ def _extract_text_from_pptx(content_bytes: bytes) -> str:
 # (byte-identical to gdrive.py's copies — see
 # AbstractConnector._detect_changes_via_file_listing()/_classify_change()).
 # _load_ts()/_store_ts() are KEPT as connector-specific overrides below: this
-# connector's checks (explicit `redis is None` guard, strict
-# `isinstance(value, str)`) differ from the other 6 connectors' copies, so
-# folding them into the base implementation would silently drop that
-# defensive behavior.
+# connector's checks (explicit `redis is None` guard, strict `isinstance(value, str)`)
+# differ from the other 6 connectors' copies, so folding them into the base
+# implementation would silently drop that defensive behavior.
 
 
 @ConnectorRegistry.register("onedrive")
@@ -291,9 +291,9 @@ class OneDriveConnector(AbstractConnector):
             )
             return None
 
-        # Add file header
+        # Add file header (redact_content is idempotent -- extract_text_from_docx already redacts its branch, #13708)
         header = f"# {file_name}\n\nFile: {file_meta.get('webUrl', '')}\n\n"
-        text = header + text
+        text = header + redact_content(text)
 
         # Update stored timestamp
         last_modified = file_meta.get("lastModifiedDateTime", "")

@@ -40,6 +40,11 @@ _IMPL_SEARCH = (
 _SUMMARIES = "TRACKED_GAP #16694: raw knowledge_summaries reads served to any signed-in user"
 _RAG_CACHE = "TRACKED_GAP #16664: a query-keyed RAG cache shared across users; partition it by visibility scope"
 _RAW_ADMIN = "ADMIN_ONLY: raw KB-collection read reachable only behind an admin gate"
+_ORPHAN_REPAIR = (
+    "ADMIN_ONLY: #16927 orphan-repair reads a fact's own metadata to judge/reassign it; "
+    "reachable only through api/admin_orphan_repair.py's router-level "
+    'Depends(require_role("admin", "superadmin"))'
+)
 _RAW_REPAIR = "NOT_USER_FACING: operator vector-repair CLI; returns row ids and booleans, no fact content"
 _RAW_ADMIN_MEMORY = "ADMIN_ONLY: platform-admin user reassignment over the verbatim and trajectory stores, not KB facts"
 _CACHE_EVICT = "NOT_USER_FACING: cache eviction reads metadata only"
@@ -60,9 +65,7 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/ai_hardware_accelerator.py", "AIHardwareAccelerator._gpu_semantic_search"): _T2,
     ("autobot-backend/api/agent.py", "_enhance_context_with_kb"): _T2,
     ("autobot-backend/api/agent.py", "comprehensive_research_task"): _T2,
-    ("autobot-backend/api/ai_stack_integration.py", "chat"): _T3,
-    ("autobot-backend/api/ai_stack_integration.py", "knowledge_search"): _T3,
-    ("autobot-backend/api/ai_stack_integration.py", "rag_query"): _T3,
+    ("autobot-backend/api/ai_stack_integration.py", "knowledge_search"): _SCOPED_ADMIN_ROUTER,
     ("autobot-backend/api/chat.py", "_enhance_with_knowledge_base"): _T2,
     ("autobot-backend/api/chat.py", "process_chat_message"): _T2,
     ("autobot-backend/api/chat_knowledge.py", "_preserve_single_fact"): _T2,
@@ -72,8 +75,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "get_share_preview",
     ): "TRACKED_GAP #16671: session fact sharing reads facts through an unwired kb_manager",
     ("autobot-backend/api/knowledge.py", "search_man_pages"): _SCOPED_ADMIN_ROUTER,
-    ("autobot-backend/api/knowledge_ai_stack.py", "_search_local_knowledge_base"): _T3,
-    ("autobot-backend/api/knowledge_ai_stack.py", "rag_search"): _T3,
     (
         "autobot-backend/api/knowledge_categories.py",
         "get_facts_in_category",
@@ -110,7 +111,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-backend/api/knowledge_ownership.py",
         "get_shared_facts",
     ): "SCOPED: the fact ids come from the caller's own ownership index (#688)",
-    ("autobot-backend/api/knowledge_rag.py", "advanced_search"): _T3,
     ("autobot-backend/api/knowledge_relations.py", "get_fact_relations"): _SCOPED_ADMIN_ROUTER,
     ("autobot-backend/api/knowledge_relations.py", "hybrid_search"): _SCOPED_ADMIN_ROUTER,
     ("autobot-backend/api/knowledge_relations.py", "traverse_relations"): _SCOPED_ADMIN_ROUTER,
@@ -147,9 +147,23 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-backend/api/knowledge_verification.py",
         "list_pending_verification",
     ): _SCOPED_ADMIN_ROUTER,
-    ("autobot-backend/api/memory_lifecycle.py", "_reinforcement_section"): _T3,
+    (
+        "autobot-backend/api/memory_lifecycle.py",
+        "_reinforcement_section",
+    ): (
+        "SCOPED: route requires Depends(check_admin_permission), and its own _slim() "
+        "helper strips every fact field except fact_id/quality_score/access_count/"
+        "last_accessed before it reaches the response -- fact content never leaves (#16665)"
+    ),
     ("autobot-backend/async_chat_workflow.py", "AsyncChatWorkflow._execute_kb_search"): _T2,
-    ("autobot-backend/knowledge/adapters/okf_adapter.py", "OKFAdapter.export_from_kb"): _T3,
+    (
+        "autobot-backend/knowledge/adapters/okf_adapter.py",
+        "OKFAdapter.export_from_kb",
+    ): (
+        "NOT_USER_FACING: no caller anywhere in the tree besides its own test and the "
+        "module-level export_to_okf() re-export, which is itself uncalled outside tests "
+        "(#16665) -- not reachable from any route, CLI entry point, or scheduled task"
+    ),
     ("autobot-backend/knowledge/search_components/agentic_search.py", "AgenticSearchTool._simple_search"): _T2,
     ("autobot-backend/knowledge/search_components/agentic_search.py", "AgenticSearchTool.iterative_search"): _T2,
     (
@@ -178,6 +192,8 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/services/knowledge/service.py", "ChatKnowledgeService._search_filter_and_format"): _T2,
     ("autobot-backend/services/knowledge_base_adapter.py", "KnowledgeBaseAdapter.get_all_facts"): _T2,
     ("autobot-backend/services/knowledge_base_adapter.py", "KnowledgeBaseAdapter.search"): _T2,
+    ("autobot-backend/services/orphan_repair_types.py", "KnowledgeFactRepairer._metadata"): _ORPHAN_REPAIR,
+    ("autobot-backend/services/orphan_repair_types.py", "KnowledgeFactRepairer.find_orphans"): _ORPHAN_REPAIR,
     ("autobot-backend/services/rag_service.py", "RAGService._execute_search_with_timeout"): _T2,
     ("autobot-backend/services/rag_service.py", "RAGService._fallback_basic_search"): _T2,
     ("autobot-backend/services/research/orchestrator.py", "_gather_candidate_sources"): _T2,

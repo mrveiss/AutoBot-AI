@@ -83,6 +83,7 @@ on:
       - 'pyproject.toml'
       - 'autobot_shared/pyproject.toml'
       - '**/package*.json'
+      - '.secrets.baseline'  # #17067: a baseline-only PR must trigger the whole-tree secret scan too
       - '.github/workflows/security.yml'
   schedule:
     # Run security scans daily at 2 AM UTC

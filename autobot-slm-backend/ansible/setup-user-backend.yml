@@ -92,6 +92,13 @@
     - role: vnc
       tags: [vnc, desktop]
       when: enable_vnc | default(true)
+      vars:
+        # #16299 review round 3: this role's own tasks run before this
+        # play's post_tasks migration sequence, so its secrets-vault
+        # registration cannot succeed yet here -- defer it (see
+        # roles/vnc/defaults/main.yml) to the explicit post-migration call
+        # below instead of letting it fail every time.
+        vnc_defer_vault_registration: true
 
   post_tasks:
     # Strict migration sequence (#10001/#10026): the old task invoked alembic
@@ -138,6 +145,32 @@
       register: health_check
       failed_when: false
       tags: [verify]
+
+    # #16299 review round 2: the vnc role's own inline registration attempt
+    # (roles: phase, before migrations run in this post_tasks: block) cannot
+    # succeed on a fresh host and is deliberately best-effort there (see
+    # roles/vnc/tasks/main.yml's comment). This is the authoritative attempt:
+    # the backend is confirmed up (health check above) and migrations have
+    # already run, so the secrets vault exists. register-vnc-password.yml's own
+    # vault-read-back check makes re-running it here safe regardless of
+    # whether the earlier roles:-phase attempt ran, skipped, or failed.
+    # Still wrapped in block/rescue -- VNC registration failing must never
+    # fail the overall provisioning run.
+    # #16299 review round 3: no rescue here -- migrations have already run
+    # and the health check above confirmed the backend is up, so a failure
+    # at this point is real (wrong API key, backend actually down) and must
+    # fail the play, not degrade into a debug line nobody reads. Recovery is
+    # re-running this playbook through the builtin updater; there is no
+    # manual recovery path.
+    - name: "VNC | Register the VNC password now that migrations have run (#16299)"
+      ansible.builtin.include_role:
+        name: vnc
+        tasks_from: register-vnc-password
+      when:
+        - enable_vnc | default(true)
+        - vnc_password_result is defined
+        - vnc_password_result.stdout | default('') | length > 0
+      tags: [vnc, migrations]
 
     - name: Display setup summary
       debug:

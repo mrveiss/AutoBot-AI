@@ -15,9 +15,11 @@ per-endpoint models so each endpoint gets a distinct OpenAPI schema.
 AIStackAgentPayload is retained as the base class and for legacy endpoints.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel
+
+from type_defs.common import Metadata
 
 # ---------------------------------------------------------------------------
 # /health — structure known from AIStackClient.health_check()
@@ -66,6 +68,27 @@ class AIStackAgentPayload(BaseModel):
 # ---------------------------------------------------------------------------
 # multimodal.py response schemas (#6509c)
 # ---------------------------------------------------------------------------
+
+
+class MultiModalResponse(BaseModel):
+    """Response for POST /process/image, /process/audio and /process/text.
+
+    ``success`` says whether processing succeeded; ``persistence`` says whether
+    the result was then written to memory (#16926). The two are independent: a
+    processed result can be refused storage, and the caller must see that here,
+    not only in the server log. Values mirror ``PersistenceOutcome``; None when
+    processing failed and there was nothing to store.
+    """
+
+    success: bool
+    result_id: str
+    modality: str
+    processing_time: float
+    confidence: float
+    result_data: Metadata
+    device_used: str | None = None
+    error_message: str | None = None
+    persistence: Literal["stored", "unowned", "refused", "failed"] | None = None
 
 
 class MultimodalEmbeddingData(BaseModel):

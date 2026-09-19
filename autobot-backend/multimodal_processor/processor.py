@@ -17,12 +17,12 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from llm_shared.torch_loader import lazy_torch
-from memory import TaskPriority, get_memory_manager
+from memory import OwnerScopeError, TaskPriority, get_memory_manager
 from utils.multimodal_performance_monitor import performance_monitor
 
 from .models import MultiModalInput, ProcessingResult
 from .processors import ContextProcessor, VisionProcessor, VoiceProcessor
-from .types import EMBEDDING_FIELDS, VISUAL_MODALITY_TYPES, ModalityType
+from .types import EMBEDDING_FIELDS, VISUAL_MODALITY_TYPES, ModalityType, PersistenceOutcome
 
 logger = get_logger(__name__)
 
@@ -163,8 +163,8 @@ class MultiModalProcessor:
             if result.user_id is None:
                 result.user_id = input_data.user_id
 
-            # #15234: the caller could not tell a persisted result from a dropped one — both claimed success.
-            result.metadata["persisted"] = await self._store_result(result)
+            # #15234, #16926: the caller could not tell a stored result from a dropped one, nor why it was dropped.
+            result.metadata["persistence"] = (await self._store_result(result)).value
 
             return result
 
@@ -521,8 +521,8 @@ class MultiModalProcessor:
         total_time = self.stats["avg_processing_time"] * (self.stats["total_processed"] - 1) + result.processing_time
         self.stats["avg_processing_time"] = total_time / self.stats["total_processed"]
 
-    async def _store_result(self, result: ProcessingResult) -> bool:
-        """Store processing result in memory. Returns whether it was persisted (#15234)."""
+    async def _store_result(self, result: ProcessingResult) -> PersistenceOutcome:
+        """Store processing result in memory. Returns which of four outcomes happened (#15234, #16926)."""
         task_data = {
             "result_id": result.result_id,
             "modality": result.modality_type.value,
@@ -542,7 +542,7 @@ class MultiModalProcessor:
                 "Not persisting multi-modal result %s: no owner on the input (#13688)",
                 result.result_id,
             )
-            return False
+            return PersistenceOutcome.UNOWNED
 
         try:
             await self.memory_manager.store_memory(
@@ -557,15 +557,15 @@ class MultiModalProcessor:
                     **task_data,
                 },
             )
-            return True
-        except ValueError as e:
-            # #15234: the tenancy guard raises ValueError for a scope it refuses (missing, blank, or a stray Mock)
-            # — a security refusal, not a transient failure, logged at error, never folded into the generic warning.
+            return PersistenceOutcome.STORED
+        except OwnerScopeError as e:
+            # #15234: the tenancy guard refused the scope (missing, blank, reserved) — a security refusal, not a
+            # transient failure. #16926: caught by type, since store_memory raises plain ValueError for validation.
             self.logger.error("Tenancy refusal storing multi-modal result %s: %s (#15234)", result.result_id, e)
-            return False
+            return PersistenceOutcome.REFUSED
         except Exception as e:
             self.logger.warning("Failed to store processing result: %s", e)
-            return False
+            return PersistenceOutcome.FAILED
 
     def _group_inputs_by_modality(self, inputs: List[MultiModalInput]) -> Dict[str, List[MultiModalInput]]:
         """Group inputs by modality type (Issue #315 - extracted method)"""
