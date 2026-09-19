@@ -15,6 +15,7 @@ from chat_workflow.delegation import (
     forbidden_to_claude_tools,
     run_delegated_subtask,
 )
+from chat_workflow.run_authority import NO_INHERITANCE
 
 # --- forbidden_work → claude_code tool mapping -----------------------------
 
@@ -75,7 +76,7 @@ async def test_run_delegated_subtask_dispatches_to_engine():
     with patch.dict(delegation._ENGINES, {"claude_code": engine}):
         out = await run_delegated_subtask("do it", agent_type="research_agent", depth=0)
     assert out == "subagent output"
-    engine.assert_awaited_once_with("do it", "research_agent", 0, "user")
+    engine.assert_awaited_once_with("do it", "research_agent", 0, "user", NO_INHERITANCE)
 
 
 @pytest.mark.asyncio
@@ -126,7 +127,7 @@ async def test_internal_engine_registered_and_dispatches():
     with patch.dict(delegation._ENGINES, {"internal": engine}):
         out = await run_delegated_subtask("t", agent_type="research_agent", depth=0, engine="internal")
     assert out == "internal result"
-    engine.assert_awaited_once_with("t", "research_agent", 0, "user")
+    engine.assert_awaited_once_with("t", "research_agent", 0, "user", NO_INHERITANCE)
 
 
 # --- _handle_delegate_tool: flag off = unchanged, on = runs subagent -------
@@ -215,6 +216,20 @@ async def test_run_delegated_subtask_logs_parent_agent_id(caplog):
 
 
 @pytest.mark.asyncio
+async def test_run_delegated_subtask_logs_the_parent_runs_agent_id(caplog):
+    """#16950: the delegate handler passes the parent run; its agent_id must still reach the log."""
+    import logging
+    from types import SimpleNamespace
+
+    parent = SimpleNamespace(agent_context=SimpleNamespace(agent_id="the_parent"))
+    engine = AsyncMock(return_value="result")
+    with patch.dict(delegation._ENGINES, {"claude_code": engine}):
+        with caplog.at_level(logging.INFO, logger="chat_workflow.delegation"):
+            await run_delegated_subtask("task", agent_type="research_agent", depth=0, parent=parent)
+    assert any("parent=the_parent" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
 async def test_run_delegated_subtask_logs_root_when_no_parent(caplog):
     """When parent_agent_id is None the log must show 'root'."""
     import logging
@@ -266,7 +281,7 @@ async def test_delegate_tool_per_turn_counter_increments():
 
 @pytest.mark.asyncio
 async def test_delegate_tool_passes_parent_agent_id_to_runner():
-    """The parent agent_id from ctx.agent_context must reach run_delegated_subtask."""
+    """The parent run, and so its agent_id, must reach run_delegated_subtask."""
     from types import SimpleNamespace
 
     mixin = _mixin()
@@ -282,7 +297,9 @@ async def test_delegate_tool_passes_parent_agent_id_to_runner():
         patch.object(delegation, "run_delegated_subtask", new=mock_run),
     ):
         _ = [m async for m in mixin._handle_delegate_tool({"params": {"task": "t"}}, [], ctx)]
-    assert captured.get("parent_agent_id") == "the_parent"
+    # #16950: the handler passes the parent run itself, not just its id, so the child
+    # can inherit its authority; run_delegated_subtask reads the id from it for the log.
+    assert captured["parent"].agent_context.agent_id == "the_parent"
     # #13821: a subagent acts for the same authenticated user. Dropping the role
     # here would deny an admin the tools they are entitled to, the moment
     # delegation ships.

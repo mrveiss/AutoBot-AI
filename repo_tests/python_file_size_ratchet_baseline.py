@@ -51,7 +51,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/agents/system_knowledge_manager.py": 843,
     "autobot-backend/agents/web_researcher.py": 1435,
     "autobot-backend/ai_hardware_accelerator.py": 1042,
-    "autobot-backend/api/a2a.py": 650,
     "autobot-backend/api/advanced_control.py": 626,
     "autobot-backend/api/agent.py": 1380,
     "autobot-backend/api/agent_config.py": 1371,
@@ -165,7 +164,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1343,
     "autobot-backend/chat_workflow/manager.py": 4068,
-    "autobot-backend/chat_workflow/tool_handler.py": 3729,  # #11542: external MCP dispatch merged into MCPDispatcher
+    "autobot-backend/chat_workflow/tool_handler.py": 3728,  # #11542: external MCP dispatch merged into MCPDispatcher
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/circuit_breaker.py": 689,
@@ -306,7 +305,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/plugin_manager.py": 702,
     "autobot-backend/project_state_manager.py": 998,
     "autobot-backend/prompt_manager.py": 1481,
-    "autobot-backend/protocols/agent_communication.py": 805,
+    "autobot-backend/protocols/agent_communication.py": 749,
     "autobot-backend/research_browser_manager.py": 704,
     "autobot-backend/secure_command_executor.py": 1220,
     "autobot-backend/secure_sandbox_executor.py": 1019,
@@ -459,7 +458,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/api/stateful.py": 688,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1129,
-    "autobot-slm-backend/main.py": 806,  # #15728: local admin socket lifespan wiring
+    "autobot-slm-backend/main.py": 793,  # #15728: local admin socket lifespan wiring
     "autobot-slm-backend/models/database.py": 1140,
     "autobot-slm-backend/models/schemas.py": 2181,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,

@@ -2385,7 +2385,6 @@ class ToolHandlerMixin:
         agent_type = params.get("agent_type", "research_agent")
         engine = params.get("engine", "claude_code")
         depth = int(ctx_dict.get("delegation_depth", 0))
-        parent_agent_id = ctx.agent_context.agent_id if ctx and ctx.agent_context else None
         from chat_workflow.session_role import DEFAULT_AUTH_ROLE  # noqa: PLC0415
 
         try:
@@ -2394,8 +2393,8 @@ class ToolHandlerMixin:
                 agent_type=agent_type,
                 depth=depth,
                 engine=engine,
-                parent_agent_id=parent_agent_id,
                 auth_role=ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE,
+                parent=ctx,  # #16950: the child inherits the parent's authority
             )
             execution_results.append(
                 {

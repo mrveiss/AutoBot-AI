@@ -17,7 +17,7 @@ should import from this module directly.
 
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List
@@ -49,6 +49,10 @@ class AgentRequest:
     priority: str = "normal"  # low, normal, high, urgent
     timeout: float = 30.0
     metadata: Dict[str, Any] | None = None
+    # #16950: on whose behalf this request runs, and the hops it crossed -- from the
+    # inbound message's header, so a peer's request is never taken for this agent's own.
+    originator: str | None = None
+    chain: List[str] = field(default_factory=list)
 
 
 @dataclass
