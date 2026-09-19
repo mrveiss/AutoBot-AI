@@ -245,7 +245,7 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "autobot_shared/secret_redaction.py",
         "Basic Auth Credentials",
         "5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8",  # pragma: allowlist secret
-    ): ("line 242's comment documenting `_BASIC_AUTH_URL_RE`'s matched shape, not a credential."),
+    ): ("the comment above `_BASIC_AUTH_URL_RE` documenting its matched shape, not a credential."),
     (
         "autobot_shared/secret_redaction_test.py",
         "Base64 High Entropy String",

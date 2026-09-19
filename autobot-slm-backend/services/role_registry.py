@@ -39,14 +39,14 @@ _SLM_ROLES = [
         "auto_restart": True,
         "health_check_port": 8000,
         "health_check_path": "/api/health",
+        # #16889: same filter+rewrite as the backend role above -- bare `pip
+        # -r` can't resolve the sibling-relative `-c ../constraints/`. #14275:
+        # venv/bin, not bare -- the unit runs venv/bin/uvicorn, not system Python.
         "post_sync_cmd": (
-            # #14275: venv/bin, not bare. The unit runs
-            # `{{ slm_backend_dir }}/venv/bin/uvicorn`, so a bare `pip`/`alembic`
-            # targets system Python — new code against unchanged dependencies,
-            # and a migration run by a different interpreter than the service.
             f"cd {_BASE_DIR}/autobot-slm-backend && "
-            "venv/bin/pip install -r requirements.txt && "
-            "venv/bin/alembic upgrade head"
+            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
+            f"requirements.txt {_BASE_DIR}/code_source > /tmp/requirements-filtered-slm-backend.txt && "
+            "venv/bin/pip install -r /tmp/requirements-filtered-slm-backend.txt && venv/bin/alembic upgrade head"
         ),
         "required": True,
         "degraded_without": [],
