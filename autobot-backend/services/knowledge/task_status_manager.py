@@ -45,6 +45,21 @@ class TaskStatusRecord:
         if self.updated_at is None:
             self.updated_at = now_utc().isoformat()
 
+    def to_response_dict(self) -> dict:
+        """Shape shared by every ``GET .../status/{task_id}`` polling endpoint (#16642)."""
+        return {
+            "task_id": self.task_id,
+            "status": self.status,
+            "message": self.message,
+            "progress_percent": self.progress_percent,
+            "items_processed": self.items_processed,
+            "items_total": self.items_total,
+            "error": self.error,
+            "elapsed_seconds": self.elapsed_seconds,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
 
 class TaskStatusManager:
     """Manages task status in Redis for persistent tracking."""

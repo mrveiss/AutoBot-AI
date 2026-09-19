@@ -33,11 +33,16 @@ import pytest
 
 _SCHEDULER_PREFIX = "llc.scheduler"
 
-# The two modules whose eager import Celery task registration depends on, and
-# the beat task name each one registers (celery_app.py beat_schedule).
+# The modules whose eager import Celery task registration depends on, and the
+# beat task name each one registers (celery_app.py beat_schedule). A new task
+# module must be added HERE as well as to the package __init__ -- that is the
+# point of this set: the isolation assertion below treats anything eagerly
+# imported and not listed here as a leak, so a task module cannot be added to
+# __init__ silently, and a module listed here cannot quietly stop registering.
 _EAGER_TASK_MODULES = {
     "llc.scheduler.project_disposal_sweep": "llc.scheduler.project_disposal_sweep.run_disposal_sweep",
     "llc.scheduler.sprint_autoclose": "llc.scheduler.sprint_autoclose.run_daily_check",
+    "llc.scheduler.stalled_run_sweep": "llc.scheduler.stalled_run_sweep.run_stalled_run_sweep",
 }
 
 # Scheduler classes that must NOT be imported by package import (PEP 562).
