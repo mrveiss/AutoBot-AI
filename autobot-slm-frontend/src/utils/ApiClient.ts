@@ -29,6 +29,8 @@
 
 import { createLogger } from '@/utils/debugUtils'
 import { getSlmApiBase } from '@/config/ssot-config'
+import type { GetPath, GetResponse } from '@autobot/ui'
+import type { paths } from '@/types/generated/api'
 
 const logger = createLogger('SlmApiClient')
 
@@ -312,6 +314,17 @@ export class SlmApiClient {
       )
     }
     throw lastError
+  }
+
+  // GET typed by the generated contract (#16292). The path must be a GET in
+  // `paths`, and the response type comes from its 200 schema, so there is no
+  // inline shape assertion for TypeScript to take on trust. Contract keys carry
+  // the `/api` prefix; the client's base already supplies it (or `/slm/api`).
+  async getContract<P extends GetPath<paths>>(
+    path: P,
+    options: RequestOptions = {}
+  ): Promise<GetResponse<paths, P>> {
+    return (await this.get(path.replace(/^\/api(?=\/)/, ''), options)) as GetResponse<paths, P>
   }
 
   // POST — returns parsed JSON (handles 204 No Content).

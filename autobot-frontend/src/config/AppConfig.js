@@ -43,23 +43,22 @@ export class AppConfigService {
           protocol: 'redis'
         },
         // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
+        // #16299: no password fields -- the backend authenticates to the real VNC server
+        // itself and offers the browser security-type "None" (api/vnc_handshake_bridge.py).
         vnc: {
           desktop: {
             host: import.meta.env.VITE_DESKTOP_VNC_HOST,
             port: import.meta.env.VITE_DESKTOP_VNC_PORT || '6080',
-            password: import.meta.env.VITE_DESKTOP_VNC_PASSWORD || 'autobot',
             protocol: 'http'
           },
           terminal: {
             host: import.meta.env.VITE_TERMINAL_VNC_HOST,
             port: import.meta.env.VITE_TERMINAL_VNC_PORT || '6080',
-            password: import.meta.env.VITE_TERMINAL_VNC_PASSWORD || 'autobot',
             protocol: 'http'
           },
           playwright: {
             host: import.meta.env.VITE_PLAYWRIGHT_VNC_HOST,
             port: import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || '6081',
-            password: import.meta.env.VITE_PLAYWRIGHT_VNC_PASSWORD || 'playwright',
             protocol: 'http'
           }
         },
@@ -206,9 +205,10 @@ export class AppConfigService {
     const backendUrl = await this.serviceDiscovery.getServiceUrl('backend');
     const proxyPath = type === 'playwright' ? 'browser' : type; // Map 'playwright' → 'browser'
 
+    // #16299: no password param -- the backend authenticates to the real VNC
+    // server itself and offers this browser security-type "None".
     const params = new URLSearchParams({
       autoconnect: options.autoconnect !== false ? 'true' : 'false',
-      password: options.password || vncConfig.password,
       resize: options.resize || 'remote',
       reconnect: options.reconnect !== false ? 'true' : 'false',
       quality: options.quality || '9',
