@@ -107,7 +107,9 @@ export interface UseWebSocketOptions {
   onClose?: (event: CloseEvent) => void
 }
 
-const DEFAULT_OPTIONS: Required<UseWebSocketOptions> = {
+// `protocols` stays optional: Required<> would strip the `undefined` its type
+// deliberately allows (#17009), and an absent value means "offer none".
+const DEFAULT_OPTIONS: Required<Omit<UseWebSocketOptions, 'protocols'>> = {
   autoConnect: true,
   autoReconnect: true,
   maxReconnectAttempts: 5,
@@ -117,7 +119,6 @@ const DEFAULT_OPTIONS: Required<UseWebSocketOptions> = {
   heartbeatInterval: 0,
   heartbeatMessage: 'ping',
   parseJSON: false,
-  protocols: undefined,
   onOpen: () => {},
   onMessage: () => {},
   onError: () => {},
