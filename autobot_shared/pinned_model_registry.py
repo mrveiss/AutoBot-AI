@@ -125,7 +125,7 @@ _REGISTRY: dict[str, PinnedModel] = {
     # diarization_service.py's own comment.
     "pyannote/speaker-diarization-3.1": PinnedModel(
         repo_id="pyannote/speaker-diarization-3.1",
-        revision="84fd25912480287da0247647c3d2b4853cb3ee5d",
+        revision="84fd25912480287da0247647c3d2b4853cb3ee5d",  # pragma: allowlist secret
         no_weight_files=True,
     ),
 }

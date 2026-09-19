@@ -176,12 +176,12 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
     (
         "autobot_shared/pinned_model_registry.py",
         "Hex High Entropy String",
-        "b19500dc665817dc424db9a65828621e2bdc89e5",
+        "b19500dc665817dc424db9a65828621e2bdc89e5",  # pragma: allowlist secret
     ): "pinned revision SHA for 'openai/clip-vit-base-patch32' in `_REGISTRY`, not a secret (#17087).",
     (
         "autobot_shared/pinned_model_registry.py",
         "Hex High Entropy String",
-        "19e879c0f9a39f27cf0c07a180747746033a4bd9",
+        "19e879c0f9a39f27cf0c07a180747746033a4bd9",  # pragma: allowlist secret
     ): (
         "weight-integrity digest for 'openai/clip-vit-base-patch32' "
         "(pytorch_model.bin) in `_REGISTRY`, not a secret (#17087)."
@@ -189,12 +189,12 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
     (
         "autobot_shared/pinned_model_registry.py",
         "Hex High Entropy String",
-        "75aec676732429ae9a41587261cb01f506a80597",
+        "75aec676732429ae9a41587261cb01f506a80597",  # pragma: allowlist secret
     ): "pinned revision SHA for 'facebook/wav2vec2-base-960h' in `_REGISTRY`, not a secret (#17087).",
     (
         "autobot_shared/pinned_model_registry.py",
         "Hex High Entropy String",
-        "b28418e88f385715a247f0f1616fca1f8cfbfc54",
+        "b28418e88f385715a247f0f1616fca1f8cfbfc54",  # pragma: allowlist secret
     ): (
         "weight-integrity digest for 'facebook/wav2vec2-base-960h' "
         "(model.safetensors) in `_REGISTRY`, not a secret (#17087)."
@@ -202,12 +202,12 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
     (
         "autobot_shared/pinned_model_registry.py",
         "Hex High Entropy String",
-        "0602352c490c245314434fa45e354c5b1ea1907b",
+        "0602352c490c245314434fa45e354c5b1ea1907b",  # pragma: allowlist secret
     ): "pinned revision SHA for 'openai/whisper-base' in `_REGISTRY`, not a secret (#17087).",
     (
         "autobot_shared/pinned_model_registry.py",
         "Hex High Entropy String",
-        "2d1af225089b0708828cd666cd238bbad39640cb",
+        "2d1af225089b0708828cd666cd238bbad39640cb",  # pragma: allowlist secret
     ): (
         "weight-integrity digest for 'openai/whisper-base' "
         "(model.safetensors) in `_REGISTRY`, not a secret (#17087)."
@@ -315,7 +315,7 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
     (
         "autobot_shared/pinned_model_registry_test.py",
         "Hex High Entropy String",
-        "b19500dc665817dc424db9a65828621e2bdc89e5",
+        "b19500dc665817dc424db9a65828621e2bdc89e5",  # pragma: allowlist secret
     ): (
         "test fixture `_REVISION` reuses `_REGISTRY`'s 'openai/clip-vit-base-patch32' "
         "revision SHA, not a secret (#17087)."

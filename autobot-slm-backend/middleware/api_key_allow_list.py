@@ -22,7 +22,7 @@ from starlette.responses import JSONResponse, Response
 from services.api_key_audit import AUDIT_UNAVAILABLE_DETAIL, AuditUnavailable, audit_key_request
 from services.api_key_routes import accepts_api_key
 
-API_KEY_HEADER = "X-API-Key"
+API_KEY_HEADER = "X-API-Key"  # pragma: allowlist secret
 
 
 class ApiKeyAllowListMiddleware(BaseHTTPMiddleware):
