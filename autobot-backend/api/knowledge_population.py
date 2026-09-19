@@ -1127,18 +1127,7 @@ async def get_populate_status(task_id: str):
             "task_id": task_id,
         }
 
-    return {
-        "task_id": task_status.task_id,
-        "status": task_status.status,
-        "message": task_status.message,
-        "progress_percent": task_status.progress_percent,
-        "items_processed": task_status.items_processed,
-        "items_total": task_status.items_total,
-        "error": task_status.error,
-        "elapsed_seconds": task_status.elapsed_seconds,
-        "created_at": task_status.created_at,
-        "updated_at": task_status.updated_at,
-    }
+    return task_status.to_response_dict()
 
 
 # =========================================================================
@@ -1212,18 +1201,7 @@ async def get_index_code_status(task_id: str):
             "task_id": task_id,
         }
 
-    return {
-        "task_id": task_status.task_id,
-        "status": task_status.status,
-        "message": task_status.message,
-        "progress_percent": task_status.progress_percent,
-        "items_processed": task_status.items_processed,
-        "items_total": task_status.items_total,
-        "error": task_status.error,
-        "elapsed_seconds": task_status.elapsed_seconds,
-        "created_at": task_status.created_at,
-        "updated_at": task_status.updated_at,
-    }
+    return task_status.to_response_dict()
 
 
 async def _index_code_background(task_id: str, root_dir: str, force: bool):
