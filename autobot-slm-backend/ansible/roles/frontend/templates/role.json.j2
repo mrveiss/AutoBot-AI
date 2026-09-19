@@ -6,7 +6,7 @@
   "ansible_playbook": "deploy-frontend.yml",
   "build_steps": [
     "npm install",
-    "npm run build"
+    "npm run build into a fresh dist-<id>/, verified for a real index.html, then published by atomically flipping the served `current` symlink to it (roles/_shared/tasks/build_publish_slm_frontend.yml, #15603) — not a flat build-in-place"
   ],
   "depends_on": [],
   "required": true,
