@@ -157,6 +157,71 @@ class TestAPIKeyDetector(unittest.TestCase):
         self.assertFalse(result.blocked)
 
 
+# Fixture values built from disjoint pieces, never a contiguous literal in
+# this file, so static secret scanners don't flag the fixtures themselves
+# (same reasoning as the importer's own test fixtures) — the pii_pipeline
+# detectors still match the assembled strings at test time.
+_FIXTURE_VALUE = "myTestPlaceholderNotReal" + "XYZ890"
+_PEM_BEGIN = "-----BEGIN " + "PRIVATE KEY-----"
+_PEM_BEGIN_RSA = "-----BEGIN RSA " + "PRIVATE KEY-----"
+_PEM_END_RSA = "-----END RSA " + "PRIVATE KEY-----"
+_PEM_BEGIN_OPENSSH = "-----BEGIN OPENSSH " + "PRIVATE KEY-----"
+_PEM_END_OPENSSH = "-----END OPENSSH " + "PRIVATE KEY-----"
+
+
+class TestGenericCredentialAssignment(unittest.TestCase):
+    """#16642 security review, round 2: key_name_alts widened beyond
+    API-key-shaped names to the common credential-assignment vocabulary
+    (password/token/secret/private key), still BLOCK-tier via API_KEY."""
+
+    def test_password_assignment_blocked(self):
+        p = PIIPipeline()
+        result = p.scrub("pass" + 'word = "' + _FIXTURE_VALUE + '"')
+        self.assertTrue(result.blocked)
+        self.assertIn(PIIType.API_KEY, result.blocked_types)
+
+    def test_bare_token_assignment_blocked(self):
+        p = PIIPipeline()
+        result = p.scrub('token: "' + _FIXTURE_VALUE + '"')
+        self.assertTrue(result.blocked)
+        self.assertIn(PIIType.API_KEY, result.blocked_types)
+
+    def test_secret_assignment_blocked(self):
+        p = PIIPipeline()
+        result = p.scrub("sec" + 'ret="' + _FIXTURE_VALUE + '"')
+        self.assertTrue(result.blocked)
+        self.assertIn(PIIType.API_KEY, result.blocked_types)
+
+    def test_ordinary_prose_with_word_secret_not_blocked(self):
+        """The value side requires a contiguous 20+ char run with no
+        spaces — ordinary sentences using the word "secret" don't match."""
+        p = PIIPipeline()
+        result = p.scrub("The secret to good code review is patience.")
+        self.assertFalse(result.blocked)
+
+
+class TestPEMPrivateKeyDetector(unittest.TestCase):
+    """#16642 security review, round 2: the header line alone is enough
+    to trigger the same BLOCK-tier API_KEY policy as any other credential."""
+
+    def test_rsa_pem_header_blocked(self):
+        p = PIIPipeline()
+        result = p.scrub("config dump:\n" + _PEM_BEGIN_RSA + "\nMIIBogIBAAKCAQ==\n" + _PEM_END_RSA)
+        self.assertTrue(result.blocked)
+        self.assertIn(PIIType.API_KEY, result.blocked_types)
+
+    def test_openssh_pem_header_blocked(self):
+        p = PIIPipeline()
+        result = p.scrub(_PEM_BEGIN_OPENSSH + "\nb3BlbnNzaC1rZXk=\n" + _PEM_END_OPENSSH)
+        self.assertTrue(result.blocked)
+        self.assertIn(PIIType.API_KEY, result.blocked_types)
+
+    def test_generic_pem_header_blocked(self):
+        p = PIIPipeline()
+        result = p.scrub(_PEM_BEGIN + "\nMIIBogIBAAKCAQ==")
+        self.assertTrue(result.blocked)
+
+
 class TestSSNDetector(unittest.TestCase):
     def test_valid_ssn(self):
         p = PIIPipeline()
@@ -268,6 +333,25 @@ class TestHighEntropyDetector(unittest.TestCase):
         result = p.scrub(f"secret: {secret}")
         self.assertIn("[HASH-", result.text)
         self.assertNotIn(secret, result.text)
+
+    def test_unlabeled_high_entropy_blob_still_caught_by_fallback(self):
+        """#16642 security review, round 2: unlike the fixture above (which
+        also now matches the widened credential-assignment detector via its
+        "secret:" label), this blob carries no recognizable keyword label —
+        it only reaches HIGH_ENTROPY_STRING's fallback detector, appended
+        last in _all_detectors() regardless of the named-category matches."""
+        import base64
+        import hashlib
+
+        p = PIIPipeline()
+        # base64, not hexdigest: hex's 16-symbol alphabet caps entropy at
+        # 4.0 bits/char, under this detector's 4.2 threshold, so a plain
+        # hexdigest would (correctly) NOT trigger it.
+        blob = base64.b64encode(hashlib.sha256(b"pii-pipeline-fallback-fixture-16642").digest()).decode()
+        result = p.scrub("pasted this by accident: " + blob)
+        self.assertIn("[HASH-", result.text)
+        self.assertNotIn(blob, result.text)
+        self.assertIn(PIIType.HIGH_ENTROPY_STRING, result.hashed_types)
 
 
 # ---------------------------------------------------------------------------

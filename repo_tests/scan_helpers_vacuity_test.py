@@ -119,7 +119,14 @@ def _run(repo: Path, checker: str, *args: str) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env=scrubbed_git_env(),
+        # PYTHONPATH pinned to the REAL repo root (#17096 review): the copied
+        # checker's own `from tools.lint...`/`from _scan_helpers import ...`
+        # must resolve regardless of the calling shell's own PYTHONPATH --
+        # empty in a bare `source .venv/bin/activate` shell, which made this
+        # subprocess fail with `ModuleNotFoundError: No module named
+        # 'tools.lint'` locally while a shell that happened to export it hid
+        # the same gap.
+        env={**scrubbed_git_env(), "PYTHONPATH": str(_REPO_ROOT)},
     )
 
 
@@ -265,7 +272,9 @@ def test_the_ansible_reference_checker_refuses_when_nothing_resolved(tmp_path: P
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env=scrubbed_git_env(),
+        # See _run()'s own comment: pinned so this does not depend on the
+        # calling shell's PYTHONPATH.
+        env={**scrubbed_git_env(), "PYTHONPATH": str(_REPO_ROOT)},
     )
 
     assert result.returncode == 1, result.stdout + result.stderr

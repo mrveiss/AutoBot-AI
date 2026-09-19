@@ -43,6 +43,7 @@ from typing import Any
 # Do not convert them to lazy attributes; see the module docstring.
 from .project_disposal_sweep import run_disposal_sweep
 from .sprint_autoclose import run_daily_check
+from .stalled_run_sweep import run_stalled_run_sweep
 
 __all__ = [
     "PollLoopScheduler",
@@ -50,6 +51,7 @@ __all__ = [
     "LivenessMonitor",
     "SessionCheckpointer",
     "run_disposal_sweep",
+    "run_stalled_run_sweep",
     "run_daily_check",
 ]
 
