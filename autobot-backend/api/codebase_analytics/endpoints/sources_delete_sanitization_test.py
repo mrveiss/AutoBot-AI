@@ -2,12 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""DELETE /sources/{id} never returns a host path on a cleanup failure (#17065).
+"""DELETE /sources/{id} never returns exception-derived text on a cleanup
+failure (#17065, tightened #17133 -- CodeQL information-exposure review).
 
 `source.error_message` is set once, at delete time, by
 `delete_source_and_cleanup()` -- this proves the DELETE response carries the
 sanitized value; a later `GET` would read back the same stored field, so
 there is no second sanitization point to test separately.
+
+Originally sanitized via `safe_error_reason()` (OS-level reason text, e.g.
+"Permission denied", with the path stripped). CodeQL still flagged the sink:
+any string *derived from* the exception, however carefully, is still tainted
+data reaching an HTTP response as far as its dataflow analysis is concerned.
+The fix is a fixed, literal string with nothing exception-derived in it at
+all -- the actual OS reason (with the path) still reaches the server log via
+`logger.error(..., exc)`, which is where an operator investigating a
+CLEANUP_FAILED source needs to look.
 """
 
 import errno
@@ -54,4 +64,9 @@ def test_a_failed_delete_reports_status_and_a_path_free_error_message(monkeypatc
     assert body["status"] == SourceStatus.CLEANUP_FAILED.value
     assert str(clone_dir) not in body["error_message"]
     assert str(tmp_path) not in body["error_message"]
-    assert "Permission denied" in body["error_message"]
+    # Not just path-free -- reason-free too (#17133): "Permission denied" is
+    # this OSError's own strerror text, and a curated message must not carry
+    # ANY part of the exception, or the next OS error's text becomes the
+    # next exposure.
+    assert "Permission denied" not in body["error_message"]
+    assert body["error_message"] == "Clone directory removal failed; see server logs for the reason."

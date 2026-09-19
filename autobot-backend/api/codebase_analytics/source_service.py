@@ -9,7 +9,6 @@ import asyncio
 import uuid
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.safe_response import safe_error_reason
 
 from .source_models import CodeSource, SourceAccess, SourceStatus, SourceType
 from .source_paths import make_clone_path
@@ -47,9 +46,19 @@ async def delete_source_and_cleanup(source_id: str, source: CodeSource | None = 
             try:
                 shutil.rmtree(source.clone_path)
             except OSError as exc:
+                # The full exception (path included) is server-side only.
+                # error_message is stored on the record and echoed verbatim
+                # by both this DELETE response and a later GET -- #17036
+                # surfaced it once, so it must be safe at every read path,
+                # not just this one (CodeQL information-exposure review,
+                # #17133). A fixed, non-exception-derived string is the only
+                # form that stays safe regardless of what OS error text
+                # ends up meaning on some future filesystem/errno; the
+                # reason for an operator to actually act on lives in the log
+                # line above, keyed by source_id.
                 logger.error("Failed to remove clone dir %s for source %s: %s", source.clone_path, source_id, exc)
                 source.status = SourceStatus.CLEANUP_FAILED
-                source.error_message = f"Clone removal failed: {safe_error_reason(exc)}"[:500]
+                source.error_message = "Clone directory removal failed; see server logs for the reason."
                 await save_source(source)
                 return False
     await _purge_source_index(source_id)

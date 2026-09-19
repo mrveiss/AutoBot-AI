@@ -64,7 +64,10 @@ class TestDeleteSourceAndCleanupReportsAFailedRemoval:
         assert result is False
         assert delete_called["value"] is False, "the record must not be dropped while the directory survives"
         assert saved["src"].status == SourceStatus.CLEANUP_FAILED
-        assert "permission denied" in saved["src"].error_message
+        # Fixed, non-exception-derived message (#17133 CodeQL information-
+        # exposure review) -- error_message is stored on the record and
+        # echoed by both the DELETE response and a later GET.
+        assert saved["src"].error_message == "Clone directory removal failed; see server logs for the reason."
         assert clone_dir.exists(), "a failed rmtree must not be treated as if the directory were gone"
 
     @pytest.mark.asyncio
