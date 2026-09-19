@@ -21,6 +21,7 @@ import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
 import { useWebSocket } from '@/composables/useWebSocket';
+import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl';
 import { useLoadingState } from '@/composables/useLoadingState';
 
 const logger = createLogger('useWorkflowBuilder');
@@ -621,6 +622,8 @@ export function useWorkflowBuilder() {
     disconnect: wsDisconnect,
   } = useWebSocket(wsUrl, {
     autoConnect: false,
+    // #17009: the endpoint authenticates; the token travels as the bearer subprotocol (#16457)
+    protocols: () => buildAuthenticatedWsSubprotocols() ?? undefined,
     autoReconnect: false,
     parseJSON: false,
     onMessage: (data: unknown) => {

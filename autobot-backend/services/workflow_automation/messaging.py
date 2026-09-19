@@ -23,11 +23,33 @@ class WorkflowMessenger:
         """Initialize messenger with empty terminal sessions dictionary."""
         # Terminal WebSocket sessions keyed by session_id
         self.terminal_sessions: Dict[str, Any] = {}
+        self.session_owners: Dict[str, str] = {}  # who claimed each slot (#17009)
 
     def register_session(self, session_id: str, websocket: Any) -> None:
         """Register a WebSocket session"""
         self.terminal_sessions[session_id] = websocket
         logger.debug("Registered WebSocket session: %s", session_id)
+
+    def claim_session(self, session_id: str, websocket: Any, owner: str) -> bool:
+        """Register *websocket* as *owner*'s socket for *session_id*, unless another user holds it (#17009).
+
+        The slot was a plain dict write, so any caller naming a session took it over
+        and received that session's workflow messages. A slot is now its claimant's:
+        the same user may reconnect over it, a different user is refused.
+        """
+        holder = self.session_owners.get(session_id)
+        if session_id in self.terminal_sessions and holder not in (None, owner):
+            logger.warning("Refused %s: workflow session %s belongs to another user", owner, session_id)
+            return False
+        self.terminal_sessions[session_id] = websocket
+        self.session_owners[session_id] = owner
+        return True
+
+    def release_session(self, session_id: str, websocket: Any) -> None:
+        """Free *session_id*'s slot if *websocket* still holds it, so a stale socket never frees a newer one."""
+        if self.terminal_sessions.get(session_id) is websocket:
+            del self.terminal_sessions[session_id]
+            self.session_owners.pop(session_id, None)
 
     def unregister_session(self, session_id: str) -> None:
         """Unregister a WebSocket session"""

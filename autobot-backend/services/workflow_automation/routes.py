@@ -8,10 +8,9 @@ Workflow Automation Routes Module
 FastAPI endpoints for workflow automation.
 """
 
-import json
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -33,6 +32,7 @@ from .models import (
     WorkflowStep,
 )
 from .persistence import load_notification_config, save_notification_config
+from .ws_endpoint import serve_workflow_socket
 
 logger = get_logger(__name__)
 
@@ -595,33 +595,5 @@ async def get_workflow_state(
 )
 @router.websocket("/workflow_ws/{session_id}")
 async def workflow_websocket(websocket: WebSocket, session_id: str) -> None:
-    """WebSocket endpoint for real-time workflow communication"""
-    await websocket.accept()
-
-    # Register WebSocket connection
-    get_workflow_manager().terminal_sessions[session_id] = websocket
-
-    try:
-        while True:
-            # Listen for workflow control messages from frontend
-            data = await websocket.receive_text()
-            message = json.loads(data)
-
-            if message.get("type") == "automation_control":
-                # Handle automation control from terminal
-                action = message.get("action")
-                workflow_id = message.get("workflow_id")
-
-                if workflow_id and action:
-                    control_request = WorkflowControlRequest(workflow_id=workflow_id, action=action)
-                    await get_workflow_manager().handle_workflow_control(control_request)
-
-    except WebSocketDisconnect:
-        # Clean up on disconnect
-        if session_id in get_workflow_manager().terminal_sessions:
-            del get_workflow_manager().terminal_sessions[session_id]
-        logger.info("WebSocket disconnected for session %s", session_id)
-    except Exception as e:
-        logger.error("WebSocket error for session %s: %s", session_id, e)
-        if session_id in get_workflow_manager().terminal_sessions:
-            del get_workflow_manager().terminal_sessions[session_id]
+    """Real-time workflow communication: authenticated and owner-scoped in ``ws_endpoint`` (#17009)."""
+    await serve_workflow_socket(websocket, session_id, get_workflow_manager())
