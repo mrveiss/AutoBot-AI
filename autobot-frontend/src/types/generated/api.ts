@@ -17378,6 +17378,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/presence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Agent Presence
+         * @description Every agent visible to the caller: its own tenant's, plus shared.
+         *
+         *     Tenant comes from `require_org_context` -> `get_tenant_context`
+         *     (#10750 A5): an ordinary caller cannot see another tenant's agents by
+         *     passing one in -- a request-supplied org (header/path/query) is only
+         *     honoured after a real membership check, otherwise 403. A **platform
+         *     admin** (`is_platform_admin` or an admin role on the JWT) is the
+         *     documented exception: `get_tenant_context` trusts an admin's
+         *     request-supplied org outright, exactly as every other org-scoped route
+         *     already does -- this route adds no new admin-override path.
+         */
+        get: operations["list_agent_presence_api_agents_presence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/coordination/claims": {
         parameters: {
             query?: never;
@@ -126872,6 +126901,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_presence_api_agents_presence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
         };
