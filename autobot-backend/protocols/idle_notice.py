@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.env_utils import env_float
 from events.bus import EventBus, PersistStrategy, get_event_bus
 from protocols.agent_kind import AgentKind
@@ -53,12 +54,15 @@ def notify_agent_idle(*, kind: AgentKind, tenant_id: str | None, name: str) -> N
     never awaits anything.
     """
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
     except RuntimeError:
         return
     payload = {"kind": kind.value, "tenant_id": tenant_id, "name": name}
     channel = f"agent:{name}"
-    loop.create_task(get_event_bus().publish(channel, EVT_AGENT_IDLE, payload, persist=PersistStrategy.NONE))
+    fire_and_forget(
+        get_event_bus().publish(channel, EVT_AGENT_IDLE, payload, persist=PersistStrategy.NONE),
+        name=f"agent-idle-notice:{name}",
+    )
 
 
 class IdleWaitExpiredError(Exception):

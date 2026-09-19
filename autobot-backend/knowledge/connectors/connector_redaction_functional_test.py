@@ -40,7 +40,7 @@ from knowledge.connectors.slack import SlackConnector
 from knowledge.connectors.web_crawler import WebCrawlerConnector, _url_to_source_id
 from knowledge.facts import FactsMixin
 
-_SECRET = "sk-" + "abcdefghijklmnopqrstuvwxyz123456"
+_SECRET = "sk-" + "abcdefghijklmnopqrstuvwxyz123456"  # pragma: allowlist secret
 
 
 class _FakeKB(FactsMixin):
