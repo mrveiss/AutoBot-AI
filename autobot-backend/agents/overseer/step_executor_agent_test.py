@@ -8,12 +8,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import agents.overseer.step_executor_agent as step_executor_module
 from agents.overseer.step_executor_agent import (
     StepExecutorAgent,
     _build_blocked_command_result,
     _build_execution_error_result,
     _build_no_command_result,
-    _parse_pty_exit_code,
 )
 from agents.overseer.types import (
     AgentTask,
@@ -24,6 +24,7 @@ from agents.overseer.types import (
     StepStatus,
     StreamChunk,
 )
+from tests.helpers.fake_pty_shell import FakeManager, FakeShell
 
 
 @pytest.fixture()
@@ -305,72 +306,55 @@ class TestGenerateExplanations:
         assert len(result.key_findings) >= 1
 
 
-class TestParsePtyExitCode:
-    """Tests for _parse_pty_exit_code (Issue #935)."""
+class TestPtyExecution:
+    """A step's output and exit code come from its PTY, never from chat history (#17078)."""
 
-    def test_extracts_exit_code_zero(self):
-        raw = "file1\nfile2\n__AUTOBOT_EXIT__=0"
-        clean, code = _parse_pty_exit_code(raw)
-        assert code == 0
-        assert "__AUTOBOT_EXIT__" not in clean
-        assert "file1" in clean
+    @pytest.fixture
+    def shell(self, monkeypatch):
+        shell = FakeShell(
+            results={"ls": ("a.txt", 0), "grep x f": ("__AUTOBOT_EXIT__=0", 2)},
+            hangs={"sleep 999"},
+        )
+        monkeypatch.setattr(step_executor_module, "PTY_AVAILABLE", True)
+        monkeypatch.setattr(step_executor_module, "simple_pty_manager", FakeManager(shell))
+        return shell
 
-    def test_extracts_nonzero_exit_code(self):
-        raw = "error output\n__AUTOBOT_EXIT__=2"
-        clean, code = _parse_pty_exit_code(raw)
-        assert code == 2
-        assert "__AUTOBOT_EXIT__" not in clean
+    @staticmethod
+    async def _run(executor, command):
+        chunks = [chunk async for chunk in executor._execute_command_streaming(command)]
+        by_type = {chunk.chunk_type: chunk.content for chunk in chunks}
+        return by_type.get("stdout"), by_type.get("return_code")
 
-    def test_no_marker_returns_zero(self):
-        raw = "some output without marker"
-        clean, code = _parse_pty_exit_code(raw)
-        assert code == 0
-        assert clean == raw
+    @pytest.mark.asyncio
+    async def test_output_and_exit_code_are_read_from_the_pty(self, executor, shell):
+        assert await self._run(executor, "ls") == ("a.txt", "0")
 
-    def test_marker_only(self):
-        raw = "__AUTOBOT_EXIT__=127"
-        clean, code = _parse_pty_exit_code(raw)
-        assert code == 127
-        assert clean == ""
+    @pytest.mark.asyncio
+    async def test_output_that_prints_the_old_marker_cannot_forge_success(self, executor, shell):
+        _, return_code = await self._run(executor, "grep x f")
 
-    def test_marker_with_surrounding_whitespace(self):
-        raw = "output\n\n__AUTOBOT_EXIT__=1\n"
-        clean, code = _parse_pty_exit_code(raw)
-        assert code == 1
-        assert "output" in clean
-        assert "__AUTOBOT_EXIT__" not in clean
+        assert return_code == "2"
 
+    @pytest.mark.asyncio
+    async def test_a_timed_out_step_is_interrupted_and_reported_124_never_0(self, executor, shell, monkeypatch):
+        monkeypatch.setattr(step_executor_module, "_OVERSEER_COMMAND_TIMEOUT_S", 0.2)
 
-class TestExtractTerminalOutput:
-    """Tests for _extract_terminal_output aggregation (Issue #935)."""
+        stdout, return_code = await self._run(executor, "sleep 999")
 
-    def test_aggregates_multiple_terminal_messages(self, executor):
-        messages = [
-            {"sender": "terminal", "text": "line one"},
-            {"sender": "assistant", "text": "ignored"},
-            {"sender": "terminal", "text": "line two"},
-        ]
-        result = executor._extract_terminal_output(messages)
-        assert "line one" in result
-        assert "line two" in result
+        assert return_code == "124" and "timed out" in stdout
+        assert shell.writes[-1] == "\x03", "only Ctrl+C is written after the timeout"
+        assert step_executor_module.simple_pty_manager.created == []
 
-    def test_skips_command_prompts(self, executor):
-        messages = [
-            {"sender": "terminal", "text": "$ ls"},
-            {"sender": "terminal", "text": "file.txt"},
-        ]
-        result = executor._extract_terminal_output(messages)
-        assert "$ ls" not in result
-        assert "file.txt" in result
+    @pytest.mark.asyncio
+    async def test_without_a_pty_the_subprocess_fallback_runs(self, executor, monkeypatch):
+        monkeypatch.setattr(step_executor_module, "PTY_AVAILABLE", False)
+        fallback = MagicMock()
 
-    def test_empty_messages_returns_empty(self, executor):
-        result = executor._extract_terminal_output([])
-        assert result == ""
+        async def _subprocess(command, task_id):
+            fallback(command)
+            yield StreamChunk(task_id, 0, "return_code", "0", True)
 
-    def test_non_terminal_senders_ignored(self, executor):
-        messages = [
-            {"sender": "user", "text": "user message"},
-            {"sender": "assistant", "text": "assistant reply"},
-        ]
-        result = executor._extract_terminal_output(messages)
-        assert result == ""
+        monkeypatch.setattr(executor, "_execute_subprocess_streaming", _subprocess)
+
+        assert (await self._run(executor, "ls"))[1] == "0"
+        fallback.assert_called_once_with("ls")

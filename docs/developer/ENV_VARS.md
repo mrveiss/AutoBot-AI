@@ -23,6 +23,7 @@ conflict when their rows sort next to each other.
 | Name | Component | Type | Default | Description |
 |---|---|---|---|---|
 | `AUTOBOT_A2A_CAPABILITY_TTL` | a2a | int | `300` | How long a fetched remote A2A capability descriptor is cached before the next check re-fetches it. Raising it reduces repeated cross-agent capability lookups; lowering it makes a capability change on the remote side (e.g. a tool removed) visible sooner (a2a/capability_verifier.py). |
+| `AUTOBOT_AGENT_COMMAND_TIMEOUT_S` | agents | int | `30` | Seconds an agent-terminal command may run before it is cancelled and reported as timed out (#17074). A command that finishes sooner returns as soon as its exit code appears, so this bounds only long or stuck commands. Raising it lets long builds finish; lowering it cancels them sooner (services/agent_terminal/command_executor.py). Range: 1–3600. |
 | `AUTOBOT_ALEMBIC_UPGRADE_TIMEOUT_S` | slm | float | `300.0` | Timeout, in seconds, for `alembic upgrade heads` during a component's post-sync migration step. Raising it tolerates a slower migration; lowering it fails a wedged migration sooner (autobot-slm-backend/api/code_sync_paths.py, #11255, #16713). |
 | `AUTOBOT_ALLOW_CONFIG_EDITS` | system | bool | false | Permit writes to the repository's tracked config files. Off by default: the codebase is the source of truth and an edit made here is invisible to deployment (#11220). |
 | `AUTOBOT_API_KEY_LEGACY_GRACE_DAYS` | slm | int | `90` | Days an API key created before scope enforcement keeps its owner's full authority, with a warning on every use, before it is refused until re-issued with explicit scopes (#16040 AC5; owner ruling: 90). |
@@ -146,6 +147,7 @@ conflict when their rows sort next to each other.
 | `AUTOBOT_OTEL_PROTOCOL` | otel | str | `'grpc'` | OTLP export protocol: 'grpc' or 'http/protobuf'. |
 | `AUTOBOT_OTEL_SAMPLE_RATE` | otel | float | `0.1` | Fraction of traces to sample (0.0–1.0). Range: 0.0–1.0. |
 | `AUTOBOT_OTEL_SERVICE_VERSION` | otel | str | `'1.5.0'` | Service version tag attached to all OTel spans. |
+| `AUTOBOT_OVERSEER_COMMAND_TIMEOUT_S` | agents | int | `60` | Seconds an overseer step command may run in the user's terminal before it is interrupted and reported as timed out (#17078). A step that finishes sooner returns as soon as its exit code appears (agents/overseer/step_executor_agent.py). Range: 1–3600. |
 | `AUTOBOT_OWNERSHIP_BLAME_TIMEOUT_SECONDS` | backend | float | `10.0` | Seconds a single `git blame` may take during ownership analysis. Must stay below the whole-analysis budget, which a previous 30s value exceeded (#13602). |
 | `AUTOBOT_OWNERSHIP_BUDGET_SECONDS` | backend | float | `20.0` | Total seconds ownership analysis may spend blaming files before it returns what it has (#13602). |
 | `AUTOBOT_OWNERSHIP_MAX_FILES` | backend | int | `2000` | How many files ownership analysis will blame. Paired with the time budget because a file count alone is the wrong bound — file size dominates blame cost (#13602). |
