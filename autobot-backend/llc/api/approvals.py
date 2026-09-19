@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from api.user_management.human_decider import require_interactive_human
 from autobot_shared.logging_manager import get_logger
 from llc.deps import assert_company_access, get_session, load_authorized, service_dep
 from user_management.services import TenantContext
@@ -48,14 +49,17 @@ class ApprovalRequest(BaseModel):
     payload: Dict[str, Any] = {}
 
 
+# Decider recorded before 2026-09-18 (#17042) when the client named nobody
+# (GH#8552). Only historic rows carry it: decisions are now attributed to the
+# verified caller, so read it as "decided before attribution was enforced".
 _BOARD_SENTINEL = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
 class ApprovalDecision(BaseModel):
     decision: ApprovalStatus
-    # Optional: callers may pass the deciding user/agent UUID.  Board UI
-    # decision-makers are human users whose IDs are passed here; falls back to
-    # the board sentinel so the field is never null in the DB (GH#8552).
+    # Ignored since #17042: the decider is the verified caller, never the body.
+    # Kept so older clients that still send it are logged rather than silently
+    # accepted or rejected.
     decided_by_agent_id: Optional[uuid.UUID] = None
 
 
@@ -127,10 +131,12 @@ async def decide_approval(
     body: ApprovalDecision,
     session: AsyncSession = Depends(get_session),
     svc: ApprovalService = Depends(_service),
-    _current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ApprovalResponse:
-    """Approve or reject a pending approval."""
+    """Approve or reject a pending approval, attributed to the verified caller (#17042)."""
+    require_interactive_human(current_user, "LLC approval decision")
+    decided_by = _verified_decider(ctx, body)
     try:
         aid = uuid.UUID(approval_id)
     except ValueError:
@@ -146,7 +152,7 @@ async def decide_approval(
                 session,
                 approval_id=aid,
                 decision=body.decision,
-                decided_by=body.decided_by_agent_id or _BOARD_SENTINEL,
+                decided_by=decided_by,
             )
     except ApprovalNotFoundError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
@@ -162,6 +168,22 @@ async def decide_approval(
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
+
+def _verified_decider(ctx: TenantContext, body: ApprovalDecision) -> uuid.UUID:
+    """The verified caller's user id; a client-supplied decider is ignored (#17042)."""
+    if body.decided_by_agent_id is not None:
+        logger.warning(
+            "Ignoring client-supplied decided_by_agent_id=%s; recording the verified caller %s",
+            body.decided_by_agent_id,
+            ctx.user_id,
+        )
+    # Every interactive login carries a UUID user id (api/auth.py sets it from the
+    # users table), so this refuses only a caller the system cannot name. If the
+    # login payload ever stops carrying it, people are refused here, not misattributed.
+    if ctx.user_id is None:
+        raise HTTPException(status_code=403, detail="The decision cannot be attributed to a verified user")
+    return ctx.user_id
 
 
 def _to_response(approval: Any) -> ApprovalResponse:

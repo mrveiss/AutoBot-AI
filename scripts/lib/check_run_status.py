@@ -19,7 +19,7 @@ repo, each silent and each in a different direction:
 
 3. **A skip can land after a failure.** Two workflows publishing one context name
    -- a path-filtered shim writing ``skipped`` after a real ``failure`` -- make
-   newest-wins report green while the merge button stays red (#16040).
+   newest-wins report green while the merge button stays red (#16046).
 
 4. **``gh pr list --json statusCheckRollup`` reports superseded commits.** The
    rollup retains runs from earlier head SHAs, so a PR whose current head is
@@ -76,7 +76,7 @@ def _latest_within(observations: Iterable[dict]) -> dict[str, str]:
     element of an unordered response reports a green context as failed; sorting
     by ``started_at`` is what makes the answer current rather than arbitrary.
 
-    A skip never overrides a conclusive result (#16040) -- newest-wins is right
+    A skip never overrides a conclusive result (#16046) -- newest-wins is right
     for supersession and wrong for two publishers sharing one context name.
     """
     newest: dict[str, tuple[str, str]] = {}

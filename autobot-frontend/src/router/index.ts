@@ -222,7 +222,7 @@ export const routes: RouteRecordRaw[] = [
         // Issue #1256: Observable Research Panel — live browser collaboration
         path: 'research',
         name: 'knowledge-research',
-        component: () => import('@/components/knowledge/KnowledgeResearchPanel.vue'),
+        component: () => import('@/components/knowledge/KnowledgeResearchTabs.vue'),
         meta: {
           title: 'Research',
           parent: 'knowledge'
@@ -252,33 +252,29 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // #16897: connectors moved into the Manage surface as a tab. The path is
+        // kept as a redirect rather than deleted — the same treatment
+        // /knowledge/watch-folders got — so existing links and bookmarks survive.
         path: 'connectors',
-        name: 'knowledge-connectors',
-        component: () => import('@/components/knowledge/connectors/ConnectorManager.vue'),
-        meta: {
-          title: 'Source Connectors',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/manage?tab=connectors'
       },
       {
         // Issue #3850: web research settings UI
+        // #16900: folded into the Research surface as a tab. Kept as a
+        // redirect rather than deleted — the same treatment
+        // /knowledge/watch-folders and /knowledge/connectors got — so
+        // existing links and bookmarks survive.
         path: 'web-research-settings',
-        name: 'knowledge-web-research-settings',
-        component: () => import('@/components/knowledge/WebResearchSettings.vue'),
-        meta: {
-          title: 'Web Research Settings',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/research?tab=settings'
       },
       {
         // MVA-344: 4-tab web research panel (Fetch Page / Crawl Site / Find Pages / Get Data)
+        // #16900: folded into the Research surface as a tab. Kept as a
+        // redirect rather than deleted — the same treatment
+        // /knowledge/watch-folders and /knowledge/connectors got — so
+        // existing links and bookmarks survive.
         path: 'web-research',
-        name: 'knowledge-web-research',
-        component: () => import('@/components/knowledge/WebResearchPanel.vue'),
-        meta: {
-          title: 'Web Research',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/research?tab=webTools'
       },
       {
         path: 'manpages',
@@ -861,6 +857,32 @@ export const routes: RouteRecordRaw[] = [
       admin: true,
     },
   },
+  // Issue #16825: live model-pricing refresh status + manual override —
+  // the GH#6480/#16228/#16231 backend had no reachable GUI.
+  {
+    path: '/admin/pricing',
+    name: 'admin-pricing',
+    component: () => import('@/views/AdminPricingView.vue'),
+    meta: {
+      title: 'Model Pricing',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
+    },
+  },
+  // Issue #16825: external MCP server admin CRUD — the #11542 backend had no
+  // reachable GUI.
+  {
+    path: '/admin/mcp-servers',
+    name: 'admin-mcp-servers',
+    component: () => import('@/views/AdminMcpServersView.vue'),
+    meta: {
+      title: 'MCP Servers',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
+    },
+  },
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
@@ -1181,7 +1203,8 @@ export const routes: RouteRecordRaw[] = [
         path: 'automation',
         name: 'llc-company-automation',
         component: WorkflowBuilderView,
-        meta: { title: 'Workflow Automation', requiresAuth: true, hideInNav: true },
+        // #16901: no longer hidden — it has a Company OS sidebar entry now.
+        meta: { title: 'Workflow Automation', requiresAuth: true },
         children: [
           {
             // Named so vue-router does not warn about an unnamed empty-path

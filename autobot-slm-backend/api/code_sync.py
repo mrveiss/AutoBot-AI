@@ -4585,6 +4585,7 @@ class _StageStatus:
     FAILED = "failed"
     SKIPPED = "skipped"
     CURRENT = "current"  # C4: already at target commit
+    PARTIAL = "partial"  # #16640: C4 fast path, but a co-located component failed
 
 
 class UpdateAllStage(BaseModel):
@@ -4997,24 +4998,11 @@ def _dedupe_colocated_roles(stage: UpdateAllStage, roles: list) -> list:
     return list(kept.values())
 
 
-async def _run_colocated_role_procedures(stage: UpdateAllStage, roles: list, slm_node_id: str) -> None:
-    """Run the full ansible procedure for each role (#12083); per-role failures are non-fatal."""
-    from api.roles import run_role_full_procedure
-
-    for role in roles:
-        try:
-            result = await run_role_full_procedure(role, slm_node_id)
-        except Exception as exc:
-            _stage_log(stage, f"co-located {role.name}: resolve error: {exc} (#12083)")
-            continue
-        if result.get("error") == "no_playbook":
-            _stage_log(stage, f"co-located {role.name}: no ansible_playbook configured — skipped (#12083)")
-            continue
-        outcome = "ok" if result.get("success") else f"FAILED ({result.get('error', 'see output')})"
-        _stage_log(stage, f"co-located {role.name}: {outcome} via {role.ansible_playbook} (#12083)")
+# #16640: moved to api/_colocated_role_procedures.py -- #14236 ceiling, made room rather than took it.
+from api._colocated_role_procedures import run_colocated_role_procedures as _run_colocated_role_procedures  # noqa: E402
 
 
-async def _resolve_colocated_managed_services(stage: UpdateAllStage, slm_node_id: str) -> None:
+async def _resolve_colocated_managed_services(stage: UpdateAllStage, slm_node_id: str) -> List[str]:
     """Run the FULL ansible role procedure for every co-located managed role (#12083).
 
     Replaces the old code-rsync-only resolve (#11605): each managed role
@@ -5037,13 +5025,13 @@ async def _resolve_colocated_managed_services(stage: UpdateAllStage, slm_node_id
     shared_ok, shared_msg, _blocked = await _ensure_autobot_shared_synced("autobot-backend")
     if not shared_ok:
         _stage_log(stage, f"co-located roles: {shared_msg} — aborting role procedures (#11611)")
-        return
+        return [f"autobot_shared: {shared_msg}"]
 
     role_names = await _get_colocated_managed_role_names(slm_node_id)
     roles = await _load_colocated_roles(role_names)
     if not roles:
         _stage_log(stage, "co-located roles: none assigned/detected on this node (#12083)")
-        return
+        return []
 
     # #12096 review: collapse roles that share the SAME real ansible deploy
     # (backend/celery/scheduler; ai-stack/chromadb) onto ONE run each — running
@@ -5051,7 +5039,7 @@ async def _resolve_colocated_managed_services(stage: UpdateAllStage, slm_node_id
     # needlessly multiplies restart windows on the live box.
     roles = _dedupe_colocated_roles(stage, roles)
 
-    await _run_colocated_role_procedures(stage, roles, slm_node_id)
+    return await _run_colocated_role_procedures(stage, roles, slm_node_id)
 
 
 async def _run_slm_stage(
@@ -5088,22 +5076,26 @@ async def _run_slm_stage(
         # C4: compare deployed commit to target
         deployed_commit = await _get_slm_deployed_commit()
         if deployed_commit and deployed_commit == remote_commit:
-            stage.status = _StageStatus.CURRENT
             stage.sha = _short_sha(remote_commit)
+            # #11605/#12083: the SLM control plane is current, so no Ansible self-update fires — but co-located
+            # managed roles (backend, celery, scheduler, frontend, ai-stack, slm-agent, ...) can still need
+            # config/build changes (env render, systemd drop-ins, npm build) that neither this stage nor the
+            # self-node-skipping fleet stage would otherwise apply. Run each role's FULL ansible procedure here so the
+            # one-click update actually brings the whole co-located box current -- and (#16640) a failure here must
+            # not read as CURRENT.
+            failed_colocated = await _resolve_colocated_managed_services(stage, slm_node.node_id)
+            if failed_colocated:
+                stage.status = _StageStatus.PARTIAL
+                stage.message = f"SLM already at {stage.sha} — co-located failed: {'; '.join(failed_colocated)}"
+                stage.completed_at = utc_timestamp()
+                _stage_log(stage, stage.message)
+                return False
+
+            stage.status = _StageStatus.CURRENT
             stage.message = f"SLM already at {_short_sha(remote_commit)} — no restart needed"
-            # #11605/#12083: the SLM control plane is current, so no Ansible
-            # self-update fires — but co-located managed roles (backend,
-            # celery, scheduler, frontend, ai-stack, slm-agent, ...) can still
-            # need config/build changes (env render, systemd drop-ins, npm
-            # build) that neither this stage nor the self-node-skipping fleet
-            # stage would otherwise apply. Run each role's FULL ansible
-            # procedure here so the one-click update actually brings the whole
-            # co-located box current.
-            await _resolve_colocated_managed_services(stage, slm_node.node_id)
-            # #11512: the SLM control plane was already at the deployed-commit
-            # marker's target and co-located roles were just resynced — same
-            # "resync succeeded but code_version never advanced" gap as
-            # drift-resolve. Guarded the same way (only when nothing is stale).
+            # #11512: the SLM control plane was already at the deployed-commit marker's target
+            # and co-located roles were just resynced — same "resync succeeded but code_version
+            # never advanced" gap as drift-resolve. Guarded the same way (only when nothing is stale).
             await _advance_node_version_if_fully_synced("autobot-slm-backend")
             stage.completed_at = utc_timestamp()
             _stage_log(stage, stage.message)
@@ -5353,7 +5345,8 @@ async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
     stage.status = _StageStatus.SUCCESS
     stage.message = summary
     stage.completed_at = utc_timestamp()
-    job.status = "partial" if skipped else "completed"
+    slm_stage = _get_stage(job, "slm_self_update")  # #16640: a co-located failure must survive too
+    job.status = "partial" if skipped or slm_stage.status == _StageStatus.PARTIAL else "completed"
     job.completed_at = utc_timestamp()
     _stage_log(stage, f"Fleet stage complete: {summary}")
     await _clear_resume_plan()
@@ -5444,6 +5437,12 @@ async def _run_fleet_stage_or_already_current(
     # C4: already_current when SLM is also at target
     deployed = await _get_slm_deployed_commit()
     slm_stage = _get_stage(job, "slm_self_update")
+    if slm_stage.status == _StageStatus.PARTIAL:  # #16640
+        job.status = "partial"
+        _stage_log(stage_fleet, "SLM current but co-located component(s) failed — pipeline partial")
+        job.completed_at = utc_timestamp()
+        return
+
     is_already_current = deployed == remote_commit or slm_stage.status in (_StageStatus.CURRENT, _StageStatus.SKIPPED)
     if is_already_current:
         job.status = "already_current"
