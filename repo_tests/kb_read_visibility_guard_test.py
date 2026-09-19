@@ -149,7 +149,9 @@ MIN_READS_FOUND = 40
 #: aliasing a KB handle (``SearchMixin._query_chromadb``, ``FactsMixin._find_duplicate``; both IMPL).
 #: Then 103 -> 97 (#16691, #16706): several routes reclassified from TRACKED_GAP to SCOPED once
 #: their admin gate or caller-independent filter was confirmed -- a measured shrink, not new debt.
-UNFILTERED_READ_CEILING = 97
+#: Then 97 -> 99: KnowledgeFactRepairer._metadata/.find_orphans (#15779's admin-only orphan
+#: repair), deliberately unfiltered -- see _ORPHAN_REPAIR in kb_read_visibility_allowlist.py.
+UNFILTERED_READ_CEILING = 99
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)

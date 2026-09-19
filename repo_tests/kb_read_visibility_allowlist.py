@@ -47,6 +47,12 @@ _SCOPED_ADMIN_ROUTER = (
     "SCOPED: route requires Depends(check_admin_permission) (403 for non-admins), and "
     "check_access already grants admins unconditional read (#16665)"
 )
+_ORPHAN_REPAIR = (
+    "ADMIN_ONLY: reachable only via api/admin_orphan_repair.py's router, gated on "
+    "Depends(require_role('admin', 'superadmin')); the read is deliberately unfiltered because "
+    "orphan detection targets exactly the facts a normal ownership-scoped read would never "
+    "surface (#15779, #16927)"
+)
 
 ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/advanced_rag_optimizer.py", "AdvancedRAGOptimizer._perform_semantic_search"): _T2,
@@ -178,6 +184,8 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/services/knowledge/service.py", "ChatKnowledgeService._search_filter_and_format"): _T2,
     ("autobot-backend/services/knowledge_base_adapter.py", "KnowledgeBaseAdapter.get_all_facts"): _T2,
     ("autobot-backend/services/knowledge_base_adapter.py", "KnowledgeBaseAdapter.search"): _T2,
+    ("autobot-backend/services/orphan_repair_types.py", "KnowledgeFactRepairer._metadata"): _ORPHAN_REPAIR,
+    ("autobot-backend/services/orphan_repair_types.py", "KnowledgeFactRepairer.find_orphans"): _ORPHAN_REPAIR,
     ("autobot-backend/services/rag_service.py", "RAGService._execute_search_with_timeout"): _T2,
     ("autobot-backend/services/rag_service.py", "RAGService._fallback_basic_search"): _T2,
     ("autobot-backend/services/research/orchestrator.py", "_gather_candidate_sources"): _T2,
