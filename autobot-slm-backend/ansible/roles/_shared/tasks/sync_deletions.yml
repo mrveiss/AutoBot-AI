@@ -133,9 +133,13 @@
     # forces one bootstrap re-run.
     - name: "{{ sync_deletions_label }} | Deletions: detect a legacy (pre-versioning) marker (#16310)"
       ansible.builtin.set_fact:
+        # `| bool` on the assignment itself, not just on every later use
+        # (#16310 review round 13, finding 3's own precedent for
+        # _sd_need_bootstrap below): Ansible can hand a fact back as the
+        # STRING "False" on a later read, which is truthy in Jinja.
         _sd_own_marker_is_legacy: >-
-          {{ (_sd_own_marker_content | length > 0) and
-             not (_sd_own_marker_lines | length > 1 and _sd_own_marker_lines[0] == _sd_marker_version) }}
+          {{ ((_sd_own_marker_content | length > 0) and
+              not (_sd_own_marker_lines | length > 1 and _sd_own_marker_lines[0] == _sd_marker_version)) | bool }}
 
     - name: "{{ sync_deletions_label }} | Deletions: warn that this module's own marker is legacy and being re-bootstrapped"
       ansible.builtin.debug:
