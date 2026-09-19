@@ -22,9 +22,25 @@
 
 import { useUserStore } from '@/stores/useUserStore'
 
+function getWsAuthToken(): string | null {
+  return useUserStore().authState.token || null
+}
+
 export function buildAuthenticatedWsUrl(baseUrl: string): string | null {
-  const token = useUserStore().authState.token
+  const token = getWsAuthToken()
   if (!token) return null
   const separator = baseUrl.includes('?') ? '&' : '?'
   return `${baseUrl}${separator}token=${encodeURIComponent(token)}`
+}
+
+/**
+ * #16457: token via the Sec-WebSocket-Protocol subprotocol instead of the URL
+ * query string, so it never lands in server access logs or browser history.
+ * Pass the result as the second argument to `new WebSocket(url, protocols)`.
+ * Returns null when no token is available, matching `buildAuthenticatedWsUrl`
+ * — callers must handle this the same way (defer the connection).
+ */
+export function buildAuthenticatedWsSubprotocols(): string[] | null {
+  const token = getWsAuthToken()
+  return token ? ['bearer', token] : null
 }
