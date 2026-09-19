@@ -45,6 +45,7 @@ trigger python-suite?
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 # The matching semantics are imported, never re-implemented: two matchers that
 # drift apart would disagree silently, and this file would then certify coverage
