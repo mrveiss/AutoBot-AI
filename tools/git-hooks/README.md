@@ -56,6 +56,7 @@ For each ref you're pushing, the hook walks the changed files and runs:
 
 | Check | When | What |
 |---|---|---|
+| **Open-PR cap** (#17006) | a `refs/heads/*` ref that does not yet exist on the remote (a new branch; a new tag is exempt) | refuse the push once open PRs (excluding forks/bots) are `>= AUTOBOT_OPEN_PR_CAP` (default 40); pushes to an existing branch are never blocked |
 | **Phase 6 issue check** | branch matches `issue-NNNN` | warn if issue is CLOSED on GitHub OR if `origin/main` already has a commit citing `#NNNN` |
 | **Phase 0c type check** | any `.ts` or `.vue` file changed | `vue-tsc --noEmit -p tsconfig.app.json` (90s timeout); only **errors in changed files** block — pre-existing project errors warn |
 | **Phase 0c test run** | any test file or composable changed | `vitest run <relevant test files>` (120s timeout); failures block |
@@ -63,6 +64,11 @@ For each ref you're pushing, the hook walks the changed files and runs:
 
 Time-boxed: a slow check warns and skips rather than blocking forever. Real
 failures block the push with a clear "fix this" message.
+
+**The open-PR cap has no bypass** — `git push --no-verify` skips the whole
+hook (see "Bypass" below, and don't), but there is no flag or env var that
+disables just this check while leaving the others active. The only
+configurable input is `AUTOBOT_OPEN_PR_CAP` itself.
 
 ## Bypass
 

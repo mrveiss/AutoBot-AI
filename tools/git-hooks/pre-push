@@ -53,6 +53,95 @@ ok()    { printf "${GRN}[pre-push OK]${CLR} %s\n" "$*" >&2; }
 EXIT_CODE=0
 
 # ---------------------------------------------------------------------------
+# Open-PR cap (#17006): refuse a NEW-branch push once open PRs in this repo
+# -- excluding forks and bot authors -- are at or above the cap. A push to a
+# branch that already exists on the remote (an already-open PR) is never
+# blocked here: finishing open work must always stay possible.
+#
+# AUTOBOT_OPEN_PR_CAP is the only knob (default 40) -- deliberately no bypass
+# flag or env override that skips the check. This is a hook-only, bash-read
+# var: it is not in autobot_shared/env_registry.py / ENV_VARS.md because that
+# registry's pre-commit check (pipeline-scripts/check_env_var_registry.py)
+# only AST-scans .py files for os.getenv("AUTOBOT_..."); the precedent for a
+# bash-only AUTOBOT_* var living in a hook's own header comment instead is
+# AUTOBOT_PREPUSH_ALLOW_TIMEOUT, above.
+#
+# Fails CLOSED (docs/developer/MEASUREMENT_DISCIPLINE.md): if gh is missing,
+# unauthenticated, the query fails, or it times out, the push is refused with
+# a message saying the count could not be determined -- that is NOT the same
+# as "under the cap". One API call: the filtered count and the oldest 10 open
+# PRs both come from a single `gh pr list --jq` invocation, time-boxed to
+# OPEN_PR_CAP_TIMEOUT like the other checks in this file (TEST_TIMEOUT /
+# TYPE_CHECK_TIMEOUT, #15985) -- EXCEPT that a timeout here is never covered
+# by AUTOBOT_PREPUSH_ALLOW_TIMEOUT: that var is this file's escape hatch for
+# an unverified push, and the cap has none (#17008 review) -- a timed-out
+# count is still an undetermined count, not a pass.
+#
+# Bot detection: `is_bot` is what actually excludes GitHub Apps in practice.
+# Measured against this repo's own dependabot history (#17008 review): gh's
+# GraphQL `author.login` for a bot reports the App-slug form `app/dependabot`,
+# never the REST-style `dependabot[bot]`, so the login-suffix test below is a
+# defensive fallback for a shape not observed in this API, not the mechanism
+# that actually does the excluding.
+# ---------------------------------------------------------------------------
+OPEN_PR_CAP="${AUTOBOT_OPEN_PR_CAP:-40}"
+OPEN_PR_CAP_TIMEOUT=10
+
+check_open_pr_cap() {
+  if ! command -v gh >/dev/null 2>&1; then
+    fail "open-PR cap: could not determine the open PR count (gh CLI not found)."
+    fail "  This is NOT 'under the cap'. Install/configure gh, or push to an existing PR branch instead."
+    return 1
+  fi
+
+  local out gh_exit
+  out=$(timeout "$OPEN_PR_CAP_TIMEOUT" gh pr list --state open --limit 1000 \
+    --json number,title,createdAt,author,isCrossRepository \
+    --jq '
+      ( [ .[] | select(.isCrossRepository == false)
+               | select((.author.is_bot // false) == false)
+               | select((.author.login // "") | test("\\[bot\\]$") | not) ] ) as $counted
+      | ($counted | length | tostring),
+      ( $counted | sort_by(.createdAt) | .[0:10][] | (.number|tostring) + "\t" + .title )
+    ' 2>&1)
+  gh_exit=$?
+
+  if [ "$gh_exit" = "124" ]; then
+    fail "open-PR cap: could not determine the open PR count (gh query timed out after ${OPEN_PR_CAP_TIMEOUT}s). This is NOT 'under the cap'."
+    fail "  No override for this -- AUTOBOT_PREPUSH_ALLOW_TIMEOUT does not apply to the open-PR cap. Retry, or push to an existing PR branch instead."
+    return 1
+  fi
+
+  if [ "$gh_exit" != "0" ] || [ -z "$out" ]; then
+    fail "open-PR cap: could not determine the open PR count (gh query failed). This is NOT 'under the cap'."
+    printf '%s\n' "$out" | head -5 >&2
+    fail "  Check 'gh auth status', then re-push. Pushes to existing PR branches are never blocked."
+    return 1
+  fi
+
+  local count
+  count=$(printf '%s\n' "$out" | head -1)
+  case "$count" in
+    ''|*[!0-9]*)
+      fail "open-PR cap: could not determine the open PR count (unexpected gh output). This is NOT 'under the cap'."
+      printf '%s\n' "$out" | head -5 >&2
+      return 1
+      ;;
+  esac
+
+  if [ "$count" -ge "$OPEN_PR_CAP" ]; then
+    fail "open-PR cap: $count open PR(s) >= cap of $OPEN_PR_CAP -- new-branch pushes are refused until open work is finished."
+    fail "  Merge, close, or finish open PRs first. Pushes to EXISTING PR branches still work (this gate only blocks a NEW branch)."
+    fail "  Oldest open PRs to act on:"
+    printf '%s\n' "$out" | tail -n +2 | sed 's/^/    #/' >&2
+    return 1
+  fi
+
+  ok "open-PR cap: $count/$OPEN_PR_CAP open PRs -- below cap"
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # Read git's stdin: <local-ref> <local-sha> <remote-ref> <remote-sha>
 # Process each pushed ref. Skip deletes (sha = 0000...).
 # ---------------------------------------------------------------------------
@@ -61,6 +150,21 @@ ZERO=0000000000000000000000000000000000000000
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$ZERO" ] && continue  # deletion
   log "checking $local_ref → $remote_ref"
+
+  # ------------------------------------------------------------------------
+  # Open-PR cap (#17006): only for a BRANCH ref that does not yet exist on
+  # the remote -- a brand-new branch. remote_sha is all-zero for exactly that
+  # case in git's pre-push stdin protocol, but that alone is not sufficient:
+  # a brand-new TAG (`git push origin v1.2.3`) has a zero remote_sha too, and
+  # a tag is never a PR head (#17008 review). refs/heads/* is what narrows it
+  # to an actual branch.
+  # ------------------------------------------------------------------------
+  if [ "$remote_sha" = "$ZERO" ] && [[ "$local_ref" == refs/heads/* ]]; then
+    if ! check_open_pr_cap; then
+      EXIT_CODE=1
+      continue
+    fi
+  fi
 
   # ------------------------------------------------------------------------
   # Phase 6 (#5143): pre-push duplicate check for issue branches

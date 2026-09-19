@@ -45,13 +45,17 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          # THERE IS NO PR QUEUE LIMIT. Issues are solved one by one without
-          # capping open PRs; the real constraint is review capacity, and PRs
-          # merge as their CI finishes. CLAUDE.md states it under **Never violate**
-          # as "Dispatch gates on review capacity, not PR count" -- quoted by its
-          # wording, since the heading this used to cite never existed (#15877).
+          # AUTOBOT_OPEN_PR_CAP (default 40) is the actual limit (#17006):
+          # pre-push refuses a push that opens a NEW branch once open PRs
+          # (excluding forks/bots) reach it -- tools/git-hooks/pre-push.
+          # CLAUDE.md states this under **Never violate** as "Open-PR cap".
           #
-          # This threshold is NOT that policy and must never be read as one. It
+          # This workflow is a separate, earlier, warn-only notice. It runs on
+          # `opened`/`reopened`, after a PR already exists, so it cannot block
+          # anything the way pre-push can -- it only flags a queue depth worth
+          # a glance well before the hard cap.
+          #
+          # This threshold is NOT that cap and must never be read as one. It
           # is a runaway detector: a number high enough that reaching it means
           # something is opening PRs in a loop, or that the merge pipeline has
           # stalled so nothing is draining. Warn-only — it posts a comment and
@@ -90,7 +94,7 @@ jobs:
             BODY=$(printf '%s\n' \
               "## Notice: $EXISTING open PRs — past the runaway threshold ($RUNAWAY_THRESHOLD)" \
               "" \
-              "**There is no PR queue limit, and this is not a request to defer this PR.** Work proceeds one issue at a time without a cap on open PRs; review capacity is the constraint." \
+              "**This is not a request to defer this PR.** The actual limit is the open-PR cap (\`AUTOBOT_OPEN_PR_CAP\`, default 40), enforced at pre-push against NEW branches only -- pushing more commits to this PR's own branch is never blocked by it." \
               "" \
               "This notice only means the count is high enough to be worth a glance for a *runaway* — something opening PRs in a loop, or a merge pipeline that has stalled so nothing is draining." \
               "" \
