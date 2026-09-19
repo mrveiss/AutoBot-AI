@@ -93045,9 +93045,9 @@ export interface components {
             shared_with?: string[];
             /**
              * Visibility
-             * @description private/shared/group/organization/system
+             * @description A typo here must 422, not silently fall through to the legacy store (#16428 review)
              */
-            visibility?: string | null;
+            visibility?: ("private" | "shared" | "group" | "organization" | "system") | null;
             /**
              * Connector Id
              * @description Bridge to this connector's ConnectorCredentialStore entry
