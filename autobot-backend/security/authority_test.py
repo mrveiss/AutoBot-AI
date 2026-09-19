@@ -73,7 +73,7 @@ class TestQueries:
         assert not RICH.permits("admin:users")
 
     def test_top_holds_every_capability(self):
-        assert TOP.has_capability("define_agents")
+        assert TOP.has_capability("any_capability_at_all")
 
 
 def test_meet_all_of_nothing_is_top():

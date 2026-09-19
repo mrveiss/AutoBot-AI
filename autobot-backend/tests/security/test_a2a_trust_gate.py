@@ -86,6 +86,7 @@ class TestTrustCapabilityGateMissingHeader:
                     request=request,
                     x_a2a_agent_id=None,
                     authorization=None,
+                    current_user={"username": "cred-a", "user_id": "cred-a"},
                 )
 
         assert exc_info.value.status_code == 401
@@ -125,7 +126,14 @@ class TestTrustCapabilityGateMissingHeader:
                     request=request,
                     x_a2a_agent_id="untrusted-peer",
                     authorization=None,
+                    current_user={"username": "cred-a", "user_id": "cred-a"},
                 )
 
         assert exc_info.value.status_code == 403
-        mock_mgr.require_capability.assert_called_once_with("untrusted-peer", Capability.SUBMIT_TASKS)
+        # #16950 (owner decision): trust is keyed on the verified credential presenting
+        # the peer id, never on the self-declared header alone.
+        from a2a.peer_identity import peer_trust_key
+
+        mock_mgr.require_capability.assert_called_once_with(
+            peer_trust_key("cred-a", "untrusted-peer"), Capability.SUBMIT_TASKS
+        )
