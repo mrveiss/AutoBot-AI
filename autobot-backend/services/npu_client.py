@@ -18,6 +18,7 @@ Usage:
 """
 
 import asyncio
+import hashlib
 import threading
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
@@ -27,7 +28,6 @@ import aiohttp
 from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.secret_redaction import redact_content
 from autobot_shared.ssot_config import config, get_config
 
 logger = get_logger(__name__)
@@ -466,18 +466,19 @@ async def generate_embedding_with_fallback(
     # Issue: CodeQL py/clear-text-logging-sensitive-data. ``text`` is caller-supplied
     # and this function has no guarantee it was pre-sanitized (several callers embed
     # raw chat/query/code content, not just the fact-content path that redacts before
-    # calling) -- redact credential-shaped spans before any of it reaches the log.
-    # Slice to 512 chars BEFORE redacting (this is an unconditional logger.error on a
-    # hot embedding-failure path with inputs up to ~100 KB): redact_content() would
-    # otherwise run every regex over the whole text on every call. 512 is well over
-    # the final 80-char prefix, so a credential crossing that boundary is still masked.
+    # calling). CodeQL does not model redact_content() as a sanitizer, so a redacted
+    # excerpt still trips the query -- log no input-derived content at all: length
+    # plus a truncated content hash is enough to correlate failures in the logs
+    # without ever reproducing what was sent.
     logger.error(
         "Embedding generation FAILED after %d attempt(s) — caller must handle the "
-        "missing vector (do NOT silently drop). model=%s, last_reason=%s, text_prefix=%r",
+        "missing vector (do NOT silently drop). model=%s, last_reason=%s, "
+        "text_len=%d, text_sha256=%s",
         max_attempts,
         model_name,
         last_reason,
-        redact_content(text[:512])[:80],
+        len(text),
+        hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:12],
     )
     return None
 
