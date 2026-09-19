@@ -25,6 +25,7 @@ from api.schemas_workflows import (
     TaskApprovalLinkResponse,
 )
 from api.user_management.dependencies import get_db_session
+from api.user_management.human_decider import require_interactive_human
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -196,7 +197,8 @@ async def approve(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Approve a pending approval gate (#1402)."""
+    """Approve a pending approval gate (#1402); only a person may (#17042)."""
+    require_interactive_human(current_user, "approval gate approve")
     svc = ApprovalGateService(session)
     username = current_user.get("username", "unknown")
     try:
@@ -228,7 +230,8 @@ async def reject(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Reject a pending approval gate (#1402)."""
+    """Reject a pending approval gate (#1402); only a person may (#17042)."""
+    require_interactive_human(current_user, "approval gate reject")
     svc = ApprovalGateService(session)
     username = current_user.get("username", "unknown")
     try:
@@ -260,7 +263,8 @@ async def request_revision(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Request revision on a pending approval gate (#1402)."""
+    """Request revision on a pending approval gate (#1402); only a person may (#17042)."""
+    require_interactive_human(current_user, "approval gate request_revision")
     svc = ApprovalGateService(session)
     username = current_user.get("username", "unknown")
     try:

@@ -1,6 +1,18 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 ---
+# #16980 (PR review): nothing notifies Reload/Restart nginx anywhere in the
+# tree today -- under the no-debris rule they are not deleted for that, so a
+# `Test nginx config` handler defined FIRST makes them safe the day
+# something does notify one. Ansible runs notified handlers in definition
+# order, so this ordering is what stops a reload/restart from firing before
+# nginx -t validates the config, the same fix #16980 applied to
+# roles/frontend/handlers/main.yml. Covered by
+# repo_tests/nginx_sites_enabled_link_enforced_16979_test.py.
+- name: Test nginx config
+  ansible.builtin.command: nginx -t
+  become: true
+
 - name: Reload nginx
   ansible.builtin.systemd:
     name: nginx

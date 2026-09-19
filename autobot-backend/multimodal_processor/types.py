@@ -44,6 +44,20 @@ class ConfidenceLevel(Enum):
     VERY_LOW = 0.2
 
 
+class PersistenceOutcome(str, Enum):
+    """What happened to a result's memory write (#16926).
+
+    Four values, not a bool: a tenancy refusal and a transient failure both left
+    the result unwritten, and collapsing them hid a data-isolation event behind
+    a Redis blip. The API forwards the value, so the caller sees which one.
+    """
+
+    STORED = "stored"
+    UNOWNED = "unowned"  # no user identity (e.g. a service key): nothing to scope the write to
+    REFUSED = "refused"  # the tenancy guard rejected the owner scope
+    FAILED = "failed"  # the store raised for any other reason
+
+
 # Issue #380: Module-level tuple for embedding field names in result extraction
 EMBEDDING_FIELDS = ("clip_features", "audio_embedding", "embeddings")
 
