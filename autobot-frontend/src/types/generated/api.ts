@@ -93044,6 +93044,11 @@ export interface components {
              */
             shared_with?: string[];
             /**
+             * Visibility
+             * @description private/shared/group/organization/system
+             */
+            visibility?: string | null;
+            /**
              * Connector Id
              * @description Bridge to this connector's ConnectorCredentialStore entry
              */
