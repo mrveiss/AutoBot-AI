@@ -182,9 +182,10 @@ fi
 # preflight forgets is a round-trip it was supposed to save.
 #
 # The expected list is read from branch protection where the token allows it,
-# so adding an eleventh required check fails this test instead of quietly
-# widening the gap. Without a token it falls back to the ten known at the time
-# of writing -- a weaker check that still catches a deletion.
+# so adding a twelfth required check fails this test instead of quietly
+# widening the gap. Without a token it falls back to the eleven known at the
+# time of writing (#17129 added python-suite) -- a weaker check that still
+# catches a deletion.
 
 echo ""
 echo "required status check coverage"
@@ -200,6 +201,7 @@ REQUIRED_FALLBACK=(
     "verify-precommit-config"
     "No commit trailers"
     "No open blocks-merge issues reference this PR"
+    "python-suite"
 )
 
 mapfile -t REQUIRED < <(

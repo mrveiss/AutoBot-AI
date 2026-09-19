@@ -179,3 +179,9 @@ python:
   # here, a change confined to this one file skips the guard that exists to
   # catch exactly that drift.
   - 'autobot-frontend/src/components/security/SecretsManager.vue'
+  # #17129: `git_hooks_formatter_dispatch_16923_test.py::test_the_bot_commit_workflow_never_installs_local_hooks`
+  # reads this workflow by concrete literal to assert it stays hook-less (the
+  # named AC6 exemption for github-actions[bot]'s commit). Without an entry
+  # here, a change confined to this file -- the only change that could add
+  # `install-git-hooks.sh` back in -- skips the guard.
+  - '.github/workflows/auto-fix-generated-types.yml'

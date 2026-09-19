@@ -48,6 +48,7 @@ from api.ws_security import authenticate_ws_admin
 from api.ws_security import validate_ws_origin as _validate_ws_origin
 from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from services.docker_task_workspace import (
     WorkspaceInfo,
     get_task_workspace_manager,
@@ -272,7 +273,7 @@ async def workspace_shell(
         await websocket.close(code=1008)
         return
 
-    await websocket.accept()
+    await accept_websocket(websocket)
     # Authentication (bearer header / cookie-session / internal-service key) + admin
     # is decided solely here, so cookie-authenticated admins and internal-key clients
     # are no longer locked out by an Authorization-header precondition (#11016).
