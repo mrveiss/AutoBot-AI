@@ -63,6 +63,7 @@ class CreateOperationRequest(BaseModel):
     estimated_items: int = 1
     context: Dict[str, Any] = {}
     execute_immediately: bool = False
+    created_by: str | None = None  # #17017: whose operation this is
 
 
 class OperationResponse(BaseModel):
@@ -166,8 +167,7 @@ class OperationIntegrationManager:
                 description=request.description,
                 operation_function=operation_function,
                 priority=priority,
-                estimated_items=request.estimated_items,
-                context=request.context,
+                metadata=dict(request.context, estimated_items=request.estimated_items, created_by=request.created_by),
                 execute_immediately=request.execute_immediately,
             )
             return {"operation_id": operation_id, "status": "created"}
@@ -611,7 +611,7 @@ class OperationMigrator:
             description=f"Migrated operation with {timeout_seconds}s timeout",
             operation_function=operation_function,
             priority=OperationPriority.NORMAL,
-            estimated_items=estimated_items,
+            metadata={"estimated_items": estimated_items},  # #17017: create_operation takes no estimated_items
             execute_immediately=True,
         )
 

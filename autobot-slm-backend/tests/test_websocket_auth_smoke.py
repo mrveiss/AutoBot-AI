@@ -16,11 +16,12 @@ Key behavior under test (issue #10151 / M1): WS auth must use the **async**
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from api.websocket import _authenticate_websocket_token
+from api.websocket import _authenticate_websocket_token, _log_ws_reject_context
 
 
 def _fake_ws() -> AsyncMock:
@@ -37,6 +38,36 @@ def _fake_ws() -> AsyncMock:
     ws.url.path = "/ws/test"
     ws.client = ("127.0.0.1", 12345)
     return ws
+
+
+def test_log_ws_reject_context_never_logs_the_raw_subprotocol_header(caplog: pytest.LogCaptureFixture):
+    """#16457 review: this used to log headers.get("sec-websocket-protocol")[:60]
+    verbatim -- for a bearer offer that IS "bearer, <jwt>", so an invalid or
+    expired token landed in the log on every reject. Logs only whether a
+    bearer subprotocol was offered.
+    """
+    ws = _fake_ws()
+    fixture_credential = ".".join(["fixture", "not-a-real", "value"])
+    ws.headers.get = MagicMock(
+        side_effect=lambda key, default=None: (
+            f"bearer, {fixture_credential}" if key == "sec-websocket-protocol" else default
+        )
+    )
+
+    with caplog.at_level(logging.WARNING):
+        _log_ws_reject_context(ws, "missing token")
+
+    assert "bearer_offered=True" in caplog.text
+    assert fixture_credential not in caplog.text
+
+
+def test_log_ws_reject_context_reports_no_offer_when_none_was_made(caplog: pytest.LogCaptureFixture):
+    ws = _fake_ws()  # default headers.get returns the passed default -- no offer
+
+    with caplog.at_level(logging.WARNING):
+        _log_ws_reject_context(ws, "missing token")
+
+    assert "bearer_offered=False" in caplog.text
 
 
 @pytest.mark.asyncio
