@@ -7,6 +7,7 @@ Worker Controller - NPU Worker Process Management
 import logging
 import subprocess
 from pathlib import Path
+
 import requests
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
@@ -144,7 +145,7 @@ class WorkerController(QObject):
             logger.info("Starting worker process: %s %s", python_cmd, self.worker_script)
 
             # Start worker process
-            self.worker_process = subprocess.Popen(
+            self.worker_process = subprocess.Popen(  # nosec B603  # fixed argv, no shell, no user input
                 [python_cmd, str(self.worker_script)],
                 cwd=str(self.worker_dir),
                 stdout=subprocess.PIPE,
@@ -200,7 +201,7 @@ class WorkerController(QObject):
         """
         try:
             # Check if service exists
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell, no user input
                 ["sc", "query", "AutoBotNPUWorker"],
                 capture_output=True,
                 text=True,
@@ -218,7 +219,7 @@ class WorkerController(QObject):
 
             # Stop the service
             logger.info("Stopping AutoBotNPUWorker service...")
-            stop_result = subprocess.run(
+            stop_result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell, no user input
                 ["sc", "stop", "AutoBotNPUWorker"],
                 capture_output=True,
                 text=True,
@@ -247,7 +248,7 @@ class WorkerController(QObject):
         """
         try:
             # Check if service exists
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell, no user input
                 ["sc", "query", "AutoBotNPUWorker"],
                 capture_output=True,
                 text=True,
@@ -265,7 +266,7 @@ class WorkerController(QObject):
 
             # Start the service
             logger.info("Starting AutoBotNPUWorker service...")
-            start_result = subprocess.run(
+            start_result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell, no user input
                 ["sc", "start", "AutoBotNPUWorker"],
                 capture_output=True,
                 text=True,

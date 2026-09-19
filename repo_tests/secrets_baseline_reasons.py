@@ -137,6 +137,160 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "grafana_admin_password default literal 'admin' -- #16299's named "
         "Grafana default. Moving to generate-or-reuse (#16299)."
     ),
+    # Pinned HuggingFace model revision SHAs and weight-integrity SHA-256
+    # digests added by #17087. Both are public identifiers (a git commit SHA
+    # on a public HF repo; a checksum whose whole purpose is to be published
+    # and compared against) that read as high-entropy hex to the plugin --
+    # not secrets by any definition. Each key verified against the actual
+    # source string (SHA1 of the literal recomputed and matched to the
+    # recorded hashed_secret) before being added here.
+    (
+        "autobot_shared/pinned_model_registry.py",
+        "Hex High Entropy String",
+        "b19500dc665817dc424db9a65828621e2bdc89e5",
+    ): "pinned revision SHA for 'openai/clip-vit-base-patch32' in `_REGISTRY`, not a secret (#17087).",
+    (
+        "autobot_shared/pinned_model_registry.py",
+        "Hex High Entropy String",
+        "19e879c0f9a39f27cf0c07a180747746033a4bd9",
+    ): (
+        "weight-integrity digest for 'openai/clip-vit-base-patch32' "
+        "(pytorch_model.bin) in `_REGISTRY`, not a secret (#17087)."
+    ),
+    (
+        "autobot_shared/pinned_model_registry.py",
+        "Hex High Entropy String",
+        "75aec676732429ae9a41587261cb01f506a80597",
+    ): "pinned revision SHA for 'facebook/wav2vec2-base-960h' in `_REGISTRY`, not a secret (#17087).",
+    (
+        "autobot_shared/pinned_model_registry.py",
+        "Hex High Entropy String",
+        "b28418e88f385715a247f0f1616fca1f8cfbfc54",
+    ): (
+        "weight-integrity digest for 'facebook/wav2vec2-base-960h' "
+        "(model.safetensors) in `_REGISTRY`, not a secret (#17087)."
+    ),
+    (
+        "autobot_shared/pinned_model_registry.py",
+        "Hex High Entropy String",
+        "0602352c490c245314434fa45e354c5b1ea1907b",
+    ): "pinned revision SHA for 'openai/whisper-base' in `_REGISTRY`, not a secret (#17087).",
+    (
+        "autobot_shared/pinned_model_registry.py",
+        "Hex High Entropy String",
+        "2d1af225089b0708828cd666cd238bbad39640cb",
+    ): (
+        "weight-integrity digest for 'openai/whisper-base' "
+        "(model.safetensors) in `_REGISTRY`, not a secret (#17087)."
+    ),
+    (
+        "autobot_shared/pinned_model_registry.py",
+        "Hex High Entropy String",
+        "3f3266f3bef50e168052af035a150dac927afe95",  # pragma: allowlist secret
+    ): "pinned revision SHA for 'Salesforce/blip2-opt-2.7b' in `_REGISTRY`, not a secret (#17087).",
+    (
+        "autobot_shared/pinned_model_registry.py",
+        "Hex High Entropy String",
+        "d18d3efcc2c358ce28fde89b0f15faf7241251f4",  # pragma: allowlist secret
+    ): (
+        "weight-integrity digest for 'Salesforce/blip2-opt-2.7b' "
+        "(model-00001-of-00002.safetensors) in `_REGISTRY`, not a secret (#17087)."
+    ),
+    (
+        "autobot_shared/pinned_model_registry.py",
+        "Hex High Entropy String",
+        "51c8959773bedd159f21db0e1f75fdc5c69c8bd2",  # pragma: allowlist secret
+    ): (
+        "weight-integrity digest for 'Salesforce/blip2-opt-2.7b' "
+        "(model-00002-of-00002.safetensors) in `_REGISTRY`, not a secret (#17087)."
+    ),
+    (
+        "autobot_shared/pinned_model_registry.py",
+        "Hex High Entropy String",
+        "2b1d5b4ba121bc95c61f96351c51a71c045c432d",  # pragma: allowlist secret
+    ): "pinned revision SHA for 'microsoft/codebert-base' in `_REGISTRY`, not a secret (#17087).",
+    (
+        "autobot_shared/pinned_model_registry.py",
+        "Hex High Entropy String",
+        "a70ea28494ddee898e0ee2474dba8691533bbefd",  # pragma: allowlist secret
+    ): (
+        "weight-integrity digest for 'microsoft/codebert-base' "
+        "(pytorch_model.bin) in `_REGISTRY`, not a secret (#17087)."
+    ),
+    (
+        "autobot-npu-worker/resources/windows-npu-worker/app/worker_settings.py",
+        "Hex High Entropy String",
+        "38f2c4945e06a5ef36f69a0dafb3af9f6664544b",  # pragma: allowlist secret
+    ): "pinned revision SHA for 'nomic-ai/nomic-embed-text-v1' in `SUPPORTED_MODELS`, not a secret (#17087).",
+    (
+        "autobot-npu-worker/resources/windows-npu-worker/app/worker_settings.py",
+        "Hex High Entropy String",
+        "08df4a98376e596d4425e0cf47b2878e95e70b32",  # pragma: allowlist secret
+    ): (
+        "weight-integrity digest for 'nomic-ai/nomic-embed-text-v1' "
+        "(model.safetensors) in `SUPPORTED_MODELS`, not a secret (#17087)."
+    ),
+    (
+        "autobot-npu-worker/resources/windows-npu-worker/app/worker_settings.py",
+        "Hex High Entropy String",
+        "a379bdf0b2ab75ccbb6dfa3cef700a18be26a130",  # pragma: allowlist secret
+    ): (
+        "weight-integrity digest for 'nomic-ai/nomic-embed-text-v1' "
+        "(pytorch_model.bin) in `SUPPORTED_MODELS`, not a secret (#17087)."
+    ),
+    (
+        "autobot-npu-worker/resources/windows-npu-worker/app/worker_settings.py",
+        "Hex High Entropy String",
+        "00d9f4e0808dbd6a8c3d74873c6f71efe1e68d89",  # pragma: allowlist secret
+    ): (
+        "pinned revision SHA for 'sentence-transformers/all-MiniLM-L6-v2' in "
+        "`SUPPORTED_MODELS`, not a secret (#17087)."
+    ),
+    (
+        "autobot-npu-worker/resources/windows-npu-worker/app/worker_settings.py",
+        "Hex High Entropy String",
+        "76cb94008a639874ff55514a76ad1f5d879e3130",  # pragma: allowlist secret
+    ): (
+        "weight-integrity digest for 'sentence-transformers/all-MiniLM-L6-v2' "
+        "(model.safetensors) in `SUPPORTED_MODELS`, not a secret (#17087)."
+    ),
+    (
+        "autobot-npu-worker/resources/windows-npu-worker/app/worker_settings.py",
+        "Hex High Entropy String",
+        "1f85d74639de5baf0508312c1384fb61483eca13",  # pragma: allowlist secret
+    ): (
+        "weight-integrity digest for 'sentence-transformers/all-MiniLM-L6-v2' "
+        "(pytorch_model.bin) in `SUPPORTED_MODELS`, not a secret (#17087)."
+    ),
+    (
+        "autobot-npu-worker/resources/windows-npu-worker/app/worker_settings.py",
+        "Hex High Entropy String",
+        "3377979d2e7b9f5aa625e21f007d97acda28b4ed",  # pragma: allowlist secret
+    ): "pinned revision SHA for 'BAAI/bge-small-en-v1.5' in `SUPPORTED_MODELS`, not a secret (#17087).",
+    (
+        "autobot-npu-worker/resources/windows-npu-worker/app/worker_settings.py",
+        "Hex High Entropy String",
+        "de99df5fffc19b352c225ea134f5fc267b4c7ad9",  # pragma: allowlist secret
+    ): (
+        "weight-integrity digest for 'BAAI/bge-small-en-v1.5' "
+        "(model.safetensors) in `SUPPORTED_MODELS`, not a secret (#17087)."
+    ),
+    (
+        "autobot-npu-worker/resources/windows-npu-worker/app/worker_settings.py",
+        "Hex High Entropy String",
+        "741dd5ef2a9ce09b44a21d1c513adab3395afdb3",  # pragma: allowlist secret
+    ): (
+        "weight-integrity digest for 'BAAI/bge-small-en-v1.5' "
+        "(pytorch_model.bin) in `SUPPORTED_MODELS`, not a secret (#17087)."
+    ),
+    (
+        "autobot_shared/pinned_model_registry_test.py",
+        "Hex High Entropy String",
+        "b19500dc665817dc424db9a65828621e2bdc89e5",
+    ): (
+        "test fixture `_REVISION` reuses `_REGISTRY`'s 'openai/clip-vit-base-patch32' "
+        "revision SHA, not a secret (#17087)."
+    ),
     (
         "autobot-backend/api/vnc_handshake_bridge_test.py",
         "Hex High Entropy String",
