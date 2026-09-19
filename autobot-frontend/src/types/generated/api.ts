@@ -9120,6 +9120,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/import_claude_memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Claude Memory Endpoint
+         * @description Queue import of Claude Code auto-memory files into knowledge_facts (#16642).
+         *
+         *     Always imports from the configured memory directory (#16642 security
+         *     review: no caller-supplied path — nothing to confine or validate).
+         *     Returns immediately with task_id. Use /import_claude_memory/status/{task_id} to poll.
+         */
+        post: operations["import_claude_memory_endpoint_api_knowledge_base_import_claude_memory_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/import_claude_memory/status/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Import Claude Memory Status
+         * @description Poll the status of a background Claude Code memory import task (#16642).
+         */
+        get: operations["get_import_claude_memory_status_api_knowledge_base_import_claude_memory_status__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/api/knowledge/facts/{fact_id}/share": {
         parameters: {
             query?: never;
@@ -116266,6 +116310,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScanManPagesChangesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_claude_memory_endpoint_api_knowledge_base_import_claude_memory_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskQueuedResponse"];
+                };
+            };
+        };
+    };
+    get_import_claude_memory_status_api_knowledge_base_import_claude_memory_status__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskStatusResponse"];
                 };
             };
             /** @description Validation Error */
