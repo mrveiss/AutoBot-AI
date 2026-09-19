@@ -23,6 +23,10 @@
 #     either way; `pre-commit install` refuses while the key merely exists.
 #   * Dangling symlinks in the hooks dir are detected, reported, and replaced.
 #   * Idempotent — safe to re-run; a second run is a no-op when up to date.
+#   * The installed `pre-commit` runs the branch guard, then dispatches staged
+#     files to the `pre-commit` framework binary if it's on PATH (#16923) —
+#     see tools/git-hooks/pre-commit for the logic; this installer just copies
+#     it verbatim, same as every other managed hook.
 #
 # Usage:
 #   bash scripts/install-git-hooks.sh          # install/refresh hooks
@@ -49,8 +53,10 @@ warn()  { printf "${YELLOW}[install-hooks WARN]${NC} %s\n" "$*" >&2; }
 fail()  { printf "${RED}[install-hooks FAIL]${NC} %s\n" "$*" >&2; }
 
 # Hooks this installer manages. Each name must exist as a real file under
-# tools/git-hooks/<name>.
-MANAGED_HOOKS="pre-commit pre-push"
+# tools/git-hooks/<name>. commit-msg (#17029) strips co-author trailers and
+# rejects a subject without the `<type>(scope): ... (#NNNN)` convention; it was
+# a hand-installed local file until then, present on one machine and nowhere else.
+MANAGED_HOOKS="pre-commit pre-push commit-msg"
 
 # --- Locate the repo and its canonical hook templates (portable) -----------
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"

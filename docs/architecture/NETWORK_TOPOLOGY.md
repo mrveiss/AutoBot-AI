@@ -195,6 +195,23 @@ Rules are generated automatically from manifest `depends_on` + `ports`.
 | `.25` | 6379 | Browser worker Redis |
 | all | 22 | SSH |
 
+### ChromaDB Bind Address (#15317)
+
+The port 8100 rows above are omitted because ChromaDB's host role is not fixed — it
+runs wherever `chromadb_service_owner` (`group_vars/all.yml`) points, `.23` (redis
+role) or `.24` (ai-stack role) per host combination.
+
+Wherever it lands, the unit's `--host` flag binds `chromadb_bind_host`
+(`autobot-slm-backend/ansible/inventory/group_vars/all.yml`), **not** the client-dial
+`chromadb_host`/`AUTOBOT_CHROMADB_HOST`. It defaults to `127.0.0.1`: on a single-host
+or co-located install ChromaDB is only ever reached over loopback, and no firewall
+rule is needed for it. A multi-node install that puts ChromaDB's client on a
+different host from its server must set `chromadb_bind_host` to that host's fleet
+IP explicitly, and add a UFW rule scoped to the calling node's IP and port 8100 —
+the same `From`/`Port`/`Purpose` shape as the `.23` Redis rows above. Leaving the
+bind at `0.0.0.0` to skip that step reopens the every-interface exposure #15317
+closed, in front of four unpatchable ChromaDB advisories, one a pre-auth RCE.
+
 ---
 
 ## DNS
