@@ -115,7 +115,7 @@ class TestTheOwnerIsNotLockedOut:
         incomplete = {"client_id": "cid", "client_secret": "csecret", "refresh_token": "rtok"}
         created = svc.create_secret(
             name="connector:oauth:auth",
-            secret_type="connector_oauth_token",
+            secret_type="connector_oauth_token",  # pragma: allowlist secret
             value=json.dumps(incomplete),
             scope="user",
             metadata={"auth_type": "OAuthRefreshAuth"},
@@ -146,7 +146,7 @@ class TestTheBoundaryStillHolds:
     async def test_a_stranger_cannot_rotate(self, store) -> None:
         secret_id, _ = await _store_for_owner(store)
         with pytest.raises(PermissionError, match="owner_id mismatch"):
-            await store.rotate(secret_id, {"key": "sk-hijacked"}, STRANGER)
+            await store.rotate(secret_id, {"key": "sk-hijacked"}, STRANGER)  # pragma: allowlist secret
 
     @pytest.mark.asyncio
     async def test_a_stranger_cannot_revoke(self, store) -> None:
