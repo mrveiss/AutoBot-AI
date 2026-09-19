@@ -18,9 +18,15 @@ through the old, broken path with no data loss:
    `visibility` is still PRIVATE, promote it to SHARED -- the same rule
    `KnowledgeOwnership.share_fact` applies to a newly-shared fact.
 3. Add the fact to the canonical `user:kb:shared:{user_id}` index.
-4. Delete the legacy `user:shared_facts:{user_id}` key.
+4. Rename the legacy `user:shared_facts:{user_id}` key to a timestamped
+   backup key (`<legacy_key>:migrated:<utc-ts>`, no TTL) instead of deleting
+   it -- a removal that is witnessed and reversible, per the owner's rule
+   that stored-data cleanup always leaves a durable, undoable trail.
+5. Write one audit-log entry per user (facts moved, visibility fixed, the
+   backup key's name) so the migration has a durable record beyond stdout.
 
-Idempotent: a second run finds no legacy keys left and does nothing.
+Idempotent: a second run finds no legacy keys left (they are backup keys
+now, outside `_LEGACY_PREFIX`) and does nothing.
 
 This rewrites stored user data, so it is never run automatically -- a human
 runs it, reviews the dry-run summary, and only then re-runs it with --apply.
@@ -36,15 +42,26 @@ import asyncio
 import json
 import logging
 import sys
+from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 _LEGACY_PREFIX = "user:shared_facts:"
+_BACKUP_MARKER = ":migrated:"
 
 
-async def _migrate_one_user(redis, user_id: str, legacy_key: str, dry_run: bool) -> tuple[int, int]:
-    """Migrate one legacy `user:shared_facts:{user_id}` set. Returns (facts_migrated, visibility_fixed)."""
+def _backup_key_for(legacy_key: str, now: datetime) -> str:
+    """The timestamped backup name a legacy key is renamed to, never deleted (#16709)."""
+    return f"{legacy_key}{_BACKUP_MARKER}{now.strftime('%Y%m%dT%H%M%SZ')}"
+
+
+async def _migrate_one_user(redis, user_id: str, legacy_key: str, dry_run: bool, now: datetime) -> tuple[int, int, str]:
+    """Migrate one legacy `user:shared_facts:{user_id}` set.
+
+    Returns (facts_migrated, visibility_fixed, backup_key) -- backup_key is
+    the name the legacy key was (or, in a dry run, would be) renamed to.
+    """
     raw_ids = await redis.smembers(legacy_key)
     fact_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in (raw_ids or [])]
 
@@ -73,36 +90,60 @@ async def _migrate_one_user(redis, user_id: str, legacy_key: str, dry_run: bool)
             await redis.sadd(f"user:kb:shared:{user_id}", fact_id)
         migrated += 1
 
+    backup_key = _backup_key_for(legacy_key, now)
     if not dry_run:
-        await redis.delete(legacy_key)
+        # Renamed, never deleted: a removal that is witnessed and reversible.
+        # RENAME does not add or change a TTL, so the backup key inherits the
+        # legacy key's usual no-expiry lifetime.
+        await redis.rename(legacy_key, backup_key)
 
-    return migrated, visibility_fixed
+    return migrated, visibility_fixed, backup_key
 
 
 async def migrate(dry_run: bool = True) -> dict:
     """Migrate every legacy shared-facts index. Returns a summary dict."""
     from autobot_shared.redis_client import get_async_redis_client
+    from services.audit_logger import audit_log
 
     redis = await get_async_redis_client(database="knowledge")
+    now = datetime.now(tz=timezone.utc)
 
     legacy_keys = []
     async for key in redis.scan_iter(match=f"{_LEGACY_PREFIX}*"):
-        legacy_keys.append(key.decode("utf-8") if isinstance(key, bytes) else key)
+        key = key.decode("utf-8") if isinstance(key, bytes) else key
+        if _BACKUP_MARKER in key:
+            continue  # an already-migrated backup key, not a live legacy set (#16709)
+        legacy_keys.append(key)
 
     total_facts = 0
     total_visibility_fixed = 0
     for legacy_key in legacy_keys:
         user_id = legacy_key[len(_LEGACY_PREFIX) :]
-        facts, visibility_fixed = await _migrate_one_user(redis, user_id, legacy_key, dry_run)
+        facts, visibility_fixed, backup_key = await _migrate_one_user(redis, user_id, legacy_key, dry_run, now)
         total_facts += facts
         total_visibility_fixed += visibility_fixed
         logger.info(
-            "%s user %s: %d fact(s) migrated, %d visibility fix(es)",
-            "[dry-run] " if dry_run else "",
+            "%suser %s: %d fact(s) migrated, %d visibility fix(es), legacy key -> %s",
+            "[dry-run] would rename -- " if dry_run else "",
             user_id,
             facts,
             visibility_fixed,
+            backup_key,
         )
+        if not dry_run:
+            # Durable record beyond stdout (#16709): who, what moved, and
+            # where the pre-migration data is recoverable from.
+            await audit_log(
+                "kb.migrate_shared_facts",
+                result="success",
+                user_id=user_id,
+                resource=legacy_key,
+                details={
+                    "facts_migrated": facts,
+                    "visibility_fixed": visibility_fixed,
+                    "backup_key": backup_key,
+                },
+            )
 
     summary = {
         "users_migrated": len(legacy_keys),

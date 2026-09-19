@@ -41,6 +41,9 @@ class _FakeAsyncRedis:
     async def delete(self, key):
         self._sets.pop(key, None)
 
+    async def rename(self, src, dst):
+        self._sets[dst] = self._sets.pop(src)
+
     async def scan_iter(self, match: str):
         prefix = match.rstrip("*")
         for key in list(self._sets.keys()):
@@ -56,12 +59,20 @@ def _seed_legacy_share(redis: _FakeAsyncRedis, user_id: str, fact_id: str, visib
     redis._sets[f"user:shared_facts:{user_id}"] = {fact_id}
 
 
+def _backup_keys(redis: _FakeAsyncRedis, user_id: str) -> list[str]:
+    prefix = f"user:shared_facts:{user_id}:migrated:"
+    return [k for k in redis._sets if k.startswith(prefix)]
+
+
 @pytest.mark.asyncio
 async def test_migrate_promotes_visibility_and_writes_the_canonical_index():
     redis = _FakeAsyncRedis()
     _seed_legacy_share(redis, "u2", "f1")
 
-    with patch("autobot_shared.redis_client.get_async_redis_client", new=AsyncMock(return_value=redis)):
+    with (
+        patch("autobot_shared.redis_client.get_async_redis_client", new=AsyncMock(return_value=redis)),
+        patch("services.audit_logger.audit_log", new=AsyncMock()),
+    ):
         summary = await migrate(dry_run=False)
 
     assert summary == {"users_migrated": 1, "facts_migrated": 1, "visibility_fixed": 1, "dry_run": False}
@@ -69,7 +80,37 @@ async def test_migrate_promotes_visibility_and_writes_the_canonical_index():
     assert metadata["visibility"] == "shared"
     assert "u2" in metadata["shared_with"]
     assert "f1" in redis._sets["user:kb:shared:u2"]
-    assert "user:shared_facts:u2" not in redis._sets
+    assert "user:shared_facts:u2" not in redis._sets  # gone under its live name...
+    assert len(_backup_keys(redis, "u2")) == 1  # ...renamed to a timestamped backup, not deleted
+
+
+@pytest.mark.asyncio
+async def test_apply_renames_instead_of_deleting_and_records_an_audit_entry():
+    """The owner's rule: a removal is witnessed, reversible, and leaves a
+    durable trail -- never a bare delete (#16709)."""
+    redis = _FakeAsyncRedis()
+    _seed_legacy_share(redis, "u2", "f1")
+    mock_audit = AsyncMock()
+
+    with (
+        patch("autobot_shared.redis_client.get_async_redis_client", new=AsyncMock(return_value=redis)),
+        patch("services.audit_logger.audit_log", new=mock_audit),
+    ):
+        await migrate(dry_run=False)
+
+    backups = _backup_keys(redis, "u2")
+    assert len(backups) == 1, "the legacy key must still exist, under its backup name"
+    assert "f1" in redis._sets[backups[0]], "the backup is a real copy of the legacy set's content"
+
+    mock_audit.assert_awaited_once()
+    args, kwargs = mock_audit.call_args
+    assert args[0] == "kb.migrate_shared_facts"
+    assert kwargs["result"] == "success"
+    assert kwargs["user_id"] == "u2"
+    assert kwargs["resource"] == "user:shared_facts:u2"
+    assert kwargs["details"]["facts_migrated"] == 1
+    assert kwargs["details"]["visibility_fixed"] == 1
+    assert kwargs["details"]["backup_key"] == backups[0]
 
 
 @pytest.mark.asyncio
@@ -77,27 +118,37 @@ async def test_migrate_is_idempotent():
     redis = _FakeAsyncRedis()
     _seed_legacy_share(redis, "u2", "f1")
 
-    with patch("autobot_shared.redis_client.get_async_redis_client", new=AsyncMock(return_value=redis)):
+    with (
+        patch("autobot_shared.redis_client.get_async_redis_client", new=AsyncMock(return_value=redis)),
+        patch("services.audit_logger.audit_log", new=AsyncMock()),
+    ):
         await migrate(dry_run=False)
         second_run = await migrate(dry_run=False)
 
     assert second_run == {"users_migrated": 0, "facts_migrated": 0, "visibility_fixed": 0, "dry_run": False}
     assert "f1" in redis._sets["user:kb:shared:u2"]  # still there, not lost
+    assert len(_backup_keys(redis, "u2")) == 1, "the second run must not re-migrate the backup key itself"
 
 
 @pytest.mark.asyncio
 async def test_dry_run_makes_no_changes():
     redis = _FakeAsyncRedis()
     _seed_legacy_share(redis, "u2", "f1")
+    mock_audit = AsyncMock()
 
-    with patch("autobot_shared.redis_client.get_async_redis_client", new=AsyncMock(return_value=redis)):
+    with (
+        patch("autobot_shared.redis_client.get_async_redis_client", new=AsyncMock(return_value=redis)),
+        patch("services.audit_logger.audit_log", new=mock_audit),
+    ):
         summary = await migrate(dry_run=True)
 
     assert summary["facts_migrated"] == 1
     assert "user:kb:shared:u2" not in redis._sets  # nothing written
     assert "f1" in redis._sets["user:shared_facts:u2"]  # legacy key untouched
+    assert not _backup_keys(redis, "u2")  # no rename happened either
     metadata = json.loads(redis._hashes["fact:f1"]["metadata"])
     assert metadata["visibility"] == "private"  # not promoted
+    mock_audit.assert_not_awaited()  # a preview is not a durable record of anything done
 
 
 def test_migrate_defaults_to_dry_run():
