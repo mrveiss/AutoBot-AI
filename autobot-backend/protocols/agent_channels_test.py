@@ -19,6 +19,7 @@ from unittest.mock import patch
 import fakeredis
 import pytest
 
+from autobot_shared.eventually import eventually
 from protocols import agent_channels, agent_communication
 from protocols.agent_channels import (
     _DIRECT_INBOXES,
@@ -203,21 +204,14 @@ async def test_a_flood_never_runs_more_handlers_than_the_bound_and_a_reply_is_ne
     try:
         for _ in range(6):
             assert await protocols["agent_a"].send_message(_to("agent_b"))
-        for _ in range(300):
-            if running[0] == 2:
-                break
-            await asyncio.sleep(0.01)
-        await asyncio.sleep(0.2)
+        await eventually(lambda: running[0] == 2)
 
         reply = await protocols["agent_b"].send_request(_to("agent_c"), timeout=5)
 
         assert reply is not None and reply.payload.content == {"ok": True}
         assert (running[0], peak[0]) == (2, 2)
         release.set()
-        for _ in range(300):
-            if len(done) == 6:
-                break
-            await asyncio.sleep(0.01)
+        await eventually(lambda: len(done) == 6)
         assert (len(done), peak[0]) == (6, 2)
     finally:
         release.set()
@@ -364,7 +358,7 @@ async def test_a_dropped_request_is_answered_with_an_error_at_once(redis_server,
     try:
         for _ in range(2):  # one handling, one queued
             assert await a.send_message(_to("agent_b"))
-        await asyncio.sleep(0.2)
+        await eventually(lambda: len(b._handling) == 1 and len(b._backlog) == 1)
         started = asyncio.get_running_loop().time()
 
         reply = await a.send_request(_to("agent_b"), timeout=5)

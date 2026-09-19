@@ -15,6 +15,7 @@ import asyncio
 
 import pytest
 
+from autobot_shared.eventually import eventually
 from protocols.agent_kind import AgentKind
 from protocols.agent_presence import AgentPresenceRegistry
 from protocols.idle_notice import IdleWaitExpiredError, notify_agent_idle, wait_for_idle
@@ -121,7 +122,7 @@ class TestNotifyAgentIdle:
         bus.subscribe(EVT_AGENT_IDLE, _listener)
         try:
             reg.report(kind=AgentKind.AI_STACK, tenant_id=None, name="rag", instance_id="i1", busy=False)
-            await asyncio.sleep(0.05)
+            await eventually(lambda: len(received) == 1)
         finally:
             bus.unsubscribe(EVT_AGENT_IDLE, _listener)
 
@@ -143,6 +144,7 @@ class TestNotifyAgentIdle:
         bus.subscribe(EVT_AGENT_IDLE, _listener)
         try:
             reg.report(kind=AgentKind.AI_STACK, tenant_id=None, name="rag", instance_id="i1", busy=False)
+            # fixed sleep on purpose (#16255): proving an event never fires has no observable to wait on
             await asyncio.sleep(0.05)
         finally:
             bus.unsubscribe(EVT_AGENT_IDLE, _listener)

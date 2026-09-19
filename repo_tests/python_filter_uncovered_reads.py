@@ -76,6 +76,17 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         "requirements-gpu-torch.txt",
         "requirements-gpu.txt",
         "requirements.txt",
+        # #17133: "README.md" is a literal pre_push_open_pr_cap_17006_test.py
+        # writes inside its own synthetic tmp_path repo fixture (_seed_repo),
+        # never a read of the real root-level file -- same shape as the
+        # CLAUDE.md entry above (#17129).
+        "README.md",
+        # #17133: secrets_baseline_reasons.py's SPECIFIC_REASONS dict carries
+        # this path as a (filename, type, hash) key, never opens the file --
+        # the guard works off the baseline's stored hash, not this doc's
+        # live content, so covering it would run twelve shards on every
+        # unrelated edit to this doc for a guard that does not depend on it.
+        "docs/developer/GITHUB_FILING_CREDENTIAL_ROTATION.md",
     }
 )
 
@@ -96,4 +107,10 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: correction -- the same run's other new find,
 #: `.github/workflows/auto-fix-generated-types.yml`, was covered in the filter
 #: instead and so is not counted here.
-MAX_UNCOVERED_READS = 39
+#:
+#: RAISED 39 -> 41 by #17133: `README.md` (a synthetic tmp_path fixture
+#: literal, same shape as the CLAUDE.md entry) and
+#: `docs/developer/GITHUB_FILING_CREDENTIAL_ROTATION.md` (a baseline-reasons
+#: dict key, never opened) above are both new bypasses, not a denominator
+#: correction.
+MAX_UNCOVERED_READS = 41
