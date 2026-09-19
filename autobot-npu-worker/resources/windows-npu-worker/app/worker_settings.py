@@ -78,21 +78,51 @@ DEFAULT_SEMANTIC_SEARCH_TOP_K = 10
 
 # Model paths and HuggingFace identifiers
 MODELS_DIR = Path(__file__).parent.parent / "models"
+#
+# revision/weight_digests (#17087): this worker cannot import
+# autobot_shared.pinned_model_registry (see module docstring), so each
+# entry carries its own pin -- same principle (a real, verified commit SHA
+# and weight-file sha256, never guessed), obtained via the exact procedure
+# in docs/developer/MODEL_REVISION_PINNING.md's "Bump procedure" section.
+# trust_remote_code is per-model, not a blanket True: nomic-embed-text
+# genuinely needs it (its config.json declares an auto_map to
+# nomic-ai/nomic-bert-2048's custom modeling code -- pinning this repo's own
+# revision does not also pin that referenced repo, which is a follow-up, not
+# yet covered); the other two are vanilla BertModel with no auto_map, so
+# trust_remote_code was previously enabled for them with nothing to trust.
 SUPPORTED_MODELS = {
     "nomic-embed-text": {
         "hf_id": "nomic-ai/nomic-embed-text-v1",
         "dim": EMBEDDING_DIM_NOMIC,
         "max_length": 8192,
+        "revision": "3ac47f125a41961d13b397d0332866be2f9152e1",  # pinned 2026-09-19 by mrveiss (#17087)
+        "trust_remote_code": True,
+        "weight_digests": {
+            "model.safetensors": "47e396424a085a613034450cd4bf9e8acfb568b19089ae1c5c4e7051ae286877",
+            "pytorch_model.bin": "9fc78c00133aac4e12f358cfe9546e893cb82bb9bb7956506fbbcaa1700ce17c",
+        },
     },
     "all-MiniLM-L6-v2": {
         "hf_id": "sentence-transformers/all-MiniLM-L6-v2",
         "dim": 384,
         "max_length": 512,
+        "revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",  # pinned 2026-09-19 by mrveiss (#17087)
+        "trust_remote_code": False,
+        "weight_digests": {
+            "model.safetensors": "53aa51172d142c89d9012cce15ae4d6cc0ca6895895114379cacb4fab128d9db",
+            "pytorch_model.bin": "c3a85f238711653950f6a79ece63eb0ea93d76f6a6284be04019c53733baf256",
+        },
     },
     "bge-small-en-v1.5": {
         "hf_id": "BAAI/bge-small-en-v1.5",
         "dim": 384,
         "max_length": 512,
+        "revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",  # pinned 2026-09-19 by mrveiss (#17087)
+        "trust_remote_code": False,
+        "weight_digests": {
+            "model.safetensors": "3c9f31665447c8911517620762200d2245a2518d6e7208acc78cd9db317e21ad",
+            "pytorch_model.bin": "84868a67d847f7f37d1df745b73a4c20b5bc0a797c87a23b265f8a0131728b88",
+        },
     },
 }
 
