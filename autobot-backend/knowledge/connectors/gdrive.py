@@ -34,6 +34,7 @@ import aiohttp
 from autobot_shared.auth import BearerAuth
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import redact_content
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.content_extraction import extract_pdf_document as _extract_pdf_document
@@ -61,10 +62,9 @@ _GDOC_MIME = "application/vnd.google-apps.document"
 _GSHEET_MIME = "application/vnd.google-apps.spreadsheet"
 
 # Issue #12659: _load_ts()/_store_ts()/_classify_change() moved to
-# AbstractConnector (byte-identical to onedrive.py's copies). This
-# connector's Redis prefix ("connector:gdrive:ts:") matches the base class
-# default derived from connector_type, so no override is needed. Its
-# _modified_time_field also matches the base default ("modifiedTime").
+# AbstractConnector (byte-identical to onedrive.py's copies). This connector's
+# Redis prefix and _modified_time_field both match the base class defaults
+# ("connector:gdrive:ts:" derived from connector_type, and "modifiedTime"), so no override is needed.
 
 
 @ConnectorRegistry.register("gdrive")
@@ -267,9 +267,9 @@ class GoogleDriveConnector(AbstractConnector):
             )
             return None
 
-        # Add file header
+        # Add file header (redact_content is idempotent -- extract_text_from_docx already redacts its branch, #13708)
         header = f"# {file_name}\n\nFile: {file_meta.get('webViewLink', '')}\n\n"
-        text = header + text
+        text = header + redact_content(text)
 
         # Update stored timestamp
         last_modified = file_meta.get("modifiedTime", "")
