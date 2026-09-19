@@ -228,6 +228,89 @@ class TestGoogleDriveConnector:
                     assert result.metadata["file_extension"] == ".pdf"
 
     @pytest.mark.asyncio
+    async def test_fetch_content_pdf_redacts_a_credential(self, connector):
+        """#13708: the PDF branch never went through the redactor -- exercises the
+        real connector function end-to-end (mocked HTTP only), not the isolated
+        content_extraction.py wrapper a prior review found this gap hiding behind.
+        """
+        file_id = "pdf-secret-123"
+        source_id = f"gdrive:{connector.config.connector_id}:file:{file_id}"
+
+        mock_metadata = {
+            "status_code": 200,
+            "body": {
+                "id": file_id,
+                "name": "Onboarding.pdf",
+                "mimeType": "application/pdf",
+                "size": "10240",
+                "modifiedTime": "2026-06-04T10:00:00Z",
+                "webViewLink": "https://drive.google.com/file/d/pdf-secret-123",
+                "parents": ["root"],
+                "driveId": "drive1",
+            },
+        }
+        mock_content = {"status_code": 200, "content": b"%PDF-1.4\n...minimal pdf content..."}
+
+        async def mock_request(method, url, **kwargs):
+            if kwargs.get("params", {}).get("alt") == "media":
+                return mock_content
+            return mock_metadata
+
+        secret = "sk-" + "abcdefghijklmnopqrstuvwxyz123456"
+        page_text = f"Setup instructions: your API key is {secret} -- keep it private."
+        extracted_doc = ExtractedDocument(format="pdf", text=page_text, pages=(PageText(1, page_text),), page_count=1)
+
+        with patch.object(connector, "_drive_request", side_effect=mock_request):
+            with patch("knowledge.connectors.gdrive._extract_pdf_document", return_value=extracted_doc):
+                with patch.object(connector, "_store_ts", return_value=None):
+                    result = await connector.fetch_content(source_id)
+
+                    assert result is not None
+                    assert secret not in result.content
+                    assert "Setup instructions" in result.content
+
+    @pytest.mark.asyncio
+    async def test_fetch_content_md_redacts_a_credential(self, connector):
+        """#13708: the .md/.txt branch decodes bytes directly with no redaction call
+        anywhere on the path -- a markdown file synced from Drive containing a
+        credential was indexed unredacted before this fix.
+        """
+        file_id = "md-secret-123"
+        source_id = f"gdrive:{connector.config.connector_id}:file:{file_id}"
+
+        mock_metadata = {
+            "status_code": 200,
+            "body": {
+                "id": file_id,
+                "name": "notes.md",
+                "mimeType": "text/markdown",
+                "size": "128",
+                "modifiedTime": "2026-06-04T10:00:00Z",
+                "webViewLink": "https://drive.google.com/file/d/md-secret-123",
+                "parents": ["root"],
+                "driveId": "drive1",
+            },
+        }
+        secret = "sk-" + "abcdefghijklmnopqrstuvwxyz123456"
+        mock_content = {
+            "status_code": 200,
+            "content": f"# Notes\n\nyour temporary password is {secret}\n".encode("utf-8"),
+        }
+
+        async def mock_request(method, url, **kwargs):
+            if kwargs.get("params", {}).get("alt") == "media":
+                return mock_content
+            return mock_metadata
+
+        with patch.object(connector, "_drive_request", side_effect=mock_request):
+            with patch.object(connector, "_store_ts", return_value=None):
+                result = await connector.fetch_content(source_id)
+
+                assert result is not None
+                assert secret not in result.content
+                assert "# Notes" in result.content
+
+    @pytest.mark.asyncio
     async def test_fetch_content_refuses_a_stamped_scan(self, connector):
         """#13884 finding 1 / finding 2: the live sync path, not just a mock.
 

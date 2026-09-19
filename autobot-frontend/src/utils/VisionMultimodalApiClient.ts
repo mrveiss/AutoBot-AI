@@ -175,6 +175,8 @@ export interface MultiModalResponse {
   result_data: Record<string, unknown>;
   device_used?: string;
   error_message?: string;
+  /** Whether the result was written to memory (#16926); independent of `success`. */
+  persistence?: 'stored' | 'unowned' | 'refused' | 'failed' | null;
 }
 
 export interface TextProcessingRequest {

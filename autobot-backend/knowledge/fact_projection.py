@@ -146,7 +146,9 @@ class FactProjectionMixin:
             logger.debug("Error checking for existing fact: %s", e)
         return None
 
-    async def _durable_update_or_adopt(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> bool:
+    async def _durable_update_or_adopt(
+        self, fact_id: str, content: str, metadata: Dict[str, Any], *, hash_content: str | None = None
+    ) -> bool:
         """Update the row, or write one if this fact predates it. ``False`` if deleted.
 
         No durable row was affected, and there are two ways to reach that. A fact
@@ -154,15 +156,19 @@ class FactProjectionMixin:
         moment to adopt it. A fact deleted concurrently must not be resurrected —
         recreating its Redis and ChromaDB projections would leave copies with no
         fact behind them. The Redis key is what tells the two apart.
+
+        Args:
+            hash_content: raw, pre-redaction content for the durable content_hash
+                column (#13708 round 4) -- see fact_store._row_values for why.
         """
         # Lazy: see the module docstring on why fact_store is not imported at module scope.
         from knowledge import fact_store
 
-        if await fact_store.update_fact(fact_id, content, metadata):
+        if await fact_store.update_fact(fact_id, content, metadata, hash_content=hash_content):
             return True
         if not await asyncio.to_thread(self.redis_client.exists, "fact:%s" % fact_id):
             return False
-        await fact_store.persist_fact(fact_id, content, metadata)
+        await fact_store.persist_fact(fact_id, content, metadata, hash_content=hash_content)
         return True
 
     async def _durable_delete(self, fact_id: str) -> bool:
