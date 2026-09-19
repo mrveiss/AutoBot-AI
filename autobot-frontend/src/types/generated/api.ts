@@ -52562,10 +52562,12 @@ export interface paths {
          * @description Return the recorded timeline for a run (for step-browser).
          *
          *     Raw inputs are stored in the DB; use ``?redact_pii=true`` to have
-         *     credentials stripped from the response on read.  Emails are NOT
-         *     separately redacted (the credential_redaction module covers API keys
-         *     and bearer tokens; email redaction would require regex patterns not
-         *     currently present in that module).
+         *     credentials stripped from the response on read.  Free text (an email
+         *     body, a document) is covered too (#13708): ``credential_redaction``'s
+         *     ``redact_string`` now also runs the cross-service content scanner
+         *     (``autobot_shared.secret_redaction``), which catches a credential sitting
+         *     in prose -- PEM blocks, basic-auth URLs, "password is X" phrasing -- not
+         *     just the API-key/bearer-token shapes this module's own patterns cover.
          */
         get: operations["get_replay_log_api_llc_agents__agent_id__runs__run_id__replay_log_get"];
         put?: never;
@@ -84702,7 +84704,16 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** MultiModalResponse */
+        /**
+         * MultiModalResponse
+         * @description Response for POST /process/image, /process/audio and /process/text.
+         *
+         *     ``success`` says whether processing succeeded; ``persistence`` says whether
+         *     the result was then written to memory (#16926). The two are independent: a
+         *     processed result can be refused storage, and the caller must see that here,
+         *     not only in the server log. Values mirror ``PersistenceOutcome``; None when
+         *     processing failed and there was nothing to store.
+         */
         MultiModalResponse: {
             /** Success */
             success: boolean;
@@ -84722,6 +84733,8 @@ export interface components {
             device_used?: string | null;
             /** Error Message */
             error_message?: string | null;
+            /** Persistence */
+            persistence?: ("stored" | "unowned" | "refused" | "failed") | null;
         } & {
             [key: string]: unknown;
         };
