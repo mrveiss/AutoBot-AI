@@ -11,8 +11,6 @@ query intent detection (Issue #249 Phase 2), and conversation-aware
 query enhancement (Issue #249 Phase 3).
 """
 
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
 
 from advanced_rag_optimizer import RAGMetrics, SearchResult
@@ -25,80 +23,27 @@ from services.chat_knowledge_service import (
     get_query_intent_detector,
 )
 
-
-@pytest.fixture
-def mock_rag_service():
-    """Create mock RAGService for testing."""
-    mock = MagicMock()
-    mock.advanced_search = AsyncMock()
-    mock.get_stats = MagicMock(
-        return_value={
-            "initialized": True,
-            "cache_entries": 5,
-            "kb_implementation": "KnowledgeBaseV2",
-        }
-    )
-    return mock
-
-
-@pytest.fixture
-def sample_search_results():
-    """Create sample search results for testing."""
-    return [
-        SearchResult(
-            content="Redis is configured in config/redis.yaml",
-            metadata={"id": "fact1", "source": "docs/redis.md"},
-            semantic_score=0.95,
-            keyword_score=0.8,
-            hybrid_score=0.9,
-            relevance_rank=1,
-            source_path="docs/redis.md",
-            chunk_index=0,
-            rerank_score=0.92,
-        ),
-        SearchResult(
-            content="Use redis-cli to connect to Redis",
-            metadata={"id": "fact2", "source": "docs/redis.md"},
-            semantic_score=0.85,
-            keyword_score=0.7,
-            hybrid_score=0.8,
-            relevance_rank=2,
-            source_path="docs/redis.md",
-            chunk_index=1,
-            rerank_score=0.82,
-        ),
-        SearchResult(
-            content="Redis default port is 6379",
-            metadata={"id": "fact3", "source": "docs/network.md"},
-            semantic_score=0.65,
-            keyword_score=0.5,
-            hybrid_score=0.6,
-            relevance_rank=3,
-            source_path="docs/network.md",
-            chunk_index=0,
-            rerank_score=0.58,  # Below default threshold
-        ),
-    ]
+# mock_rag_service, sample_search_results: services/conftest.py (#16930 review
+# split -- chat_knowledge_rag_firewall_test.py needs them too; a conftest
+# fixture is auto-discovered, unlike an explicit cross-module import, which
+# would trip pyflakes F811 the moment a second file names a parameter after it).
 
 
 @pytest.mark.asyncio
 async def test_retrieve_relevant_knowledge_success(mock_rag_service, sample_search_results) -> None:
     """Test successful knowledge retrieval with filtering."""
-    # Setup
     mock_rag_service.advanced_search.return_value = (
         sample_search_results,
         RAGMetrics(),
     )
     service = ChatKnowledgeService(mock_rag_service)
 
-    # Execute
     context, citations = await service.retrieve_relevant_knowledge(
         query="How to configure Redis?",
         top_k=5,
         score_threshold=0.7,  # Should filter out fact3
     )
 
-    # Verify
     assert "KNOWLEDGE CONTEXT:" in context
     assert "Redis is configured" in context
     assert "redis-cli" in context
@@ -113,14 +58,11 @@ async def test_retrieve_relevant_knowledge_success(mock_rag_service, sample_sear
 @pytest.mark.asyncio
 async def test_retrieve_relevant_knowledge_empty_results(mock_rag_service) -> None:
     """Test handling of empty search results."""
-    # Setup
     mock_rag_service.advanced_search.return_value = ([], RAGMetrics())
     service = ChatKnowledgeService(mock_rag_service)
 
-    # Execute
     context, citations = await service.retrieve_relevant_knowledge(query="Nonexistent topic")
 
-    # Verify
     assert context == ""
     assert citations == []
 
@@ -144,15 +86,12 @@ def test_filter_by_score(mock_rag_service, sample_search_results) -> None:
     """Test score-based filtering."""
     service = ChatKnowledgeService(mock_rag_service)
 
-    # Test with threshold 0.7
     filtered = service._filter_by_score(sample_search_results, 0.7)
     assert len(filtered) == 2  # fact1 and fact2 only
 
-    # Test with threshold 0.9
     filtered = service._filter_by_score(sample_search_results, 0.9)
     assert len(filtered) == 1  # fact1 only
 
-    # Test with threshold 0.5
     filtered = service._filter_by_score(sample_search_results, 0.5)
     assert len(filtered) == 3  # All facts
 
@@ -224,10 +163,8 @@ def test_format_citations(mock_rag_service, sample_search_results) -> None:
 
     citations = service.format_citations(sample_search_results[:2])
 
-    # Verify structure
     assert len(citations) == 2
 
-    # Check first citation
     assert citations[0]["id"] == "fact1"
     assert citations[0]["content"] == "Redis is configured in config/redis.yaml"
     assert citations[0]["score"] == 0.92
@@ -236,7 +173,6 @@ def test_format_citations(mock_rag_service, sample_search_results) -> None:
     assert "metadata" in citations[0]
     assert citations[0]["metadata"]["rerank_score"] == 0.92
 
-    # Check second citation
     assert citations[1]["id"] == "fact2"
     assert citations[1]["rank"] == 2
 
@@ -432,7 +368,6 @@ async def test_smart_retrieve_knowledge_skips_for_commands(mock_rag_service, sam
     )
     service = ChatKnowledgeService(mock_rag_service)
 
-    # Command request should skip retrieval
     context, citations, intent = await service.smart_retrieve_knowledge(
         query="git status",
         force_retrieval=False,
@@ -443,7 +378,6 @@ async def test_smart_retrieve_knowledge_skips_for_commands(mock_rag_service, sam
     assert intent.intent == QueryKnowledgeIntent.COMMAND_REQUEST
     assert intent.should_use_knowledge is False
 
-    # Verify RAG service was NOT called
     mock_rag_service.advanced_search.assert_not_called()
 
 
@@ -456,7 +390,6 @@ async def test_smart_retrieve_knowledge_retrieves_for_questions(mock_rag_service
     )
     service = ChatKnowledgeService(mock_rag_service)
 
-    # Knowledge query should trigger retrieval
     context, citations, intent = await service.smart_retrieve_knowledge(
         query="How do I configure Redis?",
         force_retrieval=False,
@@ -467,7 +400,6 @@ async def test_smart_retrieve_knowledge_retrieves_for_questions(mock_rag_service
     assert intent.intent == QueryKnowledgeIntent.KNOWLEDGE_QUERY
     assert intent.should_use_knowledge is True
 
-    # Verify RAG service WAS called
     mock_rag_service.advanced_search.assert_called_once()
 
 
@@ -480,7 +412,6 @@ async def test_smart_retrieve_knowledge_force_retrieval(mock_rag_service, sample
     )
     service = ChatKnowledgeService(mock_rag_service)
 
-    # Even for command, force_retrieval should trigger RAG
     context, citations, intent = await service.smart_retrieve_knowledge(
         query="git status",
         force_retrieval=True,  # Force retrieval
@@ -490,7 +421,6 @@ async def test_smart_retrieve_knowledge_force_retrieval(mock_rag_service, sample
     assert len(citations) >= 1
     assert intent.intent == QueryKnowledgeIntent.COMMAND_REQUEST
 
-    # Verify RAG service WAS called despite command intent
     mock_rag_service.advanced_search.assert_called_once()
 
 
@@ -499,7 +429,6 @@ async def test_smart_retrieve_knowledge_skips_for_greetings(mock_rag_service, sa
     """Test that smart retrieval skips RAG for conversational messages."""
     service = ChatKnowledgeService(mock_rag_service)
 
-    # Greeting should skip retrieval
     context, citations, intent = await service.smart_retrieve_knowledge(
         query="Hello!",
         force_retrieval=False,
@@ -509,7 +438,6 @@ async def test_smart_retrieve_knowledge_skips_for_greetings(mock_rag_service, sa
     assert citations == []
     assert intent.intent == QueryKnowledgeIntent.CONVERSATIONAL
 
-    # Verify RAG service was NOT called
     mock_rag_service.advanced_search.assert_not_called()
 
 
@@ -584,7 +512,6 @@ class TestConversationContextEnhancer:
         entities = context_enhancer._extract_entities(sample_conversation_history)
 
         assert "Redis" in entities
-        # Should find technical entities
 
     def test_short_query_enhancement(self, context_enhancer, sample_conversation_history) -> None:
         """Test that very short queries get context added."""
@@ -605,7 +532,6 @@ class TestConversationContextEnhancer:
         )
 
         assert result.enhancement_applied is True
-        # Should include some reference to prior conversation
 
     def test_needs_context_enhancement_detection(self, context_enhancer) -> None:
         """Test the internal detection of context-needing queries."""
@@ -694,7 +620,6 @@ async def test_conversation_aware_retrieve_force_retrieval(mock_rag_service, sam
     )
     service = ChatKnowledgeService(mock_rag_service)
 
-    # Even for command, force_retrieval should trigger RAG
     context, citations, intent, enhanced = await service.conversation_aware_retrieve(
         query="git status",
         conversation_history=[],
@@ -705,7 +630,6 @@ async def test_conversation_aware_retrieve_force_retrieval(mock_rag_service, sam
     assert len(citations) >= 1
     assert intent.intent == QueryKnowledgeIntent.COMMAND_REQUEST
 
-    # Verify RAG service WAS called despite command intent
     mock_rag_service.advanced_search.assert_called_once()
 
 
