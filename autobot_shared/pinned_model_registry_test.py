@@ -158,7 +158,44 @@ def test_every_registered_digest_is_a_sha256_shape():
 
 
 def test_every_registered_model_declares_at_least_one_weight_digest():
+    """A model with neither weight_digests nor no_weight_files=True is a
+    silent gap (#17087): verify_cached_model can never pass for it, and
+    nothing here says that's intentional."""
     import autobot_shared.pinned_model_registry as pmr
 
     for repo_id, pinned in pmr._REGISTRY.items():
-        assert pinned.weight_digests, f"{repo_id}: no weight_digests -- verify_cached_model can never pass"
+        assert pinned.weight_digests or pinned.no_weight_files, (
+            f"{repo_id}: no weight_digests and no_weight_files is not set -- verify_cached_model "
+            "can never pass. If this repo genuinely ships no weights of its own, set "
+            "no_weight_files=True explicitly with a comment saying why."
+        )
+
+
+def test_no_weight_files_entries_are_actually_empty():
+    """The inverse gap: no_weight_files=True on a model that DOES have
+    digests would silently skip verifying them (#17087)."""
+    import autobot_shared.pinned_model_registry as pmr
+
+    for repo_id, pinned in pmr._REGISTRY.items():
+        if pinned.no_weight_files:
+            assert not pinned.weight_digests, (
+                f"{repo_id}: no_weight_files=True but weight_digests is non-empty -- "
+                "verify_cached_model would skip checking them. Drop no_weight_files instead."
+            )
+
+
+def test_verify_cached_model_is_a_noop_for_a_no_weight_files_entry(tmp_path):
+    """Proves the exemption actually short-circuits verify_cached_model,
+    rather than happening to pass because the registry entry is malformed."""
+    import autobot_shared.pinned_model_registry as pmr
+
+    fake_repo_id = "test-org/pipeline-definition-only"
+    original = pmr._REGISTRY.get(fake_repo_id)
+    pmr._REGISTRY[fake_repo_id] = pmr.PinnedModel(repo_id=fake_repo_id, revision="deadbeef", no_weight_files=True)
+    try:
+        pmr.verify_cached_model(fake_repo_id, cache_dir=str(tmp_path))  # no cache dir populated at all
+    finally:
+        if original is None:
+            del pmr._REGISTRY[fake_repo_id]
+        else:
+            pmr._REGISTRY[fake_repo_id] = original
