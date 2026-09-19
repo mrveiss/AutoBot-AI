@@ -68,6 +68,7 @@ class TestAPIEndpoints:
         """POST /advanced_search must thread enable_reranking through to RAGService."""
         rag_service = Mock()
         rag_service.advanced_search = AsyncMock(return_value=([_sample_result("doc")], RAGMetrics()))
+        rag_service.kb_adapter.kb.ownership_manager.check_access = AsyncMock(return_value=True)
         app = _build_rag_test_app(rag_service)
 
         response = TestClient(app).post(
@@ -85,6 +86,7 @@ class TestAPIEndpoints:
         rag_service = Mock()
         result = _sample_result("Latency increased by 15%")
         rag_service.advanced_search = AsyncMock(return_value=([result], RAGMetrics(total_time=0.02)))
+        rag_service.kb_adapter.kb.ownership_manager.check_access = AsyncMock(return_value=True)
         app = _build_rag_test_app(rag_service)
 
         response = TestClient(app).post("/knowledge_base/rag/advanced_search", json={"query": "latency"})
