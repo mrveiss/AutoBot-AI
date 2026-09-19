@@ -47222,6 +47222,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/a2a/trust/grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grant trust to a (credential, peer id) pair
+         * @description Set a pair's trust level (#16950). Audited with the acting admin, the pair and the level.
+         *
+         *     The re-key starts every pair at UNTRUSTED, which cannot submit tasks, so this is
+         *     the only way back in. The level holds as a floor until a threat event or an
+         *     integrity violation revokes it.
+         */
+        post: operations["grant_trust_api_a2a_trust_grant_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/a2a/trust-legacy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pre-#16950 header-only trust records
+         * @description The header-only records kept from before the re-key: never read for access, only to guide re-grants.
+         */
+        get: operations["list_legacy_trust_api_a2a_trust_legacy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/a2a/trust": {
         parameters: {
             query?: never;
@@ -53953,6 +53997,26 @@ export interface components {
             } | null;
             /** Events */
             events: unknown[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * A2ATrustGrantRequest
+         * @description An admin grant of trust to one (credential, peer id) pair -- never to a bare peer id.
+         */
+        A2ATrustGrantRequest: {
+            /**
+             * Subject
+             * @description The verified credential subject presenting the peer id
+             */
+            subject: string;
+            /**
+             * Peer Id
+             * @description The peer's X-A2A-Agent-Id
+             */
+            peer_id: string;
+            /** @description The level to grant, held as a floor until misconduct revokes it */
+            level: components["schemas"]["TrustLevel"];
         } & {
             [key: string]: unknown;
         };
@@ -99470,6 +99534,21 @@ export interface components {
          * @enum {string}
          */
         TriggerType: "webhook" | "cron" | "redis_pubsub" | "file_watch" | "agent_event";
+        /**
+         * TrustLevel
+         * @description Trust level for federated peer evaluation (GH#8957, Issue #7358).
+         *
+         *     Used to determine what capabilities a peer agent can access based on
+         *     continuous trust scoring. Higher levels grant more capabilities.
+         *
+         *     Score ranges:
+         *       UNTRUSTED  (score ≤ 0.30)  — discovery info only
+         *       LIMITED    (0.30–0.60)     — discovery + task submission
+         *       STANDARD   (0.60–0.85)     — + memory/knowledge queries
+         *       TRUSTED    (> 0.85)        — + new agent definitions
+         * @enum {string}
+         */
+        TrustLevel: "UNTRUSTED" | "LIMITED" | "STANDARD" | "TRUSTED";
         /**
          * UIElementResponse
          * @description Response model for UI element
@@ -166051,6 +166130,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grant_trust_api_a2a_trust_grant_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["A2ATrustGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_legacy_trust_api_a2a_trust_legacy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
         };
