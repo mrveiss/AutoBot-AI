@@ -34,6 +34,7 @@ _LAZY_ATTRS = {
     "BearerAuth": "autobot_shared.auth.connector_auth",
     "OAuthRefreshAuth": "autobot_shared.auth.connector_auth",
     "validate_config_against_schema": "autobot_shared.auth.connector_auth",
+    "resolve_auth_type": "autobot_shared.auth.connector_auth",
     "JWTDecodeError": "autobot_shared.auth.jwt_core",
     "JWTExpiredError": "autobot_shared.auth.jwt_core",
     "decode_jwt": "autobot_shared.auth.jwt_core",

@@ -21,6 +21,8 @@ from __future__ import annotations
 import logging
 import os
 
+from security.secrets_store_reader import secret_log_ref
+
 logger = logging.getLogger(__name__)
 
 JSON_UNIFIED_READ_ENV = "AUTOBOT_SECRETS_JSON_UNIFIED_READ"
@@ -82,7 +84,13 @@ async def read_imported_json_secret_in_session(session, secret_id: str, root_key
         KeyError,
         ValueError,
     ) as exc:
-        logger.warning("Envelope read unusable for imported JSON secret %s: %s — falling back", secret_id, exc)
+        # Class name only, never str(exc): SecretNotFoundError/SecretAccessError
+        # embed the raw id in their own message (envelope_secrets_service.py),
+        # which would re-leak it here even with safe_id already hashed (#16444).
+        safe_id = secret_log_ref(secret_id) if secret_id else "none"
+        logger.warning(
+            "Envelope read unusable for imported JSON secret %s: %s — falling back", safe_id, type(exc).__name__
+        )
         return None
     return _to_legacy_shape(row, plaintext.decode("utf-8"))
 

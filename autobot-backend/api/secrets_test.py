@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from api.schemas_system import ChatSecretScope
+from api.schemas_system import ChatSecretScope, SecretCreateRequest
 from autobot_shared.scoping.scope_level import ScopeLevel
 from autobot_shared.status_enums import SecretType
 
@@ -195,6 +195,33 @@ class TestGetSecretDualRead:
             with pytest.raises(PermissionError):
                 await _get_secret_dual_read("s3", chat_id="chat-b")
 
+    @pytest.mark.asyncio
+    async def test_falls_back_to_connector_store_when_neither_earlier_store_has_it(self):
+        """#16428: the third fallback, after the unified store and the legacy file."""
+        from api.secrets import _get_secret_dual_read
+
+        bridged = {
+            "id": "s4",
+            "secret_type": "connector_api_key",  # pragma: allowlist secret
+            "scope": "user",
+            "created_by": "owner-9",
+        }
+        connector_svc = MagicMock()
+        connector_svc.get_secret = MagicMock(return_value=bridged)
+        with (
+            patch("api.secrets.load_imported_json_secret", AsyncMock(return_value=None)),
+            patch("api.secrets.secrets_manager") as legacy,
+            patch("api.secrets.get_secrets_service", return_value=connector_svc),
+        ):
+            legacy.get_secret = MagicMock(return_value=None)
+            result = await _get_secret_dual_read("s4", chat_id=None, owner_id="owner-9")
+
+        assert result["id"] == "s4"
+        assert result["type"] == "connector_api_key"
+        assert "secret_type" not in result
+        assert result["value"] is None
+        connector_svc.get_secret.assert_called_once_with(secret_id="s4", include_value=False, accessed_by="owner-9")
+
 
 # ---------------------------------------------------------------------------
 # #14974 — the wildcard must not be advertised where it is refused
@@ -354,3 +381,127 @@ class TestTheWildcardIsNotAdvertised:
 def _stored_secret(request):
     """Stand in for the encrypting store: echo the validated request back."""
     return request.to_secret_model()
+
+
+class TestAuditLog:
+    """audit_log() logs a hash of secret_id, never the raw id (#16444).
+
+    Truncation (``secret_id[:8] + "..."``) still carried real id bytes, which
+    CodeQL's py/clear-text-logging-sensitive-data flagged regardless -- the
+    parameter is name-tainted, and slicing isn't a sanitizer it recognizes.
+    These tests pin the property (raw id absent, a stable correlation value
+    present), not the mechanism.
+    """
+
+    def test_raw_secret_id_never_logged(self, caplog):
+        from api.secrets import audit_log
+
+        fake_request = MagicMock()
+        with patch("api.secrets.get_client_id", return_value="client-1"), caplog.at_level("INFO"):
+            audit_log("read", "sk-not-a-real-secret-0123456789", fake_request)  # pragma: allowlist secret
+
+        assert "sk-not-a-real-secret-0123456789" not in caplog.text
+
+    def test_same_secret_id_logs_the_same_correlation_value(self, caplog):
+        """An operator must still be able to tell two log lines share one secret_id."""
+        from api.secrets import audit_log
+
+        fake_request = MagicMock()
+        with patch("api.secrets.get_client_id", return_value="client-1"), caplog.at_level("INFO"):
+            audit_log("read", "same-id", fake_request)
+            first = caplog.text
+            caplog.clear()
+            audit_log("write", "same-id", fake_request)
+            second = caplog.text
+
+        import re
+
+        first_id = re.search(r"SecretID: (\S+)", first).group(1)
+        second_id = re.search(r"SecretID: (\S+)", second).group(1)
+        assert first_id == second_id
+        assert first_id != "same-id"
+
+    def test_a_falsy_secret_id_never_passes_through_unhashed(self, caplog):
+        """No branch may pass secret_id itself to the log call, not even an
+        empty one -- the prior `else secret_id` fallback did exactly that."""
+        from api.secrets import audit_log
+
+        fake_request = MagicMock()
+        with patch("api.secrets.get_client_id", return_value="client-1"), caplog.at_level("INFO"):
+            audit_log("read", "", fake_request)
+
+        import re
+
+        logged_id = re.search(r"SecretID: (\S+)", caplog.text).group(1)
+        assert logged_id == "none"
+
+
+class TestSystemVisibilityRequiresRealAdmin:
+    """#16428 review: the system-vault branch must be denied through the
+    REAL `check_admin_permission` dependency for a non-admin, not merely
+    behind a test fixture that always overrides it to True.
+
+    The suite runs against an `auth_middleware` stub
+    (`testkit/auth_middleware_stub.py`) whose `check_admin_permission`
+    approves every caller, so this loads the REAL one instead
+    (`tests.conftest.load_real_auth_middleware`, the same approach as
+    `api/knowledge_chroma_admin_16666_test.py`) and fakes only the identity
+    the request carries -- that drives the real role logic end to end.
+    """
+
+    def test_a_non_admin_is_refused_before_reaching_the_system_vault_branch(self, monkeypatch):
+        from types import SimpleNamespace
+
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api import secrets as secrets_module
+        from tests.conftest import load_real_auth_middleware
+
+        real = load_real_auth_middleware()
+        monkeypatch.setattr(
+            real,
+            "get_auth_middleware",
+            lambda: SimpleNamespace(get_user_from_request=lambda _r: {"username": "u", "role": "member"}),
+        )
+
+        app = FastAPI()
+        app.include_router(secrets_module.router, prefix="/api/secrets")
+        app.dependency_overrides[secrets_module.check_admin_permission] = real.check_admin_permission
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post(
+                "/api/secrets/",
+                json={
+                    "name": "attempted-system-secret",
+                    "type": SecretType.API_KEY.value,
+                    "scope": ChatSecretScope.GENERAL.value,
+                    "value": "irrelevant",
+                    "visibility": "system",
+                },
+            )
+
+        assert response.status_code == 403
+        # _create_system_vault_secret must never have been reached.
+        assert "attempted-system-secret" not in response.text
+
+
+class TestVisibilityIsAClosedSet:
+    """#16428 review: a typo ("System", "systen") must 422, not silently
+    fall through to the legacy store as an unrecognised value would with a
+    bare `str` field."""
+
+    @pytest.mark.parametrize("bad_value", ["System", "systen", "SYSTEM", "public"])
+    def test_an_unrecognised_visibility_is_rejected(self, bad_value):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            SecretCreateRequest(
+                name="x", type=SecretType.API_KEY, scope=ChatSecretScope.GENERAL, value="v", visibility=bad_value
+            )
+
+    @pytest.mark.parametrize("good_value", ["private", "shared", "group", "organization", "system", None])
+    def test_every_real_value_is_accepted(self, good_value):
+        SecretCreateRequest(
+            name="x", type=SecretType.API_KEY, scope=ChatSecretScope.GENERAL, value="v", visibility=good_value
+        )

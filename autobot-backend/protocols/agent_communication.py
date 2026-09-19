@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from autobot_shared.error_boundaries import error_boundary  # noqa: E402
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import RetryConfig, TimingConstants  # noqa: E402
+from protocols.message_origin import stamp  # noqa: E402
 
 
 def _parse_message_type(msg_type: Any) -> "MessageType":
@@ -55,7 +56,7 @@ def _parse_priority(priority: Any) -> "MessagePriority":
     return MessagePriority.NORMAL
 
 
-from autobot_shared.async_compat import fire_and_forget, run_or_schedule
+from autobot_shared.async_compat import fire_and_forget
 
 # noqa: E402
 from autobot_shared.redis_client import get_redis_client  # noqa: E402
@@ -127,6 +128,9 @@ class MessageHeader:
     expires_at: float | None = None
     retry_count: int = 0
     max_retries: int = RetryConfig.DEFAULT_RETRIES
+    # #16950: whose request this is, across relays -- see protocols/message_origin.py.
+    originator: str | None = None
+    chain: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -409,8 +413,9 @@ class AgentCommunicationProtocol:
     async def send_message(self, message: StandardMessage, channel_id: str | None = None) -> bool:
         """Send a message through a specific or default channel"""
 
-        # Set sender information
+        # Set sender information; the originator is set once and survives relays (#16950)
         message.header.sender = self.agent_identity
+        stamp(message.header, self.agent_identity.agent_id)
 
         # Select channel
         if channel_id:
@@ -742,64 +747,3 @@ async def broadcast_to_all_agents(sender_id: str, message_data: Any) -> int:
     )
 
     return await sender_protocol.broadcast(broadcast_msg)
-
-
-# CLI for testing the communication protocol
-if __name__ == "__main__":
-    import argparse
-
-    async def test_communication_protocol():
-        """Run integration test for agent communication protocol."""
-
-        logger.info("🧪 Testing Agent Communication Protocol")
-        logger.info("=" * 50)
-
-        manager = get_communication_manager()
-
-        # Create test agents
-        agent1_identity = AgentIdentity(agent_id="test_agent_1", agent_type="test", capabilities=["test", "demo"])
-
-        agent2_identity = AgentIdentity(agent_id="test_agent_2", agent_type="test", capabilities=["test", "demo"])
-
-        # Register agents with direct communication
-        await manager.register_agent(agent1_identity, [{"type": "direct"}])
-        protocol2 = await manager.register_agent(agent2_identity, [{"type": "direct"}])
-
-        # Set up message handlers
-        async def handle_request(message: StandardMessage) -> StandardMessage:
-            """Handle incoming request and return response message."""
-            logger.info(f"Agent 2 received request: {message.payload.content}")
-
-            return StandardMessage(
-                header=MessageHeader(message_type=MessageType.RESPONSE),
-                payload=MessagePayload(content={"response": "Hello from Agent 2!"}),
-            )
-
-        protocol2.register_message_handler(MessageType.REQUEST, handle_request)
-
-        # Test direct communication
-        logger.info("Testing direct agent communication...")
-
-        response = await send_agent_request("test_agent_1", "test_agent_2", {"message": "Hello from Agent 1!"})
-
-        logger.info("Response received: %s", response)
-
-        # Test broadcast
-        logger.info("\nTesting broadcast communication...")
-        broadcast_count = await broadcast_to_all_agents("test_agent_1", {"broadcast": "Hello everyone!"})
-
-        logger.info("Broadcast sent to %s channels", broadcast_count)
-
-        # Cleanup
-        await manager.shutdown_all()
-        logger.info("✅ Communication protocol test completed!")
-
-    parser = argparse.ArgumentParser(description="Agent Communication Protocol Test")
-    parser.add_argument("--test", action="store_true", help="Run communication test")
-
-    args = parser.parse_args()
-
-    if args.test:
-        run_or_schedule(test_communication_protocol())
-    else:
-        logger.info("Use --test to run the communication protocol test")
