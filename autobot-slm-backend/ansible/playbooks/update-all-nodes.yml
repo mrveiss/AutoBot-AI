@@ -88,6 +88,28 @@
         version: "{{ deploy_ref }}"
         force: true
 
+    # #16310: no `depth:` above stops a FUTURE clone from starting shallow,
+    # but the checkout that is actually on disk came from initial
+    # provisioning, before that -- it is shallow today regardless, and a
+    # plain `git fetch` on an already-shallow repo does not deepen it. Every
+    # component's own bootstrap plan needs full history
+    # (services/sync_deletions.py's `git log --diff-filter=AR`), so this
+    # runs once here, before any component's plan, through the same
+    # scrubbed-env git helper (services/git_subprocess.py:run_git) the
+    # planner itself uses -- never an ad-hoc `git fetch` in this playbook.
+    - name: "[PRE-FLIGHT] Ensure code_source has full history, not a shallow clone (#16310)"
+      ansible.builtin.command:
+        cmd: >-
+          /opt/autobot/autobot-slm-backend/venv/bin/python3
+          /opt/autobot/autobot-slm-backend/scripts/sync_deletion_planner.py
+          ensure-full-history --repo-root {{ git_repo_root }}
+      # Query/fixup step, like the git-status commands around it -- ansible's
+      # own change-tracking is not meaningful here. Failure is NOT swallowed:
+      # the command module's default failed_when (rc != 0) still fails this
+      # task, and the CLI's own contract (#16310) is to exit 1 with the
+      # reason on stdout whenever it could not guarantee full history.
+      changed_when: false
+
     - name: "[PRE-FLIGHT] Get current git branch"
       command: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} branch --show-current
       register: git_branch

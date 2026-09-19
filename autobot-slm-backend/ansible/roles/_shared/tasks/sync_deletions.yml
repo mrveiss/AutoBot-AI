@@ -85,6 +85,18 @@
       ansible.builtin.set_fact:
         _sd_code_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
 
+    # #16310: every marker on disk today was written in the ORIGINAL,
+    # unversioned format -- a bare commit SHA, no version line -- because it
+    # predates this tag. Bump the STRING, never the marker filename, the
+    # next time a marker's meaning changes incompatibly. Must match
+    # services/deploy_artifacts.py's SYNC_DELETIONS_MARKER_VERSION exactly
+    # (repo_tests/sync_deletions_unshallow_16310_test.py asserts the
+    # two literals stay in lockstep, the same pattern this file's own
+    # `find -prune` list already uses against ARTIFACT_DIRS).
+    - name: "{{ sync_deletions_label }} | Deletions: define this pass's marker format version (#16310)"
+      ansible.builtin.set_fact:
+        _sd_marker_version: "16310-v2"
+
     - name: "{{ sync_deletions_label }} | Deletions: slurp this module's own marker from the target"
       ansible.builtin.slurp:
         src: "{{ sync_deletions_target_dir }}/.autobot_sync_deletions_commit"
@@ -100,14 +112,49 @@
       ignore_errors: true
       when: _sd_own_marker is failed
 
+    # #16310: split from a single expression into three set_facts because
+    # later Jinja expressions in the SAME set_fact task cannot see facts
+    # earlier keys of that task just set -- each key is templated against
+    # the vars available BEFORE the task runs, not against its siblings.
+    - name: "{{ sync_deletions_label }} | Deletions: decode this module's own marker, if it slurped"
+      ansible.builtin.set_fact:
+        _sd_own_marker_content: "{{ (_sd_own_marker.content | b64decode | trim) if (_sd_own_marker is succeeded) else '' }}"
+
+    - name: "{{ sync_deletions_label }} | Deletions: split the marker into version/commit lines"
+      ansible.builtin.set_fact:
+        _sd_own_marker_lines: "{{ _sd_own_marker_content.split('\n') }}"
+
+    # A marker in the CURRENT format is exactly two lines: the version tag,
+    # then the commit. Anything else -- one line (the original bare-SHA
+    # shape every marker on disk has today), or a version tag that does not
+    # match -- reads as legacy: it may have been written by a bootstrap that
+    # ran while code_source was still shallow, before the shallow-clone
+    # guard existed, so it is treated exactly like "no marker" below and
+    # forces one bootstrap re-run.
+    - name: "{{ sync_deletions_label }} | Deletions: detect a legacy (pre-versioning) marker (#16310)"
+      ansible.builtin.set_fact:
+        _sd_own_marker_is_legacy: >-
+          {{ (_sd_own_marker_content | length > 0) and
+             not (_sd_own_marker_lines | length > 1 and _sd_own_marker_lines[0] == _sd_marker_version) }}
+
+    - name: "{{ sync_deletions_label }} | Deletions: warn that this module's own marker is legacy and being re-bootstrapped"
+      ansible.builtin.debug:
+        msg: >-
+          {{ sync_deletions_label }}: {{ sync_deletions_target_dir }}'s own deletion marker predates
+          format version {{ _sd_marker_version }} (#16310) -- treating it as absent and re-running the
+          bootstrap sweep once, now that code_source has full history.
+      when: _sd_own_marker is succeeded and _sd_own_marker_is_legacy | bool
+
     - name: "{{ sync_deletions_label }} | Deletions: settle on the previous commit, if any"
       ansible.builtin.set_fact:
         _sd_previous_commit: >-
-          {{ (_sd_own_marker.content | b64decode | trim)
-             if (_sd_own_marker is succeeded)
-             else ((_sd_legacy_marker.content | b64decode | trim)
-                   if (_sd_legacy_marker is defined and _sd_legacy_marker is succeeded)
-                   else '') }}
+          {{ ''
+             if (_sd_own_marker is succeeded and _sd_own_marker_is_legacy | bool)
+             else (_sd_own_marker_lines[1]
+                   if (_sd_own_marker is succeeded)
+                   else ((_sd_legacy_marker.content | b64decode | trim)
+                         if (_sd_legacy_marker is defined and _sd_legacy_marker is succeeded)
+                         else '')) }}
 
     - name: "{{ sync_deletions_label }} | Deletions: resolve the commit being deployed"
       ansible.builtin.command:
@@ -283,9 +330,12 @@
       when: _sd_plan.delete | length > 0
       changed_when: _sd_plan.delete | length > 0
 
+    # #16310: written as two lines (version, then commit) so a future run
+    # can tell this marker apart from the original, unversioned, bare-SHA
+    # shape -- see "define this pass's marker format version" above.
     - name: "{{ sync_deletions_label }} | Deletions: write this module's own marker (after deletion succeeds)"
       ansible.builtin.copy:
-        content: "{{ _sd_new_commit_git.stdout | trim }}\n"
+        content: "{{ _sd_marker_version }}\n{{ _sd_new_commit_git.stdout | trim }}\n"
         dest: "{{ sync_deletions_target_dir }}/.autobot_sync_deletions_commit"
         owner: "{{ sync_deletions_owner }}"
         group: "{{ sync_deletions_owner }}"
