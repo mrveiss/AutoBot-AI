@@ -93066,7 +93066,7 @@ export interface components {
             type: "ssh_key" | "password" | "api_key" | "token" | "oauth_refresh_token" | "connector_oauth_token" | "certificate" | "database_url" | "infrastructure_host" | "other";
             scope: components["schemas"]["ChatSecretScope"];
             /** Value */
-            value: string;
+            value?: string | null;
             /** Chat Id */
             chat_id?: string | null;
             /**
@@ -93102,6 +93102,28 @@ export interface components {
              * @description User IDs to share with
              */
             shared_with?: string[];
+            /**
+             * Visibility
+             * @description A typo here must 422, not silently fall through to the legacy store (#16428 review)
+             */
+            visibility?: ("private" | "shared" | "group" | "organization" | "system") | null;
+            /**
+             * Connector Id
+             * @description Bridge to this connector's ConnectorCredentialStore entry
+             */
+            connector_id?: string | null;
+            /**
+             * Auth Type
+             * @description ConnectorAuth subclass name: BearerAuth, ApiKeyAuth, BasicAuth or OAuthRefreshAuth
+             */
+            auth_type?: string | null;
+            /**
+             * Credentials
+             * @description Sensitive auth fields, validated against auth_type's schema
+             */
+            credentials?: {
+                [key: string]: string;
+            } | null;
         } & {
             [key: string]: unknown;
         };
@@ -93288,6 +93310,13 @@ export interface components {
             /** Metadata */
             metadata?: {
                 [key: string]: unknown;
+            } | null;
+            /**
+             * Credentials
+             * @description New sensitive auth fields, for a bridged secret
+             */
+            credentials?: {
+                [key: string]: string;
             } | null;
         } & {
             [key: string]: unknown;

@@ -236,7 +236,14 @@ async def mirror_provider_key_best_effort(name: str, value: str, created_by: uui
                 await session.commit()
             return wrote
     except Exception as exc:  # noqa: BLE001 - vault is optional in dev/test; never break the caller
-        logger.warning("provider-key-vault: mirror failed name=%s: %s", name, type(exc).__name__)
+        # #16444: `name` reached here only by passing the VAULT_RESOLVED_CREDENTIAL_NAMES
+        # guard above, so it is a registry label such as OPENAI_API_KEY and never a
+        # credential. Re-read from the frozenset so that holds by construction rather
+        # than by argument: api/secrets.py unpacks `name` and `value` from one request
+        # model, CodeQL taints every attribute of it alike, and a comment does not
+        # break a taint path (py/clear-text-logging-sensitive-data).
+        known = VAULT_RESOLVED_CREDENTIAL_NAMES & {name}
+        logger.warning("provider-key-vault: mirror failed name=%s: %s", "".join(known), type(exc).__name__)
         return False
 
 
