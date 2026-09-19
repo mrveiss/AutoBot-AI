@@ -21,6 +21,7 @@ import { createLogger } from '@/utils/debugUtils'
 import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
 import { useUserStore } from '@/stores/useUserStore'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { usePollingJob } from '@/composables/usePollingJob'
 
 const logger = createLogger('KnowledgeResearchPanel')
@@ -69,6 +70,8 @@ const {
   disconnect: wsDisconnect,
 } = useWebSocket(researchWsUrl, {
   autoConnect: false,
+  // #17009: the endpoint authenticates; the token travels as the bearer subprotocol (#16457)
+  protocols: () => buildAuthenticatedWsSubprotocols() ?? undefined,
   autoReconnect: false,
   parseJSON: false,
   onOpen: () => {
