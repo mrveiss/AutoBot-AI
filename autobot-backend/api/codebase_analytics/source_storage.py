@@ -23,6 +23,16 @@ _SOURCES_KEY_PREFIX = "code_source:"
 _SOURCES_INDEX_KEY = "code_sources:index"
 
 
+class RegistryUnavailable(RuntimeError):
+    """The source registry (Redis) could not be reached.
+
+    Never raised to mean "no such source" -- that is a legitimate empty
+    result. Raised only when the store itself failed, so a caller (an
+    orphan detector, in particular) cannot mistake a fault for "this id
+    genuinely has no record" (#17039 review, #17050).
+    """
+
+
 async def save_source(source: CodeSource) -> bool:
     """Persist a CodeSource to Redis.
 
@@ -86,6 +96,22 @@ async def list_sources(owner_id: str | None = None) -> List[CodeSource]:
         if source is not None and _is_visible(source, owner_id):
             sources.append(source)
     return sources
+
+
+async def registered_source_ids() -> set[str]:
+    """Every currently-registered source id, read directly from the index set.
+
+    Raises ``RegistryUnavailable`` rather than returning an empty set when
+    Redis can't be reached -- a caller checking "is this id known" must be
+    able to tell a genuinely-empty registry apart from one it couldn't read.
+    Membership-only, no per-id deserialisation: a single record's fetch
+    failing (a blip, not an outage) can never drop its id from this set.
+    """
+    redis = await get_async_redis_client(database="analytics")
+    if redis is None:
+        raise RegistryUnavailable("source registry (Redis) is unavailable")
+    raw_ids = await redis.smembers(_SOURCES_INDEX_KEY)
+    return {raw.decode("utf-8") if isinstance(raw, bytes) else raw for raw in raw_ids}
 
 
 async def get_default_source_id() -> str | None:

@@ -46,5 +46,11 @@ frontend_tls_cert_dir: /etc/autobot/certs
 frontend_tls_cert: "{{ frontend_tls_cert_dir }}/server-cert.pem"
 frontend_tls_key: "{{ frontend_tls_cert_dir }}/server-key.pem"
 
-# Frontend app directory
-frontend_dist_dir: "{{ frontend_install_dir }}/autobot-frontend/dist"
+# Frontend app directory. #15603: `current` is the atomically-flipped symlink
+# roles/_shared/tasks/build_publish_slm_frontend.yml publishes (mirroring the
+# SLM frontend's own `current` since #15610) — not a directory vite empties
+# and refills in place. Every other reference to this variable only ever
+# does `| dirname` on it to reach the package directory, which resolves
+# identically regardless of the leaf name, so this is the one place the
+# meaning actually changes.
+frontend_dist_dir: "{{ frontend_install_dir }}/autobot-frontend/current"
