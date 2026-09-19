@@ -49,6 +49,17 @@ unknown to this clone (a force-push or a re-clone moved history out from
 under a target whose marker still names the old commit) -- the caller then
 runs ``bootstrap`` mode instead, the same one-time mode used when no marker
 exists at all, rather than repeating a fatal error on every run forever.
+
+    ensure-full-history   Unshallow --repo-root if it is a shallow clone,
+               through the same scrubbed-env `run_git` helper every other
+               mode uses. Called once per pre-flight code_source fetch,
+               before any component's diff/bootstrap plan -- #16310's other
+               fix: a bootstrap plan computed against a shallow clone is not
+               just incomplete, `git log --diff-filter=AR` over a
+               one-commit history finds almost nothing to delete and that
+               empty, error-free plan still gets recorded as done.
+               python3 sync_deletion_planner.py ensure-full-history \\
+                   --repo-root /opt/autobot/code_source
 """
 
 from __future__ import annotations
@@ -61,6 +72,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from services.git_subprocess import ensure_full_history  # noqa: E402
 from services.sync_deletions import DeletionPlan, compute_bootstrap_plan, compute_deletion_plan  # noqa: E402
 
 
@@ -72,6 +84,9 @@ def _read_present_paths(path: str) -> list[str]:
 async def _run(args: argparse.Namespace) -> DeletionPlan:
     if args.mode == "diff":
         return await compute_deletion_plan(args.source_dir, args.repo_root, args.previous_commit, args.new_commit)
+    if args.mode == "ensure-full-history":
+        ok, message = await ensure_full_history(args.repo_root)
+        return DeletionPlan(error=None if ok else message)
     present_paths = _read_present_paths(args.present_file)
     return await compute_bootstrap_plan(args.source_dir, args.repo_root, args.new_commit, present_paths)
 
@@ -91,6 +106,9 @@ def _build_parser() -> argparse.ArgumentParser:
     bootstrap_parser.add_argument("--source-dir", required=True)
     bootstrap_parser.add_argument("--new-commit", required=True)
     bootstrap_parser.add_argument("--present-file", required=True)
+
+    ensure_parser = sub.add_parser("ensure-full-history", help="Unshallow --repo-root if it is a shallow clone.")
+    ensure_parser.add_argument("--repo-root", required=True)
 
     return parser
 

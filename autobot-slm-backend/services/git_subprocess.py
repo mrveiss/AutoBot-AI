@@ -34,6 +34,11 @@ logger = logging.getLogger(__name__)
 # sync or a drift check indefinitely (#16310).
 GIT_TIMEOUT_S = env_float("AUTOBOT_SYNC_GIT_TIMEOUT_S", 30.0)
 
+# `git fetch --unshallow` downloads the ENTIRE history the shallow clone
+# skipped -- on a monorepo-sized checkout that is minutes, not seconds, so it
+# gets its own, longer bound rather than sharing GIT_TIMEOUT_S (#16310).
+UNSHALLOW_TIMEOUT_S = env_float("AUTOBOT_SYNC_UNSHALLOW_TIMEOUT_S", 600.0)
+
 
 async def run_git(repo_root: str, *args: str, timeout: float = GIT_TIMEOUT_S) -> tuple[str, int]:
     """Run ``git -C repo_root <args>`` with a scrubbed env and bounded timeout.
@@ -80,6 +85,51 @@ def component_pathspec(repo_root: str, source_dir: str) -> str:
     ``drift_checker._NONSTANDARD_COMPONENT_PATHS``) still diff correctly.
     """
     return Path(source_dir).resolve().relative_to(Path(repo_root).resolve()).as_posix()
+
+
+async def is_shallow_repository(repo_root: str) -> bool:
+    """True when *repo_root* is a shallow git clone (#16310).
+
+    Shared by :func:`ensure_full_history` (fixes it) and
+    ``services/sync_deletions.py``'s bootstrap guard (refuses to plan against
+    it) -- one answer to "is this clone shallow", asked with the same `git
+    rev-parse` both callers would otherwise duplicate.
+    """
+    output, rc = await run_git(repo_root, "rev-parse", "--is-shallow-repository")
+    return rc == 0 and output.strip() == "true"
+
+
+async def ensure_full_history(repo_root: str) -> tuple[bool, str]:
+    """Unshallow *repo_root* in place if it is a shallow clone (#16310).
+
+    A shallow ``code_source`` checkout makes
+    ``services.sync_deletions.compute_bootstrap_plan``'s ``git log
+    --diff-filter=AR`` see only the commits the shallow fetch kept, so it
+    silently finds almost nothing to delete. The clone came from initial
+    provisioning, before anything here passed ``--depth`` -- so the fix is
+    not "never create a shallow clone" (nothing does), it is "never leave
+    one shallow": every fetch of the source checkout ensures full depth
+    first.
+
+    Returns ``(ok, message)``. ``ok`` is False on an unshallow that failed,
+    or on one that ran and reported success but left the repository shallow
+    anyway -- the caller must fail loudly on either, never proceed as if
+    full history is now available (that is exactly how the original bug
+    stayed invisible: an empty, error-free bootstrap plan that still wrote
+    the marker).
+    """
+    if not await is_shallow_repository(repo_root):
+        return True, f"{repo_root} already has full history"
+
+    logger.info("git_subprocess: %s is a shallow clone -- unshallowing (#16310)", repo_root)
+    _output, rc = await run_git(repo_root, "fetch", "--unshallow", timeout=UNSHALLOW_TIMEOUT_S)
+    if rc != 0:
+        return False, f"git fetch --unshallow failed in {repo_root}"
+
+    if await is_shallow_repository(repo_root):
+        return False, f"{repo_root} is still a shallow clone after `git fetch --unshallow`"
+
+    return True, f"{repo_root} unshallowed"
 
 
 async def last_commit_for_path(repo_root: str, pathspec: str) -> str | None:
