@@ -91,8 +91,12 @@ printf 'in-flight work, never committed\n' >>"$DIRTY_WT/tracked.txt"
 printf 'in-flight work on the main tree, never committed\n' >>"$THIS_REPO/tracked.txt"
 
 mkdir -p "$THIS_REPO/.claude/hooks"
+# Every sibling the hook loads at runtime. A file missing here does not fail
+# loudly: `invokes` falls back to the unconditional verdict, so the guard keeps
+# working and only the #14144 allow cases break — which reads as "the scanner is
+# wrong" rather than "the scanner is absent". preflight() proves it below.
 cp "$SOURCE_DIR/block-dangerous-commands.sh" "$SOURCE_DIR/git_invocation_parse.py" \
-  "$SOURCE_DIR/git_shell_tokenize.py" \
+  "$SOURCE_DIR/git_shell_tokenize.py" "$SOURCE_DIR/command_position_scan.py" \
   "$THIS_REPO/.claude/hooks/" || { echo "FATAL: could not stage the hook"; exit 1; }
 HOOK="$THIS_REPO/.claude/hooks/block-dangerous-commands.sh"
 
@@ -109,6 +113,16 @@ preflight() {
   echo "  sandbox common-dir: $common"
   echo "  sandbox git-dir:    $gitdir"
   records=$(python3 "$THIS_REPO/.claude/hooks/git_invocation_parse.py" "git checkout some-branch" | tr '\037' '|')
+  # #14144's scanner, proven the same way and for the same reason. Absent, it
+  # cannot report an invocation, `invokes` keeps the unconditional verdict, and
+  # every non-git guard silently returns to matching quoted prose.
+  local positions
+  positions=$(python3 "$THIS_REPO/.claude/hooks/command_position_scan.py" "ls -la | grep foo" 2>&1 | tr '\037' '|' | tr '\n' ';')
+  echo "  command-position scan: [$positions]"
+  case "$positions" in
+    *"ls|-la"*grep*) : ;;
+    *) echo "FATAL: command_position_scan.py did not report the two invocations in a known-good command — refusing to report clean"; exit 1 ;;
+  esac
   echo "  parser records for a real branch switch: [$records]"
   if [ -z "$records" ]; then
     echo "FATAL: the parser reports nothing for a real invocation — the suite cannot test the guard"
@@ -417,6 +431,46 @@ expect_block "dd if= to device"                      "dd if=/dev/zero of=/dev/sd
 expect_block "mkfs on partition"                     "mkfs.ext4 /dev/sdb1"
 
 echo ""
+echo "--- #14144: the non-git guards distinguish invoking from naming ---"
+# Each guard below gets BOTH halves. The block case proves the guard still
+# fires; the allow case proves it no longer fires on a command that merely
+# contains the trigger in an argument. Without the block half this section
+# would pass just as happily against a guard that was deleted outright.
+expect_block "chmod 777 on a real path"           "chmod 777 /etc/passwd"
+expect_allow "chmod 777 inside a search list"     'for p in "chmod 777" x; do grep -c -- "$p" f; done'
+expect_allow "chmod 777 quoted in an issue body"  'gh issue create --body "chmod 777 is refused, which is correct"'
+
+expect_block "npm publish"                              "npm publish"
+expect_allow "npm publish named in a grep"              'grep -rn "npm publish" .github/workflows'
+expect_block "twine upload"                            "twine upload dist/pkg.whl"
+expect_allow "twine upload quoted in prose"            'gh pr comment 1 --body "twine upload is CI-only here"'
+
+expect_block "recursive delete of home"               "rm -rf ~/"
+expect_allow "recursive delete named in prose"        'gh issue create --body "rm -rf ~/ would be catastrophic"'
+
+expect_block "dd to a device"                     "dd if=/dev/zero of=/dev/sda"
+expect_block "mkfs on a partition"                   "mkfs.ext4 /dev/sdb1"
+expect_allow "mkfs named in a search list"           'for p in "dd if=" "mkfs"; do grep -c -- "$p" notes.md; done'
+
+# The redirect half of the disk guard is deliberately NOT invocation-gated: a
+# redirection is not a command position, so nothing could confirm it. It must
+# keep firing exactly as before.
+expect_block "redirect to a block device still blocked" "echo x > /dev/sda1"
+
+# Uncertainty must not narrow a denial. A command position the scanner cannot
+# name means there may be an invocation it never reported, so the guard keeps
+# its unconditional verdict rather than trusting an empty result.
+expect_block "trigger behind eval"                    'eval "chmod 777 /etc/passwd"'
+# A command whose NAME sits in a variable -- `C=chmod; $C 777 /etc/passwd` -- is
+# deliberately NOT asserted here. It is not blocked on this branch and it is not
+# blocked on unmodified main either: the guard's outer textual pre-filter never
+# matches when the command name and its argument are not adjacent in the raw
+# text, so the `&&`-chained invocation check below it is never reached. #14144
+# does not change that, and a case asserting it would be asserting behaviour
+# nothing implements. The gap is real and tracked as #16921 -- fix it there, in
+# the pre-filter, rather than re-adding a case here.
+
+echo ""
 echo "--- Untrusted-repo clone safety (#16488) ---"
 # The hooks-path key is held in a variable so these fixtures are commands handed to
 # the hook, not hooks-path override invocations to the #15961 guard. The strings
@@ -449,7 +503,12 @@ expect_block "helper mentioned in a trailing comment does not excuse it" \
 # Reach floor: a suite that silently stopped executing cases — a mis-copied
 # hook, a sandbox that failed to build, an early `return` in a helper — would
 # otherwise finish with 0 failures and report clean. Assert the population.
-MIN_CASES=100
+# Raised 100 -> 139 with the #14144 section. A floor only ratchets UP: it exists
+# so a case that quietly stops running is caught, and slack is exactly the room in
+# which that can happen unnoticed. Lower it only alongside a deliberate removal --
+# the 140 -> 139 step is one: the variable-command case above was withdrawn to
+# #16921 because it asserted behaviour this branch does not implement.
+MIN_CASES=139
 TOTAL=$((PASS + FAIL))
 
 echo ""
