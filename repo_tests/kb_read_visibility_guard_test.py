@@ -149,7 +149,23 @@ MIN_READS_FOUND = 40
 #: aliasing a KB handle (``SearchMixin._query_chromadb``, ``FactsMixin._find_duplicate``; both IMPL).
 #: Then 103 -> 97 (#16691, #16706): several routes reclassified from TRACKED_GAP to SCOPED once
 #: their admin gate or caller-independent filter was confirmed -- a measured shrink, not new debt.
-UNFILTERED_READ_CEILING = 97
+#: Then 97 -> 94 (#16665): merging the ai-stack/RAG visibility fix in removed the three
+#: TRACKED_GAP entries it closed (knowledge_ai_stack.py's two search paths and
+#: knowledge_rag.py's advanced_search) -- a measured shrink, not new debt.
+#: Then 94 -> 92 (#16665/#16654/#16745): ai_stack_integration.py's ``chat`` and
+#: ``rag_query`` now filter their KB-derived context through
+#: filter_search_results_by_permission (no admin bypass), so the scan marks both
+#: filtered and their _SCOPED_ADMIN_ROUTER allowlist entries are removed -- the
+#: admin gate alone was ruled insufficient for a chat/RAG synthesis path.
+#: Then 92 -> 94 (#16716+#16908 consolidation, merging current main): the merge alone
+#: brought in #16927's orphan-repair feature, whose two KnowledgeFactRepairer reads
+#: (services/orphan_repair_types.py) are unfiltered but reachable only behind
+#: api/admin_orphan_repair.py's router-level admin/superadmin gate -- classified
+#: ADMIN_ONLY, not TRACKED_GAP. #16908 itself is a net-zero here: it deletes
+#: knowledge_ai_stack.py's _search_local_knowledge_base/search(), but #16716 had
+#: already filtered that read (no allowlist entry), so removing it changes nothing
+#: this scan counts.
+UNFILTERED_READ_CEILING = 94
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)

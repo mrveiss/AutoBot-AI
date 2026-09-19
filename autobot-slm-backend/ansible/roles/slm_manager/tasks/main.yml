@@ -452,6 +452,39 @@
       {{ autobot_secrets_root_key
          if (autobot_secrets_root_key | default('') | trim | length > 0)
          else lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}
+    # #16299: backend_secret_key's own role default (roles/backend/defaults/main.yml)
+    # was the guessable literal "change-me-in-production", shipped unchanged on every
+    # deployment that never overrode it. Generated here, once, the same way
+    # slm_secret_key is -- the backend role reads it back from this file (#10400's
+    # SLM_SECRET_KEY pattern) since backend commonly runs on a different host than
+    # this one. A backend deployed standalone, with no SLM secrets file ever reaching
+    # it, keeps its own role default as a documented fallback.
+    backend_secret_key: >-
+      {{ backend_secret_key
+         if (backend_secret_key | default('') | trim | length > 0)
+         else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    # #16299: grafana_admin_password's own role default (roles/monitoring/defaults/main.yml)
+    # is the guessable literal "admin". monitoring is listed in this SAME play
+    # (playbooks/deploy-slm-manager.yml's roles:), and Ansible's static roles: loads
+    # every listed role's defaults/main.yml up front, for the whole play -- verified
+    # empirically, not assumed: a throwaway two-role playbook showed the first role's
+    # task already seeing the SECOND role's own default before that role had run any
+    # task. So `grafana_admin_password | default('') | length > 0` would already read
+    # "admin" as "the operator set this", and never generate -- a silent no-op. The
+    # check below must compare against the KNOWN weak literal specifically, the same
+    # way an inventory-supplied real password (which will never equal "admin") is
+    # still respected. An operator who deliberately sets their password to the
+    # literal string "admin" is indistinguishable from "nobody set it" and also
+    # gets overridden -- accepted, since both cases end up running Grafana on the
+    # same guessable password either way. On a re-run monitoring reads this file
+    # back (#10400's pattern) rather than depending on this task having run this
+    # time. deploy-monitoring.yml also runs monitoring standalone, with no SLM
+    # present at all -- that path keeps the role's own "admin" default as a
+    # documented fallback.
+    grafana_admin_password: >-
+      {{ grafana_admin_password
+         if (grafana_admin_password | default('') | trim | length > 0 and grafana_admin_password != 'admin')
+         else lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
@@ -619,6 +652,22 @@
     - _slm_root_key_check.rc != 0
   no_log: true
   tags: ['slm', 'secrets']
+
+# #16299: deliberately NO back-fill for AUTOBOT_BACKEND_SECRET_KEY or
+# GRAFANA_ADMIN_PASSWORD, unlike the three back-fills above. Every host
+# provisioned before this change already has the secrets file, so the
+# generate block above is skipped for it -- but unlike the root key/chromadb
+# token/Redis password (each enabling a previously-OFF security feature), a
+# backend or Grafana on an existing install is ALREADY running on its current
+# secret. Back-filling a freshly generated value here would flow through
+# backend/monitoring's read-back tasks (#16299, mirroring #10400) and silently
+# replace the secret those services are actively using -- signed sessions
+# would stop validating, and an operator logged into Grafana with the old
+# password would be locked out. That is exactly the "regenerated credential
+# breaks a running service" case the owner's 2026-09-17 ruling excludes: an
+# existing install keeps its current password, full stop. The two role
+# defaults stay the standalone/existing-install fallback forever, not just
+# until the next backfill happens to run.
 
 # ==========================================================
 # #12297: Reconcile stale DB-URL landmines in slm-secrets.env
@@ -988,34 +1037,14 @@
 # #15610: the render lives in nginx_site.yml so playbooks/update-all-nodes.yml
 # — which deploys the SLM backend by unarchive and never runs this role — can
 # re-render the site config from the same source after it publishes a bundle.
-- name: "SLM | Deploy nginx configuration (#15610)"
+# #16979: nginx_site.yml also carries the steps that make the render live
+# (detect/replace a non-symlink sites-enabled entry, link, verify) -- moved
+# out of this file because both self-update playbooks include ONLY
+# nginx_site.yml, never this one, so those steps ran on a full provision but
+# not on self-update. Do not re-add them here; a copy in both places is the
+# drift #15610 already wrote a comment to warn against.
+- name: "SLM | Deploy nginx configuration (#15610, #16979)"
   ansible.builtin.include_tasks: nginx_site.yml
-  tags: ['slm', 'nginx']
-
-- name: "SLM | Stat sites-enabled file to detect non-symlink (#1122)"
-  ansible.builtin.stat:
-    path: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
-  register: nginx_sites_enabled_stat
-  become: true
-  tags: ['slm', 'nginx']
-
-- name: "SLM | Remove standalone sites-enabled file if not a symlink (#1122)"
-  ansible.builtin.file:
-    path: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
-    state: absent
-  become: true
-  when:
-    - nginx_sites_enabled_stat.stat.exists
-    - not nginx_sites_enabled_stat.stat.islnk
-  tags: ['slm', 'nginx']
-
-- name: "SLM | Enable nginx site (symlink to sites-available)"
-  ansible.builtin.file:
-    src: /etc/nginx/sites-available/{{ slm_nginx_config }}
-    dest: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
-    state: link
-  become: true
-  notify: reload nginx
   tags: ['slm', 'nginx']
 
 - name: "SLM | Remove default nginx site"
