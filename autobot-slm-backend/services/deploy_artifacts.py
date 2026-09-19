@@ -74,6 +74,24 @@ ARTIFACT_FILE_GLOBS: tuple[str, ...] = ("*.pyc", "*.log")
 # (roles/slm_manager/tasks/main.yml's `delete: true` sync did exactly this).
 SYNC_DELETIONS_MARKER = ".autobot_sync_deletions_commit"
 
+# #16310: every marker on a live host today was written in the ORIGINAL,
+# unversioned format -- a bare commit SHA -- because it predates this
+# version tag. Some of those were written by a bootstrap that ran while
+# `code_source` was still a shallow clone, before sync_deletions.py's
+# shallow-clone guard existed, so their "bootstrap" enumerated almost
+# nothing and the marker still got written: the target is stuck in
+# diff-only mode from a baseline missing years of real deletions.
+#
+# `ansible/roles/_shared/tasks/sync_deletions.yml` writes the marker as
+# ``f"{SYNC_DELETIONS_MARKER_VERSION}\n{commit}\n"`` and, when slurping it
+# back, treats any marker whose first line is NOT this exact token --
+# including the old bare-SHA shape -- as legacy: previous_commit reads as
+# unknown, forcing exactly one bootstrap re-run (now against a full-depth
+# clone, since ensure_full_history runs first) before the marker is
+# rewritten in the versioned format. Bump this string, not the marker
+# filename, the next time a marker's meaning changes incompatibly.
+SYNC_DELETIONS_MARKER_VERSION = "16310-v2"
+
 # #16717: the SLM frontend's staged-release layout (#15610), defined here
 # (imported by slm_frontend_build.py, which WRITES it) so a forced resync
 # can never delete a live bundle for want of an exclude.

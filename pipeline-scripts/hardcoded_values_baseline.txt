@@ -1156,7 +1156,6 @@
 1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|"/opt/autobot/venv
 1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|https://github.com
 1|other|autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml|https://github.com/mrveiss/AutoBot-AI.git
-1|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|'/opt/autobot/autobot-frontend/dist
 2|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|'/opt/autobot/autobot-slm-frontend
 1|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|https://github.com/mrveiss/AutoBot-AI.git
 3|other|autobot-slm-backend/ansible/playbooks/recover_host.yml|/home/autobot

@@ -297,6 +297,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/orphan-storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Orphan Storage
+         * @description Every orphan-storage candidate, across every registered detector.
+         *
+         *     ``provider_statuses`` names each detector that failed to run -- an
+         *     outage must read as "could not check", never as "found nothing".
+         */
+        get: operations["list_orphan_storage_api_admin_orphan_storage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/retention-policies": {
         parameters: {
             query?: never;
@@ -17370,6 +17393,35 @@ export interface paths {
          * @description List delegations for an agent as delegator or assignee (#1753).
          */
         get: operations["list_agent_delegations_api_agents__agent_id__delegations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/presence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Agent Presence
+         * @description Every agent visible to the caller: its own tenant's, plus shared.
+         *
+         *     Tenant comes from `require_org_context` -> `get_tenant_context`
+         *     (#10750 A5): an ordinary caller cannot see another tenant's agents by
+         *     passing one in -- a request-supplied org (header/path/query) is only
+         *     honoured after a real membership check, otherwise 403. A **platform
+         *     admin** (`is_platform_admin` or an admin role on the JWT) is the
+         *     documented exception: `get_tenant_context` trusts an admin's
+         *     request-supplied org outright, exactly as every other org-scoped route
+         *     already does -- this route adds no new admin-override path.
+         */
+        get: operations["list_agent_presence_api_agents_presence_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -86341,6 +86393,65 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * OrphanStorageCandidateResponse
+         * @description One orphan-storage candidate. ``location`` is logical -- no host path.
+         */
+        OrphanStorageCandidateResponse: {
+            /** Provider */
+            provider: string;
+            /** Id */
+            id: string;
+            /** Location */
+            location: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Modified At */
+            modified_at: string;
+            /** Reason */
+            reason: string;
+            /** Deletable */
+            deletable: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanStorageListResponse
+         * @description Every candidate across every registered detector, plus totals.
+         *
+         *     ``provider_statuses`` names every detector that ran and whether it
+         *     could actually check -- an outage shows up here, never as an empty
+         *     ``candidates`` list that reads as "nothing found".
+         */
+        OrphanStorageListResponse: {
+            /** Candidates */
+            candidates: components["schemas"]["OrphanStorageCandidateResponse"][];
+            /** Total Count */
+            total_count: number;
+            /** Total Size Bytes */
+            total_size_bytes: number;
+            /** Provider Statuses */
+            provider_statuses: components["schemas"]["OrphanStorageProviderStatusResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanStorageProviderStatusResponse
+         * @description Whether one detector's listing actually ran (#17039 review).
+         *
+         *     ``available=False`` means this provider's candidates could not be
+         *     determined -- never read the response as "this provider has none".
+         */
+        OrphanStorageProviderStatusResponse: {
+            /** Provider */
+            provider: string;
+            /** Available */
+            available: boolean;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * OverseerQueryData
          * @description Response data for POST /overseer/query/{session_id}.
          */
@@ -104745,6 +104856,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_orphan_storage_api_admin_orphan_storage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrphanStorageListResponse"];
                 };
             };
         };
@@ -126964,6 +127095,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_presence_api_agents_presence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
         };

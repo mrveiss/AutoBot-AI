@@ -170,10 +170,13 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: number has to move, and saying it is zero is what makes that visible.
 #: `growth=400` is the judgement call -- roughly a week of this repo's growth -- and
 #: is the only figure here not taken from a measurement.
+#: Re-pinned 6412 -> 6421 (#17133): measured population 6821 exceeded the
+#: declared allowance (skips=1 + growth=400 = 401) by 8. Population minus the
+#: unchanged growth allowance, per that same growth judgement call above.
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6412,
+    floor=6421,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
