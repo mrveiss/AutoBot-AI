@@ -2485,7 +2485,7 @@ class TerminalApproveCommandRequest(BaseModel):
     """Request to approve/deny pending command"""
 
     approved: bool = Field(..., description="Whether command is approved")
-    user_id: str | None = Field(None, description="User who made the decision")
+    user_id: str | None = Field(None, description="Ignored (#17052): the approver is the verified caller")
     comment: str | None = Field(None, description="Optional comment or reason for the decision")
     auto_approve_future: bool = Field(False, description="Auto-approve similar commands in the future")
     remember_for_project: bool = Field(False, description="Remember approval for this project")
@@ -2526,7 +2526,7 @@ class TaskAnswerRequest(BaseModel):
 class TerminalInterruptRequest(BaseModel):
     """Request to interrupt agent and take control"""
 
-    user_id: str = Field(..., description="User requesting control")
+    user_id: str | None = Field(None, description="Ignored (#17052): the actor is the verified caller")
 
 
 class TerminalHostSelectionRequest(BaseModel):

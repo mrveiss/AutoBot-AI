@@ -39,7 +39,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/agents/machine_aware_system_knowledge_manager.py": 848,
     "autobot-backend/agents/man_page_knowledge_integrator.py": 696,
     "autobot-backend/agents/npu_code_search_agent.py": 1346,  # #16173: extracted helpers
-    "autobot-backend/agents/overseer/step_executor_agent.py": 810,
+    "autobot-backend/agents/overseer/step_executor_agent.py": 650,
     "autobot-backend/agents/rag_agent.py": 602,
     "autobot-backend/agents/security_scanner_agent.py": 663,
     "autobot-backend/agents/system_command_agent.py": 903,
@@ -49,7 +49,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/advanced_control.py": 626,
     "autobot-backend/api/agent.py": 1380,
     "autobot-backend/api/agent_config.py": 1371,
-    "autobot-backend/api/agent_terminal.py": 858,
+    "autobot-backend/api/agent_terminal.py": 773,
     "autobot-backend/api/analytics.py": 1285,
     "autobot-backend/api/analytics_architecture.py": 1264,
     "autobot-backend/api/analytics_bug_prediction.py": 1438,
@@ -146,9 +146,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/validation_dashboard.py": 671,
     "autobot-backend/api/vnc_manager.py": 1699,
     "autobot-backend/api/vnc_mcp.py": 763,
-    "autobot-backend/api/websockets.py": 1124,  # #16457: accepts routed through websocket_subprotocol.accept_websocket
+    "autobot-backend/api/websockets.py": 1120,  # #16457: accepts routed through websocket_subprotocol.accept_websocket
     "autobot-backend/api/workflow.py": 1027,
-    "autobot-backend/auth_middleware.py": 1090,  # #16457: bearer parsing moved to websocket_subprotocol.py
+    "autobot-backend/auth_middleware.py": 1088,  # #16457: bearer parsing moved to websocket_subprotocol.py
     "autobot-backend/autobot_memory_graph/property_graph.py": 630,
     "autobot-backend/autobot_memory_graph/relations.py": 641,
     "autobot-backend/autobot_memory_graph/semantic_search.py": 717,
@@ -159,7 +159,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1343,
     "autobot-backend/chat_workflow/manager.py": 4067,
-    "autobot-backend/chat_workflow/tool_handler.py": 3728,  # #11542: external MCP dispatch merged into MCPDispatcher
+    "autobot-backend/chat_workflow/tool_handler.py": 3721,  # #11542: external MCP dispatch merged into MCPDispatcher
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/circuit_breaker.py": 689,
