@@ -25,6 +25,7 @@ from unittest.mock import AsyncMock
 import api.user_management.dependencies as user_deps
 from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE
 from autobot_shared.auth.jwt_core import decode_jwt, encode_jwt
+from autobot_shared.auth.permissions import Role
 
 PLATFORM_SECRET = "p" * 40  # the platform user-session key
 RUN_SECRET = "r" * 40
@@ -39,7 +40,7 @@ SESSION_ID = "session-17042"
 #: The person every human kind resolves to: username ``alice``.
 HUMAN = {
     "username": "alice",
-    "role": "user",
+    "role": Role.USER.value,
     "email": "alice@example.test",
     "user_id": str(CALLER),
     "org_id": str(ORG),
