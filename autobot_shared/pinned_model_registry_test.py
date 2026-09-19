@@ -23,6 +23,7 @@ from autobot_shared.pinned_model_registry import (
     ModelIntegrityError,
     PinnedModel,
     get_pinned_revision,
+    load_verified,
     verify_cached_model,
 )
 
@@ -199,3 +200,49 @@ def test_verify_cached_model_is_a_noop_for_a_no_weight_files_entry(tmp_path):
             del pmr._REGISTRY[fake_repo_id]
         else:
             pmr._REGISTRY[fake_repo_id] = original
+
+
+# ---------------------------------------------------------------------------
+# load_verified (#17124 -- shared load-then-verify-then-assign helper)
+# ---------------------------------------------------------------------------
+
+
+def test_load_verified_calls_each_loader_with_the_pinned_revision_and_returns_results(monkeypatch):
+    import autobot_shared.pinned_model_registry as pmr
+
+    monkeypatch.setattr(pmr, "get_pinned_revision", lambda repo_id: _REVISION)
+    monkeypatch.setattr(pmr, "verify_cached_model", lambda repo_id: None)
+
+    seen_revisions = []
+
+    def make_loader(marker):
+        def loader(revision):
+            seen_revisions.append(revision)
+            return marker
+
+        return loader
+
+    results = load_verified(_REPO_ID, make_loader("processor"), make_loader("model"))
+
+    assert results == ("processor", "model")
+    assert seen_revisions == [_REVISION, _REVISION]
+
+
+def test_load_verified_raises_and_returns_nothing_when_verification_fails(monkeypatch):
+    """The #17124 fail-open regression this helper exists to close: a caller
+    that only assigns from this function's return value must never receive a
+    partial result when the integrity check fails."""
+    import autobot_shared.pinned_model_registry as pmr
+
+    monkeypatch.setattr(pmr, "get_pinned_revision", lambda repo_id: _REVISION)
+
+    def failing_verify(repo_id):
+        raise ModelIntegrityError("tampered")
+
+    monkeypatch.setattr(pmr, "verify_cached_model", failing_verify)
+
+    loader_calls = []
+    with pytest.raises(ModelIntegrityError):
+        load_verified(_REPO_ID, lambda revision: loader_calls.append(revision) or "unverified-result")
+
+    assert loader_calls == [_REVISION], "the loader itself still runs -- verification happens after loading"

@@ -37,10 +37,13 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable, TypeVar
 
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
+
+T = TypeVar("T")
 
 
 class ModelIntegrityError(RuntimeError):
@@ -196,3 +199,21 @@ def verify_cached_model(repo_id: str, *, cache_dir: str | None = None) -> None:
             f"({sorted(pinned.weight_digests)}) were found in the local cache -- verification did not "
             "run. Refusing to treat an unverified download as safe."
         )
+
+
+def load_verified(repo_id: str, *loaders: Callable[[str], T]) -> tuple[T, ...]:
+    """Call each of *loaders* with ``repo_id``'s pinned revision, then verify the
+    cached weights once, returning each loader's result in order.
+
+    Centralizes the load-verify-then-assign shape #17124 put at every
+    ``from_pretrained`` call site after a fail-open bug: assigning to ``self.*``
+    before ``verify_cached_model`` ran left a tampered model reachable when a
+    caller's broad ``except`` swallowed the raised :class:`ModelIntegrityError`.
+    Raising here happens before any result is returned, so a caller that only
+    assigns from this function's return value can't end up with a partial,
+    unverified assignment.
+    """
+    revision = get_pinned_revision(repo_id)
+    results = tuple(loader(revision) for loader in loaders)
+    verify_cached_model(repo_id)
+    return results

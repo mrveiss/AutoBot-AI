@@ -23,6 +23,7 @@ import numpy as np
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.pinned_model_registry import ModelIntegrityError, load_verified
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as _ssot_config
 from config import cfg
@@ -605,50 +606,35 @@ class AIHardwareAccelerator:
             return await self._process_on_cpu(task)
 
     def _initialize_clip_model(self, device: Any) -> None:
-        """
-        Initialize CLIP model and processor for image embeddings.
-
-        Loads openai/clip-vit-base-patch32 with appropriate dtype. Issue #620.
-        #13034: pinned+verified, see autobot_shared/pinned_model_registry.py.
-        """
-        from autobot_shared.pinned_model_registry import get_pinned_revision, verify_cached_model
-
+        """Init CLIP model+processor for image embeddings (Issue #620); pinned+verified
+        via load_verified() (pinned_model_registry.py, #13034/#17124)."""
         torch = _get_torch()
-        revision = get_pinned_revision("openai/clip-vit-base-patch32")
-        # #17124: load into locals and verify BEFORE assigning to self.* -- assigning
-        # first (the prior shape) left a tampered model reachable if verify_cached_model
-        # raised and the caller's broad except swallowed it (fail-open).
-        clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", revision=revision)
-        clip_model = CLIPModel.from_pretrained(
+        clip_processor, clip_model = load_verified(
             "openai/clip-vit-base-patch32",
-            revision=revision,
-            torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
-        ).to(device)
-        verify_cached_model("openai/clip-vit-base-patch32")
+            lambda revision: CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", revision=revision),
+            lambda revision: CLIPModel.from_pretrained(
+                "openai/clip-vit-base-patch32",
+                revision=revision,
+                torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+            ).to(device),
+        )
         clip_model.eval()
         self.clip_processor = clip_processor
         self.clip_model = clip_model
 
     def _initialize_wav2vec_model(self, device: Any) -> None:
-        """
-        Initialize Wav2Vec2 model and processor for audio embeddings.
-
-        Loads facebook/wav2vec2-base-960h with appropriate dtype. Issue #620.
-        #13034: pinned+verified, see autobot_shared/pinned_model_registry.py.
-        """
-        from autobot_shared.pinned_model_registry import get_pinned_revision, verify_cached_model
-
+        """Init Wav2Vec2 model+processor for audio embeddings (Issue #620); pinned+verified
+        via load_verified() -- see _initialize_clip_model (#13034/#17124)."""
         torch = _get_torch()
-        revision = get_pinned_revision("facebook/wav2vec2-base-960h")
-        # #17124: load into locals and verify BEFORE assigning to self.* -- see the
-        # matching comment in _initialize_clip_model for why.
-        wav2vec_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h", revision=revision)
-        wav2vec_model = Wav2Vec2Model.from_pretrained(
+        wav2vec_processor, wav2vec_model = load_verified(
             "facebook/wav2vec2-base-960h",
-            revision=revision,
-            torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
-        ).to(device)
-        verify_cached_model("facebook/wav2vec2-base-960h")
+            lambda revision: Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h", revision=revision),
+            lambda revision: Wav2Vec2Model.from_pretrained(
+                "facebook/wav2vec2-base-960h",
+                revision=revision,
+                torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+            ).to(device),
+        )
         wav2vec_model.eval()
         self.wav2vec_processor = wav2vec_processor
         self.wav2vec_model = wav2vec_model
@@ -679,18 +665,14 @@ class AIHardwareAccelerator:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info("Initializing multi-modal models on %s", device)
 
-        from autobot_shared.pinned_model_registry import ModelIntegrityError
-
         try:
             self._initialize_clip_model(device)
             self._initialize_wav2vec_model(device)
             self._initialize_projection_matrices(device)
             logger.info("Multi-modal models initialized successfully")
         except ModelIntegrityError as e:
-            # #17124: named, distinct from a generic init failure -- a tampered cached
-            # model was detected. The failing _initialize_*_model call never assigned
-            # its self.* attributes (verify happens before assignment), so they are
-            # still None here; never silently continue as if initialization succeeded.
+            # #17124: a tampered cached model -- load_verified() never returned, so the
+            # failing _initialize_*_model call assigned nothing; still None here.
             logger.error("SECURITY: multi-modal model integrity check failed, refusing to serve: %s", e)
         except Exception as e:
             logger.error("Failed to initialize multi-modal models: %s", e)
