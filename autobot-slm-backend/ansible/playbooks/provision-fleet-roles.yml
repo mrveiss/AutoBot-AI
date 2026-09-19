@@ -118,6 +118,24 @@
       register: github_sync
       tags: [always]
 
+    # #16310: skipped, not swallowed, when GitHub is unreachable (same
+    # `github_sync is not failed` gate the offline-tolerance design already
+    # uses below) -- an unshallow attempt would fail for the identical
+    # reason and add nothing. When GitHub WAS reachable, this must fail
+    # loudly: the checkout on disk predates the shallow-clone guard and is
+    # shallow today regardless of `update: true`/`force: true` above (a
+    # plain fetch never deepens an already-shallow repo), and every
+    # component's bootstrap plan needs full history.
+    - name: "[PRE-FLIGHT] Ensure code_source has full history, not a shallow clone (#16310)"
+      ansible.builtin.command:
+        cmd: >-
+          /opt/autobot/autobot-slm-backend/venv/bin/python3
+          /opt/autobot/autobot-slm-backend/scripts/sync_deletion_planner.py
+          ensure-full-history --repo-root {{ git_repo_root }}
+      changed_when: false
+      when: github_sync is not failed
+      tags: [always]
+
     - name: "[PRE-FLIGHT] Warn if GitHub sync skipped"
       ansible.builtin.debug:
         msg: >-
@@ -465,8 +483,20 @@
       tags: ['frontend', 'slm-nginx', 'provision']
 
     - name: "SLM | Stat user frontend package.json for co-location detection"
+      # #16970: this bare `hosts: all` play never loads roles/frontend's own
+      # `frontend_dist_dir` default, so the fallback used a hardcoded absolute
+      # path -- flagged by the SSOT hardcoded-value detector once #16970's own
+      # change to this file surfaced it. `autobot.base_dir` (group_vars/all.yml,
+      # the SSOT for /opt/autobot, nested under the `autobot:` key -- a bare
+      # `base_dir` is undefined and `default()` evaluates its argument eagerly,
+      # so that raised on every run where `frontend_dist_dir` is unset, the
+      # normal case) replaces the literal; the resolved path is unchanged.
+      # (vehicle merge: combined with #16970's own later move of this default
+      # from .../dist to .../current -- the staged-swap symlink roles/frontend
+      # itself defaults frontend_dist_dir to -- so the merged literal matches
+      # that role default with autobot.base_dir substituted for the SSOT.)
       ansible.builtin.stat:
-        path: "{{ frontend_dist_dir | default('/opt/autobot/autobot-frontend/dist') | dirname }}/package.json"
+        path: "{{ frontend_dist_dir | default(autobot.base_dir + '/autobot-frontend/current') | dirname }}/package.json"
       register: _post_frontend_colocated_check
       when: _slm_nginx_config_stat.stat.exists
       tags: ['frontend', 'slm-nginx', 'provision']

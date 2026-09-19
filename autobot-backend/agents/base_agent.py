@@ -431,7 +431,9 @@ class BaseAgent(ABC):
             )
 
             # Process the request
-            response = await self.process_request(agent_request)
+            # #16986: through the same tracking and work-claim path as every other caller,
+            # now that a peer's request can actually arrive here.
+            response = await self.execute_with_tracking(agent_request)
 
             # Convert AgentResponse back to communication message
             response_message = StandardMessage(
