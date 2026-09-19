@@ -467,13 +467,17 @@ async def generate_embedding_with_fallback(
     # and this function has no guarantee it was pre-sanitized (several callers embed
     # raw chat/query/code content, not just the fact-content path that redacts before
     # calling) -- redact credential-shaped spans before any of it reaches the log.
+    # Slice to 512 chars BEFORE redacting (this is an unconditional logger.error on a
+    # hot embedding-failure path with inputs up to ~100 KB): redact_content() would
+    # otherwise run every regex over the whole text on every call. 512 is well over
+    # the final 80-char prefix, so a credential crossing that boundary is still masked.
     logger.error(
         "Embedding generation FAILED after %d attempt(s) — caller must handle the "
         "missing vector (do NOT silently drop). model=%s, last_reason=%s, text_prefix=%r",
         max_attempts,
         model_name,
         last_reason,
-        redact_content(text)[:80],
+        redact_content(text[:512])[:80],
     )
     return None
 
