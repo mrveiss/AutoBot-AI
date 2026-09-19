@@ -359,6 +359,25 @@ class HierarchicalSummarizer(BaseCognifier):
                 level_embeddings.append(np.zeros(dim))
         return np.array(level_embeddings)
 
+    @staticmethod
+    def _provenance_of(item: object) -> List[UUID]:
+        """The L0 chunk ids *item* stands for (#14968).
+
+        An L1 group holds ``ProcessedChunk``s, each standing for itself. An L2+
+        group holds ``Summary`` objects, each already citing the chunks beneath
+        it -- so provenance accumulates as abstraction rises, instead of
+        resetting at every level.
+
+        Keyed on carrying ``source_chunk_ids`` rather than on ``isinstance``,
+        because the discriminator is "does this already know its provenance",
+        not which class expresses it.
+        """
+        existing = getattr(item, "source_chunk_ids", None)
+        if existing is not None:
+            return list(existing)
+        own_id = getattr(item, "id", None)
+        return [own_id] if own_id is not None else []
+
     async def _summarize_groups(
         self,
         groups: Dict[int, list],
@@ -370,14 +389,39 @@ class HierarchicalSummarizer(BaseCognifier):
         summaries = []
         for cluster_id, items in sorted(groups.items()):
             text = "\n\n".join(getattr(i, "content", str(i)) for i in items)
+            # #14968: this was hardcoded to [], so every node above L0 was
+            # uncitable by construction -- the ids were in scope at this call
+            # site and thrown away. Deduped in first-contribution order so an
+            # L2 node's ids read in the order its children supplied them.
+            chunk_ids: List[UUID] = []
+            seen: set = set()
+            for item in items:
+                for chunk_id in self._provenance_of(item):
+                    if chunk_id not in seen:
+                        seen.add(chunk_id)
+                        chunk_ids.append(chunk_id)
             summary = await self._summarize_text(
                 text,
                 max_words=self.section_max_words,
                 entity_map=entity_map,
                 document_id=document_id,
-                level=SummaryLevel.SECTION,
-                source_chunk_ids=[],
+                # #14968: SummaryLevel is Literal["chunk","section","document"],
+                # a type alias with no members -- `SummaryLevel.SECTION` raised
+                # AttributeError on every call, swallowed by the broad
+                # `except Exception` around build_raptor_tree that logs
+                # "non-fatal" at warning level. So the tree above L0 was never
+                # built at all, which is why nothing ever noticed it had no
+                # provenance. recursive_summarizer.py passes the plain string.
+                level="section",
+                source_chunk_ids=chunk_ids,
             )
             if summary:
+                # #14968: children point up and the parent points down, so the
+                # tree is walkable in both directions -- the same wiring
+                # recursive_summarizer.py already does for its own levels.
+                for item in items:
+                    if isinstance(item, Summary):
+                        item.parent_summary_id = summary.id
+                        summary.child_summary_ids.append(item.id)
                 summaries.append(summary)
         return summaries

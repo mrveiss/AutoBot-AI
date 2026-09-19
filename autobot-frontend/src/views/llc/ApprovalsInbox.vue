@@ -144,7 +144,6 @@ import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDateTime } from '@/utils/formatHelpers'
-import { useUserStore } from '@/stores/useUserStore'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import type { components } from '@/types/generated/api'
@@ -152,7 +151,6 @@ import type { components } from '@/types/generated/api'
 const logger = createLogger('ApprovalsInbox')
 const api = useApiClient()
 const route = useRoute()
-const userStore = useUserStore()
 const { t } = useI18n()
 const { showToast } = useNotificationBus()
 
@@ -238,7 +236,6 @@ async function decide(id: string, decision: string, note?: string) {
   try {
     await api.post<unknown>(`/api/llc/approvals/${id}/decide`, {
       decision,
-      decided_by_agent_id: userStore.currentUser?.id ?? undefined,
       ...(note ? { note } : {}),
     })
     await fetchApprovals()

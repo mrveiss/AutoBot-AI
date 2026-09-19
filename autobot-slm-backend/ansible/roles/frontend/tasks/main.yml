@@ -296,18 +296,13 @@
 # builtin updater can deliver them without re-running provisioning. Copying
 # them into the playbook instead is the inline-vs-role duplication that made
 # this role undeliverable in the first place (#12959).
+# #16979: code_only.yml now also enables the site it renders (link + verify)
+# -- moved out of this file for the same reason as roles/slm_manager: the
+# self-update path includes ONLY code_only.yml, never this file, so an enable
+# step here ran on a full provision but never on self-update. Do not re-add
+# it here; see code_only.yml's own header comment.
 - name: "Frontend | Deploy nginx config"
   ansible.builtin.include_tasks: code_only.yml
-  tags: ['frontend', 'nginx']
-
-- name: "Frontend | Enable nginx site"
-  file:
-    src: /etc/nginx/sites-available/autobot-frontend
-    dest: /etc/nginx/sites-enabled/autobot-frontend
-    state: link
-  become: true
-  notify: restart nginx
-  when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['frontend', 'nginx']
 
 - name: "Frontend | Disable standalone nginx when co-located with SLM (#2829)"
