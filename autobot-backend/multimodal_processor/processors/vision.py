@@ -96,24 +96,26 @@ class VisionProcessor(BaseModalProcessor):
         """Load CLIP and BLIP-2 models for vision processing."""
         torch = _get_torch()
 
+        # #13034: pinned to exact, integrity-verified revisions instead of the
+        # mutable default branch -- see autobot_shared/pinned_model_registry.py.
+        from autobot_shared.pinned_model_registry import get_pinned_revision, verify_cached_model
+
+        clip_repo_id = "openai/clip-vit-base-patch32"
+        clip_revision = get_pinned_revision(clip_repo_id)
+        blip_repo_id = "Salesforce/blip2-opt-2.7b"
+        blip_revision = get_pinned_revision(blip_repo_id)
+
         try:
             # Load CLIP model for image embeddings and classification
             self.logger.info("Loading CLIP model...")
-            self.clip_model = CLIPModel.from_pretrained(
-                "openai/clip-vit-base-patch32"
-            ).to(  # nosec B615  # HuggingFace model loaded by name; revision pinning managed operationally
-                self.device
-            )
-            self.clip_processor = CLIPProcessor.from_pretrained(  # nosec B615
-                "openai/clip-vit-base-patch32", use_fast=True
-            )
+            self.clip_model = CLIPModel.from_pretrained(clip_repo_id, revision=clip_revision).to(self.device)
+            self.clip_processor = CLIPProcessor.from_pretrained(clip_repo_id, revision=clip_revision, use_fast=True)
+            verify_cached_model(clip_repo_id)
 
             # Load BLIP-2 model for image captioning and VQA
             # Using smaller model for memory efficiency
             self.logger.info("Loading BLIP-2 model...")
-            self.blip_processor = Blip2Processor.from_pretrained(  # nosec B615
-                "Salesforce/blip2-opt-2.7b", use_fast=True
-            )
+            self.blip_processor = Blip2Processor.from_pretrained(blip_repo_id, revision=blip_revision, use_fast=True)
 
             # Check if accelerate is available for device_map
             try:
@@ -124,16 +126,19 @@ class VisionProcessor(BaseModalProcessor):
 
             # Load BLIP-2 model with device_map only if accelerate is available
             if accelerate_available and torch.cuda.is_available():
-                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(  # nosec B615
-                    "Salesforce/blip2-opt-2.7b",
+                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
+                    blip_repo_id,
+                    revision=blip_revision,
                     torch_dtype=torch.float16,
                     device_map="auto",
                 )
             else:
-                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(  # nosec B615
-                    "Salesforce/blip2-opt-2.7b",
+                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
+                    blip_repo_id,
+                    revision=blip_revision,
                     torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
                 ).to(self.device)
+            verify_cached_model(blip_repo_id)
 
             # Set models to evaluation mode
             self.clip_model.eval()

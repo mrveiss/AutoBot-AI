@@ -236,7 +236,6 @@ class AIHardwareAccelerator:
         """Initialize the AI hardware accelerator."""
         logger.info("Initializing AI Hardware Accelerator")
 
-        # Initialize Redis client
         try:
             self.redis_client = get_redis_client("main")
             if self.redis_client:
@@ -244,24 +243,19 @@ class AIHardwareAccelerator:
         except Exception as e:
             logger.warning("Redis connection failed: %s", e)
 
-        # Check hardware availability
         await self._check_hardware_availability()
 
         # Initialize multi-modal models if GPU is available
         if self.device_status[HardwareDevice.GPU]["available"]:
             await self._initialize_multimodal_models()
 
-        # Start monitoring loop
         asyncio.create_task(self._hardware_monitoring_loop())
 
         logger.info("AI Hardware Accelerator initialized")
 
     async def _check_hardware_availability(self):
         """Check availability of all hardware devices."""
-        # Check NPU Worker
         await self._check_npu_availability()
-
-        # Check GPU
         await self._check_gpu_availability()
 
         # CPU is always available
@@ -283,10 +277,9 @@ class AIHardwareAccelerator:
                     health_data = await response.json()
                     npu_available = health_data.get("npu_available", False)
 
-                    # Log availability transitions only — this poll runs on a
-                    # timer, so logging every cycle floods the log when the NPU
-                    # worker is up but reports no NPU hardware (the normal case
-                    # on hosts without an Intel NPU).
+                    # Log availability transitions only — this poll runs on a timer, so logging every cycle floods
+                    # the log when the NPU worker is up but reports no NPU hardware (the normal case on hosts
+                    # without an Intel NPU).
                     prev = self.device_status[HardwareDevice.NPU]
                     first_check = prev.get("last_check") is None
                     changed = prev.get("available") != npu_available
@@ -305,9 +298,8 @@ class AIHardwareAccelerator:
                     logger.warning(f"NPU Worker health check failed: {response.status}")
                     self.device_status[HardwareDevice.NPU]["available"] = False
         except Exception as e:
-            # An NPU worker is optional hardware; its absence is the normal case
-            # (e.g. docker compose, no Intel NPU). Record unavailable and log at
-            # debug so we don't spam warnings every poll cycle (#9715).
+            # An NPU worker is optional hardware; its absence is the normal case (e.g. docker compose, no Intel NPU).
+            # Record unavailable and log at debug so we don't spam warnings every poll cycle (#9715).
             logger.debug("NPU Worker unavailable: %s", e)
             self.device_status[HardwareDevice.NPU]["available"] = False
 
@@ -602,8 +594,7 @@ class AIHardwareAccelerator:
 
     async def _process_on_gpu(self, task: ProcessingTask) -> Dict[str, Any]:
         """Process task on GPU using existing AutoBot GPU infrastructure."""
-        # This would integrate with existing GPU processing (semantic_chunker, etc.)
-        # For now, simulate GPU processing
+        # This would integrate with existing GPU processing (semantic_chunker, etc.) -- for now, simulate GPU processing
 
         if task.task_type == "embedding_generation":
             return await self._gpu_embedding_generation(task.input_data)
@@ -618,15 +609,19 @@ class AIHardwareAccelerator:
         Initialize CLIP model and processor for image embeddings.
 
         Loads openai/clip-vit-base-patch32 with appropriate dtype. Issue #620.
+        #13034: pinned+verified, see autobot_shared/pinned_model_registry.py.
         """
-        torch = _get_torch()
+        from autobot_shared.pinned_model_registry import get_pinned_revision, verify_cached_model
 
-        # HuggingFace model loaded by name; revision pinning managed operationally.
-        self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")  # nosec B615
-        self.clip_model = CLIPModel.from_pretrained(  # nosec B615
+        torch = _get_torch()
+        revision = get_pinned_revision("openai/clip-vit-base-patch32")
+        self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", revision=revision)
+        self.clip_model = CLIPModel.from_pretrained(
             "openai/clip-vit-base-patch32",
+            revision=revision,
             torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
         ).to(device)
+        verify_cached_model("openai/clip-vit-base-patch32")
         self.clip_model.eval()
 
     def _initialize_wav2vec_model(self, device: Any) -> None:
@@ -634,15 +629,19 @@ class AIHardwareAccelerator:
         Initialize Wav2Vec2 model and processor for audio embeddings.
 
         Loads facebook/wav2vec2-base-960h with appropriate dtype. Issue #620.
+        #13034: pinned+verified, see autobot_shared/pinned_model_registry.py.
         """
-        torch = _get_torch()
+        from autobot_shared.pinned_model_registry import get_pinned_revision, verify_cached_model
 
-        # HuggingFace model loaded by name; revision pinning managed operationally.
-        self.wav2vec_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")  # nosec B615
-        self.wav2vec_model = Wav2Vec2Model.from_pretrained(  # nosec B615
+        torch = _get_torch()
+        revision = get_pinned_revision("facebook/wav2vec2-base-960h")
+        self.wav2vec_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h", revision=revision)
+        self.wav2vec_model = Wav2Vec2Model.from_pretrained(
             "facebook/wav2vec2-base-960h",
+            revision=revision,
             torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
         ).to(device)
+        verify_cached_model("facebook/wav2vec2-base-960h")
         self.wav2vec_model.eval()
 
     def _initialize_projection_matrices(self, device: Any) -> None:
