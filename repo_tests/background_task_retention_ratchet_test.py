@@ -16,7 +16,9 @@ until completion and logs a failure that would otherwise vanish. This file
 ratchets the population that has NOT been converted yet. The census is exact
 and may only SHRINK — a new discarded launch fails here, and every conversion
 must lower the census in the same commit. #15522 converted the three
-``_ansible_self_update`` firings in ``api/code_sync.py``; #15524 tracks the rest.
+``_ansible_self_update`` firings in ``api/code_sync.py`` and #15524 the rest of
+``autobot-slm-backend/``, which is now a proven zero; the census that remains is
+``autobot-backend/`` and ``autobot-infrastructure/``.
 
 #15619 widened the sweep. It used to read one ``SCAN_ROOT`` string,
 ``autobot-slm-backend/`` — a tree holding under a tenth of the backend Python
@@ -161,11 +163,6 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
     "autobot-backend/utils/service_discovery.py": 1,
     "autobot-backend/workflow_scheduler.py": 2,
     "autobot-infrastructure/shared/scripts/comprehensive_log_aggregator.py": 4,
-    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,
-    "autobot-slm-backend/api/infrastructure.py": 1,
-    "autobot-slm-backend/api/setup_wizard.py": 1,
-    "autobot-slm-backend/api/updates.py": 1,
-    "autobot-slm-backend/slm/agent/agent.py": 1,
     # audit_middleware surfaced only when `run_coroutine_threadsafe` joined
     # LAUNCHERS: it hands an audit write into the loop from another thread and
     # drops the future. Censused, not converted — the fix belongs with #15637,
@@ -192,6 +189,11 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
 PROVEN_ZERO_ROOTS: dict[str, str] = {
     "autobot_shared/": "#15641 converted the last one (http_client.py)",
     "autobot-npu-worker/": "#15642 converted the last one (windows npu_worker.py)",
+    # #15524 converted the last five: api/infrastructure.py, api/setup_wizard.py,
+    # api/updates.py and both vendored copies of slm/agent/agent.py. This is the
+    # root the guard was originally built around (#15522), so its zero is the one
+    # most worth re-measuring every run rather than recording as finished.
+    "autobot-slm-backend/": "#15524 converted the last five (infrastructure, setup_wizard, updates, both agent.py)",
 }
 
 
