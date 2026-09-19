@@ -20,7 +20,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llc.models.approval import LLCApproval
 from llc.models.enums import ApprovalStatus, ApprovalType
 from llc.services.approval import (
     ApprovalNotFoundError,
@@ -29,6 +28,7 @@ from llc.services.approval import (
     ApprovalStateError,
     requires_approval,
 )
+from models.approval import Approval
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -46,19 +46,19 @@ def _make_approval(
     decided_by: uuid.UUID | None = None,
     decided_at: datetime | None = None,
 ) -> MagicMock:
-    """Build a lightweight MagicMock that looks like LLCApproval without a DB session.
+    """Build a lightweight MagicMock that looks like Approval without a DB session (#17043).
 
     Using MagicMock avoids SQLAlchemy's _sa_instance_state requirement while
     still providing the attribute interface the service layer queries.
     """
-    a = MagicMock(spec=LLCApproval)
+    a = MagicMock(spec=Approval)
     a.id = id or uuid.uuid4()
     a.company_id = company_id or uuid.uuid4()
-    a.type = gate_type.value
+    a.approval_type = gate_type.value
     a.status = status.value
-    a.requested_by_agent_id = requested_by or uuid.uuid4()
-    a.payload = payload or {}
-    a.decided_by_agent_id = decided_by
+    a.requested_by_agent = str(requested_by or uuid.uuid4())
+    a.context = payload or {}
+    a.decided_by_user = str(decided_by) if decided_by else None
     a.decided_at = decided_at
     a.created_at = datetime.now(timezone.utc)
     a.updated_at = datetime.now(timezone.utc)
@@ -106,10 +106,10 @@ async def test_request_approval_creates_pending_record() -> None:
 
     session.add.assert_called_once_with(approval)
     session.flush.assert_awaited_once()
-    assert approval.type == ApprovalType.HIRE.value
+    assert approval.approval_type == ApprovalType.HIRE.value
     assert approval.status == ApprovalStatus.PENDING.value
     assert approval.company_id == company_id
-    assert approval.requested_by_agent_id == requester
+    assert approval.requested_by_agent == str(requester)
 
 
 @pytest.mark.asyncio
@@ -187,7 +187,7 @@ async def test_decide_approve_sets_status_and_decided_fields() -> None:
         )
 
     assert updated.status == ApprovalStatus.APPROVED.value
-    assert updated.decided_by_agent_id == decider
+    assert updated.decided_by_user == str(decider)
     assert updated.decided_at is not None
     session.flush.assert_awaited_once()
 

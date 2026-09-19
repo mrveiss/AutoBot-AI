@@ -58205,13 +58205,12 @@ export interface components {
         };
         /**
          * ApprovalAddCommentRequest
-         * @description Request body for adding a comment to an approval gate.
+         * @description Comment on an approval gate. author_type is ignored (#17056) -- kept only to log an old client sending it.
          */
         ApprovalAddCommentRequest: {
             /** Body */
             body: string;
-            /** @default human */
-            author_type: components["schemas"]["AuthorTypeEnum"];
+            author_type?: components["schemas"]["AuthorTypeEnum"] | null;
         } & {
             [key: string]: unknown;
         };
@@ -58323,7 +58322,7 @@ export interface components {
              * Format: uuid
              */
             company_id: string;
-            type: components["schemas"]["llc__models__enums__ApprovalType"];
+            type: components["schemas"]["ApprovalType"];
             /**
              * Requested By Agent Id
              * Format: uuid
@@ -58381,6 +58380,15 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ApprovalStatus
+         * @description Possible statuses for an approval gate.
+         *
+         *     Canonical for both the platform-general and the LLC company-scoped case
+         *     (#17043): WITHDRAWN/EXPIRED were LLC-only until this merge.
+         * @enum {string}
+         */
+        ApprovalStatus: "pending" | "approved" | "rejected" | "revision_requested" | "withdrawn" | "expired";
+        /**
          * ApprovalTransitionRequest
          * @description Request body for approve / reject / request-revision.
          */
@@ -58390,6 +58398,17 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ApprovalType
+         * @description Categories of approval gates.
+         *
+         *     Canonical for both the platform-general and the LLC company-scoped case
+         *     (#17043): HIRE..FINDING_PROMOTION were LLC-only (``llc/models/enums.py``)
+         *     until this merge -- ``llc.models.enums.ApprovalType`` now re-exports this
+         *     class rather than defining its own, so the two never drift apart again.
+         * @enum {string}
+         */
+        ApprovalType: "destructive_action" | "resource_request" | "create_agent" | "workflow_gate" | "hire" | "strategy" | "budget_override" | "sprint_close" | "project_disposal" | "finding_promotion";
         /**
          * ApproveCapabilitiesRequest
          * @description Request to approve plugin capabilities.
@@ -66224,7 +66243,7 @@ export interface components {
         CreateApprovalRequest: {
             /** Title */
             title: string;
-            approval_type: components["schemas"]["models__approval__ApprovalType"];
+            approval_type: components["schemas"]["ApprovalType"];
             /** Description */
             description?: string | null;
             /** Requested By Agent */
@@ -103948,7 +103967,7 @@ export interface components {
         };
         /** ApprovalDecision */
         llc__api__approvals__ApprovalDecision: {
-            decision: components["schemas"]["llc__models__enums__ApprovalStatus"];
+            decision: components["schemas"]["ApprovalStatus"];
             /** Decided By Agent Id */
             decided_by_agent_id?: string | null;
         } & {
@@ -104083,18 +104102,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * ApprovalStatus
-         * @description Status of an LLC approval request (GH#8214).
-         * @enum {string}
-         */
-        llc__models__enums__ApprovalStatus: "pending" | "approved" | "rejected" | "withdrawn" | "expired";
-        /**
-         * ApprovalType
-         * @description Gate type for a board approval request (GH#8214).
-         * @enum {string}
-         */
-        llc__models__enums__ApprovalType: "hire" | "strategy" | "budget_override" | "sprint_close" | "project_disposal" | "finding_promotion";
-        /**
          * TemplateSearchResponse
          * @description Response for GET /llc/templates/search (GH#8260).
          */
@@ -104108,18 +104115,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * ApprovalStatus
-         * @description Possible statuses for an approval gate.
-         * @enum {string}
-         */
-        models__approval__ApprovalStatus: "pending" | "approved" | "rejected" | "revision_requested";
-        /**
-         * ApprovalType
-         * @description Categories of approval gates.
-         * @enum {string}
-         */
-        models__approval__ApprovalType: "destructive_action" | "resource_request" | "create_agent" | "workflow_gate";
         /**
          * TrainRequest
          * @description Request to trigger model training.
@@ -125607,8 +125602,8 @@ export interface operations {
     list_approvals_api_approval_gates_get: {
         parameters: {
             query?: {
-                status_filter?: components["schemas"]["models__approval__ApprovalStatus"] | null;
-                approval_type?: components["schemas"]["models__approval__ApprovalType"] | null;
+                status_filter?: components["schemas"]["ApprovalStatus"] | null;
+                approval_type?: components["schemas"]["ApprovalType"] | null;
                 workflow_id?: string | null;
                 agent_id?: string | null;
                 /** @description Maximum number of items to return */
@@ -169498,7 +169493,7 @@ export interface operations {
                 /** @description Filter by company */
                 company_id: string;
                 /** @description Filter by gate type */
-                type?: components["schemas"]["llc__models__enums__ApprovalType"] | null;
+                type?: components["schemas"]["ApprovalType"] | null;
             };
             header?: never;
             path?: never;
