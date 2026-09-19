@@ -7858,6 +7858,8 @@
     "systemHealth": "Systemzustand",
     "providerFallback": "Anbieter-Fallback",
     "advancedControl": "Erweiterte Steuerung",
+    "adminPricing": "Modellpreise",
+    "adminMcpServers": "MCP-Server",
     "llcRoles": "Rollen"
   },
   "llcCompanyStatus": {
