@@ -46,6 +46,7 @@ from fastapi import (
     Request,
 )
 
+from api.knowledge_office_upload import OFFICE_EXTENSIONS, extract_office_upload, verified_upload_extension
 from api.schemas_knowledge import (
     AddFactsRequest,
     AddUrlRequest,
@@ -124,7 +125,7 @@ from utils.path_validation import contains_path_traversal
 # File upload constants (Issue #549 Code Review)
 MAX_FILE_SIZE_MB = 10
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".json", ".csv", ".html"}
+ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".json", ".csv", ".html"} | OFFICE_EXTENSIONS  # #16775
 
 # Import RAG Agent for enhanced search capabilities
 try:
@@ -922,10 +923,9 @@ async def _fetch_and_extract_url(url: str, fallback_title: str) -> "tuple[str, s
 
     from autobot_shared.security.ssrf_guard import SSRFError, fetch_safe_url
 
-    # Imported locally rather than at module scope: `config` is already a local
-    # name in add_watch_folder (a WatchFolderConfig), so a module-level import
-    # would be silently shadowed there. Kept outside the try so an ImportError
-    # surfaces as itself instead of as a fetch failure.
+    # Imported locally rather than at module scope: `config` is already a local name in add_watch_folder (a
+    # WatchFolderConfig), so a module-level import would be silently shadowed there. Kept outside the try so an
+    # ImportError surfaces as itself instead of as a fetch failure.
     from autobot_shared.ssot_config import config
 
     try:
@@ -1089,9 +1089,11 @@ def _extract_file_content(filename: str, file_content: bytes) -> "tuple[str, Ext
     Raises:
         HTTPException: If file cannot be parsed or library is missing
     """
-    import os
 
-    ext = os.path.splitext(filename.lower())[1]
+    ext = verified_upload_extension(filename, file_content)  # #16773: the bytes outrank the name
+
+    if ext in OFFICE_EXTENSIONS:
+        return extract_office_upload(filename, file_content, ext), None
 
     if ext in {".txt", ".md", ".csv"}:
         return file_content.decode("utf-8", errors="replace"), None
@@ -1252,10 +1254,9 @@ async def upload_file_to_knowledge(
     category = form.get("category", "uploads")
     tags = _parse_upload_tags(form.get("tags", "[]"))
 
-    # #14754: _extract_file_content does blocking CPU work — PDF parsing plus
-    # pdfplumber layout analysis on every page — and this handler is async, so a
-    # large upload held the worker's event loop for the whole extraction and
-    # stalled every other coroutine on it, health endpoints included.
+    # #14754: _extract_file_content does blocking CPU work — PDF parsing plus pdfplumber layout analysis on every page
+    # — and this handler is async, so a large upload held the worker's event loop for the whole extraction and stalled
+    # every other coroutine on it, health endpoints included.
     from media.document.ocr import extraction_timeout
 
     _deadline = extraction_timeout()
@@ -1265,9 +1266,9 @@ async def upload_file_to_knowledge(
             timeout=_deadline,
         )
     except asyncio.TimeoutError:
-        # The deadline is what makes the offload safe: to_thread frees the loop but the
-        # default executor's slots are process-wide and shared with the OCR path, so an
-        # extraction that never returns holds one indefinitely -- rejected here instead (#14754).
+        # The deadline is what makes the offload safe: to_thread frees the loop but the default executor's slots are
+        # process-wide and shared with the OCR path, so an extraction that never returns holds one indefinitely.
+        # Reported as a rejected upload rather than left to hang (#14754).
         logger.warning("Extraction of %s exceeded %ss", filename, _deadline)
         raise HTTPException(
             status_code=422,
@@ -2325,10 +2326,9 @@ async def get_facts_by_category(
     try:
         category_fact_ids, category_totals = await _fetch_category_fact_ids(kb, categories_to_fetch, limit, offset)
         if not category_totals:
-            # Issue #12394: fall back only when NO category index exists at all.
-            # (Previously this checked `category_fact_ids`, which is also empty
-            # for a legitimate out-of-range page on an existing index, wrongly
-            # triggering the expensive full-keyspace SCAN fallback.)
+            # Issue #12394: fall back only when NO category index exists at all. (Previously this checked
+            # `category_fact_ids`, which is also empty for a legitimate out-of-range page on an existing index,
+            # wrongly triggering the expensive full-keyspace SCAN fallback.)
             logger.warning("No category indexes - falling back to SCAN method")
             return await _get_facts_by_category_legacy(kb, category, limit, offset)
 

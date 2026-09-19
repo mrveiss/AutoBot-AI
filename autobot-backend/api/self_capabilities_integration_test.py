@@ -6,7 +6,15 @@
 Integration tests for self_capabilities router (Issue #4258)
 
 Verifies that the self_capabilities router is properly registered and the
-GET /api/capabilities endpoint is accessible and returns the expected structure.
+GET /api/self/capabilities endpoint is accessible and returns the expected structure.
+
+#16908: mounted here at "/api/self", matching the real registration in
+initialization/router_registry/feature_routers.py -- it used to be "/api",
+which does not match either the router's own decorated path or production
+(prior to #16908, the shared "/api" prefix meant this router's /capabilities
+was actually shadowed by api/chat.py's own /capabilities in the full app;
+this isolated test never exercised that collision, since it never mounted
+chat.py's router alongside it).
 """
 
 import pytest
@@ -21,7 +29,7 @@ from api.self_capabilities import router
 def app():
     """Create a minimal FastAPI app with the self_capabilities router."""
     app = FastAPI(title="TestApp", version="1.0.0", description="Test")
-    app.include_router(router, prefix="/api", tags=["self-capabilities"])
+    app.include_router(router, prefix="/api/self", tags=["self-capabilities"])
     return app
 
 
@@ -32,14 +40,14 @@ def client(app: FastAPI) -> TestClient:
 
 
 def test_self_capabilities_endpoint_exists(client: TestClient):
-    """Verify that GET /api/capabilities endpoint is accessible."""
-    response = client.get("/api/capabilities")
+    """Verify that GET /api/self/capabilities endpoint is accessible."""
+    response = client.get("/api/self/capabilities")
     assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
 
 def test_self_capabilities_returns_correct_structure(client: TestClient):
-    """Verify that GET /api/capabilities returns expected response structure."""
-    response = client.get("/api/capabilities")
+    """Verify that GET /api/self/capabilities returns expected response structure."""
+    response = client.get("/api/self/capabilities")
     assert response.status_code == 200
     data = response.json()
 
@@ -58,7 +66,7 @@ def test_self_capabilities_returns_correct_structure(client: TestClient):
 
 def test_self_capabilities_endpoints_structure(client: TestClient):
     """Verify the structure of individual endpoint entries."""
-    response = client.get("/api/capabilities")
+    response = client.get("/api/self/capabilities")
     data = response.json()
 
     # Verify endpoints list is present and non-empty
@@ -82,17 +90,17 @@ def test_self_capabilities_endpoints_structure(client: TestClient):
 
 def test_self_capabilities_has_capabilities_endpoint(client: TestClient):
     """Verify that the /capabilities endpoint itself is included in the discovery."""
-    response = client.get("/api/capabilities")
+    response = client.get("/api/self/capabilities")
     data = response.json()
 
     # Find the capabilities endpoint in the list
     capabilities_endpoints = [ep for ep in data["endpoints"] if "/capabilities" in ep["path"]]
-    assert len(capabilities_endpoints) > 0, "Expected /api/capabilities endpoint to be in discovery list"
+    assert len(capabilities_endpoints) > 0, "Expected /api/self/capabilities endpoint to be in discovery list"
 
 
 def test_self_capabilities_grouping_by_tag(client: TestClient):
     """Verify that endpoints are correctly grouped by tag."""
-    response = client.get("/api/capabilities")
+    response = client.get("/api/self/capabilities")
     data = response.json()
 
     # Verify by_tag is a dictionary
@@ -109,7 +117,7 @@ def test_self_capabilities_grouping_by_tag(client: TestClient):
 
 def test_self_capabilities_grouping_by_operation_type(client: TestClient):
     """Verify that endpoints are correctly grouped by operation type."""
-    response = client.get("/api/capabilities")
+    response = client.get("/api/self/capabilities")
     data = response.json()
 
     # Verify by_operation_type is a dictionary
@@ -129,7 +137,7 @@ def test_self_capabilities_grouping_by_operation_type(client: TestClient):
 
 def test_self_capabilities_api_paths_list(client: TestClient):
     """Verify that api_paths contains unique paths."""
-    response = client.get("/api/capabilities")
+    response = client.get("/api/self/capabilities")
     data = response.json()
 
     # Verify api_paths is a list
@@ -148,7 +156,7 @@ def test_self_capabilities_api_paths_list(client: TestClient):
 
 def test_self_capabilities_total_endpoints_count(client: TestClient):
     """Verify that total_endpoints count matches endpoints list length."""
-    response = client.get("/api/capabilities")
+    response = client.get("/api/self/capabilities")
     data = response.json()
 
     assert isinstance(data["total_endpoints"], int)
@@ -157,7 +165,7 @@ def test_self_capabilities_total_endpoints_count(client: TestClient):
 
 def test_self_capabilities_unique_paths_count(client: TestClient):
     """Verify that unique_paths count matches api_paths list length."""
-    response = client.get("/api/capabilities")
+    response = client.get("/api/self/capabilities")
     data = response.json()
 
     assert isinstance(data["unique_paths"], int)
@@ -178,6 +186,6 @@ def test_self_capabilities_endpoint_registration(app: FastAPI):
     """
     schema = get_openapi(title=app.title, version=app.version, description=app.description or "", routes=app.routes)
     paths = {path: item for path, item in schema.get("paths", {}).items() if "/capabilities" in path}
-    assert paths, f"Expected /api/capabilities route to be registered; got {sorted(schema.get('paths', {}))}"
+    assert paths, f"Expected /api/self/capabilities route to be registered; got {sorted(schema.get('paths', {}))}"
 
-    assert any("get" in item for item in paths.values()), f"Expected GET method on /api/capabilities; got {paths}"
+    assert any("get" in item for item in paths.values()), f"Expected GET method on /api/self/capabilities; got {paths}"

@@ -338,3 +338,13 @@ async def _emit_firewall_event(verdict: FirewallVerdict, task_id: str | None) ->
 # ---------------------------------------------------------------------------
 
 get_content_firewall = lazy_singleton(ContentFirewall)
+
+
+async def inspect_rag_context(content: str, *, context_label: str = "") -> FirewallVerdict:
+    """The one inspection point every RAG path calls before context reaches
+    the model (#16771) -- both advanced_rag_optimizer's search-based path and
+    knowledge.service's chat retrieval path route through this, so there is
+    one place that knows RAG content goes through ContentSource.RAG, not two
+    copies that can drift.
+    """
+    return await get_content_firewall().inspect(content, source=ContentSource.RAG, context_label=context_label)

@@ -39,6 +39,7 @@ async def test_rag_query_applies_quarantine_filter():
             request=RAGQueryRequest(query="what is autobot", max_results=10),
             admin_check=True,
             knowledge_base=mock_kb,
+            current_user={"user_id": "u1", "role": "admin"},
         )
 
     mock_kb.search.assert_called_once_with(query="what is autobot", top_k=10, filters=RESEARCH_QUARANTINE_FILTER)
@@ -54,6 +55,7 @@ async def test_chat_applies_quarantine_filter():
             request=ChatRequest(message="what is autobot", use_knowledge_base=True),
             admin_check=True,
             knowledge_base=mock_kb,
+            current_user={"user_id": "u1", "role": "admin"},
         )
 
     mock_kb.search.assert_called_once_with(query="what is autobot", top_k=5, filters=RESEARCH_QUARANTINE_FILTER)

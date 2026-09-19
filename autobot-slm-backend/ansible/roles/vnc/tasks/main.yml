@@ -197,6 +197,11 @@
   register: vnc_password_result
   changed_when: false
   become: true
+  # #16299 review: this result's stdout is the plaintext password, and #16299
+  # added a real consumer of it (the secrets-vault registration task below) --
+  # without no_log, ansible prints the full task result, password included,
+  # to the console/log on a verbose run or on failure.
+  no_log: true
 
 - name: Set VNC password file for user
   ansible.builtin.shell: |
@@ -221,6 +226,65 @@
     creates: "/home/{{ vnc_user }}/.vnc/x11vnc.passwd"
   become: true
   when: vnc_password_result.stdout | length > 0
+
+# #16299: register the same password in the canonical secrets system, so
+# api.vnc_proxy can authenticate to the real VNC server server-side instead
+# of the browser holding the password (the VITE_*_VNC_PASSWORD leak this
+# issue is about). The on-disk files above remain the VNC server's OWN copy
+# (x11vnc/vncserver read only from local files); this is the backend's copy,
+# and the only one it may ever read -- a plaintext env-file read would be a
+# parallel credential path the owner's secrets-management rule forbids.
+#
+# #16299 review round 3: a block/rescue here was wrong in a different way
+# than round 2's local-file gate -- it doesn't just cover the one PLAYBOOK
+# where a failure here is expected (setup-user-backend.yml, whose roles:
+# phase runs before its own post_tasks' migration sequence); it ALSO
+# silently swallows a genuine failure (wrong API key, backend down) into a
+# debug line on every OTHER playbook that includes this role, where the
+# vault is already migrated and a failure here is real. VNC would fail
+# closed with nothing but a log line nobody reads.
+#
+# vnc_defer_vault_registration (defaults/main.yml, default false) separates
+# the one EXPECTED-to-fail case from every genuine one: setup-user-backend.yml
+# sets it true for this role, so this task skips registration entirely here
+# (nothing to rescue -- it never runs) and calls register-vnc-password.yml
+# again, unrescued, from its OWN post_tasks after migrations. Every other
+# playbook leaves the flag false, so a failure here is real and fails the
+# play -- not silently swallowed.
+#
+# The non-desktop refusal always hard-fails regardless of the flag: sending
+# a password in cleartext to a genuinely remote host is a real
+# misconfiguration, never something to defer or rescue.
+- name: "VNC | Refuse to register a non-co-located host's password over plaintext HTTP (#16299)"
+  ansible.builtin.fail:
+    msg: >-
+      vnc_type={{ vnc_type }} is not "desktop" -- this role's secrets-vault registration
+      reaches the backend over plain HTTP (backend_port is loopback-only, no TLS listener),
+      which is only safe for the co-located desktop host. Wire real HTTPS with certificate
+      validation (the shared TLS keypair, #16020) before enabling this for a genuinely
+      remote host; sending the password in cleartext cross-host is not an acceptable
+      fallback.
+  when:
+    - vnc_password_result.stdout | length > 0
+    - vnc_type != 'desktop'
+
+- name: "VNC | Secrets-vault registration deferred to post_tasks (#16299)"
+  ansible.builtin.debug:
+    msg: >-
+      VNC password registration deferred to setup-user-backend.yml's post_tasks, after
+      migrations run -- this role's own roles:-phase invocation cannot reach the secrets
+      vault before then.
+  when:
+    - vnc_password_result.stdout | length > 0
+    - vnc_type == 'desktop'
+    - vnc_defer_vault_registration | bool
+
+- name: "VNC | Register VNC password in the canonical secrets system (#16299)"
+  ansible.builtin.include_tasks: register-vnc-password.yml
+  when:
+    - vnc_password_result.stdout | length > 0
+    - vnc_type == 'desktop'
+    - not (vnc_defer_vault_registration | bool)
 
 # --- Node-level TLS cert (#1962) ---
 # Shared node keypair, also provisioned by roles/backend and setup-internal-ca.
