@@ -91,7 +91,13 @@ _ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(
 #: since that gap was the blind spot #16147 was filed for. A legitimate guard
 #: removal now needs a same-PR floor lowering, same as every other reach
 #: floor in this module (#15928).
-MIN_GUARDS_EXAMINED = 104
+#:
+#: RE-MEASURED 2026-09-19 on the ws-auth train (#17048): 273 tracked
+#: `repo_tests/*_test.py`, 132 match `_ENUMERATOR` and 104 match it without
+#: `.glob(`. Guard growth had carried the no-`.glob(` reach up to the old floor
+#: of 104, so dropping the term no longer failed anything -- re-pinned to the
+#: exact full reach so the mutation below fires again.
+MIN_GUARDS_EXAMINED = 132
 
 #: WHAT THIS MODULE CHECKS, AND WHAT IT DOES NOT (#16154).
 #:
