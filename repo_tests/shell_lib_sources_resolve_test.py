@@ -520,7 +520,7 @@ def test_the_two_offenders_are_fixed() -> None:
     """
     by_rel = {site.rel: site for site in _SITES if site.is_last}
     for rel, expected in (
-        ("autobot-infrastructure/shared/scripts/hooks/post-commit-doc-sync", "blocks"),
+        ("autobot-infrastructure/shared/scripts/hooks/post-merge-doc-sync", "blocks"),
         (
             "autobot-infrastructure/shared/scripts/hooks/pre-commit-warn-untracked",
             "non-blocking",

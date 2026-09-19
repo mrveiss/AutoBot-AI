@@ -83,7 +83,15 @@ logger = get_logger(__name__)
 CLAIM_TTL_S = env_int_clamped("AUTOBOT_WORK_CLAIM_TTL_S", 300, min_v=10, max_v=3600)
 
 #: Namespaces a scope can name. A claim never spans two of them.
-VALID_KINDS = frozenset({"path", "kb", "device", "project", "config"})
+#:
+#: ``provider``, ``cpu`` and ``queue`` (#16951) claim a shared, contended
+#: RESOURCE rather than a filesystem-shaped tree -- a provider's account-wide
+#: quota, a CPU-time slot, a generic queue's concurrency slot. Each is a flat,
+#: single-segment scope (e.g. ``provider:anthropic``), which needs no special
+#: case: the existing subtree-overlap rule degrades correctly to exact-match
+#: when a scope has no sub-segments, the same way ``project:acme`` already
+#: behaves. No new overlap semantics, no new kind of kind.
+VALID_KINDS = frozenset({"path", "kb", "device", "project", "config", "provider", "cpu", "queue"})
 
 #: Kinds this module deliberately refuses, and where each belongs instead.
 #:

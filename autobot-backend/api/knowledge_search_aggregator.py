@@ -39,6 +39,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.relations import relations_by_direction
 from knowledge.search_filters import (
     extract_user_context_from_request,
     filter_search_results_by_permission,
@@ -50,27 +51,27 @@ logger = get_logger(__name__)
 
 # Issue #336: Extracted helper for processing relation results
 def _process_outgoing_relation(rel: Dict[str, Any], fact_id: str, related_ids: Set[str], results: List[Dict]) -> None:
-    """Process a single outgoing relation (Issue #336 - extracted helper)."""
+    """Process a single outgoing relation (Issue #336 - extracted helper). Keys are "to"/"type" (#16708)."""
     if rel.get("target_fact"):
         target = rel["target_fact"]
         target["source"] = "graph_relation"
-        target["relation_type"] = rel.get("relation_type")
+        target["relation_type"] = rel.get("type")
         target["from_fact"] = fact_id
-        if rel.get("target_id") not in related_ids:
+        if rel.get("to") not in related_ids:
             results.append(target)
-            related_ids.add(rel.get("target_id"))
+            related_ids.add(rel.get("to"))
 
 
 def _process_incoming_relation(rel: Dict[str, Any], fact_id: str, related_ids: Set[str], results: List[Dict]) -> None:
-    """Process a single incoming relation (Issue #336 - extracted helper)."""
+    """Process a single incoming relation (Issue #336 - extracted helper). See #16708 note above."""
     if rel.get("source_fact"):
         source = rel["source_fact"]
         source["source"] = "graph_relation"
-        source["relation_type"] = rel.get("relation_type")
+        source["relation_type"] = rel.get("type")
         source["to_fact"] = fact_id
-        if rel.get("source_id") not in related_ids:
+        if rel.get("from") not in related_ids:
             results.append(source)
-            related_ids.add(rel.get("source_id"))
+            related_ids.add(rel.get("from"))
 
 
 async def _expand_fact_relations(
@@ -94,12 +95,12 @@ async def _expand_fact_relations(
     if not relations.get("success"):
         return
     ownership_manager = getattr(kb, "ownership_manager", None)
-    for rel in relations.get("outgoing", []):
+    for rel in relations_by_direction(relations.get("relations", []), "outgoing"):  # #16708
         if await _related_fact_is_accessible(
             rel.get("target_fact"), ownership_manager, user_id, user_org_id, user_group_ids, is_admin
         ):
             _process_outgoing_relation(rel, fact_id, related_ids, results)
-    for rel in relations.get("incoming", []):
+    for rel in relations_by_direction(relations.get("relations", []), "incoming"):
         if await _related_fact_is_accessible(
             rel.get("source_fact"), ownership_manager, user_id, user_org_id, user_group_ids, is_admin
         ):
@@ -150,7 +151,7 @@ def _build_relation_context(rel: Dict[str, Any], total_length: int, max_length: 
     content = rel["target_fact"].get("content", "")[:300]
     if total_length + len(content) > max_length:
         return total_length
-    rel_type = rel.get("relation_type", "related_to")
+    rel_type = rel.get("type", "related_to")  # #16708: real key is "type"
     context_parts.append(f"- [{rel_type}] {content}\n")
     return total_length + len(content)
 
@@ -210,11 +211,11 @@ async def _process_relations_for_citations(
             continue
 
         relations = await kb.get_fact_relations(fact_id, direction="outgoing", include_fact_details=True)
-        if not (relations.get("success") and relations.get("outgoing")):
+        if not (relations.get("success") and relations.get("relations")):  # #16708: real key is "relations"
             continue
 
         context_parts.append("## Related Information\n")
-        for rel in relations["outgoing"][:2]:
+        for rel in relations["relations"][:2]:
             if await _related_fact_is_accessible(
                 rel.get("target_fact"), ownership_manager, user_id, user_org_id, user_group_ids, is_admin
             ):
@@ -416,8 +417,7 @@ async def stats(req: Request):
         },
     }
 
-    # Knowledge base stats
-    # Issue #379: Parallelize independent KB stats calls with asyncio.gather()
+    # Knowledge base stats -- Issue #379: parallelize independent KB stats calls with asyncio.gather()
     if kb is not None:
         try:
             kb_stats, rel_stats = await asyncio.gather(
@@ -686,8 +686,8 @@ async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relati
             if not result.get("success"):
                 continue
 
-            for rel in result.get("outgoing", [])[:5]:  # Limit per fact
-                target_id = rel.get("target_id")
+            for rel in relations_by_direction(result.get("relations", []), "outgoing")[:5]:  # #16708, limit per fact
+                target_id = rel.get("to")
                 if not target_id or target_id not in fact_ids:
                     continue
                 key = f"{fact_id}-{target_id}"
@@ -697,7 +697,7 @@ async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relati
                         {
                             "from": fact_id,
                             "to": target_id,
-                            "type": rel.get("relation_type", "related_to"),
+                            "type": rel.get("type", "related_to"),
                             "strength": rel.get("strength", 0.8),
                         }
                     )

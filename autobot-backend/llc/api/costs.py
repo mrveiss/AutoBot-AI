@@ -37,7 +37,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +47,7 @@ from llc.deps import assert_company_access
 from llc.models.budget import LLCAgentBudget
 from llc.services.model_tiers import get_model_tier_service
 from llc.services.step_rollup import StepRollupService
+from llm_shared.quota_headroom import QuotaHeadroomEntry, get_quota_headroom_store
 from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
 from user_management.services import TenantContext
@@ -143,13 +144,40 @@ class AgentModelCost(BaseModel):
     window: str = "lifetime"
 
 
+class QuotaHeadroomReading(BaseModel):
+    """One observed headroom reading for a provider's rate-limit window.
+
+    Sourced from ``QuotaHeadroomStore`` (#15026), which records what the
+    provider itself reported (rate-limit response headers, a 429's
+    ``retry-after``) — never a computed guess.
+    """
+
+    window: str
+    limit: Optional[float] = None
+    remaining: Optional[float] = None
+    utilization: Optional[float] = None
+    resets_at: Optional[float] = None
+    observed_at: Optional[float] = None
+    source: str = ""
+
+
 class QuotaWindow(BaseModel):
     """Quota headroom for one provider."""
 
     provider: str
     windows: List[str]
     description: str
-    note: str = "Headroom values require provider API key configuration to populate."
+    # #16951: real observed readings, one per RECORDED entry — not filtered to
+    # the static `windows` list above. `windows` documents the vocabulary a
+    # provider's own dashboard uses (rpm/tpm/etc.); a real writer is not
+    # bound to it, and the one writer this store actually has today
+    # (rate_limit_backoff.py's 429 handler) records under "requests" instead
+    # (see quota_headroom.py's docstring). Filtering headroom to `windows`
+    # silently dropped exactly that data — the same defect class as a
+    # fabricated zero, from the other side: real data that does not match an
+    # expected shape must still be shown, not discarded.
+    headroom: List[QuotaHeadroomReading] = Field(default_factory=list)
+    note: str
 
 
 # ---------------------------------------------------------------------------
@@ -231,18 +259,58 @@ async def costs_by_agent_model(
     ]
 
 
+def _build_quota_window(provider: str, entries: List[QuotaHeadroomEntry]) -> QuotaWindow:
+    """Assemble one provider's response from its static structure and real entries.
+
+    Every entry ``all_entries`` returned is shown — never filtered to the
+    static ``windows`` vocabulary below, which documents what a provider's own
+    dashboard calls its windows and is not a constraint on what a writer may
+    record (#16951). ``windows`` and ``headroom`` can therefore name different
+    window strings for the same provider; that is a true statement about two
+    different things (the vocabulary a provider defines, and what has actually
+    been observed), not a bug to reconcile.
+    """
+    structure = _PROVIDER_QUOTA_STRUCTURE.get(provider, {})
+    headroom = [
+        QuotaHeadroomReading(
+            window=entry.window,
+            limit=entry.limit,
+            remaining=entry.remaining,
+            utilization=entry.utilization,
+            resets_at=entry.resets_at,
+            observed_at=entry.observed_at,
+            source=entry.source,
+        )
+        for entry in entries
+    ]
+    return QuotaWindow(
+        provider=provider,
+        windows=structure.get("windows", ["rpm"]),
+        description=structure.get("description", f"Rate limit windows for provider {provider!r}"),
+        headroom=headroom,
+        note=(
+            "Live headroom below, as last observed from the provider."
+            if headroom
+            else "No headroom observed yet for this provider — no call has recorded a rate-limit reading."
+        ),
+    )
+
+
 @router.get("/quota-windows", response_model=List[QuotaWindow])
 async def quota_windows(
     company_id: Optional[str] = Query(None, description="Filter by company UUID"),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[QuotaWindow]:
-    """Return provider quota window structures for all configured providers.
+    """Return provider quota window structures, with real observed headroom (#16951, #15026).
 
     Each entry describes the rate-limit windows applicable to the provider
     (e.g. RPM + TPM for OpenAI; 5-hour + 7-day output token windows for
-    Anthropic).  Actual headroom values require provider API key configuration
-    and are populated by the quota monitor (phase 3).
+    Anthropic), plus whatever ``QuotaHeadroomStore`` has actually observed for
+    it — the provider's own rate-limit response headers and 429s, recorded by
+    ``llm_shared/rate_limit_backoff.py`` on every LLM call. A window with no
+    reading yet reports none rather than a fabricated zero: "never observed"
+    and "confirmed empty" are different facts.
     """
     if company_id:
         assert_company_access(ctx, company_id)
@@ -255,18 +323,14 @@ async def quota_windows(
     # response is the platform tier map only.
     tier_map = svc.get_tier_map()
     all_providers = set(tier_map.keys())
+    store = get_quota_headroom_store()
 
-    return [
-        QuotaWindow(
-            provider=p,
-            windows=_PROVIDER_QUOTA_STRUCTURE.get(p, {}).get("windows", ["rpm"]),
-            description=_PROVIDER_QUOTA_STRUCTURE.get(p, {}).get(
-                "description", f"Rate limit windows for provider {p!r}"
-            ),
-        )
-        for p in sorted(all_providers)
-        if p in _PROVIDER_QUOTA_STRUCTURE or p in tier_map
-    ]
+    results: List[QuotaWindow] = []
+    for p in sorted(all_providers):
+        if p not in _PROVIDER_QUOTA_STRUCTURE and p not in tier_map:
+            continue
+        results.append(_build_quota_window(p, await store.all_entries(provider=p)))
+    return results
 
 
 # ---------------------------------------------------------------------------
