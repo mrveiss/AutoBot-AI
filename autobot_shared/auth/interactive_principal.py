@@ -26,7 +26,7 @@ from typing import Any, Mapping, Optional
 
 #: ``token_type`` every login mint sets (backend ``create_jwt_token``). A token
 #: issued before 2026-09-18 lacks it and is not a login here until re-issued.
-LOGIN_TOKEN_TYPE = "login"
+LOGIN_TOKEN_TYPE = "login"  # nosec B105  # a JWT token_type label, not a credential (#17042)
 
 #: Claims that appear only on tokens minted for something other than a finished
 #: human login. Presence of any one of them, whatever its value, disqualifies
