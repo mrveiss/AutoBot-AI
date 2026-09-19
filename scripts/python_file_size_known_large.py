@@ -137,9 +137,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_chat.py": 725,
     "autobot-backend/api/schemas_code.py": 3266,
     "autobot-backend/api/schemas_knowledge.py": 5156,
-    "autobot-backend/api/schemas_system.py": 4344,  # #17099: visibility field for SYSTEM-vault routing
+    "autobot-backend/api/schemas_system.py": 4346,  # #16444 review: RequestValidationError import comment
     "autobot-backend/api/schemas_workflows.py": 3011,
-    "autobot-backend/api/secrets.py": 1207,  # #17099: SYSTEM-visibility secrets routed to EnvelopeSecretsService
+    "autobot-backend/api/secrets.py": 1216,  # #16444 review: except HTTPException, ValueError handlers
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
     "autobot-backend/api/system.py": 1112,
@@ -231,7 +231,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
     "autobot-backend/knowledge/connectors/base.py": 676,
-    "autobot-backend/knowledge/connectors/credential_store.py": 739,
+    "autobot-backend/knowledge/connectors/credential_store.py": 761,  # #16444 review: rotate() validates the merged bundle
     "autobot-backend/knowledge/connectors/gdrive.py": 702,
     "autobot-backend/knowledge/connectors/gitlab.py": 873,
     "autobot-backend/knowledge/connectors/onedrive.py": 642,

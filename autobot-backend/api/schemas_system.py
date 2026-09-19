@@ -10,7 +10,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -3543,7 +3543,9 @@ class SecretCreateRequest(BaseModel):
     # unrouted. Only "system" gets special handling in create_secret(); every
     # other value's current (unrouted) behaviour is unchanged by this field's
     # mere existence.
-    visibility: str | None = Field(None, max_length=32, description="private/shared/group/organization/system")
+    visibility: Literal["private", "shared", "group", "organization", "system"] | None = Field(
+        None, description="A typo here must 422, not silently fall through to the legacy store (#16428 review)"
+    )
 
     # #16428: bridges this secret to a connector's ConnectorCredentialStore
     # entry (ADR-007) instead of this store's own file, per #13632's decision

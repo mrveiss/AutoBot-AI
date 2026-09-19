@@ -775,6 +775,10 @@ async def create_secret(
     except ValueError as e:
         audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
         raise HTTPException(status_code=400, detail="Internal server error")
+    except HTTPException:
+        # #16428: without this, get_coordinator()'s 503 (vault not configured)
+        # falls into the generic handler below and becomes a misleading 500.
+        raise
     except Exception as e:
         audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
         logger.error("Failed to create secret: %s", e)
@@ -1040,6 +1044,11 @@ async def update_secret(
             details="permission_denied",
         )
         raise HTTPException(status_code=403, detail="Internal server error")
+    except ValueError as e:
+        # #16428: rotate()'s merged-bundle validation failure -- a bad
+        # request, not a server fault.
+        audit_log("UPDATE", secret_id, http_request, success=False, details=str(e))
+        raise HTTPException(status_code=400, detail="Internal server error")
     except HTTPException:
         raise
     except Exception as e:

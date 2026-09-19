@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from api.schemas_system import ChatSecretScope
+from api.schemas_system import ChatSecretScope, SecretCreateRequest
 from autobot_shared.scoping.scope_level import ScopeLevel
 from autobot_shared.status_enums import SecretType
 
@@ -434,3 +434,74 @@ class TestAuditLog:
 
         logged_id = re.search(r"SecretID: (\S+)", caplog.text).group(1)
         assert logged_id == "none"
+
+
+class TestSystemVisibilityRequiresRealAdmin:
+    """#16428 review: the system-vault branch must be denied through the
+    REAL `check_admin_permission` dependency for a non-admin, not merely
+    behind a test fixture that always overrides it to True.
+
+    The suite runs against an `auth_middleware` stub
+    (`testkit/auth_middleware_stub.py`) whose `check_admin_permission`
+    approves every caller, so this loads the REAL one instead
+    (`tests.conftest.load_real_auth_middleware`, the same approach as
+    `api/knowledge_chroma_admin_16666_test.py`) and fakes only the identity
+    the request carries -- that drives the real role logic end to end.
+    """
+
+    def test_a_non_admin_is_refused_before_reaching_the_system_vault_branch(self, monkeypatch):
+        from types import SimpleNamespace
+
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api import secrets as secrets_module
+        from tests.conftest import load_real_auth_middleware
+
+        real = load_real_auth_middleware()
+        monkeypatch.setattr(
+            real,
+            "get_auth_middleware",
+            lambda: SimpleNamespace(get_user_from_request=lambda _r: {"username": "u", "role": "member"}),
+        )
+
+        app = FastAPI()
+        app.include_router(secrets_module.router, prefix="/api/secrets")
+        app.dependency_overrides[secrets_module.check_admin_permission] = real.check_admin_permission
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post(
+                "/api/secrets/",
+                json={
+                    "name": "attempted-system-secret",
+                    "type": SecretType.API_KEY.value,
+                    "scope": ChatSecretScope.GENERAL.value,
+                    "value": "irrelevant",
+                    "visibility": "system",
+                },
+            )
+
+        assert response.status_code == 403
+        # _create_system_vault_secret must never have been reached.
+        assert "attempted-system-secret" not in response.text
+
+
+class TestVisibilityIsAClosedSet:
+    """#16428 review: a typo ("System", "systen") must 422, not silently
+    fall through to the legacy store as an unrecognised value would with a
+    bare `str` field."""
+
+    @pytest.mark.parametrize("bad_value", ["System", "systen", "SYSTEM", "public"])
+    def test_an_unrecognised_visibility_is_rejected(self, bad_value):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            SecretCreateRequest(
+                name="x", type=SecretType.API_KEY, scope=ChatSecretScope.GENERAL, value="v", visibility=bad_value
+            )
+
+    @pytest.mark.parametrize("good_value", ["private", "shared", "group", "organization", "system", None])
+    def test_every_real_value_is_accepted(self, good_value):
+        SecretCreateRequest(
+            name="x", type=SecretType.API_KEY, scope=ChatSecretScope.GENERAL, value="v", visibility=good_value
+        )

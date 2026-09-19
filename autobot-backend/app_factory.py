@@ -38,6 +38,7 @@ from initialization import (
 
 # Import initialization modules
 from initialization.integrity_handlers import register_integrity_handlers
+from initialization.validation_error_handlers import register_validation_error_handlers
 
 # Store logger for app usage
 logger = get_logger(__name__)
@@ -55,6 +56,10 @@ def _register_exception_handlers(app: FastAPI) -> None:
     # integrity violation has a specific, actionable answer and must not be
     # flattened into a 500 (#15775).
     register_integrity_handlers(app)
+    # A 422's default body echoes the submitted payload verbatim -- the
+    # concrete case is a secret disclosed through a failed request model
+    # validator (#16428 security review).
+    register_validation_error_handlers(app)
 
     @app.exception_handler(Exception)
     async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
