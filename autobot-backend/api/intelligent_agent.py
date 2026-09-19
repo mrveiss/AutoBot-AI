@@ -18,6 +18,7 @@ from api.system_health import ComponentHealth, KnownProbes, register_health_prob
 from api.ws_security import enforce_ws_origin
 from auth_middleware import authenticate_websocket, check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 
 if TYPE_CHECKING:
     from intelligence.intelligent_agent import IntelligentAgent
@@ -276,10 +277,10 @@ async def websocket_stream(websocket: WebSocket):
         return
     user = await authenticate_websocket(websocket)
     if user is None:
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Authentication required")
         return
-    await websocket.accept()
+    await accept_websocket(websocket)
     logger.info("WebSocket connection established (user=%s)", user.get("username"))
     try:
         agent = await get_agent()
