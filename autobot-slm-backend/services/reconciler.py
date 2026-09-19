@@ -40,6 +40,12 @@ from models.database import (
 )
 from services.service_categorizer import categorize_service
 from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
+from services.service_remediation_tracker import (
+    clear_service_remediation,
+    log_restart_result,
+    read_service_remediation,
+    write_service_remediation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -467,8 +473,7 @@ class ReconcilerService:
         self._heartbeat_timeout = settings.heartbeat_interval * settings.unhealthy_threshold
         # Track remediation attempts per node: {node_id: {"count": int, "last_attempt": datetime}}
         self._remediation_tracker: Dict[str, Dict] = {}
-        # Track service restart attempts: {(node_id, svc_name): {"count": int, "last_attempt": dt}}
-        self._service_remediation_tracker: Dict[tuple, Dict] = {}
+        # Service restart attempts persist on Service.extra_data["remediation"] (#16712), not here.
         # Timestamps for rate-limited background tasks (#926 Phase 3)
         self._last_manifest_health_check: float = 0.0
         self._last_cert_expiry_check: float = 0.0
@@ -1013,7 +1018,7 @@ class ReconcilerService:
 
         # Try to restart the SLM agent via Ansible (#1814: prefer ansible_name)
         ansible_target = node.ansible_target
-        restarted = await self._restart_service_via_ansible(
+        restarted, _cause = await self._restart_service_via_ansible(
             ansible_target,
             "slm-agent",
             timeout_s=REMEDIATION_PLAYBOOK_TIMEOUT_S,
@@ -1071,34 +1076,12 @@ class ReconcilerService:
         )
         return False
 
-    @staticmethod
-    def _log_restart_result(service_name: str, hostname: str, timeout_s: int, result: dict) -> bool:
-        """Log and interpret one execute_playbook result. Helper for _restart_service_via_ansible.
-
-        A timeout must read as a failure, never a silent success (#14524) --
-        `result["success"]` already reflects that (execute_playbook's
-        `returncode == 0` check), this only chooses which message to log.
-        `result.get("output", ...)`, not `.get("error", ...)`: execute_playbook
-        never returns an "error" key, only "output" -- the previous
-        `.get("error", ...)` here always fell through to its generic default.
-        """
-        if result.get("success"):
-            logger.info("Successfully restarted %s on %s", service_name, hostname)
-            return True
-        if result.get("timed_out"):
-            logger.warning(
-                "Restart of %s on %s timed out after %ds -- killed (#14524)", service_name, hostname, timeout_s
-            )
-            return False
-        logger.warning("Failed to restart %s on %s: %s", service_name, hostname, result.get("output", "Unknown error"))
-        return False
-
     async def _restart_service_via_ansible(
         self,
         hostname: str,
         service_name: str,
         timeout_s: int,
-    ) -> bool:
+    ) -> tuple[bool, str | None]:
         """Restart a systemd service on a remote node via Ansible playbook.
 
         A timed-out run comes back `success=False` (#14524), so this always
@@ -1127,11 +1110,11 @@ class ReconcilerService:
                 },
                 timeout_s=timeout_s,
             )
-            return self._log_restart_result(service_name, hostname, timeout_s, result)
+            return log_restart_result(service_name, hostname, timeout_s, result)
 
         except Exception as e:
             logger.warning("Error restarting %s on %s: %s", service_name, hostname, e)
-            return False
+            return False, str(e)
 
     def reset_remediation_tracker(self, node_id: str) -> None:
         """Reset remediation tracker for a node (e.g., after manual intervention)."""
@@ -1139,23 +1122,18 @@ class ReconcilerService:
             del self._remediation_tracker[node_id]
             logger.info("Reset remediation tracker for node %s", node_id)
 
-    def reset_service_remediation_tracker(self, node_id: str, service_name: str = None) -> None:
-        """Reset service remediation tracker for a node/service."""
+    async def reset_service_remediation_tracker(
+        self, db: AsyncSession, node_id: str, service_name: str | None = None
+    ) -> None:
+        """Clear the persisted remediation tracker (#16712 acknowledge path; a recovery clears itself instead)."""
+        stmt = select(Service).where(Service.node_id == node_id)
         if service_name:
-            key = (node_id, service_name)
-            if key in self._service_remediation_tracker:
-                del self._service_remediation_tracker[key]
-                logger.info(
-                    "Reset service remediation tracker for %s on %s",
-                    service_name,
-                    node_id,
-                )
-        else:
-            keys_to_remove = [k for k in self._service_remediation_tracker if k[0] == node_id]
-            for key in keys_to_remove:
-                del self._service_remediation_tracker[key]
-            if keys_to_remove:
-                logger.info("Reset all service remediation trackers for node %s", node_id)
+            stmt = stmt.where(Service.service_name == service_name)
+        result = await db.execute(stmt)
+        cleared = [s.service_name for s in result.scalars().all() if clear_service_remediation(s)]
+        if cleared:
+            await db.commit()
+            logger.info("Reset service remediation tracker for %s on %s", cleared, node_id)
 
     async def _remediate_failed_services(self) -> None:
         """Auto-restart failed services that are enabled.
@@ -1206,7 +1184,15 @@ class ReconcilerService:
                 if node.status == NodeStatus.OFFLINE.value:
                     continue
 
-                await self._remediate_failed_service(db, node, service)
+                # One bad row must not halt remediation for the rest (#17096).
+                try:
+                    await self._remediate_failed_service(db, node, service)
+                except Exception:
+                    logger.exception(
+                        "Service remediation failed for %s on %s -- continuing with the next service",
+                        service.service_name,
+                        service.node_id,
+                    )
 
     def _check_service_cooldown(self, node_id: str, service_name: str, tracker: dict, now: datetime) -> bool:
         """Check if service is in remediation cooldown.
@@ -1232,13 +1218,16 @@ class ReconcilerService:
     ) -> None:
         """Create event when max service restart attempts exceeded.
 
-        Helper for _remediate_failed_service (Issue #665).
+        Helper for _remediate_failed_service (Issue #665). `tracker["last_cause"]`
+        names the last attempt's own failure, not only node and service (#16712 AC).
         """
+        cause = tracker.get("last_cause") or "unknown (no cause was captured for the last attempt)"
         logger.warning(
-            "Service %s on %s exceeded max restart attempts (%d). " "Human intervention required.",
+            "Service %s on %s exceeded max restart attempts (%d): %s. Human intervention required.",
             service.service_name,
             node.node_id,
             MAX_SERVICE_RESTART_ATTEMPTS,
+            cause,
         )
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
@@ -1247,11 +1236,12 @@ class ReconcilerService:
             severity=EventSeverity.WARNING.value,
             message=(
                 f"Service {service.service_name} on {node.hostname} requires "
-                f"human intervention after {MAX_SERVICE_RESTART_ATTEMPTS} failed restart attempts"
+                f"human intervention after {MAX_SERVICE_RESTART_ATTEMPTS} failed restart attempts: {cause}"
             ),
             details={
                 "service_name": service.service_name,
                 "attempts": tracker["count"],
+                "cause": cause,
                 "action_required": "manual_review",
             },
         )
@@ -1272,11 +1262,7 @@ class ReconcilerService:
         """
         if success:
             service.status = ServiceStatus.RUNNING.value
-            logger.info(
-                "Successfully restarted service %s on %s",
-                service.service_name,
-                node.node_id,
-            )
+            logger.info("Successfully restarted service %s on %s", service.service_name, node.node_id)
             await self._broadcast_service_remediation(
                 node.node_id,
                 service.service_name,
@@ -1309,10 +1295,9 @@ class ReconcilerService:
 
         Returns True if remediation was attempted, False if skipped.
         """
-        key = (node.node_id, service.service_name)
         now = datetime.now(timezone.utc)
 
-        tracker = self._service_remediation_tracker.get(key, {"count": 0, "last_attempt": None})
+        tracker = read_service_remediation(service)
 
         # Check cooldown
         if self._check_service_cooldown(node.node_id, service.service_name, tracker, now):
@@ -1323,7 +1308,8 @@ class ReconcilerService:
             if not tracker.get("exhausted"):
                 await self._create_max_attempts_service_event(db, node, service, tracker)
                 tracker["exhausted"] = True
-                self._service_remediation_tracker[key] = tracker
+                write_service_remediation(service, tracker)
+                await db.commit()
             return False
 
         # Attempt restart
@@ -1350,20 +1336,29 @@ class ReconcilerService:
         # legitimate long-running restart, so this path gets its own, much
         # larger budget (see SERVICE_RESTART_PLAYBOOK_TIMEOUT_S).
         ansible_target = node.ansible_target
-        success = await self._restart_service_via_ansible(
+        success, cause = await self._restart_service_via_ansible(
             ansible_target,
             service.service_name,
             timeout_s=SERVICE_RESTART_PLAYBOOK_TIMEOUT_S,
         )
 
-        # Update tracker
-        self._service_remediation_tracker[key] = {
-            "count": tracker["count"] + 1 if not success else 0,
-            "last_attempt": now,
-        }
+        # Refresh first (#17096 review): the ansible await can run for minutes,
+        # and a concurrent heartbeat for this row can clear/edit extra_data
+        # meanwhile -- writing from the pre-await `service` would silently
+        # undo it. Captured by _handle_service_restart_result's own commit().
+        await db.refresh(service)
+        fresh_tracker = read_service_remediation(service)
+        write_service_remediation(
+            service,
+            {
+                "count": fresh_tracker["count"] + 1 if not success else 0,
+                "last_attempt": now,
+                "exhausted": False,
+                "last_cause": cause,  # #16712 AC: exhaustion must name the cause
+            },
+        )
 
-        # Handle result and broadcast
-        await self._handle_service_restart_result(db, node, service, success, tracker)
+        await self._handle_service_restart_result(db, node, service, success, fresh_tracker)
         return True
 
     async def _broadcast_service_remediation(
@@ -1857,6 +1852,8 @@ class ReconcilerService:
         if "n_restarts" in svc_data:
             existing_extra["n_restarts"] = svc_data["n_restarts"]
         existing_extra["n_restarts_increased_at"] = last_increase_iso
+        if status != ServiceStatus.FAILED.value:
+            existing_extra.pop("remediation", None)  # #16712: recovery resets it
         service.extra_data = existing_extra
         return is_churning
 

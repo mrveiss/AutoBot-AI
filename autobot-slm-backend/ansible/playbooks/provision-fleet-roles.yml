@@ -465,8 +465,20 @@
       tags: ['frontend', 'slm-nginx', 'provision']
 
     - name: "SLM | Stat user frontend package.json for co-location detection"
+      # #16970: this bare `hosts: all` play never loads roles/frontend's own
+      # `frontend_dist_dir` default, so the fallback used a hardcoded absolute
+      # path -- flagged by the SSOT hardcoded-value detector once #16970's own
+      # change to this file surfaced it. `autobot.base_dir` (group_vars/all.yml,
+      # the SSOT for /opt/autobot, nested under the `autobot:` key -- a bare
+      # `base_dir` is undefined and `default()` evaluates its argument eagerly,
+      # so that raised on every run where `frontend_dist_dir` is unset, the
+      # normal case) replaces the literal; the resolved path is unchanged.
+      # (vehicle merge: combined with #16970's own later move of this default
+      # from .../dist to .../current -- the staged-swap symlink roles/frontend
+      # itself defaults frontend_dist_dir to -- so the merged literal matches
+      # that role default with autobot.base_dir substituted for the SSOT.)
       ansible.builtin.stat:
-        path: "{{ frontend_dist_dir | default('/opt/autobot/autobot-frontend/current') | dirname }}/package.json"
+        path: "{{ frontend_dist_dir | default(autobot.base_dir + '/autobot-frontend/current') | dirname }}/package.json"
       register: _post_frontend_colocated_check
       when: _slm_nginx_config_stat.stat.exists
       tags: ['frontend', 'slm-nginx', 'provision']
