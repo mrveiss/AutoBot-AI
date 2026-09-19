@@ -144,8 +144,9 @@ class DocumentsMixin:
         ``read_text(encoding="utf-8")``, which reads a PDF as UTF-8 — raising on
         the binary header or, worse, storing mojibake. Extraction now goes
         through DocumentExtractor, so the advertised formats are the handled
-        ones: PDF, DOC/DOCX, plain text, and the spreadsheet / presentation /
-        OpenDocument set it delegates to DocumentParser.
+        ones: PDF, DOC/DOCX, plain text (including CSV #16785), JSON and HTML
+        (#16785), and the spreadsheet / presentation / OpenDocument set it
+        delegates to DocumentParser.
 
         Args:
             file_path: Path to the file
