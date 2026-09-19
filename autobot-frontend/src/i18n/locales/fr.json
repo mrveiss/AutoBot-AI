@@ -6461,7 +6461,20 @@
       "closePanel": "Fermer le panneau",
       "tabParticipants": "Participants",
       "tabActivity": "Activité",
-      "tabNotifications": "Alertes"
+      "tabNotifications": "Alertes",
+      "tabInvitations": "Invitations"
+    },
+    "invitations": {
+      "loading": "Chargement des invitations...",
+      "noInvitations": "Aucune invitation en attente",
+      "sessionLabel": "Session {id}",
+      "invitedAt": "Invité {time}",
+      "justNow": "à l'instant",
+      "minutesAgo": "il y a {count} min",
+      "accept": "Accepter",
+      "decline": "Refuser",
+      "respondError": "Impossible de traiter cette réponse. Veuillez réessayer.",
+      "bellTitle": "Invitations en attente"
     }
   },
   "research": {
