@@ -171,7 +171,6 @@
 1|other|autobot-backend/benchmarks/benchmark_belief_state.py|https://redis.io/docs/clients/python/
 1|other|autobot-backend/benchmarks/cache_benchmark.py|"user"
 1|other|autobot-backend/canvas/vega_validation.py|https://vega.github.io/schema/vega-lite/v5.json
-1|other|autobot-backend/chat_workflow/llm_handler.py|http://0.0.0.0:11434
 1|other|autobot-backend/chat_workflow/manager.py|"assistant"
 1|other|autobot-backend/chat_workflow/tool_handler.py|5
 1|other|autobot-backend/chat_workflow/tool_handler.py|https://html.duckduckgo.com/html/?q={quote_plus(query
@@ -936,7 +935,6 @@
 1|ssot|autobot-backend/a2a/agent_card.py|:8443
 1|ssot|autobot-backend/benchmarks/benchmark_belief_state.py|:3000
 1|ssot|autobot-backend/benchmarks/benchmark_belief_state.py|:8080
-1|ssot|autobot-backend/chat_workflow/llm_handler.py|:11434
 1|ssot|autobot-backend/knowledge/search_components/agentic_search.py|llama3.2:latest
 1|ssot|autobot-backend/llm_shared/providers/ollama_provider.py|:11434
 1|ssot|autobot-backend/middleware/builtin/telemetry_prompt_middleware.py|:9090
