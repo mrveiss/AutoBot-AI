@@ -60,7 +60,7 @@ from .monitor import MemoryMonitor
 from .protocols import ICacheManager, IGeneralStorage, ITaskStorage
 
 # Storage Components
-from .storage import GeneralStorage, TaskStorage
+from .storage import GeneralStorage, OwnerScopeError, TaskStorage
 from .working_memory import WorkingMemoryService
 
 __all__ = [
@@ -83,6 +83,7 @@ __all__ = [
     # Components
     "TaskStorage",
     "GeneralStorage",
+    "OwnerScopeError",
     "LRUCacheManager",
     "MemoryMonitor",
     # Canonical Manager
