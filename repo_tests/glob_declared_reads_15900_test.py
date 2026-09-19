@@ -244,6 +244,21 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         },
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
+    "autobot-frontend/src/*.js": (
+        {"repo_tests/vnc_password_not_in_frontend_source_16299_test.py"},
+        "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
+        "(#16299); `autobot-frontend/` is outside the python filter's trees",
+    ),
+    "autobot-frontend/src/*.ts": (
+        {"repo_tests/vnc_password_not_in_frontend_source_16299_test.py"},
+        "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
+        "(#16299); `autobot-frontend/` is outside the python filter's trees",
+    ),
+    "autobot-frontend/src/*.vue": (
+        {"repo_tests/vnc_password_not_in_frontend_source_16299_test.py"},
+        "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
+        "(#16299); `autobot-frontend/` is outside the python filter's trees",
+    ),
     "libs/autobot-sdk-ts/src/resources/*.ts": (
         {"repo_tests/sdk_ts_request_contract_test.py"},
         "reads the TS SDK's own resource-method source to check it against the backend's routes (#15528, "

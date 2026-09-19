@@ -31,7 +31,7 @@ async def _store(content: str, metadata: dict | None = None) -> tuple[dict, dict
     kb = FactsFakeKB()
     persisted: dict = {}
 
-    async def _capture(fact_id, text, meta):
+    async def _capture(fact_id, text, meta, **_kwargs):
         persisted.update(fact_id=fact_id, content=text, metadata=meta)
         return {"status": "success", "fact_id": fact_id, "action": "created"}
 
@@ -119,7 +119,7 @@ async def test_the_agent_store_fact_tool_is_covered_end_to_end():
     kb = FactsFakeKB()
     persisted: dict = {}
 
-    async def _capture(fact_id, text, meta):
+    async def _capture(fact_id, text, meta, **_kwargs):
         persisted.update(content=text, metadata=meta)
         return {"status": "success", "fact_id": fact_id, "action": "created"}
 
@@ -148,7 +148,7 @@ async def test_update_fact_sanitizes_replacement_content_without_losing_the_rout
     stored_metadata = {INJECTION_ROUTE: "connector:confluence-1", "title": "old"}
     written: dict = {}
 
-    async def _durable(fact_id, content, metadata):
+    async def _durable(fact_id, content, metadata, **_kwargs):
         written.update(content=content, metadata=metadata)
         return True
 
@@ -169,3 +169,91 @@ async def test_update_fact_sanitizes_replacement_content_without_losing_the_rout
     assert written["metadata"][INJECTION_ROUTE] == "connector:confluence-1"
     assert written["metadata"][INJECTION_SANITIZED] is True
     assert written["metadata"]["title"] == "new", "the caller's own metadata still applies"
+
+
+# ---------------------------------------------------------------------------
+# #13708 round 4: URL-shaped metadata fields carry a credential redact_content
+# (which only ever sees *content*, never metadata) cannot reach -- Basic-Auth
+# userinfo or a credential-shaped query param on the URL a writer fetched from.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_credential_bearing_source_url_is_redacted():
+    """add_url_to_knowledge's exact shape: metadata["source"] = the fetched URL."""
+    secret_url = "https://example.com/webhook?api_key=sk-abcdefghijklmnop123&page=1"
+    _, persisted = await _store("Page content.", {"source": secret_url, "type": "url"})
+
+    assert "sk-abcdefghijklmnop123" not in persisted["metadata"]["source"]
+    assert "example.com/webhook" in persisted["metadata"]["source"]
+    assert "page=1" in persisted["metadata"]["source"], "non-credential query params survive"
+
+
+@pytest.mark.asyncio
+async def test_basic_auth_userinfo_in_source_url_is_redacted():
+    secret_url = "https://user:hunter2@example.com/feed"
+    _, persisted = await _store("Feed content.", {"source": secret_url})
+
+    assert "hunter2" not in persisted["metadata"]["source"]
+    assert "example.com/feed" in persisted["metadata"]["source"]
+
+
+@pytest.mark.asyncio
+async def test_source_url_and_url_fields_are_also_redacted():
+    """The other two field names round 4 named, not just "source"."""
+    secret_url = "https://user:hunter2@example.com/a"
+    _, persisted = await _store("A.", {"source_url": secret_url, "url": secret_url})
+
+    assert "hunter2" not in persisted["metadata"]["source_url"]
+    assert "hunter2" not in persisted["metadata"]["url"]
+
+
+@pytest.mark.asyncio
+async def test_the_recorded_route_does_not_leak_the_raw_url():
+    """#13708 round 4 review, BLOCK 1: sanitize_fact_content used to compute
+    the route label from metadata["source"] BEFORE redact_url_metadata_fields
+    masked it, so the raw credential-bearing URL survived in a second field
+    (INJECTION_ROUTE -- also a Prometheus label / log field in
+    sanitize_for_storage) even after "source" itself was correctly redacted."""
+    secret_url = "https://example.com/webhook?api_key=sk-abcdefghijklmnop123&page=1"
+    _, persisted = await _store("Page content.", {"source": secret_url, "type": "url"})
+
+    assert "sk-abcdefghijklmnop123" not in persisted["metadata"][INJECTION_ROUTE]
+    assert persisted["metadata"][INJECTION_ROUTE] == persisted["metadata"]["source"]
+
+
+@pytest.mark.asyncio
+async def test_an_ordinary_source_is_unchanged():
+    """Negative control: a non-URL source (a connector id, a filename) must survive
+    unmangled -- the redaction pass is a no-op, not a fallback quarantine."""
+    _, persisted = await _store("Doc content.", {"source": "connector:confluence-1"})
+
+    assert persisted["metadata"]["source"] == "connector:confluence-1"
+
+
+@pytest.mark.asyncio
+async def test_update_fact_also_redacts_a_credential_bearing_source_url():
+    """The same field-name rule applies through update_fact's own metadata merge,
+    not just a new fact created via store_fact."""
+    kb = FactsFakeKB()
+    secret_url = "https://user:hunter2@example.com/feed"
+    written: dict = {}
+
+    async def _durable(fact_id, content, metadata, **_kwargs):
+        written.update(content=content, metadata=metadata)
+        return True
+
+    with (
+        patch.object(
+            FactsFakeKB,
+            "_read_fact_for_write",
+            new=AsyncMock(return_value=({"content": "old", "timestamp": ""}, {})),
+        ),
+        patch.object(FactsFakeKB, "_refresh_content_hash", new=AsyncMock()),
+        patch.object(FactsFakeKB, "_durable_update_or_adopt", new=AsyncMock(side_effect=_durable)),
+        patch("knowledge.facts.asyncio.to_thread", new=AsyncMock()),
+    ):
+        result = await kb.update_fact("f1", content="Refreshed.", metadata={"source": secret_url})
+
+    assert result["status"] == "success"
+    assert "hunter2" not in written["metadata"]["source"]
