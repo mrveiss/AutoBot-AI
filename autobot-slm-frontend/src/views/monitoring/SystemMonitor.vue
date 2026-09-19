@@ -13,6 +13,7 @@
 import { ref, computed } from 'vue'
 import GrafanaDashboard from '@/components/monitoring/GrafanaDashboard.vue'
 import MetricsDetailsView from './MetricsDetailsView.vue'
+import NodeGpuSummary from '@/components/monitoring/NodeGpuSummary.vue'
 import { useFleetStore } from '@/stores/fleet'
 import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
 
@@ -22,7 +23,12 @@ const {
   memoryUsage,
   diskUsage,
   systemHealth,
+  gpuNodes,
+  gpuUnavailable,
 } = usePrometheusMetrics({ autoFetch: true, pollInterval: 30000 })
+
+// #15226: each node's GPUs, matched to its card by node_id
+const gpuByNode = computed(() => new Map(gpuNodes.value.map((gpuNode) => [gpuNode.node_id, gpuNode])))
 
 // View mode toggle (Issue #896 - added 'metrics' mode)
 const viewMode = ref<'grafana' | 'details' | 'metrics'>('grafana')
@@ -209,6 +215,7 @@ function getMetricColor(value: number): string {
               <span class="text-gray-600">{{ $t('monitoring.systemMonitor.disk') }}</span>
               <span :class="getMetricColor(node.disk)">{{ node.disk.toFixed(1) }}%</span>
             </div>
+            <NodeGpuSummary :status="gpuByNode.get(node.node_id)" :unavailable="gpuUnavailable" />
           </div>
 
           <div v-if="node.services.length > 0" class="mt-4 pt-3 border-t border-gray-100">
