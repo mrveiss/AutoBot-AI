@@ -234,14 +234,18 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       warn "node_modules missing — skipping vue-tsc (run 'npm install')"
     fi
 
-    # Targeted test runs for changed test files + sibling __tests__/
+    # Targeted test runs for changed test files + sibling __tests__/.
+    # vitest below runs with cwd already inside autobot-frontend/, so every
+    # path here must be relative to that dir, not the repo root $changed uses.
     test_files=$(echo "$changed" \
       | grep -E '\.test\.ts$' \
+      | sed 's|^autobot-frontend/||' \
       | head -10)
     # Also test corresponding __tests__/ for any composable changes
     composable_tests=$(echo "$changed" \
       | grep -E 'composables/.*\.ts$' \
       | grep -v '\.test\.' \
+      | sed 's|^autobot-frontend/||' \
       | sed -E 's|(composables)/(.+)\.ts$|\1/__tests__/\2.test.ts|' \
       | xargs -I{} sh -c '[ -f "$REPO_ROOT/autobot-frontend/{}" ] && echo "{}"' \
       2>/dev/null || true)

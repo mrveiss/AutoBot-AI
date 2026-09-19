@@ -121,7 +121,18 @@ def _missing_report(missing: list[str], found: list[str]) -> list[str]:
 
 
 def report(body: str) -> tuple[bool, list[str]]:
-    """Return (ok, output lines) for one pull request body."""
+    """Return (ok, output lines) for one pull request body.
+
+    **Imported by ``scripts/validate_pr_body.py`` (#16859)**, which runs this
+    gate locally before ``gh pr create`` so an author learns the requirement
+    before the push rather than from a red check ~63 checks in. Changing this
+    name or its ``(ok, lines)`` return shape breaks that caller.
+
+    You will not find out locally: ``tools/git-hooks/pre-push`` selects the
+    sibling test of each changed file (``<file>_test.py``), so editing this
+    module runs ``check_pr_template_sections_test.py`` and never
+    ``validate_pr_body_test.py``. CI catches it, after the push.
+    """
     missing: list[str] = []
     empty: list[str] = []
     lines: list[str] = []
