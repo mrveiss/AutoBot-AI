@@ -141,6 +141,7 @@ conflict when their rows sort next to each other.
 | `AUTOBOT_OLLAMA_BASE_URL` | ai | str | *(none)* | Base URL of the local Ollama API (e.g. http://localhost:11434). |
 | `AUTOBOT_OPENVINO_CACHE_DIR` | ai | str | `'data/openvino_cache'` | Directory for compiled OpenVINO model artefacts. Relative to the working directory unless given as an absolute path. |
 | `AUTOBOT_ORCHESTRATOR_MODEL` | ai | str | `'llama3.2:1b'` | Ollama model name used for the main orchestrator/routing loop. |
+| `AUTOBOT_ORPHAN_GRACE_HOURS` | storage | int | `24` | An orphan-storage detector (#17038/#17039) excludes anything younger than this many hours, so a clone or file still being written is never offered for cleanup. Clamped to at least 1 -- 0 would offer data mid-write. Raising it widens the safety window before a genuine orphan is even listed; lowering it surfaces one sooner (services/orphan_storage.py). Range: 1–720. |
 | `AUTOBOT_OTEL_ENABLED` | otel | bool | false | Enable OpenTelemetry tracing when truthy. |
 | `AUTOBOT_OTEL_ENDPOINT` | otel | str | *(none)* | OTLP collector endpoint URL (e.g. http://otel-collector:4317). |
 | `AUTOBOT_OTEL_PROTOCOL` | otel | str | `'grpc'` | OTLP export protocol: 'grpc' or 'http/protobuf'. |
