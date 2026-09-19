@@ -133,6 +133,51 @@ fi
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GIT_INVOCATION_PARSER="$HOOK_DIR/git_invocation_parse.py"
+COMMAND_POSITION_SCANNER="$HOOK_DIR/command_position_scan.py"
+
+# ──────────────────────────────────────────────
+# Does the command INVOKE this, or merely name it? (#14144)
+# ──────────────────────────────────────────────
+#
+# The git guards answer that with a tokenizer (#15296). The guards further down
+# did not: they grep the whole command string, so a command whose ARGUMENTS
+# merely contain a trigger word is denied even though nothing is invoked. That
+# is not hypothetical -- a read-only loop searching a file FOR these very
+# triggers is refused by them, and `repo_tests/git_invocation_parse_test.py`
+# already spells its own prose in pieces to work around it.
+#
+# `invokes` narrows a denial ONLY on a confident positive parse. Every other
+# outcome -- no python3, a parser error, an unparseable command, or a command
+# position naming something unknowable like `eval` or `$CMD` -- returns true, so
+# the caller keeps exactly the verdict it has today. The guard can therefore
+# only ever become more precise, never more permissive, than before this change.
+CMD_INVOCATIONS=""
+CMD_INVOCATIONS_STATE="unscanned"
+UNIT_SEPARATOR=$(printf '\037')
+
+scan_invocations() {
+  case "$CMD_INVOCATIONS_STATE" in
+    usable) return 0 ;;
+    unusable) return 1 ;;
+  esac
+  CMD_INVOCATIONS_STATE="unusable"
+  command -v python3 >/dev/null 2>&1 || return 1
+  CMD_INVOCATIONS=$(python3 "$COMMAND_POSITION_SCANNER" "$COMMAND" 2>/dev/null) || return 1
+  # A command position the scanner could not name means there may be an
+  # invocation it never reported. Reporting nothing reads as "nothing dangerous
+  # here", which is the one answer that must never come from not looking.
+  if printf '%s\n' "$CMD_INVOCATIONS" | grep -q "^?$UNIT_SEPARATOR"; then
+    return 1
+  fi
+  CMD_INVOCATIONS_STATE="usable"
+  return 0
+}
+
+# invokes <command-name ERE> [<args ERE>] — true when the command really runs it.
+invokes() {
+  scan_invocations || return 0
+  printf '%s\n' "$CMD_INVOCATIONS" | grep -qE "^($1)$UNIT_SEPARATOR${2:-}"
+}
 
 # Ask git about a path with the inherited git environment scrubbed: a stray
 # GIT_DIR or GIT_WORK_TREE would make rev-parse answer about a different
@@ -356,11 +401,11 @@ fi
 # Destructive filesystem operations
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r[a-zA-Z]*f[[:space:]]+(\/|~|\$HOME|\.\.\/\.\.)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r[a-zA-Z]*f[[:space:]]+(\/|~|\$HOME|\.\.\/\.\.)' && invokes 'rm'; then
   deny "Blocked: recursive force-delete on root/home/parent paths. Specify a safe target directory."
 fi
 
-if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r.*[[:space:]]+(\/[[:space:]]|\/\*|\/$|~\/?\*?[[:space:]]|~\/?\*?$)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r.*[[:space:]]+(\/[[:space:]]|\/\*|\/$|~\/?\*?[[:space:]]|~\/?\*?$)' && invokes 'rm'; then
   deny "Blocked: recursive delete targeting root or home directory."
 fi
 
@@ -384,17 +429,30 @@ fi
 # Dangerous system commands
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND_TO_CHECK" | grep -qE 'chmod[[:space:]]+777'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'chmod[[:space:]]+777' && invokes 'chmod' '.*777'; then
   deny "Blocked: chmod 777 gives everyone read/write/execute. Use more restrictive permissions (e.g., 755 or 644)."
 fi
 
-if echo "$COMMAND_TO_CHECK" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(bash|sh|zsh|sudo)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(bash|sh|zsh|sudo)' && invokes 'curl|wget'; then
   deny "Blocked: piping downloaded content directly to a shell is dangerous. Download first, inspect, then execute."
 fi
 
 # Redirect guard targets raw block devices only — matching all of /dev/ would
 # false-positive on the ubiquitous stderr/stdout null-discard idiom (#11593).
-if echo "$COMMAND_TO_CHECK" | grep -qE '(mkfs|dd[[:space:]]+if=|>[[:space:]]*/dev/(sd|hd|nvme|vd|xvd|mmcblk|loop|dm-|md))'; then
+# Split in two (#14144). The PROGRAM half is invocation-gated: a command that
+# merely names one of these tools -- a grep for it, a comment about it, this
+# very file -- is not running it.
+if echo "$COMMAND_TO_CHECK" | grep -qE '(mkfs|dd[[:space:]]+if=)' && invokes 'dd|mkfs[.a-zA-Z0-9]*'; then
+  deny "Blocked: destructive disk operation detected. This can cause irreversible data loss."
+fi
+
+# The REDIRECT half stays unconditional, and that is deliberate rather than an
+# oversight: a redirection is not a command position, so the scanner skips it
+# and `invokes` has nothing to say about a write to a block device. Gating this
+# half would disable it silently -- the failure mode this whole change exists
+# to remove. It keeps today's behaviour, false positives on quoted prose and
+# all, until something can tell a redirection target from a mention of one.
+if echo "$COMMAND_TO_CHECK" | grep -qE '>[[:space:]]*/dev/(sd|hd|nvme|vd|xvd|mmcblk|loop|dm-|md)'; then
   deny "Blocked: destructive disk operation detected. This can cause irreversible data loss."
 fi
 
@@ -402,11 +460,11 @@ fi
 # Accidental package publishing
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND_TO_CHECK" | grep -qE '(npm|yarn|pnpm|bun)[[:space:]]+publish'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE '(npm|yarn|pnpm|bun)[[:space:]]+publish' && invokes 'npm|yarn|pnpm|bun' '(.*[[:space:]])?publish([[:space:]]|$)'; then
   deny "Blocked: publishing npm packages should be done manually or via CI, not through Claude Code."
 fi
 
-if echo "$COMMAND_TO_CHECK" | grep -qE 'twine[[:space:]]+upload'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'twine[[:space:]]+upload' && invokes 'twine' '(.*[[:space:]])?upload([[:space:]]|$)'; then
   deny "Blocked: publishing Python packages should be done manually or via CI, not through Claude Code."
 fi
 
