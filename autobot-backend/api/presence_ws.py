@@ -18,6 +18,7 @@ from api.ws_security import enforce_ws_origin
 from auth_middleware import authenticate_websocket
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 from user_management.database import get_async_session_factory
 from websocket.presence import presence_websocket_handler
@@ -83,7 +84,7 @@ async def session_presence(
     if user_payload is None or user_payload.get("user_id") is None:
         # accept() before close(4001), matching api/live_events.py's own rule:
         # clients see a clean close frame, not a raw handshake rejection.
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=_WS_CLOSE_UNAUTHENTICATED, reason="Unauthorized")
         logger.info("Presence WS rejected: invalid or missing token, session=%s", session_id)
         return
@@ -91,7 +92,7 @@ async def session_presence(
     try:
         user_id = uuid.UUID(str(user_payload["user_id"]))
     except ValueError:
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=_WS_CLOSE_UNAUTHENTICATED, reason="Unauthorized")
         logger.warning("Presence WS rejected: malformed user_id in token, session=%s", session_id)
         return
@@ -99,7 +100,7 @@ async def session_presence(
     # Authenticated is not authorized: a verified user still must not join a
     # session they aren't a participant of.
     if not await _authorized_participant(session_id, user_id):
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=_WS_CLOSE_POLICY_VIOLATION, reason="Not a session participant")
         logger.info("Presence WS refused: user=%s not a participant of session=%s", user_id, session_id)
         return

@@ -38,6 +38,7 @@ from api.ws_security import enforce_ws_admin, enforce_ws_origin
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.threshold_constants import TimingConstants
 from desktop_streaming_manager import get_desktop_streaming
@@ -167,10 +168,9 @@ async def request_takeover(
 
     Issue #744: Requires admin authentication.
     """
-    # Convert request strings to enums via direct name lookup so each enum is the
-    # single source of truth (#12208 — the old hand-maintained maps mirrored every
-    # member by hand and silently dropped any new one, rejecting a valid trigger
-    # with a 400). Enum member names are the UPPER strings the client sends.
+    # Convert request strings to enums via direct name lookup so each enum is the single source of truth (#12208 — the
+    # old hand-maintained maps mirrored every member by hand and silently dropped any new one, rejecting a valid
+    # trigger with a 400). Enum member names are the UPPER strings the client sends.
     try:
         trigger = TakeoverTrigger[request.trigger.upper()]
     except KeyError:
@@ -539,7 +539,7 @@ async def monitoring_websocket(websocket: WebSocket):
         return
     if not await enforce_ws_admin(websocket):
         return
-    await websocket.accept()
+    await accept_websocket(websocket)
     logger.info("Monitoring WebSocket client connected")
 
     try:
@@ -581,7 +581,7 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
         return
     if not await enforce_ws_admin(websocket):
         return
-    await websocket.accept()
+    await accept_websocket(websocket)
 
     try:
         # Use the desktop streaming manager's WebSocket handler

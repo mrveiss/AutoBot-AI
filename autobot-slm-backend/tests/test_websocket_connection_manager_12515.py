@@ -62,6 +62,22 @@ class TestConnectLifecycle:
         await mgr.connect(ws, "events:global")
         assert ws.accept.call_args.kwargs.get("subprotocol") is None
 
+    async def test_connect_does_not_echo_an_unoffered_near_match(self):
+        """#16457 review: this used to be `"bearer" if protocols.startswith("bearer")`.
+
+        A client offering ``bearerX`` never offered plain ``bearer`` -- echoing
+        it back anyway hands the browser a subprotocol it never asked for,
+        which RFC 6455 4.2.2 has it refuse the handshake over. Now routed
+        through the shared ``autobot_shared.websocket_subprotocol.accept_websocket``,
+        which negotiates an exact match only (mirrors
+        ``autobot_shared/websocket_subprotocol_test.py``'s equivalent case,
+        the same helper both backends now share).
+        """
+        mgr = ConnectionManager()
+        ws = _fake_ws(protocols="bearerX, sometoken")
+        await mgr.connect(ws, "events:global")
+        assert ws.accept.call_args.kwargs.get("subprotocol") is None
+
     async def test_disconnect_removes_and_prunes_empty_channel(self):
         mgr = ConnectionManager()
         ws = _fake_ws()
