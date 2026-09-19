@@ -39,7 +39,7 @@ This skill is the **fast path**. Reach for it when the answer is wanted now.
 # Pick whichever matches the ask; run exactly one.
 git diff                                  # uncommitted changes
 git diff --staged                         # staged changes
-git diff origin/Dev_new_gui...HEAD        # whole branch vs base
+git diff origin/main...HEAD        # whole branch vs base
 gh pr diff <number>                       # a specific PR
 ```
 

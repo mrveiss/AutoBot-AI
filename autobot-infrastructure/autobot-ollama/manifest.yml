@@ -18,6 +18,9 @@ services:
     system_service: ollama
     start_order: 1
     user: ollama
+    # #16025: backs both hardware-variant registry roles -- a node runs one or
+    # the other, never both, but either can be assigned this same unit.
+    slm_roles: [autobot-llm-cpu, autobot-llm-gpu]
 
 ports:
   - port: 11434

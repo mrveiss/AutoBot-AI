@@ -15,9 +15,9 @@ name: SSOT Coverage
 
 on:
   push:
-    branches: [ main, Dev_new_gui, develop ]
+    branches: [ release, main, develop ]
   pull_request:
-    branches: [ main, Dev_new_gui, develop ]
+    branches: [ release, main, develop ]
     # #13388: SAFE — "SSOT Configuration Compliance" is not a required context.
     # pipeline-scripts/detect-hardcoded-values.sh scans with
     # `grep -rn --include="*.py" --include="*.ts" --include="*.vue" --include="*.sh"
@@ -231,7 +231,7 @@ jobs:
         # already owns. Two consequences, both live on the merged base:
         #
         #   * the eight `other`-class rules blocked nothing, so nine hardcoded
-        #     /opt/autobot paths sat on Dev_new_gui under a green check;
+        #     /opt/autobot paths sat on main under a green check;
         #   * the parse above falls back to "0" when the JSON is missing, so a
         #     detector that died (a missing scan directory is FATAL by design)
         #     reported clean. An absent result read as a clean result.

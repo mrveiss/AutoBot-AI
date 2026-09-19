@@ -31,6 +31,16 @@ Your data stays on your machines. Your AI stays yours.
 | Service lifecycle management (SLM) | Your infrastructure |
 | Module ecosystem | Your data |
 
+## Why, How, What
+
+- **Why.** Private AI you trust with your business knowledge shouldn't require handing that
+  knowledge — or control of the intelligence itself — to someone else's server.
+- **How.** A small, stable Core (RAG + knowledge-graph memory, a provider-agnostic LLM gateway
+  with fallback, governance) plus a management layer that absorbs deploy/operate/scale, plus
+  Modules that inherit all of it instead of rebuilding it.
+- **What.** A self-hosted AI platform — chat, a private knowledge base, a fleet-management
+  dashboard, and installable modules. Apache-2.0. No subscription.
+
 ## The Platform Model
 
 AutoBot is three layers, bottom to top:
@@ -95,6 +105,12 @@ control:
   agent-company), Codebase Analytics, the Transcriber, and more
 - **Complete Data Privacy** — full data control, no external dependencies, runs entirely
   on your hardware, no vendor lock-in
+- **Governance-Ready Architecture** — audit logging, MFA, a secrets vault, retention
+  policies, and RBAC built for GDPR/SOC2/ISO27001 today, on an architecture (self-hosted
+  data, a provider-agnostic LLM gateway, human-oversight-capable governance) that maps
+  cleanly onto EU AI Act, NIS2, and ISO/IEC 42001 (AI management systems) obligations. See
+  [EU AI Act, NIS2 & Governance Fit](docs/architecture/EU_AI_GOVERNANCE.md) for
+  what's covered and what's still a gap — no compliance certification is claimed.
 
 → Browse everything in the [Capability Catalog](docs/features/CATALOG.md).
 

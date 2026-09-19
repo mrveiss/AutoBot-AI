@@ -7,7 +7,7 @@
 The forensic record this file exists for
 ----------------------------------------
 On 2026-08-26 ``autobot-backend/api/terminal_websocket_route_test.py`` reached
-613 lines on ``Dev_new_gui`` with no ``KNOWN_LARGE`` entry. Neither side of the
+613 lines on ``main`` with no ``KNOWN_LARGE`` entry. Neither side of the
 merge that produced it was in violation:
 
 * the pull request's own head (``1eeaa912f01``) held it at **598** lines, and
@@ -23,7 +23,7 @@ pull request cannot see that class of violation, by construction — however
 correctly it is gated.
 
 ``code-quality`` did in fact catch it afterwards: its ``push`` run on
-``Dev_new_gui@16c104be5`` failed at the step "Audit the python-file-size
+``main@16c104be5`` failed at the step "Audit the python-file-size
 ceilings for drift". Nobody was told. The failure was found days later by
 someone running the audit by hand, which is the actual defect — a red base that
 reaches no reader is indistinguishable from a green one.
@@ -69,7 +69,7 @@ AUDIT_FLAG = "--audit-ceilings"
 
 #: The branch the whole project merges into. The guard is worthless on any
 #: other one.
-INTEGRATION_BRANCH = "Dev_new_gui"
+INTEGRATION_BRANCH = "main"
 
 
 # ---------------------------------------------------------------------------
@@ -118,9 +118,7 @@ def audit_invocations(doc: dict[str, Any]) -> list[dict[str, Any]]:
 def failing_steps(doc: dict[str, Any]) -> list[dict[str, Any]]:
     """Steps that end the run non-zero when the audit reported a violation."""
     return [
-        step
-        for step in steps(doc)
-        if "exit 1" in str(step.get("run", "")) and "rc != '0'" in str(step.get("if", ""))
+        step for step in steps(doc) if "exit 1" in str(step.get("run", "")) and "rc != '0'" in str(step.get("if", ""))
     ]
 
 
@@ -134,6 +132,15 @@ def issue_filing_steps(doc: dict[str, Any]) -> list[dict[str, Any]]:
         # `issues.createComment`, which the *closing* step uses on the clean path.
         and "issues.create({" in str(step.get("with", {}).get("script", ""))
     ]
+
+
+def violation_filing_steps(doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """Issue-filing steps gated on the audit's exit code: the violation's reader.
+
+    Distinct from the ``failure()`` reader (#16237), which files a guard that did
+    not finish and carries no audit report.
+    """
+    return [step for step in issue_filing_steps(doc) if "rc != '0'" in str(step.get("if", ""))]
 
 
 # ---------------------------------------------------------------------------
@@ -157,9 +164,9 @@ def test_the_step_enumeration_is_not_empty():
 def test_every_step_the_sweep_returns_was_actually_read():
     """The flattener must return real step mappings, not placeholders."""
     found = steps(load_workflow())
-    assert all(step.get("name") or step.get("uses") or step.get("run") for step in found), (
-        "a step came back with no name, `uses` or `run` — the flattener is reading the wrong level of the document"
-    )
+    assert all(
+        step.get("name") or step.get("uses") or step.get("run") for step in found
+    ), "a step came back with no name, `uses` or `run` — the flattener is reading the wrong level of the document"
 
 
 def test_the_helpers_reject_a_workflow_that_lost_its_steps():
@@ -250,16 +257,17 @@ def test_a_violation_is_filed_as_an_issue():
     """The part that is genuinely new.
 
     ``code-quality`` already failed on the base for this exact violation
-    (``Dev_new_gui@16c104be5``, step "Audit the python-file-size ceilings for
+    (``main@16c104be5``, step "Audit the python-file-size ceilings for
     drift"). Its redness reached no reader, so the violation stood until
     someone ran the audit locally. A log line is not a report.
     """
-    filing = issue_filing_steps(load_workflow())
-    assert filing, "a failing audit files no issue — the failure would again reach nobody"
-    guards = {str(step.get("if", "")) for step in filing}
-    assert all("rc != '0'" in guard for guard in guards), (
-        f"the issue-filing step(s) are not gated on the audit's exit code: {sorted(guards)}"
-    )
+    doc = load_workflow()
+    assert violation_filing_steps(doc), "a failing audit files no issue — the failure would again reach nobody"
+    # The only other gate a filing step may carry is `failure()`: the reader for a
+    # guard that did not finish (#16237). A filing step on any third gate is neither.
+    guards = {str(step.get("if", "")).strip() for step in issue_filing_steps(doc)}
+    unexpected = sorted(guard for guard in guards if "rc != '0'" not in guard and guard != "failure()")
+    assert not unexpected, f"an issue-filing step is gated on neither the audit's exit code nor failure(): {unexpected}"
 
 
 def test_the_filing_step_is_granted_the_permission_it_needs():
@@ -282,15 +290,17 @@ def test_the_audit_output_is_passed_through_the_environment():
     ``script:`` body, so a path containing a backtick or ``${`` cannot break the
     step whose whole job is to report the failure.
     """
-    filing = issue_filing_steps(load_workflow())
-    assert filing
-    for step in filing:
+    doc = load_workflow()
+    assert violation_filing_steps(doc)
+    for step in issue_filing_steps(doc):
         script = str(step.get("with", {}).get("script", ""))
         assert "steps.audit.outputs.report" not in script, (
             "the audit report is interpolated straight into the github-script body; "
             "pass it through `env:` and read `process.env` instead"
         )
-        assert "process.env" in script
+    # Only the violation reader carries the report; the failure() reader has none to pass.
+    for step in violation_filing_steps(doc):
+        assert "process.env" in str(step.get("with", {}).get("script", ""))
 
 
 # ---------------------------------------------------------------------------
@@ -307,8 +317,7 @@ def test_the_guard_does_not_cancel_superseded_base_runs():
     """
     concurrency = load_workflow().get("concurrency") or {}
     assert concurrency.get("cancel-in-progress") is not True, (
-        "the base guard cancels superseded runs, so a rapid second merge would "
-        "discard the verification of the first"
+        "the base guard cancels superseded runs, so a rapid second merge would " "discard the verification of the first"
     )
 
 

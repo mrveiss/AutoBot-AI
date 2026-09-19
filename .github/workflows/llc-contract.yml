@@ -15,7 +15,7 @@ name: LLC Contract Gate
 
 on:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     paths: &paths
       - 'autobot-backend/llc/**'
       - 'autobot-backend/api/llc/**'
@@ -25,7 +25,7 @@ on:
       - 'scripts/audit_api_wiring.py'
       - '.github/workflows/llc-contract.yml'
   pull_request:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     paths: *paths
 
 concurrency:

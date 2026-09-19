@@ -48,7 +48,7 @@ _NON_BODY = {"Request", "Response", "BackgroundTasks", "WebSocket", "UploadFile"
 _SCALARS = {"str", "int", "float", "bool", "bytes", "UUID", "Decimal", "datetime", "date", "time"}
 _COMPLEX_BUILTINS = {"dict", "list", "Dict", "List", "Mapping", "Any"}
 
-# Floors, measured on Dev_new_gui: 2791 route handlers, 24 of them carrying a
+# Floors, measured on main: 2791 route handlers, 24 of them carrying a
 # ``Form`` field. Lower only when the tree genuinely holds fewer -- never to
 # make a red run pass. The second floor is the load-bearing one: an extractor
 # that stops recognising ``Form`` reports zero mixtures and reads clean.

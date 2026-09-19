@@ -16,7 +16,7 @@ from typing import Any, Dict
 
 from agents.declared_scope_check import INVALID_DECLARED_SCOPE
 from agents.scope_enforcement import hold_scopes
-from autobot_shared.coordination.work_claims import ScopeError
+from autobot_shared.coordination.work_claims import ScopeError, conflict_payload
 from autobot_shared.logging_manager import get_logger
 
 from .pii_pipeline import PIIBlocked, scrub_outbound
@@ -26,6 +26,26 @@ from .trust_score import get_trust_manager
 from .types import TaskArtifact, TaskState
 
 logger = get_logger(__name__)
+
+
+async def _is_cancelled(task_id: str, manager) -> bool:
+    """True once `task_id` has moved to CANCELLED underneath a running executor.
+
+    Checked at defined points inside `_execute_claimed` (#16174) -- never
+    inside a single call into the orchestrator, which this cannot interrupt
+    once it has started. Cancelling stops the NEXT checkpoint from doing more
+    work; it does not abort work already in flight.
+    """
+    task = manager.get_task(task_id)
+    return task is not None and task.status.state == TaskState.CANCELLED
+
+
+async def _abort_if_cancelled(task_id: str, manager, where: str) -> bool:
+    """A checkpoint: log and return True once cancellation should stop more work."""
+    if await _is_cancelled(task_id, manager):
+        logger.info("A2A task %s cancelled %s; no further work performed", task_id, where)
+        return True
+    return False
 
 
 def _extract_response_text(result: Dict[str, Any]) -> str:
@@ -142,22 +162,10 @@ def _report_refusal(manager, task_id: str, conflict) -> None:
 
     The operator's next question is "blocked by what?" -- a refusal that does not
     answer it turns a coordination event into a mystery, and the conflict object
-    already renders holder, task, mode, expiry and intent.
+    already renders holder, task, mode, expiry and intent. The artifact is the
+    shared refusal shape (#16208).
     """
-    manager.add_artifact(
-        task_id,
-        TaskArtifact(
-            artifact_type="json",
-            content={
-                "refused_scope": conflict.requested,
-                "held_by_agent": conflict.holder.agent_id,
-                "held_by_task": conflict.holder.task_id,
-                "holder_intent": conflict.holder.intent,
-                "holder_expires_at": conflict.holder.expires_at,
-                "reason": str(conflict),
-            },
-        ),
-    )
+    manager.add_artifact(task_id, TaskArtifact(artifact_type="json", content=conflict_payload(conflict)))
     manager.update_state(task_id, TaskState.FAILED, message="scope_conflict")
     manager.publish_event(
         task_id,
@@ -361,12 +369,23 @@ async def _execute_claimed(
     peer_id: str | None,
     manager,
 ) -> None:
-    """The original execution body, unchanged, now inside the task's claims."""
+    """The original execution body, now with cooperative-cancellation checkpoints (#16174).
+
+    A cancelled task's executor cannot be interrupted mid-call -- `cancel_task`
+    only flips a state in Redis -- so each checkpoint below only ever stops
+    the NEXT step from starting. `hold_scopes`'s `finally` releases the claim
+    as soon as this function returns, at whichever checkpoint that is.
+    """
     try:
+        if await _abort_if_cancelled(task_id, manager, "before scrub"):
+            return
         scrubbed = _scrub_inbound(task_id, input_text, peer_id, manager)
         if scrubbed is None:
             return
         input_text = scrubbed
+
+        if await _abort_if_cancelled(task_id, manager, "before orchestration"):
+            return
 
         # Late import to avoid circular deps at module load time
         from agents.agent_orchestration import get_distributed_agent_coordinator
@@ -376,6 +395,9 @@ async def _execute_claimed(
             input_text,
             context=context,
         )
+
+        if await _abort_if_cancelled(task_id, manager, "after orchestration"):
+            return
 
         artifacts = _store_response_artifacts(task_id, result, peer_id, manager)
         if artifacts is None:

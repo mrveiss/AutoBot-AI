@@ -113,6 +113,13 @@ WRITE_VERBS = frozenset(
         "mv",
         "stash",
         "init",
+        # #15490 named `clone` among the mutating verbs and it was the one
+        # missing. It writes a whole repository, and an inherited GIT_DIR is the
+        # same hazard here as for `init` — the difference is only how much gets
+        # written. Adding it surfaced no violation: both `git clone` sites in
+        # test files already scrub (one directly, one through a module constant
+        # built from the helper), so this closes the gap rather than opening one.
+        "clone",
         "config",
         "worktree",
         "merge",
@@ -129,11 +136,14 @@ ALLOWLIST: frozenset[str] = frozenset(
     {
         # An operational CLI tool (argparse, `if __name__ == "__main__":`, no
         # `def test_*` anywhere in it) that deliberately creates real worktrees
-        # off `origin/Dev_new_gui` and pushes real branches -- the opposite of
+        # off `origin/main` and pushes real branches -- the opposite of
         # a throwaway fixture. Named `test_first_remediation.py` for pytest's
         # own `test_*.py` collection glob, which is exactly why it also
         # matches this guard's naming heuristic; scrubbing it would break the
-        # tool it is.
+        # tool it is. Same call recorded at `is_production_path` in
+        # check_git_toplevel_env_scrubbed.py (#16179), and #15490 requires the
+        # reference rather than the reason alone — a bare reason is an opinion,
+        # and `test_every_allowlist_entry_carries_an_issue_reference` enforces it.
         "scripts/test_first_remediation.py",
     }
 )

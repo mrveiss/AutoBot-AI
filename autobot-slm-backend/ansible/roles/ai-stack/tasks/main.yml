@@ -31,6 +31,24 @@
     group: root
   tags: ['ai', 'config']
 
+# #16627 (P1b of #13568): the AI stack's Redis client (autobot_shared, via
+# REDIS_* in this env file) authenticates as `default` with the SLM-generated
+# password while the server stays nopass. Adopted only when no password is set,
+# and always with the username -- a password alone is refused by nopass.
+- name: "AI Stack | Read the SLM-generated Redis credential (#16627)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/read_redis_password.yml
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Adopt the SLM-generated Redis credential when none is set (#16627)"
+  ansible.builtin.set_fact:
+    ai_redis_password: "{{ _redis_password_read }}"
+    ai_redis_username: "{{ ai_redis_username | default('', true) or _redis_username_read }}"
+  when:
+    - (_redis_password_read | default('') | trim) | length > 0
+    - (ai_redis_password | default('') | trim) | length == 0
+  no_log: true
+  tags: ['ai', 'config']
+
 - name: "AI Stack | Deploy /etc/autobot/autobot-ai-stack.env"
   ansible.builtin.template:
     src: ai-stack.env.j2
@@ -127,6 +145,10 @@
   ansible.builtin.pip:
     name: pip
     virtualenv: "{{ ai_install_dir }}/venv"
+    # #16641: without this, pip falls back to shelling out to the standalone
+    # `virtualenv` executable, absent from these hosts. Matches the
+    # interpreter the "Create Python virtual environment" task above targets.
+    virtualenv_command: "python3.14 -m venv"
     state: latest
   become_user: "{{ ai_user }}"
   environment:
@@ -182,6 +204,8 @@
   ansible.builtin.pip:
     requirements: "{{ ai_install_dir }}/requirements-ai-filtered.txt"
     virtualenv: "{{ ai_install_dir }}/venv"
+    # #16641: see "Upgrade pip in venv" above.
+    virtualenv_command: "python3.14 -m venv"
     state: present
     extra_args: "--timeout 300"
   become_user: "{{ ai_user }}"
@@ -191,55 +215,18 @@
   timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when: _ai_requirements_file.stat.exists
 
-# #15598: this list runs only when requirements-ai.txt is missing, so `-r` is
-# not available to it by construction -- the degraded path is defined by that
-# file's absence. The floors therefore stay literal, and every one of them is
-# the SAME specifier text `autobot-infrastructure/shared/docker/ai-stack/
-# requirements-ai.txt` declares, so the fallback can no longer land a stack the
-# happy path would refuse. They were one to two majors below it (chromadb
-# `>=0.4.0` against `>=1.5.9,<2.0.0`, langchain `>=0.1.0` against
-# `>=1.3.18,<2.0.0`), which is exactly the version a silent degraded path is
-# least likely to have anyone check. Upper bounds come across with the floors:
-# unbounded here, pip would resolve chromadb 2.x into a venv the manifest caps
-# below it. `repo_tests/ansible_requirements_parity_test.py` (#15568) fails the
-# PR that moves the manifest without moving these.
-#
-# numpy stays bare against constraints/shared.txt (#10524) -- the `-c` was
-# missing here, so nothing bound it. Same shape as roles/npu-worker and
-# roles/tts-worker.
-- name: Install AI Python packages (fallback list)
-  ansible.builtin.pip:
-    name:
-      - chromadb>=1.5.9,<2.0.0
-      - langchain>=1.4.0,<2.0.0
-      - langchain-community
-      - transformers>=5.16.1
-      - sentence-transformers>=6.0.1
-      - torch>=2.14.0
-      - numpy
-      - pandas
-      - pillow
-      - openai
-      - anthropic
-      - fastapi>=0.141.1
-      - "uvicorn[standard]>=0.52.4"
-      - httpx
-      - pydantic>=2.13.5
-      - python-dotenv
-      - redis>=8.1.0
-      - sqlalchemy>=2.0.52
-      - aiosqlite
-    virtualenv: "{{ ai_install_dir }}/venv"
-    state: present
-    extra_args: >-
-      --timeout 300
-      -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
-  become_user: "{{ ai_user }}"
-  environment:
-    PIP_DEFAULT_TIMEOUT: "300"
-    HOME: "{{ ai_data_dir }}"
-  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
-  when: not _ai_requirements_file.stat.exists
+# #15684: this used to be a fallback `name:` list for when
+# requirements-ai.txt was absent, restating the manifest's packages by hand
+# (and drifting out of sync with it -- #15623 had to raise two of its floors
+# by reading, because the union comparison that predated #15629 could not
+# see they had fallen behind). That state was never reachable: "AI Stack |
+# Deploy requirements-ai.txt before installing from it (#14809)" above is
+# unconditional, so by the time `_ai_requirements_file` is checked the file
+# always exists -- a host with none is not a state this role can actually
+# reach, let alone one worth a second, hand-kept package list for. Removed
+# rather than kept as a decision-with-a-reason (#15684's other option),
+# because a branch nothing can ever take is not a source of truth to keep
+# describing.
 
 - name: Deploy AI stack environment file
   ansible.builtin.template:

@@ -945,7 +945,7 @@ class Role(Base):
     sync_type = Column(String(20), default=SyncType.COMPONENT.value)
     source_paths = Column(JSON, nullable=False, default=list)
     target_path = Column(String(255), nullable=False)
-    systemd_service = Column(String(100), nullable=True)
+    systemd_service = Column(JSON, nullable=True)  # #16025: a role can own >1 unit (AC4), was String(100)
     auto_restart = Column(Boolean, default=False)
     health_check_port = Column(Integer, nullable=True)
     health_check_path = Column(String(255), nullable=True)

@@ -22,6 +22,7 @@ repeated here; where the two disagree, **this file wins**.
 | Deviating from a standard pattern on purpose | [`ARCHITECTURE_EXCEPTIONS.md`](docs/developer/ARCHITECTURE_EXCEPTIONS.md) |
 | Adding a ratchet, changing its detector or matcher, or freezing/regenerating a baseline | [`RATCHET_BASELINES.md`](docs/developer/RATCHET_BASELINES.md) |
 | Writing or changing a guard, sweep, count, or acceptance criterion — or reading an empty result | [`MEASUREMENT_DISCIPLINE.md`](docs/developer/MEASUREMENT_DISCIPLINE.md) |
+| Before pushing any code change — known self-inflicted bug patterns | [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md#self-review-before-pushing-known-self-inflicted-patterns) |
 
 ## Engineering Standard
 
@@ -38,17 +39,53 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 ## Never violate
 
 - **Say "I don't know" — never fabricate.** But an admission is not a closure — it is an opening: it means *"I need help, let's find this together"*, so **ask right then** in an interactive session, and where there is nobody to ask leave the criterion unticked, file it, and never drop it. A *stated* gap is a finding; an *unstated* one is the defect. A guessed cause, count or verdict is the one error treated as serious — for an agent a wrong answer is not an opinion, it executes. "I could not determine X" is a contribution. Guards and reports distinguish *nothing found* from *did not look*. See [`MEASUREMENT_DISCIPLINE.md`](docs/developer/MEASUREMENT_DISCIPLINE.md).
-- **PRs target `Dev_new_gui`.** `main`/`master` are blocked by the pre-commit hook — use `issue-*` or `hotfix-*`.
-- **Never work from a stale base** — and the half that bites is the judgement, not the freshness. Answer "is this already done?" against current `origin/Dev_new_gui` and the issue's acceptance criteria, **never against an old branch**: a stale answer points toward doing *more* work, so nothing pushes back on it, and reviving such a branch can regress newer code. `git fetch origin` and branch from (or rebase onto) current base before the first edit — the auto-update bot only refreshes branches that already have a PR, so the window this covers is everything before the first push.
+- **PRs target `main`; `release` is the release branch.** `release`/`master` are blocked by the pre-commit hook — use `issue-*` or `hotfix-*`.
+- **Never work from a stale base** — and the half that bites is the judgement, not the freshness. Answer "is this already done?" against current `origin/main` and the issue's acceptance criteria, **never against an old branch**: a stale answer points toward doing *more* work, so nothing pushes back on it, and reviving such a branch can regress newer code. `git fetch origin` and branch from (or rebase onto) current base before the first edit — the auto-update bot only refreshes branches that already have a PR, so the window this covers is everything before the first push.
 - **Commit format:** `<type>(scope): <description> (#issue-number)`. Never `--no-verify` — a PostToolUse hook auto-formats `.py`.
 - **Never hardcode.** Config via SSOT, TTLs via env-var-backed module constants, no IPs or ports in code.
 - **The codebase is the source of truth** — never edit `/opt/autobot/` or `/var/log/autobot/`.
 - **System updates (test AND prod) go through the builtin updater only** — the code-sync API / self-update path a user reaches in the maintenance UI. If the builtin cannot do it, fix that gap (issue + PR); never side-channel via ad-hoc ansible or shell.
+- **No agent cleans up data or credentials on its own.** Deleting, rewriting or rotating stored data or credentials is only *proposed* by an agent. A human approves it through an always-available review queue (the approval gates), it is never auto-approved, and it always leaves a durable paper trail — [#17038](https://github.com/mrveiss/AutoBot-AI/issues/17038).
 - **Security reviews are findings-first** — one-line verdict, then a severity/`file:line`/issue/fix table, within 3 tool calls. Verify *after*; never explore before the verdict lands. Skill: `secreview`.
 - **Nothing internal in outward artifacts** — no IPs, hostnames, secrets, tokens, or internal filesystem paths in issues, PRs, comments or logs. Redact to a generic role or node reference.
 - **Dispatch gates on review capacity, not PR count.** There is no open-PR limit; every PR still gets a `code-reviewer` pass before merge. PRs accumulating means review is the bottleneck — do that, don't defer new work.
 - **Batch same-scope issues into one PR by default** (`Closes #A, #B`) — one CI suite per batch, not per issue. Each issue must still be *fully* delivered; partial delivery never closes. Independent or different-risk changes get separate PRs, as does anything too large for one honest review pass.
 - **A pushed PR ends the tick — never wait on its CI.** Pushing is the sweep point: check every *other* in-flight PR once (approval gate, CI verdict, behind-ness), act on what is green or red, then start the next non-colliding scoped issue immediately. The PR just pushed is re-checked at the next sweep, never polled.
+
+## Git/PR Workflow
+
+### Pre-Push Checklist (non-negotiable)
+1. Commit subject includes the issue reference — see commit format under **Never violate**.
+2. No file exceeds `MAX_LINES` (600, enforced by `check_python_file_size.py`) — split, don't
+   raise the ceiling; see [`RATCHET_BASELINES.md`](docs/developer/RATCHET_BASELINES.md).
+3. Run the repo's lint/type-check locally before pushing — don't rely on `/pre-merge-validate`
+   at review time to catch it first.
+4. Never bypass pre-commit hooks via `core.hooksPath` or `--no-verify` — see **Never violate**.
+
+## Verification
+
+Never state CI is green, history was destroyed, work is complete, or a check failed without
+pasting the command and its output. Three-dot diffs (`git diff base...head`, from the merge
+base) for "what this PR changes" — a two-dot diff between two tips shows base's own
+independent commits reversed as if the PR made them once base has moved. Re-read source APIs
+for current numbers — never hand-patch a cached figure. Applies to every claim made against
+[`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md) and
+[`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md) steps.
+
+## Environment Guards
+
+A worktree cap, protect-files hook, or permission classifier blocking an action is reported
+with the exact blocker, verbatim, immediately — never retried blind and never resolved by
+proposing to raise the limit. Never touch a branch, PR, or worktree another session owns,
+unless the user asks or it is the abandoned/stale work you were dispatched to finish (claim
+it in the ledger first) — see the global worktree-mandate exception.
+
+## Issue Filing
+
+Search open **and** closed issues (`gh issue list --search "<query>" --state all`) before
+filing — no duplicates. Scrub external vendor/product names from filed content (see the
+`research-to-issues` skill). Link children to their umbrella with native GitHub relationships,
+not just the `- [ ]` checklist — full commands in [`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md).
 
 ## Essential Patterns
 

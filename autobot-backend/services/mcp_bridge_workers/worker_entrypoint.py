@@ -31,7 +31,6 @@ import asyncio
 import importlib
 import json
 import logging
-import resource
 import sys
 from typing import Any, Dict
 
@@ -56,21 +55,13 @@ _JSONRPC = "2.0"
 
 def _apply_rlimits() -> None:
     """Apply RLIMIT_CPU, RLIMIT_AS, RLIMIT_NOFILE from env (#3229)."""
-    cpu = int(config.mcp_worker_cpu_seconds or 0)
-    if cpu > 0:
-        resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
-    mem_mb = int(config.mcp_worker_mem_mb or 0)
-    if mem_mb > 0:
-        mem_bytes = mem_mb * 1024 * 1024
-        resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
-    nofile = int(config.mcp_worker_nofile or 0)
-    if nofile > 0:
-        resource.setrlimit(resource.RLIMIT_NOFILE, (nofile, nofile))
-    # Prevent fork bombs — cap total user processes
-    try:
-        resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
-    except (ValueError, OSError):
-        pass
+    from services.mcp_isolation_config import apply_rlimits
+
+    apply_rlimits(
+        cpu_seconds=int(config.mcp_worker_cpu_seconds or 0),
+        memory_mb=int(config.mcp_worker_mem_mb or 0),
+        nofile=int(config.mcp_worker_nofile or 0),
+    )
 
 
 def _load_bridge(bridge_module: str) -> Any:

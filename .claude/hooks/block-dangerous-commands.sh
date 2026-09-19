@@ -52,15 +52,17 @@ deny() {
 
 if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+push'; then
 
-  # Block push to main, master, or Dev_new_gui directly
-  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push.*(origin[[:space:]]+|:)(main|master|Dev_new_gui)\b'; then
-    deny "Blocked: cannot push directly to main/master/Dev_new_gui. Use a feature branch and create a PR."
+  # Block push to release, master, or main directly
+  # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
+  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push.*(origin[[:space:]]+|:)(release|master|main|Dev_new_gui)\b'; then
+    deny "Blocked: cannot push directly to release/master/main/Dev_new_gui. Use a feature branch and create a PR."
   fi
 
   # Block bare git push when on protected branches
+  # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
   if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push[[:space:]]*($|[;&|])'; then
     CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
-    if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "Dev_new_gui" ]; then
+    if [ "$CURRENT_BRANCH" = "release" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "Dev_new_gui" ]; then
       deny "Blocked: you are on $CURRENT_BRANCH. Use a feature branch and create a PR."
     fi
   fi
@@ -109,11 +111,11 @@ fi
 #   - file restore FROM THE INDEX: `git checkout -- <path>`, `git checkout .`,
 #     `git restore <path>` — bounded by what you staged
 #   - detached / toggle switches: `git switch -`, `git switch --detach`
-#   - SHA / tag / Dev_new_gui checkouts that move HEAD and nothing else
+#   - SHA / tag / main checkouts that move HEAD and nothing else
 #
 # What that list used to say, and why it was wrong (#15835): it read "file
-# restore: `git checkout -- <path>`" next to "SHA / tag / Dev_new_gui
-# checkouts", and `git checkout origin/Dev_new_gui -- .` matches BOTH entries.
+# restore: `git checkout -- <path>`" next to "SHA / tag / main
+# checkouts", and `git checkout origin/main -- .` matches BOTH entries.
 # It was allowed by design, and it destroyed 147 lines of uncommitted work in
 # this repository. Two different operations share that syntax:
 #
@@ -131,6 +133,51 @@ fi
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GIT_INVOCATION_PARSER="$HOOK_DIR/git_invocation_parse.py"
+COMMAND_POSITION_SCANNER="$HOOK_DIR/command_position_scan.py"
+
+# ──────────────────────────────────────────────
+# Does the command INVOKE this, or merely name it? (#14144)
+# ──────────────────────────────────────────────
+#
+# The git guards answer that with a tokenizer (#15296). The guards further down
+# did not: they grep the whole command string, so a command whose ARGUMENTS
+# merely contain a trigger word is denied even though nothing is invoked. That
+# is not hypothetical -- a read-only loop searching a file FOR these very
+# triggers is refused by them, and `repo_tests/git_invocation_parse_test.py`
+# already spells its own prose in pieces to work around it.
+#
+# `invokes` narrows a denial ONLY on a confident positive parse. Every other
+# outcome -- no python3, a parser error, an unparseable command, or a command
+# position naming something unknowable like `eval` or `$CMD` -- returns true, so
+# the caller keeps exactly the verdict it has today. The guard can therefore
+# only ever become more precise, never more permissive, than before this change.
+CMD_INVOCATIONS=""
+CMD_INVOCATIONS_STATE="unscanned"
+UNIT_SEPARATOR=$(printf '\037')
+
+scan_invocations() {
+  case "$CMD_INVOCATIONS_STATE" in
+    usable) return 0 ;;
+    unusable) return 1 ;;
+  esac
+  CMD_INVOCATIONS_STATE="unusable"
+  command -v python3 >/dev/null 2>&1 || return 1
+  CMD_INVOCATIONS=$(python3 "$COMMAND_POSITION_SCANNER" "$COMMAND" 2>/dev/null) || return 1
+  # A command position the scanner could not name means there may be an
+  # invocation it never reported. Reporting nothing reads as "nothing dangerous
+  # here", which is the one answer that must never come from not looking.
+  if printf '%s\n' "$CMD_INVOCATIONS" | grep -q "^?$UNIT_SEPARATOR"; then
+    return 1
+  fi
+  CMD_INVOCATIONS_STATE="usable"
+  return 0
+}
+
+# invokes <command-name ERE> [<args ERE>] — true when the command really runs it.
+invokes() {
+  scan_invocations || return 0
+  printf '%s\n' "$CMD_INVOCATIONS" | grep -qE "^($1)$UNIT_SEPARATOR${2:-}"
+}
 
 # Ask git about a path with the inherited git environment scrubbed: a stray
 # GIT_DIR or GIT_WORK_TREE would make rev-parse answer about a different
@@ -180,10 +227,11 @@ source_is_own_branch() {
   git_scrubbed "$dir" "$gitdir" remote | grep -qxF "$remote"
 }
 
-# main/master/Dev_new_gui, local or through origin.
+# release/master/main, local or through origin.
+# Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
 is_protected_ref() {
   case "${1#origin/}" in
-    main | master | Dev_new_gui) return 0 ;;
+    release | master | main | Dev_new_gui) return 0 ;;
   esac
   return 1
 }
@@ -266,7 +314,7 @@ if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch -e restore -e reset -
     # A reset onto a protected ref moves HEAD and can drop commits a parallel
     # session has not pushed yet (#6512).
     if [ "$SUBCOMMAND" = "reset" ] && is_protected_ref "$REF_ARG"; then
-      deny "Blocked: resetting onto a protected ref moves HEAD and can lose unpushed commits in parallel sessions (#6512). Use 'git fetch && git merge --ff-only' or create a fresh branch with 'git checkout -b NEW origin/Dev_new_gui'."
+      deny "Blocked: resetting onto a protected ref moves HEAD and can lose unpushed commits in parallel sessions (#6512). Use 'git fetch && git merge --ff-only' or create a fresh branch with 'git checkout -b NEW origin/main'."
     fi
 
     # A path-scoped checkout or restore that names a source other than the
@@ -309,14 +357,14 @@ if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch -e restore -e reset -
     # branch. Allowed on the main tree, exactly as before.
     case ",$INVOCATION_FLAGS," in *,new,* | *,restore,*) continue ;; esac
 
-    if [ "$REF_ARG" = "main" ] || [ "$REF_ARG" = "master" ]; then
-      deny "Blocked: never check out main/master locally (#4113, #6512). Main is read-only; commits flow Dev_new_gui → main via release cycle. If you need to inspect main, use git log origin/main or create a worktree: git worktree add .worktrees/inspect-main main"
+    if [ "$REF_ARG" = "release" ] || [ "$REF_ARG" = "master" ]; then
+      deny "Blocked: never check out release/master locally (#4113, #6512). Release is read-only; commits flow main → release via release cycle. If you need to inspect release, use git log origin/release or create a worktree: git worktree add .worktrees/inspect-release release"
     fi
 
     # Deny only when a concrete branch-name arg is present and is not one of the
     # safe targets (base branch, file restore, detached HEAD, SHA, tag, path).
     if [ -n "$REF_ARG" ] &&
-      [ "$REF_ARG" != "Dev_new_gui" ] &&
+      [ "$REF_ARG" != "main" ] &&
       [ "$REF_ARG" != "." ] &&
       [ "$REF_ARG" != "HEAD" ] &&
       ! [[ "$REF_ARG" =~ ^[0-9a-f]{7,40}$ ]] &&
@@ -353,11 +401,11 @@ fi
 # Destructive filesystem operations
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r[a-zA-Z]*f[[:space:]]+(\/|~|\$HOME|\.\.\/\.\.)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r[a-zA-Z]*f[[:space:]]+(\/|~|\$HOME|\.\.\/\.\.)' && invokes 'rm'; then
   deny "Blocked: recursive force-delete on root/home/parent paths. Specify a safe target directory."
 fi
 
-if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r.*[[:space:]]+(\/[[:space:]]|\/\*|\/$|~\/?\*?[[:space:]]|~\/?\*?$)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r.*[[:space:]]+(\/[[:space:]]|\/\*|\/$|~\/?\*?[[:space:]]|~\/?\*?$)' && invokes 'rm'; then
   deny "Blocked: recursive delete targeting root or home directory."
 fi
 
@@ -381,17 +429,30 @@ fi
 # Dangerous system commands
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND_TO_CHECK" | grep -qE 'chmod[[:space:]]+777'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'chmod[[:space:]]+777' && invokes 'chmod' '.*777'; then
   deny "Blocked: chmod 777 gives everyone read/write/execute. Use more restrictive permissions (e.g., 755 or 644)."
 fi
 
-if echo "$COMMAND_TO_CHECK" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(bash|sh|zsh|sudo)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(bash|sh|zsh|sudo)' && invokes 'curl|wget'; then
   deny "Blocked: piping downloaded content directly to a shell is dangerous. Download first, inspect, then execute."
 fi
 
 # Redirect guard targets raw block devices only — matching all of /dev/ would
 # false-positive on the ubiquitous stderr/stdout null-discard idiom (#11593).
-if echo "$COMMAND_TO_CHECK" | grep -qE '(mkfs|dd[[:space:]]+if=|>[[:space:]]*/dev/(sd|hd|nvme|vd|xvd|mmcblk|loop|dm-|md))'; then
+# Split in two (#14144). The PROGRAM half is invocation-gated: a command that
+# merely names one of these tools -- a grep for it, a comment about it, this
+# very file -- is not running it.
+if echo "$COMMAND_TO_CHECK" | grep -qE '(mkfs|dd[[:space:]]+if=)' && invokes 'dd|mkfs[.a-zA-Z0-9]*'; then
+  deny "Blocked: destructive disk operation detected. This can cause irreversible data loss."
+fi
+
+# The REDIRECT half stays unconditional, and that is deliberate rather than an
+# oversight: a redirection is not a command position, so the scanner skips it
+# and `invokes` has nothing to say about a write to a block device. Gating this
+# half would disable it silently -- the failure mode this whole change exists
+# to remove. It keeps today's behaviour, false positives on quoted prose and
+# all, until something can tell a redirection target from a mention of one.
+if echo "$COMMAND_TO_CHECK" | grep -qE '>[[:space:]]*/dev/(sd|hd|nvme|vd|xvd|mmcblk|loop|dm-|md)'; then
   deny "Blocked: destructive disk operation detected. This can cause irreversible data loss."
 fi
 
@@ -399,12 +460,49 @@ fi
 # Accidental package publishing
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND_TO_CHECK" | grep -qE '(npm|yarn|pnpm|bun)[[:space:]]+publish'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE '(npm|yarn|pnpm|bun)[[:space:]]+publish' && invokes 'npm|yarn|pnpm|bun' '(.*[[:space:]])?publish([[:space:]]|$)'; then
   deny "Blocked: publishing npm packages should be done manually or via CI, not through Claude Code."
 fi
 
-if echo "$COMMAND_TO_CHECK" | grep -qE 'twine[[:space:]]+upload'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'twine[[:space:]]+upload' && invokes 'twine' '(.*[[:space:]])?upload([[:space:]]|$)'; then
   deny "Blocked: publishing Python packages should be done manually or via CI, not through Claude Code."
+fi
+
+# ──────────────────────────────────────────────
+# Untrusted-repo clone safety (#16488)
+#
+# The research/adopt skills read other people's repositories, and a clone
+# brings an untrusted `.git` onto the machine with it -- hooks, `core.fsmonitor`,
+# `core.sshCommand`, filter drivers, and recursive submodules can all execute
+# during or after a plain `git clone`. `scripts/research/safe_clone.py` is the
+# one path that neutralises all of that (shallow, hooks/fsmonitor/file-protocol
+# disabled, `.git` deleted, agent-instruction files renamed `*.untrusted`)
+# before anything reads the tree.
+#
+# The helper's own subprocess call never appears as a literal `git clone` in a
+# Bash command -- it runs a fixed argv directly, from a `python3` invocation --
+# so it never reaches this rule at all and needs no explicit exemption. Adding
+# one (e.g. "allow if the command merely MENTIONS the helper's path") would be
+# a bypass: an unsafe `git clone` sitting next to unrelated text that names the
+# helper would then slip through. Every literal `git ... clone` is judged the
+# same way, whether or not the helper is mentioned anywhere else on the line.
+# ──────────────────────────────────────────────
+
+if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git([[:space:]]+[^;&|]*)?[[:space:]]+clone([[:space:]]|$)'; then
+
+  CLONE_DENY_MSG="Blocked: git clone must go through scripts/research/safe_clone.py (python3 scripts/research/safe_clone.py <url> --id <id>), or carry every one of its safe flags itself: --depth 1 --no-tags --single-branch; the config values core.hooksPath=/dev/null, core.fsmonitor=false, protocol.file.allow=never and protocol.ext.allow=never, each passed with -c; and never --recurse-submodules (#16488)."
+
+  if echo "$COMMAND_TO_CHECK" | grep -qE '\-\-recurse-submodules'; then
+    deny "$CLONE_DENY_MSG"
+  fi
+
+  for required_flag in '\-\-depth[[:space:]]+1' '\-\-no-tags' '\-\-single-branch' \
+    'core\.hooksPath=/dev/null' 'core\.fsmonitor=false' \
+    'protocol\.file\.allow=never' 'protocol\.ext\.allow=never'; do
+    if ! echo "$COMMAND_TO_CHECK" | grep -qE "$required_flag"; then
+      deny "$CLONE_DENY_MSG"
+    fi
+  done
 fi
 
 exit 0

@@ -15,12 +15,9 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from monitoring.metrics_adapter import get_metrics_adapter
 from monitoring.prometheus_metrics import get_metrics_manager
 
 
@@ -103,17 +100,10 @@ def test_prometheus_metrics():
             logger.info(f"  ✗ {metric} NOT FOUND")
             return False
 
-    logger.info("\n✓ Testing MetricsAdapter...")
-    adapter = get_metrics_adapter()
-    adapter.record_system_cpu(50.0)
-    adapter.record_error("test", "test_component", "TEST_ERROR")
-    adapter.record_claude_api_request("test_tool", True, 1024)
-    logger.info("  ✓ MetricsAdapter works (dual-write)")
-
     logger.info("\n" + "=" * 70)
     logger.info("✅ All Phase 1 metrics tests PASSED!")
     logger.info("=" * 70)
-    print("\nMetrics endpoint ready at: http://10.0.0.1:8001/api/monitoring/metrics")
+    print("\nMetrics endpoint ready at: /api/monitoring/metrics on the backend")
     logger.info("Configure Prometheus to scrape this endpoint.\n")
 
     return True

@@ -43,6 +43,7 @@ import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 from api.chat_knowledge_manager import get_chat_knowledge_manager_instance
+from api.chat_knowledge_prompt import TranscriptRefused
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     AddKnowledgeRequest,
@@ -73,6 +74,15 @@ from constants.threshold_constants import CategoryDefaults
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["chat_knowledge"])
+
+# #16490: DELETE /context/{chat_id} and the /context-orphans cleanup routes
+# live in a sibling module -- this file is a handful of lines from
+# scripts/check_python_file_size.py's MAX_LINES, the same reason
+# chat_knowledge_manager.py/chat_knowledge_prompt.py were split out of it
+# (#15160). Composed the same way api/chat.py composes api/chat_sessions.py.
+from api.chat_knowledge_delete import router as _delete_router
+
+router.include_router(_delete_router)
 
 
 # API Endpoints
@@ -298,6 +308,9 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
 
         return {"success": True, "data": {"success": True, "compiled": compiled}}
 
+    except TranscriptRefused as e:
+        # #15700: a refused transcript is the user's to fix, not a server fault.
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error("Failed to compile chat: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -448,7 +461,7 @@ async def _preserve_single_fact(
     """Preserve a single fact with bounded concurrency."""
     async with semaphore:
         try:
-            fact = await knowledge_base.get_fact(fact_id)
+            fact = await asyncio.to_thread(knowledge_base.get_fact, fact_id)  # #16670: synchronous
             if not fact:
                 return {"status": "error", "fact_id": fact_id, "error": "not_found"}
 
@@ -462,8 +475,8 @@ async def _preserve_single_fact(
             metadata["preserved_at"] = preserve_time
             metadata["preserved_from_deletion"] = True
 
-            success = await knowledge_base.update_fact(fact_id=fact_id, metadata=metadata)
-            if success:
+            result = await knowledge_base.update_fact(fact_id=fact_id, metadata=metadata)
+            if result.get("status") == "success":  # #16670: a failed update is a (truthy) dict too
                 return {"status": "success", "fact_id": fact_id}
             else:
                 return {"status": "error", "fact_id": fact_id, "error": "update_failed"}

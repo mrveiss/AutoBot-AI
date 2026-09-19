@@ -23,7 +23,7 @@ add and configure fleet nodes (which may all be the same machine).
 |-------|-------------|
 | 1 — Pre-flight | Checks root, systemd, Debian/Ubuntu, disk space (5 GB), memory (2 GB), internet |
 | 2 — System Setup | Installs Python 3.14, Node 20, Ansible, nginx, git, openssl, rsync; creates `autobot` user with passwordless sudo; generates ED25519 SSH key at `/home/autobot/.ssh/autobot_key`; copies to `/etc/autobot/ssh/` |
-| 3 — Code Deployment | Clones `Dev_new_gui` to `/opt/autobot/code_source`; rsyncs `autobot-slm-backend`, `autobot-slm-frontend`, `autobot_shared`, `autobot-infrastructure` to `/opt/autobot/` |
+| 3 — Code Deployment | Clones `main` to `/opt/autobot/code_source`; rsyncs `autobot-slm-backend`, `autobot-slm-frontend`, `autobot_shared`, `autobot-infrastructure` to `/opt/autobot/` |
 | 4 — Ansible Deployment | Generates `inventory/localhost.yml`; writes `/etc/autobot/slm-secrets.env` (secret key, encryption key, admin password, server IP, network subnet/gateway); runs `deploy-slm-manager.yml --skip-tags seed,provision` |
 | 5 — Service Verification | Waits up to 7 minutes for `autobot-slm-backend` to pass `GET /api/health`; verifies PostgreSQL and nginx |
 | 6 — Register Local Node | Authenticates with SLM API; registers the machine as node `00-SLM-Manager` with roles `slm-backend`, `slm-frontend`, `slm-database`, `slm-monitoring`; assigns code source |
@@ -83,7 +83,7 @@ ps -p 1 -o comm=   # Must output: systemd
 
 ```bash
 # Option A: Direct from GitHub (blank server)
-curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/Dev_new_gui/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo bash
 
 # Option B: After cloning
 git clone https://github.com/mrveiss/AutoBot-AI.git
@@ -94,7 +94,7 @@ sudo ./install.sh
 sudo ./install.sh --unattended
 
 # Custom admin password + specific branch
-sudo ./install.sh --admin-pass=MySecurePass --branch=Dev_new_gui
+sudo ./install.sh --admin-pass=MySecurePass --branch=main
 
 # Multi-interface host: specify which IP to bind
 sudo ./install.sh --ip=192.168.1.100
@@ -455,7 +455,7 @@ configurations. Use `10.255.255.254` as the host IP for service-to-service calls
 
 ```bash
 # Pull latest code to SLM code source
-sudo -u autobot git -C /opt/autobot/code_source pull origin Dev_new_gui
+sudo -u autobot git -C /opt/autobot/code_source pull origin main
 
 # Re-run provisioning (code sync + service restart only)
 cd /opt/autobot/autobot-slm-backend/ansible

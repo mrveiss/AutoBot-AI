@@ -17,7 +17,7 @@
 #
 # Usage:
 #   bash pipeline-scripts/check-pre-commit-hook-pr.sh [--changed-lines-only] <hook-name>
-#   bash pipeline-scripts/check-pre-commit-hook-pr.sh --python <validator-path> [--ext py,ts,...]
+#   bash pipeline-scripts/check-pre-commit-hook-pr.sh [--changed-lines-only] --python <validator-path> [--ext py,ts,...]
 #
 # --changed-lines-only (#13950)
 #   Report only violations on lines this PR actually added. Without it the hook
@@ -30,6 +30,9 @@
 #   output this wrapper cannot parse keep their existing behaviour exactly.
 #   Suppressed violations are still printed, and the whole-file backlog stays
 #   visible by running the hook directly.
+#   With --python the wrapper cannot parse the validator's output, so it passes
+#   `--changed-lines-only --base <resolved base>` through and the validator
+#   scopes itself (#16178). A validator that cannot scope rejects the flag.
 #
 # Examples (in GitHub Actions steps):
 #   - run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-print-console
@@ -70,7 +73,7 @@ EXT_PATHSPEC=('*.py' '*.ts' '*.tsx' '*.vue' '*.js' '*.mjs')
 
 if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <hook-name>" >&2
-    echo "       $0 --python <validator-path> [--ext py,ts,...]" >&2
+    echo "       $0 [--changed-lines-only] --python <validator-path> [--ext py,ts,...]" >&2
     exit 2
 fi
 
@@ -78,7 +81,7 @@ if [ "$1" = "--changed-lines-only" ]; then
     CHANGED_LINES_ONLY=true
     shift
     if [ "$#" -lt 1 ]; then
-        echo "Usage: $0 --changed-lines-only <hook-name>" >&2
+        echo "Usage: $0 --changed-lines-only <hook-name> | --python <validator-path> [--ext ...]" >&2
         exit 2
     fi
 fi
@@ -201,7 +204,17 @@ count=$(echo "$files" | wc -l)
 
 # ── Invocation ────────────────────────────────────────────────────────────────
 
-if $USE_PYTHON; then
+if $USE_PYTHON && $CHANGED_LINES_ONLY; then
+    # A validator's output has no format this wrapper can parse, so it cannot be
+    # filtered here: the validator is handed the base this wrapper resolved and
+    # scopes itself (#16178). Until this branch existed the flag was accepted in
+    # --python mode and silently dropped, so a caller asking for scoping got a
+    # whole-file run with no sign of it. A validator that cannot scope rejects the
+    # unknown flag, which is the loud outcome that was missing.
+    echo "Running ${VALIDATOR_PATH} against $count changed file(s), reporting only added lines..."
+    # shellcheck disable=SC2086
+    echo "$files" | xargs python3 "$VALIDATOR_PATH" --changed-lines-only --base "$base"
+elif $USE_PYTHON; then
     echo "Running ${VALIDATOR_PATH} against $count changed file(s)..."
     # shellcheck disable=SC2086
     echo "$files" | xargs python3 "$VALIDATOR_PATH"

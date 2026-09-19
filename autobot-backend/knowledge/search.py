@@ -192,6 +192,28 @@ class SearchMixin:
         )
         return results
 
+    async def basic_vector_search(
+        self,
+        query: str,
+        top_k: int,
+        filters: Dict[str, Any] | None = None,
+    ) -> List[Dict[str, Any]]:
+        """Validate, sanitize, and query ChromaDB directly -- no VectorSearchEngine dispatch.
+
+        The entry point ``VectorSearchEngine._CPUBackend`` must call instead of
+        ``search()`` itself (#15165): ``_CPUBackend`` is one of ``search()``'s
+        own callers (the CPU leg of hardware dispatch), so calling back into
+        ``search()`` -- which tries ``VectorSearchEngine`` again -- recurses
+        with no base case anywhere in the chain.
+        """
+        invalid_result = self._validate_search_inputs(query)
+        if invalid_result is not None:
+            return invalid_result
+        sanitized = self._sanitize_search_query(query)
+        if sanitized is None:
+            return []
+        return await self._execute_vector_search(sanitized, top_k, filters=filters)
+
     async def search(  # noqa: PLR0913
         self,
         query: str,
@@ -401,12 +423,12 @@ class SearchMixin:
             kwargs["where"] = where
         try:
             return await asyncio.to_thread(chroma_collection.query, **kwargs)
-        except (ValueError, Exception) as exc:
-            # ChromaDB raises ValueError when where filter matches fewer docs
-            # than n_results. Fall back to unfiltered search.
-            logger.warning("ChromaDB where filter failed (%s), retrying without filter", exc)
-            kwargs.pop("where", None)
-            return await asyncio.to_thread(chroma_collection.query, **kwargs)
+        except Exception as exc:
+            if not where:  # nothing to lose: retry the same query once
+                logger.warning("ChromaDB query failed (%s), retrying once", exc)
+                return await asyncio.to_thread(chroma_collection.query, **kwargs)
+            logger.warning("ChromaDB filtered query failed (%s); no results, never an unfiltered retry (#16662)", exc)
+            return {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
 
     def _deduplicate_results(self, results_data: Dict[str, Any], similarity_top_k: int) -> List[Dict[str, Any]]:
         """Deduplicate and format ChromaDB results. Issue #281: Extracted helper."""

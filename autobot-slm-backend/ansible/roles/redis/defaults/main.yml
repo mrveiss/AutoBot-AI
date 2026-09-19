@@ -8,6 +8,12 @@ network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP 
 redis_port: 6379
 redis_bind: "0.0.0.0"
 redis_password: ""
+# #16626: ACL username sent with redis_password (AUTH <user> <password>); "" keeps password-only AUTH
+redis_username: ""
+# #16627: the credential the role's own clients (readiness ping, redis_exporter)
+# send. It follows redis_password -- the server's requirepass -- unless the server
+# has none, when tasks/main.yml adopts the SLM-generated one with user `default`.
+redis_client_password: "{{ redis_password }}"
 redis_maxmemory: "2gb"
 redis_maxmemory_policy: "allkeys-lru"
 redis_data_dir: "/var/lib/redis"

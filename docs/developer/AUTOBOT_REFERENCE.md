@@ -64,7 +64,7 @@ cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --sy
 - The SLM frontend is in `autobot-slm-frontend/`, NOT `autobot-vue`
 - Worktrees: `.worktrees/` (project-local, gitignored)
 - Ansible playbooks and roles: `autobot-slm-backend/ansible/`
-- Primary working branch: `Dev_new_gui`
+- Primary working branch: `main`
 - Test files are colocated next to source files (not in a separate `tests/` directory)
 - Never use stale `from src.` imports for migrated modules
 
@@ -187,7 +187,7 @@ Workflow: Edit Ansible templates locally → commit → deploy via Ansible → v
 
 - **stable**: Tagged releases only (`vYYYY.M.D`)
 - **beta**: Prerelease tags (`vYYYY.M.D-beta.N`)
-- **dev**: Moving head on `main` (no tag)
+- **dev**: Moving head on `release` (no tag)
 
 ---
 

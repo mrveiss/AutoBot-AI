@@ -36,7 +36,7 @@ from knowledge import get_knowledge_base
 from llm_shared import LLMRequest, get_provider_registry
 from transcriber.ai.context import build_context
 from transcriber.ai.prompts import get_system_prompt
-from transcriber.deps import can_access
+from transcriber.deps import can_access, resolve_user_id
 from transcriber.export.segments import build_segment_list
 
 logger = get_logger(__name__)
@@ -44,19 +44,6 @@ router = APIRouter()
 
 # HTTPException status → WebSocket close code (RFC 6455 + app-specific 4xxx)
 _WS_CLOSE_CODES = {404: 4004, 400: 1008}
-
-
-def _resolve_user_id(user: dict) -> str:
-    """Map an auth payload to the transcriber user-id string.
-
-    Raises 403 if the principal carries no identity fields.  A
-    malformed-but-authenticated principal must NOT silently inherit
-    DEFAULT_USER — that was the IDOR (#9968) at the resolver level.
-    """
-    uid = user.get("user_id") or user.get("username")
-    if not uid:
-        raise HTTPException(status_code=403, detail="Authenticated principal has no identity")
-    return str(uid)
 
 
 async def _load_recording(state: State, transcript_id: str, caller_id: str) -> dict:
@@ -136,7 +123,7 @@ async def _run_analysis_session(websocket: WebSocket, transcript_id: str, user: 
     _validate_analysis_request(request)
 
     try:
-        content = await _load_transcript_content(websocket.app.state, transcript_id, _resolve_user_id(user))
+        content = await _load_transcript_content(websocket.app.state, transcript_id, resolve_user_id(user))
     except HTTPException as exc:
         await websocket.send_json({"error": exc.detail})
         await websocket.close(code=_WS_CLOSE_CODES.get(exc.status_code, 1011))
@@ -233,7 +220,7 @@ async def push_transcript_to_kb(
     Security: Requires authentication. Verifies the backing recording
     exists and is accessible to the caller before indexing.
     """
-    caller_id = _resolve_user_id(user)
+    caller_id = resolve_user_id(user)
     await _load_recording(raw_request.app.state, transcript_id, caller_id)
 
     try:

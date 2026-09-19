@@ -120,7 +120,8 @@ def _shell_files(root: Path = _REPO_ROOT) -> list[Path]:
     return sorted(kept)
 
 
-#: MEASURED 2026-09-11 against this tree: 212 tracked shell scripts. The
+#: MEASURED 2026-09-12 against this tree: 211 tracked shell scripts, 212 until
+#: #16308 retired a dead monitoring launcher. The
 #: previous 150 was 29% below its own population; migrated to `_reach.declare`
 #: (#15928) rather than raised in place, so the floor is pinned automatically
 #: and the empty-tree case is proven by `reach_declarations_test`. `growth=30`
@@ -131,7 +132,7 @@ def _shell_files(root: Path = _REPO_ROOT) -> list[Path]:
 REACH = declare(
     "ansible-inventory-shell-sweep",
     discover=_shell_files,
-    floor=212,
+    floor=211,
     growth=30,
     skips=0,
     what="tracked shell scripts",

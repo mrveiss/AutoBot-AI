@@ -28,7 +28,7 @@ Editing rules:
 
 #: Measured on the sweep that added this guard: 178 guards parsed, 27 of their
 #: inputs uncovered. The ansible tree is NOT here -- #15713 covered it in the
-#: same change, because it had already broken `Dev_new_gui` once (#15704) and
+#: same change, because it had already broken `main` once (#15704) and
 #: eighteen guards read it, which is the largest concentration in the repo.
 UNCOVERED_READS: frozenset[str] = frozenset(
     {
@@ -46,7 +46,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         ".github/workflows/frontend-test.yml",
         ".github/workflows/hardened-smoke-test.yml",
         ".github/workflows/marker-tests.yml",
-        ".github/workflows/ratchet-base-guard.yml",
         ".github/workflows/ssot-coverage.yml",
         ".mcp/autobot-mcp-server.js",
         ".pre-commit-config.yaml",
@@ -81,4 +80,8 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: changed. Distinguish the two cases whenever this number moves up: correcting
 #: an instrument that was under-counting is not the same act as accepting a new
 #: bypass, and only the second is what "only ever goes DOWN" forbids.
-MAX_UNCOVERED_READS = 39
+#:
+#: LOWERED 39 -> 38 by #16237: the filter now covers the ratchet base guard's
+#: workflow, because `workflow_rc_capture_test.py` runs its audit step on a
+#: planted failing path and has to run whenever that step changes.
+MAX_UNCOVERED_READS = 38

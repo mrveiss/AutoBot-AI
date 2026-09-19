@@ -8,7 +8,7 @@
 #   check-new-module-callers.sh [--base-branch REF] [--allow-deferral FILE]
 #
 # Defaults:
-#   --base-branch origin/Dev_new_gui
+#   --base-branch origin/main
 #   --allow-deferral (optional) file containing deferred issue refs like "#7234"
 #
 # Exit codes:
@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-BASE_BRANCH="origin/Dev_new_gui"
+BASE_BRANCH="origin/main"
 ALLOW_DEFERRAL_FILE=""
 
 # Parse options

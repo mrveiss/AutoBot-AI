@@ -6,7 +6,7 @@ This document describes the GitHub Actions CI/CD pipeline setup for the AutoBot 
 ## Pipeline Structure
 
 ### 1. Security Tests Job (`security-tests`)
-**Triggers:** Push to `main` or `Dev_new_gui` branches, PRs to `main`
+**Triggers:** Push to `release` or `main` branches, PRs to `release`
 **Environment:** Ubuntu Latest with Python 3.14
 
 **Steps:**
@@ -18,7 +18,7 @@ This document describes the GitHub Actions CI/CD pipeline setup for the AutoBot 
 - Coverage reporting to Codecov
 
 ### 2. Docker Build Job (`docker-build`)
-**Triggers:** Only on `main` branch pushes
+**Triggers:** Only on `release` branch pushes
 **Dependencies:** Requires `security-tests` to pass
 
 **Steps:**
@@ -37,7 +37,7 @@ This document describes the GitHub Actions CI/CD pipeline setup for the AutoBot 
 - Unit test execution
 
 ### 4. Deployment Check Job (`deployment-check`)
-**Triggers:** Only on `main` branch pushes
+**Triggers:** Only on `release` branch pushes
 **Dependencies:** All other jobs must pass
 
 **Steps:**
@@ -58,11 +58,11 @@ The pipeline uses these GitHub repository secrets:
 
 ### Branch Protection
 
-**`Dev_new_gui` required status checks (enforced):**
+**`main` required status checks (enforced):**
 - `smoke-test` — startup import smoke test
 - `code-quality` — Black, isort, flake8, bandit, autoflake, mypy, and custom regression guards
 
-Recommended branch protection rules for `main`:
+Recommended branch protection rules for `release`:
 - Require status checks to pass
 - Require branches to be up to date
 - Include administrators
@@ -108,8 +108,8 @@ docker run --rm autobot-sandbox:latest echo "Sandbox test successful"
 - Status notifications
 
 ### 🔄 Automatic Triggers
-- **Push to main/Dev_new_gui:** Full pipeline execution
-- **Pull requests to main:** Security and frontend tests only
+- **Push to release/main:** Full pipeline execution
+- **Pull requests to release:** Security and frontend tests only
 - **Failed jobs:** Automatic notification with detailed status
 
 ### 📊 Test Coverage
@@ -205,7 +205,7 @@ act push
 ## Deployment Integration
 
 ### Deployment Artifacts
-Each successful main branch build generates:
+Each successful release branch build generates:
 - `DEPLOYMENT_SUMMARY.md` - Deployment status report
 - Coverage reports (Codecov integration)
 - Docker image validation results

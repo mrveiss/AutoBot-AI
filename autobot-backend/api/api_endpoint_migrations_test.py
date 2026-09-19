@@ -18758,9 +18758,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_111_get_current_user_info_mixed_pattern(self):
         """Verify get_current_user_info endpoint uses Mixed Pattern"""
-        from api import auth
+        from api import auth_me
 
-        source = inspect.getsource(auth.get_current_user_info)
+        source = inspect.getsource(auth_me.get_current_user_info)
         # Should have @with_error_handling decorator
         self.assertIn("@with_error_handling", source)
         # Should have category parameter
@@ -18832,13 +18832,13 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_111_all_auth_endpoints_have_decorator(self):
         """Verify all auth endpoints have @with_error_handling decorator"""
-        from api import auth
+        from api import auth, auth_me
 
         # List of all endpoint functions in auth.py
         endpoint_functions = [
             auth.login,
             auth.logout,
-            auth.get_current_user_info,
+            auth_me.get_current_user_info,
             auth.check_authentication,
             auth.check_permission,
             auth.change_password,
@@ -18854,13 +18854,13 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_111_auth_100_percent_milestone(self):
         """Verify auth.py has reached 100% migration"""
-        from api import auth
+        from api import auth, auth_me
 
         # List of all endpoint functions
         endpoint_functions = [
             auth.login,
             auth.logout,
-            auth.get_current_user_info,
+            auth_me.get_current_user_info,
             auth.check_authentication,
             auth.check_permission,
             auth.change_password,
@@ -18883,7 +18883,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_111_migration_preserves_authentication_logic(self):
         """Verify migration preserves authentication logic"""
-        from api import auth
+        from api import auth, auth_me
 
         # Check login preserves authentication flow
         source_login = inspect.getsource(auth.login)
@@ -18893,7 +18893,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("LoginResponse", source_login)
 
         # Check get_current_user_info preserves user data retrieval
-        source_me = inspect.getsource(auth.get_current_user_info)
+        source_me = inspect.getsource(auth_me.get_current_user_info)
         self.assertIn("get_user_from_request", source_me)
         self.assertIn("username", source_me)
         self.assertIn("role", source_me)
@@ -25663,15 +25663,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
     # BATCH 153: knowledge_ai_stack.py - COMPLETE (100%)
     # ==============================================
 
-    def test_batch_153_enhanced_search_simple_pattern(self):
-        """Verify enhanced_search endpoint uses Simple Pattern"""
-        from api import knowledge_ai_stack
-
-        source = inspect.getsource(knowledge_ai_stack.search)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="search"', source)
-        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+    # test_batch_153_enhanced_search_simple_pattern removed: knowledge_ai_stack.search deleted, not migrated (#16908).
 
     def test_batch_153_rag_search_simple_pattern(self):
         """Verify rag_search endpoint uses Simple Pattern"""
@@ -25747,8 +25739,8 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify all knowledge_ai_stack endpoints have @with_error_handling decorator"""
         from api import knowledge_ai_stack
 
+        # search removed from this list: deleted, not migrated (#16908).
         endpoint_functions = [
-            knowledge_ai_stack.search,
             knowledge_ai_stack.rag_search,
             knowledge_ai_stack.extract_knowledge,
             knowledge_ai_stack.analyze_documents,
@@ -25770,8 +25762,8 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify knowledge_ai_stack.py has reached 100% migration"""
         from api import knowledge_ai_stack
 
+        # search removed from this list: deleted, not migrated (#16908).
         endpoint_functions = [
-            knowledge_ai_stack.search,
             knowledge_ai_stack.rag_search,
             knowledge_ai_stack.extract_knowledge,
             knowledge_ai_stack.analyze_documents,
@@ -25783,7 +25775,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         migrated_count = sum(1 for func in endpoint_functions if "@with_error_handling" in inspect.getsource(func))
 
-        total_endpoints = 8
+        total_endpoints = 7
         self.assertEqual(
             migrated_count,
             total_endpoints,
@@ -25793,31 +25785,25 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertEqual(progress_percentage, 100.0)
 
     def test_batch_153_migration_preserves_ai_stack_integration(self):
-        """Verify migration preserves AI Stack client integration"""
+        """Verify migration preserves AI Stack client integration. Pins only
+        rag_search now -- search's own checks removed, deleted not migrated (#16908)."""
         from api import knowledge_ai_stack
-
-        # Verify AI Stack client dependency injection
-        enhanced_search_source = inspect.getsource(knowledge_ai_stack.search)
-        self.assertIn("get_ai_stack_client", enhanced_search_source)
-        self.assertIn("ai_client", enhanced_search_source)
 
         # Verify RAG query functionality
         rag_source = inspect.getsource(knowledge_ai_stack.rag_search)
         self.assertIn("rag_query", rag_source)
+        self.assertIn("get_ai_stack_client", rag_source)
+        self.assertIn("ai_client", rag_source)
 
     def test_batch_153_migration_preserves_rag_capabilities(self):
-        """Verify migration preserves RAG (Retrieval-Augmented Generation) capabilities"""
+        """Verify migration preserves RAG (Retrieval-Augmented Generation) capabilities.
+        search's own include_rag/rag_enhanced checks removed, deleted not migrated (#16908)."""
         from api import knowledge_ai_stack
 
         # Verify RAG search functionality
         rag_source = inspect.getsource(knowledge_ai_stack.rag_search)
         self.assertIn("rag_query", rag_source)
         self.assertIn("documents", rag_source)
-
-        # Verify enhanced search combines RAG
-        enhanced_source = inspect.getsource(knowledge_ai_stack.search)
-        self.assertIn("include_rag", enhanced_source)
-        self.assertIn("rag_enhanced", enhanced_source)
 
     def test_batch_153_migration_preserves_knowledge_extraction(self):
         """Verify migration preserves knowledge extraction functionality"""
@@ -25852,18 +25838,17 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_migration_preserves_pydantic_models(self):
         """Verify migration preserves Pydantic request models (#10666 B1: SearchRequest
-        renamed to SearchRequest; AIStackSearchRequest is the ai_stack variant)"""
+        renamed to SearchRequest; AIStackSearchRequest dropped -- search's own model, deleted (#16908))"""
         from api import knowledge_ai_stack
 
-        # Verify request models are defined (AIStackSearchRequest is the ai-stack variant)
-        self.assertTrue(hasattr(knowledge_ai_stack, "AIStackSearchRequest"))
+        # Verify request models are defined
         self.assertTrue(hasattr(knowledge_ai_stack, "KnowledgeExtractionRequest"))
         self.assertTrue(hasattr(knowledge_ai_stack, "DocumentAnalysisRequest"))
         self.assertTrue(hasattr(knowledge_ai_stack, "RAGQueryRequest"))
 
-        # Verify models are used in endpoints
-        enhanced_search_source = inspect.getsource(knowledge_ai_stack.search)
-        self.assertIn("AIStackSearchRequest", enhanced_search_source)
+        # Verify a model is used in a still-live endpoint
+        rag_search_source = inspect.getsource(knowledge_ai_stack.rag_search)
+        self.assertIn("AIStackRAGQueryRequest", rag_search_source)
 
     # ==============================================
     # BATCH 154: metrics.py - COMPLETE (100%)

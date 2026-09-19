@@ -14,9 +14,16 @@ import { ref, onMounted, computed } from 'vue'
 import { useAgentRegistry, type SpecializedAgent } from '@/composables/useAgentRegistry'
 import { useAvailableModels } from '@/composables/useAvailableModels'
 import AgentSettingsPanel from '@/components/agents/AgentSettingsPanel.vue'
+import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('AgentRegistryView')
+
+// #16278: the Settings tab reads and writes system config through
+// /api/settings/, which is admin-only. A non-admin would only see defaults
+// and a failed Save, so the tab is offered to admins alone.
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.isAdmin)
 
 const {
   backendAgents,
@@ -156,6 +163,7 @@ onMounted(async () => {
           <span v-if="summary" class="ml-1 text-xs text-tertiary">({{ summary.total_specialized }})</span>
         </button>
         <button
+          v-if="isAdmin"
           @click="activeTab = 'settings'"
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
@@ -342,8 +350,8 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Settings Tab -->
-      <div v-show="activeTab === 'settings'">
+      <!-- Settings Tab (admin-only, #16278) -->
+      <div v-if="isAdmin" v-show="activeTab === 'settings'">
         <AgentSettingsPanel />
       </div>
     </div>

@@ -32,19 +32,7 @@ from repo_tests.router_auth_enumerator import (
 #: May only SHRINK. Each entry is a real finding on #15745, not an exemption --
 #: they are recorded here so the guard can be turned on before the fixes land,
 #: rather than the fixes waiting on a guard that does not exist yet.
-KNOWN_UNGATED: frozenset[str] = frozenset(
-    {
-        "api.developer",
-        "api.frontend_config",
-        "api.knowledge_search",
-        "api.knowledge_search_aggregator",
-        "api.knowledge_suggestions",
-        "api.redis",
-        "api.transcriber",
-        "api.wake_word",
-        "services.knowledge_sync_service",
-    }
-)
+KNOWN_UNGATED: frozenset[str] = frozenset()
 
 #: TWO ENTRIES WERE REMOVED FROM THIS LIST AS FALSE FINDINGS, and how they got
 #: here matters more than that they left.
@@ -96,7 +84,7 @@ def test_the_vocabulary_is_derived_and_contains_the_name_that_was_missed() -> No
         ("api.agent_org", "GATED", "router-level APIRouter(dependencies=[...])"),
         ("api.system", "GATED", "per-route check_admin_permission"),
         ("api.websockets", "GATED", "inline in the handler body"),
-        ("api.redis", "UNGATED", "genuinely nothing"),
+        ("api.knowledge_search", "GATED", "router-level APIRouter(dependencies=[...]) (#15745)"),
         ("api.chat_embed", "UNGATED-BY-DESIGN", "documented in the module docstring"),
     ],
 )

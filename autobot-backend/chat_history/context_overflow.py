@@ -520,10 +520,10 @@ class ConversationSummarizer:
     )
 
     async def _get_gateway(self):
-        """Return LLM gateway instance (separate method for test patching)."""
-        from llm_shared.gateway import get_llm_gateway
+        """Return the canonical LLM service (#14840); ``llm_shared.gateway`` never existed."""
+        from services.llm_service import get_llm_service
 
-        return get_llm_gateway()
+        return get_llm_service()
 
     async def summarize_messages(
         self,
@@ -555,9 +555,9 @@ class ConversationSummarizer:
 
         try:
             gateway = await self._get_gateway()
-            response = await gateway.chat_completion(
+            response = await gateway.chat(
                 messages=[{"role": CategoryDefaults.ROLE_USER, "content": prompt}],
-                model=model_name,
+                model_name=model_name,
                 temperature=0.3,  # Low temp for consistent summaries
                 max_tokens=500,  # Cap summary length
             )
@@ -566,9 +566,9 @@ class ConversationSummarizer:
             logger.error("Summarization failed for %d messages: %s", len(messages), exc, exc_info=True)
             raise SummarizationFailed(f"summarization call failed: {exc}") from exc
 
-        if not summary:
-            logger.error("Summarization returned an empty completion for %d messages", len(messages))
-            raise SummarizationFailed("LLM returned empty summary")
+        if not summary:  # LLMService reports a provider failure in .error, not by raising
+            logger.error("Empty summary for %d messages: %s", len(messages), getattr(response, "error", None))
+            raise SummarizationFailed(f"LLM returned empty summary: {getattr(response, 'error', None)}")
 
         logger.info(
             "Generated summary for %d messages (%d → %d tokens est.)",

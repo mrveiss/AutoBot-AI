@@ -5,7 +5,7 @@ nav_order: 4
 
 **Project Start**: July 2025
 **Current Status**: Active Development - See [docs/system-state.md](system-state.md) for current status
-**Last Updated**: July 22, 2026
+**Last Updated**: September 16, 2026
 **Canonical Source**: This is the single authoritative project roadmap (rolling; formerly `ROADMAP_2025.md`)
 
 > **Note**: Previous roadmap files have been archived to `docs/archive/`. This document consolidates all roadmap variants and provides accurate implementation status based on actual codebase verification.
@@ -16,20 +16,37 @@ nav_order: 4
 
 AutoBot has evolved into a **comprehensive autonomous AI platform** through intensive development. This roadmap consolidates information from all previous roadmap variants and provides verified implementation status.
 
-### Verified Implementation (snapshot: December 2025)
+### Verified Implementation (snapshot: 2026-09-16)
 
-> These counts are a December 2025 codebase snapshot and have grown since (e.g. the
-> `autobot-backend/agents/` directory now holds 60+ agents and the frontend 360+ Vue
-> components). Treat the table as a point-in-time baseline, not a live count.
+> Every count below was measured against the tree on the date given, and the
+> **How counted** column is the command that produced it — so any row can be
+> re-derived rather than taken on trust. The previous table was a December 2025
+> snapshot that had drifted badly (components 260 -> 372, agents "40+" -> 61) and
+> cited `autobot-backend/llm_interface_pkg/providers/`, a path that no longer
+> exists. Counts drift; the method should not.
 
-| Metric | Verified Count | Source |
-|--------|----------------|--------|
-| **Specialized Agents** | 40+ agents | `autobot-backend/agents/` directory |
-| **API Endpoints** | 1,092 routes | 257 modules in `autobot-backend/api/` |
-| **Vue Components** | 260 components | `autobot-frontend/src/components/` |
-| **MCP Bridges** | 16 bridges (6 external + 10 backend) | `autobot-backend/api/*_mcp.py` |
-| **Redis Databases** | 12 databases | `autobot-infrastructure/shared/config/redis-databases.yaml` |
-| **LLM Providers** | 8 provider types + adapter registry | `autobot-backend/llm_interface_pkg/providers/` |
+| Metric | Count | How counted |
+|--------|-------|-------------|
+| **Specialized agents** | 61 | `.py` under `autobot-backend/agents/`, excluding `__init__` and tests |
+| **API route modules** | 323 | `autobot-backend/api/*.py`, excluding tests |
+| **Route decorators** | 2,446 | `@router.{get,post,put,delete,patch,websocket}` across `autobot-backend/` |
+| **Database models** | 75 (36 of them in `llc/`) | `class X(Base)` across `autobot-backend/` |
+| **Services** | 84 | `*_service.py` under `autobot-backend/` |
+| **Alembic migrations** | 97 | files in `autobot-backend/migrations/versions/` |
+| **Vue components** | 372 | `.vue` under `autobot-frontend/src/components/` |
+| **Vue views** | 78 | `.vue` under `autobot-frontend/src/views/` |
+| **i18n locales** | 11 | `.json` under `autobot-frontend/src/i18n/locales/` |
+| **LLM provider backends** | 16, across 21 modules | `autobot-backend/llm_shared/providers/` (the rest are shared helpers) |
+| **MCP bridges** | 11 | `autobot-backend/api/*_mcp.py` |
+| **Redis databases** | 15 | `db:` keys in `autobot-infrastructure/shared/config/redis-databases.yaml` |
+| **Scheduled (beat) jobs** | 29 | `beat_schedule` entries in `autobot-backend/celery_app.py` |
+| **CI workflows** | 65 | `.github/workflows/*.y{a,}ml` |
+| **Python test files** | 5,612 | `*_test.py` and `test_*.py`, excluding `node_modules` |
+
+The single largest subsystem absent from the phase list below is **Company OS**
+(`autobot-backend/llc/`) — 36 of the 75 database models, with its own scheduler,
+API surface and frontend views. The phases end at 21; this arrived after them and
+is documented in `docs/research/` rather than here.
 
 ---
 
@@ -71,7 +88,7 @@ This section documents key architectural decisions where the original plan was r
 
 | Aspect | Original Plan | Current Implementation |
 |--------|---------------|------------------------|
-| **Deployment** | Single server | Multi-VM distributed fleet |
+| **Deployment** | Single server | Distributed, role-based fleet |
 | **Status** | Evolved | ✅ Production |
 
 **Why We Changed**:
@@ -130,7 +147,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 
 | Aspect | Original Plan | Current Implementation |
 |--------|---------------|------------------------|
-| **Servers** | Multiple dev servers allowed | Single frontend server (VM1 only) |
+| **Servers** | Multiple dev servers allowed | Single frontend server (frontend role only) |
 | **Status** | Replaced | ✅ Mandatory |
 
 **Why We Changed**:
@@ -139,7 +156,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 - WebSocket connections got confused between instances
 - State synchronization issues between multiple frontends
 - Single server ensures consistent user experience
-- All development uses sync-to-VM workflow
+- All development uses sync-to-deployment-machine workflow
 
 ### 6. Redis Database Structure
 
@@ -170,9 +187,9 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 
 - ❌ LangChain → Custom LLM interface (performance + control)
 - ❌ LlamaIndex → Custom RAG with ChromaDB (flexibility + accuracy)
-- ❌ Single server → Multi-VM distributed fleet (scalability + isolation)
+- ❌ Single server → distributed, role-based fleet (scalability + isolation)
 - ❌ TinyLLaMA/Phi-2 → Mistral 7B for all tasks (quality + consistency, pending optimization)
-- ❌ Multiple frontends → Single VM1 frontend (stability)
+- ❌ Multiple frontends → Single frontend role (stability)
 
 ---
 
@@ -197,7 +214,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 | System packages (xvfb, etc.) | ✓ | Partial | ⚠️ 80% |
 | Kex WSL2 check | ✓ | Not needed (VNC instead) | ➖ Deprecated |
 
-**Evolution**: Expanded to support 5-machine distributed infrastructure
+**Evolution**: Expanded to support distributed, role-based infrastructure — Docker, one VM, or scaled to any count
 
 ---
 
@@ -545,7 +562,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 | WSL2 compatibility | ✓ | With Kex VNC | ✅ |
 | Native Kali | ✓ | Working | ✅ |
 | Headless VM | ✓ | Working | ✅ |
-| Distributed VMs | Added | 5-machine cluster | ✅ |
+| Distributed, role-based deployment | Added | Docker, one VM, or scaled by role | ✅ |
 
 ---
 
@@ -553,16 +570,16 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 
 ### ✅ PHASE 15: Distributed Infrastructure (COMPLETE)
 
-**Status**: 5-machine production cluster
+**Status**: Role-based production deployment — one worked example below; machine count is a deployment choice
 
-| VM | IP | Purpose | Status |
+| Role | IP | Purpose | Status |
 |----|-----|---------|--------|
-| Main (WSL) | <backend-ip> | Backend API + VNC | ✅ |
-| VM1 Frontend | <frontend-ip> | Web UI | ✅ |
-| VM2 NPU Worker | <npu-ip> | Hardware AI | ✅ |
-| VM3 Redis | <database-ip> | Data layer | ✅ |
-| VM4 AI Stack | <aiml-ip> | AI processing | ✅ |
-| VM5 Browser | <browser-ip> | Playwright | ✅ |
+| Main / Control (WSL) | <backend-ip> | Backend API + VNC | ✅ |
+| Frontend | <frontend-ip> | Web UI | ✅ |
+| NPU Worker | <npu-ip> | Hardware AI | ✅ |
+| Database (Redis) | <database-ip> | Data layer | ✅ |
+| AI Stack | <aiml-ip> | AI processing | ✅ |
+| Browser | <browser-ip> | Playwright | ✅ |
 
 ---
 
@@ -800,7 +817,7 @@ These features were not in the original 20-phase roadmap but were implemented ba
 
 ### 3. Distributed > Centralized (At Scale)
 
-- 5-machine cluster instead of single server
+- Distributed, role-based deployment instead of a single server
 - Better resource allocation
 - Improved fault tolerance
 - Easier scaling
@@ -823,7 +840,7 @@ These features were not in the original 20-phase roadmap but were implemented ba
 - ✅ 12 Redis databases configured
 - ✅ 8 LLM provider types + adapter registry
 - ✅ 16 MCP bridges active (6 external + 10 backend)
-- ✅ Multi-VM distributed infrastructure
+- ✅ Distributed, role-based infrastructure
 
 ### Feature Completeness
 
@@ -859,7 +876,7 @@ These features were not in the original 20-phase roadmap but were implemented ba
 
 ### Infrastructure
 
-- **Architecture**: Multi-VM distributed fleet
+- **Architecture**: Distributed, role-based fleet
 - **Automation**: Playwright
 - **Desktop**: VNC/noVNC
 - **SSH**: Paramiko
@@ -868,7 +885,7 @@ These features were not in the original 20-phase roadmap but were implemented ba
 
 ## 🏁 Conclusion
 
-AutoBot has achieved **~99% production readiness** with a multi-VM distributed fleet, 40+ specialized agents, 1,092+ API routes, complete knowledge graph pipeline, OpenTelemetry tracing, NPU acceleration, TTS voice output, i18n support, and enterprise security. The original 20-phase roadmap is complete. Remaining work is polish (wake word CPU opt) and deferred infrastructure (Docker Compose).
+AutoBot has achieved **~99% production readiness** with a distributed, role-based fleet, 40+ specialized agents, 1,092+ API routes, complete knowledge graph pipeline, OpenTelemetry tracing, NPU acceleration, TTS voice output, i18n support, and enterprise security. The original 20-phase roadmap is complete. Remaining work is polish (wake word CPU opt) and deferred infrastructure (Docker Compose).
 
 **Current Status**: ✅ **FUNCTIONAL**
 

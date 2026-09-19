@@ -25,7 +25,7 @@ on:
 # #13432 found that cancelling base-branch runs meant each merge cancelled the
 # previous merge's verification, and merges arrive faster than a suite completes -
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
-# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -43,14 +43,22 @@ jobs:
         uses: actions/checkout@v7
         with:
           # NOT fetch-depth: 0 (#16207). This gate reads one regex over the PR's own
-          # commits, and a full clone is 12,874 commits on Dev_new_gui -- measured at
+          # commits, and a full clone is 12,874 commits on main -- measured at
           # 13s of git for 1s of work, 93% of the job, paid on every PR. Deepest PR in
           # the last 40 merged was 30 commits, so 100 is >3x the observed maximum.
           #
           # The depth is a guess about the future, so the scan refuses to run rather
           # than trust it: the reachability check below turns "too shallow" into a
           # loud failure instead of an empty range that reports clean.
-          fetch-depth: ${{ github.event_name == 'merge_group' && '0' || '100' }}
+          #
+          # #16931: sized per PR. A release promotion (main -> release) carries every
+          # commit since the last release -- #16801 had 808 -- so it exceeds any fixed
+          # depth chosen for ordinary PRs, and the guard below refused it. Full history
+          # is fetched only for a PR deeper than 90 commits: exactly the set for which
+          # depth 100 is guaranteed to fail anyway, so this never spends the #16207 cost
+          # on a PR that would have passed. Ordinary PRs keep depth 100. Expressions
+          # have comparison but no arithmetic, hence a threshold, not `commits + N`.
+          fetch-depth: ${{ (github.event_name == 'merge_group' || github.event.pull_request.commits > 90) && '0' || '100' }}
 
       - name: Scan PR commits for banned trailers
         env:
@@ -67,7 +75,7 @@ jobs:
           # seconds the shallow fetch saves, so it is checked explicitly (#16207).
           for _endpoint in "${BASE_SHA}" "${HEAD_SHA}"; do
             if ! git cat-file -e "${_endpoint}^{commit}" 2>/dev/null; then
-              echo "::error::${_endpoint} is not present at fetch-depth 100 -- this PR is"
+              echo "::error::${_endpoint} is not present in the checkout -- this PR is"
               echo "::error::deeper than the checkout. Raise fetch-depth in this workflow;"
               echo "::error::do NOT widen it back to 0 without re-measuring (#16207)."
               exit 1
@@ -124,7 +132,7 @@ jobs:
           owner_re='martins\.veiss@gmail\.com|Martins Veiss'
           # GitHub's squash merge stamps "Co-authored-by: github-actions[bot]" onto
           # the owner's own commit whenever the auto-fix workflow pushed to the
-          # branch. 22 of the last 60 commits on Dev_new_gui carry exactly that, so
+          # branch. 22 of the last 60 commits on main carry exactly that, so
           # a rule without this arm would reject a third of normal work.
           bot_ident_re='\[bot\]@users\.noreply\.github\.com|\[bot\]>'
           coauthor_re='^[[:space:]]*Co-authored-by:'

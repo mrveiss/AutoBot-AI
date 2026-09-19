@@ -30,7 +30,7 @@ async def test_device_fetching_does_not_scale_with_device_count(mock_session_fac
     """Sending to 50 devices issues the same number of queries as sending to 5 (#15150).
 
     This replaces an `assert elapsed < 5.0` wall clock. That bound measured the
-    machine, not the code: on unchanged `Dev_new_gui` the same test varied
+    machine, not the code: on unchanged `main` the same test varied
     1.249s -> 2.616s run to run, a 2.1x swing against a threshold with under 2x
     headroom, and the self-hosted runner regularly has a dozen PRs queued. It
     failed once in a batch, passed in isolation, and passed on a re-run of the

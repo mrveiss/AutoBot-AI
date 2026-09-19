@@ -3063,6 +3063,57 @@
         "title": "ComponentBreakdown",
         "type": "object"
       },
+      "ComponentDriftModel": {
+        "description": "One component's full-tree drift result.",
+        "properties": {
+          "compared": {
+            "title": "Compared",
+            "type": "integer"
+          },
+          "component": {
+            "title": "Component",
+            "type": "string"
+          },
+          "drifted": {
+            "items": {
+              "$ref": "#/components/schemas/FileVerdictModel"
+            },
+            "title": "Drifted",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "exclusions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Exclusions",
+            "type": "object"
+          },
+          "skipped": {
+            "default": false,
+            "title": "Skipped",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "component",
+          "compared",
+          "drifted",
+          "exclusions"
+        ],
+        "title": "ComponentDriftModel",
+        "type": "object"
+      },
       "ComponentSyncJobStatus": {
         "description": "Status of an async component-resolve job (#11303).",
         "properties": {
@@ -4226,6 +4277,36 @@
         "title": "FileDriftReport",
         "type": "object"
       },
+      "FileVerdictModel": {
+        "description": "One deployed-relative path and the verdict it earned.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "verdict"
+        ],
+        "title": "FileVerdictModel",
+        "type": "object"
+      },
       "FleetHealthResponse": {
         "description": "Fleet health status response.",
         "properties": {
@@ -4643,6 +4724,228 @@
         ],
         "title": "FleetUpdateSummaryResponse",
         "type": "object"
+      },
+      "FullTreeDriftReport": {
+        "description": "Every component, every file, one verdict each (#16310).",
+        "properties": {
+          "checked_at": {
+            "title": "Checked At",
+            "type": "string"
+          },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/ComponentDriftModel"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "exclusions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Exclusions",
+            "type": "object"
+          },
+          "total_compared": {
+            "title": "Total Compared",
+            "type": "integer"
+          },
+          "total_drift": {
+            "title": "Total Drift",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "components",
+          "total_compared",
+          "total_drift",
+          "exclusions",
+          "checked_at",
+          "errors"
+        ],
+        "title": "FullTreeDriftReport",
+        "type": "object"
+      },
+      "GPUDevice": {
+        "description": "One GPU. Metrics are null when the vendor tool could not read them.",
+        "properties": {
+          "device_type": {
+            "$ref": "#/components/schemas/NPUDeviceType"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "memory_total_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Total Mb"
+          },
+          "memory_used_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Used Mb"
+          },
+          "monitored": {
+            "title": "Monitored",
+            "type": "boolean"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "power_watts": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power Watts"
+          },
+          "temperature_celsius": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature Celsius"
+          },
+          "utilization_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utilization Percent"
+          }
+        },
+        "required": [
+          "device_type",
+          "monitored"
+        ],
+        "title": "GPUDevice",
+        "type": "object"
+      },
+      "GPUNodeListResponse": {
+        "description": "Every node's GPU state.",
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GPUNodeStatus"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "nodes",
+          "total"
+        ],
+        "title": "GPUNodeListResponse",
+        "type": "object"
+      },
+      "GPUNodeStatus": {
+        "description": "A node's GPU state from its latest heartbeat.",
+        "properties": {
+          "devices": {
+            "items": {
+              "$ref": "#/components/schemas/GPUDevice"
+            },
+            "title": "Devices",
+            "type": "array"
+          },
+          "hostname": {
+            "title": "Hostname",
+            "type": "string"
+          },
+          "last_heartbeat": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Heartbeat"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "node_status": {
+            "title": "Node Status",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/GPUReportState"
+          }
+        },
+        "required": [
+          "node_id",
+          "hostname",
+          "node_status",
+          "state"
+        ],
+        "title": "GPUNodeStatus",
+        "type": "object"
+      },
+      "GPUReportState": {
+        "description": "What a node's latest heartbeat said about its GPUs.",
+        "enum": [
+          "not_reported",
+          "none",
+          "present"
+        ],
+        "title": "GPUReportState",
+        "type": "string"
       },
       "HTTPValidationError": {
         "properties": {
@@ -5775,6 +6078,17 @@
         ],
         "title": "NPUDetectionResponse",
         "type": "object"
+      },
+      "NPUDeviceType": {
+        "description": "NPU device type enumeration.",
+        "enum": [
+          "intel-npu",
+          "nvidia-gpu",
+          "amd-gpu",
+          "unknown"
+        ],
+        "title": "NPUDeviceType",
+        "type": "string"
       },
       "NPUFleetMetricsResponse": {
         "description": "Aggregate NPU fleet performance metrics.",
@@ -8757,7 +9071,10 @@
           "systemd_service": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -9112,7 +9429,10 @@
           "systemd_service": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -14514,7 +14834,10 @@
           "systemd_service": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -15429,7 +15752,7 @@
     },
     "/api/api-keys/scopes": {
       "get": {
-        "description": "Get available API key scopes (no authentication required).",
+        "description": "Get the catalogue of available API key scopes. Unauthenticated by design (#16040 AC7).\n\nThe owner ruled on 2026-09-11 to keep this route open. It returns only the\nstatic scope names and their descriptions (``API_KEY_SCOPES``): no keys,\nno users, no tenant data. The key-creation form needs that catalogue before\nit can offer a choice. ``middleware/security_headers.py`` allowlists this\npath for the same reason.",
         "operationId": "get_api_scopes_api_api_keys_scopes_get",
         "responses": {
           "200": {
@@ -15703,6 +16026,26 @@
           }
         ],
         "summary": "Get Current User Info",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/proxy-check": {
+      "get": {
+        "description": "nginx auth_request target for the /autobot-api/ internal-key gate (#16374).\n\nA side-effect-free membership check, deliberately separate from ``/me``:\n``/me`` answers \"is this a live SLM session?\", which any backend login\ntoken satisfies by design (epic #10193) -- every read-only or non-admin\nuser therefore passed the old gate too, and nginx then attached the\ntrusted internal key that ``autobot-backend/auth_middleware.py`` treats\nas full admin. This answers \"does this session hold the role the key\nactually confers?\": 204 for a session whose role grants\n``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it\n-- including SUPERADMIN, which holds no granular permissions (#13854)\nand is refused here as on every other permission-gated SLM admin route\n-- and an unknown role resolves to USER, so it also fails closed. 401\ncovers a missing Authorization header (the upstream ``HTTPBearer``'s\n``auto_error=True`` raises it before this dependency runs) or an\ninvalid/expired token (``get_current_user`` raises it). Returns no body\neither way -- an ``auth_request`` subrequest's body is discarded, only\nthe status code is read.",
+        "operationId": "proxy_check_api_auth_proxy_check_get",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Proxy Check",
         "tags": [
           "auth"
         ]
@@ -17815,6 +18158,61 @@
           }
         ],
         "summary": "Get File Drift",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/drift/full": {
+      "get": {
+        "description": "Every file under every deployed component, checked in one run (#16310).\n\nAn empty or unreadable component tree is reported through ``errors``, not\nsilently folded into a clean result -- a run that could not look must\nnever read the same as a run that looked and found nothing.",
+        "operationId": "get_full_tree_drift_api_code_sync_drift_full_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullTreeDriftReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Full Tree Drift",
         "tags": [
           "code-sync"
         ]
@@ -22854,6 +23252,34 @@
         "summary": "Get Errors",
         "tags": [
           "monitoring"
+        ]
+      }
+    },
+    "/api/monitoring/gpu/nodes": {
+      "get": {
+        "description": "Every node's GPU state: not reported, none present, or its devices.",
+        "operationId": "list_gpu_nodes_api_monitoring_gpu_nodes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GPUNodeListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Gpu Nodes",
+        "tags": [
+          "monitoring",
+          "gpu"
         ]
       }
     },

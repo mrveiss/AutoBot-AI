@@ -39,6 +39,9 @@ frontend:
   # Canonical source for the cross-language parity guard (#13073, #13074):
   # a port/enum edit here with no frontend edit must still run the suite.
   - 'autobot_shared/ssot_config.py'
+  # #16337: the Security Scan job's audit gate lives here, so a change to the
+  # gate must run the gate.
+  - 'pipeline-scripts/npm_audit_gate.py'
   # #15002: the redactor drift guard runs in this suite and reads the terminal
   # plugin's copy, so a plugin-only edit must still run it.
   # Not yet mirrored in frontend-test.yml's push list or ci.yml's filter: both

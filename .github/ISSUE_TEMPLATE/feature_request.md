@@ -24,7 +24,7 @@ Any other context?
 
 What does it take to call the code complete?
 
-- [ ] Code merged to `Dev_new_gui`
+- [ ] Code merged to `main`
 - [ ] Unit tests for the new module(s)
 - [ ] Linting clean
 - [ ] (other implementation-level criteria specific to this feature)

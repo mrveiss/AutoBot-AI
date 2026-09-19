@@ -18,7 +18,7 @@
  * a member the backend vocabulary does not carry fails to compile.
  */
 
-import type { Role } from '@/types/_generated/workflow'
+import { ROLE_PRIORITY, type Role } from '@/types/_generated/workflow'
 
 export const ADMIN_ROLES = ['admin', 'superadmin'] as const satisfies readonly Role[]
 
@@ -43,4 +43,25 @@ export function isAssignableRole(role: string): boolean {
 export function isAdminRole(role: string | null | undefined): boolean {
   if (!role) return false
   return (ADMIN_ROLES as readonly string[]).includes(role.toLowerCase())
+}
+
+/**
+ * Role rank: the backend's authoritative ordering, generated from
+ * `autobot_shared/auth/permissions.py::_ROLE_META` priorities (#16244, #16491)
+ * rather than hand-copied, so a priority changed there reaches this guard with
+ * the next regeneration. `superadmin` ranks above `admin` for the reason
+ * `_ROLE_META`'s own comment gives: it is administrative at every gate that
+ * admits `admin`, and a lower rank would sort the most privileged role below
+ * `readonly`.
+ *
+ * UI ROUTING ONLY — this never grants access the backend refuses. It backs
+ * `meta.minRole`'s router guard alone; every actual permission decision
+ * still goes through the backend's own gates.
+ */
+export const ROLE_RANK: Readonly<Record<Role, number>> = ROLE_PRIORITY
+
+/** True when `role` meets or exceeds `minRole` in the ranking above. Unknown/missing `role` never meets any `minRole`. */
+export function meetsMinRole(role: string | null | undefined, minRole: Role): boolean {
+  if (!role || !(role in ROLE_RANK)) return false
+  return ROLE_RANK[role as Role] >= ROLE_RANK[minRole]
 }

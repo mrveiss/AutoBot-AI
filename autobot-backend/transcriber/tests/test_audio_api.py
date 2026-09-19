@@ -17,7 +17,7 @@ from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 
 from transcriber.database import Database
-from transcriber.deps import get_db
+from transcriber.deps import authenticate, get_db
 from transcriber.routes.projects import router as projects_router
 from transcriber.routes.recordings import _generate_waveform
 from transcriber.routes.recordings import router as recordings_router
@@ -61,6 +61,7 @@ async def client(tmp_path):
 
     await db.connect()
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[authenticate] = lambda: None
     app.state.transcriber_upload_dir = str(upload_dir)
     app.include_router(projects_router, prefix="/api/transcriber")
     app.include_router(recordings_router, prefix="/api/transcriber")

@@ -250,7 +250,7 @@ Before the route-deletion PR can run:
    - `useOperationsApi.ts:117` → `/api/long-running/health`
    - `usePrometheusMetrics.ts:368/583` → `/api/monitoring/services/health`
 5. **`Sunset:` header live for at least one release** — the middleware
-   shipped with PR #6912 (commit landed on `Dev_new_gui` at 2026-05-04).
+   shipped with PR #6912 (commit landed on `main` at 2026-05-04).
 6. **Pre-commit hook becomes hard-line** — drop the `# noqa: health-route`
    suppression escape hatch from the production code path.
 

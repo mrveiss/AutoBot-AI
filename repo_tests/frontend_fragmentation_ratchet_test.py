@@ -87,14 +87,27 @@ BASELINE = {
     # `.vue` components carrying their own <style> rules. Target is a small
     # number of shared stylesheets, not 381 components each with a private
     # copy of the design system.
-    "components_declaring_styles": 381,
+    "components_declaring_styles": 380,  # #16245: RedisServiceControl.vue removed
     # Distinct class names declared anywhere in the frontend.
-    "distinct_class_names": 5627,
+    #
+    # #16972/#15455: OWNER-APPROVED, ONE-OFF EXCEPTION -- for this counter and
+    # css_rule_declarations only, not precedent for recounting any other ratchet
+    # in this file (the five duplication counters below stay strict). Raised
+    # for #16875's two genuinely new admin pages' own non-duplicated layout,
+    # after every actual duplicate was consolidated first (by hand and by
+    # cross-referencing sibling admin views) -- this pair is documented above
+    # as measuring page SIZE, not duplication, and is interim until #15455
+    # replaces them with a real duplication measure.
+    "distinct_class_names": 5628,  # one less than the owner-approved 5629: the
+    # KnowledgeResearchTabs.vue fix below also removed 2 rules from the tree
     # Total CSS rule declarations.
-    "css_rule_declarations": 9434,
+    #
+    # #16972/#15455: same owner-approved, one-off exception as distinct_class_names
+    # directly above -- see that comment.
+    "css_rule_declarations": 9411,  # one less than the owner-approved 9412, same reason
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
-    "button_definition_files": 102,
+    "button_definition_files": 101,
     # Distinct `.btn-*` class names declared anywhere.
     "button_class_names": 115,
     # Distinct notification entry points. Target is 1 canonical API, the rest
@@ -104,7 +117,7 @@ BASELINE = {
     "date_format_approaches": 4,
     # Hardcoded `z-index: <number>` declarations, i.e. stacking order decided
     # per file rather than by a scale.
-    "hardcoded_zindex_declarations": 52,
+    "hardcoded_zindex_declarations": 51,
 }
 
 # Families worth pinning individually, so a regression in one cannot hide
@@ -125,7 +138,7 @@ FAMILY_BASELINE = {
     "panel": 34,
     "form": 27,
     "action": 27,
-    "modal": 26,
+    "modal": 25,
     "empty": 23,
     "error": 35,
     "section": 23,
@@ -149,7 +162,7 @@ FAMILY_BASELINE = {
     "spinner": 4,
     "table": 18,
     "input": 18,
-    "dialog": 13,
+    "dialog": 11,
     "tab": 11,
     "label": 8,
     "grid": 4,
@@ -321,9 +334,9 @@ def test_fragmentation_only_shrinks(dimension: str) -> None:
     actual = _measure()[dimension]
     baseline = BASELINE[dimension]
 
-    assert actual <= baseline, (
-        f"{dimension} is {actual}, ratchet allows {baseline} (#12730, #12731).\n{_ADVICE[dimension]}"
-    )
+    assert (
+        actual <= baseline
+    ), f"{dimension} is {actual}, ratchet allows {baseline} (#12730, #12731).\n{_ADVICE[dimension]}"
     assert actual == baseline, (
         f"{dimension} is down to {actual} but the baseline still says {baseline} — "
         "lower it in the commit that did the work, so the number stays a deliberate claim"

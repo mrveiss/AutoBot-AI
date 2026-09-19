@@ -22,19 +22,20 @@ Related Issues: #78 (Search Quality), #185 (Split), #209 (Knowledge split),
 """
 
 import logging
-from typing import List
+from typing import Dict, List
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from api.schemas_knowledge import SearchRequest
+from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
-from knowledge.schemas import (
-    ExpandQueryResponse,
-    KnowledgeSearchResponse,
-    RecordClickResponse,
-    SearchAnalyticsResponse,
+from knowledge.schemas import KnowledgeSearchResponse
+from knowledge.search_filters import (
+    extract_user_context_from_request,
+    filter_search_results_by_permission,
 )
 from knowledge.vector_search_engine import SearchResult as _EngineResult
 from knowledge.vector_search_engine import get_vector_search_engine
@@ -62,7 +63,9 @@ except ImportError:
 logger = get_logger(__name__)
 
 # Create router for search endpoints
-router = APIRouter(tags=["knowledge-search"])
+# #15745: no route here had any auth dependency; anonymous callers could
+# search, expand queries and record clicks against the knowledge base.
+router = APIRouter(tags=["knowledge-search"], dependencies=[Depends(get_current_user)])
 
 # Performance optimization: O(1) lookup for valid search modes (Issue #326)
 VALID_SEARCH_MODES = {"vector", "text", "auto"}
@@ -138,7 +141,16 @@ def _build_search_response(
 # =============================================================================
 
 
-async def _execute_kb_search(kb_to_use, query: str, search_limit: int, mode: str) -> list:
+async def _execute_kb_search(
+    kb_to_use,
+    query: str,
+    search_limit: int,
+    mode: str,
+    user_id: str,
+    user_org_id: str | None,
+    user_group_ids: List[str],
+    is_admin: bool,
+) -> list:
     """Execute search on knowledge base via VectorSearchEngine (Issue #3828).
 
     Routes through the canonical VectorSearchEngine for unified hardware
@@ -146,6 +158,9 @@ async def _execute_kb_search(kb_to_use, query: str, search_limit: int, mode: str
     search methods only when the engine raises.
 
     Issue #398: original KB-dispatch logic preserved as fallback.
+
+    #16665: results are filtered to what *user_id* may see before returning,
+    an explicit admin read (is_admin) sees every fact.
     """
     try:
         engine = await get_vector_search_engine()
@@ -154,7 +169,7 @@ async def _execute_kb_search(kb_to_use, query: str, search_limit: int, mode: str
             top_k=search_limit,
             hardware_backend="auto",
         )
-        return [
+        results = [
             {
                 "content": r.text,
                 "score": r.score,
@@ -169,12 +184,21 @@ async def _execute_kb_search(kb_to_use, query: str, search_limit: int, mode: str
             "_execute_kb_search: VectorSearchEngine failed (%s), falling back to direct KB",
             exc,
         )
+        # Legacy per-implementation fallback
+        kb_class_name = kb_to_use.__class__.__name__
+        if kb_class_name == "KnowledgeBaseV2":
+            results = await kb_to_use.search(query=query, top_k=search_limit)
+        else:
+            results = await kb_to_use.search(query=query, similarity_top_k=search_limit, mode=mode)
 
-    # Legacy per-implementation fallback
-    kb_class_name = kb_to_use.__class__.__name__
-    if kb_class_name == "KnowledgeBaseV2":
-        return await kb_to_use.search(query=query, top_k=search_limit)
-    return await kb_to_use.search(query=query, similarity_top_k=search_limit, mode=mode)
+    return await filter_search_results_by_permission(
+        results,
+        user_id=user_id,
+        user_org_id=user_org_id,
+        user_group_ids=user_group_ids,
+        ownership_manager=getattr(kb_to_use, "ownership_manager", None),
+        is_admin=is_admin,
+    )
 
 
 async def _apply_reranking(query: str, results: list, kb_to_use) -> dict | None:
@@ -323,8 +347,19 @@ async def _reformulate_query_if_requested(query: str, reformulate_query: bool) -
     return reformulated_queries
 
 
-async def _search_with_all_queries(kb_to_use, reformulated_queries: List[str], search_limit: int) -> List[Metadata]:
-    """Search with all reformulated queries and deduplicate (Issue #281: extracted)."""
+async def _search_with_all_queries(
+    kb_to_use,
+    reformulated_queries: List[str],
+    search_limit: int,
+    user_id: str,
+    user_org_id: str | None,
+    user_group_ids: List[str],
+    is_admin: bool,
+) -> List[Metadata]:
+    """Search with all reformulated queries and deduplicate (Issue #281: extracted).
+
+    #16665: results are filtered to what *user_id* may see before returning.
+    """
     all_results = []
     seen_content = set()
 
@@ -348,6 +383,14 @@ async def _search_with_all_queries(kb_to_use, reformulated_queries: List[str], s
         except Exception as e:
             logger.error("Search failed for query '%s': %s", search_query, e)
 
+    all_results = await filter_search_results_by_permission(
+        all_results,
+        user_id=user_id,
+        user_org_id=user_org_id,
+        user_group_ids=user_group_ids,
+        ownership_manager=getattr(kb_to_use, "ownership_manager", None),
+        is_admin=is_admin,
+    )
     return all_results[:search_limit]
 
 
@@ -475,7 +518,15 @@ async def _check_empty_kb_for_search(kb_to_use, query: str, mode: str) -> dict |
     return None
 
 
-async def _execute_basic_search_with_reranking(request: SearchRequest, kb_to_use, query: str) -> dict:
+async def _execute_basic_search_with_reranking(
+    request: SearchRequest,
+    kb_to_use,
+    query: str,
+    user_id: str,
+    user_org_id: str | None,
+    user_group_ids: List[str],
+    is_admin: bool,
+) -> dict:
     """
     Execute basic search with optional reranking.
 
@@ -492,7 +543,9 @@ async def _execute_basic_search_with_reranking(request: SearchRequest, kb_to_use
     kb_class_name = kb_to_use.__class__.__name__
 
     # Execute basic search
-    results = await _execute_kb_search(kb_to_use, query, request.limit, request.mode)
+    results = await _execute_kb_search(
+        kb_to_use, query, request.limit, request.mode, user_id, user_org_id, user_group_ids, is_admin
+    )
 
     # Apply reranking if requested
     if request.enable_reranking:
@@ -517,7 +570,7 @@ async def _execute_basic_search_with_reranking(request: SearchRequest, kb_to_use
     operation="consolidated_search",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-async def search(request: SearchRequest, req: Request):
+async def search(request: SearchRequest, req: Request, current_user: Dict = Depends(get_current_user)):
     """
     Canonical knowledge base search endpoint (#555, #10666).
 
@@ -576,39 +629,74 @@ async def search(request: SearchRequest, req: Request):
     if empty_response:
         return empty_response
 
+    # #16665: every fact returned below is filtered to what this caller may
+    # see; an explicit admin read (this is one) sees every fact.
+    user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
+    is_admin = is_admin_role(current_user.get("role"))
+
     # Path 1: Full RAG search with synthesis
     if request.enable_rag and RAG_AVAILABLE:
-        return await _rag_search(request, kb_to_use)
+        return await _rag_search(request, kb_to_use, user_id, user_org_id, user_group_ids, is_admin)
 
     # Path 2: Search with tags/filtering/advanced options
     if request.tags or request.min_score > 0 or hasattr(kb_to_use, "search") or request.uses_advanced_features():
-        return await _aistack_search(request, kb_to_use)
+        return await _aistack_search(request, kb_to_use, user_id, user_org_id, user_group_ids, is_admin)
 
     # Path 3: Basic search (Issue #665: uses helper)
-    return await _execute_basic_search_with_reranking(request, kb_to_use, query)
+    return await _execute_basic_search_with_reranking(
+        request, kb_to_use, query, user_id, user_org_id, user_group_ids, is_admin
+    )
 
 
-async def _aistack_search(request: SearchRequest, kb_to_use) -> dict:
+async def _aistack_search(
+    request: SearchRequest,
+    kb_to_use,
+    user_id: str,
+    user_org_id: str | None,
+    user_group_ids: List[str],
+    is_admin: bool,
+) -> dict:
     """
     Handle advanced search path for the consolidated endpoint (#555, #10666).
 
     Uses the unified ``search()`` method with advanced params when available.
     Falls back to basic search + post-filtering for KB implementations that
     do not inherit SearchMixin.
+
+    #16665: every branch's results are filtered to what *user_id* may see
+    before returning.
     """
     kb_class_name = kb_to_use.__class__.__name__
+    ownership_manager = getattr(kb_to_use, "ownership_manager", None)
+
+    async def _filtered(results: list) -> list:
+        return await filter_search_results_by_permission(
+            results,
+            user_id=user_id,
+            user_org_id=user_org_id,
+            user_group_ids=user_group_ids,
+            ownership_manager=ownership_manager,
+            is_admin=is_admin,
+        )
 
     # Unified search() handles both enhanced and advanced params (#10666)
     if request.uses_advanced_features() and hasattr(kb_to_use, "search"):
-        return await kb_to_use.search(**request.to_advanced_params())
+        result = await kb_to_use.search(**request.to_advanced_params())
+        result["results"] = await _filtered(result.get("results", []))
+        result["total_results"] = len(result["results"])
+        return result
 
     # Use search() with legacy params when advanced features not needed
     if hasattr(kb_to_use, "search"):
         result = await kb_to_use.search(**request.to_legacy_params())
+        result["results"] = await _filtered(result.get("results", []))
+        result["total_results"] = len(result["results"])
         return result
 
     # Fallback: basic search with post-filtering
-    results = await _execute_kb_search(kb_to_use, request.query, request.limit, request.mode)
+    results = await _execute_kb_search(
+        kb_to_use, request.query, request.limit, request.mode, user_id, user_org_id, user_group_ids, is_admin
+    )
 
     # Apply min_score filter
     if request.min_score > 0:
@@ -628,7 +716,14 @@ async def _aistack_search(request: SearchRequest, kb_to_use) -> dict:
     )
 
 
-async def _rag_search(request: SearchRequest, kb_to_use) -> dict:
+async def _rag_search(
+    request: SearchRequest,
+    kb_to_use,
+    user_id: str,
+    user_org_id: str | None,
+    user_group_ids: List[str],
+    is_admin: bool,
+) -> dict:
     """
     Handle RAG search path for the consolidated endpoint (Issue #555).
 
@@ -646,7 +741,9 @@ async def _rag_search(request: SearchRequest, kb_to_use) -> dict:
     reformulated_queries = await _reformulate_query_if_requested(query, request.reformulate_query)
 
     # Search with all queries
-    all_results = await _search_with_all_queries(kb_to_use, reformulated_queries, request.limit)
+    all_results = await _search_with_all_queries(
+        kb_to_use, reformulated_queries, request.limit, user_id, user_org_id, user_group_ids, is_admin
+    )
 
     # Apply min_score filter
     if request.min_score > 0:
@@ -668,134 +765,9 @@ async def _rag_search(request: SearchRequest, kb_to_use) -> dict:
         }
 
 
-# =============================================================================
-# Issue #78: Analytics Endpoints
-# =============================================================================
-
-
-@router.get("/search_analytics", response_model=SearchAnalyticsResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_search_analytics",
-    error_code_prefix="KNOWLEDGE_SEARCH",
-)
-async def get_search_analytics():
-    """
-    Get search analytics and performance metrics.
-
-    Issue #78: Search analytics dashboard data.
-
-    Returns:
-    - total_searches: Total number of searches
-    - unique_queries: Number of unique queries
-    - avg_results: Average results per search
-    - failed_search_rate: Rate of searches with 0 results
-    - click_through_rate: Rate of result clicks
-    - avg_duration_ms: Average search duration
-    - popular_queries: Most searched queries
-    - recent_failed_queries: Recent searches with no results
-    """
-    try:
-        from knowledge.search_quality import get_search_analytics
-
-        analytics = get_search_analytics()
-        return {
-            "success": True,
-            "analytics": analytics.get_search_performance_stats(),
-        }
-    except ImportError:
-        return {
-            "success": False,
-            "message": "Search analytics not available",
-            "analytics": {},
-        }
-
-
-@router.post("/record_click", response_model=RecordClickResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="record_search_click",
-    error_code_prefix="KNOWLEDGE_SEARCH",
-)
-async def record_search_click(request: dict):
-    """
-    Record a search result click for analytics.
-
-    Issue #78: Click-through rate tracking.
-
-    Request body:
-    - query: The search query
-    - result_id: ID of the clicked result
-    - session_id: Optional session identifier
-    """
-    from fastapi import HTTPException
-
-    try:
-        from knowledge.search_quality import get_search_analytics
-
-        query = request.get("query", "")
-        result_id = request.get("result_id", "")
-        session_id = request.get("session_id")
-
-        if not query or not result_id:
-            raise HTTPException(
-                status_code=400,
-                detail="query and result_id are required",
-            )
-
-        analytics = get_search_analytics()
-        analytics.record_click(query, result_id, session_id)
-
-        return {"success": True, "message": "Click recorded"}
-
-    except ImportError:
-        return {"success": False, "message": "Search analytics not available"}
-
-
-@router.post("/expand_query", response_model=ExpandQueryResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="expand_query",
-    error_code_prefix="KNOWLEDGE_SEARCH",
-)
-async def expand_query(request: dict):
-    """
-    Expand a query with synonyms and related terms.
-
-    Issue #78: Query expansion preview.
-
-    Request body:
-    - query: The search query to expand
-
-    Returns:
-    - original_query: The input query
-    - expanded_queries: List of expanded query variations
-    """
-    from fastapi import HTTPException
-
-    try:
-        from knowledge.search_quality import get_query_expander
-
-        query = request.get("query", "")
-        if not query:
-            raise HTTPException(status_code=400, detail="Query is required")
-
-        expander = get_query_expander()
-        expanded = expander.expand_query(query)
-
-        return {
-            "success": True,
-            "original_query": query,
-            "expanded_queries": expanded,
-            "expansion_count": len(expanded),
-        }
-
-    except ImportError:
-        return {
-            "success": False,
-            "message": "Query expansion not available",
-            "expanded_queries": [query],
-        }
+# Analytics endpoints (search_analytics, record_click, expand_query) moved to
+# api/knowledge_search_analytics.py (#16665, #14236 file-size ceiling) -- they
+# never return knowledge-base facts, so they carry no fact-visibility concern.
 
 
 # ===== HELPER FUNCTIONS =====
