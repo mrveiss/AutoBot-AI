@@ -1306,10 +1306,10 @@
     # frontend) matches neither section above, so it never got the shared
     # keypair through this playbook -- the ONLY path a GUI/self-update reaches
     # (CLAUDE.md: "System updates ... go through the builtin updater only").
-    # Gated on the role_active_facts.yml fact, not `'vnc' in group_names`:
-    # vnc has no entry in services/inventory_builder.py::_ROLE_TO_GROUPS (the
-    # map this playbook's dynamic inventory groups come from), so a
-    # group_names check would silently exempt exactly this node.
+    # Gated on the role_active_facts.yml fact, not a group_names membership
+    # check: vnc has no entry in services/inventory_builder.py::_ROLE_TO_GROUPS
+    # (the map this playbook's dynamic inventory groups come from), so testing
+    # group_names here would silently exempt exactly this node.
     - name: "[PLAY 2] VNC | Ensure the shared node TLS cert"
       include_tasks: "../_shared/tasks/ensure_node_tls_cert.yml"
       when: "role_vnc_active | default(false) | bool"
