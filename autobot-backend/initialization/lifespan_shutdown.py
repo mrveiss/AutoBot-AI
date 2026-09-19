@@ -319,6 +319,15 @@ async def stop_background_loops(app: FastAPI, report: "_ShutdownReport") -> None
     except Exception as _mt_err:
         report.failed("Metrics task cancel", _mt_err)
 
+    # #16965: cancel the presence-registry sync loop.
+    try:
+        presence_task = getattr(app.state, "agent_presence_sync_task", None)
+        if presence_task is not None and not presence_task.done():
+            presence_task.cancel()
+            await asyncio.gather(presence_task, return_exceptions=True)
+    except Exception as _pt_err:
+        report.failed("Agent presence sync task cancel", _pt_err)
+
 
 async def shutdown_agent_runtime(app: FastAPI, report: "_ShutdownReport") -> None:
     """Shut down the orchestrator, WebResearcher and the AI Stack client."""
