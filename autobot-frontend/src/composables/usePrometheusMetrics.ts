@@ -18,6 +18,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase, getBackendWsUrl } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from './useLoadingState'
 // Shared with autobot-slm-frontend's usePrometheusMetrics.ts — see the
@@ -195,6 +196,8 @@ export function usePrometheusMetrics(
     disconnect: wsDisconnectInner,
   } = useWebSocket(_buildWsUrl(), {
     autoConnect: false,
+    // #17009: the endpoint authenticates; the token travels as the bearer subprotocol (#16457)
+    protocols: () => buildAuthenticatedWsSubprotocols() ?? undefined,
     autoReconnect: false,
     parseJSON: false,
     onOpen: () => {

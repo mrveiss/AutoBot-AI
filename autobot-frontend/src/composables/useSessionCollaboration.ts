@@ -44,7 +44,7 @@
 import { ref, computed, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, watch, type Ref, type ComputedRef } from 'vue'
 import { useChatStore, type UserContext, type SessionActivity } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
-import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
+import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { getApiBase } from '@/config/ssot-config'
 import { apiService, type PendingInvitationResponse } from '@/services/api'
 
@@ -160,10 +160,11 @@ let presenceSocket: WebSocket | null = null
 // closes only when the last instance disposes.
 let activeInstanceCount = 0
 
-function _presenceWsUrl(sessionId: string): string | null {
+// #16457: the token travels via the Sec-WebSocket-Protocol subprotocol, not
+// the URL -- it no longer lands in server access logs or browser history.
+function _presenceWsUrl(sessionId: string): string {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const base = `${wsProtocol}//${window.location.host}${getApiBase()}/ws/sessions/${sessionId}/presence`
-  return buildAuthenticatedWsUrl(base)
+  return `${wsProtocol}//${window.location.host}${getApiBase()}/ws/sessions/${sessionId}/presence`
 }
 
 /**
@@ -350,7 +351,8 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     }
 
     const wsUrl = _presenceWsUrl(sessionId)
-    if (!wsUrl) {
+    const subprotocols = buildAuthenticatedWsSubprotocols()
+    if (subprotocols === null) {
       logger.debug('No auth token available yet; deferring presence connect')
       return
     }
@@ -364,7 +366,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       currentTab: 'chat'
     }
 
-    presenceSocket = new WebSocket(wsUrl)
+    presenceSocket = new WebSocket(wsUrl, subprotocols)
     presenceSocket.onopen = () => {
       wsConnected.value = true
       logger.debug(`Joined session ${sessionId} for collaboration`)
