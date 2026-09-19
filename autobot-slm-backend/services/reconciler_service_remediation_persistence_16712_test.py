@@ -74,7 +74,7 @@ class _FakeService:
 def test_read_defaults_to_zero_when_never_attempted():
     service = _FakeService(extra_data=None)
 
-    assert reconciler._read_service_remediation(service) == {
+    assert reconciler.read_service_remediation(service) == {
         "count": 0,
         "last_attempt": None,
         "exhausted": False,
@@ -85,10 +85,10 @@ def test_write_then_read_round_trips_and_preserves_other_extra_data_keys():
     service = _FakeService(extra_data={"error_message": "boom"})
     now = datetime(2026, 9, 19, 12, 0, 0, tzinfo=timezone.utc)
 
-    reconciler._write_service_remediation(service, {"count": 2, "last_attempt": now, "exhausted": False})
+    reconciler.write_service_remediation(service, {"count": 2, "last_attempt": now, "exhausted": False})
 
     assert service.extra_data["error_message"] == "boom", "an unrelated extra_data key must survive the write"
-    assert reconciler._read_service_remediation(service) == {"count": 2, "last_attempt": now, "exhausted": False}
+    assert reconciler.read_service_remediation(service) == {"count": 2, "last_attempt": now, "exhausted": False}
 
 
 def test_the_tracker_survives_a_fresh_reconciler_instance():
@@ -98,7 +98,7 @@ def test_the_tracker_survives_a_fresh_reconciler_instance():
     service = _FakeService(extra_data={"remediation": {"count": 3, "last_attempt": None, "exhausted": True}})
 
     fresh = reconciler.ReconcilerService()
-    tracker = reconciler._read_service_remediation(service)
+    tracker = reconciler.read_service_remediation(service)
 
     assert not hasattr(fresh, "_service_remediation_tracker"), "the old process-memory tracker must be gone"
     assert tracker["count"] == 3

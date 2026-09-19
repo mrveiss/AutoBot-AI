@@ -40,6 +40,11 @@ from models.database import (
 )
 from services.service_categorizer import categorize_service
 from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
+from services.service_remediation_tracker import (
+    clear_service_remediation,
+    read_service_remediation,
+    write_service_remediation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -452,39 +457,6 @@ def _service_health_degraded(extra_data: dict | None, restart_churn_active: bool
     return False
 
 
-def _read_service_remediation(service: Service) -> dict:
-    """A (node, service)'s remediation tracker, read from the row itself (#16712).
-
-    Persisted on ``Service.extra_data`` -- never a separate process-memory
-    dict, which a backend restart would silently reset, giving a failing
-    service three fresh attempts after every deploy forever.
-    """
-    raw = (service.extra_data or {}).get("remediation") or {}
-    last_attempt_raw = raw.get("last_attempt")
-    return {
-        "count": raw.get("count", 0),
-        "last_attempt": parse_utc_iso(last_attempt_raw) if last_attempt_raw else None,
-        "exhausted": bool(raw.get("exhausted", False)),
-    }
-
-
-def _write_service_remediation(service: Service, tracker: dict) -> None:
-    """Persist *tracker* onto the row (#16712).
-
-    A genuine COPY of ``extra_data``, not the same dict mutated in place and
-    handed back -- SQLAlchemy's JSON column does not reliably flag that as
-    dirty (see ``_update_existing_service``'s identical note).
-    """
-    last_attempt = tracker.get("last_attempt")
-    existing_extra = dict(service.extra_data or {})
-    existing_extra["remediation"] = {
-        "count": tracker["count"],
-        "last_attempt": last_attempt.isoformat() if last_attempt else None,
-        "exhausted": bool(tracker.get("exhausted", False)),
-    }
-    service.extra_data = existing_extra
-
-
 class ReconcilerService:
     """Background service for health monitoring and reconciliation.
 
@@ -500,9 +472,7 @@ class ReconcilerService:
         self._heartbeat_timeout = settings.heartbeat_interval * settings.unhealthy_threshold
         # Track remediation attempts per node: {node_id: {"count": int, "last_attempt": datetime}}
         self._remediation_tracker: Dict[str, Dict] = {}
-        # Service restart attempts persist on Service.extra_data["remediation"]
-        # (#16712), not a process-memory dict a backend restart would reset --
-        # see _read_service_remediation/_write_service_remediation below.
+        # Service restart attempts persist on Service.extra_data["remediation"] (#16712), not here.
         # Timestamps for rate-limited background tasks (#926 Phase 3)
         self._last_manifest_health_check: float = 0.0
         self._last_cert_expiry_check: float = 0.0
@@ -1176,25 +1146,12 @@ class ReconcilerService:
     async def reset_service_remediation_tracker(
         self, db: AsyncSession, node_id: str, service_name: str | None = None
     ) -> None:
-        """Clear the persisted remediation tracker for a node's service(s) (#16712).
-
-        An operator's explicit acknowledgement funnels here (api/nodes.py's
-        ``acknowledge-remediation``); a service recovering on its own funnels
-        through ``_update_existing_service`` instead, on the same row it
-        already reads every heartbeat -- no separate reset call needed there.
-        """
+        """Clear the persisted remediation tracker (#16712 acknowledge path; a recovery clears itself instead)."""
         stmt = select(Service).where(Service.node_id == node_id)
         if service_name:
             stmt = stmt.where(Service.service_name == service_name)
         result = await db.execute(stmt)
-        cleared = []
-        for service in result.scalars().all():
-            if not (service.extra_data or {}).get("remediation"):
-                continue
-            existing_extra = dict(service.extra_data or {})
-            existing_extra.pop("remediation", None)
-            service.extra_data = existing_extra
-            cleared.append(service.service_name)
+        cleared = [s.service_name for s in result.scalars().all() if clear_service_remediation(s)]
         if cleared:
             await db.commit()
             logger.info("Reset service remediation tracker for %s on %s", cleared, node_id)
@@ -1353,7 +1310,7 @@ class ReconcilerService:
         """
         now = datetime.now(timezone.utc)
 
-        tracker = _read_service_remediation(service)
+        tracker = read_service_remediation(service)
 
         # Check cooldown
         if self._check_service_cooldown(node.node_id, service.service_name, tracker, now):
@@ -1364,7 +1321,7 @@ class ReconcilerService:
             if not tracker.get("exhausted"):
                 await self._create_max_attempts_service_event(db, node, service, tracker)
                 tracker["exhausted"] = True
-                _write_service_remediation(service, tracker)
+                write_service_remediation(service, tracker)
                 await db.commit()
             return False
 
@@ -1398,15 +1355,9 @@ class ReconcilerService:
             timeout_s=SERVICE_RESTART_PLAYBOOK_TIMEOUT_S,
         )
 
-        # Update tracker (persisted with the row; _handle_service_restart_result's
-        # own db.commit() below captures it, same transaction as the status change)
-        _write_service_remediation(
-            service,
-            {
-                "count": tracker["count"] + 1 if not success else 0,
-                "last_attempt": now,
-                "exhausted": False,
-            },
+        # Update tracker; captured by _handle_service_restart_result's own commit().
+        write_service_remediation(
+            service, {"count": tracker["count"] + 1 if not success else 0, "last_attempt": now, "exhausted": False}
         )
 
         # Handle result and broadcast
@@ -1904,12 +1855,8 @@ class ReconcilerService:
         if "n_restarts" in svc_data:
             existing_extra["n_restarts"] = svc_data["n_restarts"]
         existing_extra["n_restarts_increased_at"] = last_increase_iso
-        # #16712: a service that recovers on its own resets its remediation
-        # tracker here, the next heartbeat that observes it is no longer
-        # FAILED -- no separate call needed, this row is already being
-        # written back below regardless.
         if status != ServiceStatus.FAILED.value:
-            existing_extra.pop("remediation", None)
+            existing_extra.pop("remediation", None)  # #16712: recovery resets it
         service.extra_data = existing_extra
         return is_churning
 
