@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
@@ -119,17 +120,51 @@ async def test_two_concurrent_repairs_serialize_and_the_second_finds_a_live_owne
     secret_id = await _secret_owned_by(service, session, _GONE)
     engine = create_async_engine(fresh_db_url)
     other = async_sessionmaker(engine, expire_on_commit=False)()
+    probe_engine = create_async_engine(fresh_db_url)
     try:
         with patch("services.orphan_repair.audit_log", new=AsyncMock(return_value=True)):
             await repair_orphan(session, _repairers(service), "secret", str(secret_id), str(_NEW), actor_user_id="a")
             second = asyncio.create_task(
                 repair_orphan(other, _repairers(service), "secret", str(secret_id), str(_LIVE), actor_user_id="b")
             )
-            await asyncio.sleep(0.5)
+
+            # Deterministic sync, not a fixed sleep (#16255): wait for Postgres to
+            # report `other` actually blocked on the row lock, not merely "not yet
+            # done" -- a starved runner can make the latter true for a reason that
+            # has nothing to do with the lock this test exists to prove.
+            # autobot_shared.eventually.eventually's condition is synchronous
+            # (every other call site in the repo passes a plain lambda over an
+            # in-memory value); this one needs an async Postgres query per poll,
+            # so this mirrors its exact semantics -- bounded deadline, the
+            # watched task's own failure re-raised if it finishes first --
+            # directly instead of forcing an async check through a sync API.
+            async def _wait_until_second_blocks_on_a_lock(*, deadline: float = 30.0) -> None:
+                async def _poll() -> None:
+                    while True:
+                        # fresh_db_url is a throwaway database exclusive to this test
+                        # (#15900-style isolation), so any session waiting on a lock
+                        # in it is `other`.
+                        async with probe_engine.connect() as conn:
+                            row = (
+                                await conn.execute(
+                                    text("SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock'")
+                                )
+                            ).first()
+                        if row is not None:
+                            return
+                        if second.done():
+                            second.result()
+                            raise AssertionError("the second repair finished before it was seen waiting on the lock")
+                        await asyncio.sleep(0.01)
+
+                await asyncio.wait_for(_poll(), timeout=deadline)
+
+            await _wait_until_second_blocks_on_a_lock()
             assert not second.done(), "the second repair must wait on the first's row lock"
             await session.commit()
             with pytest.raises(NotAnOrphan):
                 await second
     finally:
         await other.close()
+        await probe_engine.dispose()
         await engine.dispose()

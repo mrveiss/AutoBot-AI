@@ -251,7 +251,19 @@ def exemption(actor: str, branch: str, title: str) -> str | None:
 
 
 def check(body: str, actor: str = "", branch: str = "", title: str = "") -> tuple[bool, str]:
-    """Return (ok, message) for one pull request."""
+    """Return (ok, message) for one pull request.
+
+    **Imported by ``scripts/validate_pr_body.py`` (#16859)**, which runs this
+    gate locally before ``gh pr create`` so an author learns the requirement
+    before the push rather than from a red check ~63 checks in. Changing this
+    name, its keyword parameters or its ``(ok, message)`` return shape breaks
+    that caller — it passes ``actor``/``branch``/``title`` by keyword.
+
+    You will not find out locally: ``tools/git-hooks/pre-push`` selects the
+    sibling test of each changed file (``<file>_test.py``), so editing this
+    module runs ``check_pr_issue_batching_test.py`` and never
+    ``validate_pr_body_test.py``. CI catches it, after the push.
+    """
     excused = exemption(actor, branch, title)
     if excused is not None:
         return True, f"Batching rule does not apply ({excused})."

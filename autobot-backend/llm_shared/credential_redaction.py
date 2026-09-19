@@ -7,10 +7,20 @@ Credential redaction for log/trace safety (GH#9037).
 
 Ensures API keys and sensitive credentials never appear in logs, traces,
 or audit records.
+
+#13708: ``redact_string`` also runs the cross-service content scanner
+(``autobot_shared.secret_redaction``) after its own patterns, so a credential
+in free text this module's narrower ``API_KEY_PATTERNS`` never covered --
+PEM blocks, basic-auth URLs, "password is X" phrasing -- is caught too. Every
+caller of this module's ``redact_dict``/``redact_string`` gets the wider
+coverage for free, including ``llc/services/replay_service.py``'s read-time
+redaction, which previously had no content scanner at all in that path.
 """
 
 import re
 from typing import Any, Dict
+
+from autobot_shared.secret_redaction import redact_content
 
 # Patterns for common API key formats
 API_KEY_PATTERNS = [
@@ -60,7 +70,10 @@ def redact_string(text: str) -> str:
     """
     for pattern in API_KEY_PATTERNS:
         text = pattern.sub(lambda m: redact_api_key(m.group(1)), text)
-    return text
+    # #13708: catches PEM blocks, basic-auth URLs, and phrasing this module's
+    # own API_KEY_PATTERNS never covered. Runs second so a value the loop
+    # above already masked doesn't get scanned a second time.
+    return redact_content(text)
 
 
 def redact_dict(data: Dict[str, Any]) -> Dict[str, Any]:
