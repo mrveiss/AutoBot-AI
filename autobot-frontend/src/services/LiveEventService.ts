@@ -13,7 +13,7 @@
 import { ref, watch, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import config, { getApiBase } from '@/config/ssot-config'
-import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
+import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
 import { whenPiniaReady } from '@/utils/whenPiniaReady'
 import type { ConnectionState } from '@/services/GlobalWebSocketService'
@@ -92,22 +92,20 @@ class LiveEventService {
   readonly isConnected: Ref<boolean> = ref(false)
   readonly connectionState: Ref<LiveEventConnectionState> = ref('disconnected')
 
-  // #6692/#6700: token resolved via shared helper unless caller supplies one
-  // explicitly (e.g., test override). Returns null when no token is available
-  // so connect() can defer instead of producing a guaranteed-403 handshake.
-  //
   // #14822: the `/live` suffix now lives in `config.liveEventsUrl` rather than
   // being appended here. The old comment warned that `config.websocketUrl`
   // already ends in `/api/ws`, so prepending `/ws/` would build
   // `wss://host/api/ws/ws/live` and 404 — the named getter removes the chance
   // of getting that wrong at each call site.
-  private getUrl(token?: string): string | null {
-    const base = config.liveEventsUrl
-    if (token) {
-      const sep = base.includes('?') ? '&' : '?'
-      return `${base}${sep}token=${encodeURIComponent(token)}`
-    }
-    return buildAuthenticatedWsUrl(base)
+  //
+  // #16457: token via the Sec-WebSocket-Protocol subprotocol, not the URL --
+  // it no longer lands in server access logs or browser history. An explicit
+  // token (e.g. test override) takes precedence over the shared helper.
+  // Returns null when no token is available so connect() can defer instead of
+  // producing a guaranteed-403 handshake.
+  private getSubprotocols(token?: string): string[] | null {
+    if (token) return ['bearer', token]
+    return buildAuthenticatedWsSubprotocols()
   }
 
   async connect(token?: string): Promise<void> {
@@ -118,8 +116,9 @@ class LiveEventService {
     ) {
       return
     }
-    const url = this.getUrl(token)
-    if (url === null) {
+    const url = config.liveEventsUrl
+    const subprotocols = this.getSubprotocols(token)
+    if (subprotocols === null) {
       // #6692: no token yet — defer until login (auto-connect watcher retries)
       logger.debug('LiveEventService: no token, deferring connect until login')
       this.connectionState.value = 'disconnected'
@@ -130,7 +129,7 @@ class LiveEventService {
     logger.debug('Connecting LiveEventService', { attempt: this.reconnectAttempts + 1 })
     return new Promise<void>((resolve, reject) => {
       try {
-        this.ws = new WebSocket(url)
+        this.ws = new WebSocket(url, subprotocols)
       } catch (err: unknown) {
         this._handleError(err)
         reject(err)

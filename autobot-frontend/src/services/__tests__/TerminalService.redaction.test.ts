@@ -4,10 +4,13 @@
  * Guard test for TerminalService's redacted invalid-URL error message (#14989).
  *
  * _validateWsUrl throws `Invalid WebSocket URL: ${wsUrl}` when the resolved
- * URL is not ws://wss://. That wsUrl now carries a JWT (buildAuthenticatedWsUrl,
- * #6700) via connect(), and the thrown Error's .message reaches
- * logger.error('Failed to connect...', err) through _handleConnectCatchError
- * -- so it must not embed the raw token.
+ * URL is not ws://wss://, and the thrown Error's .message reaches
+ * logger.error('Failed to connect...', err) through _handleConnectCatchError.
+ * connect() itself no longer embeds the JWT in the URL (#16457: it travels
+ * as a Sec-WebSocket-Protocol subprotocol instead) -- these tests drive
+ * _validateWsUrl/_handleConnectCatchError directly with a synthetic
+ * token-bearing URL to pin the redaction as defense in depth regardless of
+ * what produced the URL, the same way redactUrlForLogging.ts documents it.
  *
  * baseUrl is always resolved to a valid ws://wss:// prefix in normal use
  * (_resolveWsBaseUrl falls back to a hardcoded valid URL otherwise), so this
