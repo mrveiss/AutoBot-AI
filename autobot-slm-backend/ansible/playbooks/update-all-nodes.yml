@@ -1301,6 +1301,20 @@
       when: "'frontend' in group_names"
       tags: [frontend]
 
+    # ----- VNC -----
+    # #16020: a node whose only cert-consuming role is vnc (no backend, no
+    # frontend) matches neither section above, so it never got the shared
+    # keypair through this playbook -- the ONLY path a GUI/self-update reaches
+    # (CLAUDE.md: "System updates ... go through the builtin updater only").
+    # Gated on the role_active_facts.yml fact, not `'vnc' in group_names`:
+    # vnc has no entry in services/inventory_builder.py::_ROLE_TO_GROUPS (the
+    # map this playbook's dynamic inventory groups come from), so a
+    # group_names check would silently exempt exactly this node.
+    - name: "[PLAY 2] VNC | Ensure the shared node TLS cert"
+      include_tasks: "../_shared/tasks/ensure_node_tls_cert.yml"
+      when: "role_vnc_active | default(false) | bool"
+      tags: [vnc]
+
     - name: "[PLAY 2] Frontend | Deploy autobot-frontend"
       unarchive:
         src: "{{ deploy_tmp }}/frontend.tar.gz"
@@ -2047,6 +2061,16 @@
           - "  PLAY 2b: Database Node Update (role-owned files)"
           - "======================================================="
           - "  Target: {{ inventory_hostname }}"
+
+    # #16020: roles/redis/tasks/main.yml ensures the shared keypair, but this
+    # play applies the role via `tasks_from: code_only` below (see its own
+    # comment), which never reaches that task -- only the role's full
+    # provisioning entrypoint does. A database node maintained only through
+    # this playbook could never repair a missing cert otherwise.
+    - name: "[PLAY 2b] Database | Ensure the shared node TLS cert"
+      include_tasks: "../_shared/tasks/ensure_node_tls_cert.yml"
+      when: "role_redis_active | default(false) | bool"
+      tags: [database, redis]
 
     # Applies the role's code_only task file — the systemd override, the backup
     # script and the ChromaDB credential file + unit — NEVER the full role,

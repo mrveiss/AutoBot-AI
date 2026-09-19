@@ -2261,8 +2261,10 @@ async def acknowledge_remediation(
             detail="Node not found",
         )
 
-    # Reset the remediation tracker
+    # Reset the remediation trackers (#16712: service-level is persisted on
+    # the row, not process memory, so it needs the session to clear it)
     reconciler_service.reset_remediation_tracker(node_id)
+    await reconciler_service.reset_service_remediation_tracker(db, node_id)
 
     # Create acknowledgment event
     await _create_node_event(

@@ -196,7 +196,7 @@ def test_remediate_failed_service_uses_its_own_playbook_timeout_constant():
     try:
         service = reconciler.ReconcilerService()
         node = SimpleNamespace(node_id="node-14524", hostname="node-14524", ansible_target="node-14524")
-        service_row = SimpleNamespace(service_name="autobot-pg-backup")
+        service_row = SimpleNamespace(service_name="autobot-pg-backup", extra_data=None)
         db = _FakeSession()
         result = asyncio.run(service._remediate_failed_service(db, node, service_row))
     finally:
