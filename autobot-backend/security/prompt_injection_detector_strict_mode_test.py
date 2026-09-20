@@ -102,10 +102,15 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 #: 'autobot-backend/*.py' | grep -v '_test\.py$' | wc -l`, independently
 #: cross-checked -- a local reach-test pass is not reliable evidence for this
 #: one, per #17072 review). Population minus the unchanged growth allowance.
+#: Re-pinned 2944 -> 2945 (#16937): measured population 3245 -- this PR adds
+#: one new non-test .py file (security/unicode_normalization.py). Same
+#: direct-count method, population minus the unchanged growth allowance.
+#: (#17125 independently re-pins to the same 2945 for its own +1 file; if
+#: that lands first this entry is a no-op re-measurement, not a conflict.)
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2944,
+    floor=2945,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )
