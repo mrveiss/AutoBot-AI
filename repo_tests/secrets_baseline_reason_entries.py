@@ -527,4 +527,20 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "line 204's fake `user:hunter2@` basic-auth URL fixture (the source_url/url field-name "
         "variant) for test_source_url_and_url_fields_are_also_redacted."
     ),
+    (
+        "autobot-slm-frontend/src/locales/en.json",
+        "Secret Keyword",
+        "f4e7a8740db0b7a0bfd8e63077261475f61fc2a6",  # pragma: allowlist secret
+    ): (
+        'line 3407\'s `"secret": "Secret"` -- an i18n display label (a column/field '
+        "header the Data Hygiene page's #17040 batch introduced, #17157), not a "
+        "credential. The KEY name `secret` trips the Secret Keyword denylist; the VALUE "
+        "is the literal word 'Secret'. Same false-positive shape as the 7 entries "
+        "already baselined under this identical hashed_secret for autobot-frontend's "
+        "own i18n/locales/*.json files -- independently re-hashed plain SHA1('Secret') "
+        "and confirmed the match, not asserted from the filename alone. Landed "
+        "unbaselined because Secret Detection is gated by a path filter that #17157's "
+        "frontend/locale-only diff didn't trigger, so the whole-tree scan never ran "
+        "against it on main (#17173, filed for the filter/scope mismatch itself)."
+    ),
 }
