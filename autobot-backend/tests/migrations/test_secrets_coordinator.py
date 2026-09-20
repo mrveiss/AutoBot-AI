@@ -186,7 +186,11 @@ async def test_system_visibility_secret_from_the_ui_path_is_readable_by_the_coor
         yield session
 
     with (
-        patch("api.secrets.get_coordinator", return_value=coord),
+        # _create_system_vault_secret imports get_coordinator INSIDE the function
+        # (api/secrets.py:681), so api.secrets never holds that attribute and
+        # patching it there raises AttributeError. Patch the module it is imported
+        # from, which the deferred import resolves at call time.
+        patch("api.envelope_secrets.get_coordinator", return_value=coord),
         patch("llc.deps.get_session", _one_session),
         patch(
             "user_management.middleware.rbac_middleware.rbac_middleware.get_user_permissions",
