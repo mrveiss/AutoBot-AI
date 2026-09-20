@@ -342,6 +342,24 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_SYNC_UNSHALLOW_TIMEOUT_S",
+        type=float,
+        default=600.0,
+        description=(
+            "Timeout, in seconds, for `git fetch --unshallow` on the builtin "
+            "updater's `code_source` checkout when it is still a shallow "
+            "clone (from initial provisioning). Downloads the ENTIRE history "
+            "the shallow fetch skipped, so it gets a much longer bound than "
+            "AUTOBOT_SYNC_GIT_TIMEOUT_S -- minutes, not seconds, on a "
+            "monorepo-sized checkout (autobot-slm-backend/services/"
+            "git_subprocess.py:ensure_full_history, #16310)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CONSTRAINTS_RSYNC_TIMEOUT_S",
         type=float,
         default=30.0,

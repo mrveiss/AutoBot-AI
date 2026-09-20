@@ -236,18 +236,23 @@
         npm install
       become_user: autobot-service
 
-    - name: Build frontend for production
-      shell: |
-        cd {{ deployed_src_root }}/autobot-vue
-        npm run build
-      become_user: autobot-service
-      environment:
-        VITE_BACKEND_HOST: "{{ backend_host }}"
-        VITE_BACKEND_PORT: "{{ backend_port }}"
-        VITE_REDIS_HOST: "{{ redis_host }}"
-        VITE_AI_STACK_HOST: "{{ ai_stack_host }}"
-        VITE_BROWSER_HOST: "{{ browser_host }}"
-        VITE_NPU_WORKER_HOST: "{{ npu_worker_host }}"
+    # #15603: staged build-then-swap (#15557, #15610's mechanism) — a failed
+    # build here used to empty the served dist/ while `nginx -t`/restart
+    # below carried on regardless.
+    - name: Build and publish frontend for production, staged (#15603)
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
+      vars:
+        slm_frontend_publish_label: "Native deploy (frontend)"
+        slm_frontend_publish_dir: "{{ deployed_src_root }}/autobot-vue"
+        slm_frontend_publish_user: autobot-service
+        slm_frontend_publish_build_script: "build"
+        slm_frontend_publish_build_env:
+          VITE_BACKEND_HOST: "{{ backend_host }}"
+          VITE_BACKEND_PORT: "{{ backend_port }}"
+          VITE_REDIS_HOST: "{{ redis_host }}"
+          VITE_AI_STACK_HOST: "{{ ai_stack_host }}"
+          VITE_BROWSER_HOST: "{{ browser_host }}"
+          VITE_NPU_WORKER_HOST: "{{ npu_worker_host }}"
 
     - name: Configure Nginx for frontend
       copy:
@@ -257,7 +262,10 @@
               listen [::]:80 default_server;
 
               server_name autobot-frontend;
-              root {{ deployed_src_root }}/autobot-vue/dist;
+              # #15603: `current`, the atomically-flipped symlink the staged
+              # publish above creates — not `dist`, which vite would empty
+              # and refill in place on every rebuild.
+              root {{ deployed_src_root }}/autobot-vue/current;
               index index.html;
 
               # Frontend static files
