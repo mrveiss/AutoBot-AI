@@ -39,6 +39,8 @@ if "services" not in sys.modules:
     _svc_pkg.__path__ = [str(_SERVICES)]  # type: ignore[attr-defined]
     sys.modules["services"] = _svc_pkg
 sys.modules["services.deploy_artifacts"] = deploy_artifacts
+# #9780: patch() resolves through the parent, so the parent must expose this same object.
+setattr(sys.modules["services"], "deploy_artifacts", deploy_artifacts)
 if "services.git_tracker" not in sys.modules:
     _gt = types.ModuleType("services.git_tracker")
     _gt.DEFAULT_REPO_PATH = "/opt/autobot/code_source"  # type: ignore[attr-defined]

@@ -23,6 +23,7 @@ _LOGIN_CLAIMS = {
 }
 _JWT_HUMAN = {"username": "alice", "role": "user", "auth_method": "jwt", "login_token": True}
 _SESSION_HUMAN = {"username": "alice", "role": "user", "auth_method": "session"}
+_WS_HUMAN = {"username": "alice", "role": "user", "auth_method": "jwt_websocket", "login_token": True}
 
 
 def test_a_token_minted_as_a_login_is_a_login():
@@ -46,8 +47,8 @@ def test_any_purpose_claim_disqualifies_even_a_login_typed_token(claim):
         assert not is_login_token({**_LOGIN_CLAIMS, claim: value}), (claim, value)
 
 
-@pytest.mark.parametrize("user", [_JWT_HUMAN, _SESSION_HUMAN])
-def test_a_login_jwt_or_session_is_a_human(user):
+@pytest.mark.parametrize("user", [_JWT_HUMAN, _SESSION_HUMAN, _WS_HUMAN])
+def test_a_login_jwt_session_or_websocket_login_is_a_human(user):
     assert is_interactive_human(user)
 
 
@@ -64,7 +65,8 @@ def test_a_login_jwt_or_session_is_a_human(user):
         ("jwt without the login marker", {"username": "alice", "auth_method": "jwt"}),
         ("jwt with a falsy login marker", {**_JWT_HUMAN, "login_token": False}),
         ("jwt with a truthy non-bool marker", {**_JWT_HUMAN, "login_token": "yes"}),
-        ("websocket jwt", {"username": "alice", "auth_method": "jwt_websocket", "login_token": True}),
+        ("websocket jwt without the login marker", {"username": "alice", "auth_method": "jwt_websocket"}),
+        ("websocket jwt with a falsy login marker", {**_WS_HUMAN, "login_token": False}),
         ("unknown method", {"username": "alice", "auth_method": "api_key"}),
         ("service flag on a session", {**_SESSION_HUMAN, "service": True}),
         ("auth-disabled flag on a jwt", {**_JWT_HUMAN, "auth_disabled": True}),

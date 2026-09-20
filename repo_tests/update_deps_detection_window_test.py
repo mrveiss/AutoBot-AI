@@ -165,12 +165,19 @@ def _staged_publish_tasks() -> tuple[Path, list[dict]]:
         for key in ("ansible.builtin.include_tasks", "include_tasks")
         if isinstance(task.get(key), str) and "build_publish_slm_frontend" in task[key]
     ]
-    assert len(included) == 1, (
-        "update-all-nodes.yml no longer delegates its SLM frontend build to exactly one shared "
-        f"task file (found {included!r}) — a build outside the shared staged publish can empty "
-        "the served dist/ (#15430, #15557)"
+    # #16970 (#17133 review): a second, separate include_tasks call site was
+    # added for the user-frontend's own staged publish (a distinct play, same
+    # shared mechanism) -- so the count is no longer 1, but every call site
+    # still resolves to the SAME shared file, which is the actual property:
+    # the build logic lives in exactly one place, however many plays use it.
+    resolved_targets = {(_PLAYBOOK.parent / target).resolve() for target in included}
+    assert included, "update-all-nodes.yml no longer delegates any SLM frontend build to a shared task file"
+    assert len(resolved_targets) == 1, (
+        "update-all-nodes.yml's frontend build call sites no longer share ONE task file "
+        f"(resolved to {sorted(str(p) for p in resolved_targets)}) — a build outside the shared "
+        "staged publish can empty the served dist/ (#15430, #15557)"
     )
-    shared = (_PLAYBOOK.parent / included[0]).resolve()
+    shared = next(iter(resolved_targets))
     assert shared.is_file(), f"the shared staged-publish task file is missing: {shared}"
     document = yaml.safe_load(shared.read_text(encoding="utf-8"))
     return shared, [task for task in document if isinstance(task, dict)]

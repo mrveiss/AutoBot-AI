@@ -15,6 +15,7 @@ from typing import Any, Dict
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -91,6 +92,20 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+# #16428 review: FastAPI's default 422 body echoes the submitted payload
+# verbatim (Pydantic v2 puts it in each error's "input"/"ctx"). Duplicated
+# from autobot_shared.fastapi_validation_handlers.register_validation_error_handlers
+# rather than imported: this container ships its own dependency set
+# (requirements-ai.txt) with no autobot_shared on the image.
+@app.exception_handler(RequestValidationError)
+async def _validation_error_without_input(request: Request, exc: RequestValidationError) -> JSONResponse:
+    safe_errors = [
+        {"loc": list(e.get("loc", [])), "msg": e.get("msg", ""), "type": e.get("type", "")} for e in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": safe_errors})
+
 
 # Add CORS middleware
 app.add_middleware(

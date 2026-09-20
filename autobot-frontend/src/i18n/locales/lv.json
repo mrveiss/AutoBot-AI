@@ -9454,5 +9454,12 @@
     "errorSetRate": "Likmi neizdevās saglabāt.",
     "errorClearRate": "Likmi neizdevās notīrīt.",
     "errorSetStepCost": "Soļa izmaksu datus neizdevās saglabāt."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Iestatījumi",
+      "hideSettingsButton": "Slēpt iestatījumus",
+      "settingsHeading": "Transkribētāja iestatījumi"
+    }
   }
 }

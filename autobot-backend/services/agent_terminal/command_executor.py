@@ -6,53 +6,33 @@
 Agent Terminal Command Executor
 
 Handles command execution in PTY with intelligent polling and cancellation.
+
+A command runs in the session's own shell and completes when its UUID exit-code
+marker appears in the PTY's transcript (services/pty_command.py, #17074). It
+used to poll chat history for ``sender == "terminal"``, while agent output is
+saved as ``agent_terminal`` and only after the command returns: every command
+waited out its timeout, and the exit-code marker written afterwards landed in
+a shell recreated after the kill, reporting ``EXIT_CODE: 0`` for a command that
+never finished. A command that times out is now cancelled and reported as timed
+out, and nothing more is written to its PTY.
 """
 
 import asyncio
-import re
-import time
-import uuid
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
+from services import pty_command
+from services.pty_command import TIMED_OUT_RETURN_CODE, TRUNCATED_NOTE  # noqa: F401 -- part of this module's contract
 from type_defs.common import Metadata
-from utils.encoding_utils import strip_ansi_codes
 
 from .models import AgentTerminalSession
 
 logger = get_logger(__name__)
 
-# Issue #380: Module-level tuple for error detection patterns
-_ERROR_PATTERNS = (
-    r"command not found",
-    r"permission denied",
-    r"no such file or directory",
-    r"cannot access",
-    r"error:",
-    r"fatal:",
-    r"failed",
-)
-
-
-def _extract_terminal_output(messages: list) -> str:
-    """Extract most recent terminal output from messages (Issue #315: extracted).
-
-    Returns:
-        Cleaned output string or empty string if none found
-    """
-    for msg in reversed(messages):
-        if msg.get("sender") != "terminal" or not msg.get("text"):
-            continue
-        terminal_text = msg["text"]
-        clean_output = strip_ansi_codes(terminal_text)
-
-        # Extract output (skip command echo)
-        lines = clean_output.split("\n")
-        if len(lines) > 1:
-            return "\n".join(lines[1:]).strip()
-        return ""
-    return ""
+#: Seconds an agent command may run before it is cancelled and reported as timed out (#17074).
+AGENT_COMMAND_TIMEOUT_S = env_int("AUTOBOT_AGENT_COMMAND_TIMEOUT_S", 30)
 
 
 class CommandExecutor:
@@ -63,7 +43,7 @@ class CommandExecutor:
         Initialize command executor.
 
         Args:
-            chat_history_manager: ChatHistoryManager instance for output polling
+            chat_history_manager: ChatHistoryManager instance for cancellation notices
         """
         self.chat_history_manager = chat_history_manager
 
@@ -158,6 +138,26 @@ class CommandExecutor:
         logger.info(f"[CANCEL] ✅ Command cancellation complete for " f"session {session.session_id}")
         return True
 
+    def _live_pty(self, session: AgentTerminalSession):
+        """The session's PTY, recreated if stale (e.g. after a backend restart); None if unavailable."""
+        if not session.pty_session_id:
+            logger.warning("No PTY session ID available for writing")
+            return None
+        from services.simple_pty import simple_pty_manager
+
+        pty = simple_pty_manager.get_session(session.pty_session_id)
+        if pty and pty.is_alive():
+            return pty
+        logger.warning(
+            f"[PTY_WRITE] PTY session {session.pty_session_id} not alive (exists={pty is not None}), recreating..."
+        )
+        new_pty = simple_pty_manager.create_session(session.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT))
+        if not new_pty:
+            logger.error(f"Failed to recreate PTY session {session.pty_session_id}")
+            return None
+        logger.info("Recreated PTY session %s", session.pty_session_id)
+        return new_pty
+
     def _write_to_pty(self, session: AgentTerminalSession, text: str) -> bool:
         """
         Write text to PTY terminal display.
@@ -170,46 +170,14 @@ class CommandExecutor:
         Returns:
             True if written successfully
         """
-        logger.info(
-            f"[PTY_WRITE] Called for session {session.session_id}, "
-            f"pty_session_id={session.pty_session_id}, text_len={len(text)}"
-        )
-
-        if not session.pty_session_id:
-            logger.warning("No PTY session ID available for writing")
-            return False
-
         try:
-            from services.simple_pty import simple_pty_manager
-
-            pty = simple_pty_manager.get_session(session.pty_session_id)
-            logger.info(
-                f"[PTY_WRITE] Got PTY session: {pty is not None}, " f"alive: {pty.is_alive() if pty else 'N/A'}"
-            )
-
-            # If PTY is not alive, recreate it (handles stale sessions after restart)
-            if not pty or not pty.is_alive():
-                logger.warning(
-                    f"[PTY_WRITE] PTY session {session.pty_session_id} not alive "
-                    f"(exists={pty is not None}), recreating..."
-                )
-
-                # Create new PTY with same session ID
-                new_pty = simple_pty_manager.create_session(session.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT))
-
-                if new_pty:
-                    logger.info("Recreated PTY session %s", session.pty_session_id)
-                    pty = new_pty
-                else:
-                    logger.error(f"Failed to recreate PTY session {session.pty_session_id}")
-                    return False
-
-            # Write to PTY
+            pty = self._live_pty(session)
+            if pty is None:
+                return False
             success = pty.write_input(text)
             if success:
                 logger.debug("Wrote to PTY %s: %s...", session.pty_session_id, text[:50])
             return success
-
         except Exception as e:
             logger.error("Error writing to PTY: %s", e)
             return False
@@ -258,227 +226,20 @@ class CommandExecutor:
             logger.error("[CANCEL] Error during command cancellation: %s", e, exc_info=True)
             return False
 
-    def _search_for_exit_marker(self, messages: list, marker: str, marker_id: str) -> int | None:
-        """Search messages for exit code marker. (Issue #315 - extracted)"""
-        escaped_marker = re.escape(marker)
-        for msg in reversed(messages):
-            if msg.get("sender") != "terminal" or not msg.get("text"):
-                continue
-            clean_text = strip_ansi_codes(msg["text"])
-            match = re.search(rf"{escaped_marker}(\d+)", clean_text)
-            if match:
-                return_code = int(match.group(1))
-                logger.info(f"[PTY_EXEC] Detected return code: {return_code} " f"(marker: {marker_id})")
-                return return_code
-        return None
-
-    async def _detect_return_code(self, session: AgentTerminalSession, max_attempts: int = 10) -> int | None:
+    async def _handle_poll_timeout(self, session: AgentTerminalSession, elapsed: float) -> None:
         """
-        Detect command return code using exit code marker injection.
-
-        SECURITY FIX (Critical #2): Uses UUID-based marker to prevent regex injection.
-        Phase 1 Implementation: Injects unique marker and polls chat history with
-        exponential backoff to detect the exit code.
-
-        Args:
-            session: Agent terminal session
-            max_attempts: Maximum polling attempts (default: 10)
-
-        Returns:
-            Return code if detected, None if detection failed
-        """
-        if not self.chat_history_manager:
-            return None
-
-        logger.debug("[PTY_EXEC] Injecting exit code marker...")
-
-        # SECURITY FIX (Critical #2): Generate unique UUID-based marker to prevent spoofing
-        # Attack vector fixed: `echo "EXIT_CODE:0" && malicious_command` can no longer fake success
-        marker_id = str(uuid.uuid4())
-        marker = f"__EXIT_CODE_{marker_id}__:"
-
-        # Inject marker to capture exit code
-        marker_cmd = f"echo '{marker}'$?"
-        if not self._write_to_pty(session, f"{marker_cmd}\n"):
-            logger.warning("[PTY_EXEC] Failed to inject exit code marker")
-            return None
-
-        logger.debug("[PTY_EXEC] Injected unique marker: %s", marker)
-
-        # Poll with exponential backoff
-        base_delay = TimingConstants.MICRO_DELAY  # Start with 100ms
-        for attempt in range(max_attempts):
-            await asyncio.sleep(base_delay * (1.5**attempt))  # Exponential backoff
-
-            if not session.conversation_id:
-                continue
-
-            try:
-                messages = await self.chat_history_manager.get_session_messages(
-                    session_id=session.conversation_id, limit=3
-                )
-                # Use helper to search for marker (Issue #315)
-                result = self._search_for_exit_marker(messages, marker, marker_id)
-                if result is not None:
-                    return result
-            except Exception as e:
-                logger.warning(f"[PTY_EXEC] Error detecting return code " f"(attempt {attempt + 1}): {e}")
-
-        # Fallback: Analyze error patterns
-        logger.debug("[PTY_EXEC] Marker detection failed, falling back to error pattern analysis")
-        return await self._analyze_error_patterns(session)
-
-    def _check_error_patterns_in_text(self, clean_text: str, error_patterns: list) -> bool:
-        """Check if text contains any error patterns. (Issue #315 - extracted)"""
-        for pattern in error_patterns:
-            if re.search(pattern, clean_text):
-                logger.debug("[PTY_EXEC] Error pattern detected: %s", pattern)
-                return True
-        return False
-
-    async def _analyze_error_patterns(self, session: AgentTerminalSession) -> int:
-        """
-        Fallback return code detection via error pattern analysis.
-
-        Analyzes recent terminal output for common error indicators when
-        exit code marker detection fails.
-
-        Args:
-            session: Agent terminal session
-
-        Returns:
-            Return code estimate (0 = success, 1 = error)
-        """
-        if not self.chat_history_manager:
-            return 0
-
-        # Issue #380: use module-level constant
-        try:
-            if not session.conversation_id:
-                return 0  # Assume success if no conversation
-
-            messages = await self.chat_history_manager.get_session_messages(session_id=session.conversation_id, limit=5)
-
-            for msg in reversed(messages):
-                if msg.get("sender") != "terminal" or not msg.get("text"):
-                    continue
-                clean_text = strip_ansi_codes(msg["text"]).lower()
-                # Use helper to check patterns (Issue #315, #380: use module constant)
-                if self._check_error_patterns_in_text(clean_text, _ERROR_PATTERNS):
-                    return 1  # Error detected
-
-        except Exception as e:
-            logger.warning("[PTY_EXEC] Error pattern analysis failed: %s", e)
-
-        return 0  # Assume success if no errors detected
-
-    async def _poll_for_current_output(self, session: AgentTerminalSession) -> str:
-        """
-        Poll chat history for current terminal output (Issue #665: extracted helper).
-
-        Args:
-            session: Agent terminal session
-
-        Returns:
-            Current terminal output or empty string
-        """
-        if not session.conversation_id or not self.chat_history_manager:
-            return ""
-
-        try:
-            messages = await self.chat_history_manager.get_session_messages(session_id=session.conversation_id, limit=5)
-            return _extract_terminal_output(messages)
-        except Exception as e:
-            logger.warning("[PTY_EXEC] Polling error: %s", e)
-            return ""
-
-    async def _handle_poll_timeout(self, session: AgentTerminalSession, elapsed: float, last_output: str) -> str:
-        """
-        Handle polling timeout with command cancellation (Issue #665: extracted helper).
+        Cancel a command that outran its timeout (Issue #665: extracted helper).
 
         CRITICAL FIX (Critical #3): Cancels command to prevent orphaned processes.
-
-        Args:
-            session: Agent terminal session
-            elapsed: Elapsed time in seconds
-            last_output: Last captured output
-
-        Returns:
-            Last captured output
+        Nothing else is written to the PTY afterwards (#17074).
         """
         logger.warning(
             f"[PTY_EXEC] Polling timeout reached ({elapsed:.2f}s), " f"cancelling command to prevent orphaned processes"
         )
-
-        cancelled = await self.cancel_command(session, reason="timeout")
-        if cancelled:
+        if await self.cancel_command(session, reason="timeout"):
             logger.info("[PTY_EXEC] Successfully cancelled command after timeout")
         else:
             logger.error("[PTY_EXEC] Failed to cancel command after timeout - " "may have orphaned process")
-
-        return last_output
-
-    async def _intelligent_poll_output(
-        self,
-        session: AgentTerminalSession,
-        timeout: float = 30.0,
-        stability_threshold: float = 0.5,
-    ) -> str:
-        """
-        Intelligent polling system with adaptive timeouts and output stability detection.
-
-        Issue #665: Refactored to use extracted helpers for polling and timeout handling.
-
-        CRITICAL FIX (Critical #3): Cancels command on timeout to prevent orphaned processes.
-        Phase 2 Implementation: Polls chat history with progressive backoff until
-        output stabilizes (unchanged for stability_threshold seconds) or timeout.
-
-        Args:
-            session: Agent terminal session
-            timeout: Maximum wait time in seconds (default: 30s)
-            stability_threshold: Seconds of unchanged output to consider stable (default: 0.5s)
-
-        Returns:
-            Collected output from chat history
-        """
-        if not self.chat_history_manager:
-            return ""
-
-        start_time = time.time()
-        last_output = ""
-        last_change_time = start_time
-        poll_interval = 0.1  # Start with 100ms
-        max_interval = 2.0  # Cap at 2 seconds
-
-        logger.debug(
-            f"[PTY_EXEC] Starting intelligent polling " f"(timeout={timeout}s, stability={stability_threshold}s)"
-        )
-
-        while (time.time() - start_time) < timeout:
-            # Poll for current output (Issue #665: uses helper)
-            current_output = await self._poll_for_current_output(session)
-
-            # Check output stability
-            if current_output and current_output == last_output:
-                stable_duration = time.time() - last_change_time
-                if stable_duration >= stability_threshold:
-                    logger.info(
-                        f"[PTY_EXEC] Output stabilized after {stable_duration:.2f}s, "
-                        f"total elapsed: {time.time() - start_time:.2f}s"
-                    )
-                    return current_output
-            elif current_output != last_output:
-                last_output = current_output
-                last_change_time = time.time()
-                poll_interval = 0.1  # Reset interval on new output
-
-            # Progressive backoff
-            await asyncio.sleep(poll_interval)
-            poll_interval = min(poll_interval * 1.5, max_interval)
-
-        # Timeout reached - handle with cancellation (Issue #665: uses helper)
-        elapsed = time.time() - start_time
-        return await self._handle_poll_timeout(session, elapsed, last_output)
 
     def _build_pty_error_result(self, error_msg: str) -> Metadata:
         """
@@ -519,68 +280,52 @@ class CommandExecutor:
             "return_code": return_code,
         }
 
-    async def _poll_and_detect_return_code(self, session: AgentTerminalSession, timeout: float) -> tuple[str, int]:
-        """
-        Poll for command output and detect return code.
+    def _build_pty_timeout_result(self, output: str, timeout: float) -> Metadata:
+        """A command cancelled on timeout: never a success, and no exit code was read (#17074)."""
+        return {
+            "status": "timeout",
+            "stdout": output,
+            "stderr": f"Command timed out after {timeout:g}s and was cancelled",
+            "return_code": TIMED_OUT_RETURN_CODE,
+        }
 
-        Issue #665: Extracted from execute_in_pty to reduce function length.
-        Implements the pub/sub pattern via chat history to avoid race conditions.
-
-        Args:
-            session: Agent terminal session
-            timeout: Max seconds to wait for output
-
-        Returns:
-            Tuple of (full_output, return_code)
-        """
-        # Phase 2: Intelligent polling with adaptive timeouts
-        logger.info(f"[PTY_EXEC] Starting intelligent polling (timeout={timeout}s) " f"for command completion...")
-
-        full_output = await self._intelligent_poll_output(
-            session=session,
-            timeout=timeout,
-            stability_threshold=0.5,  # 500ms stability threshold
-        )
-
-        # Phase 1: Detect return code with retry logic
-        return_code = await self._detect_return_code(
-            session=session,
-            max_attempts=10,
-        )
-
-        # If detection failed, default to 0 (success) or analyze errors
-        if return_code is None:
-            logger.warning("[PTY_EXEC] Return code detection failed, using fallback")
-            return_code = 0 if full_output else 1
-
-        logger.info(
-            f"[PTY_EXEC] Command execution complete. "
-            f"Return code: {return_code}, Output length: {len(full_output)} chars"
-        )
-
-        return full_output, return_code
-
-    async def execute_in_pty(self, session: AgentTerminalSession, command: str, timeout: float = 30.0) -> Metadata:
+    async def execute_in_pty(
+        self, session: AgentTerminalSession, command: str, timeout: float | None = None
+    ) -> Metadata:
         """
         Execute command directly in PTY shell (true collaboration mode).
-
-        Issue #665: Refactored to use helper methods for result building.
 
         Args:
             session: Agent terminal session
             command: Command to execute
-            timeout: Max seconds to wait for output (default: 30s)
+            timeout: Max seconds to wait (default: AUTOBOT_AGENT_COMMAND_TIMEOUT_S)
 
         Returns:
             Dict with status, stdout, stderr, return_code
         """
+        timeout = AGENT_COMMAND_TIMEOUT_S if timeout is None else timeout
         logger.info("[PTY_EXEC] Executing in PTY: %s", command)
 
-        # Write command to PTY (shell will execute it)
-        if not self._write_to_pty(session, f"{command}\n"):
+        marker = pty_command.new_marker()
+        try:
+            pty = self._live_pty(session)
+        except Exception as e:
+            logger.error("Error preparing PTY: %s", e)
+            pty = None
+        start = pty.transcript_position() if pty else 0
+        if pty is None or not pty.write_input(pty_command.typed_input(command, marker)):
             return self._build_pty_error_result("Failed to write command to PTY")
 
-        # Poll for output and detect return code (Issue #665: extracted)
-        full_output, return_code = await self._poll_and_detect_return_code(session, timeout)
-
-        return self._build_pty_result(full_output, return_code)
+        return_code, timed_out = await pty_command.await_exit_code(
+            pty, start, marker, timeout, on_timeout=lambda: self._handle_poll_timeout(session, timeout)
+        )
+        output = pty_command.output_since(pty, start, command, marker)
+        if timed_out:
+            return self._build_pty_timeout_result(output, timeout)
+        if return_code is None:
+            return {
+                **self._build_pty_error_result("The shell ended before the command reported an exit code"),
+                "stdout": output,
+            }
+        logger.info(f"[PTY_EXEC] Command complete. Return code: {return_code}, output: {len(output)} chars")
+        return self._build_pty_result(output, return_code)

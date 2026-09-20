@@ -18,6 +18,7 @@ repeated here; where the two disagree, **this file wins**.
 | Need a service, port, or architecture fact | [`AUTOBOT_REFERENCE.md`](docs/developer/AUTOBOT_REFERENCE.md) |
 | Adding an event type, WebSocket route, bus, or session state | [`EVENT_STATE_DOCTRINE.md`](docs/developer/EVENT_STATE_DOCTRINE.md) |
 | Reviewing or changing path validation, session ownership, plugin loading, or secrets | [`THREAT_MODEL.md`](docs/developer/THREAT_MODEL.md) |
+| Adding or bumping a HuggingFace `from_pretrained` call site | [`MODEL_REVISION_PINNING.md`](docs/developer/MODEL_REVISION_PINNING.md) |
 | Claiming a work scope, adding a lock/lease, or any "which agent owns this" state | [`AGENT_COORDINATION.md`](docs/developer/AGENT_COORDINATION.md) |
 | Deviating from a standard pattern on purpose | [`ARCHITECTURE_EXCEPTIONS.md`](docs/developer/ARCHITECTURE_EXCEPTIONS.md) |
 | Adding a ratchet, changing its detector or matcher, or freezing/regenerating a baseline | [`RATCHET_BASELINES.md`](docs/developer/RATCHET_BASELINES.md) |
@@ -48,8 +49,9 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 - **No agent cleans up data or credentials on its own.** Deleting, rewriting or rotating stored data or credentials is only *proposed* by an agent. A human approves it through an always-available review queue (the approval gates), it is never auto-approved, and it always leaves a durable paper trail — [#17038](https://github.com/mrveiss/AutoBot-AI/issues/17038).
 - **Security reviews are findings-first** — one-line verdict, then a severity/`file:line`/issue/fix table, within 3 tool calls. Verify *after*; never explore before the verdict lands. Skill: `secreview`.
 - **Nothing internal in outward artifacts** — no IPs, hostnames, secrets, tokens, or internal filesystem paths in issues, PRs, comments or logs. Redact to a generic role or node reference.
-- **Dispatch gates on review capacity, not PR count.** There is no open-PR limit; every PR still gets a `code-reviewer` pass before merge. PRs accumulating means review is the bottleneck — do that, don't defer new work.
+- **Open-PR cap:** `AUTOBOT_OPEN_PR_CAP` (default 40), enforced at pre-push for new branches — at the cap, finish, merge, or close before starting new work; every PR still gets a `code-reviewer` pass before merge.
 - **Batch same-scope issues into one PR by default** — one CI suite per batch, not per issue. Each issue must still be *fully* delivered; partial delivery never closes. Independent or different-risk changes get separate PRs, as does anything too large for one honest review pass. Write **one `Closes #N` per line** — `Closes #A, #B` links only #A.
+- **Finish what you started — append before you open** (owner rule 2026-09-19). Before opening a new PR, check for an open PR the change can be appended to (same scope, risk, owner) and append; fix and land existing PRs before opening new ones; finish started issues before starting new ones.
 - **Issues touching the same file go in ONE PR, solved by ONE agent** (owner rule 2026-09-18). Hub files — registries, ratchet baselines, `.secrets.baseline`, `.github/`, `CLAUDE.md` — are exempt; one agent may split sequentially, the next PR opening after the previous merges. Check the open PRs touching a file before editing it.
 - **A pushed PR ends the tick — never wait on its CI.** Pushing is the sweep point: check every *other* in-flight PR once (approval gate, CI verdict, behind-ness), act on what is green or red, then start the next non-colliding scoped issue immediately. The PR just pushed is re-checked at the next sweep, never polled.
 

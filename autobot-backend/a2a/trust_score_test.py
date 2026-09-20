@@ -165,29 +165,26 @@ class TestTrustLevelMapping:
 
 
 class TestCapabilityMatrix:
-    def test_untrusted_has_only_discovery(self):
+    def test_untrusted_has_no_capability(self):
         caps = get_capabilities(TrustLevel.UNTRUSTED)
-        assert caps == {Capability.DISCOVERY}
+        assert caps == set()
 
-    def test_limited_has_discovery_and_tasks(self):
+    def test_limited_has_tasks(self):
         caps = get_capabilities(TrustLevel.LIMITED)
-        assert Capability.DISCOVERY in caps
         assert Capability.SUBMIT_TASKS in caps
         assert Capability.QUERY_MEMORY not in caps
 
     def test_standard_has_memory(self):
         caps = get_capabilities(TrustLevel.STANDARD)
         assert Capability.QUERY_MEMORY in caps
-        assert Capability.DEFINE_AGENTS not in caps
 
     def test_trusted_has_all_capabilities(self):
         caps = get_capabilities(TrustLevel.TRUSTED)
-        assert caps == {
-            Capability.DISCOVERY,
-            Capability.SUBMIT_TASKS,
-            Capability.QUERY_MEMORY,
-            Capability.DEFINE_AGENTS,
-        }
+        assert caps == set(Capability)
+
+    def test_define_agents_is_gone_with_no_operation_behind_it(self):
+        """#16957: a capability no route or code path gates claims a control that does not exist."""
+        assert "define_agents" not in {c.value for c in Capability}
 
     def test_has_capability_positive(self):
         assert has_capability(TrustLevel.STANDARD, Capability.SUBMIT_TASKS)
@@ -288,8 +285,11 @@ class TestRequireCapability:
 
     def test_no_raise_for_allowed_capability(self, tmp_path):
         mgr = _manager_no_redis(tmp_path)
-        # UNTRUSTED can do discovery
-        mgr.require_capability("new-peer", Capability.DISCOVERY)  # must not raise
+        peer = "ltd-peer"
+        for _ in range(PROMOTION_WINDOW):
+            mgr.record_success(peer)
+        assert mgr.get_trust_level(peer) != TrustLevel.UNTRUSTED
+        mgr.require_capability(peer, Capability.SUBMIT_TASKS)  # must not raise
 
     def test_standard_peer_can_query_memory(self, tmp_path):
         mgr = _manager_no_redis(tmp_path)
