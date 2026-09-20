@@ -65,6 +65,7 @@ finally:
 
 is_shallow_repository = _gs.is_shallow_repository
 ensure_full_history = _gs.ensure_full_history
+ShallowCheck = _gs.ShallowCheck
 
 _GIT_ENV = {
     **scrubbed_git_env(),
@@ -110,7 +111,7 @@ async def test_is_shallow_repository_true_for_a_shallow_clone(tmp_path) -> None:
     _shallow_clone(origin, clone)
 
     with _real_git():
-        assert await is_shallow_repository(str(clone)) is True
+        assert await is_shallow_repository(str(clone)) is ShallowCheck.SHALLOW
 
 
 async def test_is_shallow_repository_false_for_an_ordinary_repo(tmp_path) -> None:
@@ -119,7 +120,18 @@ async def test_is_shallow_repository_false_for_an_ordinary_repo(tmp_path) -> Non
     _commit_all(repo, "seed")
 
     with _real_git():
-        assert await is_shallow_repository(str(repo)) is False
+        assert await is_shallow_repository(str(repo)) is ShallowCheck.FULL
+
+
+async def test_is_shallow_repository_is_unknown_for_a_path_that_is_not_a_git_repo(tmp_path) -> None:
+    """#17118: a broken repo_root must read as UNKNOWN, never as FULL --
+    `rev-parse --is-shallow-repository` fails (rc != 0, no true/false line)
+    against a plain directory with no `.git` at all."""
+    not_a_repo = tmp_path / "not-a-repo"
+    not_a_repo.mkdir()
+
+    with _real_git():
+        assert await is_shallow_repository(str(not_a_repo)) is ShallowCheck.UNKNOWN
 
 
 async def test_ensure_full_history_unshallows_a_shallow_clone(tmp_path) -> None:
@@ -133,13 +145,13 @@ async def test_ensure_full_history_unshallows_a_shallow_clone(tmp_path) -> None:
     _shallow_clone(origin, clone)
 
     with _real_git():
-        assert await is_shallow_repository(str(clone)) is True
+        assert await is_shallow_repository(str(clone)) is ShallowCheck.SHALLOW
 
         ok, message = await ensure_full_history(str(clone))
 
         assert ok is True
         assert "unshallow" in message.lower()
-        assert await is_shallow_repository(str(clone)) is False
+        assert await is_shallow_repository(str(clone)) is ShallowCheck.FULL
 
     # Full history really did arrive, not just the shallow flag flipping.
     log = subprocess.run(
@@ -178,3 +190,25 @@ async def test_ensure_full_history_surfaces_failure_instead_of_swallowing_it(tmp
 
     assert ok is False
     assert "unshallow" in message.lower()
+
+
+async def test_ensure_full_history_fails_loudly_on_an_undeterminable_repo_root(tmp_path) -> None:
+    """#17118: the actual live bug. Before this fix, `is_shallow_repository`
+    returned False for ANY `rev-parse` failure -- including "this is not a
+    git repository at all" -- and `ensure_full_history` read that False as
+    "already has full history", a false success for a repo_root it never
+    verified. `scripts/sync_deletion_planner.py`'s `ensure-full-history` CLI
+    mode would then exit 0 for a broken checkout, exactly the "empty,
+    error-free" failure mode #16310 was filed to remove.
+
+    Without the fix, this fails: ok is True and the message claims full
+    history for a path with no `.git` at all.
+    """
+    broken = tmp_path / "not-a-repo"
+    broken.mkdir()
+
+    with _real_git():
+        ok, message = await ensure_full_history(str(broken))
+
+    assert ok is False
+    assert "could not determine" in message.lower()

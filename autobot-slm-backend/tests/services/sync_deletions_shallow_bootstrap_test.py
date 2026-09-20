@@ -148,6 +148,24 @@ async def test_bootstrap_refuses_to_run_on_a_shallow_clone(tmp_path) -> None:
     assert "shallow" in plan.error.lower()
 
 
+async def test_bootstrap_refuses_to_run_when_shallowness_cannot_be_determined(tmp_path) -> None:
+    """#17118: the guard must ALSO refuse when `is_shallow_repository` cannot
+    tell (UNKNOWN), not only when it confirms SHALLOW. Before the tri-state
+    fix, `rev-parse --is-shallow-repository` failing against a repo_root
+    that is not a git repository at all read as False -- "not shallow" --
+    and this guard let the bootstrap plan proceed against a checkout it
+    never actually verified."""
+    not_a_repo = tmp_path / "not-a-repo"
+    not_a_repo.mkdir()
+
+    with _real_git():
+        plan = await compute_bootstrap_plan(str(not_a_repo), str(not_a_repo), "HEAD", present_paths=["gone.py"])
+
+    assert plan.delete == [], "a refused plan must not also claim something is safe to delete"
+    assert plan.error, "an undeterminable clone depth must fail loudly, not silently plan an empty bootstrap"
+    assert "undeterminable" in plan.error.lower()
+
+
 async def test_bootstrap_runs_normally_on_the_same_history_once_unshallowed(tmp_path) -> None:
     """Control: the SAME clone, made full-depth, plans correctly -- proves the
     refusal above is really about shallowness, not something else about a
