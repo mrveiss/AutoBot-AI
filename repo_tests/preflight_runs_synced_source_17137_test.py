@@ -29,8 +29,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-PLAYBOOK_DIR = REPO_ROOT / "autobot-slm-backend" / "ansible" / "playbooks"
+from repo_tests._paths import repo_root
+
+PLAYBOOK_DIR = repo_root() / "autobot-slm-backend" / "ansible" / "playbooks"
 
 #: The three plays that carry pre-flight tasks (#16310, #17137).
 _PLAYBOOKS = (
