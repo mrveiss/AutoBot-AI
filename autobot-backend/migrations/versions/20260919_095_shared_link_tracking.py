@@ -36,7 +36,7 @@ _TABLE = "chat_shared_links"
 def upgrade() -> None:
     if not has_column(_TABLE, "view_count"):
         op.add_column(
-            _TABLE,
+            "chat_shared_links",
             sa.Column(
                 "view_count",
                 sa.Integer(),
@@ -47,7 +47,7 @@ def upgrade() -> None:
         )
     if not has_column(_TABLE, "last_accessed_at"):
         op.add_column(
-            _TABLE,
+            "chat_shared_links",
             sa.Column(
                 "last_accessed_at",
                 sa.DateTime(timezone=True),
@@ -57,7 +57,7 @@ def upgrade() -> None:
         )
     if not has_column(_TABLE, "require_login"):
         op.add_column(
-            _TABLE,
+            "chat_shared_links",
             sa.Column(
                 "require_login",
                 sa.Boolean(),

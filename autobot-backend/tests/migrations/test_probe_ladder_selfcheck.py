@@ -58,9 +58,13 @@ def test_create_table_calls_are_all_literal():
     stamp below it and crash the subsequent upgrade with DuplicateTable.
     create_table is therefore strictly literal-only.
 
-    add_column may use helpers (e.g. 011's _add_timestamp_columns), but then
-    the revision must still be observable through other artifacts — otherwise
-    the bracket widens silently.
+    add_column may use helpers (e.g. 011's _add_timestamp_columns) for the
+    COLUMN name, but its TABLE name (first positional arg) must still be a
+    literal for the ladder to see it at all -- a `_TABLE` module constant
+    there is invisible to it (#17125), even though the same constant is fine
+    in has_column/has_table/drop_column guard calls elsewhere in the same
+    revision. Short of that, the revision must still be observable through
+    other artifacts — otherwise the bracket widens silently.
     """
     script = _script_directory()
     artifacts = extract_artifacts(script)
@@ -76,7 +80,12 @@ def test_create_table_calls_are_all_literal():
             assert observable, (
                 f"{path.name}: add_column calls the ladder cannot extract AND "
                 "no other artifact makes this revision observable — use "
-                "literal names or add a structural marker"
+                "literal names or add a structural marker. The extractor "
+                "requires op.add_column's FIRST argument to be a string "
+                'literal (ast.Constant): a `_TABLE = "..."` module constant '
+                "passed there is invisible to it, even though the same "
+                "`_TABLE` is fine in has_column/has_table/drop_column guard "
+                "calls, which this test does not check (#17125)"
             )
 
 
@@ -149,7 +158,10 @@ def test_observability_coverage():
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "
-        "add a structural marker or consciously extend the allowlist"
+        "add a structural marker or consciously extend the allowlist. If "
+        "this revision's add_column calls pass the table name as a `_TABLE` "
+        "variable rather than the literal string, that is almost always the "
+        "cause (#17125) — see test_create_table_calls_are_all_literal"
     )
 
 
