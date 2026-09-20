@@ -67,3 +67,27 @@ def safe_error_response(
         safe_msg = "Internal server error" if not context else f"Error {context}"
 
     return {"detail": safe_msg, "status_code": status_code}
+
+
+def safe_error_reason(exc: BaseException) -> str:
+    """A short, logical failure reason -- never a host, port or path an exception's own text may carry (#17065).
+
+    For a field the caller embeds in its own response shape (an
+    ``error_message``, a ``ProviderStatus.error``), rather than the full
+    ``{"detail", "status_code"}`` boundary response ``safe_error_response``
+    above returns.
+
+    ``OSError.strerror`` is the OS's message alone, set whenever the OS
+    itself raised it (as ``shutil.rmtree`` does) -- ``str(exc)`` on that same
+    exception additionally appends ``.filename``, which is exactly the path
+    to keep out. When ``.strerror`` is unset (a hand-raised, message-only
+    ``OSError``, never the OS's own), ``str(exc)`` IS just that message, with
+    no filename to have appended. Anything that isn't an ``OSError`` at all
+    (a Redis client's own exception, for one) falls back to its class name,
+    since its message text cannot be trusted the same way. The full
+    exception, path and all, stays in the caller's own log -- this function
+    never logs anything itself, unlike ``safe_error_response``.
+    """
+    if isinstance(exc, OSError):
+        return exc.strerror or str(exc)
+    return exc.__class__.__name__
