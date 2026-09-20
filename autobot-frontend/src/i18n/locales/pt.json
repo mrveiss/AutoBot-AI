@@ -7866,6 +7866,7 @@
     "advancedControl": "Controle avançado",
     "adminPricing": "Preços de modelos",
     "adminMcpServers": "Servidores MCP",
+    "adminPermissionScopes": "Escopos de permissão",
     "llcRoles": "Funções"
   },
   "llcCompanyStatus": {
@@ -9119,6 +9120,12 @@
       "deleteTitle": "Excluir servidor MCP",
       "deleteConfirm": "Tem certeza de que deseja excluir",
       "deleteUndone": "Esta ação não pode ser desfeita."
+    },
+    "permissionScopes": {
+      "title": "Escopos de permissão",
+      "subtitle": "Vocabulário detalhado de permissões e pacotes de escopo para chaves de API",
+      "comingSoonTitle": "Chegará em uma versão posterior",
+      "comingSoonMessage": "Escopos de permissão detalhados — um vocabulário de permissões, pacotes de escopo e a aplicação de escopos em chaves de API — não estão disponíveis nesta versão. Esta página permitirá defini-los e atribuí-los assim que forem lançados."
     }
   },
   "components": {

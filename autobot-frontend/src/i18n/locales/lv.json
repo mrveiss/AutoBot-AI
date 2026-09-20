@@ -7866,6 +7866,7 @@
     "advancedControl": "Papildu vadība",
     "adminPricing": "Modeļu cenas",
     "adminMcpServers": "MCP serveri",
+    "adminPermissionScopes": "Atļauju tvērumi",
     "llcRoles": "Lomas"
   },
   "llcCompanyStatus": {
@@ -9119,6 +9120,12 @@
       "deleteTitle": "Dzēst MCP serveri",
       "deleteConfirm": "Vai tiešām vēlaties dzēst",
       "deleteUndone": "Šo darbību nevar atsaukt."
+    },
+    "permissionScopes": {
+      "title": "Atļauju tvērumi",
+      "subtitle": "Detalizēts atļauju vārdu krājums un tvērumu komplekti API atslēgām",
+      "comingSoonTitle": "Būs pieejams nākamajā laidienā",
+      "comingSoonMessage": "Detalizēti atļauju tvērumi — atļauju vārdu krājums, tvērumu komplekti un API atslēgu tvērumu izpilde — šajā laidienā nav pieejami. Šī lapa ļaus tos definēt un piešķirt, tiklīdz tie būs pieejami."
     }
   },
   "components": {

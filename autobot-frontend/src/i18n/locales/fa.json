@@ -200,6 +200,7 @@
     "advancedControl": "کنترل پیشرفته",
     "adminPricing": "قیمت‌گذاری مدل‌ها",
     "adminMcpServers": "سرورهای MCP",
+    "adminPermissionScopes": "دامنه‌های مجوز",
     "llcRoles": "نقش‌ها"
   },
   "llcCompanyStatus": {
@@ -9119,6 +9120,12 @@
       "deleteTitle": "حذف سرور MCP",
       "deleteConfirm": "آیا مطمئن هستید که می‌خواهید حذف کنید",
       "deleteUndone": "این عمل قابل بازگشت نیست."
+    },
+    "permissionScopes": {
+      "title": "دامنه‌های مجوز",
+      "subtitle": "واژگان دقیق مجوز و بسته‌های دامنه برای کلیدهای API",
+      "comingSoonTitle": "به‌زودی در نسخه‌ای بعدی",
+      "comingSoonMessage": "دامنه‌های مجوز دقیق — واژگان مجوز، بسته‌های دامنه و اجرای دامنه کلید API — در این نسخه در دسترس نیستند. این صفحه پس از عرضه، امکان تعریف و تخصیص آن‌ها را فراهم می‌کند."
     }
   },
   "components": {

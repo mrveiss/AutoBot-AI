@@ -7866,6 +7866,7 @@
     "advancedControl": "Erweiterte Steuerung",
     "adminPricing": "Modellpreise",
     "adminMcpServers": "MCP-Server",
+    "adminPermissionScopes": "Berechtigungsbereiche",
     "llcRoles": "Rollen"
   },
   "llcCompanyStatus": {
@@ -9119,6 +9120,12 @@
       "deleteTitle": "MCP-Server löschen",
       "deleteConfirm": "Sind Sie sicher, dass Sie löschen möchten",
       "deleteUndone": "Dies kann nicht rückgängig gemacht werden."
+    },
+    "permissionScopes": {
+      "title": "Berechtigungsbereiche",
+      "subtitle": "Feingranulares Berechtigungsvokabular und Bereichsbündel für API-Schlüssel",
+      "comingSoonTitle": "Kommt in einer späteren Version",
+      "comingSoonMessage": "Feingranulare Berechtigungsbereiche — ein Berechtigungsvokabular, Bereichsbündel und die Durchsetzung von API-Schlüssel-Bereichen — sind in dieser Version nicht verfügbar. Auf dieser Seite können Sie sie definieren und zuweisen, sobald sie verfügbar sind."
     }
   },
   "components": {
