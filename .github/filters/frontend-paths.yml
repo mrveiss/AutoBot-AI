@@ -30,6 +30,13 @@
 # authoritative.
 frontend:
   - 'autobot-frontend/**'
+  # #14786: the shared kit both frontends consume via a `file:` dependency.
+  # It carries its own test suite (libs/autobot-ui/src/**/__tests__/**) that
+  # nothing else runs -- without this line the suite is invisible to CI
+  # entirely (no workflow referenced it at all before #14786 batch 1), so a
+  # kit-only change would take this workflow's REQUIRED context green while
+  # its own tests never executed.
+  - 'libs/autobot-ui/**'
   - '.github/workflows/frontend-test.yml'
   # The shim workflow gates a required context, so editing it must run the real
   # suite for the same reason editing frontend-test.yml does.
