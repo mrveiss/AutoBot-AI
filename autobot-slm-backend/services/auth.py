@@ -31,9 +31,9 @@ import logging
 import os
 import secrets
 from datetime import timedelta
-from typing import Callable
+from typing import Callable, NoReturn
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,7 +46,9 @@ from autobot_shared.user_management.password_epoch import (
 )
 from config import settings
 from models.schemas import TokenResponse, UserCreate, UserResponse
+from services.api_key_audit import AUDIT_UNAVAILABLE_DETAIL, AuditUnavailable, audit_key_request
 from services.api_key_authority import legacy_grace_deadline, permission_allowed, role_for_user
+from services.api_key_routes import mark_key_permission
 from services.token_denylist import is_jti_revoked
 from user_management.models.user import User
 
@@ -384,6 +386,7 @@ async def get_slm_db():
 
 
 async def get_api_key_user(
+    request: Request,
     x_api_key: str = Header(None, alias="X-API-Key"),
     db: AsyncSession = Depends(get_slm_db),
 ) -> dict:
@@ -414,18 +417,11 @@ async def get_api_key_user(
 
     api_key = await api_key_service.validate_key(x_api_key)
     if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired API key",
-            headers={"WWW-Authenticate": "ApiKey"},
-        )
+        await _reject_key(request, x_api_key, "Invalid or expired API key")
 
     user = await _get_user_for_api_key(db, api_key.user_id)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found for API key",
-        )
+        await _reject_key(request, x_api_key, "User not found for API key", api_key_id=str(api_key.id))
 
     # The KEY's authority, not the USER's (#16040).
     #
@@ -450,7 +446,7 @@ async def get_api_key_user(
     # of the #16040 AC2 intersection checks the owner, and the key half checks
     # the scopes. A key made before scopes were enforced keeps its owner's full
     # authority until its grace period ends (AC5), and must then be re-issued.
-    deadline = _legacy_grace_or_401(api_key)
+    deadline = await _legacy_grace_or_401(request, x_api_key, api_key)
     return {
         "sub": user.username,
         "role": role_for_user(user.is_platform_admin).value,
@@ -461,7 +457,29 @@ async def get_api_key_user(
     }
 
 
-def _legacy_grace_or_401(api_key):
+async def _audit_or_503(request: Request, **row) -> None:
+    """Write the key request's audit row (#16294), or answer 503: an unaudited key request never proceeds."""
+    try:
+        await audit_key_request(request, **row)
+    except AuditUnavailable:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=AUDIT_UNAVAILABLE_DETAIL)
+
+
+async def _reject_key(request: Request, presented: str, reason: str, api_key_id: str | None = None) -> NoReturn:
+    """Audit a rejected key (#16294), then answer 401."""
+    await _audit_or_503(
+        request,
+        action="api_key_rejected",
+        allowed=False,
+        status=401,
+        presented_key=presented,
+        api_key_id=api_key_id,
+        reason=reason,
+    )
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=reason, headers={"WWW-Authenticate": "ApiKey"})
+
+
+async def _legacy_grace_or_401(request: Request, presented: str, api_key):
     """Return a pre-enforcement key's grace deadline, or None for a scoped key (#16040 AC5).
 
     A key inside its grace period is warned about on every use. A key whose
@@ -472,10 +490,11 @@ def _legacy_grace_or_401(api_key):
     if deadline is None:
         return None
     if now_utc() >= deadline:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="This API key predates scope enforcement and its grace period has ended; re-issue it",
-            headers={"WWW-Authenticate": "ApiKey"},
+        await _reject_key(
+            request,
+            presented,
+            "This API key predates scope enforcement and its grace period has ended; re-issue it",
+            api_key_id=str(api_key.id),
         )
     logger.warning(
         "API key %s predates scope enforcement: it keeps its owner's full authority until %s; re-issue it",
@@ -489,14 +508,26 @@ def require_key_permission(permission: Permission) -> Callable:
     """Like ``require_permission``, for a route that authenticates by API key (#16040 AC4).
 
     The key's authority is its owner's role intersected with its scope bundle.
-    A key lacking the scope gets 403, not 401. No production route uses this
-    yet: which routes accept keys is #16294's decision.
+    A key lacking the scope gets 403, not 401. Depending on this is what puts a
+    route on the key allow-list (``services/api_key_routes.py``, #16294), which
+    ships empty. Every decision is audited as a key request.
     """
 
-    async def _check(current_user: dict = Depends(get_api_key_user)) -> dict:
+    async def _check(request: Request, current_user: dict = Depends(get_api_key_user)) -> dict:
+        allowed = permission_allowed(current_user, permission)
+        await _audit_or_503(
+            request,
+            action="api_key_request" if allowed else "api_key_refused_scope",
+            allowed=allowed,
+            status=200 if allowed else 403,
+            presented_key=request.headers.get("X-API-Key"),
+            api_key_id=current_user.get("api_key_id"),
+            username=current_user.get("sub"),
+            permission=permission.value,
+        )
         return _require_permission_or_403(current_user, permission)
 
-    return _check
+    return mark_key_permission(_check, permission)
 
 
 async def _get_user_for_api_key(db: AsyncSession, user_id):

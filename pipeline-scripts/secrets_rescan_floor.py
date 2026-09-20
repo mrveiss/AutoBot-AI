@@ -39,13 +39,14 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-#: Measured 2026-09-11: the committed baseline held 1,331 findings in 284 files,
-#: written by detect-secrets 1.5.0 over every tracked file. The floor sits 31
-#: below, so a rescan that loses more than that is a narrowed scan, not a cleaner
-#: tree. Lower it only in the change that removes baseline entries; raise it as
-#: audited entries accumulate. repo_tests/no_tracked_key_material_test.py holds it
-#: at or under the committed count and within a fixed headroom of it.
-FLOOR = 1_300
+#: Measured 2026-09-20 (#17134): the committed baseline holds 1,414 findings,
+#: up from the 1,331 measured 2026-09-11 as the security train's audited entries
+#: accumulated. The floor sits 31 below, the same margin as that first pinning,
+#: so a rescan that loses more than that is a narrowed scan, not a cleaner tree.
+#: Lower it only in the change that removes baseline entries; raise it as audited
+#: entries accumulate. repo_tests/no_tracked_key_material_test.py holds it at or
+#: under the committed count and within a fixed headroom of it.
+FLOOR = 1_383
 
 
 def count_findings(baseline: object) -> int:

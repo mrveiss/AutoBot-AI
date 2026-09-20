@@ -1321,19 +1321,12 @@ class ToolHandlerMixin:
     def _init_terminal_tool(self):
         """Initialize terminal tool for command execution."""
         try:
-            import api.agent_terminal as agent_terminal_api
+            from api.agent_terminal_access import ensure_agent_terminal_service
             from tools.terminal_tool import TerminalTool
 
-            # CRITICAL: Access the global singleton instance directly
-            # This ensures sessions created here are visible to the approval API
-            if agent_terminal_api._agent_terminal_service_instance is None:
-                from services.agent_terminal import AgentTerminalService
-
-                # Pass self to prevent circular initialization loop
-                agent_terminal_api._agent_terminal_service_instance = AgentTerminalService(chat_workflow_manager=self)
-                logger.info("Initialized global AgentTerminalService singleton")
-
-            agent_service = agent_terminal_api._agent_terminal_service_instance
+            # CRITICAL: the one singleton, so sessions created here are visible to the
+            # approval API. Passing self prevents a circular initialization loop.
+            agent_service = ensure_agent_terminal_service(chat_workflow_manager=self)
             self.terminal_tool = TerminalTool(agent_terminal_service=agent_service)
             logger.info("Terminal tool initialized successfully with singleton service")
         except Exception as e:
@@ -2378,7 +2371,6 @@ class ToolHandlerMixin:
         agent_type = params.get("agent_type", "research_agent")
         engine = params.get("engine", "claude_code")
         depth = int(ctx_dict.get("delegation_depth", 0))
-        parent_agent_id = ctx.agent_context.agent_id if ctx and ctx.agent_context else None
         from chat_workflow.session_role import DEFAULT_AUTH_ROLE  # noqa: PLC0415
 
         try:
@@ -2387,8 +2379,8 @@ class ToolHandlerMixin:
                 agent_type=agent_type,
                 depth=depth,
                 engine=engine,
-                parent_agent_id=parent_agent_id,
                 auth_role=ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE,
+                parent=ctx,  # #16950: the child inherits the parent's authority
             )
             execution_results.append(
                 {

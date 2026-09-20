@@ -23,6 +23,7 @@ conflict when their rows sort next to each other.
 | Name | Component | Type | Default | Description |
 |---|---|---|---|---|
 | `AUTOBOT_A2A_CAPABILITY_TTL` | a2a | int | `300` | How long a fetched remote A2A capability descriptor is cached before the next check re-fetches it. Raising it reduces repeated cross-agent capability lookups; lowering it makes a capability change on the remote side (e.g. a tool removed) visible sooner (a2a/capability_verifier.py). |
+| `AUTOBOT_AGENT_COMMAND_TIMEOUT_S` | agents | int | `30` | Seconds an agent-terminal command may run before it is cancelled and reported as timed out (#17074). A command that finishes sooner returns as soon as its exit code appears, so this bounds only long or stuck commands. Raising it lets long builds finish; lowering it cancels them sooner (services/agent_terminal/command_executor.py). Range: 1–3600. |
 | `AUTOBOT_AGENT_COMM_INBOX_MAX_LENGTH` | agents | int | `1000` | Most messages an agent's Redis peer inbox holds, and most inbound messages waiting in memory for a handler slot. Beyond it the oldest (inbox) or newest (in memory) are dropped and logged, so a flood cannot grow either without bound (protocols/agent_channels.py, #16986). |
 | `AUTOBOT_AGENT_COMM_INBOX_TTL_SECONDS` | agents | int | `3600` | Seconds an agent's Redis peer inbox survives after its last write, so an inbox whose owner never returns is reclaimed (protocols/agent_channels.py, #16986). |
 | `AUTOBOT_AGENT_COMM_MAX_INFLIGHT_HANDLERS` | agents | int | `32` | Most inbound peer messages one agent handles at once. More wait in a bounded backlog; a reply to the agent's own request is never held behind them (protocols/agent_communication.py, #16986). |
@@ -154,6 +155,7 @@ conflict when their rows sort next to each other.
 | `AUTOBOT_OTEL_PROTOCOL` | otel | str | `'grpc'` | OTLP export protocol: 'grpc' or 'http/protobuf'. |
 | `AUTOBOT_OTEL_SAMPLE_RATE` | otel | float | `0.1` | Fraction of traces to sample (0.0–1.0). Range: 0.0–1.0. |
 | `AUTOBOT_OTEL_SERVICE_VERSION` | otel | str | `'1.5.0'` | Service version tag attached to all OTel spans. |
+| `AUTOBOT_OVERSEER_COMMAND_TIMEOUT_S` | agents | int | `60` | Seconds an overseer step command may run in the user's terminal before it is interrupted and reported as timed out (#17078). A step that finishes sooner returns as soon as its exit code appears (agents/overseer/step_executor_agent.py). Range: 1–3600. |
 | `AUTOBOT_OWNERSHIP_BLAME_TIMEOUT_SECONDS` | backend | float | `10.0` | Seconds a single `git blame` may take during ownership analysis. Must stay below the whole-analysis budget, which a previous 30s value exceeded (#13602). |
 | `AUTOBOT_OWNERSHIP_BUDGET_SECONDS` | backend | float | `20.0` | Total seconds ownership analysis may spend blaming files before it returns what it has (#13602). |
 | `AUTOBOT_OWNERSHIP_MAX_FILES` | backend | int | `2000` | How many files ownership analysis will blame. Paired with the time budget because a file count alone is the wrong bound — file size dominates blame cost (#13602). |

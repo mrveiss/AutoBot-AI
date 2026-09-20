@@ -403,6 +403,11 @@ _REAL_SERVICE_MODULES = (
     # (stdlib + autobot_shared), so its co-located test exercises the real
     # decision without importing services/auth.py.
     "api_key_authority",
+    # #16294: the key allow-list (a route walk) and the key-request audit writer.
+    # services/auth.py imports both at load time, and the route-level key tests
+    # load services/auth.py for real (tests/api/_real_auth_import.py).
+    "api_key_routes",
+    "api_key_audit",
     # #16281: its co-located test drives the real publish/retract logic.
     "node_gpu",
     # #16712: reconciler.py imports this at module scope; its co-located test

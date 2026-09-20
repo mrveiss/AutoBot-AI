@@ -120,10 +120,17 @@ class CodeEmbeddingGenerator:
         def _load_sync():
             from transformers import AutoModel, AutoTokenizer
 
-            # HuggingFace model loaded by name; revision pinning managed operationally.
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)  # nosec B615
-            # HuggingFace model loaded by name; revision pinning managed operationally.
-            self.model = AutoModel.from_pretrained(self.model_name)  # nosec B615
+            from autobot_shared.pinned_model_registry import get_pinned_revision, verify_cached_model
+
+            # #13034: pinned to an exact, integrity-verified revision instead of the
+            # mutable default branch -- see autobot_shared/pinned_model_registry.py.
+            # self.model_name is always "microsoft/codebert-base" (__init__ takes no
+            # parameters); a future caller-selectable model_name would need its own
+            # registry entry before this call site could stay pinned.
+            revision = get_pinned_revision(self.model_name)
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, revision=revision)
+            self.model = AutoModel.from_pretrained(self.model_name, revision=revision)
+            verify_cached_model(self.model_name)
 
             if self.npu_available:
                 self._convert_to_openvino()

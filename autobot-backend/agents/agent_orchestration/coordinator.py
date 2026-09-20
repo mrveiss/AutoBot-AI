@@ -14,7 +14,7 @@ legacy agent routing and distributed agent communication protocols.
 
 import logging
 import uuid
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -32,6 +32,9 @@ from .types import (
     DEFAULT_AGENT_CAPABILITIES,
     DistributedAgentInfo,
 )
+
+if TYPE_CHECKING:
+    from security.authority import Authority
 
 logger = get_logger(__name__)
 
@@ -231,6 +234,7 @@ class DistributedAgentCoordinator:
         context: Dict[str, Any] | None,
         chat_history: List[Dict[str, Any]] | None,
         preferred_agents: List[str] | None,
+        authority: "Authority | None" = None,
     ) -> Dict[str, Any] | None:
         """
         Attempt to process request with distributed agents.
@@ -250,7 +254,7 @@ class DistributedAgentCoordinator:
             return None
         try:
             return await self._executor.process_with_distributed_agents(
-                request, context, chat_history, preferred_agents
+                request, context, chat_history, preferred_agents, authority
             )
         except Exception as e:
             logger.warning("Distributed processing failed: %s, falling back to legacy", e)
@@ -298,6 +302,7 @@ class DistributedAgentCoordinator:
         context: Dict[str, Any] | None = None,
         chat_history: List[Dict[str, Any]] | None = None,
         preferred_agents: List[str] | None = None,
+        authority: "Authority | None" = None,
     ) -> Dict[str, Any]:
         """
         Enhanced request processing supporting both legacy and distributed agents.
@@ -309,6 +314,9 @@ class DistributedAgentCoordinator:
             context: Optional context information
             chat_history: Optional chat history for context
             preferred_agents: Optional list of preferred agents to use
+            authority: The originator's authority (#16957), e.g. an A2A peer's
+                capabilities. None is an internal caller. An agent the originator
+                may not reach is refused before it runs.
 
         Returns:
             Dict containing response and routing information
@@ -318,14 +326,14 @@ class DistributedAgentCoordinator:
 
             # Try distributed agents first if available and running
             distributed_result = await self._try_distributed_processing(
-                request, context, chat_history, preferred_agents
+                request, context, chat_history, preferred_agents, authority
             )
             if distributed_result is not None:
                 return distributed_result
 
             # Fallback to legacy agent processing
             if LEGACY_AGENTS_AVAILABLE:
-                return await self._executor.process_with_legacy_agents(request, context, chat_history)
+                return await self._executor.process_with_legacy_agents(request, context, chat_history, authority)
             return self._build_no_agents_response()
 
         except Exception as e:

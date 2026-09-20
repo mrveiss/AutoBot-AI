@@ -966,8 +966,7 @@ const onCommandCommented = async (commentData: { command: string; comment: strin
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          approved: false,  // Deny the command
-          user_id: 'web_user',
+          approved: false,  // Deny the command; the server records the signed-in caller (#17052)
           comment: commentData.comment || commentData  // User's alternative suggestion
         })
       })

@@ -230,9 +230,10 @@ async def test_delegation_still_accepts_an_unregistered_agent_type(monkeypatch):
 
     seen = {}
 
-    async def _fake_engine(task, agent_type, depth, auth_role):
+    async def _fake_engine(task, agent_type, depth, auth_role, inherited):
         # #13821: engines take the delegating session's authenticated role as a
-        # 4th argument, so a subagent runs as the user who asked for it.
+        # 4th argument, so a subagent runs as the user who asked for it; #16950
+        # adds the parent's inheritance as a 5th.
         seen.update(task=task, agent_type=agent_type, depth=depth, auth_role=auth_role)
         return "ok"
 

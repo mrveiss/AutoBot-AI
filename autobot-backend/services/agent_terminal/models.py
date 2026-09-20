@@ -49,6 +49,9 @@ class AgentTerminalSession:
     pending_approval: Metadata | None = None
     metadata: Metadata = field(default_factory=dict)
     pty_session_id: str | None = None  # PTY session for terminal display
+    # #17053: the verified creator's username, stamped at creation. None means no
+    # recorded owner (created before 2026-09-18, or rebuilt, #13478): admin-only.
+    owner: str | None = None
     running_command_task: asyncio.Task | None = None  # Track running command for cancellation
 
     # === Issue #372: Feature Envy Reduction Methods ===
@@ -293,4 +296,5 @@ class AgentTerminalSession:
             "metadata": self.metadata,
             "pty_session_id": self.pty_session_id,  # CRITICAL: Store PTY session ID
             "pending_approval": self.pending_approval,  # CRITICAL: Persist pending approvals
+            "owner": self.owner,  # #17053: survives a reload, or the owner is locked out
         }
