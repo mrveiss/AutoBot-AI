@@ -47,15 +47,15 @@ def _make_approval(
     a = MagicMock()
     a.id = uuid.uuid4()
     a.company_id = uuid.uuid4()
-    a.type = approval_type.value
+    a.approval_type = approval_type.value
     a.status = status.value
-    a.requested_by_agent_id = uuid.uuid4()
-    a.decided_by_agent_id = uuid.uuid4()
+    a.requested_by_agent = str(uuid.uuid4())
+    a.decided_by_user = str(uuid.uuid4())
     a.decided_at = datetime.now(timezone.utc)
-    payload: Dict[str, Any] = {}
+    context: Dict[str, Any] = {}
     if decision_note:
-        payload["decision_note"] = decision_note
-    a.payload = payload
+        context["decision_note"] = decision_note
+    a.context = context
     return a
 
 
@@ -100,9 +100,9 @@ def _make_kb(client: MagicMock) -> MagicMock:
 def test_compose_document_includes_all_fields() -> None:
     approval = _make_approval(decision_note="Good strategic fit")
     doc = _compose_document(approval)
-    assert approval.type in doc
+    assert approval.approval_type in doc
     assert approval.status in doc
-    assert str(approval.requested_by_agent_id) in doc
+    assert approval.requested_by_agent in doc
     assert "Good strategic fit" in doc
 
 
@@ -141,7 +141,7 @@ async def test_write_indexes_resolved_approval() -> None:
     call_kwargs = collection.add.call_args[1]
     assert f"decision:{approval.id}" in call_kwargs["ids"]
     assert call_kwargs["metadatas"][0]["decision"] == approval.status
-    assert call_kwargs["metadatas"][0]["approval_type"] == approval.type
+    assert call_kwargs["metadatas"][0]["approval_type"] == approval.approval_type
 
 
 @pytest.mark.asyncio
