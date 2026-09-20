@@ -11,9 +11,9 @@ Model sizes are the part worth being honest about. Four of the six tiers were
 measured directly on a dev host (#15495's own sizing reference). The other
 two -- INSTRUCTION_MODEL and SYSTEM_MODEL -- were declared required but
 absent from that host, so their sizes below are read from the Ollama
-library's published default-quantization size instead of guessed:
-https://ollama.com/library/mistral:7b-instruct (4.4 GB, Q4_K_M, 2026-09-20)
-and https://ollama.com/library/dolphin-llama3:8b (4.7 GB, Q4_0, 2026-09-20).
+library's published default-quantization sizes instead of guessed: 4.4 GB
+(Q4_K_M) for the instruction tier and 4.7 GB (Q4_0) for the system tier,
+both read 2026-09-20.
 """
 
 from __future__ import annotations
