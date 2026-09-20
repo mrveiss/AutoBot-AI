@@ -99,7 +99,15 @@ _BASELINES = {
         # and `interface LDAPLoginResponse` (useSsoApi.ts); both are now derived
         # from `components['schemas'][...]`. Lowered in the same commit as the
         # work, per this module's docstring: an unrecorded shrink is a failure.
-        "responses": 29,
+        # #17040: 29 -> 34. Five new hand-typed response interfaces in
+        # useAutobotApi.ts for the Data Hygiene page's new endpoints
+        # (OrphanStorageListResponse, ApprovalGateResponse, OrphanListResponse,
+        # OrphanRepairResponse, AuditQueryResponse) -- these endpoints have no
+        # existing entry in the generated OpenAPI contract to derive from yet,
+        # so hand-typing them is the real, deliberate cost of shipping the page,
+        # not an unrecorded regression. Re-measured on this merged tree, not
+        # assumed from the PR description.
+        "responses": 34,
         "inline_generics": 87,
     },
 }
