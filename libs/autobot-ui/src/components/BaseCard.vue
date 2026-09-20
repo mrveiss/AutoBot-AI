@@ -24,7 +24,7 @@ withDefaults(
     <header v-if="$slots.header" class="aui-card__header">
       <slot name="header" />
     </header>
-    <div :class="['aui-card__body', { 'aui-card__body--flush': flush }]">
+    <div :class="['aui-card__body']">
       <slot />
     </div>
     <footer v-if="$slots.footer" class="aui-card__footer">
