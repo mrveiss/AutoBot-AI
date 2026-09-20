@@ -188,3 +188,68 @@ def test_no_unlisted_publisher_exists() -> None:
         + "\n  ".join(sorted(unlisted))
         + "\n\nRegister them, or add them to _NOT_PUBLISHERS with the reason."
     )
+
+
+#: The one override value the user-frontend path uses (#15603). Anything
+#: else -- including a typo of it -- must fail loudly rather than silently
+#: changing which vite mode an actual deploy runs.
+_KNOWN_BUILD_SCRIPT_OVERRIDE = "build"
+
+_INCLUDE_TASKS_RE = re.compile(r"include_tasks:\s*\S*build_publish_slm_frontend\.yml\s*$")
+_BUILD_SCRIPT_OVERRIDE_RE = re.compile(r'slm_frontend_publish_build_script:\s*"([^"]*)"')
+
+
+def _build_script_overrides() -> Dict[str, List[str]]:
+    """path (relative to REPO_ROOT) -> the override found at each
+    include_tasks call site of build_publish_slm_frontend.yml, in file
+    order. "" means that call site includes the task with no override --
+    the SLM path, defaulting to build:slm (the "builds with build:slm"
+    clause above).
+    """
+    overrides: Dict[str, List[str]] = {}
+    for path in sorted((REPO_ROOT / "autobot-slm-backend" / "ansible").rglob("*.yml")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            if not _INCLUDE_TASKS_RE.search(line):
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            # vars:/when:/tags: are SIBLING keys of include_tasks: (both
+            # direct children of the same task-item mapping), not nested
+            # under it, so they sit at the SAME indent -- only a `- ` list
+            # marker at or below the *task item's own* indent (2 less, the
+            # `- name:` line) starts the next task and ends this one.
+            task_indent = max(indent - 2, 0)
+            override = ""
+            for follow in lines[i + 1 :]:
+                follow_indent = len(follow) - len(follow.lstrip(" "))
+                stripped = follow.lstrip(" ")
+                if follow.strip() and follow_indent <= task_indent and stripped.startswith("-"):
+                    break
+                if follow.strip() and follow_indent < task_indent:
+                    break
+                match = _BUILD_SCRIPT_OVERRIDE_RE.search(follow)
+                if match:
+                    override = match.group(1)
+                    break
+            overrides.setdefault(str(path.relative_to(REPO_ROOT)), []).append(override)
+    return overrides
+
+
+def test_no_build_publish_slm_frontend_caller_overrides_away_from_a_known_script():
+    """#17133 review: the shared task's build:slm default only protects the
+    SLM UI's API base if every call site either leaves
+    slm_frontend_publish_build_script unset (the SLM path) or sets it to
+    exactly "build" (the user-frontend path, #15603) -- anything else would
+    silently change which vite mode an actual deploy runs, the exact class
+    of defect relaxing the "builds with build:slm" clause's ansible pattern
+    to accept the templated form could otherwise hide.
+    """
+    overrides = _build_script_overrides()
+    all_values = [v for values in overrides.values() for v in values]
+    assert any(v == "" for v in all_values), "no unset (SLM-path) call site found -- the scan itself is broken"
+    assert any(
+        v == _KNOWN_BUILD_SCRIPT_OVERRIDE for v in all_values
+    ), "no user-frontend override found -- the scan itself is broken"
+
+    bad = {path: values for path, values in overrides.items() if any(v not in ("", "build") for v in values)}
+    assert not bad, f"unexpected slm_frontend_publish_build_script override(s), expected '' or 'build': {bad}"

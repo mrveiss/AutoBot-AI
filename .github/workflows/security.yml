@@ -378,8 +378,11 @@ jobs:
 
     # GATES (#13543). Backlog measured at 0 findings at every severity, running
     # `bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/`
-    # — the exact invocation below — immediately before the gate was armed, so
-    # arming it broke no open pull request and needed no triage campaign.
+    # — immediately before the gate was armed, so arming it broke no open pull
+    # request and needed no triage campaign. Widened to include
+    # autobot-npu-worker/ (#17087): that tree shipped 3 unpinned
+    # `from_pretrained()` call sites invisible to this gate until now, found
+    # only by a manual local `bandit -r autobot-npu-worker/` run.
     #
     # A new finding here is a real one. Fix it, or suppress it at the call site
     # with a specific-ID `# nosec` and a stated reason, which is the convention
@@ -389,7 +392,7 @@ jobs:
         set -euo pipefail
         # `|| true` on the SCANNER only — bandit exits non-zero when it finds
         # anything, and the gate below is what turns that into a verdict.
-        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f json -o bandit-report.json || true
+        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ autobot-npu-worker/ -f json -o bandit-report.json || true
         python3 pipeline-scripts/security_scan_gate.py \
           --format bandit \
           --report bandit-report.json \

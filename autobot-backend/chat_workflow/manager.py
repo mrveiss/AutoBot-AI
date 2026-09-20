@@ -317,11 +317,10 @@ class ChatWorkflowManager(
         self.redis_client = None  # Main database connection
         self.conversation_history_ttl = TTL_24_HOURS
         self.transcript_dir = "data/conversation_transcripts"  # Long-term file storage
+        self._active_streams = 0  # #16947 busy signal: incremented for process_message_stream's span
 
-        # Error boundary manager for enhanced error tracking
         self.error_manager = get_error_boundary_manager()
 
-        # Terminal tool integration
         self.terminal_tool = None
         self._init_terminal_tool()
 
@@ -468,7 +467,6 @@ class ChatWorkflowManager(
         planning_start = positions["planning_start"]
         planning_end = positions["planning_end"]
 
-        # Check thought block status
         if thought_start >= 0:
             if thought_end > thought_start:
                 # Block is closed - check for planning after
@@ -478,7 +476,6 @@ class ChatWorkflowManager(
             else:
                 return "thought"
 
-        # Check planning block status
         if planning_start >= 0:
             if planning_end > planning_start:
                 return "response"
@@ -649,29 +646,23 @@ class ChatWorkflowManager(
         For opening tags (thought/planning), find content after [TYPE].
         For closing tags (response after thought/planning), find content after [/TYPE].
         """
-        # Opening tags for entering a block
         opening_tag_map = {
             "thought": r"\[THOUGHT\]",
             "planning": r"\[PLANNING\]",
         }
 
-        # Closing tags for exiting a block
         closing_tag_map = {
             "thought": r"\[/THOUGHT\]",
             "planning": r"\[/PLANNING\]",
         }
 
-        # Determine which tag to look for
         if new_type in opening_tag_map:
-            # Entering a thought/planning block
             pattern = opening_tag_map[new_type]
         elif new_type == "response" and previous_type in closing_tag_map:
-            # Exiting a thought/planning block back to response
             pattern = closing_tag_map[previous_type]
         else:
             return ""
 
-        # Find the last occurrence of the complete tag
         match = None
         for m in re.finditer(pattern, llm_response, re.IGNORECASE):
             match = m
@@ -3864,16 +3855,24 @@ before summarizing.
         # GH#11186: apply the trusted per-session role once here, so both the graph
         # and legacy paths carry the governed identity into the tool seam.
         context = await self._apply_session_role(session_id, context, auth_role)
+        self._active_streams += 1
         try:
-            async for msg in self._process_via_graph(session_id, message, context):
-                yield msg
-        except Exception as graph_err:
-            logger.warning(
-                "LangGraph flow failed, falling back to legacy: %s",
-                graph_err,
-            )
-            async for msg in self._process_message_stream_legacy(session_id, message, context):
-                yield msg
+            try:
+                async for msg in self._process_via_graph(session_id, message, context):
+                    yield msg
+            except Exception as graph_err:
+                logger.warning(
+                    "LangGraph flow failed, falling back to legacy: %s",
+                    graph_err,
+                )
+                async for msg in self._process_message_stream_legacy(session_id, message, context):
+                    yield msg
+        finally:
+            self._active_streams -= 1
+
+    def is_processing(self) -> bool:
+        """True while any process_message_stream call is in flight (#16947 busy signal)."""
+        return self._active_streams > 0
 
     async def _process_via_graph(
         self,

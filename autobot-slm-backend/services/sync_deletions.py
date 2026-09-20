@@ -34,6 +34,18 @@ Never reads or writes ``.deployed_commit`` -- that remains
 ``_get_slm_deployed_commit()``'s C4 self-update skip-gate (#12202), and a
 read-only bootstrap of it (when this module's own marker is absent) is a
 caller concern, not this module's.
+
+Host evidence, 2026-09-19 (#16310): every marker written before this module's
+shallow-clone guard existed was written while ``code_source`` was shallow, so
+its (empty, error-free) bootstrap never actually enumerated anything, and the
+diff-mode plans that follow can never see further back than that empty
+baseline. Two fixes, both in the caller, not here: (1)
+``services.git_subprocess.ensure_full_history`` unshallows ``code_source``
+before any plan in this module runs; (2) the marker gains a version line
+(``ansible/roles/_shared/tasks/sync_deletions.yml``'s
+``_sd_marker_version``) -- a marker written in the old, unversioned, bare-SHA
+format reads as legacy and forces exactly one bootstrap re-run, against the
+now-unshallowed history, before it is upgraded to the versioned format.
 """
 
 from __future__ import annotations
@@ -43,7 +55,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
-from services.git_subprocess import component_pathspec, run_git
+from services.git_subprocess import component_pathspec, is_shallow_repository, run_git
 from services.host_state_filter import kept_reason
 
 # Plain stdlib logging, deliberately -- see services/git_subprocess.py's
@@ -221,24 +233,6 @@ def _bootstrap_candidates(present_paths: list[str], ever_added: set[str], tracke
     return [rel for rel in present_paths if not _is_artifact_path(rel) and rel in ever_added and rel not in tracked_now]
 
 
-async def _is_shallow_repository(repo_root: str) -> bool:
-    """True when *repo_root* is a shallow git clone (#16310).
-
-    A bootstrap plan computed against a shallow clone is not merely
-    incomplete, it is silently WRONG: :func:`_ever_added_paths` runs
-    ``git log --diff-filter=AR`` over the whole history, and a shallow fetch
-    only kept the one commit ``update-all-nodes.yml``'s pre-flight checkout
-    asked for -- so "ever added" collapses to "added in that one commit",
-    the bootstrap finds almost nothing to delete, and returns a plan with no
-    ``error`` set. Nothing about an empty, error-free plan looks like a
-    problem, so the caller (``ansible/roles/_shared/tasks/sync_deletions.yml``)
-    wrote the marker anyway -- permanently locking the target into diff-mode
-    from a baseline that was missing years of deletions.
-    """
-    output, rc = await run_git(repo_root, "rev-parse", "--is-shallow-repository")
-    return rc == 0 and output.strip() == "true"
-
-
 async def compute_bootstrap_plan(
     source_dir: str, repo_root: str, new_commit: str, present_paths: list[str]
 ) -> DeletionPlan:
@@ -255,9 +249,13 @@ async def compute_bootstrap_plan(
     the marker, so the next run retries once the clone is full-depth --
     the same "fail loudly instead of succeeding empty" contract
     :func:`compute_deletion_plan` already has for an unknown previous
-    commit.
+    commit. This guard should be unreachable in practice now that the
+    caller's pre-flight fetch step calls
+    ``services.git_subprocess.ensure_full_history`` before any component's
+    plan is computed (#16310) -- it stays as defence in depth for a clone
+    this module is handed some other way.
     """
-    if await _is_shallow_repository(repo_root):
+    if await is_shallow_repository(repo_root):
         return DeletionPlan(
             error=(
                 f"{repo_root} is a shallow git clone -- a bootstrap plan computed against it "

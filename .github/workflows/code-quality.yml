@@ -478,7 +478,7 @@ jobs:
 
     - name: Security check with bandit
       run: |
-        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
+        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ autobot-npu-worker/ || {
           echo "⚠️ Security issues detected - review bandit output"
           exit 1
         }

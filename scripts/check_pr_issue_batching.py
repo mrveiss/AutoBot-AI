@@ -21,6 +21,16 @@ uses to decide what counts as an issue reference, so the two gates cannot
 disagree about what a reference is. #16795 split it in two for *this* gate's own
 question: a reference is any of them, but only a closing keyword is a delivered
 issue, and "batched" is a claim about delivery.
+
+#17128: batching moved from a per-PR-authorship rule to a per-landing one. A
+``vehicle-*`` branch now carries several already-approved member PRs into one
+CI run and closes/refs them as carried, so a member PR is single-issue *by
+design* -- the same-issue rule this gate enforces on how a PR is authored no
+longer matches how batching actually happens, and it was failing almost every
+PR. A vehicle (by branch name or by its member table) passes outright. Every
+other single-issue or closes-nothing PR still gets the same guidance it always
+did, but now as a ``::warning::`` annotation rather than a failing exit code --
+a nudge, not a block.
 """
 
 from __future__ import annotations
@@ -250,6 +260,49 @@ def exemption(actor: str, branch: str, title: str) -> str | None:
     return None
 
 
+_VEHICLE_BRANCH_PREFIX = "vehicle-"
+
+
+def is_vehicle(branch: str, body: str) -> bool:
+    """True when *branch* or *body* mark this as a batching vehicle (#17128).
+
+    A vehicle lands several already-approved member PRs in one branch and
+    closes/refs them as carried, so the per-PR single-issue rule does not
+    apply to how it was AUTHORED. The branch-name convention is the primary
+    signal; the member-table check covers a vehicle rebuilt on a
+    differently-named branch. A table header needs a "head" column (the merged
+    SHA) plus a "member" or "pr" column -- the two shapes real vehicles use
+    (``Member | Head | Delivers`` and ``PR | Head | Closes | Title``).
+    """
+    if branch.strip().lower().startswith(_VEHICLE_BRANCH_PREFIX):
+        return True
+    for line in (body or "").splitlines():
+        stripped = line.strip()
+        if not (stripped.startswith("|") and stripped.endswith("|")):
+            continue
+        cells = {cell.strip().lower() for cell in stripped.strip("|").split("|")}
+        if "head" in cells and ("member" in cells or "pr" in cells):
+            return True
+    return False
+
+
+def _vehicle_notice(closing: set[str], referenced: set[str]) -> str:
+    """One-line pass notice for a vehicle PR, naming what it carries (#17128)."""
+    mentioned = referenced - closing
+    closes = f"closes {len(closing)} issue(s)" + (f" ({_render(closing)})" if closing else "")
+    refs = f"refs {len(mentioned)} issue(s)" + (f" ({_render(mentioned)})" if mentioned else "")
+    return f"Vehicle PR: {closes}, {refs}."
+
+
+def warning_annotation(text: str) -> str:
+    """Wrap *text* as a single-line GitHub ``::warning::`` workflow command.
+
+    ``%0A`` keeps a multi-line hint on one line -- the same encoding
+    ``pipeline-scripts/ci_dispatch_watchdog.py`` already uses for ``::error::``.
+    """
+    return "::warning::" + text.replace("\n", "%0A")
+
+
 def check(body: str, actor: str = "", branch: str = "", title: str = "") -> tuple[bool, str]:
     """Return (ok, message) for one pull request.
 
@@ -263,7 +316,15 @@ def check(body: str, actor: str = "", branch: str = "", title: str = "") -> tupl
     sibling test of each changed file (``<file>_test.py``), so editing this
     module runs ``check_pr_issue_batching_test.py`` and never
     ``validate_pr_body_test.py``. CI catches it, after the push.
+
+    #17128: a single-issue or closes-nothing PR no longer fails -- it returns
+    ``True`` with a ``::warning::`` annotation carrying the same guidance this
+    gate always printed. A vehicle (see :func:`is_vehicle`) short-circuits
+    everything else and passes outright, however many issues it closes or refs.
     """
+    if is_vehicle(branch, body):
+        return True, _vehicle_notice(closing_issues(body), referenced_issues(body))
+
     excused = exemption(actor, branch, title)
     if excused is not None:
         return True, f"Batching rule does not apply ({excused})."
@@ -280,7 +341,7 @@ def check(body: str, actor: str = "", branch: str = "", title: str = "") -> tupl
     rationale = single_issue_rationale(body)
     if rationale:
         return True, f"{_scope(closing, referenced)}, rationale given: {rationale}"
-    return False, _rationale_failure(body, closing, referenced)
+    return True, warning_annotation(_rationale_failure(body, closing, referenced))
 
 
 def _scope(closing: set[str], referenced: set[str]) -> str:
@@ -302,7 +363,10 @@ def _render(issues: set[str]) -> str:
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
+    # stdout, not stderr: #17128 added a `::warning::` workflow command to the
+    # passing path, and stdout is the stream GitHub documents for those --
+    # same reasoning as check_pr_template_sections.py's main().
+    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
     ok, message = check(
         os.environ.get("PR_BODY", ""),
         os.environ.get("PR_ACTOR", ""),

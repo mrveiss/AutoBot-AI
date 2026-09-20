@@ -297,6 +297,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/orphan-storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Orphan Storage
+         * @description Every orphan-storage candidate, across every registered detector.
+         *
+         *     ``provider_statuses`` names each detector that failed to run -- an
+         *     outage must read as "could not check", never as "found nothing".
+         */
+        get: operations["list_orphan_storage_api_admin_orphan_storage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/retention-policies": {
         parameters: {
             query?: never;
@@ -17370,6 +17393,35 @@ export interface paths {
          * @description List delegations for an agent as delegator or assignee (#1753).
          */
         get: operations["list_agent_delegations_api_agents__agent_id__delegations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/presence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Agent Presence
+         * @description Every agent visible to the caller: its own tenant's, plus shared.
+         *
+         *     Tenant comes from `require_org_context` -> `get_tenant_context`
+         *     (#10750 A5): an ordinary caller cannot see another tenant's agents by
+         *     passing one in -- a request-supplied org (header/path/query) is only
+         *     honoured after a real membership check, otherwise 403. A **platform
+         *     admin** (`is_platform_admin` or an admin role on the JWT) is the
+         *     documented exception: `get_tenant_context` trusts an admin's
+         *     request-supplied org outright, exactly as every other org-scoped route
+         *     already does -- this route adds no new admin-override path.
+         */
+        get: operations["list_agent_presence_api_agents_presence_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -36678,7 +36730,7 @@ export interface paths {
         put?: never;
         /**
          * Approve Command
-         * @description Approve or deny a pending command execution
+         * @description Approve or deny a pending command execution; a person decides and is recorded (#17052).
          */
         post: operations["approve_command_api_security_approve_command_post"];
         delete?: never;
@@ -47206,6 +47258,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/a2a/trust/grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grant trust to a (credential, peer id) pair
+         * @description Set a pair's trust level (#16950). Audited with the acting admin, the pair and the level.
+         *
+         *     The re-key starts every pair at UNTRUSTED, which cannot submit tasks, so this is
+         *     the only way back in. The level holds as a floor until a threat event or an
+         *     integrity violation revokes it.
+         */
+        post: operations["grant_trust_api_a2a_trust_grant_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/a2a/trust-legacy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pre-#16950 header-only trust records
+         * @description The header-only records kept from before the re-key: never read for access, only to guide re-grants.
+         */
+        get: operations["list_legacy_trust_api_a2a_trust_legacy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/a2a/trust": {
         parameters: {
             query?: never;
@@ -53937,6 +54033,26 @@ export interface components {
             } | null;
             /** Events */
             events: unknown[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * A2ATrustGrantRequest
+         * @description An admin grant of trust to one (credential, peer id) pair -- never to a bare peer id.
+         */
+        A2ATrustGrantRequest: {
+            /**
+             * Subject
+             * @description The verified credential subject presenting the peer id
+             */
+            subject: string;
+            /**
+             * Peer Id
+             * @description The peer's X-A2A-Agent-Id
+             */
+            peer_id: string;
+            /** @description The level to grant, held as a floor until misconduct revokes it */
+            level: components["schemas"]["TrustLevel"];
         } & {
             [key: string]: unknown;
         };
@@ -86277,6 +86393,65 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * OrphanStorageCandidateResponse
+         * @description One orphan-storage candidate. ``location`` is logical -- no host path.
+         */
+        OrphanStorageCandidateResponse: {
+            /** Provider */
+            provider: string;
+            /** Id */
+            id: string;
+            /** Location */
+            location: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Modified At */
+            modified_at: string;
+            /** Reason */
+            reason: string;
+            /** Deletable */
+            deletable: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanStorageListResponse
+         * @description Every candidate across every registered detector, plus totals.
+         *
+         *     ``provider_statuses`` names every detector that ran and whether it
+         *     could actually check -- an outage shows up here, never as an empty
+         *     ``candidates`` list that reads as "nothing found".
+         */
+        OrphanStorageListResponse: {
+            /** Candidates */
+            candidates: components["schemas"]["OrphanStorageCandidateResponse"][];
+            /** Total Count */
+            total_count: number;
+            /** Total Size Bytes */
+            total_size_bytes: number;
+            /** Provider Statuses */
+            provider_statuses: components["schemas"]["OrphanStorageProviderStatusResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanStorageProviderStatusResponse
+         * @description Whether one detector's listing actually ran (#17039 review).
+         *
+         *     ``available=False`` means this provider's candidates could not be
+         *     determined -- never read the response as "this provider has none".
+         */
+        OrphanStorageProviderStatusResponse: {
+            /** Provider */
+            provider: string;
+            /** Available */
+            available: boolean;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * OverseerQueryData
          * @description Response data for POST /overseer/query/{session_id}.
          */
@@ -93066,7 +93241,7 @@ export interface components {
             type: "ssh_key" | "password" | "api_key" | "token" | "oauth_refresh_token" | "connector_oauth_token" | "certificate" | "database_url" | "infrastructure_host" | "other";
             scope: components["schemas"]["ChatSecretScope"];
             /** Value */
-            value: string;
+            value?: string | null;
             /** Chat Id */
             chat_id?: string | null;
             /**
@@ -93102,6 +93277,28 @@ export interface components {
              * @description User IDs to share with
              */
             shared_with?: string[];
+            /**
+             * Visibility
+             * @description A typo here must 422, not silently fall through to the legacy store (#16428 review)
+             */
+            visibility?: ("private" | "shared" | "group" | "organization" | "system") | null;
+            /**
+             * Connector Id
+             * @description Bridge to this connector's ConnectorCredentialStore entry
+             */
+            connector_id?: string | null;
+            /**
+             * Auth Type
+             * @description ConnectorAuth subclass name: BearerAuth, ApiKeyAuth, BasicAuth or OAuthRefreshAuth
+             */
+            auth_type?: string | null;
+            /**
+             * Credentials
+             * @description Sensitive auth fields, validated against auth_type's schema
+             */
+            credentials?: {
+                [key: string]: string;
+            } | null;
         } & {
             [key: string]: unknown;
         };
@@ -93288,6 +93485,13 @@ export interface components {
             /** Metadata */
             metadata?: {
                 [key: string]: unknown;
+            } | null;
+            /**
+             * Credentials
+             * @description New sensitive auth fields, for a bridged secret
+             */
+            credentials?: {
+                [key: string]: string;
             } | null;
         } & {
             [key: string]: unknown;
@@ -98146,7 +98350,7 @@ export interface components {
             approved: boolean;
             /**
              * User Id
-             * @description User who made the decision
+             * @description Ignored (#17052): the approver is the verified caller
              */
             user_id?: string | null;
             /**
@@ -98444,9 +98648,9 @@ export interface components {
         TerminalInterruptRequest: {
             /**
              * User Id
-             * @description User requesting control
+             * @description Ignored (#17052): the actor is the verified caller
              */
-            user_id: string;
+            user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -99454,6 +99658,21 @@ export interface components {
          * @enum {string}
          */
         TriggerType: "webhook" | "cron" | "redis_pubsub" | "file_watch" | "agent_event";
+        /**
+         * TrustLevel
+         * @description Trust level for federated peer evaluation (GH#8957, Issue #7358).
+         *
+         *     Used to determine what capabilities a peer agent can access based on
+         *     continuous trust scoring. Higher levels grant more capabilities.
+         *
+         *     Score ranges:
+         *       UNTRUSTED  (score ≤ 0.30)  — discovery info only
+         *       LIMITED    (0.30–0.60)     — discovery + task submission
+         *       STANDARD   (0.60–0.85)     — + memory/knowledge queries
+         *       TRUSTED    (> 0.85)        — + new agent definitions
+         * @enum {string}
+         */
+        TrustLevel: "UNTRUSTED" | "LIMITED" | "STANDARD" | "TRUSTED";
         /**
          * UIElementResponse
          * @description Response model for UI element
@@ -104637,6 +104856,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_orphan_storage_api_admin_orphan_storage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrphanStorageListResponse"];
                 };
             };
         };
@@ -126860,6 +127099,28 @@ export interface operations {
             };
         };
     };
+    list_agent_presence_api_agents_presence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+    };
     get_claims_api_coordination_claims_get: {
         parameters: {
             query?: {
@@ -139437,7 +139698,10 @@ export interface operations {
     };
     request_host_selection_api_agent_terminal_host_selection_request_post: {
         parameters: {
-            query?: never;
+            query?: {
+                async_client?: boolean;
+                database?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -139728,8 +139992,8 @@ export interface operations {
     };
     execute_agent_command_api_agent_terminal_execute_post: {
         parameters: {
-            query?: {
-                session_id?: string;
+            query: {
+                session_id: string;
                 async_client?: boolean;
                 database?: string;
             };
@@ -139984,7 +140248,10 @@ export interface operations {
     };
     get_command_state_api_agent_terminal_commands__command_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                async_client?: boolean;
+                database?: string;
+            };
             header?: never;
             path: {
                 command_id: string;
@@ -166035,6 +166302,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grant_trust_api_a2a_trust_grant_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["A2ATrustGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_legacy_trust_api_a2a_trust_legacy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
         };

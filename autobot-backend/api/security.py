@@ -27,7 +27,8 @@ from api.schemas_system import (
     URLCheckRequest,
     URLCheckResponse,
 )
-from auth_middleware import check_admin_permission
+from api.user_management.human_decider import require_interactive_human
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security.domain_security import get_domain_security_manager
@@ -70,8 +71,11 @@ async def get_security_status(request: Request):
     operation="approve_command",
     error_code_prefix="SECURITY",
 )
-async def approve_command(request: Request, approval: CommandApprovalRequest):
-    """Approve or deny a pending command execution"""
+async def approve_command(
+    request: Request, approval: CommandApprovalRequest, current_user: dict = Depends(get_current_user)
+):
+    """Approve or deny a pending command execution; a person decides and is recorded (#17052)."""
+    require_interactive_human(current_user, "security approve-command")
     try:
         # Get or initialize security layer
         security_layer = getattr(request.app.state, "security_layer", None)
@@ -80,9 +84,16 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
             request.app.state.security_layer = security_layer
 
         # Approve or deny the command
+        was_pending = approval.command_id in security_layer.pending_approvals
         security_layer.approve_command(approval.command_id, approval.approved)
 
         action = "approved" if approval.approved else "denied"
+        security_layer.audit_log(
+            action="command_approval_decision",
+            user=current_user.get("username"),
+            outcome=action,
+            details={"command_id": approval.command_id, "was_pending": was_pending},
+        )
         message = f"Command {approval.command_id} {action}"
 
         logger.info(message)
