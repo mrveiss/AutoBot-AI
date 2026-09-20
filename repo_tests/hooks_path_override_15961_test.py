@@ -186,10 +186,15 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: #17145 and #17146 were consolidated. Each fit on its own -- #17145 measured 6884
 #: and re-pinned to 6484 for it -- but their added files combine, and the allowance
 #: had one file of headroom. Population minus the unchanged growth allowance.
+#: Re-pinned 6486 -> 6488 (#16843): measured population 6888 after this PR's own 4
+#: new files (services/emergency_stop.py, its _test.py, api/schemas_emergency_stop.py,
+#: tests/api/test_advanced_control_emergency_stop_16843.py) exceeded the declared
+#: allowance (skips=1 + growth=400 = 401) by 1. Population minus the unchanged growth
+#: allowance, same formula as every prior re-pin above.
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6486,
+    floor=6488,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",

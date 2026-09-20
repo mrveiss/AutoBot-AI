@@ -102,10 +102,18 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 #: 'autobot-backend/*.py' | grep -v '_test\.py$' | wc -l`, independently
 #: cross-checked -- a local reach-test pass is not reliable evidence for this
 #: one, per #17072 review). Population minus the unchanged growth allowance.
+#: Re-pinned 2944 -> 2947 (#16843): measured population 3247, direct-called
+#: via `_tracked_backend_python_files(Path.cwd())` rather than through pytest
+#: (same distrust as the #17072 re-pin above) -- this PR's own
+#: api/schemas_emergency_stop.py, services/emergency_stop.py, and
+#: tests/api/test_advanced_control_emergency_stop_16843.py (its name does not
+#: end `_test.py`, so this guard's filter does not exclude it) exceeded the
+#: declared allowance (skips=0 + growth=300 = 300) by 3. Population minus the
+#: unchanged growth allowance.
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2944,
+    floor=2947,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )
