@@ -99,7 +99,12 @@ _BASELINES = {
         # and `interface LDAPLoginResponse` (useSsoApi.ts); both are now derived
         # from `components['schemas'][...]`. Lowered in the same commit as the
         # work, per this module's docstring: an unrecorded shrink is a failure.
-        "responses": 29,
+        # #17040: 29 -> 34. `useAutobotApi.ts` gained 5 hand-typed response
+        # interfaces (OrphanStorageListResponse, ApprovalGateResponse,
+        # OrphanListResponse, OrphanRepairResponse, AuditQueryResponse) for the
+        # Data Hygiene page's new orphan-storage/orphan-repair/audit calls
+        # (#17157). None has a generated contract yet to derive from.
+        "responses": 34,
         "inline_generics": 87,
     },
 }
