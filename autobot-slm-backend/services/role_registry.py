@@ -39,26 +39,14 @@ _SLM_ROLES = [
         "auto_restart": True,
         "health_check_port": 8000,
         "health_check_path": "/api/health",
-        # #16889: routed through the canonical
-        # scripts/build-filtered-requirements.sh rather than a bare
-        # `pip install -r requirements.txt`. #16394 gave this file its own
-        # sibling-relative `-c ../constraints/shared.txt` (#10524), which does
-        # not resolve from the deployed directory, and pip aborts the whole
-        # sync -- the `&&` then silently skips `alembic upgrade head`
-        # (#11069/#14272), same failure mode as the backend/ai-stack roles
-        # above. Same script, so all deploy paths share one implementation
-        # instead of drifting.
+        # #16889: routed through build-filtered-requirements.sh -- same
+        # rationale as the backend role's post_sync_cmd above; a bare
+        # `pip install -r` can't resolve this file's constraints include.
         "post_sync_cmd": (
-            # #14275: venv/bin, not bare. The unit runs
-            # `{{ slm_backend_dir }}/venv/bin/uvicorn`, so a bare `pip`/`alembic`
-            # targets system Python — new code against unchanged dependencies,
-            # and a migration run by a different interpreter than the service.
-            f"cd {_BASE_DIR}/autobot-slm-backend && "
-            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
-            f"requirements.txt {_BASE_DIR}/code_source "
-            "> /tmp/requirements-filtered-slm-backend.txt && "
-            "venv/bin/pip install -r /tmp/requirements-filtered-slm-backend.txt && "
-            "venv/bin/alembic upgrade head"
+            f"cd {_BASE_DIR}/autobot-slm-backend && "  # #14275: venv/bin, not bare (see backend role above)
+            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh requirements.txt "
+            f"{_BASE_DIR}/code_source > /tmp/requirements-filtered-slm-backend.txt && "
+            "venv/bin/pip install -r /tmp/requirements-filtered-slm-backend.txt && venv/bin/alembic upgrade head"
         ),
         "required": True,
         "degraded_without": [],
