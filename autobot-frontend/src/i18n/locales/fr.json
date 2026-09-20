@@ -7860,6 +7860,7 @@
     "advancedControl": "Contrôle avancé",
     "adminPricing": "Tarification des modèles",
     "adminMcpServers": "Serveurs MCP",
+    "adminPermissionScopes": "Portées de permissions",
     "llcRoles": "Rôles"
   },
   "llcCompanyStatus": {
@@ -9113,6 +9114,12 @@
       "deleteTitle": "Supprimer le serveur MCP",
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer",
       "deleteUndone": "Cette action est irréversible."
+    },
+    "permissionScopes": {
+      "title": "Portées de permissions",
+      "subtitle": "Vocabulaire de permissions fin et lots de portées pour les clés API",
+      "comingSoonTitle": "Disponible dans une version ultérieure",
+      "comingSoonMessage": "Les portées de permissions fines — un vocabulaire de permissions, des lots de portées et l'application des portées aux clés API — ne sont pas disponibles dans cette version. Cette page vous permettra de les définir et de les attribuer une fois disponibles."
     }
   },
   "components": {
