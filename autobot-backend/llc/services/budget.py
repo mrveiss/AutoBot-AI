@@ -21,11 +21,12 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.model_pricing import MODEL_PRICING_PER_1M_TOKENS
+from autobot_shared.local_models import is_local_model
 from autobot_shared.redis_client import get_async_redis_client
 from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.exceptions import BudgetExhausted, UnpricedModel
 from llc.models.budget import LLCAgentBudget
+from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_price
 
 from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
 from .base import LLCServiceBase
@@ -121,19 +122,37 @@ class BudgetService(LLCServiceBase):
 
         Returns the dollar cost added this call (always calculated for analytics).
         Raises BudgetExhausted if spending exceeds the active budget mode limit,
-        and UnpricedModel if the model has no entry in the pricing table.
+        and UnpricedModel if the model is neither local nor in the live catalogue.
         """
-        pricing = MODEL_PRICING_PER_1M_TOKENS.get(model)
-        if pricing is None:
-            # #15860: this used to log and charge zero. A cost of 0 and a cost
-            # that could not be computed are the same number, and only one of
-            # them is a fact -- so an unpriced model made dollar budgets
-            # silently inapplicable rather than visibly broken.
-            #
-            # Refusing is safe because the table distinguishes free from
-            # unknown: every local model carries an explicit zero entry.
-            raise UnpricedModel(model=model, agent_id=agent_id)
-        cost = Decimal(str((tokens_in * pricing["input"] + tokens_out * pricing["output"]) / 1_000_000))
+        if is_local_model(model):
+            # #16316: free by construction -- a local model was never going to
+            # appear in a hosted-API price catalogue, and that absence is not
+            # the same fact as "nobody has priced this yet". Checked before the
+            # cache is consulted at all, so a cold or unpopulated snapshot can
+            # never affect a local model's cost.
+            cost = Decimal("0")
+        else:
+            try:
+                pricing = get_cached_price(model)
+            except PricingCacheCold:
+                # #16316: the local mirror has not completed its first read from
+                # Redis yet. "Cannot compute right now" and "genuinely unpriced"
+                # both mean the same thing to a caller -- refuse, do not guess --
+                # so both raise the same exception; only the log line differs,
+                # because this one is transient and the other is not.
+                logger.warning(
+                    "ingest_cost_event: pricing cache cold for model=%r agent=%s -- refusing rather than guessing",
+                    model,
+                    agent_id,
+                )
+                raise UnpricedModel(model=model, agent_id=agent_id) from None
+            if pricing is None:
+                # #15860: this used to log and charge zero. A cost of 0 and a cost
+                # that could not be computed are the same number, and only one of
+                # them is a fact -- so an unpriced model made dollar budgets
+                # silently inapplicable rather than visibly broken.
+                raise UnpricedModel(model=model, agent_id=agent_id)
+            cost = Decimal(str((tokens_in * pricing.input_per_1m + tokens_out * pricing.output_per_1m) / 1_000_000))
 
         total_tokens = tokens_in + tokens_out
 

@@ -2009,16 +2009,10 @@ async def _init_content_reach_registry(app: FastAPI) -> None:
 
 
 async def initialize_background_services(app: FastAPI):
-    """
-    Phase 2: Initialize background services (NON-BLOCKING).
+    """Phase 2: initialize background services (NON-BLOCKING, #281).
 
-    Issue #281: Refactored from 162 lines to use extracted helper methods.
-
-    These services can fail gracefully without preventing app startup.
-    Initialization happens in background while app serves requests.
-
-    Args:
-        app: FastAPI application instance
+    These can fail gracefully without preventing app startup; initialization
+    happens in the background while the app serves requests.
     """
     try:
         await update_app_state_multi(
@@ -2075,6 +2069,9 @@ async def initialize_background_services(app: FastAPI):
         await _start_community_clustering_loop(app)
         await _start_llc_notification_router(app)
         await _init_content_reach_registry(app)
+        from llm_shared.pricing.sync_cache import start_pricing_cache_scheduler  # #16230: no local wrapper needed
+
+        await start_pricing_cache_scheduler(app)
 
         await update_app_state_multi(
             initialization_status="ready",

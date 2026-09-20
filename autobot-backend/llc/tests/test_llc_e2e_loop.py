@@ -66,7 +66,7 @@ from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.tests import _e2e_harness as harness
 from models.agent_org import AgentOrgNode, OrgRole
 
-# A model present in MODEL_PRICING_PER_1M_TOKENS so the cost is non-zero.
+# Priced via the `_seed_pricing_cache` fixture below (#16230) so the cost is non-zero.
 _COST_MODEL = "claude-haiku-4-5-20251001"
 
 
@@ -186,6 +186,32 @@ def _stub_kb_collections():
         patch(f"{target}.archive_collection", new=AsyncMock(return_value="stub:archived")),
     ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def _seed_pricing_cache():
+    """Warm `sync_cache` with a price for `_COST_MODEL` (#16230).
+
+    Pricing used to come from a static table, always present with no setup.
+    It now comes from `llm_shared.pricing.sync_cache`'s in-memory mirror,
+    populated by a background scheduler this minimal-mount test never starts
+    (see the module docstring: no network, no Redis) -- left cold,
+    `ingest_cost_event`'s cost-ingest step would raise `UnpricedModel` instead
+    of recording a real cost, breaking the loop this test exists to prove.
+    Seeded directly the same way the module docstring seeds the DB rows no
+    public endpoint can create, torn back down to cold after each test.
+    """
+    import time
+
+    from llm_shared.pricing import sync_cache
+    from llm_shared.pricing.sources import ModelPricing
+
+    # 0.8/4.0: the same claude-haiku-4-5-20251001 price the old static table
+    # carried, kept so the loop's cost assertion below (0.28) is unchanged.
+    price = ModelPricing(provider="anthropic", model_id=_COST_MODEL, input_per_1m=0.8, output_per_1m=4.0)
+    sync_cache._snapshot = sync_cache._Snapshot(prices={_COST_MODEL: price}, fetched_at=time.monotonic())
+    yield
+    sync_cache._reset_for_tests()
 
 
 # ---------------------------------------------------------------------------

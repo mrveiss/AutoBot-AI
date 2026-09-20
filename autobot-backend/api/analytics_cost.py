@@ -41,9 +41,11 @@ from api.schemas_analytics import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.local_models import LOCAL_MODEL_NAMES
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
-from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
+from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_snapshot
+from services.llm_cost_tracker import get_cost_tracker
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/cost", tags=["analytics", "cost"])
@@ -300,37 +302,56 @@ async def get_model_pricing(
     Returns pricing per 1M tokens for all supported models.
 
     Issue #744: Requires admin authentication.
+    Issue #16230: sourced from the live pricing cache, not a hardcoded table.
     """
+    try:
+        snapshot = get_cached_snapshot()
+    except PricingCacheCold:
+        snapshot = {}
+
     pricing_list = []
 
-    for model, prices in MODEL_PRICING.items():
-        # Cache model.lower() to avoid repeated computation (Issue #323)
-        model_lower = model.lower()
-        # Determine provider from model name
-        if "claude" in model_lower:
-            provider = "anthropic"
-        elif "gpt" in model_lower or model.startswith("o1"):
-            provider = "openai"
-        elif "gemini" in model_lower:
-            provider = "google"
-        else:
-            provider = "local"
-
+    for model, pricing in snapshot.items():
         pricing_list.append(
             {
                 "model": model,
-                "provider": provider,
-                "input_price_per_1m": prices["input"],
-                "output_price_per_1m": prices["output"],
-                "is_free": prices["input"] == 0 and prices["output"] == 0,
+                # `pricing.provider` is stamped by the live source itself
+                # (LiteLLM/OpenRouter) rather than guessed from the model
+                # name -- the old name-substring heuristic only worked
+                # because the static table it read from was a short, fully
+                # enumerated list; the live catalogue is neither.
+                "provider": pricing.provider or "unknown",
+                "input_price_per_1m": pricing.input_per_1m,
+                "output_price_per_1m": pricing.output_per_1m,
+                "is_free": pricing.input_per_1m == 0 and pricing.output_per_1m == 0,
+            }
+        )
+
+    # Local models are never in the live catalogue (#16316) -- free by
+    # construction, not absent because nobody priced them.
+    for model in sorted(LOCAL_MODEL_NAMES):
+        pricing_list.append(
+            {
+                "model": model,
+                "provider": "local",
+                "input_price_per_1m": 0.0,
+                "output_price_per_1m": 0.0,
+                "is_free": True,
             }
         )
 
     # Sort by provider then by price
     pricing_list.sort(key=lambda x: (x["provider"], -x["input_price_per_1m"]))
 
+    # #16233: manufactured freshness is exactly what this replaces a fixed
+    # literal to avoid -- the real freshest `updated_at` the live catalogue
+    # states, or today's date (still true, unlike a frozen literal) when the
+    # cache is cold or every returned entry lacks one.
+    catalogue_dates = [p.updated_at for p in snapshot.values() if p.updated_at is not None]
+    pricing_date = max(catalogue_dates).date().isoformat() if catalogue_dates else now_utc().date().isoformat()
+
     return {
-        "pricing_date": "2025-01-01",
+        "pricing_date": pricing_date,
         "currency": "USD",
         "models": pricing_list,
         "total_models": len(pricing_list),

@@ -92,6 +92,37 @@ class PricingRedisStore:
     async def get(self, provider: str, model_id: str) -> ModelPricing | None:
         return await self._read(_model_key(provider, model_id))
 
+    async def get_all_by_model(self) -> dict[str, ModelPricing]:
+        """Every bare-model-name entry, for `llm_shared.pricing.sync_cache`'s mirror (#16230).
+
+        Deliberately does NOT swallow a Redis-unreachable failure into `{}`
+        the way `get_all_for_provider` does -- that caller reads a provider's
+        prices as one of several signals, tolerating a soft miss. This one
+        feeds a snapshot that must distinguish "reached Redis, genuinely
+        empty" from "could not reach Redis" (#16316's cold-cache rule): the
+        first is a real `{}`, the second must not silently look like one, or
+        a Redis hiccup would empty a process's cache of every real price.
+        Raises so the caller's own tick handler decides what "failed" means.
+        """
+        redis = await self._redis()
+        if redis is None:
+            raise ConnectionError("PricingRedisStore: no Redis client available")
+        pattern = f"{_BY_MODEL_PREFIX}:*"
+        keys = [k async for k in redis.scan_iter(pattern)]
+        if not keys:
+            return {}
+        values = await redis.mget(*keys)
+        result: dict[str, ModelPricing] = {}
+        for raw in values:
+            if raw is None:
+                continue
+            try:
+                pricing = ModelPricing.from_dict(json.loads(raw))
+                result[pricing.model_id.lower()] = pricing
+            except Exception:
+                pass
+        return result
+
     async def get_all_for_provider(self, provider: str) -> dict[str, ModelPricing]:
         try:
             redis = await self._redis()

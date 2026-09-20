@@ -44,6 +44,7 @@ from api.schemas_analytics import (
     PromptCategory,
     UsageRecordRequest,
 )
+from autobot_shared.local_models import is_local_model
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -55,6 +56,7 @@ from constants.model_constants import (
 )
 from constants.threshold_constants import CategoryDefaults
 from constants.ttl_constants import TTL_30_DAYS
+from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_snapshot
 
 # Prefix provided by analytics_routers.py registry (#1032)
 router = APIRouter(tags=["llm-patterns", "analytics"])
@@ -76,9 +78,6 @@ SIMPLE_PROMPT_CATEGORIES = {
     PromptCategory.SUMMARIZATION,
 }
 
-
-# Model costs per 1M tokens (USD) — SSOT is autobot_shared.model_pricing (#3528, #15912).
-from autobot_shared.model_pricing import MODEL_COSTS_PER_1M_TOKENS as MODEL_COSTS  # noqa: E402,F401
 
 # Pattern detection rules for prompt categorization
 PROMPT_PATTERNS = {
@@ -231,23 +230,35 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
         return PromptCategory.UNKNOWN
 
     def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
-        """Calculate cost for a request"""
-        # Find matching model pricing
+        """Calculate cost for a request (#16230: live catalogue, not a hardcoded table)."""
         model_lower = model.lower()
-        pricing = None
 
-        for model_name, costs in MODEL_COSTS.items():
+        if is_local_model(model_lower):
+            return 0.0
+
+        try:
+            snapshot = get_cached_snapshot()
+        except PricingCacheCold:
+            # Analytics estimate, not a billing figure (unlike budget.py) -- an
+            # unreachable/stale cache falls straight to the same "nothing
+            # matched" default below rather than refusing.
+            snapshot = {}
+
+        pricing = None
+        for model_name, costs in snapshot.items():
             if model_name in model_lower or model_lower in model_name:
                 pricing = costs
                 break
 
-        if not pricing:
-            # Default to medium pricing
-            pricing = {"input": 1.0, "output": 5.0}
+        if pricing is not None:
+            input_cost = (input_tokens / 1_000_000) * pricing.input_per_1m
+            output_cost = (output_tokens / 1_000_000) * pricing.output_per_1m
+            return round(input_cost + output_cost, 6)
 
-        input_cost = (input_tokens / 1_000_000) * pricing["input"]
-        output_cost = (output_tokens / 1_000_000) * pricing["output"]
-
+        # Default to medium pricing (#3528) when nothing in the live catalogue
+        # matches -- preserved from the static-table version.
+        input_cost = (input_tokens / 1_000_000) * 1.0
+        output_cost = (output_tokens / 1_000_000) * 5.0
         return round(input_cost + output_cost, 6)
 
     def _get_prompt_preview(self, prompt: str, max_length: int = 100) -> str:

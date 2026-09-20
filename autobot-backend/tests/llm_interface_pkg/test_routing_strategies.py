@@ -19,6 +19,7 @@ from unittest.mock import patch
 
 import pytest
 
+from llm_shared.pricing.sources import ModelPricing
 from llm_shared.tiered_routing.base_strategy import RoutingStrategy
 from llm_shared.tiered_routing.complexity_router import ComplexityRouter
 from llm_shared.tiered_routing.cost_router import CostRouter
@@ -155,12 +156,29 @@ class TestComplexityRouter:
 # ─── CostRouter ──────────────────────────────────────────────────────────────
 
 
+def _patched_prices(prices: dict[str, tuple[float, float]]):
+    """Patch `cost_router`'s live-cache lookup the way these tests used to patch
+    `MODEL_PRICING_PER_1M_TOKENS` directly (#16230).
+
+    `_blended_cost` now calls `get_cached_price`, imported by name into
+    `cost_router`'s module namespace -- that is what a test must patch now;
+    patching `llm_shared.pricing.sync_cache.get_cached_price` would leave
+    `cost_router`'s own already-bound reference untouched. A model absent from
+    *prices* resolves to `None`, matching "not in the pricing table" before.
+    """
+    catalogue = {
+        model: ModelPricing(provider="test", model_id=model, input_per_1m=inp, output_per_1m=out)
+        for model, (inp, out) in prices.items()
+    }
+    return patch(
+        "llm_shared.tiered_routing.cost_router.get_cached_price",
+        side_effect=lambda model: catalogue.get(model),
+    )
+
+
 class TestCostRouter:
     def test_prefers_cheaper_model_for_simple_request(self, config):
-        with patch(
-            "llm_shared.tiered_routing.cost_router.MODEL_PRICING_PER_1M_TOKENS",
-            {"cheap-model": {"input": 0.1, "output": 0.4}, "capable-model": {"input": 3.0, "output": 15.0}},
-        ):
+        with _patched_prices({"cheap-model": (0.1, 0.4), "capable-model": (3.0, 15.0)}):
             router = CostRouter(config)
             model, result = router.route(SIMPLE_MSG)
             assert model == "cheap-model"
@@ -168,38 +186,26 @@ class TestCostRouter:
     def test_trivial_request_still_eligible_for_cheap_model(self, config):
         # Issue #11834: GH#9050's trivial tier must not push the easiest
         # requests to the expensive complex-only candidate set.
-        with patch(
-            "llm_shared.tiered_routing.cost_router.MODEL_PRICING_PER_1M_TOKENS",
-            {"cheap-model": {"input": 0.1, "output": 0.4}, "capable-model": {"input": 3.0, "output": 15.0}},
-        ):
+        with _patched_prices({"cheap-model": (0.1, 0.4), "capable-model": (3.0, 15.0)}):
             router = CostRouter(config)
             model, _ = router.route(TRIVIAL_MSG)
             assert model == "cheap-model"
 
     def test_complex_request_uses_complex_model_regardless_of_cost(self, config):
-        with patch(
-            "llm_shared.tiered_routing.cost_router.MODEL_PRICING_PER_1M_TOKENS",
-            {"cheap-model": {"input": 0.1, "output": 0.4}, "capable-model": {"input": 3.0, "output": 15.0}},
-        ):
+        with _patched_prices({"cheap-model": (0.1, 0.4), "capable-model": (3.0, 15.0)}):
             router = CostRouter(config)
             model, _ = router.route(COMPLEX_MSG)
             assert model == "capable-model"
 
     def test_zero_cost_local_models_return_first_candidate(self, config):
-        with patch(
-            "llm_shared.tiered_routing.cost_router.MODEL_PRICING_PER_1M_TOKENS",
-            {},  # local models not in pricing table → 0.0
-        ):
+        with _patched_prices({}):  # nothing priced → 0.0 for every candidate
             router = CostRouter(config)
             model, _ = router.route(SIMPLE_MSG)
             # falls back to first candidate (simple)
             assert model == "cheap-model"
 
     def test_metrics_include_cost_savings(self, config):
-        with patch(
-            "llm_shared.tiered_routing.cost_router.MODEL_PRICING_PER_1M_TOKENS",
-            {"cheap-model": {"input": 0.1, "output": 0.4}, "capable-model": {"input": 3.0, "output": 15.0}},
-        ):
+        with _patched_prices({"cheap-model": (0.1, 0.4), "capable-model": (3.0, 15.0)}):
             router = CostRouter(config)
             router.route(SIMPLE_MSG)
             metrics = router.get_metrics()
