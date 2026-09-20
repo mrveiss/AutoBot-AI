@@ -21,17 +21,22 @@ import logging
 import os
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict, List, Tuple, Type
-
-import jsonschema
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Type
 
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
 from .hooks import validate_hook_names
 from .registry import get_registry
 
+if TYPE_CHECKING:
+    import jsonschema  # noqa: F401  # forward-ref for string annotations only
+
 logger = logging.getLogger(__name__)
 
-_DRAFT_202012_VALIDATOR = jsonschema.Draft202012Validator
+# #17138: jsonschema is imported lazily, inside the two functions below, not
+# at module level. This module is reached from api/secrets.py's import graph
+# (middleware/__init__.py -> plugin_sdk/__init__.py -> loader.py), so a
+# module-level `import jsonschema` landed on every caller of ANYTHING in
+# `middleware`, whether or not it ever loads or validates a plugin.
 
 
 def _validate_config_schema(plugin_name: str, config_schema: Dict[str, Any]) -> None:
@@ -39,8 +44,10 @@ def _validate_config_schema(plugin_name: str, config_schema: Dict[str, Any]) -> 
 
     Issue #11522 — structural validation at load time.
     """
+    import jsonschema  # noqa: F811
+
     try:
-        _DRAFT_202012_VALIDATOR.check_schema(config_schema)
+        jsonschema.Draft202012Validator.check_schema(config_schema)
     except jsonschema.SchemaError as exc:
         raise PluginLoadError(
             f"Plugin '{plugin_name}': config_schema is not valid JSON Schema " f"(Draft 2020-12): {exc.message}"
@@ -56,7 +63,9 @@ def _validate_config_against_schema(
 
     Issue #11522 — field-level error detail on non-conforming config.
     """
-    validator = _DRAFT_202012_VALIDATOR(config_schema)
+    import jsonschema  # noqa: F811
+
+    validator = jsonschema.Draft202012Validator(config_schema)
     errors = list(validator.iter_errors(config))
     if not errors:
         return
@@ -64,7 +73,7 @@ def _validate_config_against_schema(
     # Value-free, field-level messages: name the field and the violated
     # constraint but never echo the submitted value (#11522 review m-4) —
     # these strings surface in HTTP 422 responses via validate_plugin_config.
-    def _fmt(err: jsonschema.ValidationError) -> str:
+    def _fmt(err: "jsonschema.ValidationError") -> str:
         path = ".".join(str(p) for p in err.path) or "<root>"
         if err.validator == "required":
             # 'required' messages name schema-declared fields, never submitted

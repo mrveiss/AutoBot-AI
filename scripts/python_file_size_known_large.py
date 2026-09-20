@@ -229,11 +229,11 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
     "autobot-backend/knowledge/connectors/base.py": 676,
-    "autobot-backend/knowledge/connectors/credential_store.py": 761,  # #16444 review: rotate() validates the merged bundle
+    "autobot-backend/knowledge/connectors/credential_store.py": 778,  # #16444: rotate() validates the merged bundle
     "autobot-backend/knowledge/connectors/gdrive.py": 702,
     "autobot-backend/knowledge/connectors/gitlab.py": 873,
     "autobot-backend/knowledge/connectors/onedrive.py": 642,
-    "autobot-backend/knowledge/connectors/tests/test_credential_store.py": 1032,
+    "autobot-backend/knowledge/connectors/tests/test_credential_store.py": 1043,
     "autobot-backend/knowledge/facts.py": 1783,
     "autobot-backend/knowledge/ownership.py": 757,
     "autobot-backend/knowledge/pipeline/cognifiers/cognifiers_test.py": 806,
@@ -491,7 +491,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/network_constants.py": 616,
     "autobot_shared/npu/integration.py": 929,
-    "autobot_shared/plugin_sdk/loader.py": 687,
+    "autobot_shared/plugin_sdk/loader.py": 696,
     "autobot_shared/plugin_sdk/plugin_load_visibility_test.py": 750,
     "autobot_shared/plugin_sdk/plugin_sdk_test.py": 941,
     "autobot_shared/rate_limiter_test.py": 618,

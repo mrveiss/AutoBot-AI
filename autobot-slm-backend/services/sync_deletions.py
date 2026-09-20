@@ -55,7 +55,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
-from services.git_subprocess import component_pathspec, is_shallow_repository, run_git
+from services.git_subprocess import ShallowCheck, component_pathspec, is_shallow_repository, run_git
 from services.host_state_filter import kept_reason
 
 # Plain stdlib logging, deliberately -- see services/git_subprocess.py's
@@ -244,9 +244,10 @@ async def compute_bootstrap_plan(
     total, never one per file: every path tracked at *new_commit*, and every
     path git has ever added or renamed something into.
 
-    Refuses to run at all on a shallow clone (#16310): an ``error`` plan
-    routes through the caller's existing block/rescue, which does NOT write
-    the marker, so the next run retries once the clone is full-depth --
+    Refuses to run at all on a shallow clone, OR one whose shallowness could
+    not be determined (#17118) -- an ``error`` plan routes through the
+    caller's existing block/rescue, which does NOT write the marker, so the
+    next run retries once the clone is full-depth (or reachable at all) --
     the same "fail loudly instead of succeeding empty" contract
     :func:`compute_deletion_plan` already has for an unknown previous
     commit. This guard should be unreachable in practice now that the
@@ -255,10 +256,16 @@ async def compute_bootstrap_plan(
     plan is computed (#16310) -- it stays as defence in depth for a clone
     this module is handed some other way.
     """
-    if await is_shallow_repository(repo_root):
+    shallow_status = await is_shallow_repository(repo_root)
+    if shallow_status is not ShallowCheck.FULL:
+        reason = (
+            "is a shallow git clone"
+            if shallow_status is ShallowCheck.SHALLOW
+            else "has an undeterminable clone depth (git could not answer `rev-parse --is-shallow-repository`)"
+        )
         return DeletionPlan(
             error=(
-                f"{repo_root} is a shallow git clone -- a bootstrap plan computed against it "
+                f"{repo_root} {reason} -- a bootstrap plan computed against it "
                 "would silently miss almost every file actually deleted from source (#16310); "
                 "unshallow the clone (or keep code_source at full depth) and retry"
             )

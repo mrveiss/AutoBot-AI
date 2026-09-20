@@ -5,16 +5,17 @@
 """
 Tests for the Slack/Confluence/Jira/Mock feature-flag gates (Issue #10538).
 
-The framework's ``knowledge/connectors/__init__.py`` only imports (and
-therefore registers, via the ``@ConnectorRegistry.register`` decorator) the
-Slack/Confluence/Jira connector modules when the ``kb_enterprise_connectors``
-subsystem flag is enabled, and the Mock connector module when
-``kb_mock_connector`` is enabled. Since import side effects are process-global
-and cached by Python, this is verified two ways:
+Since #17138, ``knowledge/connectors/__init__.py`` imports nothing at all —
+every connector module, gated ones included, is imported lazily by
+``registry.ConnectorRegistry._ensure_loaded``/``_ensure_all_loaded`` on first
+use. The ``kb_enterprise_connectors``/``kb_mock_connector`` gates moved with
+it: they are now checked at resolve time, in ``registry._FEATURE_GATED_MODULES``
+plus the ``is_feature_enabled`` call inside those two methods, rather than at
+package-import time. Verified two ways:
 
-1. A static source check that each gate exists and covers its module(s)
-   (regression guard against someone dropping the ``if`` and always
-   importing them).
+1. A static source check that ``registry.py`` still declares all four gated
+   types under the right flag (regression guard against someone dropping an
+   entry, or moving one into the unconditional ``_LAZY_MODULES`` map).
 2. A behavioural check, via a subprocess, that a fresh interpreter with both
    flags left at their default (disabled) never registers "slack",
    "confluence", "jira" or "mock" as connector types.
@@ -25,48 +26,37 @@ import subprocess
 import sys
 from pathlib import Path
 
-_CONNECTORS_INIT = Path(__file__).parent / "__init__.py"
+_REGISTRY_PY = Path(__file__).parent / "registry.py"
 
 
 class TestFeatureFlagGateSource:
-    """Static check that __init__.py gates the three connectors on the flag."""
+    """Static check that registry.py gates the three connectors on the flag."""
 
     def test_gate_covers_all_three_connectors(self) -> None:
-        source = _CONNECTORS_INIT.read_text(encoding="utf-8")
-        assert 'is_feature_enabled("kb_enterprise_connectors")' in source
+        source = _REGISTRY_PY.read_text(encoding="utf-8")
+        assert '"confluence": ("knowledge.connectors.confluence", "kb_enterprise_connectors")' in source
+        assert '"jira": ("knowledge.connectors.jira", "kb_enterprise_connectors")' in source
+        assert '"slack": ("knowledge.connectors.slack", "kb_enterprise_connectors")' in source
 
-        gate_start = source.index('if is_feature_enabled("kb_enterprise_connectors")')
-        gated_block = source[gate_start:]
-        assert "import knowledge.connectors.slack" in gated_block
-        assert "import knowledge.connectors.confluence" in gated_block
-        assert "import knowledge.connectors.jira" in gated_block
+    def test_gated_types_not_also_unconditional(self) -> None:
+        """The gated types must not also appear in _LAZY_MODULES (unconditional)."""
+        import knowledge.connectors.registry as registry_module
 
-    def test_gated_imports_not_unconditional(self) -> None:
-        """The gated imports must not also appear in the unconditional block above the gate."""
-        source = _CONNECTORS_INIT.read_text(encoding="utf-8")
-        gate_start = source.index('if is_feature_enabled("kb_enterprise_connectors")')
-        unconditional_block = source[:gate_start]
-        assert "import knowledge.connectors.slack" not in unconditional_block
-        assert "import knowledge.connectors.confluence" not in unconditional_block
-        assert "import knowledge.connectors.jira" not in unconditional_block
+        for gated_type in ("slack", "confluence", "jira"):
+            assert gated_type not in registry_module._LAZY_MODULES, gated_type
 
 
 class TestMockConnectorGateSource:
-    """Static check that __init__.py gates the mock connector on its own flag."""
+    """Static check that registry.py gates the mock connector on its own flag."""
 
     def test_gate_covers_mock_connector(self) -> None:
-        source = _CONNECTORS_INIT.read_text(encoding="utf-8")
-        assert 'is_feature_enabled("kb_mock_connector")' in source
+        source = _REGISTRY_PY.read_text(encoding="utf-8")
+        assert '"mock": ("knowledge.connectors.mock", "kb_mock_connector")' in source
 
-        gate_start = source.index('if is_feature_enabled("kb_mock_connector")')
-        gated_block = source[gate_start:]
-        assert "import knowledge.connectors.mock" in gated_block
+    def test_gated_type_not_also_unconditional(self) -> None:
+        import knowledge.connectors.registry as registry_module
 
-    def test_gated_import_not_unconditional(self) -> None:
-        source = _CONNECTORS_INIT.read_text(encoding="utf-8")
-        gate_start = source.index('if is_feature_enabled("kb_mock_connector")')
-        unconditional_block = source[:gate_start]
-        assert "import knowledge.connectors.mock" not in unconditional_block
+        assert "mock" not in registry_module._LAZY_MODULES
 
 
 class TestFeatureFlagGateBehaviour:
