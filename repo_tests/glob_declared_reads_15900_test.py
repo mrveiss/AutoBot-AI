@@ -153,6 +153,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/hook_decision_exit_codes_15956_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/one_git_enumeration_15926_test.py",
+            "repo_tests/python_filter_covers_tested_shell_wrappers_test.py",
             "repo_tests/redis_password_literal_guard_test.py",
             "repo_tests/shell_lib_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
