@@ -77,9 +77,11 @@ By contrast, the two items that *were* the same capability twice converged
 cleanly:
 
 - `useVncControls` existed in three places; #12931 gave the shared copy an
-  injected transport and #12978 reduced the two app copies to re-export shims
-  (`autobot-frontend/src/composables/useVncControls.ts:13-21`,
-  `autobot-slm-frontend/src/composables/useVncControls.ts:13-21`).
+  injected transport and #12978 reduced the two app copies to re-export shims.
+  Once confirmed callerless in both apps (their migration onto the shared copy
+  had already left them orphaned), the shims themselves were removed — #14907
+  — so `autobot-plugins/vnc/src/composables/useVncControls.ts` is now the only
+  file, not a shim pointing at one.
 - The `@autobot/ui` components carry no backend knowledge at all, so both apps
   consume them unchanged and supply their own design tokens.
 
