@@ -186,10 +186,15 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: #17145 and #17146 were consolidated. Each fit on its own -- #17145 measured 6884
 #: and re-pinned to 6484 for it -- but their added files combine, and the allowance
 #: had one file of headroom. Population minus the unchanged growth allowance.
+#: Re-pinned 6486 -> 6488 (#17154): measured 6888 once #17148 and #16937 were
+#: consolidated. #17148 adds no counting files and #16937 adds two; each fit
+#: alone against the 6487 allowance, the pair does not. Sixth re-pin of this
+#: floor in one night and the second caused purely by combining PRs that each
+#: measured correctly -- see #17142.
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6486,
+    floor=6488,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
