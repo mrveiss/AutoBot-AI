@@ -423,6 +423,22 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_AGENT_COMMAND_TIMEOUT_S",
+        type=int,
+        default=30,
+        description=(
+            "Seconds an agent-terminal command may run before it is cancelled and reported as "
+            "timed out (#17074). A command that finishes sooner returns as soon as its exit code "
+            "appears, so this bounds only long or stuck commands. Raising it lets long builds "
+            "finish; lowering it cancels them sooner (services/agent_terminal/command_executor.py)."
+        ),
+        component="agents",
+        range=(1, 3600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_AGENT_COMM_REGISTRATION_TTL_SECONDS",
         type=int,
         default=90,
@@ -433,6 +449,21 @@ register_env_var(
             "(protocols/agent_channels.py, #16986)."
         ),
         component="agents",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_OVERSEER_COMMAND_TIMEOUT_S",
+        type=int,
+        default=60,
+        description=(
+            "Seconds an overseer step command may run in the user's terminal before it is "
+            "interrupted and reported as timed out (#17078). A step that finishes sooner returns "
+            "as soon as its exit code appears (agents/overseer/step_executor_agent.py)."
+        ),
+        component="agents",
+        range=(1, 3600),
     )
 )
 

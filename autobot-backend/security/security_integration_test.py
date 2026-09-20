@@ -230,7 +230,18 @@ class TestSecurityAPIIntegration:
 
     def test_command_approval_workflow_api(self):
         """Test command approval workflow through API"""
+        import api.security as security_api
+
         app = create_app()
+        # #17052 gated approve-command behind require_interactive_human. The shared test
+        # stub's principal is auth_method="stub", which is deliberately NOT an interactive
+        # human, so supply one here rather than widening the stub -- that would satisfy the
+        # guard by default in every backend test (fail-open).
+        app.dependency_overrides[security_api.get_current_user] = lambda: {
+            "username": "root",
+            "role": "admin",
+            "auth_method": "session",
+        }
         client = TestClient(app)
 
         # Test command approval endpoint

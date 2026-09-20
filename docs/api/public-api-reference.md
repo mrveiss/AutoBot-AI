@@ -28,15 +28,11 @@ Internal, admin-only, and MCP bridge endpoints are excluded.
 
 ## Authentication
 
-All API requests require a valid API key or JWT token.
+All API requests require a valid JWT token.
 
-### API Key Authentication
+### API keys are not accepted here
 
-Pass the API key in the `Authorization` header:
-
-```
-Authorization: Bearer <api-key>
-```
+This API (the main backend) does not accept user API keys; send a JWT as below (#16294, owner ruling 2026-09-18). A user API key is an SLM credential, sent as `X-API-Key`, and the SLM accepts it only on routes that declare a key permission (`autobot-slm-backend/services/api_key_routes.py`). That list is currently empty. A key sent anywhere else is refused with 403.
 
 ### JWT Token Authentication
 

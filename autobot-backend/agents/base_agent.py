@@ -8,6 +8,7 @@ Provides unified interface for agents running locally or in containers
 """
 
 import asyncio
+import contextlib
 import threading
 import uuid
 from abc import ABC, abstractmethod
@@ -49,6 +50,7 @@ from agents.base_agent_types import (  # noqa: F401
 # `BaseAgent`. Re-exported here so the existing import sites keep working.
 from agents.declared_scope_check import malformed_scope_response
 from agents.scope_enforcement import hold_scopes, refused_response
+from protocols.message_origin import acting_for, origin_of
 
 
 class BaseAgent(ABC):
@@ -419,8 +421,10 @@ class BaseAgent(ABC):
     async def _handle_communication_request(self, message: StandardMessage) -> StandardMessage | None:
         """Handle incoming communication requests"""
         try:
-            # Convert communication message to AgentRequest
+            # Convert communication message to AgentRequest. #16950: keep whose request it
+            # is -- the sender was dropped here, so a peer's request read as this agent's own.
             request_data = message.payload.content
+            origin = origin_of(message.header)
             agent_request = AgentRequest(
                 request_id=message.header.message_id,
                 agent_type=self.agent_type,
@@ -428,12 +432,16 @@ class BaseAgent(ABC):
                 payload=request_data.get("payload", {}),
                 context=request_data.get("context", {}),
                 priority=request_data.get("priority", "normal"),
+                originator=origin.originator if origin else None,
+                chain=list(origin.chain) if origin else [],
             )
 
-            # Process the request
-            # #16986: through the same tracking and work-claim path as every other caller,
-            # now that a peer's request can actually arrive here.
-            response = await self.execute_with_tracking(agent_request)
+            # Process the request; anything it sends continues the originator's chain
+            # (#16950), and it runs through the same tracking and work-claim path as every
+            # other caller (#16986), now that a peer's request can actually arrive here.
+            # Both sides of this merge are wanted: the context wraps the tracked call.
+            with acting_for(origin) if origin else contextlib.nullcontext():
+                response = await self.execute_with_tracking(agent_request)
 
             # Convert AgentResponse back to communication message
             response_message = StandardMessage(

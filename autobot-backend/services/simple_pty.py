@@ -6,6 +6,7 @@
 Simple synchronous PTY implementation that works reliably
 """
 
+import collections
 import os
 import pty
 import queue
@@ -22,6 +23,11 @@ logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for PTY event types
 _PTY_OUTPUT_EVENTS = frozenset({"output", "eof"})
+
+#: Characters of recent output a PTY keeps for readers that must not consume its
+#: output queue -- the queue belongs to the terminal WebSocket (#17074). The
+#: oldest output is dropped past this, whole chunks at a time.
+_TRANSCRIPT_MAX_CHARS = 1_000_000
 
 # Issue #13219: same 10 ms wait the read loop always used, expressed in the
 # milliseconds poll() takes instead of the seconds select() took.
@@ -76,6 +82,11 @@ class SimplePTY:
         self.process = None
         self.output_queue = queue.Queue()
         self.input_queue = queue.Queue()
+        # #17074: a bounded copy of the output, addressed by absolute offset.
+        self._transcript: collections.deque[str] = collections.deque()
+        self._transcript_len = 0  # characters currently held
+        self._transcript_base = 0  # absolute offset of the first held character
+        self._transcript_lock = threading.Lock()
         self.running = False
         self.reader_thread = None
         self.writer_thread = None
@@ -201,6 +212,8 @@ class SimplePTY:
                     event_type, content, should_break = _read_pty_data(fd)
                     if event_type in _PTY_OUTPUT_EVENTS:
                         self.output_queue.put((event_type, content))
+                    if event_type == "output" and content:
+                        self._append_transcript(content)
                     if should_break:
                         break
 
@@ -248,6 +261,37 @@ class SimplePTY:
         except Exception as e:
             logger.error("Error queuing input: %s", e)
             return False
+
+    def _append_transcript(self, text: str) -> None:
+        """Keep a copy of *text* for transcript readers, dropping the oldest past the cap."""
+        with self._transcript_lock:
+            self._transcript.append(text)
+            self._transcript_len += len(text)
+            while self._transcript_len > _TRANSCRIPT_MAX_CHARS and len(self._transcript) > 1:
+                dropped = self._transcript.popleft()
+                self._transcript_len -= len(dropped)
+                self._transcript_base += len(dropped)
+
+    def transcript_position(self) -> int:
+        """Absolute offset just past the last output received (#17074)."""
+        with self._transcript_lock:
+            return self._transcript_base + self._transcript_len
+
+    def read_transcript(self, since: int) -> tuple[int, str]:
+        """Output received after absolute offset *since*, without consuming the output queue (#17074).
+
+        Returns ``(offset, text)``: the absolute offset *text* starts at, read
+        atomically with it. An offset past *since* means the output in between
+        was already dropped under the cap -- the caller has lost it, and knows.
+        """
+        with self._transcript_lock:
+            parts, offset = [], self._transcript_base
+            for chunk in self._transcript:
+                end = offset + len(chunk)
+                if end > since:
+                    parts.append(chunk[max(since - offset, 0) :])
+                offset = end
+            return max(since, self._transcript_base), "".join(parts)
 
     def get_output(self) -> tuple | None:
         """Get output from PTY (non-blocking)"""

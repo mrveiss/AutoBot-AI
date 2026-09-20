@@ -50,12 +50,15 @@ import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional, Set
+from typing import TYPE_CHECKING, Dict, Optional, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from autobot_shared.trust_enums import TrustLevel
+
+if TYPE_CHECKING:
+    from security.authority import Authority
 
 logger = get_logger(__name__)
 
@@ -88,22 +91,26 @@ def _level_from_score(score: float) -> TrustLevel:
 
 
 class Capability(str, Enum):
-    DISCOVERY = "discovery"  # view agent card, list capabilities
-    SUBMIT_TASKS = "submit_tasks"  # submit new A2A tasks
-    QUERY_MEMORY = "query_memory"  # read knowledge / memory stores
-    DEFINE_AGENTS = "define_agents"  # contribute new agent definitions
+    """What a peer's trust level lets it do. Every member must have an enforcement site (#16957)."""
+
+    SUBMIT_TASKS = "submit_tasks"  # submit new A2A tasks -- enforced at api/a2a.py submit_task
+    QUERY_MEMORY = "query_memory"  # read knowledge / memory stores -- enforced at orchestrator routing
+    # #16957: two members were removed because they claimed controls that did not exist.
+    # - DEFINE_AGENTS ("contribute new agent definitions"): no route or code path lets a
+    #   peer define an agent. Re-add it together with the operation it gates, never before.
+    # - DISCOVERY ("view agent card"): the card is public by protocol design at
+    #   /.well-known/agent.json (A2A spec 3.1), so no trust level can restrict it. Gating
+    #   the admin copy at /api/a2a/agent-card would refuse a document anyone can fetch.
 
 
 _CAPABILITY_MATRIX: Dict[TrustLevel, Set[Capability]] = {
-    TrustLevel.UNTRUSTED: {Capability.DISCOVERY},
-    TrustLevel.LIMITED: {Capability.DISCOVERY, Capability.SUBMIT_TASKS},
-    TrustLevel.STANDARD: {Capability.DISCOVERY, Capability.SUBMIT_TASKS, Capability.QUERY_MEMORY},
-    TrustLevel.TRUSTED: {
-        Capability.DISCOVERY,
-        Capability.SUBMIT_TASKS,
-        Capability.QUERY_MEMORY,
-        Capability.DEFINE_AGENTS,
-    },
+    TrustLevel.UNTRUSTED: set(),
+    TrustLevel.LIMITED: {Capability.SUBMIT_TASKS},
+    TrustLevel.STANDARD: {Capability.SUBMIT_TASKS, Capability.QUERY_MEMORY},
+    # Since #16957, TRUSTED grants nothing beyond STANDARD: the one capability it added
+    # had no operation behind it. The level still matters for promotion and demotion;
+    # the levels as a whole are to be revisited once the peer-identity re-key is decided.
+    TrustLevel.TRUSTED: {Capability.SUBMIT_TASKS, Capability.QUERY_MEMORY},
 }
 
 
@@ -155,6 +162,12 @@ class TrustRecord:
     current_level: TrustLevel = TrustLevel.UNTRUSTED
     score: float = 0.0
 
+    # #16950: an admin grant -- a floor the score cannot drift below. Misconduct
+    # (a threat event or integrity violation) revokes it. None: no grant.
+    granted_level: Optional[str] = None
+    granted_by: Optional[str] = None
+    granted_at: Optional[float] = None
+
     # Timestamps (Unix epoch floats)
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
@@ -193,7 +206,13 @@ class TrustRecord:
 # Redis key layout
 # ---------------------------------------------------------------------------
 
-_KEY_TRUST = "a2a:trust:{}"
+#: #16950 (owner decision): trust is keyed on the pair (credential subject, peer id),
+#: see a2a/peer_identity.py. Pair records live in their own namespace, so no
+#: self-declared header id can ever collide with a pair key.
+_KEY_TRUST = "a2a:peer-trust:{}"
+#: The header-only records from before #16950. Never read for access and never
+#: deleted: they are the audit trail of who held what, and tell an admin whom to re-grant.
+_KEY_LEGACY_TRUST_PATTERN = "a2a:trust:*"
 
 
 def _default_trust_audit_db() -> Path:
@@ -209,6 +228,13 @@ _SQLITE_DB_DEFAULT = _default_trust_audit_db()
 # ---------------------------------------------------------------------------
 # TrustScoreManager
 # ---------------------------------------------------------------------------
+
+
+def _revoke_grant(record: TrustRecord) -> None:
+    """Misconduct revokes an admin grant, so the demotion that follows is not undone by the floor."""
+    if record.granted_level is not None:
+        logger.info("trust_score: grant revoked peer=%s (was %s)", record.peer_id, record.granted_level)
+        record.granted_level = record.granted_by = record.granted_at = None
 
 
 class TrustScoreManager:
@@ -267,6 +293,7 @@ class TrustScoreManager:
         old_level = record.current_level
         record.threat_event_count += 1
         record.consecutive_successes = 0
+        _revoke_grant(record)
         record.score = record.compute_score()
 
         # Instant demotion — cap at LIMITED; do not raise UNTRUSTED peers
@@ -285,6 +312,7 @@ class TrustScoreManager:
         old_level = record.current_level
         record.integrity_violation_count += 1
         record.consecutive_successes = 0
+        _revoke_grant(record)
         record.score = record.compute_score()
 
         # Integrity violations demote directly to UNTRUSTED
@@ -304,7 +332,7 @@ class TrustScoreManager:
         """Return TrustRecords for all known peers (scanned from Redis)."""
         try:
             r = self._redis()
-            keys = r.keys("a2a:trust:*")
+            keys = r.keys(_KEY_TRUST.format("*"))
             records = []
             for key in keys:
                 raw = r.get(key)
@@ -316,6 +344,38 @@ class TrustScoreManager:
             return sorted(records, key=lambda rec: rec.peer_id)
         except Exception as exc:
             logger.warning("trust_score: list_peers Redis scan failed: %s", exc)
+            return []
+
+    def grant(self, peer_key: str, level: TrustLevel, *, actor: str) -> TrustRecord:
+        """An admin sets *peer_key*'s level, as a floor its score cannot drift below (#16950).
+
+        The only way a peer regains trust after the re-key reset. Without it, a peer
+        that may not submit tasks can never earn trust through them. Audited with the
+        actor, the pair and the level; misconduct later revokes it.
+        """
+        record = self._load(peer_key)
+        old_level = record.current_level
+        record.granted_level, record.granted_by, record.granted_at = level.value, actor, time.time()
+        record.current_level = level
+        record.last_level_change_at = time.time()
+        logger.info("trust_score: admin grant peer=%s level=%s actor=%s", peer_key, level.value, actor)
+        self._snapshot(record, old_level, level, reason=f"admin_grant by {actor}")
+        self._save(record)
+        return record
+
+    def list_legacy_peers(self) -> list[dict]:
+        """The pre-#16950 header-only records, read-only: whom an admin needs to re-grant."""
+        try:
+            r = self._redis()
+            rows = []
+            for key in r.keys(_KEY_LEGACY_TRUST_PATTERN):
+                raw = r.get(key)
+                if raw:
+                    d = json.loads(raw)
+                    rows.append({k: d.get(k) for k in ("peer_id", "current_level", "score", "updated_at")})
+            return sorted(rows, key=lambda row: str(row["peer_id"]))
+        except Exception as exc:
+            logger.warning("trust_score: legacy listing failed: %s", exc)
             return []
 
     def get_audit_log(self, peer_id: str, limit: int = 100) -> list[dict]:
@@ -372,6 +432,10 @@ class TrustScoreManager:
         old_level = record.current_level
         record.score = record.compute_score()
         computed_level = _level_from_score(record.score)
+        if record.granted_level is not None:
+            # #16950: a grant is a floor against score drift, not against misconduct.
+            floor = TrustLevel(record.granted_level)
+            computed_level = _LEVEL_ORDER[max(_level_rank(computed_level), _level_rank(floor))]
 
         old_rank = _level_rank(old_level)
         computed_rank = _level_rank(computed_level)
@@ -496,3 +560,15 @@ class TrustScoreManager:
 # ---------------------------------------------------------------------------
 
 get_trust_manager = lazy_singleton(TrustScoreManager)
+
+
+def authority_for_level(level: TrustLevel) -> "Authority":
+    """A peer's authority for the intersection rule (#16950): its trust level's capabilities.
+
+    Only the capability surface is constrained. A peer has no approval gates, tool
+    boundary or RBAC role of its own to add, so those are top, and the chain's other
+    hops supply them. An unrecognised level grants nothing: fail closed.
+    """
+    from security.authority import Authority
+
+    return Authority(capabilities=frozenset(c.value for c in _CAPABILITY_MATRIX.get(level, ())))

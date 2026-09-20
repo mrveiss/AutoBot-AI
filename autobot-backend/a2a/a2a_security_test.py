@@ -378,7 +378,7 @@ class TestJwtSubExtraction:
         import base64
         import json
 
-        from api.a2a import _extract_jwt_sub
+        from a2a.peer_identity import jwt_subject_for_audit as _extract_jwt_sub
 
         header = base64.urlsafe_b64encode(b'{"alg":"HS256"}').rstrip(b"=").decode()
         payload = base64.urlsafe_b64encode(json.dumps({"sub": "user42"}).encode()).rstrip(b"=").decode()
@@ -386,11 +386,11 @@ class TestJwtSubExtraction:
         assert _extract_jwt_sub(token) == "user42"
 
     def test_returns_none_for_missing_auth(self):
-        from api.a2a import _extract_jwt_sub
+        from a2a.peer_identity import jwt_subject_for_audit as _extract_jwt_sub
 
         assert _extract_jwt_sub(None) is None
 
     def test_returns_none_for_malformed_token(self):
-        from api.a2a import _extract_jwt_sub
+        from a2a.peer_identity import jwt_subject_for_audit as _extract_jwt_sub
 
         assert _extract_jwt_sub("Bearer not.a.valid.token.at.all") is None
