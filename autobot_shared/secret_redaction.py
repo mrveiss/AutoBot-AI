@@ -220,7 +220,23 @@ class ContentMatch:
     confidence: str  # "high" | "medium"
 
 
-_PEM_BLOCK_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----")
+# Bounded, not the unbounded ``*``/``*?`` this replaced (CodeQL py/polynomial-redos):
+# an unanchored ``[\s\S]*?`` body scan is retried from *every* "-----BEGIN ... PRIVATE
+# KEY-----" occurrence in the input, and on a crafted string with many such markers and
+# no matching END, each retry walks to the end of the remaining text -- O(n^2) on
+# adversarial input. Real PEM key-type headers ("RSA ", "ENCRYPTED ", "OPENSSH ", ...)
+# are well under 12 characters, and real key bodies top out in the low KB (~3.2KB base64
+# for a 4096-bit RSA key, ~6.4KB for the much rarer 8192-bit) -- the bounds below give
+# both a multi-x safety margin over that, so no real PEM block is affected, while a
+# malicious restart now costs O(bound) instead of O(remaining input), making the whole
+# scan linear in input length again (verified: doubling adversarial input length roughly
+# doubles scan time, not quadruples it).
+_PEM_HEADER_MAX = 40
+_PEM_BODY_MAX = 16384
+_PEM_BLOCK_RE = re.compile(
+    rf"-----BEGIN [A-Z0-9 ]{{0,{_PEM_HEADER_MAX}}}PRIVATE KEY-----"
+    rf"[\s\S]{{0,{_PEM_BODY_MAX}}}?-----END [A-Z0-9 ]{{0,{_PEM_HEADER_MAX}}}PRIVATE KEY-----"
+)
 
 # A JWT is three base64url segments joined by dots; the first two decode to
 # JSON objects, so both start with the base64url encoding of ``{"`` (``eyJ``).
@@ -260,7 +276,14 @@ _CREDENTIAL_PHRASE_RE = re.compile(
 
 # A data: URI's base64 payload is long, high-entropy, and not a credential --
 # excluded up front so the generic scanner below never has to reason about it.
-_DATA_URI_RE = re.compile(r"data:[^,\s]+;base64,[A-Za-z0-9+/=]+")
+# Bounded for the same reason as _PEM_BLOCK_RE above (CodeQL py/polynomial-redos): the
+# media-type span ``[^,\s]+`` is unbounded and its negated class also matches the "data:"
+# literal itself, so a crafted string with many "data:" occurrences and no ";base64,"
+# forces a backtrack-to-end-of-input retry at every occurrence -- O(n^2). Real MIME types
+# (even long ones like "application/vnd.openxmlformats-officedocument...") are well under
+# 255 characters, so the bound below changes nothing for a real data: URI.
+_DATA_URI_MEDIA_TYPE_MAX = 255
+_DATA_URI_RE = re.compile(rf"data:[^,\s]{{1,{_DATA_URI_MEDIA_TYPE_MAX}}};base64,[A-Za-z0-9+/=]+")
 
 # A bare, contiguous run with no whitespace, long enough to plausibly be a
 # token and short enough that a base64 image (typically hundreds+ chars) is
