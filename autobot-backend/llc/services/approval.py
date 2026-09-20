@@ -23,9 +23,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from models.approval import Approval
 
 from ..kb.decision_log import DecisionLogWriter
-from ..models.approval import LLCApproval
 from ..models.enums import ApprovalStatus, ApprovalType
 from .base import LLCServiceBase
 
@@ -62,7 +62,7 @@ class ApprovalService(LLCServiceBase):
         gate_type: ApprovalType,
         payload: Dict[str, Any],
         requested_by: uuid.UUID,
-    ) -> LLCApproval:
+    ) -> Approval:
         """Create a pending approval record and emit a Redis event.
 
         Args:
@@ -73,14 +73,16 @@ class ApprovalService(LLCServiceBase):
             requested_by: Agent ID making the request.
 
         Returns:
-            The newly created ``LLCApproval`` row (status=PENDING).
+            The newly created ``Approval`` row (status=PENDING), scoped to
+            *company_id* -- the unified platform approval table (#17043).
         """
-        approval = LLCApproval(
-            company_id=company_id,
-            type=gate_type.value,
+        approval = Approval(
+            title=f"{gate_type.value} approval",
+            approval_type=gate_type.value,
             status=ApprovalStatus.PENDING.value,
-            requested_by_agent_id=requested_by,
-            payload=payload,
+            company_id=company_id,
+            requested_by_agent=str(requested_by),
+            context=payload,
         )
         session.add(approval)
         await session.flush()
@@ -93,15 +95,15 @@ class ApprovalService(LLCServiceBase):
         )
         return approval
 
-    async def publish_requested(self, approval: "LLCApproval") -> None:
+    async def publish_requested(self, approval: "Approval") -> None:
         """Publish approval_requested event — call AFTER the DB transaction commits."""
         await self._publish(
             _EVENT_REQUESTED,
             {
                 "approval_id": str(approval.id),
                 "company_id": str(approval.company_id),
-                "type": approval.type,
-                "requested_by_agent_id": str(approval.requested_by_agent_id),
+                "type": approval.approval_type,
+                "requested_by_agent_id": approval.requested_by_agent,
             },
         )
 
@@ -112,7 +114,7 @@ class ApprovalService(LLCServiceBase):
         approval_id: uuid.UUID,
         decision: ApprovalStatus,
         decided_by: uuid.UUID,
-    ) -> LLCApproval:
+    ) -> Approval:
         """Record an approve or reject decision.
 
         Args:
@@ -122,7 +124,7 @@ class ApprovalService(LLCServiceBase):
             decided_by: Agent ID making the decision.
 
         Returns:
-            Updated ``LLCApproval`` row.
+            Updated ``Approval`` row.
 
         Raises:
             ApprovalNotFoundError: approval_id does not exist.
@@ -132,7 +134,7 @@ class ApprovalService(LLCServiceBase):
         if decision not in (ApprovalStatus.APPROVED, ApprovalStatus.REJECTED):
             raise ApprovalStateError(f"Decision must be APPROVED or REJECTED, got {decision.value!r}")
 
-        result = await session.execute(select(LLCApproval).where(LLCApproval.id == approval_id).with_for_update())
+        result = await session.execute(select(Approval).where(Approval.id == approval_id).with_for_update())
         approval = result.scalar_one_or_none()
         if approval is None:
             raise ApprovalNotFoundError(f"Approval {approval_id} not found")
@@ -141,7 +143,7 @@ class ApprovalService(LLCServiceBase):
             raise ApprovalStateError(f"Approval {approval_id} is already in state {approval.status!r}")
 
         approval.status = decision.value
-        approval.decided_by_agent_id = decided_by
+        approval.decided_by_user = str(decided_by)
         approval.decided_at = datetime.now(timezone.utc)
         await session.flush()
         logger.info(
@@ -152,20 +154,20 @@ class ApprovalService(LLCServiceBase):
         )
         return approval
 
-    async def publish_decided(self, approval: "LLCApproval", decision: ApprovalStatus) -> None:
+    async def publish_decided(self, approval: "Approval", decision: ApprovalStatus) -> None:
         """Publish approval_decided event — call AFTER the DB transaction commits."""
         await self._publish(
             _EVENT_DECIDED,
             {
                 "approval_id": str(approval.id),
                 "company_id": str(approval.company_id),
-                "type": approval.type,
+                "type": approval.approval_type,
                 "decision": decision.value,
-                "decided_by_agent_id": str(approval.decided_by_agent_id),
+                "decided_by_agent_id": approval.decided_by_user,
             },
         )
 
-    async def log_decision_to_kb(self, approval: "LLCApproval") -> None:
+    async def log_decision_to_kb(self, approval: "Approval") -> None:
         """Post-decision hook: index the resolved approval into the decisions KB (GH#8243).
 
         Best-effort — never raises; KB failures are logged but do not affect callers.
@@ -186,7 +188,7 @@ class ApprovalService(LLCServiceBase):
         session: AsyncSession,
         company_id: uuid.UUID,
         gate_type: Optional[ApprovalType] = None,
-    ) -> List[LLCApproval]:
+    ) -> List[Approval]:
         """Return all pending approvals for a company, optionally filtered by type.
 
         Args:
@@ -195,18 +197,18 @@ class ApprovalService(LLCServiceBase):
             gate_type: If provided, filter to this gate type only.
 
         Returns:
-            List of ``LLCApproval`` rows with status=PENDING, ordered oldest-first.
+            List of ``Approval`` rows with status=PENDING, ordered oldest-first.
         """
         stmt = (
-            select(LLCApproval)
+            select(Approval)
             .where(
-                LLCApproval.company_id == company_id,
-                LLCApproval.status == ApprovalStatus.PENDING.value,
+                Approval.company_id == company_id,
+                Approval.status == ApprovalStatus.PENDING.value,
             )
-            .order_by(LLCApproval.created_at)
+            .order_by(Approval.created_at)
         )
         if gate_type is not None:
-            stmt = stmt.where(LLCApproval.type == gate_type.value)
+            stmt = stmt.where(Approval.approval_type == gate_type.value)
 
         result = await session.execute(stmt)
         return list(result.scalars().all())
@@ -229,7 +231,7 @@ def requires_approval(gate_type: ApprovalType) -> Callable:
 
     The decorated function must accept an ``approval_id: uuid.UUID`` keyword
     argument.  When called, the decorator checks that a corresponding
-    ``LLCApproval`` with the right type and ``APPROVED`` status exists.
+    ``Approval`` with the right type and ``APPROVED`` status exists.
 
     Usage::
 
@@ -257,14 +259,14 @@ def requires_approval(gate_type: ApprovalType) -> Callable:
             if approval_id is None:
                 raise ApprovalRequiredError(gate_type)
 
-            result = await session.execute(select(LLCApproval).where(LLCApproval.id == approval_id))
+            result = await session.execute(select(Approval).where(Approval.id == approval_id))
             approval = result.scalar_one_or_none()
 
             if approval is None:
                 raise ApprovalNotFoundError(f"Approval {approval_id} not found")
-            if approval.type != gate_type.value:
+            if approval.approval_type != gate_type.value:
                 raise ApprovalStateError(
-                    f"Approval {approval_id} is type {approval.type!r}, expected {gate_type.value!r}"
+                    f"Approval {approval_id} is type {approval.approval_type!r}, expected {gate_type.value!r}"
                 )
             if approval.status != ApprovalStatus.APPROVED.value:
                 raise ApprovalStateError(f"Approval {approval_id} has status {approval.status!r}, must be APPROVED")
