@@ -170,17 +170,22 @@
       register: rsync_results
 
     # ------------------------------------------------------------------
-    # Frontend build step: rebuild dist after code sync
+    # Frontend build step: rebuild and publish after code sync (#15603)
     # ------------------------------------------------------------------
-    - name: "Rebuild autobot-frontend production dist"
-      ansible.builtin.command:
-        cmd: npm run build
-        chdir: "{{ install_base }}/autobot-frontend"
-      register: frontend_build
+    # Staged build-then-swap, the same mechanism the SLM frontend publish
+    # below already uses (#15557, #15610) — a failed build no longer empties
+    # the served directory while nginx keeps answering for it.
+    - name: "Build and publish autobot-frontend (staged, #15603)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
+      vars:
+        slm_frontend_publish_label: "Node update (user frontend)"
+        slm_frontend_publish_dir: "{{ install_base }}/autobot-frontend"
+        slm_frontend_publish_user: autobot
+        slm_frontend_publish_build_script: "build"
+        slm_frontend_publish_build_env: {}
       when: >
         'autobot-frontend' in deploy_roles
         and (cache_stat.results | selectattr('item', 'equalto', 'autobot-frontend') | map(attribute='stat.exists') | first | default(false))
-      changed_when: frontend_build.rc == 0
 
     # #10435: SLM UI is served under /slm; build:slm exports VITE_API_URL=/slm so
     # the API base is baked correctly (plain build leaves it unset → guard fails).

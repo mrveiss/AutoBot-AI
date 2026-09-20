@@ -47,6 +47,59 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_AGENT_PRESENCE_TTL_SECONDS",
+        type=float,
+        default=90.0,
+        description=(
+            "Seconds an agent's live-presence entry survives with no further "
+            "heartbeat before `list_live()` treats it as gone. Raising it "
+            "tolerates a longer gap between reports before an agent is "
+            "reported offline; lowering it detects a crashed/partitioned "
+            "agent sooner, at the cost of a busier reporter needing to "
+            "report more often (protocols/agent_presence.py, #16947)."
+        ),
+        component="agents",
+        range=(1, 3600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_IDLE_NOTICE_TIMEOUT_SECONDS",
+        type=float,
+        default=300.0,
+        description=(
+            "Bound on `wait_for_idle()`'s one-shot subscription (#16949): how "
+            "long it waits for a peer to go idle before raising "
+            "`IdleWaitExpiredError` instead of waiting forever. Raising it "
+            "tolerates a longer-running peer before giving up; lowering it "
+            "fails a stuck wait sooner (protocols/idle_notice.py)."
+        ),
+        component="agents",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AGENT_PRESENCE_SYNC_INTERVAL_SECONDS",
+        type=float,
+        default=30.0,
+        description=(
+            "How often the background task re-runs every kind's presence "
+            "adapter (#16965) -- kept comfortably under "
+            "`AUTOBOT_AGENT_PRESENCE_TTL_SECONDS` so an entry never goes "
+            "stale between sweeps. Raising it means a status change (busy, "
+            "gone) takes longer to show up in `list_live()`; lowering it "
+            "polls the DB/health-registry/session-manager sources more "
+            "often (initialization/agent_presence_sync.py)."
+        ),
+        component="agents",
+        range=(1, 3600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_RUN_CHECKPOINT_TTL_SECONDS",
         type=int,
         default=86400,
@@ -365,5 +418,60 @@ register_env_var(
             "built from: one describes this deployment, the other where new work starts."
         ),
         component="orchestration",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AGENT_COMM_REGISTRATION_TTL_SECONDS",
+        type=int,
+        default=90,
+        description=(
+            "Seconds an agent stays reachable on the Redis peer channel after its last refresh. "
+            "The protocol's heartbeat (30 s) refreshes it, so an agent that died without closing its channel "
+            "stops receiving messages after three missed beats, rather than leaving them in an inbox no one reads "
+            "(protocols/agent_channels.py, #16986)."
+        ),
+        component="agents",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AGENT_COMM_INBOX_MAX_LENGTH",
+        type=int,
+        default=1000,
+        description=(
+            "Most messages an agent's Redis peer inbox holds, and most inbound messages waiting in memory for a h"
+            "andler slot. Beyond it the oldest (inbox) or newest (in memory) are dropped and logged, so a flood c"
+            "annot grow either without bound (protocols/agent_channels.py, #16986)."
+        ),
+        component="agents",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AGENT_COMM_INBOX_TTL_SECONDS",
+        type=int,
+        default=3600,
+        description=(
+            "Seconds an agent's Redis peer inbox survives after its last write, so an inbox whose owner never ret"
+            "urns is reclaimed (protocols/agent_channels.py, #16986)."
+        ),
+        component="agents",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AGENT_COMM_MAX_INFLIGHT_HANDLERS",
+        type=int,
+        default=32,
+        description=(
+            "Most inbound peer messages one agent handles at once. More wait in a bounded backlog; a reply to the"
+            " agent's own request is never held behind them (protocols/agent_communication.py, #16986)."
+        ),
+        component="agents",
     )
 )

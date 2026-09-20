@@ -18,11 +18,13 @@ import content_reach.health  # noqa: F401 — registers KnownProbes.CONTENT_REAC
 from api.adapters import router as adapters_router  # Issue #1403
 from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
 from api.admin_orphan_repair import router as admin_orphan_repair_router  # #15779, #16927
+from api.admin_orphan_storage import router as admin_orphan_storage_router  # #17038, #17039
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
 from api.agent_org import router as agent_org_router  # #1405
+from api.agent_presence import router as agent_presence_router  # #16965
 from api.approval_gates import router as approval_gates_router  # #1402
 from api.audit import router as audit_router
 from api.auth import router as auth_router
@@ -141,6 +143,12 @@ def _get_system_routers() -> list:
             ["admin", "orphan-repair"],
             "admin_orphan_repair",
         ),  # #15779
+        (
+            admin_orphan_storage_router,
+            "",
+            ["admin", "orphan-storage"],
+            "admin_orphan_storage",
+        ),  # #17038, #17039
         (
             admin_retention_policies_router,
             "",
@@ -520,6 +528,7 @@ def _get_agent_routers() -> list:
         ),
         (overseer_router, "/overseer", ["overseer", "agent"], "overseer"),
         (agent_org_router, "/agents", ["agent-org"], "agent_org"),
+        (agent_presence_router, "", ["agent-presence"], "agent_presence"),  # #16965
         (coordination_router, "/coordination", ["coordination", "agent"], "coordination"),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
