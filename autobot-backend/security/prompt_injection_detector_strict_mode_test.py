@@ -102,10 +102,14 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 #: 'autobot-backend/*.py' | grep -v '_test\.py$' | wc -l`, independently
 #: cross-checked -- a local reach-test pass is not reliable evidence for this
 #: one, per #17072 review). Population minus the unchanged growth allowance.
+#: Re-pinned 2944 -> 2945 (#17125): measured population 3245 after re-parenting
+#: this PR's migration onto #17072's own new head -- one new non-test .py file
+#: (the migration itself). Same direct-count method, population minus the
+#: unchanged growth allowance.
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2944,
+    floor=2945,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )

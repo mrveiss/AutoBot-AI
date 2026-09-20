@@ -110,9 +110,9 @@ def _load_migration_module():
         "..",
         "migrations",
         "versions",
-        "20260919_094_shared_link_tracking.py",
+        "20260919_095_shared_link_tracking.py",
     )
-    spec = importlib.util.spec_from_file_location("shared_link_tracking_20260919_094", path)
+    spec = importlib.util.spec_from_file_location("shared_link_tracking_20260919_095", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -121,7 +121,12 @@ def _load_migration_module():
 def test_migration_head_matches_the_current_chain_not_the_stale_stash_draft() -> None:
     """The rescued stash draft pointed its down_revision at ``20260531_050``,
     which already has a different direct successor on ``main`` -- this pins
-    the rebased value instead of letting it silently drift again."""
+    the rebased value instead of letting it silently drift again.
+
+    Re-parented a second time (094 -> 095, #17072's 20260918_094 landed on
+    main pointing at the same 20260916_093 parent this migration originally
+    used -- a real fork, not a hypothetical one) after 20260918_094 merged.
+    """
     migration = _load_migration_module()
-    assert migration.down_revision == "20260916_093"
-    assert migration.revision == "20260919_094"
+    assert migration.down_revision == "20260918_094"
+    assert migration.revision == "20260919_095"
