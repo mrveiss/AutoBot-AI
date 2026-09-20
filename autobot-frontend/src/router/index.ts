@@ -883,6 +883,23 @@ export const routes: RouteRecordRaw[] = [
       admin: true,
     },
   },
+  // Issue #16825: fine-grained permission scopes -- no backend or frontend
+  // exists for this one yet (unlike MCP admin/pricing above, which already
+  // ship). This route is a "coming in a later release" panel, not a stub of
+  // a working feature -- no form, no table, no API call. hideInNav + an
+  // adminMenuItems entry, same pattern as the two routes above (#16933's
+  // nav-items-coverage.test.ts enforces this pairing for every /admin/* route).
+  {
+    path: '/admin/permission-scopes',
+    name: 'admin-permission-scopes',
+    component: () => import('@/views/AdminPermissionScopesView.vue'),
+    meta: {
+      title: 'Permission Scopes',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
+    },
+  },
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },

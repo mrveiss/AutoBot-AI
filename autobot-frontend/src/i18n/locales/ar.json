@@ -7860,6 +7860,7 @@
     "advancedControl": "التحكم المتقدم",
     "adminPricing": "تسعير النماذج",
     "adminMcpServers": "خوادم MCP",
+    "adminPermissionScopes": "نطاقات الصلاحيات",
     "llcRoles": "الأدوار"
   },
   "llcCompanyStatus": {
@@ -9113,6 +9114,12 @@
       "deleteTitle": "حذف خادم MCP",
       "deleteConfirm": "هل أنت متأكد من رغبتك في الحذف",
       "deleteUndone": "لا يمكن التراجع عن هذا الإجراء."
+    },
+    "permissionScopes": {
+      "title": "نطاقات الصلاحيات",
+      "subtitle": "مفردات صلاحيات دقيقة وحزم نطاقات لمفاتيح API",
+      "comingSoonTitle": "قادم في إصدار لاحق",
+      "comingSoonMessage": "نطاقات الصلاحيات الدقيقة — مفردات الصلاحيات، وحزم النطاقات، وإنفاذ نطاقات مفاتيح API — غير متوفرة في هذا الإصدار. ستتيح لك هذه الصفحة تحديدها وتعيينها بمجرد إطلاقها."
     }
   },
   "components": {
