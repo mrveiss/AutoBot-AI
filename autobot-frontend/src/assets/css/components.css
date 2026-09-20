@@ -962,6 +962,13 @@
   font-size: var(--text-sm);
 }
 
+.checkbox-input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
 .modal-body-text {
   font-size: var(--text-sm);
   color: var(--text-secondary);
