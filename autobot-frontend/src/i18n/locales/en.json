@@ -7867,6 +7867,7 @@
     "advancedControl": "Advanced Control",
     "adminPricing": "Model Pricing",
     "adminMcpServers": "MCP Servers",
+    "adminPermissionScopes": "Permission Scopes",
     "sharedLinks": "Shared Chat Links",
     "companyOs": "Company OS",
     "llcDashboard": "Dashboard",
@@ -9113,6 +9114,12 @@
       "deleteTitle": "Delete MCP Server",
       "deleteConfirm": "Are you sure you want to delete",
       "deleteUndone": "This cannot be undone."
+    },
+    "permissionScopes": {
+      "title": "Permission Scopes",
+      "subtitle": "Fine-grained permission vocabulary and scope bundles for API keys",
+      "comingSoonTitle": "Coming in a later release",
+      "comingSoonMessage": "Fine-grained permission scopes — a permission vocabulary, scope bundles, and API-key scope enforcement — are not available in this release. This page will let you define and assign them once they ship."
     }
   },
   "components": {
