@@ -88,6 +88,28 @@
         version: "{{ deploy_ref }}"
         force: true
 
+    # #16310: no `depth:` above stops a FUTURE clone from starting shallow,
+    # but the checkout that is actually on disk came from initial
+    # provisioning, before that -- it is shallow today regardless, and a
+    # plain `git fetch` on an already-shallow repo does not deepen it. Every
+    # component's own bootstrap plan needs full history
+    # (services/sync_deletions.py's `git log --diff-filter=AR`), so this
+    # runs once here, before any component's plan, through the same
+    # scrubbed-env git helper (services/git_subprocess.py:run_git) the
+    # planner itself uses -- never an ad-hoc `git fetch` in this playbook.
+    - name: "[PRE-FLIGHT] Ensure code_source has full history, not a shallow clone (#16310)"
+      ansible.builtin.command:
+        cmd: >-
+          /opt/autobot/autobot-slm-backend/venv/bin/python3
+          /opt/autobot/autobot-slm-backend/scripts/sync_deletion_planner.py
+          ensure-full-history --repo-root {{ git_repo_root }}
+      # Query/fixup step, like the git-status commands around it -- ansible's
+      # own change-tracking is not meaningful here. Failure is NOT swallowed:
+      # the command module's default failed_when (rc != 0) still fails this
+      # task, and the CLI's own contract (#16310) is to exit 1 with the
+      # reason on stdout whenever it could not guarantee full history.
+      changed_when: false
+
     - name: "[PRE-FLIGHT] Get current git branch"
       command: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} branch --show-current
       register: git_branch
@@ -1301,6 +1323,20 @@
       when: "'frontend' in group_names"
       tags: [frontend]
 
+    # ----- VNC -----
+    # #16020: a node whose only cert-consuming role is vnc (no backend, no
+    # frontend) matches neither section above, so it never got the shared
+    # keypair through this playbook -- the ONLY path a GUI/self-update reaches
+    # (CLAUDE.md: "System updates ... go through the builtin updater only").
+    # Gated on the role_active_facts.yml fact, not a group_names membership
+    # check: vnc has no entry in services/inventory_builder.py::_ROLE_TO_GROUPS
+    # (the map this playbook's dynamic inventory groups come from), so testing
+    # group_names here would silently exempt exactly this node.
+    - name: "[PLAY 2] VNC | Ensure the shared node TLS cert"
+      include_tasks: "../_shared/tasks/ensure_node_tls_cert.yml"
+      when: "role_vnc_active | default(false) | bool"
+      tags: [vnc]
+
     - name: "[PLAY 2] Frontend | Deploy autobot-frontend"
       unarchive:
         src: "{{ deploy_tmp }}/frontend.tar.gz"
@@ -1345,14 +1381,18 @@
       register: frontend_npm_install
       tags: [frontend, deps]
 
-    - name: "[PLAY 2] Frontend | Rebuild production dist"
-      command:
-        cmd: npx vite build
-        chdir: /opt/autobot/autobot-frontend
-      become_user: autobot
-      become: true
+    # #15603: staged build-then-swap (#15557, #15610's mechanism) — a failed
+    # build no longer empties the served directory while nginx below still
+    # restarts and starts answering 403 for every path.
+    - name: "[PLAY 2] Frontend | Build and publish production dist, staged (#15603)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
+      vars:
+        slm_frontend_publish_label: "Fleet update (user frontend)"
+        slm_frontend_publish_dir: /opt/autobot/autobot-frontend
+        slm_frontend_publish_user: autobot
+        slm_frontend_publish_build_script: "build"
+        slm_frontend_publish_build_env: {}
       when: "'frontend' in group_names"
-      register: frontend_build
       tags: [frontend]
 
     - name: "[PLAY 2] Frontend | Restart nginx"
@@ -2047,6 +2087,16 @@
           - "  PLAY 2b: Database Node Update (role-owned files)"
           - "======================================================="
           - "  Target: {{ inventory_hostname }}"
+
+    # #16020: roles/redis/tasks/main.yml ensures the shared keypair, but this
+    # play applies the role via `tasks_from: code_only` below (see its own
+    # comment), which never reaches that task -- only the role's full
+    # provisioning entrypoint does. A database node maintained only through
+    # this playbook could never repair a missing cert otherwise.
+    - name: "[PLAY 2b] Database | Ensure the shared node TLS cert"
+      include_tasks: "../_shared/tasks/ensure_node_tls_cert.yml"
+      when: "role_redis_active | default(false) | bool"
+      tags: [database, redis]
 
     # Applies the role's code_only task file — the systemd override, the backup
     # script and the ChromaDB credential file + unit — NEVER the full role,

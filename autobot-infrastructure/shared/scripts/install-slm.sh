@@ -418,7 +418,12 @@ setup_slm_admin_ui() {
     if [[ -d "$SLM_ADMIN_DIR" ]]; then
         cd "$SLM_ADMIN_DIR"
         sudo -u autobot npm install --silent
-        sudo -u autobot npm run build --silent 2>/dev/null || true
+        # #15603: no longer `|| true` — that discarded a build failure
+        # entirely (the installer reported success over an empty dist/,
+        # worse than the Ansible sites' unstaged-but-at-least-visible
+        # failures). `set -e` (top of file) now aborts the install on a
+        # real build failure the same way every other step here does.
+        sudo -u autobot npm run build --silent
     else
         warn "SLM Admin UI directory not found, skipping build"
     fi

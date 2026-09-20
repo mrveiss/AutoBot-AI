@@ -13,16 +13,19 @@ system_dependencies:
   - nginx
   - nodejs   # v20 via NodeSource
 
+# #15603: no build oneshot. This declared exec_start: "bash -c 'cd ... && npm
+# ci && npm run build'" — unstaged, the exact defect
+# roles/_shared/tasks/build_publish_slm_frontend.yml exists to close — and
+# ManifestService.exec_start (autobot-slm-backend/models/manifest.py) has zero
+# consumers anywhere in the codebase, the same dead field removed from the
+# SLM frontend's manifest.yml in the same change. The real, live build/publish
+# mechanism is the `ansible_role: frontend` named below, via that shared task
+# file.
 services:
-  - name: autobot-frontend-build
-    type: oneshot
-    start_order: 1
-    exec_start: "bash -c 'cd /opt/autobot/autobot-frontend && npm ci && npm run build'"
-    user: autobot-frontend
   - name: autobot-frontend
     type: systemd
     system_service: nginx
-    start_order: 2
+    start_order: 1
 
 ports:
   - port: 443

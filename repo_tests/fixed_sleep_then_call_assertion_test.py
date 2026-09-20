@@ -82,6 +82,10 @@ _EXEMPT_SITES: dict[tuple[str, str], int] = {
         "TestMultiModalWorkflowIntegration.test_realtime_multimodal_stream",
     ): 1,  # paces the simulated stream; excluded from every timing assert below
     (
+        "autobot-backend/protocols/idle_notice_test.py",
+        "TestNotifyAgentIdle.test_an_already_idle_first_report_fires_no_notice",
+    ): 1,  # proving an event never fires has no observable to wait on
+    (
         "autobot-backend/security/threat_intelligence_test.py",
         "TestThreatIntelligenceCache.test_cache_expiration",
     ): 1,  # TTL expiry via time.time() is the subject; no injectable clock
