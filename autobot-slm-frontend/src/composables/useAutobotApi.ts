@@ -183,6 +183,143 @@ export interface BudgetPoliciesList {
 }
 
 // =============================================================================
+// Data Hygiene (#17040) — orphan-storage preview, orphan-resource repair, and
+// the audit trail both actions leave.
+//
+// Deletion is NEVER issued directly from this composable: an orphan-storage
+// candidate is only PROPOSED through `createApproval` below
+// (POST /approval-gates, approval_type=destructive_action) -- approving that
+// gate is what actually runs `services/orphan_storage_cleanup_action.py`.
+// Orphan-resource repair (facts, secrets) reassigns a live owner rather than
+// deleting anything, so it calls POST /admin/orphans/repair directly, the
+// same way `api/admin_orphan_repair.py`'s own handler does.
+// =============================================================================
+
+/** One candidate row (`api/schemas_orphan_storage.py::OrphanStorageCandidateResponse`). */
+export interface OrphanStorageCandidate {
+  provider: string
+  id: string
+  location: string
+  size_bytes: number
+  modified_at: string
+  reason: string
+  deletable: boolean
+}
+
+/** Whether one detector actually ran -- `available: false` means "could not check", never "found nothing". */
+export interface OrphanStorageProviderStatus {
+  provider: string
+  available: boolean
+  error: string | null
+}
+
+export interface OrphanStorageListResponse {
+  candidates: OrphanStorageCandidate[]
+  total_count: number
+  total_size_bytes: number
+  provider_statuses: OrphanStorageProviderStatus[]
+}
+
+/**
+ * Body of POST /approval-gates (`api/schemas_workflows.py::CreateApprovalRequest`).
+ * Data Hygiene always sends `approval_type: 'destructive_action'` and a
+ * `context` shaped exactly like `orphan_storage_cleanup_action.py`'s
+ * docstring: `{ action: 'orphan_storage_delete', provider, candidate_id }`.
+ */
+export interface CreateApprovalRequestBody {
+  title: string
+  approval_type: string
+  description?: string
+  requested_by_agent?: string
+  workflow_id?: string
+  workflow_step?: string
+  context?: Record<string, unknown>
+  task_ids?: string[]
+}
+
+export interface ApprovalGateResponse {
+  id: string
+  title: string
+  description: string | null
+  approval_type: string
+  status: string
+  requested_by_agent: string | null
+  decided_by_user: string | null
+  workflow_id: string | null
+  workflow_step: string | null
+  context: Record<string, unknown> | null
+  decided_at: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+/**
+ * One orphaned resource. Every `OrphanRepairer.find_orphans()` implementation
+ * in `services/orphan_repair_types.py` returns exactly this shape regardless
+ * of resource type -- `conditions` is type-specific (owner/grant/scope for a
+ * knowledge fact, dead_vaults for a secret) and rendered generically here.
+ */
+export interface OrphanResource {
+  resource_id: string
+  conditions: Record<string, unknown>
+}
+
+export interface OrphanListResponse {
+  resource_type: string
+  orphans: OrphanResource[]
+}
+
+/** Body of POST /admin/orphans/repair (`api/schemas_orphan_repair.py::OrphanRepairRequest`). */
+export interface OrphanRepairRequestBody {
+  resource_type: string
+  resource_id: string
+  new_owner_id: string
+}
+
+export interface OrphanRepairResponse {
+  resource_type: string
+  resource_id: string
+  new_owner_id: string
+  conditions: Record<string, unknown>
+  before: Record<string, unknown>
+  after: Record<string, unknown>
+}
+
+/** `services/audit_logger.py::AuditResult` (`Literal["success", "denied", "failed", "error"]`). */
+export type AuditResultValue = 'success' | 'denied' | 'failed' | 'error'
+
+/**
+ * One row of GET /audit/logs (`AuditLogEntry.to_response_dict()` in
+ * `services/audit_logger.py`). `timestamp` is a Unix-epoch float in
+ * SECONDS (`AuditEntry.timestamp: float`), not an ISO string or ms --
+ * multiply by 1000 before handing it to `Date`.
+ */
+export interface AuditLogEntry {
+  id: string
+  timestamp: number
+  date: string
+  operation: string
+  result: AuditResultValue
+  user_id: string | null
+  session_id: string | null
+  ip_address: string | null
+  resource: string | null
+  vm_source: string | null
+  vm_name: string | null
+  user_role: string | null
+  details: Record<string, unknown> | null
+  performance_ms: number | null
+}
+
+export interface AuditQueryResponse {
+  success: boolean
+  total_returned: number
+  has_more: boolean
+  entries: AuditLogEntry[]
+  query: Record<string, unknown>
+}
+
+// =============================================================================
 // Advanced Control (#12653) — desktop streaming + human takeover.
 //
 // The endpoint paths and payload shapes below used to be re-declared inline in
@@ -1065,6 +1202,57 @@ export function useAutobotApi() {
   }
 
   // =============================================================================
+  // Data Hygiene (#17040)
+  // =============================================================================
+
+  /**
+   * Orphan-storage candidates across every registered detector (#17038/#17039).
+   * Read-only: this route has no delete endpoint on purpose. A candidate is
+   * removed only once an approval created by `createApproval` is approved.
+   */
+  async function getOrphanStorage(): Promise<OrphanStorageListResponse> {
+    const response = await client.get<OrphanStorageListResponse>('/admin/orphan-storage')
+    return response.data
+  }
+
+  /**
+   * Create an approval-gate request (#1402). Data Hygiene uses this ONLY to
+   * PROPOSE an orphan-storage deletion -- never to delete directly.
+   */
+  async function createApproval(body: CreateApprovalRequestBody): Promise<ApprovalGateResponse> {
+    const response = await client.post<ApprovalGateResponse>('/approval-gates', body)
+    return response.data
+  }
+
+  /** Orphans of one resource type (#15779/#16927): currently 'knowledge_fact' or 'secret'. */
+  async function getOrphans(resourceType: string, limit?: number): Promise<OrphanListResponse> {
+    const params = new URLSearchParams({ resource_type: resourceType })
+    if (limit) params.append('limit', String(limit))
+    const response = await client.get<OrphanListResponse>(`/admin/orphans?${params}`)
+    return response.data
+  }
+
+  /** Reassign an orphaned resource to a live owner -- a repair, not a deletion; no approval gate. */
+  async function repairOrphan(body: OrphanRepairRequestBody): Promise<OrphanRepairResponse> {
+    const response = await client.post<OrphanRepairResponse>('/admin/orphans/repair', body)
+    return response.data
+  }
+
+  /** Audit trail (#1281/#4461), filtered by one `operation` at a time -- the backend accepts a single value. */
+  async function getAuditLogs(options?: {
+    operation?: string
+    limit?: number
+    offset?: number
+  }): Promise<AuditQueryResponse> {
+    const params = new URLSearchParams()
+    if (options?.operation) params.append('operation', options.operation)
+    if (options?.limit) params.append('limit', String(options.limit))
+    if (options?.offset) params.append('offset', String(options.offset))
+    const response = await client.get<AuditQueryResponse>(`/audit/logs?${params}`)
+    return response.data
+  }
+
+  // =============================================================================
   // Logs API (for viewing, not forwarding)
   // =============================================================================
 
@@ -1824,6 +2012,12 @@ export function useAutobotApi() {
     getLLMFallbackStatus,
     // Budget audit (#10488)
     getBudgetPolicies,
+    // Data Hygiene (#17040)
+    getOrphanStorage,
+    createApproval,
+    getOrphans,
+    repairOrphan,
+    getAuditLogs,
     // Logs
     getLogs,
     // System

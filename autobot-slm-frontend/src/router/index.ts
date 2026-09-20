@@ -296,6 +296,15 @@ const router = createRouter({
           meta: { title: 'SSO / OIDC', parent: 'settings', admin: true }
         },
         {
+          // Issue #17040: Data hygiene -- orphan-storage preview (proposes
+          // cleanup via POST /approval-gates, never deletes directly),
+          // orphan-resource repair, and the audit trail both leave.
+          path: 'admin/data-hygiene',
+          name: 'settings-admin-data-hygiene',
+          component: () => import('@/views/settings/admin/DataHygieneView.vue'),
+          meta: { title: 'Data Hygiene', parent: 'settings', admin: true }
+        },
+        {
           // Issue #11129 P2: Company OS project disposal policy (SLM operator panel)
           path: 'disposal-policy',
           name: 'settings-disposal-policy',

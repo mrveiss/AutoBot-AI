@@ -15,9 +15,14 @@
 
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 const route = useRoute()
 const router = useRouter()
+// #17040: the Data Hygiene tab below is the only entry in this array added
+// through i18n -- every other entry here already hardcodes its name (a
+// pre-existing gap tracked separately, not this issue's scope to fix).
+const { t } = useI18n()
 
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
@@ -51,6 +56,10 @@ const tabs = [
   { id: 'budget-audit', name: 'Budget Audit', path: '/settings/admin/budget-audit', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
   // MVA-1735: SSO/OIDC provider configuration
   { id: 'sso', name: 'SSO / OIDC', path: '/settings/admin/sso', icon: 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z' },
+  // Issue #17040: orphan-storage preview (proposes via approval-gates only),
+  // orphan-resource repair, and audit -- reachable through this same tab bar
+  // so the router's existing admin-route guard covers it automatically.
+  { id: 'data-hygiene', name: t('dataHygiene.tabName'), path: '/settings/admin/data-hygiene', icon: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' },
   // Issue: NPU Workers consolidated to Fleet Overview /fleet/npu (Worker Registry sub-tab)
 ]
 
