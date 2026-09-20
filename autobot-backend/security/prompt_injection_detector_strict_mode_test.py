@@ -102,18 +102,17 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 #: 'autobot-backend/*.py' | grep -v '_test\.py$' | wc -l`, independently
 #: cross-checked -- a local reach-test pass is not reliable evidence for this
 #: one, per #17072 review). Population minus the unchanged growth allowance.
-#: Re-pinned 2944 -> 2947 (#16843): measured population 3247, direct-called
-#: via `_tracked_backend_python_files(Path.cwd())` rather than through pytest
-#: (same distrust as the #17072 re-pin above) -- this PR's own
-#: api/schemas_emergency_stop.py, services/emergency_stop.py, and
-#: tests/api/test_advanced_control_emergency_stop_16843.py (its name does not
-#: end `_test.py`, so this guard's filter does not exclude it) exceeded the
-#: declared allowance (skips=0 + growth=300 = 300) by 3. Population minus the
-#: unchanged growth allowance.
+#: Two branches re-pinned 2944 independently and in parallel -- #16843 to 2947
+#: (its own +3 non-test files) and #16937 to 2945 (+1 file,
+#: security/unicode_normalization.py) -- each correct against a tree that no
+#: longer exists once the other merges. Re-pinned again on #16843's merge of
+#: current main (base 358606d25): measured population 3248 directly on the
+#: merged tree, not taken from either side of the conflict. Population minus
+#: the unchanged growth allowance, same formula as every prior re-pin above.
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2947,
+    floor=2948,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )
