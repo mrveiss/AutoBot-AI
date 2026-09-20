@@ -122,16 +122,19 @@ jobs:
         # structlog is required because test_unified_secrets_api.py mounts the
         # full FastAPI router which transitively imports security.service_auth
         # (structlog-based structured logging for HMAC service-auth).
-        # aiohttp is required because test_secrets_coordinator.py's #17099 test
-        # imports api.secrets, which imports knowledge.connectors.credential_store,
-        # which imports knowledge/connectors/gdrive.py at module level (#16444).
+        # aiohttp and defusedxml are required because test_secrets_coordinator.py's
+        # #17099 test imports api.secrets, which imports
+        # knowledge.connectors.credential_store, whose package __init__ eagerly
+        # imports EVERY connector module: gdrive.py needs aiohttp (#16444),
+        # nextcloud.py needs defusedxml (#17134). Every connector's third-party
+        # import lands here as long as that __init__ stays eager -- see #17138.
         run: |
           python -m pip install --upgrade pip
           python -m pip install \
             "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite \
             pydantic pydantic-settings \
             bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \
-            cryptography fastapi structlog aiohttp \
+            cryptography fastapi structlog aiohttp defusedxml \
             pytest pytest-asyncio
 
       - name: Run migration matrix
