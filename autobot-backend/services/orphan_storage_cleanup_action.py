@@ -25,7 +25,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from autobot_shared.logging_manager import get_logger
 from models.approval import ApprovalComment
 from services.approval_execution import register_post_approval_action
 from services.audit_logger import audit_log
@@ -35,8 +34,6 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from models.approval import Approval
-
-logger = get_logger(__name__)
 
 #: The ``context["action"]`` value a proposal names to route here.
 ACTION = "orphan_storage_delete"
@@ -48,8 +45,14 @@ async def execute_orphan_storage_delete(approval: "Approval", session: "AsyncSes
     provider = context.get("provider")
     candidate_id = context.get("candidate_id")
     if not provider or not candidate_id:
-        logger.error("Approval %s has no provider/candidate_id in context: %r", approval.id, context)
-        return
+        # #17141: raise rather than log-and-return. approval_execution's
+        # dispatcher is the sole owner of failure recording -- returning
+        # quietly here would leave the approval reading APPROVED with
+        # nothing durable, exactly the hole that issue closes. Raising lets
+        # the dispatcher's own except-and-record path catch this the same
+        # way it catches any other handler failure, with no separate
+        # recording logic to keep in sync here.
+        raise ValueError(f"approval {approval.id} is missing provider/candidate_id in its action context")
 
     result = await delete_candidate(provider, candidate_id)
 

@@ -122,26 +122,41 @@ jobs:
         # structlog is required because test_unified_secrets_api.py mounts the
         # full FastAPI router which transitively imports security.service_auth
         # (structlog-based structured logging for HMAC service-auth).
-        # test_secrets_coordinator.py's #17099 test imports api.secrets, which drags
-        # in several eager package __init__ files, each pulling third-party imports
-        # that have nothing to do with migrations: connectors' __init__ imports every
-        # connector (gdrive.py -> aiohttp, #16444; nextcloud.py -> defusedxml, #17134)
-        # and middleware/__init__ -> plugin_sdk/__init__ -> loader.py -> jsonschema,
-        # with prometheus_client via auth_middleware -> security_layer.
+        # test_secrets_coordinator.py's #17099 test imports api.secrets, which used to
+        # drag in several eager package __init__ files, each pulling a third-party
+        # import that has nothing to do with migrations. #17138 fixed two of the four
+        # found (verified empirically, not just by re-reading the fix): connectors'
+        # __init__ no longer imports every connector at package-import time
+        # (gdrive.py -> aiohttp, #16444; nextcloud.py -> defusedxml, #17134 -- both
+        # now lazy, resolved on first real use by registry.ConnectorRegistry), and
+        # plugin_sdk/loader.py no longer binds jsonschema.Draft202012Validator at
+        # module level (reached via middleware/__init__ -> plugin_sdk/__init__ ->
+        # loader.py) -- so defusedxml and jsonschema are gone from this list.
         #
-        # These four were NOT found one red run at a time: the import graph was walked
-        # statically from api/secrets.py, following module-level imports only, through
-        # relative imports and through every ancestor package __init__. starlette is the
-        # only other name that walk reports and pip already installs it with fastapi.
-        # The durable fix is #17138 (stop importing eagerly), not a longer list here.
+        # aiohttp and prometheus_client stay: #17138's own fix does not reach them.
+        # Confirmed by import-blocking the four names one at a time against a fresh
+        # `from api.secrets import _create_system_vault_secret` after the #17138 fix
+        # landed, rather than trusting the walk below to still be complete:
+        #   - aiohttp: api.secrets -> autobot_memory_graph -> autobot_memory_graph.
+        #     queries -> autobot_shared.security (eager __init__) -> ssrf_guard.py.
+        #     A DIFFERENT eager package __init__ than connectors', not touched here.
+        #   - prometheus_client: api.secrets -> auth_middleware -> security_layer ->
+        #     autobot_shared.monitoring (eager __init__) -> prometheus_metrics.py.
+        #     A third, also-untouched eager package __init__.
+        # Both are the same general pattern #17138's own issue named but did not
+        # scope to fix (autobot_shared.security and autobot_shared.monitoring have
+        # far wider callers than connectors/plugin_sdk) -- tracked as a follow-up
+        # rather than silently left for the next red run to rediscover.
+        #
+        # starlette is the only other name a static import-graph walk of
+        # api/secrets.py reports, and pip already installs it with fastapi.
         run: |
           python -m pip install --upgrade pip
           python -m pip install \
             "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite \
             pydantic pydantic-settings \
             bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \
-            cryptography fastapi structlog aiohttp defusedxml \
-            jsonschema prometheus_client \
+            cryptography fastapi structlog aiohttp prometheus_client \
             pytest pytest-asyncio
 
       - name: Run migration matrix

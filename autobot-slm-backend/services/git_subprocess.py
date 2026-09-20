@@ -13,6 +13,7 @@ the code_source checkout, and this is the one place that does it.
 from __future__ import annotations
 
 import asyncio
+import enum
 import logging
 from pathlib import Path
 
@@ -87,8 +88,33 @@ def component_pathspec(repo_root: str, source_dir: str) -> str:
     return Path(source_dir).resolve().relative_to(Path(repo_root).resolve()).as_posix()
 
 
-async def is_shallow_repository(repo_root: str) -> bool:
-    """True when *repo_root* is a shallow git clone (#16310).
+class ShallowCheck(enum.Enum):
+    """Tri-state result of asking whether a repo is a shallow clone (#17118).
+
+    A plain ``bool`` collapses "verified not shallow" and "could not tell"
+    into the same ``False`` -- a broken *repo_root* (not a git repository, a
+    corrupted ``.git``, git unavailable, a wedged process) then reads
+    identically to a genuine full-depth clone. ``UNKNOWN`` makes that a
+    third, distinct value every caller has to name explicitly instead of
+    silently falling through an ``if``.
+    """
+
+    SHALLOW = "shallow"
+    FULL = "full"
+    UNKNOWN = "unknown"
+
+
+async def is_shallow_repository(repo_root: str) -> ShallowCheck:
+    """Whether *repo_root* is a shallow git clone -- SHALLOW, FULL, or
+    UNKNOWN when that could not be determined (#16310, tri-state #17118).
+
+    UNKNOWN covers every way ``git rev-parse --is-shallow-repository``
+    fails to give a clean answer: ``run_git``'s own collapse of "could not
+    run at all" (timeout, spawn failure) into ``rc=1``, and git running but
+    the command itself failing (*repo_root* is not a git repository, a
+    corrupted ``.git``, or any other rev-parse error) -- both are "could not
+    tell", not "not shallow". Only a clean rev-parse with a real
+    ``true``/``false`` line counts as a determination.
 
     Shared by :func:`ensure_full_history` (fixes it) and
     ``services/sync_deletions.py``'s bootstrap guard (refuses to plan against
@@ -96,7 +122,14 @@ async def is_shallow_repository(repo_root: str) -> bool:
     rev-parse` both callers would otherwise duplicate.
     """
     output, rc = await run_git(repo_root, "rev-parse", "--is-shallow-repository")
-    return rc == 0 and output.strip() == "true"
+    if rc != 0:
+        return ShallowCheck.UNKNOWN
+    stripped = output.strip()
+    if stripped == "true":
+        return ShallowCheck.SHALLOW
+    if stripped == "false":
+        return ShallowCheck.FULL
+    return ShallowCheck.UNKNOWN
 
 
 async def ensure_full_history(repo_root: str) -> tuple[bool, str]:
@@ -112,13 +145,17 @@ async def ensure_full_history(repo_root: str) -> tuple[bool, str]:
     first.
 
     Returns ``(ok, message)``. ``ok`` is False on an unshallow that failed,
-    or on one that ran and reported success but left the repository shallow
-    anyway -- the caller must fail loudly on either, never proceed as if
+    on one that ran and reported success but left the repository shallow
+    anyway, or when shallowness could not be determined at all (#17118) --
+    the caller must fail loudly on every one of those, never proceed as if
     full history is now available (that is exactly how the original bug
     stayed invisible: an empty, error-free bootstrap plan that still wrote
     the marker).
     """
-    if not await is_shallow_repository(repo_root):
+    status = await is_shallow_repository(repo_root)
+    if status is ShallowCheck.UNKNOWN:
+        return False, f"could not determine whether {repo_root} is a shallow clone"
+    if status is ShallowCheck.FULL:
         return True, f"{repo_root} already has full history"
 
     logger.info("git_subprocess: %s is a shallow clone -- unshallowing (#16310)", repo_root)
@@ -126,8 +163,11 @@ async def ensure_full_history(repo_root: str) -> tuple[bool, str]:
     if rc != 0:
         return False, f"git fetch --unshallow failed in {repo_root}"
 
-    if await is_shallow_repository(repo_root):
+    status = await is_shallow_repository(repo_root)
+    if status is ShallowCheck.SHALLOW:
         return False, f"{repo_root} is still a shallow clone after `git fetch --unshallow`"
+    if status is ShallowCheck.UNKNOWN:
+        return False, f"could not confirm {repo_root} is no longer shallow after `git fetch --unshallow`"
 
     return True, f"{repo_root} unshallowed"
 
