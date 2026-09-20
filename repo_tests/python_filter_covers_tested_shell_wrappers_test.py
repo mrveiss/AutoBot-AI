@@ -152,9 +152,10 @@ def test_every_library_a_tested_wrapper_sources_is_covered():
         for sourced in _sourced_paths(script)[0]:
             if not _is_covered(sourced, patterns):
                 uncovered[sourced] = script.relative_to(_REPO_ROOT).as_posix()
-    assert not uncovered, (
-        "these libraries are sourced by a tested wrapper but match no filter pattern:\n  "
-        + "\n  ".join(f"{path} — sourced by {by}" for path, by in sorted(uncovered.items()))
+    assert (
+        not uncovered
+    ), "these libraries are sourced by a tested wrapper but match no filter pattern:\n  " + "\n  ".join(
+        f"{path} — sourced by {by}" for path, by in sorted(uncovered.items())
     )
 
 
@@ -198,9 +199,7 @@ def test_the_source_extractor_reads_both_spellings():
 
 def test_no_source_line_goes_unread():
     """An argument the extractor cannot resolve is a dependency nobody is checking."""
-    unresolved = {
-        script.name: args for script, _ in _tested_wrappers().items() if (args := _sourced_paths(script)[1])
-    }
+    unresolved = {script.name: args for script, _ in _tested_wrappers().items() if (args := _sourced_paths(script)[1])}
     assert not unresolved, f"source arguments that did not resolve to a repository file: {unresolved}"
 
 
