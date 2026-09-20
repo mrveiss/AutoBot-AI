@@ -217,6 +217,15 @@ def link_group_vars(inventory_path: Path, ansible_dir: Path) -> None:
         logger.warning("Could not link group_vars for dynamic inventory: %s", exc)
 
 
+#: The auto-detected ansible dir (#17150): prefer code_source for latest roles,
+#: falling back to the deployed copy when code_source's ansible dir does not
+#: exist YET. `SLM_ANSIBLE_DIR` overrides the code_source candidate; if that
+#: override path also does not exist, the fallback still applies unchanged
+#: from the pre-#17150 behavior -- only the re-check-per-call timing changed.
+DEFAULT_CODE_SOURCE_ANSIBLE_DIR = "/opt/autobot/code_source/autobot-slm-backend/ansible"
+FALLBACK_ANSIBLE_DIR = Path("/opt/autobot/autobot-slm-backend/ansible")
+
+
 class PlaybookExecutor:
     """Execute Ansible playbooks programmatically."""
 
@@ -225,20 +234,51 @@ class PlaybookExecutor:
         Initialize playbook executor.
 
         Args:
-            ansible_dir: Path to Ansible directory (defaults to autobot-slm-backend/ansible)
+            ansible_dir: Path to Ansible directory (defaults to autobot-slm-backend/ansible).
+                An explicit value is never auto-refreshed later (#17150) -- it is
+                a caller's deliberate choice (tests, wizard provisioning), not
+                the auto-detected default this instance would otherwise track.
         """
-        if ansible_dir is None:
-            # Use code_source for latest Ansible roles; fall back to deployed copy
-            ansible_dir = Path(
-                os.getenv(
-                    "SLM_ANSIBLE_DIR",
-                    "/opt/autobot/code_source/autobot-slm-backend/ansible",
-                )
-            )
-            if not ansible_dir.exists():
-                ansible_dir = Path("/opt/autobot/autobot-slm-backend/ansible")
-        self.ansible_dir = ansible_dir
-        self.inventory_path = ansible_dir / "inventory" / "slm-nodes.yml"
+        self._ansible_dir_explicit = ansible_dir is not None
+        self.ansible_dir = ansible_dir if ansible_dir is not None else self._auto_detect_ansible_dir()
+        self.inventory_path = self.ansible_dir / "inventory" / "slm-nodes.yml"
+
+    @staticmethod
+    def _auto_detect_ansible_dir() -> Path:
+        """Where code_source's ansible dir *currently* is, checked fresh (#17150).
+
+        Module-level constants, not literals, so a test can monkeypatch either
+        candidate without touching real `/opt/autobot`.
+        """
+        # Use code_source for latest Ansible roles; fall back to deployed copy
+        ansible_dir = Path(os.getenv("SLM_ANSIBLE_DIR", DEFAULT_CODE_SOURCE_ANSIBLE_DIR))
+        if not ansible_dir.exists():
+            ansible_dir = FALLBACK_ANSIBLE_DIR
+        return ansible_dir
+
+    def _refresh_ansible_dir(self) -> None:
+        """Re-detect ``ansible_dir``/``inventory_path`` before this run uses them (#17150).
+
+        `PlaybookExecutor` is a module-level lazy singleton (`get_playbook_executor`):
+        constructed once per process, on whichever API call first touches it. Before
+        this fix, a process that started while code_source's ansible dir did not yet
+        exist stayed pinned to the installed-copy fallback for its entire lifetime --
+        `_update_code_source()` could sync code_source perfectly on every later call
+        and it would never matter, because it derives its OWN sync target from
+        `self.ansible_dir` (two dirs up): pinned to the fallback, that target is
+        `/opt/autobot`, not `/opt/autobot/code_source`, so the sync itself would
+        silently target the wrong directory too. Called at the top of
+        `execute_playbook`, before `_update_code_source`, so a fresh call both
+        re-detects AND syncs the right directory, not just one of the two.
+
+        No-op when this instance's ``ansible_dir`` was passed explicitly at
+        construction (tests, wizard provisioning) -- that choice is never
+        silently replaced.
+        """
+        if self._ansible_dir_explicit:
+            return
+        self.ansible_dir = self._auto_detect_ansible_dir()
+        self.inventory_path = self.ansible_dir / "inventory" / "slm-nodes.yml"
 
     def _find_ansible_playbook(self) -> str:
         """Find ansible-playbook executable.
@@ -1240,6 +1280,10 @@ class PlaybookExecutor:
             Dict with keys: success (bool), output (str), returncode (int),
             timed_out (bool) -- True only when ``timeout_s`` was exceeded.
         """
+        # #17150: re-detect before syncing, not just before reading the playbook path --
+        # _update_code_source derives ITS OWN sync target from self.ansible_dir, so
+        # syncing first against a stale fallback would target the wrong directory too.
+        self._refresh_ansible_dir()
         code_source_synced = await self._update_code_source()
         sync_failure = self._code_source_sync_failure_result(playbook_name, detach, code_source_synced)
         if sync_failure is not None:
