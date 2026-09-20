@@ -37,7 +37,7 @@ const props = withDefaults(
   },
 )
 
-const isDisabled = computed(() => props.disabled)
+const isDisabled = computed(() => props.disabled || props.loading)
 </script>
 
 <template>

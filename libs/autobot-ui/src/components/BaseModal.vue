@@ -119,7 +119,9 @@ const handleClose = () => {
 }
 
 const handleOverlayClick = () => {
-  handleClose()
+  if (props.closeOnOverlay) {
+    handleClose()
+  }
 }
 
 // Focus, restore, and scroll-lock all driven by composables above.

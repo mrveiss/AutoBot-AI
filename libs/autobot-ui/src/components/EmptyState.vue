@@ -18,7 +18,7 @@ defineProps<{
 
 <template>
   <div class="aui-empty" role="status">
-    <div v-if="$slots.icon" class="aui-empty__icon">
+    <div v-if="$slots.icon" class="aui-empty__icon" aria-hidden="true">
       <slot name="icon" />
     </div>
     <p v-if="$slots.title || title" class="aui-empty__title">
