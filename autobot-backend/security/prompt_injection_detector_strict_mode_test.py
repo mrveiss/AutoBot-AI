@@ -98,10 +98,14 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 #: 2910 against 3210 at #17129.
 #: Re-pinned 2925 -> 2940 (#17134): measured population 3240 after the same merge.
 #: Population minus the unchanged growth allowance.
+#: Re-pinned 2940 -> 2944 (#17072): measured population 3244 (`git ls-files --
+#: 'autobot-backend/*.py' | grep -v '_test\.py$' | wc -l`, independently
+#: cross-checked -- a local reach-test pass is not reliable evidence for this
+#: one, per #17072 review). Population minus the unchanged growth allowance.
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2940,
+    floor=2944,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )

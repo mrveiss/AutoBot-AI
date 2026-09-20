@@ -6,7 +6,7 @@
 
 Runs nightly at 01:00 UTC. Selects LLCProject rows where lifecycle_state ==
 'pending_disposal' and disposal_scheduled_at <= now(UTC), then disposes each
-that passes the approval gate (no approval required, or LLCApproval.status ==
+that passes the approval gate (no approval required, or its Approval.status ==
 APPROVED).
 
 Beat schedule entry:
@@ -25,10 +25,10 @@ from datetime import datetime, timezone
 from celery import shared_task
 from sqlalchemy import or_, select
 
-from llc.models.approval import LLCApproval
 from llc.models.enums import ApprovalStatus
 from llc.models.sprint import LLCProject
 from llc.services.project_disposal import dispose
+from models.approval import Approval
 from user_management.database import get_async_session_factory
 from utils.celery_reliability import (
     CELERY_MAX_RETRIES,
@@ -92,10 +92,10 @@ async def _async_sweep() -> int:
 
 
 async def _is_disposal_allowed(project: LLCProject, session: object) -> bool:
-    """Approval-gated projects dispose only once their LLCApproval is APPROVED."""
+    """Approval-gated projects dispose only once their Approval is APPROVED (#17043)."""
     if project.disposal_approval_id is None:
         return True
-    result = await session.execute(select(LLCApproval).where(LLCApproval.id == project.disposal_approval_id))
+    result = await session.execute(select(Approval).where(Approval.id == project.disposal_approval_id))
     approval = result.scalar_one_or_none()
     return approval is not None and approval.status == ApprovalStatus.APPROVED.value
 
