@@ -280,7 +280,7 @@ def _build_script_overrides() -> Dict[str, List[str]]:
 #: -- every other call site publishes the general user-facing frontend
 #: (`autobot-frontend`, or `autobot-vue`, its pre-rename directory name still
 #: used by deploy-native-services.yml -- confirmed NOT the SLM frontend by
-#: docs/developer/AUTOBOT_REFERENCE.md:64, "The SLM frontend is in
+#: docs/developer/AUTOBOT_REFERENCE.md, "The SLM frontend is in
 #: autobot-slm-frontend/, NOT autobot-vue"). Checked against every one of
 #: this scan's own live call sites in test_call_site_classification_matches_
 #: this_pin below, not just asserted.
@@ -329,7 +329,7 @@ def test_call_site_classification_matches_this_pin():
     Native deploy (frontend) and Frontend were the two labels #17136 could
     not resolve from their names alone: both publish `.../autobot-frontend`
     or `.../autobot-vue`, neither of which is the SLM frontend (confirmed
-    against docs/developer/AUTOBOT_REFERENCE.md:64), so `build` is already
+    against docs/developer/AUTOBOT_REFERENCE.md), so `build` is already
     correct at both -- no live defect, just an unresolved label.
     """
     sites = _call_sites()
