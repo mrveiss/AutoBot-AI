@@ -73,7 +73,7 @@ describe('findShortfalls (negative control over the whole scan)', () => {
   it('reports a package as missing (not a version shortfall) when node_modules has no entry for it', async () => {
     vi.doMock('node:fs', () => ({
       existsSync: () => false,
-      readFileSync: (path: string) => JSON.stringify({ dependencies: {}, devDependencies: { jsdom: '^30.0.1' } }),
+      readFileSync: (_path: string) => JSON.stringify({ dependencies: {}, devDependencies: { jsdom: '^30.0.1' } }),
     }))
     const { findShortfalls } = await import('./dependency-floor-reporter')
     expect(findShortfalls()).toEqual([{ name: 'jsdom', declared: '^30.0.1', installed: null }])
