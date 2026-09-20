@@ -36730,7 +36730,7 @@ export interface paths {
         put?: never;
         /**
          * Approve Command
-         * @description Approve or deny a pending command execution
+         * @description Approve or deny a pending command execution; a person decides and is recorded (#17052).
          */
         post: operations["approve_command_api_security_approve_command_post"];
         delete?: never;
@@ -47258,6 +47258,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/a2a/trust/grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grant trust to a (credential, peer id) pair
+         * @description Set a pair's trust level (#16950). Audited with the acting admin, the pair and the level.
+         *
+         *     The re-key starts every pair at UNTRUSTED, which cannot submit tasks, so this is
+         *     the only way back in. The level holds as a floor until a threat event or an
+         *     integrity violation revokes it.
+         */
+        post: operations["grant_trust_api_a2a_trust_grant_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/a2a/trust-legacy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pre-#16950 header-only trust records
+         * @description The header-only records kept from before the re-key: never read for access, only to guide re-grants.
+         */
+        get: operations["list_legacy_trust_api_a2a_trust_legacy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/a2a/trust": {
         parameters: {
             query?: never;
@@ -53993,6 +54037,26 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * A2ATrustGrantRequest
+         * @description An admin grant of trust to one (credential, peer id) pair -- never to a bare peer id.
+         */
+        A2ATrustGrantRequest: {
+            /**
+             * Subject
+             * @description The verified credential subject presenting the peer id
+             */
+            subject: string;
+            /**
+             * Peer Id
+             * @description The peer's X-A2A-Agent-Id
+             */
+            peer_id: string;
+            /** @description The level to grant, held as a floor until misconduct revokes it */
+            level: components["schemas"]["TrustLevel"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AIDocumentListResponse
          * @description Response for GET /documents.
          */
@@ -58241,13 +58305,12 @@ export interface components {
         };
         /**
          * ApprovalAddCommentRequest
-         * @description Request body for adding a comment to an approval gate.
+         * @description Comment on an approval gate. author_type is ignored (#17056) -- kept only to log an old client sending it.
          */
         ApprovalAddCommentRequest: {
             /** Body */
             body: string;
-            /** @default human */
-            author_type: components["schemas"]["AuthorTypeEnum"];
+            author_type?: components["schemas"]["AuthorTypeEnum"] | null;
         } & {
             [key: string]: unknown;
         };
@@ -58359,7 +58422,7 @@ export interface components {
              * Format: uuid
              */
             company_id: string;
-            type: components["schemas"]["llc__models__enums__ApprovalType"];
+            type: components["schemas"]["ApprovalType"];
             /**
              * Requested By Agent Id
              * Format: uuid
@@ -58417,6 +58480,15 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ApprovalStatus
+         * @description Possible statuses for an approval gate.
+         *
+         *     Canonical for both the platform-general and the LLC company-scoped case
+         *     (#17043): WITHDRAWN/EXPIRED were LLC-only until this merge.
+         * @enum {string}
+         */
+        ApprovalStatus: "pending" | "approved" | "rejected" | "revision_requested" | "withdrawn" | "expired";
+        /**
          * ApprovalTransitionRequest
          * @description Request body for approve / reject / request-revision.
          */
@@ -58426,6 +58498,17 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ApprovalType
+         * @description Categories of approval gates.
+         *
+         *     Canonical for both the platform-general and the LLC company-scoped case
+         *     (#17043): HIRE..FINDING_PROMOTION were LLC-only (``llc/models/enums.py``)
+         *     until this merge -- ``llc.models.enums.ApprovalType`` now re-exports this
+         *     class rather than defining its own, so the two never drift apart again.
+         * @enum {string}
+         */
+        ApprovalType: "destructive_action" | "resource_request" | "create_agent" | "workflow_gate" | "hire" | "strategy" | "budget_override" | "sprint_close" | "project_disposal" | "finding_promotion";
         /**
          * ApproveCapabilitiesRequest
          * @description Request to approve plugin capabilities.
@@ -66260,7 +66343,7 @@ export interface components {
         CreateApprovalRequest: {
             /** Title */
             title: string;
-            approval_type: components["schemas"]["models__approval__ApprovalType"];
+            approval_type: components["schemas"]["ApprovalType"];
             /** Description */
             description?: string | null;
             /** Requested By Agent */
@@ -93177,7 +93260,7 @@ export interface components {
             type: "ssh_key" | "password" | "api_key" | "token" | "oauth_refresh_token" | "connector_oauth_token" | "certificate" | "database_url" | "infrastructure_host" | "other";
             scope: components["schemas"]["ChatSecretScope"];
             /** Value */
-            value: string;
+            value?: string | null;
             /** Chat Id */
             chat_id?: string | null;
             /**
@@ -93213,6 +93296,28 @@ export interface components {
              * @description User IDs to share with
              */
             shared_with?: string[];
+            /**
+             * Visibility
+             * @description A typo here must 422, not silently fall through to the legacy store (#16428 review)
+             */
+            visibility?: ("private" | "shared" | "group" | "organization" | "system") | null;
+            /**
+             * Connector Id
+             * @description Bridge to this connector's ConnectorCredentialStore entry
+             */
+            connector_id?: string | null;
+            /**
+             * Auth Type
+             * @description ConnectorAuth subclass name: BearerAuth, ApiKeyAuth, BasicAuth or OAuthRefreshAuth
+             */
+            auth_type?: string | null;
+            /**
+             * Credentials
+             * @description Sensitive auth fields, validated against auth_type's schema
+             */
+            credentials?: {
+                [key: string]: string;
+            } | null;
         } & {
             [key: string]: unknown;
         };
@@ -93399,6 +93504,13 @@ export interface components {
             /** Metadata */
             metadata?: {
                 [key: string]: unknown;
+            } | null;
+            /**
+             * Credentials
+             * @description New sensitive auth fields, for a bridged secret
+             */
+            credentials?: {
+                [key: string]: string;
             } | null;
         } & {
             [key: string]: unknown;
@@ -98257,7 +98369,7 @@ export interface components {
             approved: boolean;
             /**
              * User Id
-             * @description User who made the decision
+             * @description Ignored (#17052): the approver is the verified caller
              */
             user_id?: string | null;
             /**
@@ -98555,9 +98667,9 @@ export interface components {
         TerminalInterruptRequest: {
             /**
              * User Id
-             * @description User requesting control
+             * @description Ignored (#17052): the actor is the verified caller
              */
-            user_id: string;
+            user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -99565,6 +99677,21 @@ export interface components {
          * @enum {string}
          */
         TriggerType: "webhook" | "cron" | "redis_pubsub" | "file_watch" | "agent_event";
+        /**
+         * TrustLevel
+         * @description Trust level for federated peer evaluation (GH#8957, Issue #7358).
+         *
+         *     Used to determine what capabilities a peer agent can access based on
+         *     continuous trust scoring. Higher levels grant more capabilities.
+         *
+         *     Score ranges:
+         *       UNTRUSTED  (score ≤ 0.30)  — discovery info only
+         *       LIMITED    (0.30–0.60)     — discovery + task submission
+         *       STANDARD   (0.60–0.85)     — + memory/knowledge queries
+         *       TRUSTED    (> 0.85)        — + new agent definitions
+         * @enum {string}
+         */
+        TrustLevel: "UNTRUSTED" | "LIMITED" | "STANDARD" | "TRUSTED";
         /**
          * UIElementResponse
          * @description Response model for UI element
@@ -104043,7 +104170,7 @@ export interface components {
         };
         /** ApprovalDecision */
         llc__api__approvals__ApprovalDecision: {
-            decision: components["schemas"]["llc__models__enums__ApprovalStatus"];
+            decision: components["schemas"]["ApprovalStatus"];
             /** Decided By Agent Id */
             decided_by_agent_id?: string | null;
         } & {
@@ -104178,18 +104305,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * ApprovalStatus
-         * @description Status of an LLC approval request (GH#8214).
-         * @enum {string}
-         */
-        llc__models__enums__ApprovalStatus: "pending" | "approved" | "rejected" | "withdrawn" | "expired";
-        /**
-         * ApprovalType
-         * @description Gate type for a board approval request (GH#8214).
-         * @enum {string}
-         */
-        llc__models__enums__ApprovalType: "hire" | "strategy" | "budget_override" | "sprint_close" | "project_disposal" | "finding_promotion";
-        /**
          * TemplateSearchResponse
          * @description Response for GET /llc/templates/search (GH#8260).
          */
@@ -104203,18 +104318,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * ApprovalStatus
-         * @description Possible statuses for an approval gate.
-         * @enum {string}
-         */
-        models__approval__ApprovalStatus: "pending" | "approved" | "rejected" | "revision_requested";
-        /**
-         * ApprovalType
-         * @description Categories of approval gates.
-         * @enum {string}
-         */
-        models__approval__ApprovalType: "destructive_action" | "resource_request" | "create_agent" | "workflow_gate";
         /**
          * TrainRequest
          * @description Request to trigger model training.
@@ -125722,8 +125825,8 @@ export interface operations {
     list_approvals_api_approval_gates_get: {
         parameters: {
             query?: {
-                status_filter?: components["schemas"]["models__approval__ApprovalStatus"] | null;
-                approval_type?: components["schemas"]["models__approval__ApprovalType"] | null;
+                status_filter?: components["schemas"]["ApprovalStatus"] | null;
+                approval_type?: components["schemas"]["ApprovalType"] | null;
                 workflow_id?: string | null;
                 agent_id?: string | null;
                 /** @description Maximum number of items to return */
@@ -139590,7 +139693,10 @@ export interface operations {
     };
     request_host_selection_api_agent_terminal_host_selection_request_post: {
         parameters: {
-            query?: never;
+            query?: {
+                async_client?: boolean;
+                database?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -139881,8 +139987,8 @@ export interface operations {
     };
     execute_agent_command_api_agent_terminal_execute_post: {
         parameters: {
-            query?: {
-                session_id?: string;
+            query: {
+                session_id: string;
                 async_client?: boolean;
                 database?: string;
             };
@@ -140137,7 +140243,10 @@ export interface operations {
     };
     get_command_state_api_agent_terminal_commands__command_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                async_client?: boolean;
+                database?: string;
+            };
             header?: never;
             path: {
                 command_id: string;
@@ -166192,6 +166301,63 @@ export interface operations {
             };
         };
     };
+    grant_trust_api_a2a_trust_grant_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["A2ATrustGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_legacy_trust_api_a2a_trust_legacy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+    };
     list_trust_records_api_a2a_trust_get: {
         parameters: {
             query?: never;
@@ -169635,7 +169801,7 @@ export interface operations {
                 /** @description Filter by company */
                 company_id: string;
                 /** @description Filter by gate type */
-                type?: components["schemas"]["llc__models__enums__ApprovalType"] | null;
+                type?: components["schemas"]["ApprovalType"] | null;
             };
             header?: never;
             path?: never;

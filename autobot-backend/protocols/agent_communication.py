@@ -30,6 +30,7 @@ from autobot_shared.env_utils import env_int  # noqa: E402
 from autobot_shared.error_boundaries import error_boundary  # noqa: E402
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import RetryConfig, TimingConstants  # noqa: E402
+from protocols.message_origin import stamp  # noqa: E402
 
 
 def _parse_message_type(msg_type: Any) -> "MessageType":
@@ -144,6 +145,9 @@ class MessageHeader:
     expires_at: float | None = None
     retry_count: int = 0
     max_retries: int = RetryConfig.DEFAULT_RETRIES
+    # #16950: whose request this is, across relays -- see protocols/message_origin.py.
+    originator: str | None = None
+    chain: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -277,8 +281,9 @@ class AgentCommunicationProtocol:
     async def send_message(self, message: StandardMessage, channel_id: str | None = None) -> bool:
         """Send a message through a specific or default channel"""
 
-        # Set sender information
+        # Set sender information; the originator is set once and survives relays (#16950)
         message.header.sender = self.agent_identity
+        stamp(message.header, self.agent_identity.agent_id)
 
         # The named channel, or else the first that can reach the recipient (#16986)
         if channel_id and channel_id not in self.channels:

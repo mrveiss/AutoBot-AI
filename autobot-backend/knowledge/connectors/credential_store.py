@@ -218,6 +218,11 @@ class ConnectorCredentialStore:
                 secret_type=secret_type,
                 value=value,
                 scope="user",
+                # secret_type alone doesn't determine auth_cls uniquely --
+                # BearerAuth and ApiKeyAuth share "connector_api_key" -- so
+                # rotate() needs the exact class name to validate against
+                # the right schema (#16428 security review).
+                metadata={"auth_type": auth_cls.__name__},
                 created_by=owner_id,
             ),
         )
@@ -266,7 +271,13 @@ class ConnectorCredentialStore:
         new_credentials: dict,
         owner_id: str,
     ) -> None:
-        """Replace the stored secret value with new_credentials in-place."""
+        """Replace the stored secret value with new_credentials in-place.
+
+        Raises ValueError when the merged bundle doesn't satisfy the auth
+        type's schema -- store()'s validation on create() must hold on
+        rotation too, or a partial/malformed update persists silently until
+        the connector next tries to authenticate with it (#16428 review).
+        """
         existing = await asyncio.get_running_loop().run_in_executor(
             None,
             # accessed_by drives the access audit (#13628): rotation decrypts the
@@ -279,6 +290,17 @@ class ConnectorCredentialStore:
 
         current_creds = json.loads(existing["value"])
         current_creds.update(new_credentials)
+
+        auth_type_name = (existing.get("metadata") or {}).get("auth_type")
+        if auth_type_name:
+            from autobot_shared.auth import resolve_auth_type, validate_config_against_schema
+
+            auth_cls = resolve_auth_type(auth_type_name)
+            if auth_cls is not None:
+                errors = validate_config_against_schema(auth_cls, current_creds)
+                if errors:
+                    raise ValueError("; ".join(errors))
+
         new_value = json.dumps(current_creds, ensure_ascii=False)
 
         await asyncio.get_running_loop().run_in_executor(

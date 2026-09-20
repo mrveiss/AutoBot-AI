@@ -173,10 +173,15 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: Re-pinned 6412 -> 6421 (#17133): measured population 6821 exceeded the
 #: declared allowance (skips=1 + growth=400 = 401) by 8. Population minus the
 #: unchanged growth allowance, per that same growth judgement call above.
+#: Re-pinned 6421 -> 6473 (#17134): measured population 6873 after the security train
+#: merged main and the command-approvals branch. Population minus the unchanged growth
+#: allowance, same formula as the #17133 re-pin.
+#: Re-pinned 6473 -> 6481 (#17072): measured population 6881 after #17072's own file
+#: additions (8 net over main, 7 more than the allowance absorbs). Same formula again.
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6421,
+    floor=6481,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",

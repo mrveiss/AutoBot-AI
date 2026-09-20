@@ -25,6 +25,7 @@ APPROVAL_PENDING_SESSION_TTL: int = env_int("AUTOBOT_APPROVAL_PENDING_SESSION_TT
 from services.command_approval_manager import AgentRole
 from type_defs.common import Metadata
 
+from .conversation_owner import conversation_owner
 from .models import AgentSessionState, AgentTerminalSession
 
 logger = get_logger(__name__)
@@ -245,7 +246,7 @@ class SessionManager:
             conversation_id: Optional chat conversation ID to link
             host: Target host for command execution
             metadata: Additional session metadata
-            owner: Authenticated creator's username (#14989/#14960)
+            owner: Authenticated creator's username (#14989/#14960); None = the conversation's owner (#17053)
             tenant_id: The creator's org_id, from the JWT claim only (#16975).
                 None if it could not be determined -- never guessed here.
 
@@ -253,6 +254,8 @@ class SessionManager:
             Created session
         """
         session_id = str(uuid.uuid4())
+        if owner is None:
+            owner = await self._conversation_owner(conversation_id)
         pty_session_id = await self._setup_pty_for_session(session_id, conversation_id, owner)
 
         session = AgentTerminalSession(
@@ -264,6 +267,7 @@ class SessionManager:
             host=host,
             metadata=metadata or {},
             pty_session_id=pty_session_id,
+            owner=owner,  # #17053: the one record the REST ownership checks read
         )
 
         async with self._sessions_lock:
@@ -322,6 +326,7 @@ class SessionManager:
                         host=session_data.get("host"),
                         metadata=session_data.get("metadata", {}),
                         pty_session_id=session_data.get("pty_session_id"),
+                        owner=session_data.get("owner"),
                     )
 
                     # Restore session state
@@ -353,6 +358,10 @@ class SessionManager:
         # unreachable from the one path that needed it.
         return await self._rebuild_session_from_pending_approval(session_id)
 
+    async def _conversation_owner(self, conversation_id: str | None) -> str | None:
+        """Owner of the conversation driving a session, or None: admin-only (#17053)."""
+        return await conversation_owner(self.chat_history_manager, conversation_id)
+
     async def _rebuild_session_from_pending_approval(self, session_id: str) -> AgentTerminalSession | None:
         """Reconstruct a vanished session that still has an unanswered approval.
 
@@ -373,6 +382,7 @@ class SessionManager:
             # command is allowed to do.
             agent_role=AgentRole.CHAT_AGENT,
             conversation_id=conversation_id,
+            owner=await self._conversation_owner(conversation_id),
         )
         await self._restore_pending_approval(session, conversation_id)
 

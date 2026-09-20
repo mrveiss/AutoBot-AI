@@ -17,7 +17,7 @@ Mirrors test_goals_idor.py:
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -30,17 +30,22 @@ _FIXED_USER_ID = uuid.UUID("66666666-6666-6666-6666-666666666666")
 _OTHER_ORG = "99999999-9999-9999-9999-999999999999"
 _AGENT_ID = "77777777-7777-7777-7777-777777777777"
 
+#: Sentinel distinguishing "use the caller's own org" (the unset default)
+#: from a literal ``company_id=None`` -- a general, non-LLC approval (#17043 review).
+_SAME_AS_CALLER = object()
 
-def _make_approval(company_id: str) -> MagicMock:
+
+def _make_approval(company_id: str | None) -> MagicMock:
+    """An Approval row shaped for the LLC case (#17043): unified model attribute names."""
     now = datetime.now(timezone.utc)
     approval = MagicMock()
     approval.id = uuid.uuid4()
     approval.company_id = company_id
-    approval.type = "hire"
+    approval.approval_type = "hire"
     approval.status = "pending"
-    approval.requested_by_agent_id = _AGENT_ID
-    approval.payload = {}
-    approval.decided_by_agent_id = None
+    approval.requested_by_agent = _AGENT_ID
+    approval.context = {}
+    approval.decided_by_user = None
     approval.decided_at = None
     approval.created_at = now
     approval.updated_at = now
@@ -49,7 +54,7 @@ def _make_approval(company_id: str) -> MagicMock:
 
 def _make_client(
     caller_org_id: str,
-    approval_company_id: Optional[str] = None,
+    approval_company_id: Any = _SAME_AS_CALLER,
     approval_exists: bool = True,
     is_platform_admin: bool = False,
 ) -> TestClient:
@@ -63,7 +68,7 @@ def _make_client(
     mock_session = AsyncMock()
     mock_session.begin = MagicMock(return_value=AsyncMock())
 
-    acid = approval_company_id if approval_company_id is not None else caller_org_id
+    acid = caller_org_id if approval_company_id is _SAME_AS_CALLER else approval_company_id
     approval = _make_approval(acid) if approval_exists else None
 
     exec_result = MagicMock()
@@ -205,5 +210,16 @@ class TestApprovalsIdor:
     def test_decide_not_found_returns_404(self):
         org = str(uuid.uuid4())
         client = _make_client(org, approval_exists=False)
+        resp = client.post(f"/api/llc/approvals/{uuid.uuid4()}/decide", json={"decision": "approved"})
+        assert resp.status_code == 404
+
+    def test_decide_a_general_approval_as_platform_admin_returns_404(self):
+        """A general (non-LLC, company_id=NULL) row must 404 here even for a
+        platform admin (#17043 review): load_authorized's admin exemption
+        skips the company_id comparison outright, so without an explicit
+        NULL check an admin could decide a platform-general approval through
+        LLC semantics and have it logged to company:None:decisions."""
+        org = str(uuid.uuid4())
+        client = _make_client(org, approval_company_id=None, is_platform_admin=True)
         resp = client.post(f"/api/llc/approvals/{uuid.uuid4()}/decide", json={"decision": "approved"})
         assert resp.status_code == 404

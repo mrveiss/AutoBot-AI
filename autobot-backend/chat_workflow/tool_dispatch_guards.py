@@ -50,6 +50,10 @@ def enforce_forbidden_work(
 
     agent_id = ctx.agent_context.agent_id if (ctx is not None and ctx.agent_context is not None) else None
     forbidden = resolve_forbidden_tools(agent_id)
+    # #16950: a boundary inherited from a delegating parent binds this run too.
+    inherited = getattr(ctx, "authority", None) if ctx is not None else None
+    if inherited is not None:
+        forbidden = forbidden | inherited.forbidden_tools
     if not forbidden:
         return None
     tool_name = tool_call.get("name", "")

@@ -16,6 +16,7 @@ here may import ``autobot_shared`` — it is not on the worker's disk.
 """
 
 import asyncio
+import hashlib
 import logging
 from pathlib import Path
 from typing import Dict
@@ -23,6 +24,49 @@ from typing import Dict
 from worker_settings import SUPPORTED_MODELS
 
 logger = logging.getLogger(__name__)
+
+
+class ModelIntegrityError(RuntimeError):
+    """A downloaded model's weights don't match its pinned digest -- fail
+    closed rather than use an unverified artifact (#17087). Duplicates
+    autobot_shared.pinned_model_registry.ModelIntegrityError's shape rather
+    than importing it: this package cannot import autobot_shared (module
+    docstring)."""
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _verify_downloaded_weights(hf_id: str, revision: str, weight_digests: Dict[str, str]) -> None:
+    """Verify the just-downloaded weights for *hf_id*@*revision* against the
+    pinned digests in ``worker_settings.SUPPORTED_MODELS`` (#17087)."""
+    from huggingface_hub import try_to_load_from_cache  # local import: heavy, only needed here
+
+    checked_any = False
+    for filename, expected_digest in weight_digests.items():
+        local_path = try_to_load_from_cache(hf_id, filename, revision=revision)
+        if not isinstance(local_path, str):
+            continue  # not cached under this filename -- from_pretrained used a different one
+        checked_any = True
+        actual_digest = _sha256_file(Path(local_path))
+        if actual_digest != expected_digest:
+            raise ModelIntegrityError(
+                f"{hf_id!r} revision {revision}: {filename} sha256 mismatch -- expected "
+                f"{expected_digest}, got {actual_digest}. Refusing to use a model whose weights "
+                "do not match the pinned digest."
+            )
+        logger.info(f"Verified {hf_id} ({filename}) against pinned digest")
+
+    if not checked_any:
+        raise ModelIntegrityError(
+            f"{hf_id!r} revision {revision}: none of the registered weight files "
+            f"({sorted(weight_digests)}) were found in the local cache -- verification did not run."
+        )
 
 
 class ModelConversionMixin:
@@ -59,12 +103,16 @@ class ModelConversionMixin:
             from transformers import AutoModel, AutoTokenizer
 
             hf_id = model_config["hf_id"]
-            logger.info(f"Downloading {hf_id} from HuggingFace...")
+            revision = model_config["revision"]
+            trust_remote_code = model_config.get("trust_remote_code", False)
+            logger.info(f"Downloading {hf_id}@{revision} from HuggingFace...")
 
-            # Download model and tokenizer
-            tokenizer = AutoTokenizer.from_pretrained(hf_id, trust_remote_code=True)
-            model = AutoModel.from_pretrained(hf_id, trust_remote_code=True)
+            # Pinned to a verified revision, never the mutable default branch (#17087).
+            tokenizer = AutoTokenizer.from_pretrained(hf_id, revision=revision, trust_remote_code=trust_remote_code)
+            model = AutoModel.from_pretrained(hf_id, revision=revision, trust_remote_code=trust_remote_code)
             model.eval()
+
+            _verify_downloaded_weights(hf_id, revision, model_config.get("weight_digests", {}))
 
             # Save tokenizer for later use
             model_path.mkdir(parents=True, exist_ok=True)

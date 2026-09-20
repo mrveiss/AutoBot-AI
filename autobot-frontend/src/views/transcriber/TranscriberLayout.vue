@@ -5,9 +5,11 @@
 // Hosts the transcriber settings surface, including the cloud ASR provider
 // selector (#10147c).
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import AsrProviderSelector from '@/components/transcriber/AsrProviderSelector.vue'
 import { useUserStore } from '@/stores/useUserStore'
 
+const { t } = useI18n()
 const settingsOpen = ref(false)
 
 // #15758: the only setting here, the cloud ASR provider, is admin-only on the
@@ -26,12 +28,16 @@ const isAdmin = computed(() => userStore.isAdmin)
         :aria-expanded="settingsOpen"
         @click="settingsOpen = !settingsOpen"
       >
-        {{ settingsOpen ? 'Hide settings' : 'Settings' }}
+        {{ settingsOpen ? t('transcriber.layout.hideSettingsButton') : t('transcriber.layout.settingsButton') }}
       </button>
     </header>
 
-    <section v-if="settingsOpen" class="transcriber-layout-settings" aria-label="Transcriber settings">
-      <h2 class="transcriber-layout-settings-heading">Transcriber settings</h2>
+    <section
+      v-if="settingsOpen"
+      class="transcriber-layout-settings"
+      :aria-label="t('transcriber.layout.settingsHeading')"
+    >
+      <h2 class="transcriber-layout-settings-heading">{{ t('transcriber.layout.settingsHeading') }}</h2>
       <AsrProviderSelector />
     </section>
 

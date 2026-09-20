@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
+from services.approval_execution import run_post_approval_actions
 
 logger = get_logger(__name__)
 
@@ -97,20 +98,31 @@ class ApprovalGateService:
         approval_id: uuid.UUID,
         decided_by: str,
         comment: str | None = None,
+        *,
+        author_type: str,
     ) -> Approval:
-        """Approve a pending approval gate."""
-        return await self._transition(
+        """Approve a pending approval gate, then run whatever it proposed (#17038/#17043).
+
+        The transition itself commits first; ``run_post_approval_actions``
+        cannot fail the approval decision, only what happens after it.
+        """
+        approval = await self._transition(
             approval_id,
             ApprovalStatus.APPROVED,
             decided_by,
             comment,
+            author_type,
         )
+        await run_post_approval_actions(approval, self.session)
+        return approval
 
     async def reject(
         self,
         approval_id: uuid.UUID,
         decided_by: str,
         comment: str | None = None,
+        *,
+        author_type: str,
     ) -> Approval:
         """Reject a pending approval gate."""
         return await self._transition(
@@ -118,6 +130,7 @@ class ApprovalGateService:
             ApprovalStatus.REJECTED,
             decided_by,
             comment,
+            author_type,
         )
 
     async def request_revision(
@@ -125,6 +138,8 @@ class ApprovalGateService:
         approval_id: uuid.UUID,
         decided_by: str,
         comment: str | None = None,
+        *,
+        author_type: str,
     ) -> Approval:
         """Request revision on a pending approval gate."""
         return await self._transition(
@@ -132,6 +147,7 @@ class ApprovalGateService:
             ApprovalStatus.REVISION_REQUESTED,
             decided_by,
             comment,
+            author_type,
         )
 
     async def resubmit(
@@ -166,7 +182,8 @@ class ApprovalGateService:
         approval_id: uuid.UUID,
         author: str,
         body: str,
-        author_type: str = "human",
+        *,
+        author_type: str,
     ) -> ApprovalComment:
         """Add a comment to an approval."""
         await self._get_or_raise(approval_id)
@@ -206,7 +223,14 @@ class ApprovalGateService:
         approval_id: uuid.UUID,
         task_id: str,
     ) -> bool:
-        """Remove a task link from an approval."""
+        """Remove a task link from an approval.
+
+        Goes through ``_get_or_raise`` first, like ``link_task`` (#17043
+        review): the unscoped chokepoint's whole point is that a
+        company-scoped row 404s before any mutation, and this was the one
+        method that queried ``TaskApprovalLink`` directly instead.
+        """
+        await self._get_or_raise(approval_id)
         stmt = select(TaskApprovalLink).where(
             TaskApprovalLink.approval_id == approval_id,
             TaskApprovalLink.task_id == task_id,
@@ -222,14 +246,21 @@ class ApprovalGateService:
     # -- Queries -------------------------------------------------------
 
     async def get(self, approval_id: uuid.UUID) -> Approval | None:
-        """Get an approval with comments and task links loaded."""
+        """Get an unscoped approval with comments and task links loaded.
+
+        Never returns a company-scoped row (#17043): this service has no
+        tenant context to authorize one, and its callers -- these API routes,
+        ``chat_workflow`` -- never pass any. The LLC case reads/writes the
+        same ``approvals`` table directly, through its own tenant-checked
+        queries in ``llc/services/approval.py``, not through this class.
+        """
         stmt = (
             select(Approval)
             .options(
                 selectinload(Approval.comments),
                 selectinload(Approval.task_links),
             )
-            .where(Approval.id == approval_id)
+            .where(Approval.id == approval_id, Approval.company_id.is_(None))
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
@@ -243,13 +274,14 @@ class ApprovalGateService:
         limit: int = 50,
         offset: int = 0,
     ) -> List[Approval]:
-        """List approvals with optional filters."""
+        """List unscoped approvals with optional filters (see ``get``: never a company-scoped row)."""
         stmt = (
             select(Approval)
             .options(
                 selectinload(Approval.comments),
                 selectinload(Approval.task_links),
             )
+            .where(Approval.company_id.is_(None))
             .order_by(Approval.created_at.desc())
             .limit(limit)
             .offset(offset)
@@ -282,14 +314,19 @@ class ApprovalGateService:
         self,
         approval_id: uuid.UUID,
     ) -> Approval:
-        """Load approval with relationships or raise ValueError."""
+        """Load an unscoped approval with relationships, or raise ValueError.
+
+        Excludes a company-scoped row for the same reason as ``get`` above --
+        this is the chokepoint every mutating method (approve/reject/
+        request_revision/add_comment/link_task/unlink_task) goes through.
+        """
         stmt = (
             select(Approval)
             .options(
                 selectinload(Approval.comments),
                 selectinload(Approval.task_links),
             )
-            .where(Approval.id == approval_id)
+            .where(Approval.id == approval_id, Approval.company_id.is_(None))
         )
         result = await self.session.execute(stmt)
         approval = result.scalar_one_or_none()
@@ -303,6 +340,7 @@ class ApprovalGateService:
         new_status: ApprovalStatus,
         decided_by: str,
         comment: str | None,
+        author_type: str,
     ) -> Approval:
         """Perform a status transition with validation."""
         approval = await self._get_or_raise(approval_id)
@@ -316,10 +354,11 @@ class ApprovalGateService:
         approval.decided_at = now_utc()
 
         if comment:
+            # author_type is the verified caller's, never a literal (#17056).
             c = ApprovalComment(
                 approval_id=approval_id,
                 author=decided_by,
-                author_type="human",
+                author_type=author_type,
                 body=comment,
             )
             self.session.add(c)
