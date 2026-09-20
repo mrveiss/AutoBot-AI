@@ -36,6 +36,13 @@ makes a network call — the gate exists solely to keep a "mock" entry out of
 the production ``GET /knowledge_base/connector_types`` listing by default;
 enable it in dev/CI to exercise the sync() pipeline offline.
 
+Issue #17138: No connector module is imported by this package any more --
+each is imported lazily, on first use, by ``registry.ConnectorRegistry``
+(``_ensure_loaded``/``_ensure_all_loaded``), which is also where the two
+feature-flag checks above are now evaluated. Importing this package (or any
+sibling module such as ``credential_store``) no longer pulls in every
+connector's own third-party dependency.
+
 Example usage::
 
     from knowledge.connectors import ConnectorRegistry, ConnectorConfig
@@ -55,17 +62,17 @@ Example usage::
     result = await connector.sync()
 """
 
-# Trigger registration of built-in connector types
-import knowledge.connectors.database  # noqa: F401
-import knowledge.connectors.external_adapter  # noqa: F401
-import knowledge.connectors.file_server  # noqa: F401
-import knowledge.connectors.gdrive  # noqa: F401  # GH#9003
-import knowledge.connectors.gitlab  # noqa: F401
-import knowledge.connectors.nextcloud  # noqa: F401
-import knowledge.connectors.notion  # noqa: F401
-import knowledge.connectors.onedrive  # noqa: F401  # GH#9004
-import knowledge.connectors.web_crawler  # noqa: F401
-from autobot_shared.feature_flags import is_feature_enabled
+# #17138: no `import knowledge.connectors.<concrete connector>` here any
+# more. Each one pulls in its own third-party dependency (aiohttp for
+# gdrive, defusedxml for nextcloud, ...), and Python always runs a package's
+# __init__ before any of its submodules -- so anything that imported ONLY
+# knowledge.connectors.credential_store (a sibling module with no connector
+# dependency of its own) paid for every connector's imports too. The
+# registry now resolves and imports a connector's module lazily, on first
+# use, in registry.py's own _ensure_loaded/_ensure_all_loaded -- see its
+# module docstring. The #10538 feature-flag gate for the
+# enterprise/mock connectors moved there with it, since the gate has to be
+# checked at resolve time now instead of at package-import time.
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -76,23 +83,6 @@ from knowledge.connectors.models import (
     SyncResult,
 )
 from knowledge.connectors.registry import CATEGORY_MAP, ConnectorRegistry
-
-# Issue #10538: Slack/Confluence/Jira ship disabled by default — these
-# connectors reach third-party SaaS APIs and no credentials are configured
-# out of the box. Gate their import (and therefore their
-# @ConnectorRegistry.register side effect) behind the subsystem flag so
-# nothing in this module makes them creatable unless explicitly enabled.
-if is_feature_enabled("kb_enterprise_connectors"):
-    import knowledge.connectors.confluence  # noqa: F401
-    import knowledge.connectors.jira  # noqa: F401
-    import knowledge.connectors.slack  # noqa: F401
-
-# Issue #10538: MockConnector makes zero network calls (it replays local JSON
-# fixtures), so it does not need the kb_enterprise_connectors gate above.
-# It has its own flag purely to keep "mock" out of the production connector
-# type listing by default — see the module docstring in knowledge/connectors/mock.py.
-if is_feature_enabled("kb_mock_connector"):
-    import knowledge.connectors.mock  # noqa: F401
 
 __all__ = [
     "AbstractConnector",

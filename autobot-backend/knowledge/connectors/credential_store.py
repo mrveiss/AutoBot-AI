@@ -11,6 +11,7 @@ Bridges ConnectorConfig ↔ SecretsService so that sensitive auth fields
 
 import asyncio
 import contextlib
+import functools
 import hashlib
 import json
 import os
@@ -157,11 +158,27 @@ def _configured_lock_ttl_ms() -> int:
     return configured
 
 
-_REFRESH_LOCK_TTL_MS = _configured_lock_ttl_ms()
-# A loser must outwait the lease, or it gives up on a refresh still in progress.
-_REFRESH_WAIT_S = env_float_clamped("AUTOBOT_OAUTH_REFRESH_WAIT_S", 0.0, min_v=(_REFRESH_LOCK_TTL_MS / 1000.0) + 5.0)
-# Guarded against 0 from the environment, which would busy-loop the executor.
-_REFRESH_POLL_S = env_float_clamped("AUTOBOT_OAUTH_REFRESH_POLL_S", 0.2, min_v=0.05)
+# #17138: computed on first real use, not at module import -- _token_timeout_s()
+# (via _configured_lock_ttl_ms()) imports knowledge.connectors.oauth_flow, which
+# imports aiohttp at its own module level. A module-level constant would have
+# paid for that on every import of this file, including a caller (api.secrets)
+# that never performs an OAuth refresh at all. lru_cache keeps the "compute once"
+# property these were written for; only WHEN that first computation happens moves.
+@functools.lru_cache(maxsize=1)
+def _refresh_lock_ttl_ms() -> int:
+    return _configured_lock_ttl_ms()
+
+
+@functools.lru_cache(maxsize=1)
+def _refresh_wait_s() -> float:
+    """A loser must outwait the lease, or it gives up on a refresh still in progress."""
+    return env_float_clamped("AUTOBOT_OAUTH_REFRESH_WAIT_S", 0.0, min_v=(_refresh_lock_ttl_ms() / 1000.0) + 5.0)
+
+
+@functools.lru_cache(maxsize=1)
+def _refresh_poll_s() -> float:
+    """Guarded against 0 from the environment, which would busy-loop the executor."""
+    return env_float_clamped("AUTOBOT_OAUTH_REFRESH_POLL_S", 0.2, min_v=0.05)
 
 
 async def _release_quietly(lease: LeaderLease) -> None:
@@ -429,8 +446,8 @@ class ConnectorCredentialStore:
         appears, then fails loudly rather than falling through to an
         unsynchronized refresh, which would reintroduce the bug.
         """
-        deadline = time.monotonic() + _REFRESH_WAIT_S
-        delay = _REFRESH_POLL_S
+        deadline = time.monotonic() + _refresh_wait_s()
+        delay = _refresh_poll_s()
         while time.monotonic() < deadline:
             await asyncio.sleep(delay)
             # Back off: a waiter polling every 200ms drives a sqlite
@@ -448,7 +465,7 @@ class ConnectorCredentialStore:
             takeover = LeaderLease(
                 key=_refresh_lock_key(secret_id),
                 database=_REFRESH_DB,
-                ttl_ms=_REFRESH_LOCK_TTL_MS,
+                ttl_ms=_refresh_lock_ttl_ms(),
                 worker_id=uuid.uuid4().hex,
                 label="OAuth refresh",
             )
@@ -458,7 +475,7 @@ class ConnectorCredentialStore:
                 finally:
                     await _release_quietly(takeover)
         raise TimeoutError(
-            f"Timed out after {_REFRESH_WAIT_S}s waiting for a concurrent OAuth refresh of {secret_id!r}. "
+            f"Timed out after {_refresh_wait_s()}s waiting for a concurrent OAuth refresh of {secret_id!r}. "
             "Refusing to refresh unsynchronized — a second refresh can invalidate the rotated token."
         )
 
@@ -492,7 +509,7 @@ class ConnectorCredentialStore:
         lease = LeaderLease(
             key=_refresh_lock_key(secret_id),
             database=_REFRESH_DB,
-            ttl_ms=_REFRESH_LOCK_TTL_MS,
+            ttl_ms=_refresh_lock_ttl_ms(),
             # A unique id per lease, NOT the default hostname-pid. Two refreshes in
             # one process would otherwise share an identity, and ``release()``'s
             # "only delete if it is still mine" guard would happily delete the other
