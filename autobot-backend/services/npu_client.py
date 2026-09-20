@@ -18,6 +18,7 @@ Usage:
 """
 
 import asyncio
+import hashlib
 import threading
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
@@ -462,13 +463,22 @@ async def generate_embedding_with_fallback(
             await asyncio.sleep(EMBEDDING_RETRY_BASE_DELAY * (2 ** (attempt - 1)))
 
     _embedding_generated.labels(backend="none", status="failure").inc()
+    # Issue: CodeQL py/clear-text-logging-sensitive-data. ``text`` is caller-supplied
+    # and this function has no guarantee it was pre-sanitized (several callers embed
+    # raw chat/query/code content, not just the fact-content path that redacts before
+    # calling). CodeQL does not model redact_content() as a sanitizer, so a redacted
+    # excerpt still trips the query -- log no input-derived content at all: length
+    # plus a truncated content hash is enough to correlate failures in the logs
+    # without ever reproducing what was sent.
     logger.error(
         "Embedding generation FAILED after %d attempt(s) — caller must handle the "
-        "missing vector (do NOT silently drop). model=%s, last_reason=%s, text_prefix=%r",
+        "missing vector (do NOT silently drop). model=%s, last_reason=%s, "
+        "text_len=%d, text_sha256=%s",
         max_attempts,
         model_name,
         last_reason,
-        text[:80],
+        len(text),
+        hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:12],
     )
     return None
 
