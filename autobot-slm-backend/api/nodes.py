@@ -2261,8 +2261,8 @@ async def acknowledge_remediation(
             detail="Node not found",
         )
 
-    # Reset the remediation tracker
     reconciler_service.reset_remediation_tracker(node_id)
+    await reconciler_service.reset_service_remediation_tracker(db, node_id)  # #16712: row-persisted
 
     # Create acknowledgment event
     await _create_node_event(

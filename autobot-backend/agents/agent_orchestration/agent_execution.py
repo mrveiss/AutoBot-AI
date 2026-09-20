@@ -16,7 +16,9 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from security.authority import Authority
 
+from .capability_requirements import refusal, refused_agents
 from .types import CLASSIFICATION_TERMS, CODE_SEARCH_TERMS, AgentType
 
 if TYPE_CHECKING:
@@ -26,6 +28,12 @@ if TYPE_CHECKING:
     from .routing import AgentRouter
 
 logger = get_logger(__name__)
+
+
+def _routed_agent_types(routing_decision: Dict[str, Any]) -> List[str]:
+    """Every agent a routing decision would run: its primary and, for multi-agent, each secondary."""
+    agents = [routing_decision.get("primary_agent"), *routing_decision.get("secondary_agents", [])]
+    return [getattr(agent, "value", agent) for agent in agents if agent is not None]
 
 
 class AgentExecutor:
@@ -132,12 +140,20 @@ class AgentExecutor:
         context: Dict[str, Any] | None = None,
         chat_history: List[Dict[str, Any]] | None = None,
         preferred_agents: List[str] | None = None,
+        authority: Authority | None = None,
     ) -> Dict[str, Any]:
-        """Process request using distributed agent system. Issue #620."""
+        """Process request using distributed agent system. Issue #620.
+
+        #16957: *authority* is the originator's (an A2A peer's); None is an internal
+        caller. An agent it may not reach is refused before it runs, not fallen back from.
+        """
         selected_agent = await self._select_distributed_agent(request, context, preferred_agents)
 
         if not selected_agent:
             raise Exception("No suitable distributed agent found")
+        refused = refused_agents(authority, [selected_agent.agent_type])
+        if refused:
+            return refusal(refused)
 
         task_id = f"task_{uuid.uuid4().hex[:8]}"
         start_time = datetime.now(tz=timezone.utc)
@@ -204,10 +220,14 @@ class AgentExecutor:
         request: str,
         context: Dict[str, Any] | None = None,
         chat_history: List[Dict[str, Any]] | None = None,
+        authority: Authority | None = None,
     ) -> Dict[str, Any]:
-        """Process request using legacy agent system."""
+        """Process request using legacy agent system. #16957: *authority* as in the distributed path."""
         # Determine optimal agent routing
         routing_decision = await self.router.determine_routing(request, context)
+        refused = refused_agents(authority, _routed_agent_types(routing_decision))
+        if refused:
+            return refusal(refused)
 
         # Execute based on routing decision
         if routing_decision["strategy"] == "single_agent":

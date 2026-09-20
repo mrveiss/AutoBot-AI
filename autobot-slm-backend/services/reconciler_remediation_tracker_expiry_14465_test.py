@@ -316,7 +316,7 @@ def test_a_node_whose_restart_never_gets_a_heartbeat_accepted_reaches_max_attemp
     exactly once.
     """
     service = reconciler.ReconcilerService()
-    service._restart_service_via_ansible = _AsyncReturns(True)
+    service._restart_service_via_ansible = _AsyncReturns((True, None))
     service._heartbeat_returned = _AsyncReturns(False)
 
     max_attempts_events: list[dict] = []
@@ -360,7 +360,7 @@ def test_escalation_survives_the_expiry_floor_at_its_worst_case_setting():
     protect the never-verifies scenario above and let it escalate.
     """
     service = reconciler.ReconcilerService()
-    service._restart_service_via_ansible = _AsyncReturns(True)
+    service._restart_service_via_ansible = _AsyncReturns((True, None))
     service._heartbeat_returned = _AsyncReturns(False)
 
     clock = _Clock(datetime.now(timezone.utc))
@@ -389,7 +389,7 @@ def test_a_node_that_verifies_every_time_never_accumulates_by_design():
     unrelated to, and unaffected by, this fix.
     """
     service = reconciler.ReconcilerService()
-    service._restart_service_via_ansible = _AsyncReturns(True)
+    service._restart_service_via_ansible = _AsyncReturns((True, None))
     service._heartbeat_returned = _AsyncReturns(True)
 
     clock = _Clock(datetime.now(timezone.utc))
@@ -495,7 +495,7 @@ def test_a_genuinely_flapping_node_with_verified_heartbeats_does_not_escalate():
     than silently assumed fixed.
     """
     service = reconciler.ReconcilerService()
-    service._restart_service_via_ansible = _AsyncReturns(True)
+    service._restart_service_via_ansible = _AsyncReturns((True, None))
     # _heartbeat_returned is the REAL function here -- not stubbed.
 
     clock = _Clock(datetime.now(timezone.utc))
@@ -571,7 +571,7 @@ def test_ordinary_heartbeat_processing_never_touches_the_remediation_tracker():
         os_info=None,
     )
     service = reconciler.ReconcilerService()
-    service._restart_service_via_ansible = _AsyncReturns(True)
+    service._restart_service_via_ansible = _AsyncReturns((True, None))
     service._heartbeat_returned = _AsyncReturns(False)
     remediation_db = _FakeSession()
 
@@ -728,7 +728,7 @@ def test_cooldown_still_paces_attempts_even_with_frequent_reconcile_ticks():
     cooldown period). Restart attempts must stay paced to the cooldown.
     """
     service = reconciler.ReconcilerService()
-    service._restart_service_via_ansible = _CountingAsyncReturns(True)
+    service._restart_service_via_ansible = _CountingAsyncReturns((True, None))
     service._heartbeat_returned = _AsyncReturns(False)
 
     clock = _Clock(datetime.now(timezone.utc))
@@ -785,7 +785,7 @@ def test_the_tracker_write_survives_a_failed_result_commit():
     this issue reports.
     """
     service = reconciler.ReconcilerService()
-    service._restart_service_via_ansible = _AsyncReturns(True)
+    service._restart_service_via_ansible = _AsyncReturns((True, None))
     service._heartbeat_returned = _AsyncReturns(False)
     db = _FailingResultCommitSession()
     node = _degraded_node()

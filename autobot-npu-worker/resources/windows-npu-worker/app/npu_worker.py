@@ -32,7 +32,9 @@ import os
 from typing import Any, Dict
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from model_manager import OpenVINOModelManager
 from worker_identity import get_pairing_status, get_persistent_worker_id
 from worker_inference import WorkerInferenceMixin
@@ -56,6 +58,20 @@ from worker_startup import WorkerStartupMixin
 from worker_state import LRUCache, ThreadSafeStats
 
 logger = logging.getLogger(__name__)
+
+
+# #16428 review: FastAPI's default 422 body echoes the submitted payload
+# verbatim (Pydantic v2 puts it in each error's "input"/"ctx"). PairRequest's
+# config: Dict[str, Any] can carry pairing secrets the main host sends.
+# Duplicated from autobot_shared.fastapi_validation_handlers.
+# register_validation_error_handlers rather than imported: this module ships
+# inside the standalone Windows package (see the module docstring), which has
+# no autobot_shared on disk.
+async def _validation_error_without_input(request: Request, exc: RequestValidationError) -> JSONResponse:
+    safe_errors = [
+        {"loc": list(e.get("loc", [])), "msg": e.get("msg", ""), "type": e.get("type", "")} for e in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": safe_errors})
 
 
 class WindowsNPUWorker(
@@ -88,6 +104,7 @@ class WindowsNPUWorker(
         self.redis_client = None
 
         self.app = FastAPI(title="AutoBot Windows NPU Worker", version="2.0.0")
+        self.app.add_exception_handler(RequestValidationError, _validation_error_without_input)
 
         # NPU capabilities
         self.npu_available = False

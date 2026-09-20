@@ -840,12 +840,9 @@ X-RateLimit-Window: 60
 
 ## Authentication & Authorization
 
-### API Key Authentication
-```bash
-curl -H "Authorization: Bearer api_key_here" \
-     -H "Content-Type: application/json" \
-     https://127.0.0.1:8443/api/system/health
-```
+### API keys are not accepted here
+
+The main backend does not accept user API keys; authenticate with a JWT as below (#16294, owner ruling 2026-09-18). User API keys are an SLM credential (`X-API-Key`), accepted only on SLM routes that declare a key permission (`autobot-slm-backend/services/api_key_routes.py`, currently none) and refused with 403 everywhere else.
 
 ### JWT Token Authentication  
 ```bash

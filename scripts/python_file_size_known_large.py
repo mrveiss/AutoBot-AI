@@ -39,18 +39,17 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/agents/machine_aware_system_knowledge_manager.py": 848,
     "autobot-backend/agents/man_page_knowledge_integrator.py": 696,
     "autobot-backend/agents/npu_code_search_agent.py": 1346,  # #16173: extracted helpers
-    "autobot-backend/agents/overseer/step_executor_agent.py": 810,
+    "autobot-backend/agents/overseer/step_executor_agent.py": 650,
     "autobot-backend/agents/rag_agent.py": 602,
     "autobot-backend/agents/security_scanner_agent.py": 663,
     "autobot-backend/agents/system_command_agent.py": 903,
     "autobot-backend/agents/system_knowledge_manager.py": 843,
     "autobot-backend/agents/web_researcher.py": 1435,
-    "autobot-backend/ai_hardware_accelerator.py": 1042,
-    "autobot-backend/api/a2a.py": 650,
+    "autobot-backend/ai_hardware_accelerator.py": 1040,
     "autobot-backend/api/advanced_control.py": 626,
     "autobot-backend/api/agent.py": 1380,
     "autobot-backend/api/agent_config.py": 1371,
-    "autobot-backend/api/agent_terminal.py": 858,
+    "autobot-backend/api/agent_terminal.py": 773,
     "autobot-backend/api/analytics.py": 1285,
     "autobot-backend/api/analytics_architecture.py": 1264,
     "autobot-backend/api/analytics_bug_prediction.py": 1438,
@@ -136,9 +135,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_chat.py": 725,
     "autobot-backend/api/schemas_code.py": 3266,
     "autobot-backend/api/schemas_knowledge.py": 5156,
-    "autobot-backend/api/schemas_system.py": 4306,
+    "autobot-backend/api/schemas_system.py": 4346,  # #16444 review: RequestValidationError import comment
     "autobot-backend/api/schemas_workflows.py": 3011,
-    "autobot-backend/api/secrets.py": 1048,
+    "autobot-backend/api/secrets.py": 1216,  # #16444 review: except HTTPException, ValueError handlers
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
     "autobot-backend/api/system.py": 1112,
@@ -147,9 +146,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/validation_dashboard.py": 671,
     "autobot-backend/api/vnc_manager.py": 1699,
     "autobot-backend/api/vnc_mcp.py": 763,
-    "autobot-backend/api/websockets.py": 1124,  # #16457: accepts routed through websocket_subprotocol.accept_websocket
+    "autobot-backend/api/websockets.py": 1120,  # #16457: accepts routed through websocket_subprotocol.accept_websocket
     "autobot-backend/api/workflow.py": 1027,
-    "autobot-backend/auth_middleware.py": 1090,  # #16457: bearer parsing moved to websocket_subprotocol.py
+    "autobot-backend/auth_middleware.py": 1088,  # #16457: bearer parsing moved to websocket_subprotocol.py
     "autobot-backend/autobot_memory_graph/property_graph.py": 630,
     "autobot-backend/autobot_memory_graph/relations.py": 641,
     "autobot-backend/autobot_memory_graph/semantic_search.py": 717,
@@ -159,8 +158,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1343,
-    "autobot-backend/chat_workflow/manager.py": 4068,
-    "autobot-backend/chat_workflow/tool_handler.py": 3728,  # #11542: external MCP dispatch merged into MCPDispatcher
+    "autobot-backend/chat_workflow/manager.py": 4067,
+    "autobot-backend/chat_workflow/tool_handler.py": 3721,  # #11542: external MCP dispatch merged into MCPDispatcher
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/circuit_breaker.py": 689,
@@ -210,7 +209,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/events/stream_manager.py": 654,
     "autobot-backend/events/types.py": 885,
     "autobot-backend/hardware_acceleration.py": 609,
-    "autobot-backend/initialization/lifespan.py": 2364,
+    "autobot-backend/initialization/lifespan.py": 2362,
     "autobot-backend/initialization/router_registry/feature_routers.py": 779,
     "autobot-backend/integrations/cloud_integration.py": 630,
     "autobot-backend/integrations/communication_integration.py": 605,
@@ -230,11 +229,11 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
     "autobot-backend/knowledge/connectors/base.py": 676,
-    "autobot-backend/knowledge/connectors/credential_store.py": 739,
+    "autobot-backend/knowledge/connectors/credential_store.py": 778,  # #16444: rotate() validates the merged bundle
     "autobot-backend/knowledge/connectors/gdrive.py": 702,
     "autobot-backend/knowledge/connectors/gitlab.py": 873,
     "autobot-backend/knowledge/connectors/onedrive.py": 642,
-    "autobot-backend/knowledge/connectors/tests/test_credential_store.py": 1032,
+    "autobot-backend/knowledge/connectors/tests/test_credential_store.py": 1043,
     "autobot-backend/knowledge/facts.py": 1783,
     "autobot-backend/knowledge/ownership.py": 757,
     "autobot-backend/knowledge/pipeline/cognifiers/cognifiers_test.py": 806,
@@ -301,7 +300,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/plugin_manager.py": 702,
     "autobot-backend/project_state_manager.py": 998,
     "autobot-backend/prompt_manager.py": 1481,
-    "autobot-backend/protocols/agent_communication.py": 749,
+    "autobot-backend/protocols/agent_communication.py": 711,
     "autobot-backend/research_browser_manager.py": 704,
     "autobot-backend/secure_command_executor.py": 1220,
     "autobot-backend/secure_sandbox_executor.py": 1019,
@@ -312,14 +311,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/security/enterprise/sso_integration.py": 916,
     "autobot-backend/security/enterprise/threat_detection/engine.py": 719,
     "autobot-backend/security/input_validator.py": 607,
-    "autobot-backend/security/prompt_injection_detector.py": 747,
+    "autobot-backend/security/prompt_injection_detector.py": 703,  # #16354: invisible-char table moved to security/unicode_normalization.py
     "autobot-backend/security/security_edge_cases_test.py": 638,
     "autobot-backend/security/session_ownership.py": 833,
     "autobot-backend/security/threat_detection_refactor_test.py": 880,
     "autobot-backend/security/threat_intelligence.py": 763,
     "autobot-backend/security_layer.py": 767,
     "autobot-backend/services/agent_analytics.py": 686,
-    "autobot-backend/services/agent_terminal/service.py": 962,
+    "autobot-backend/services/agent_terminal/service.py": 951,
     "autobot-backend/services/ai_stack_client.py": 790,
     "autobot-backend/services/analytics_service.py": 838,
     "autobot-backend/services/audit_logger.py": 1022,
@@ -454,7 +453,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/stateful.py": 688,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1129,
-    "autobot-slm-backend/main.py": 806,  # #15728: local admin socket lifespan wiring
+    "autobot-slm-backend/main.py": 798,  # merge #16444+#17113: local admin socket lifespan wiring + shared 422 handler
     "autobot-slm-backend/models/database.py": 1140,
     "autobot-slm-backend/models/schemas.py": 2181,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,
@@ -468,7 +467,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/services/drift_checker_test.py": 1351,
     "autobot-slm-backend/services/inventory_builder.py": 710,
     "autobot-slm-backend/services/playbook_executor.py": 1362,
-    "autobot-slm-backend/services/reconciler.py": 2222,
+    "autobot-slm-backend/services/reconciler.py": 2219,
     # Not legacy debt: created after this guard existed (#14465/#14548). Tracked
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 843,
@@ -492,7 +491,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/network_constants.py": 616,
     "autobot_shared/npu/integration.py": 929,
-    "autobot_shared/plugin_sdk/loader.py": 687,
+    "autobot_shared/plugin_sdk/loader.py": 696,
     "autobot_shared/plugin_sdk/plugin_load_visibility_test.py": 750,
     "autobot_shared/plugin_sdk/plugin_sdk_test.py": 941,
     "autobot_shared/rate_limiter_test.py": 618,

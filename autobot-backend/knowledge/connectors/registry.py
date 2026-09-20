@@ -25,6 +25,7 @@ Issue #8152: create() now async with migration support.
 from __future__ import annotations
 
 import asyncio
+import importlib
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Type
 
@@ -36,6 +37,38 @@ from autobot_shared.time_utils import now_utc
 from knowledge.connectors.models import ConnectorConfig
 
 logger = get_logger(__name__)
+
+# type -> dotted module that registers it via @ConnectorRegistry.register, so
+# nothing here imports it until a caller actually asks for that type (#17138).
+# Each module's own third-party dependency (aiohttp for gdrive, defusedxml for
+# nextcloud, ...) previously landed on EVERY caller of ANYTHING in this
+# package -- including one that only wanted credential_store, a sibling
+# module with no connector dependency of its own -- because Python always
+# runs a package's __init__ before any of its submodules.
+_LAZY_MODULES: Dict[str, str] = {
+    "database": "knowledge.connectors.database",
+    "external_adapter": "knowledge.connectors.external_adapter",
+    "file_server": "knowledge.connectors.file_server",
+    "gdrive": "knowledge.connectors.gdrive",
+    "gitlab": "knowledge.connectors.gitlab",
+    "gitea": "knowledge.connectors.gitlab",
+    "forgejo": "knowledge.connectors.gitlab",
+    "nextcloud": "knowledge.connectors.nextcloud",
+    "notion": "knowledge.connectors.notion",
+    "onedrive": "knowledge.connectors.onedrive",
+    "web_crawler": "knowledge.connectors.web_crawler",
+}
+
+# type -> (dotted module, feature flag it needs). Same lazy contract as
+# _LAZY_MODULES, plus the #10538 gate __init__.py used to check at import
+# time -- that check now has to happen at resolve time instead, since
+# nothing runs at import time any more.
+_FEATURE_GATED_MODULES: Dict[str, tuple[str, str]] = {
+    "confluence": ("knowledge.connectors.confluence", "kb_enterprise_connectors"),
+    "jira": ("knowledge.connectors.jira", "kb_enterprise_connectors"),
+    "slack": ("knowledge.connectors.slack", "kb_enterprise_connectors"),
+    "mock": ("knowledge.connectors.mock", "kb_mock_connector"),
+}
 
 # Issue #10539: Category → connector type list.
 # Maps a logical capability category (lowercase, normalised) to the list of
@@ -90,6 +123,41 @@ class ConnectorRegistry:
         return decorator
 
     @classmethod
+    def _ensure_loaded(cls, connector_type: str) -> None:
+        """Import the one module *connector_type* registers in, if it hasn't
+        already (#17138). A no-op for a type that is not lazy at all
+        (already registered some other way) or not known -- `create()`'s
+        existing "Unknown connector type" error still fires for that case.
+        """
+        if connector_type in cls._connectors:
+            return
+        module_name = _LAZY_MODULES.get(connector_type)
+        if module_name is not None:
+            importlib.import_module(module_name)
+            return
+        gated = _FEATURE_GATED_MODULES.get(connector_type)
+        if gated is not None:
+            from autobot_shared.feature_flags import is_feature_enabled
+
+            module_name, flag = gated
+            if is_feature_enabled(flag):
+                importlib.import_module(module_name)
+
+    @classmethod
+    def _ensure_all_loaded(cls) -> None:
+        """Import every lazy connector module, enabled feature flags included
+        (#17138). For a caller that genuinely wants the full type list --
+        ``list_types()``/``registered_types()``, the connector-picker API's
+        own use -- rather than one specific type."""
+        for module_name in _LAZY_MODULES.values():
+            importlib.import_module(module_name)
+        from autobot_shared.feature_flags import is_feature_enabled
+
+        for module_name, flag in _FEATURE_GATED_MODULES.values():
+            if is_feature_enabled(flag):
+                importlib.import_module(module_name)
+
+    @classmethod
     async def create(cls, config: ConnectorConfig) -> "object":
         """Instantiate a connector from a :class:`ConnectorConfig`.
 
@@ -102,10 +170,22 @@ class ConnectorRegistry:
                         migration raises an exception.
         """
 
+        cls._ensure_loaded(config.connector_type)
         klass = cls._connectors.get(config.connector_type)
         if klass is None:
-            registered = list(cls._connectors.keys())
-            raise ValueError("Unknown connector type '%s'. Registered types: %s" % (config.connector_type, registered))
+            # #17138: lazy loading means _connectors only holds what some
+            # caller has already touched -- the error must still name every
+            # type that WOULD register (matching pre-#17138 behaviour, which
+            # imported every enabled type eagerly), not just the ones loaded
+            # so far this process. A gated type whose flag is off is omitted,
+            # same as it always was when __init__.py skipped its import.
+            from autobot_shared.feature_flags import is_feature_enabled
+
+            known = set(cls._connectors) | set(_LAZY_MODULES)
+            known.update(t for t, (_module, flag) in _FEATURE_GATED_MODULES.items() if is_feature_enabled(flag))
+            raise ValueError(
+                "Unknown connector type '%s'. Registered types: %s" % (config.connector_type, sorted(known))
+            )
 
         stored_version = config.config.get("_version", 1)
         current_version = getattr(klass, "config_version", 1)
@@ -185,7 +265,13 @@ class ConnectorRegistry:
 
     @classmethod
     def list_types(cls) -> List[str]:
-        """Return all registered connector type strings."""
+        """Return all registered connector type strings.
+
+        Imports every lazy connector module first (#17138) -- the caller is
+        explicitly asking for the full type list, unlike ``create()``/
+        ``get_registered_class()`` asking about one specific type.
+        """
+        cls._ensure_all_loaded()
         return list(cls._connectors.keys())
 
     @classmethod
@@ -233,7 +319,11 @@ class ConnectorRegistry:
         Callers iterating over the type→class mapping should use this method
         instead of reading the private ``_connectors`` dict so internal storage
         can be refactored without breaking them.
+
+        Imports every lazy connector module first (#17138), same reasoning
+        as :meth:`list_types`.
         """
+        cls._ensure_all_loaded()
         return MappingProxyType(cls._connectors)
 
     @classmethod
@@ -241,8 +331,10 @@ class ConnectorRegistry:
         """Return the registered connector class for *type_name*, or None (Issue #5057).
 
         Public accessor that replaces ``ConnectorRegistry._connectors.get(...)``
-        at call sites outside the registry module.
+        at call sites outside the registry module. Imports *type_name*'s own
+        module first if it hasn't been loaded yet (#17138).
         """
+        cls._ensure_loaded(type_name)
         return cls._connectors.get(type_name)
 
     @classmethod
