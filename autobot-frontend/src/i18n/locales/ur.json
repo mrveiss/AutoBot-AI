@@ -200,6 +200,7 @@
     "advancedControl": "ایڈوانسڈ کنٹرول",
     "adminPricing": "ماڈل قیمت",
     "adminMcpServers": "MCP سرورز",
+    "adminPermissionScopes": "اجازت کے دائرے",
     "llcRoles": "کردار"
   },
   "llcCompanyStatus": {
@@ -9113,6 +9114,12 @@
       "deleteTitle": "MCP سرور حذف کریں",
       "deleteConfirm": "کیا آپ واقعی حذف کرنا چاہتے ہیں",
       "deleteUndone": "یہ واپس نہیں ہو سکتا।"
+    },
+    "permissionScopes": {
+      "title": "اجازت کے دائرے",
+      "subtitle": "API کیز کے لیے تفصیلی اجازت کی لغت اور دائرہ بنڈل",
+      "comingSoonTitle": "بعد کے ورژن میں آ رہا ہے",
+      "comingSoonMessage": "تفصیلی اجازت کے دائرے — ایک اجازت کی لغت، دائرہ بنڈل، اور API کیز کے دائرے کا نفاذ — اس ورژن میں دستیاب نہیں ہیں۔ یہ صفحہ لانچ ہونے کے بعد انہیں متعین اور تفویض کرنے کی سہولت دے گا۔"
     }
   },
   "components": {
