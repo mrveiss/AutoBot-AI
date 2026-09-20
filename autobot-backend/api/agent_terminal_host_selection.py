@@ -12,6 +12,12 @@ These endpoints let an agent ask a human which infrastructure host an SSH action
 should target, and they own state nothing else in the parent module touches --
 the pending-selection store and its lock. That made them the one self-contained
 group in a file that had reached its recorded size ceiling.
+
+Ownership (#17057): a request records the owner of the agent session it serves.
+Only that owner or an admin can see, answer or cancel it, and a request someone
+else owns answers the same 404 as one that does not exist. Choosing a host
+decides where another user's agent runs a command, so select and cancel also
+need a person signed in interactively (#17042).
 """
 
 import asyncio
@@ -21,6 +27,7 @@ from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.agent_terminal_access import get_agent_terminal_service, may_act_for, require_session_access
 from api.schemas_system import TerminalHostSelectionRequest
 from api.schemas_terminal import (
     AgentTerminalHostSelectionCancelResponse,
@@ -29,6 +36,7 @@ from api.schemas_terminal import (
     AgentTerminalHostSelectionSubmitResponse,
     AgentTerminalPendingSelectionsResponse,
 )
+from api.user_management.human_decider import require_interactive_human
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -44,6 +52,14 @@ _pending_host_selections: Dict[str, Dict] = {}
 _pending_host_selections_lock = asyncio.Lock()
 
 
+def _visible_selection(request_id: str, user: dict) -> Dict:
+    """The request, or the same 404 whether it is missing or someone else's. Call under the lock."""
+    selection = _pending_host_selections.get(request_id)
+    if selection is None or not may_act_for(selection.get("owner"), user):
+        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
+    return selection
+
+
 @router.post("/host-selection/request", response_model=AgentTerminalHostSelectionRequestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -53,6 +69,7 @@ _pending_host_selections_lock = asyncio.Lock()
 async def request_host_selection(
     current_user: dict = Depends(get_current_user),
     request: TerminalHostSelectionRequest = None,
+    service=Depends(get_agent_terminal_service),
 ):
     """
     Agent requests host selection for SSH action.
@@ -71,6 +88,7 @@ async def request_host_selection(
     4. User selects host and calls POST /host-selection/{request_id}/select
     5. Agent polls GET /host-selection/{request_id} to get selection result
     """
+    session = await require_session_access(service, request.agent_session_id, current_user)
     request_id = str(uuid.uuid4())
 
     # Create pending selection request
@@ -78,6 +96,7 @@ async def request_host_selection(
         _pending_host_selections[request_id] = {
             "request_id": request_id,
             "agent_session_id": request.agent_session_id,
+            "owner": session.owner,  # #17057: who may see, answer or cancel it
             "command": request.command,
             "purpose": request.purpose,
             "preferred_host_id": request.preferred_host_id,
@@ -121,9 +140,7 @@ async def get_host_selection(
     - If selected: includes host details and connection info
     """
     async with _pending_host_selections_lock:
-        if request_id not in _pending_host_selections:
-            raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
-        selection = dict(_pending_host_selections[request_id])
+        selection = dict(_visible_selection(request_id, current_user))
 
     return {
         "request_id": selection["request_id"],
@@ -168,11 +185,9 @@ async def submit_host_selection(
         username: SSH username
         remember_choice: Whether to use this host for future SSH commands
     """
+    require_interactive_human(current_user, f"host selection {request_id}")
     async with _pending_host_selections_lock:
-        if request_id not in _pending_host_selections:
-            raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
-
-        selection = _pending_host_selections[request_id]
+        selection = _visible_selection(request_id, current_user)
 
         if selection["status"] != "pending_selection":
             raise HTTPException(
@@ -221,11 +236,9 @@ async def cancel_host_selection(
 
     Called by frontend when user closes the dialog without selecting.
     """
+    require_interactive_human(current_user, f"host selection cancel {request_id}")
     async with _pending_host_selections_lock:
-        if request_id not in _pending_host_selections:
-            raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
-
-        selection = _pending_host_selections[request_id]
+        selection = _visible_selection(request_id, current_user)
 
         if selection["status"] != "pending_selection":
             raise HTTPException(
@@ -270,7 +283,7 @@ async def list_pending_host_selections(
                 "created_at": s["created_at"],
             }
             for s in _pending_host_selections.values()
-            if s["status"] == "pending_selection"
+            if s["status"] == "pending_selection" and may_act_for(s.get("owner"), current_user)
         ]
 
     return {

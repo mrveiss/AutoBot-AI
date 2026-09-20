@@ -36,6 +36,10 @@ class AgentTerminalSession:
     agent_id: str
     agent_role: AgentRole
     conversation_id: str | None = None  # Linked chat conversation
+    # #16975: the creating principal's org_id (JWT claim only, never a
+    # caller-supplied value), captured at creation -- it cannot be recovered
+    # afterwards. None when undetermined; presence then reports UNKNOWN_TENANT.
+    tenant_id: str | None = None
     host: str = "main"  # Target host (main, frontend, npu-worker, etc.)
     state: AgentSessionState = AgentSessionState.AGENT_CONTROL
     created_at: float = field(default_factory=time.time)
@@ -45,6 +49,9 @@ class AgentTerminalSession:
     pending_approval: Metadata | None = None
     metadata: Metadata = field(default_factory=dict)
     pty_session_id: str | None = None  # PTY session for terminal display
+    # #17053: the verified creator's username, stamped at creation. None means no
+    # recorded owner (created before 2026-09-18, or rebuilt, #13478): admin-only.
+    owner: str | None = None
     running_command_task: asyncio.Task | None = None  # Track running command for cancellation
 
     # === Issue #372: Feature Envy Reduction Methods ===
@@ -281,6 +288,7 @@ class AgentTerminalSession:
             "agent_id": self.agent_id,
             "agent_role": self.agent_role.value,
             "conversation_id": self.conversation_id,
+            "tenant_id": self.tenant_id,  # #16975/#16978: lost on reload otherwise
             "host": self.host,
             "state": self.state.value,
             "created_at": self.created_at,
@@ -288,4 +296,5 @@ class AgentTerminalSession:
             "metadata": self.metadata,
             "pty_session_id": self.pty_session_id,  # CRITICAL: Store PTY session ID
             "pending_approval": self.pending_approval,  # CRITICAL: Persist pending approvals
+            "owner": self.owner,  # #17053: survives a reload, or the owner is locked out
         }

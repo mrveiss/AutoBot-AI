@@ -296,6 +296,20 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_GPU_PROBE_TIMEOUT_S",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds a GPU vendor tool (nvidia-smi, rocm-smi) may run before the probe gives up. "
+            "Read by autobot_shared.gpu_telemetry for the SLM agent's heartbeat GPU telemetry (#16280)."
+        ),
+        component="slm",
+        range=(0.5, 60.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PRICING_POST_SYNC_TIMEOUT_S",
         type=float,
         default=120.0,
@@ -321,6 +335,24 @@ register_env_var(
             "deletion pass. Raising it tolerates a slower repository; lowering "
             "it fails a wedged git process sooner rather than stalling a sync "
             "(autobot-slm-backend/services/sync_deletions.py, #16310)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SYNC_UNSHALLOW_TIMEOUT_S",
+        type=float,
+        default=600.0,
+        description=(
+            "Timeout, in seconds, for `git fetch --unshallow` on the builtin "
+            "updater's `code_source` checkout when it is still a shallow "
+            "clone (from initial provisioning). Downloads the ENTIRE history "
+            "the shallow fetch skipped, so it gets a much longer bound than "
+            "AUTOBOT_SYNC_GIT_TIMEOUT_S -- minutes, not seconds, on a "
+            "monorepo-sized checkout (autobot-slm-backend/services/"
+            "git_subprocess.py:ensure_full_history, #16310)."
         ),
         component="slm",
     )

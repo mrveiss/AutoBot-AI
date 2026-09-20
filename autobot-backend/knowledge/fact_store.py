@@ -47,39 +47,50 @@ def content_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()[:_CONTENT_HASH_WIDTH]
 
 
-def _row_values(content: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-    """The columns a fact's content and metadata determine."""
+def _row_values(content: str, metadata: Dict[str, Any], *, hash_content: str | None = None) -> Dict[str, Any]:
+    """The columns a fact's content and metadata determine.
+
+    Args:
+        hash_content: raw, pre-redaction content the ``content_hash`` column
+            keys off instead (#13708 round 4) -- see ``knowledge/facts.py``'s
+            ``_check_for_duplicates`` for why: two different secrets both
+            redact to the identical placeholder and must not hash the same.
+            Defaults to `content` (post-redaction) when not given.
+    """
     return {
         "content": content,
         "metadata_json": metadata,
-        "content_hash": content_hash(content),
+        "content_hash": content_hash(hash_content if hash_content is not None else content),
         "unique_key": metadata.get("unique_key"),
         "owner_id": metadata.get("owner_id") or metadata.get("user_id"),
         "source_session_id": metadata.get("source_session_id"),
     }
 
 
-async def persist_fact(fact_id: str, content: str, metadata: Dict[str, Any]) -> None:
+async def persist_fact(
+    fact_id: str, content: str, metadata: Dict[str, Any], *, hash_content: str | None = None
+) -> None:
     """Write the durable row. Raises when the fact could not be recorded."""
     factory = get_async_session_factory()
     async with factory() as session:
         row = await session.get(KnowledgeFact, fact_id)
+        row_values = _row_values(content, metadata, hash_content=hash_content)
         if row is None:
-            session.add(KnowledgeFact(id=fact_id, **_row_values(content, metadata)))
+            session.add(KnowledgeFact(id=fact_id, **row_values))
         else:
-            for column, value in _row_values(content, metadata).items():
+            for column, value in row_values.items():
                 setattr(row, column, value)
         await session.commit()
 
 
-async def update_fact(fact_id: str, content: str, metadata: Dict[str, Any]) -> bool:
+async def update_fact(fact_id: str, content: str, metadata: Dict[str, Any], *, hash_content: str | None = None) -> bool:
     """Update an existing row. ``False`` when no such fact is recorded."""
     factory = get_async_session_factory()
     async with factory() as session:
         row = await session.get(KnowledgeFact, fact_id)
         if row is None:
             return False
-        for column, value in _row_values(content, metadata).items():
+        for column, value in _row_values(content, metadata, hash_content=hash_content).items():
             setattr(row, column, value)
         await session.commit()
         return True

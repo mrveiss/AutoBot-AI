@@ -36,13 +36,31 @@ framework's other quality hooks (#11598).
 bash scripts/install-git-hooks.sh
 ```
 
-Copies each hook (`pre-commit`, `pre-push`) into the repo's hooks dir as a
+Copies each hook (`pre-commit`, `pre-push`, `commit-msg`) into the repo's hooks dir as a
 **real file** — never a worktree symlink (those dangle when the worktree is
 deleted, silently disabling enforcement — #11598). The installer is idempotent
 (a second run is a no-op), normalises a bad absolute `core.hooksPath` back to
 git's default, detects/replaces any dangling symlink left by the old
 `install_hooks.sh` (now a shim that delegates here), and preserves a pre-commit
 framework hook when one is present.
+
+## What the commit-msg hook does
+
+It strips co-author and tool trailers (`Co-authored-by`, `Generated with [Claude Code]`,
+`Claude-Session:`), because mrveiss is the sole author. Then it rejects a subject that does not
+follow `<type>(scope): <description> (#NNNN)` by running
+`scripts/lint-conventions.sh --commit-msg`, the same rule the pre-commit framework's
+`lint-commit-subject` runs (#17029). Merge, Revert, `fixup!`, `squash!` and worktree-claim
+subjects are exempt. Until #17029 it was a hand-installed local file, not part of the repo.
+
+git runs it for `git commit` (and `--amend`), a real merge commit, and a rebase reword or
+conflict `--continue`. A plain `git revert` or `git cherry-pick` does not run it. Finishing a
+conflicted cherry-pick or rebase of an **older commit whose subject predates the convention**
+therefore needs a conforming subject: conclude that pick with
+`git commit -m "<type>(scope): <description> (#NNNN)"` and then `git cherry-pick --continue`,
+or reword the subject during the rebase (`reword`). A backport carries its own issue reference
+like any other commit. If a real workflow cannot be completed that way, that is a hook defect:
+file it.
 
 ## What the pre-commit hook does
 
@@ -56,6 +74,7 @@ For each ref you're pushing, the hook walks the changed files and runs:
 
 | Check | When | What |
 |---|---|---|
+| **Open-PR cap** (#17006) | a `refs/heads/*` ref that does not yet exist on the remote (a new branch; a new tag is exempt) | refuse the push once open PRs (excluding forks/bots) are `>= AUTOBOT_OPEN_PR_CAP` (default 40); pushes to an existing branch are never blocked |
 | **Phase 6 issue check** | branch matches `issue-NNNN` | warn if issue is CLOSED on GitHub OR if `origin/main` already has a commit citing `#NNNN` |
 | **Phase 0c type check** | any `.ts` or `.vue` file changed | `vue-tsc --noEmit -p tsconfig.app.json` (90s timeout); only **errors in changed files** block — pre-existing project errors warn |
 | **Phase 0c test run** | any test file or composable changed | `vitest run <relevant test files>` (120s timeout); failures block |
@@ -64,15 +83,16 @@ For each ref you're pushing, the hook walks the changed files and runs:
 Time-boxed: a slow check warns and skips rather than blocking forever. Real
 failures block the push with a clear "fix this" message.
 
+**The open-PR cap has no bypass** — `git push --no-verify` skips the whole
+hook (see "Bypass" below, and don't), but there is no flag or env var that
+disables just this check while leaving the others active. The only
+configurable input is `AUTOBOT_OPEN_PR_CAP` itself.
+
 ## Bypass
 
-```bash
-git push --no-verify
-```
-
-Use only when you actually have to (e.g. delivering a hotfix and CI will
-verify). Don't make a habit of it — every bypass is the path that produces
-PR #5141-class incidents.
+There is no sanctioned bypass: never `--no-verify`, never a `core.hooksPath` override
+(CLAUDE.md, #17026; #15961 is what one silently disables). A hook that blocks legitimate work
+is a bug: fix the cause, or file the hook defect.
 
 ## Tested manually
 

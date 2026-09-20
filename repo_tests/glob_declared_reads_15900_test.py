@@ -135,9 +135,18 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         {"repo_tests/promtool_rules_test.py"},
         "root-relative `*.promtool-test.yml` sweep; the matching files live outside the python filter's trees",
     ),
+    "*.service": (
+        {"repo_tests/chromadb_bind_not_hardcoded_15317_test.py"},
+        "root-relative `*.service` sweep; the matching files live outside the python filter's trees",
+    ),
+    "*.service.j2": (
+        {"repo_tests/chromadb_bind_not_hardcoded_15317_test.py"},
+        "root-relative `*.service.j2` sweep; the matching files live outside the python filter's trees",
+    ),
     "*.sh": (
         {
             "repo_tests/ansible_inventory_path_exists_test.py",
+            "repo_tests/chromadb_bind_not_hardcoded_15317_test.py",
             "repo_tests/deployment_script_scan.py",
             "repo_tests/embedded_python_dependency_declared_test.py",
             "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
@@ -186,6 +195,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/infra_libs_test_wiring_guard_15051_test.py",
             "repo_tests/job_name_names_what_it_runs_test.py",
+            "repo_tests/nginx_sites_enabled_link_enforced_16979_test.py",
             "repo_tests/pip_relative_editable_needs_chdir_test.py",
             "repo_tests/python_interpreter_role_rename_test.py",
             "repo_tests/required_context_complements_test.py",
@@ -242,6 +252,26 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/workflow_rc_capture_test.py",
         },
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
+    ),
+    "autobot-frontend/src/*.js": (
+        {"repo_tests/vnc_password_not_in_frontend_source_16299_test.py"},
+        "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
+        "(#16299); `autobot-frontend/` is outside the python filter's trees",
+    ),
+    "autobot-frontend/src/*.ts": (
+        {"repo_tests/vnc_password_not_in_frontend_source_16299_test.py"},
+        "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
+        "(#16299); `autobot-frontend/` is outside the python filter's trees",
+    ),
+    "autobot-frontend/src/*.vue": (
+        {"repo_tests/vnc_password_not_in_frontend_source_16299_test.py"},
+        "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
+        "(#16299); `autobot-frontend/` is outside the python filter's trees",
+    ),
+    "docker/*.yml": (
+        {"repo_tests/chromadb_bind_not_hardcoded_15317_test.py"},
+        "sweeps compose files for a hardcoded ChromaDB bind address (#15317); `docker/` is "
+        "outside the python filter's trees",
     ),
     "libs/autobot-sdk-ts/src/resources/*.ts": (
         {"repo_tests/sdk_ts_request_contract_test.py"},

@@ -221,6 +221,18 @@ _ss_spec.loader.exec_module(_ss_mod)
 sys.modules["models.schemas_secrets"] = _ss_mod
 setattr(sys.modules["models"], "schemas_secrets", _ss_mod)
 
+# #16281: models/npu_schemas.py and models/gpu_schemas.py are REAL for the same
+# reason -- services/node_gpu.py builds pydantic responses from them, and a
+# MagicMock model validates nothing. Both import only pydantic; gpu_schemas also
+# imports npu_schemas, hence the order and the sys.modules entry before exec.
+for _schema in ("npu_schemas", "gpu_schemas"):
+    _schema_path = Path(__file__).parent / "models" / f"{_schema}.py"
+    _schema_spec = _ss_importlib_util.spec_from_file_location(f"models.{_schema}", _schema_path)
+    _schema_mod = _ss_importlib_util.module_from_spec(_schema_spec)
+    sys.modules[f"models.{_schema}"] = _schema_mod
+    _schema_spec.loader.exec_module(_schema_mod)
+    setattr(sys.modules["models"], _schema, _schema_mod)
+
 
 # ── services ──────────────────────────────────────────────────────────────────
 # The services.* modules api/code_sync.py and api/setup_wizard.py import are
@@ -276,13 +288,44 @@ _EXTRA_SERVICE_MODULES = (
     "services.full_tree_drift",
 )
 
-# Parent package first so each child stub binds onto it (see _stub docstring).
-for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES))):
+# #16722: the parent is a hollow package over the real directory, not a MagicMock.
+# In importlib mode pytest imports a test module's parent first and re-imports it
+# from disk when the object in sys.modules has no __path__
+# (_pytest.pathlib._import_module_using_spec), so a bare MagicMock let collecting
+# ANY test under services/ run the real services/__init__.py over it, and the
+# leak guard blamed whichever such test came first. A MagicMock given a __path__
+# is no better: it invents attributes, so Package.setup read a mock
+# pytest_plugins and `from services import x` bound a mock instead of the real
+# submodule. A hollow package -- the shape tests/services/conftest.py already
+# uses -- invents nothing: stubbed children are bound onto it below, and every
+# other submodule imports from its real file.
+if "services" not in sys.modules:
+    _services_pkg = types.ModuleType("services")
+    _services_pkg.__path__ = [str(Path(__file__).parent / "services")]
+    _services_pkg.__package__ = "services"
+    _services_pkg.__spec__ = None
+    sys.modules["services"] = _services_pkg
+
+# Each child stub binds onto the parent as it is created (see _stub docstring).
+for _m in sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES)):
     _stub(_m)
 
+# #16712/#16722 (#17133 review): pytest.ini's --import-mode=importlib collects a
+# services/*_test.py file as the dotted module services.<name>, and
+# _pytest.python.Package.setup() reads the parent's xunit-style
+# setUpModule/setup_module/tearDownModule/teardown_module and pytest_plugins.
+# The earlier MagicMock-based stub needed those pinned to None/() by hand,
+# because a MagicMock invents every attribute it is asked for instead of
+# leaving them absent. The hollow types.ModuleType above has neither problem:
+# it genuinely lacks them, exactly like the real (nearly empty)
+# services/__init__.py, so pytest reads "not defined" on its own. Assigning
+# them here would UNDO that -- #17133 CI caught exactly this, via
+# tests/test_services_stub_is_a_package_16722.py asserting the stub carries
+# no invented pytest_plugins.
+
 # ── services.* modules that must be REAL, not stubs ──────────────────────────
-# ``services`` itself is a MagicMock, not a package, so a normal import cannot
-# traverse it — each of these is loaded from its file spec and re-bound onto
+# ``services`` itself is a hollow package, not the real one (#16722) — each of
+# these is loaded from its file spec up front and re-bound onto
 # the parent stub so ``patch("services.x.Y")`` resolves to the same object.
 #
 # Each entry earns its place by a failure that a MagicMock made invisible:
@@ -328,6 +371,15 @@ for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_M
 # outgrown "eight" twice already (#15462), and a stale number reads as a rule.
 import importlib.util as _importlib_util  # noqa: E402
 
+# #16281: the SLM's top-level status vocabulary (#15495), loaded by path. On
+# pytest.ini's pythonpath `autobot_shared/` itself is a root, so a bare
+# `import status_enums` finds autobot_shared/status_enums.py -- a different
+# module with no NodeStatus. Production resolves the SLM's own; so does the suite.
+_se_spec = _importlib_util.spec_from_file_location("status_enums", Path(__file__).parent / "status_enums.py")
+_se_mod = _importlib_util.module_from_spec(_se_spec)
+_se_spec.loader.exec_module(_se_mod)
+sys.modules["status_enums"] = _se_mod
+
 _REAL_SERVICE_MODULES = (
     "ssh_utils",
     "deploy_artifacts",
@@ -351,6 +403,16 @@ _REAL_SERVICE_MODULES = (
     # (stdlib + autobot_shared), so its co-located test exercises the real
     # decision without importing services/auth.py.
     "api_key_authority",
+    # #16294: the key allow-list (a route walk) and the key-request audit writer.
+    # services/auth.py imports both at load time, and the route-level key tests
+    # load services/auth.py for real (tests/api/_real_auth_import.py).
+    "api_key_routes",
+    "api_key_audit",
+    # #16281: its co-located test drives the real publish/retract logic.
+    "node_gpu",
+    # #16712: reconciler.py imports this at module scope; its co-located test
+    # drives the real read/write/clear logic, not MagicMocks.
+    "service_remediation_tracker",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for

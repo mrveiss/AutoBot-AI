@@ -71,13 +71,13 @@ the one read-side gate · `validate_ownership` (:613).
 ## 3. Plugin loading
 
 **Boundary:** the install endpoint. Loading executes arbitrary Python by design
-([`loader.py`](../../autobot_shared/plugin_sdk/loader.py) — `import_module` (:541), then the
-`spec_from_file_location` (:610) fallback). No load-time sandbox exists or is intended.
+([`loader.py`](../../autobot_shared/plugin_sdk/loader.py) — `import_module` (:550), then the
+`spec_from_file_location` (:619) fallback). No load-time sandbox exists or is intended.
 
 **Canonical enforcement:** every route in
 [`autobot-backend/plugin_manager.py`](../../autobot-backend/plugin_manager.py) carries a
 `Depends` on [`auth_middleware.py`](../../autobot-backend/auth_middleware.py)
-`check_admin_permission` (:967).
+`check_admin_permission` (:962).
 Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-backend/archive_safety.py)
 — `validate_zip_metadata` (:27), `safe_extract` (:58), `MAX_UPLOAD_BYTES` (:19).
 
@@ -100,9 +100,9 @@ response, a log line, an issue, a PR comment — is already redacted.
 
 **Canonical enforcement:** [`encryption_service.py`](../../autobot-backend/encryption_service.py) AES-GCM + PBKDF2 for data at rest ·
 [`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns ·
-[`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py) `ConnectorCredentialStore` (:178) for connector/OAuth creds, ownership via `_require_owner` (:604) ·
-[`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:954) for service-to-service ·
-[`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:121) for SLM token revocation.
+[`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py) `ConnectorCredentialStore` (:195) for connector/OAuth creds, ownership via `_require_owner` (:643) ·
+[`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:949) for service-to-service ·
+[`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:123) for SLM token revocation.
 
 **Invariants**
 - No parallel crypto path. A diff introducing its own `Fernet(...)` or `AESGCM(...)` instead

@@ -182,12 +182,12 @@ class WorkerInferenceMixin:
         import random
 
         # Use hashlib from top-level imports for deterministic embedding
-        hash_obj = hashlib.md5(f"{text}{model_name}".encode())
+        hash_obj = hashlib.md5(f"{text}{model_name}".encode(), usedforsecurity=False)
         random.seed(int(hash_obj.hexdigest(), 16) % (2**32))
 
         # Use constants for embedding dimensions
         dim = EMBEDDING_DIM_NOMIC if "nomic" in model_name.lower() else EMBEDDING_DIM_DEFAULT
-        embedding = [random.uniform(-1, 1) for _ in range(dim)]
+        embedding = [random.uniform(-1, 1) for _ in range(dim)]  # nosec B311 -- deterministic mock, not security
 
         # Normalize
         norm = sum(x**2 for x in embedding) ** 0.5
@@ -197,7 +197,7 @@ class WorkerInferenceMixin:
 
     def _generate_cache_key(self, text: str, model_name: str) -> str:
         """Generate cache key using hashlib from top-level imports"""
-        return hashlib.md5(f"{text}:{model_name}".encode()).hexdigest()
+        return hashlib.md5(f"{text}:{model_name}".encode(), usedforsecurity=False).hexdigest()
 
     async def _calculate_cache_hit_rate(self) -> float:
         """Calculate cache hit rate (async for thread-safe stats access)"""

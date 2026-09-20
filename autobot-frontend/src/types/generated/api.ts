@@ -257,6 +257,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/orphans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Orphans
+         * @description Orphans among the first *limit* resources of a type, so they surface before a user trips on one.
+         */
+        get: operations["list_orphans_api_admin_orphans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orphans/repair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Repair Orphan Resource
+         * @description Assign a live owner to a resource no live principal can reach. Refused (409) if any can.
+         */
+        post: operations["repair_orphan_resource_api_admin_orphans_repair_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orphan-storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Orphan Storage
+         * @description Every orphan-storage candidate, across every registered detector.
+         *
+         *     ``provider_statuses`` names each detector that failed to run -- an
+         *     outage must read as "could not check", never as "found nothing".
+         */
+        get: operations["list_orphan_storage_api_admin_orphan_storage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/retention-policies": {
         parameters: {
             query?: never;
@@ -338,26 +401,6 @@ export interface paths {
          *     Counts are approximate (best-effort Redis scan); 0 = unavailable.
          */
         get: operations["get_retention_settings_api_admin_retention_settings_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/schedulers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Schedulers
-         * @description List every registered scheduler with its effective state and declared default.
-         */
-        get: operations["list_schedulers_api_admin_schedulers_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1609,10 +1652,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Dynamic endpoint capability discovery
-         * @description Returns a dynamically derived list of all registered API endpoints, grouped by OpenAPI tag and operation type.  The result is derived from the live FastAPI OpenAPI schema (not hardcoded) and is cached with a 5-minute TTL that resets when the served route table changes.
+         * Get Chat Capabilities
+         * @description Get AI Stack chat capabilities and available features.
+         *
+         *     Issue #744: Requires authenticated user.
          */
-        get: operations["get_capabilities_api_capabilities_get"];
+        get: operations["get_chat_capabilities_api_capabilities_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4515,12 +4560,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Aistack Stats
-         * @description Get enhanced knowledge base statistics including AI Stack metrics.
+         * Get Knowledge Stats
+         * @description Get knowledge base statistics - FIXED to use proper instance
          *
-         *     Issue #744: Requires authenticated user.
+         *     Issue #744: Requires admin authentication.
          */
-        get: operations["get_aistack_stats_api_knowledge_base_stats_get"];
+        get: operations["get_knowledge_stats_api_knowledge_base_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6019,34 +6064,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/ai-stack/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Search
-         * @description Search combining local knowledge base with AI Stack RAG capabilities.
-         *
-         *     Issue #281: Refactored from 144 lines to use extracted helper methods.
-         *     Issue #744: Requires authenticated user.
-         *
-         *     This endpoint provides superior search results by combining:
-         *     - Local knowledge base semantic search
-         *     - AI Stack RAG-enhanced retrieval
-         *     - Intelligent result ranking and synthesis
-         */
-        post: operations["search_api_knowledge_base_ai_stack_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/knowledge_base/ai-stack/search/rag": {
         parameters: {
             query?: never;
@@ -6064,33 +6081,10 @@ export interface paths {
          *     understanding and context-aware response generation.
          *
          *     Issue #744: Requires authenticated user.
+         *     Issue #16665: locally-retrieved documents are scoped to the caller before
+         *     being used as RAG context. Issue #16654/#16745: no admin bypass here.
          */
         post: operations["rag_search_api_knowledge_base_ai_stack_search_rag_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/ai-stack/extract": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Extract Knowledge
-         * @description Extract structured knowledge from content using AI Stack capabilities.
-         *
-         *     This endpoint uses AI Stack's knowledge extraction agent to identify
-         *     and structure knowledge from various content types.
-         *
-         *     Issue #744: Requires authenticated user.
-         */
-        post: operations["extract_knowledge_api_knowledge_base_ai_stack_extract_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6172,7 +6166,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/ai-stack/stats": {
+    "/api/knowledge_base/ai-stack/ai-stack/stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -6183,9 +6177,14 @@ export interface paths {
          * Get Aistack Stats
          * @description Get enhanced knowledge base statistics including AI Stack metrics.
          *
+         *     #16908: path corrected from "/stats" to "/ai-stack/stats" -- it collided
+         *     with (and always lost to) api/knowledge.py's own /stats, registered as a
+         *     core router before this one. "/ai-stack/stats" matches the path this
+         *     handler's own generated OpenAPI type already documented.
+         *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["get_aistack_stats_api_knowledge_base_ai_stack_stats_get"];
+        get: operations["get_aistack_stats_api_knowledge_base_ai_stack_ai_stack_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6809,15 +6808,44 @@ export interface paths {
         put?: never;
         /**
          * Search
-         * @description Search combining local knowledge base with AI Stack RAG capabilities.
+         * @description Canonical knowledge base search endpoint (#555, #10666).
          *
-         *     Issue #281: Refactored from 144 lines to use extracted helper methods.
-         *     Issue #744: Requires authenticated user.
+         *     Single entry point combining all search capabilities:
+         *     - Basic search (query, limit/top_k)
+         *     - Search with tags, hybrid mode, reranking
+         *     - RAG search (query reformulation, synthesis)
+         *     - Advanced filtering (date filters, term filters, clustering)
+         *     - Analytics tracking
          *
-         *     This endpoint provides superior search results by combining:
-         *     - Local knowledge base semantic search
-         *     - AI Stack RAG-enhanced retrieval
-         *     - Intelligent result ranking and synthesis
+         *     **Parameters:**
+         *     - **query** (required): Search query string
+         *     - **limit** / **top_k**: Maximum results (default: 10, max: 100)
+         *     - **category**: Filter by category
+         *     - **mode**: Search mode — `semantic`, `keyword`, `hybrid` (default), `auto`
+         *     - **enable_rag**: Enable RAG enhancement for synthesized responses
+         *     - **enable_reranking**: Enable cross-encoder reranking
+         *     - **reformulate_query**: Expand query for better coverage
+         *     - **return_context**: Return optimized context for chat integration
+         *     - **tags** / **tags_match_any**: Tag filtering
+         *     - **min_score**: Minimum score threshold (0.0-1.0)
+         *     - **offset**: Pagination offset
+         *     - **include_documentation**: Also search project documentation
+         *     - **include_relations**: Include related facts
+         *     - **enable_query_expansion**: Synonym/related-term expansion
+         *     - **enable_relevance_scoring**: Additional relevance scoring
+         *     - **enable_clustering**: Cluster results by topic
+         *     - **exclude_sources**: Exclude results from these source IDs
+         *     - **verified_only**: Return only verified/approved facts
+         *     - **created_after** / **created_before**: Date range filters (YYYY-MM-DD)
+         *     - **exclude_terms** / **require_terms**: Term inclusion/exclusion
+         *     - **session_id** / **track_analytics**: Analytics correlation
+         *
+         *     **Returns:** results, total_results, query, mode, rag_applied,
+         *     reranking_applied, synthesized_response (if enable_rag=true).
+         *
+         *     Migration (#10666): /enhanced_search→tags/reranking params,
+         *     /rag_search→enable_rag=true, /similarity_search→mode=semantic+min_score,
+         *     advanced search→enable_query_expansion/enable_clustering etc.
          */
         post: operations["search_api_knowledge_base_search_post"];
         delete?: never;
@@ -9080,6 +9108,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/import_claude_memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Claude Memory Endpoint
+         * @description Queue import of Claude Code auto-memory files into knowledge_facts (#16642).
+         *
+         *     Always imports from the configured memory directory (#16642 security
+         *     review: no caller-supplied path — nothing to confine or validate).
+         *     Returns immediately with task_id. Use /import_claude_memory/status/{task_id} to poll.
+         */
+        post: operations["import_claude_memory_endpoint_api_knowledge_base_import_claude_memory_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/import_claude_memory/status/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Import Claude Memory Status
+         * @description Poll the status of a background Claude Code memory import task (#16642).
+         */
+        get: operations["get_import_claude_memory_status_api_knowledge_base_import_claude_memory_status__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/api/knowledge/facts/{fact_id}/share": {
         parameters: {
             query?: never;
@@ -9683,33 +9755,10 @@ export interface paths {
          *     understanding and context-aware response generation.
          *
          *     Issue #744: Requires authenticated user.
+         *     Issue #16665: locally-retrieved documents are scoped to the caller before
+         *     being used as RAG context. Issue #16654/#16745: no admin bypass here.
          */
         post: operations["rag_search_api_knowledge_base_search_rag_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/extract": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Extract Knowledge
-         * @description Extract structured knowledge from content using AI Stack capabilities.
-         *
-         *     This endpoint uses AI Stack's knowledge extraction agent to identify
-         *     and structure knowledge from various content types.
-         *
-         *     Issue #744: Requires authenticated user.
-         */
-        post: operations["extract_knowledge_api_knowledge_base_extract_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9791,6 +9840,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/ai-stack/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Aistack Stats
+         * @description Get enhanced knowledge base statistics including AI Stack metrics.
+         *
+         *     #16908: path corrected from "/stats" to "/ai-stack/stats" -- it collided
+         *     with (and always lost to) api/knowledge.py's own /stats, registered as a
+         *     core router before this one. "/ai-stack/stats" matches the path this
+         *     handler's own generated OpenAPI type already documented.
+         *
+         *     Issue #744: Requires authenticated user.
+         */
+        get: operations["get_aistack_stats_api_knowledge_base_ai_stack_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/health/status": {
         parameters: {
             query?: never;
@@ -9807,6 +9883,31 @@ export interface paths {
         get: operations["knowledge_health_api_knowledge_base_health_status_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Knowledge
+         * @description Extract structured knowledge from content using AI Stack capabilities.
+         *
+         *     This endpoint uses AI Stack's knowledge extraction agent to identify
+         *     and structure knowledge from various content types.
+         *
+         *     Issue #744: Requires authenticated user.
+         */
+        post: operations["extract_knowledge_api_knowledge_base_extract_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -16495,7 +16596,7 @@ export interface paths {
         put?: never;
         /**
          * Approve
-         * @description Approve a pending approval gate (#1402).
+         * @description Approve a pending approval gate (#1402); only a person may (#17042).
          */
         post: operations["approve_api_approval_gates__approval_id__approve_post"];
         delete?: never;
@@ -16515,7 +16616,7 @@ export interface paths {
         put?: never;
         /**
          * Reject
-         * @description Reject a pending approval gate (#1402).
+         * @description Reject a pending approval gate (#1402); only a person may (#17042).
          */
         post: operations["reject_api_approval_gates__approval_id__reject_post"];
         delete?: never;
@@ -16535,7 +16636,7 @@ export interface paths {
         put?: never;
         /**
          * Request Revision
-         * @description Request revision on a pending approval gate (#1402).
+         * @description Request revision on a pending approval gate (#1402); only a person may (#17042).
          */
         post: operations["request_revision_api_approval_gates__approval_id__request_revision_post"];
         delete?: never;
@@ -17029,7 +17130,7 @@ export interface paths {
          *
          *     Returns immediately with plan_id. Use WebSocket for real-time updates.
          *
-         *     Issue #744: Requires authenticated user.
+         *     Issue #744: Requires authenticated user. #17009: and ownership of the session.
          */
         post: operations["submit_query_api_overseer_query__session_id__post"];
         delete?: never;
@@ -17049,7 +17150,7 @@ export interface paths {
          * Get Status
          * @description Get current overseer status for a session.
          *
-         *     Issue #744: Requires authenticated user.
+         *     Issue #744: Requires authenticated user. #17009: and ownership of the session.
          */
         get: operations["get_status_api_overseer_status__session_id__get"];
         put?: never;
@@ -17292,6 +17393,35 @@ export interface paths {
          * @description List delegations for an agent as delegator or assignee (#1753).
          */
         get: operations["list_agent_delegations_api_agents__agent_id__delegations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/presence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Agent Presence
+         * @description Every agent visible to the caller: its own tenant's, plus shared.
+         *
+         *     Tenant comes from `require_org_context` -> `get_tenant_context`
+         *     (#10750 A5): an ordinary caller cannot see another tenant's agents by
+         *     passing one in -- a request-supplied org (header/path/query) is only
+         *     honoured after a real membership check, otherwise 403. A **platform
+         *     admin** (`is_platform_admin` or an admin role on the JWT) is the
+         *     documented exception: `get_tenant_context` trusts an admin's
+         *     request-supplied org outright, exactly as every other org-scoped route
+         *     already does -- this route adds no new admin-override path.
+         */
+        get: operations["list_agent_presence_api_agents_presence_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -33591,6 +33721,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/self/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dynamic endpoint capability discovery
+         * @description Returns a dynamically derived list of all registered API endpoints, grouped by OpenAPI tag and operation type.  The result is derived from the live FastAPI OpenAPI schema (not hardcoded) and is cached with a 5-minute TTL that resets when the served route table changes.
+         */
+        get: operations["get_capabilities_api_self_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/research-browser/url": {
         parameters: {
             query?: never;
@@ -36580,7 +36730,7 @@ export interface paths {
         put?: never;
         /**
          * Approve Command
-         * @description Approve or deny a pending command execution
+         * @description Approve or deny a pending command execution; a person decides and is recorded (#17052).
          */
         post: operations["approve_command_api_security_approve_command_post"];
         delete?: never;
@@ -41943,13 +42093,8 @@ export interface paths {
         put?: never;
         /**
          * Start Codebase Indexing
-         * @description Start comprehensive codebase indexing operation
-         *
-         *     This operation will:
-         *     - Index all source code files matching the patterns
-         *     - Extract semantic information and relationships
-         *     - Build searchable knowledge base entries
-         *     - Support checkpoint/resume for large codebases
+         * @description Not implemented: its operation called a method that exists nowhere (#17017). Wiring it to the
+         *     codebase-analytics indexer, not a second copy of it, is #17023.
          */
         post: operations["start_codebase_indexing_api_long_running_codebase_index_post"];
         delete?: never;
@@ -41995,13 +42140,8 @@ export interface paths {
         put?: never;
         /**
          * Start Knowledge Base Population
-         * @description Start knowledge base population operation
-         *
-         *     This operation will:
-         *     - Process documents from specified source paths
-         *     - Extract and chunk text content appropriately
-         *     - Generate embeddings and build searchable index
-         *     - Support incremental updates and force reindexing
+         * @description Not implemented: its operation was a placeholder that reported success (#17017). Wiring it to
+         *     ``api/knowledge_population.py`` is #17023.
          */
         post: operations["start_knowledge_base_population_api_long_running_knowledge_base_populate_post"];
         delete?: never;
@@ -42021,13 +42161,7 @@ export interface paths {
         put?: never;
         /**
          * Start Security Scan
-         * @description Start comprehensive security scan operation
-         *
-         *     This operation will:
-         *     - Scan code for security vulnerabilities
-         *     - Check dependencies for known issues
-         *     - Search for exposed secrets and credentials
-         *     - Generate detailed security report
+         * @description Not implemented: no operation handles a security scan (#17017); whether one is wanted is #17023.
          */
         post: operations["start_security_scan_api_long_running_security_scan_post"];
         delete?: never;
@@ -42068,7 +42202,7 @@ export interface paths {
         };
         /**
          * Get Operation Status
-         * @description Get detailed operation status
+         * @description Get detailed operation status: its creator's or an admin's (#17017)
          */
         get: operations["get_operation_status_api_long_running__operation_id__get"];
         put?: never;
@@ -42088,7 +42222,7 @@ export interface paths {
         };
         /**
          * List Operations
-         * @description List operations with filtering
+         * @description List operations with filtering: a non-admin sees only their own, counts included (#17017)
          */
         get: operations["list_operations_api_long_running__get"];
         put?: never;
@@ -42110,7 +42244,7 @@ export interface paths {
         put?: never;
         /**
          * Cancel Operation
-         * @description Cancel a running operation
+         * @description Cancel a running operation: its creator or an admin (#17017)
          */
         post: operations["cancel_operation_api_long_running__operation_id__cancel_post"];
         delete?: never;
@@ -42130,7 +42264,7 @@ export interface paths {
         put?: never;
         /**
          * Resume Operation
-         * @description Resume operation from latest checkpoint
+         * @description Resume operation from latest checkpoint: its creator or an admin, who then owns the resumed one (#17017)
          */
         post: operations["resume_operation_api_long_running__operation_id__resume_post"];
         delete?: never;
@@ -45170,6 +45304,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai-stack/orchestrate/multi-agent-query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Multi Agent Query
+         * @description Orchestrate multiple AI agents for complex query processing.
+         *
+         *     Args:
+         *         query: Query to process with multiple agents
+         *         agents: List of agent names to use
+         *         coordination_mode: How to coordinate agents (parallel, sequential)
+         *
+         *     Issue #744: Requires admin authentication.
+         */
+        post: operations["multi_agent_query_api_ai_stack_orchestrate_multi_agent_query_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-stack/agents": {
         parameters: {
             query?: never;
@@ -45209,6 +45370,9 @@ export interface paths {
          *     RAG agent for enhanced retrieval and generation capabilities.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #16654/#16745: the admin gate does not bypass fact visibility -- KB
+         *     documents feeding RAG synthesis are scoped to the caller, same as any other
+         *     RAG-bound read, since an admin's RAG synthesis gets no special bypass.
          */
         post: operations["rag_query_api_ai_stack_rag_query_post"];
         delete?: never;
@@ -45278,6 +45442,9 @@ export interface paths {
          *     knowledge base and advanced AI reasoning capabilities.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #16654/#16745: the admin gate does not bypass fact visibility -- an
+         *     admin's chat gets no read bypass, so KB context is scoped to the caller
+         *     before it reaches the chat prompt.
          */
         post: operations["chat_api_ai_stack_chat_post"];
         delete?: never;
@@ -45462,33 +45629,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ai-stack/orchestrate/multi-agent-query": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Multi Agent Query
-         * @description Orchestrate multiple AI agents for complex query processing.
-         *
-         *     Args:
-         *         query: Query to process with multiple agents
-         *         agents: List of agent names to use
-         *         coordination_mode: How to coordinate agents (parallel, sequential)
-         *
-         *     Issue #744: Requires admin authentication.
-         */
-        post: operations["multi_agent_query_api_ai_stack_orchestrate_multi_agent_query_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/ai-stack/legacy/rag-search": {
         parameters: {
             query?: never;
@@ -45511,6 +45651,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/rag/loop/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Loop Status
+         * @description Get autonomous improvement loop status.
+         *
+         *     Returns last run time, variants tested, winner, current baseline config,
+         *     and any variant pending human approval.
+         *
+         *     Issue #4680.
+         */
+        get: operations["get_loop_status_api_knowledge_base_rag_loop_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/rag/loop/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Loop Variant
+         * @description Promote the pending staging variant to production RAGConfig.
+         *
+         *     The autonomous loop stores a "pending approval" variant when the improvement
+         *     margin is below the auto-promotion threshold.  This endpoint applies it.
+         *
+         *     Returns 409 if no variant is pending.
+         *
+         *     Issue #4680.
+         */
+        post: operations["approve_loop_variant_api_knowledge_base_rag_loop_approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/rag/loop/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Loop Variant
+         * @description Discard the pending staging variant without applying it to production RAGConfig.
+         *
+         *     The autonomous loop stores a "pending approval" variant when the improvement
+         *     margin is below the auto-promotion threshold.  This endpoint clears it.
+         *
+         *     Returns 409 if no variant is pending.
+         *
+         *     Issue #4916.
+         */
+        post: operations["reject_loop_variant_api_knowledge_base_rag_loop_reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/rag/advanced_search": {
         parameters: {
             query?: never;
@@ -45526,6 +45745,8 @@ export interface paths {
          *
          *     Issue #620: Refactored to use extracted helper methods.
          *     Issue #744: Requires authenticated user.
+         *     Issue #16665: returned results are scoped to the caller. Issue #16654/#16745:
+         *     no admin bypass -- an admin caller is scoped the same as any other caller.
          *
          *     **Parameters:**
          *     - **query**: Search query string
@@ -45616,85 +45837,6 @@ export interface paths {
          */
         put: operations["update_rag_configuration_api_knowledge_base_rag_config_rag_put"];
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/rag/loop/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Loop Status
-         * @description Get autonomous improvement loop status.
-         *
-         *     Returns last run time, variants tested, winner, current baseline config,
-         *     and any variant pending human approval.
-         *
-         *     Issue #4680.
-         */
-        get: operations["get_loop_status_api_knowledge_base_rag_loop_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/rag/loop/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Approve Loop Variant
-         * @description Promote the pending staging variant to production RAGConfig.
-         *
-         *     The autonomous loop stores a "pending approval" variant when the improvement
-         *     margin is below the auto-promotion threshold.  This endpoint applies it.
-         *
-         *     Returns 409 if no variant is pending.
-         *
-         *     Issue #4680.
-         */
-        post: operations["approve_loop_variant_api_knowledge_base_rag_loop_approve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/rag/loop/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reject Loop Variant
-         * @description Discard the pending staging variant without applying it to production RAGConfig.
-         *
-         *     The autonomous loop stores a "pending approval" variant when the improvement
-         *     margin is below the auto-promotion threshold.  This endpoint clears it.
-         *
-         *     Returns 409 if no variant is pending.
-         *
-         *     Issue #4916.
-         */
-        post: operations["reject_loop_variant_api_knowledge_base_rag_loop_reject_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -46044,6 +46186,26 @@ export interface paths {
          *         Success confirmation
          */
         post: operations["cleanup_old_metrics_api_admin_access_control_cleanup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/schedulers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Schedulers
+         * @description List every registered scheduler with its effective state and declared default.
+         */
+        get: operations["list_schedulers_api_admin_schedulers_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -47090,6 +47252,50 @@ export interface paths {
          *     and at least tags or examples).  Results are cached for 5 minutes.
          */
         post: operations["verify_remote_capabilities_api_a2a_capabilities_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/a2a/trust/grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grant trust to a (credential, peer id) pair
+         * @description Set a pair's trust level (#16950). Audited with the acting admin, the pair and the level.
+         *
+         *     The re-key starts every pair at UNTRUSTED, which cannot submit tasks, so this is
+         *     the only way back in. The level holds as a floor until a threat event or an
+         *     integrity violation revokes it.
+         */
+        post: operations["grant_trust_api_a2a_trust_grant_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/a2a/trust-legacy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pre-#16950 header-only trust records
+         * @description The header-only records kept from before the re-key: never read for access, only to guide re-grants.
+         */
+        get: operations["list_legacy_trust_api_a2a_trust_legacy_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -49368,7 +49574,7 @@ export interface paths {
         put?: never;
         /**
          * Decide Approval
-         * @description Approve or reject a pending approval.
+         * @description Approve or reject a pending approval, attributed to the verified caller (#17042).
          */
         post: operations["decide_approval_api_llc_approvals__approval_id__decide_post"];
         delete?: never;
@@ -52480,10 +52686,12 @@ export interface paths {
          * @description Return the recorded timeline for a run (for step-browser).
          *
          *     Raw inputs are stored in the DB; use ``?redact_pii=true`` to have
-         *     credentials stripped from the response on read.  Emails are NOT
-         *     separately redacted (the credential_redaction module covers API keys
-         *     and bearer tokens; email redaction would require regex patterns not
-         *     currently present in that module).
+         *     credentials stripped from the response on read.  Free text (an email
+         *     body, a document) is covered too (#13708): ``credential_redaction``'s
+         *     ``redact_string`` now also runs the cross-service content scanner
+         *     (``autobot_shared.secret_redaction``), which catches a credential sitting
+         *     in prose -- PEM blocks, basic-auth URLs, "password is X" phrasing -- not
+         *     just the API-key/bearer-token shapes this module's own patterns cover.
          */
         get: operations["get_replay_log_api_llc_agents__agent_id__runs__run_id__replay_log_get"];
         put?: never;
@@ -53152,12 +53360,15 @@ export interface paths {
         };
         /**
          * Quota Windows
-         * @description Return provider quota window structures for all configured providers.
+         * @description Return provider quota window structures, with real observed headroom (#16951, #15026).
          *
          *     Each entry describes the rate-limit windows applicable to the provider
          *     (e.g. RPM + TPM for OpenAI; 5-hour + 7-day output token windows for
-         *     Anthropic).  Actual headroom values require provider API key configuration
-         *     and are populated by the quota monitor (phase 3).
+         *     Anthropic), plus whatever ``QuotaHeadroomStore`` has actually observed for
+         *     it — the provider's own rate-limit response headers and 429s, recorded by
+         *     ``llm_shared/rate_limit_backoff.py`` on every LLM call. A window with no
+         *     reading yet reports none rather than a fabricated zero: "never observed"
+         *     and "confirmed empty" are different facts.
          */
         get: operations["quota_windows_api_llc_costs_quota_windows_get"];
         put?: never;
@@ -53826,6 +54037,26 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * A2ATrustGrantRequest
+         * @description An admin grant of trust to one (credential, peer id) pair -- never to a bare peer id.
+         */
+        A2ATrustGrantRequest: {
+            /**
+             * Subject
+             * @description The verified credential subject presenting the peer id
+             */
+            subject: string;
+            /**
+             * Peer Id
+             * @description The peer's X-A2A-Agent-Id
+             */
+            peer_id: string;
+            /** @description The level to grant, held as a floor until misconduct revokes it */
+            level: components["schemas"]["TrustLevel"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AIDocumentListResponse
          * @description Response for GET /documents.
          */
@@ -54001,56 +54232,6 @@ export interface components {
          * @description data payload for POST /search/rag.
          */
         AIStackRagSearchData: {
-            [key: string]: unknown;
-        };
-        /**
-         * AIStackSearchData
-         * @description data payload for POST /search.
-         */
-        AIStackSearchData: {
-            [key: string]: unknown;
-        };
-        /**
-         * AIStackSearchRequest
-         * @description Search request with AI Stack integration.
-         */
-        AIStackSearchRequest: {
-            /**
-             * Query
-             * @description Search query
-             */
-            query: string;
-            /**
-             * Search Type
-             * @description Search type (precise, comprehensive, broad)
-             * @default comprehensive
-             */
-            search_type: string;
-            /**
-             * Max Results
-             * @description Maximum results to return
-             * @default 10
-             */
-            max_results: number;
-            /**
-             * Include Rag
-             * @description Include RAG-enhanced results
-             * @default true
-             */
-            include_rag: boolean;
-            /**
-             * Include Local
-             * @description Include local knowledge base results
-             * @default true
-             */
-            include_local: boolean;
-            /**
-             * Confidence Threshold
-             * @description Minimum confidence score
-             * @default 0.3
-             */
-            confidence_threshold: number;
-        } & {
             [key: string]: unknown;
         };
         /**
@@ -58124,13 +58305,12 @@ export interface components {
         };
         /**
          * ApprovalAddCommentRequest
-         * @description Request body for adding a comment to an approval gate.
+         * @description Comment on an approval gate. author_type is ignored (#17056) -- kept only to log an old client sending it.
          */
         ApprovalAddCommentRequest: {
             /** Body */
             body: string;
-            /** @default human */
-            author_type: components["schemas"]["AuthorTypeEnum"];
+            author_type?: components["schemas"]["AuthorTypeEnum"] | null;
         } & {
             [key: string]: unknown;
         };
@@ -58242,7 +58422,7 @@ export interface components {
              * Format: uuid
              */
             company_id: string;
-            type: components["schemas"]["llc__models__enums__ApprovalType"];
+            type: components["schemas"]["ApprovalType"];
             /**
              * Requested By Agent Id
              * Format: uuid
@@ -58300,6 +58480,15 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ApprovalStatus
+         * @description Possible statuses for an approval gate.
+         *
+         *     Canonical for both the platform-general and the LLC company-scoped case
+         *     (#17043): WITHDRAWN/EXPIRED were LLC-only until this merge.
+         * @enum {string}
+         */
+        ApprovalStatus: "pending" | "approved" | "rejected" | "revision_requested" | "withdrawn" | "expired";
+        /**
          * ApprovalTransitionRequest
          * @description Request body for approve / reject / request-revision.
          */
@@ -58309,6 +58498,17 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ApprovalType
+         * @description Categories of approval gates.
+         *
+         *     Canonical for both the platform-general and the LLC company-scoped case
+         *     (#17043): HIRE..FINDING_PROMOTION were LLC-only (``llc/models/enums.py``)
+         *     until this merge -- ``llc.models.enums.ApprovalType`` now re-exports this
+         *     class rather than defining its own, so the two never drift apart again.
+         * @enum {string}
+         */
+        ApprovalType: "destructive_action" | "resource_request" | "create_agent" | "workflow_gate" | "hire" | "strategy" | "budget_override" | "sprint_close" | "project_disposal" | "finding_promotion";
         /**
          * ApproveCapabilitiesRequest
          * @description Request to approve plugin capabilities.
@@ -66143,7 +66343,7 @@ export interface components {
         CreateApprovalRequest: {
             /** Title */
             title: string;
-            approval_type: components["schemas"]["models__approval__ApprovalType"];
+            approval_type: components["schemas"]["ApprovalType"];
             /** Description */
             description?: string | null;
             /** Requested By Agent */
@@ -66937,21 +67137,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["AIStackRagSearchData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[AIStackSearchData] */
-        DataResponse_AIStackSearchData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AIStackSearchData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -84685,7 +84870,16 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** MultiModalResponse */
+        /**
+         * MultiModalResponse
+         * @description Response for POST /process/image, /process/audio and /process/text.
+         *
+         *     ``success`` says whether processing succeeded; ``persistence`` says whether
+         *     the result was then written to memory (#16926). The two are independent: a
+         *     processed result can be refused storage, and the caller must see that here,
+         *     not only in the server log. Values mirror ``PersistenceOutcome``; None when
+         *     processing failed and there was nothing to store.
+         */
         MultiModalResponse: {
             /** Success */
             success: boolean;
@@ -84705,6 +84899,8 @@ export interface components {
             device_used?: string | null;
             /** Error Message */
             error_message?: string | null;
+            /** Persistence */
+            persistence?: ("stored" | "unowned" | "refused" | "failed") | null;
         } & {
             [key: string]: unknown;
         };
@@ -86152,6 +86348,125 @@ export interface components {
             subscription_tier?: string | null;
             /** Max Users */
             max_users?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanListResponse
+         * @description Orphans of one type, each with the conditions that make it one (#15779 AC4).
+         */
+        OrphanListResponse: {
+            /** Resource Type */
+            resource_type: string;
+            /** Orphans */
+            orphans: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanRepairRequest
+         * @description Make *new_owner_id* the owner of a resource no live principal can reach.
+         *
+         *     ``resource_type`` is a plain string, not an enum, on purpose: an unknown type is
+         *     refused by the service **and audited**, where a validation error would leave no trace.
+         */
+        OrphanRepairRequest: {
+            /** Resource Type */
+            resource_type: string;
+            /** Resource Id */
+            resource_id: string;
+            /**
+             * New Owner Id
+             * @description A live user to own the resource
+             */
+            new_owner_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanRepairResponse
+         * @description What was repaired, and the conditions that justified the break-glass. Never secret material.
+         */
+        OrphanRepairResponse: {
+            /** Resource Type */
+            resource_type: string;
+            /** Resource Id */
+            resource_id: string;
+            /** New Owner Id */
+            new_owner_id: string;
+            /** Conditions */
+            conditions: {
+                [key: string]: unknown;
+            };
+            /** Before */
+            before: {
+                [key: string]: unknown;
+            };
+            /** After */
+            after: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanStorageCandidateResponse
+         * @description One orphan-storage candidate. ``location`` is logical -- no host path.
+         */
+        OrphanStorageCandidateResponse: {
+            /** Provider */
+            provider: string;
+            /** Id */
+            id: string;
+            /** Location */
+            location: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Modified At */
+            modified_at: string;
+            /** Reason */
+            reason: string;
+            /** Deletable */
+            deletable: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanStorageListResponse
+         * @description Every candidate across every registered detector, plus totals.
+         *
+         *     ``provider_statuses`` names every detector that ran and whether it
+         *     could actually check -- an outage shows up here, never as an empty
+         *     ``candidates`` list that reads as "nothing found".
+         */
+        OrphanStorageListResponse: {
+            /** Candidates */
+            candidates: components["schemas"]["OrphanStorageCandidateResponse"][];
+            /** Total Count */
+            total_count: number;
+            /** Total Size Bytes */
+            total_size_bytes: number;
+            /** Provider Statuses */
+            provider_statuses: components["schemas"]["OrphanStorageProviderStatusResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanStorageProviderStatusResponse
+         * @description Whether one detector's listing actually ran (#17039 review).
+         *
+         *     ``available=False`` means this provider's candidates could not be
+         *     determined -- never read the response as "this provider has none".
+         */
+        OrphanStorageProviderStatusResponse: {
+            /** Provider */
+            provider: string;
+            /** Available */
+            available: boolean;
+            /** Error */
+            error?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -89271,6 +89586,35 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * QuotaHeadroomReading
+         * @description One observed headroom reading for a provider's rate-limit window.
+         *
+         *     Sourced from ``QuotaHeadroomStore`` (#15026), which records what the
+         *     provider itself reported (rate-limit response headers, a 429's
+         *     ``retry-after``) — never a computed guess.
+         */
+        QuotaHeadroomReading: {
+            /** Window */
+            window: string;
+            /** Limit */
+            limit?: number | null;
+            /** Remaining */
+            remaining?: number | null;
+            /** Utilization */
+            utilization?: number | null;
+            /** Resets At */
+            resets_at?: number | null;
+            /** Observed At */
+            observed_at?: number | null;
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * QuotaWindow
          * @description Quota headroom for one provider.
          */
@@ -89281,10 +89625,9 @@ export interface components {
             windows: string[];
             /** Description */
             description: string;
-            /**
-             * Note
-             * @default Headroom values require provider API key configuration to populate.
-             */
+            /** Headroom */
+            headroom?: components["schemas"]["QuotaHeadroomReading"][];
+            /** Note */
             note: string;
         } & {
             [key: string]: unknown;
@@ -92917,7 +93260,7 @@ export interface components {
             type: "ssh_key" | "password" | "api_key" | "token" | "oauth_refresh_token" | "connector_oauth_token" | "certificate" | "database_url" | "infrastructure_host" | "other";
             scope: components["schemas"]["ChatSecretScope"];
             /** Value */
-            value: string;
+            value?: string | null;
             /** Chat Id */
             chat_id?: string | null;
             /**
@@ -92953,6 +93296,28 @@ export interface components {
              * @description User IDs to share with
              */
             shared_with?: string[];
+            /**
+             * Visibility
+             * @description A typo here must 422, not silently fall through to the legacy store (#16428 review)
+             */
+            visibility?: ("private" | "shared" | "group" | "organization" | "system") | null;
+            /**
+             * Connector Id
+             * @description Bridge to this connector's ConnectorCredentialStore entry
+             */
+            connector_id?: string | null;
+            /**
+             * Auth Type
+             * @description ConnectorAuth subclass name: BearerAuth, ApiKeyAuth, BasicAuth or OAuthRefreshAuth
+             */
+            auth_type?: string | null;
+            /**
+             * Credentials
+             * @description Sensitive auth fields, validated against auth_type's schema
+             */
+            credentials?: {
+                [key: string]: string;
+            } | null;
         } & {
             [key: string]: unknown;
         };
@@ -93139,6 +93504,13 @@ export interface components {
             /** Metadata */
             metadata?: {
                 [key: string]: unknown;
+            } | null;
+            /**
+             * Credentials
+             * @description New sensitive auth fields, for a bridged secret
+             */
+            credentials?: {
+                [key: string]: string;
             } | null;
         } & {
             [key: string]: unknown;
@@ -97997,7 +98369,7 @@ export interface components {
             approved: boolean;
             /**
              * User Id
-             * @description User who made the decision
+             * @description Ignored (#17052): the approver is the verified caller
              */
             user_id?: string | null;
             /**
@@ -98295,9 +98667,9 @@ export interface components {
         TerminalInterruptRequest: {
             /**
              * User Id
-             * @description User requesting control
+             * @description Ignored (#17052): the actor is the verified caller
              */
-            user_id: string;
+            user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -99305,6 +99677,21 @@ export interface components {
          * @enum {string}
          */
         TriggerType: "webhook" | "cron" | "redis_pubsub" | "file_watch" | "agent_event";
+        /**
+         * TrustLevel
+         * @description Trust level for federated peer evaluation (GH#8957, Issue #7358).
+         *
+         *     Used to determine what capabilities a peer agent can access based on
+         *     continuous trust scoring. Higher levels grant more capabilities.
+         *
+         *     Score ranges:
+         *       UNTRUSTED  (score ≤ 0.30)  — discovery info only
+         *       LIMITED    (0.30–0.60)     — discovery + task submission
+         *       STANDARD   (0.60–0.85)     — + memory/knowledge queries
+         *       TRUSTED    (> 0.85)        — + new agent definitions
+         * @enum {string}
+         */
+        TrustLevel: "UNTRUSTED" | "LIMITED" | "STANDARD" | "TRUSTED";
         /**
          * UIElementResponse
          * @description Response model for UI element
@@ -103783,7 +104170,7 @@ export interface components {
         };
         /** ApprovalDecision */
         llc__api__approvals__ApprovalDecision: {
-            decision: components["schemas"]["llc__models__enums__ApprovalStatus"];
+            decision: components["schemas"]["ApprovalStatus"];
             /** Decided By Agent Id */
             decided_by_agent_id?: string | null;
         } & {
@@ -103918,18 +104305,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * ApprovalStatus
-         * @description Status of an LLC approval request (GH#8214).
-         * @enum {string}
-         */
-        llc__models__enums__ApprovalStatus: "pending" | "approved" | "rejected" | "withdrawn" | "expired";
-        /**
-         * ApprovalType
-         * @description Gate type for a board approval request (GH#8214).
-         * @enum {string}
-         */
-        llc__models__enums__ApprovalType: "hire" | "strategy" | "budget_override" | "sprint_close" | "project_disposal" | "finding_promotion";
-        /**
          * TemplateSearchResponse
          * @description Response for GET /llc/templates/search (GH#8260).
          */
@@ -103943,18 +104318,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * ApprovalStatus
-         * @description Possible statuses for an approval gate.
-         * @enum {string}
-         */
-        models__approval__ApprovalStatus: "pending" | "approved" | "rejected" | "revision_requested";
-        /**
-         * ApprovalType
-         * @description Categories of approval gates.
-         * @enum {string}
-         */
-        models__approval__ApprovalType: "destructive_action" | "resource_request" | "create_agent" | "workflow_gate";
         /**
          * TrainRequest
          * @description Request to trigger model training.
@@ -104427,6 +104790,91 @@ export interface operations {
             };
         };
     };
+    list_orphans_api_admin_orphans_get: {
+        parameters: {
+            query: {
+                resource_type: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrphanListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repair_orphan_resource_api_admin_orphans_repair_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrphanRepairRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrphanRepairResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_orphan_storage_api_admin_orphan_storage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrphanStorageListResponse"];
+                };
+            };
+        };
+    };
     list_retention_policies_api_admin_retention_policies_get: {
         parameters: {
             query?: {
@@ -104576,26 +105024,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
-                };
-            };
-        };
-    };
-    list_schedulers_api_admin_schedulers_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SchedulerStateResponse"];
                 };
             };
         };
@@ -106469,7 +106897,7 @@ export interface operations {
             };
         };
     };
-    get_capabilities_api_capabilities_get: {
+    get_chat_capabilities_api_capabilities_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -106484,7 +106912,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SelfCapabilitiesResponse"];
+                    "application/json": components["schemas"]["DataResponse_ChatCapabilitiesData_"];
                 };
             };
         };
@@ -110558,7 +110986,7 @@ export interface operations {
             };
         };
     };
-    get_aistack_stats_api_knowledge_base_stats_get: {
+    get_knowledge_stats_api_knowledge_base_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -110573,7 +111001,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackStatsData_"];
+                    "application/json": components["schemas"]["KnowledgeStatsResponse"];
                 };
             };
         };
@@ -112254,39 +112682,6 @@ export interface operations {
             };
         };
     };
-    search_api_knowledge_base_ai_stack_search_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AIStackSearchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackSearchData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     rag_search_api_knowledge_base_ai_stack_search_rag_post: {
         parameters: {
             query?: never;
@@ -112307,39 +112702,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_AIStackRagSearchData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    extract_knowledge_api_knowledge_base_ai_stack_extract_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AIStackKnowledgeExtractionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackKnowledgeExtractData_"];
                 };
             };
             /** @description Validation Error */
@@ -112449,7 +112811,7 @@ export interface operations {
             };
         };
     };
-    get_aistack_stats_api_knowledge_base_ai_stack_stats_get: {
+    get_aistack_stats_api_knowledge_base_ai_stack_ai_stack_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -113169,7 +113531,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AIStackSearchRequest"];
+                "application/json": components["schemas"]["api__schemas_knowledge__SearchRequest"];
             };
         };
         responses: {
@@ -113179,7 +113541,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackSearchData_"];
+                    "application/json": components["schemas"]["KnowledgeSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -116083,6 +116445,57 @@ export interface operations {
             };
         };
     };
+    import_claude_memory_endpoint_api_knowledge_base_import_claude_memory_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskQueuedResponse"];
+                };
+            };
+        };
+    };
+    get_import_claude_memory_status_api_knowledge_base_import_claude_memory_status__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     share_fact_api_knowledge_base_api_knowledge_facts__fact_id__share_post: {
         parameters: {
             query?: never;
@@ -116783,39 +117196,6 @@ export interface operations {
             };
         };
     };
-    extract_knowledge_api_knowledge_base_extract_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AIStackKnowledgeExtractionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackKnowledgeExtractData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     analyze_documents_api_knowledge_base_analyze_documents_post: {
         parameters: {
             query?: never;
@@ -116912,6 +117292,26 @@ export interface operations {
             };
         };
     };
+    get_aistack_stats_api_knowledge_base_ai_stack_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_AIStackStatsData_"];
+                };
+            };
+        };
+    };
     knowledge_health_api_knowledge_base_health_status_get: {
         parameters: {
             query?: never;
@@ -116928,6 +117328,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_AIStackHealthStatusData_"];
+                };
+            };
+        };
+    };
+    extract_knowledge_api_knowledge_base_extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIStackKnowledgeExtractionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_AIStackKnowledgeExtractData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -125392,8 +125825,8 @@ export interface operations {
     list_approvals_api_approval_gates_get: {
         parameters: {
             query?: {
-                status_filter?: components["schemas"]["models__approval__ApprovalStatus"] | null;
-                approval_type?: components["schemas"]["models__approval__ApprovalType"] | null;
+                status_filter?: components["schemas"]["ApprovalStatus"] | null;
+                approval_type?: components["schemas"]["ApprovalType"] | null;
                 workflow_id?: string | null;
                 agent_id?: string | null;
                 /** @description Maximum number of items to return */
@@ -126657,6 +127090,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_presence_api_agents_presence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
         };
@@ -139238,7 +139693,10 @@ export interface operations {
     };
     request_host_selection_api_agent_terminal_host_selection_request_post: {
         parameters: {
-            query?: never;
+            query?: {
+                async_client?: boolean;
+                database?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -139529,8 +139987,8 @@ export interface operations {
     };
     execute_agent_command_api_agent_terminal_execute_post: {
         parameters: {
-            query?: {
-                session_id?: string;
+            query: {
+                session_id: string;
                 async_client?: boolean;
                 database?: string;
             };
@@ -139785,7 +140243,10 @@ export interface operations {
     };
     get_command_state_api_agent_terminal_commands__command_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                async_client?: boolean;
+                database?: string;
+            };
             header?: never;
             path: {
                 command_id: string;
@@ -148260,6 +148721,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_capabilities_api_self_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelfCapabilitiesResponse"];
                 };
             };
         };
@@ -163252,6 +163733,42 @@ export interface operations {
             };
         };
     };
+    multi_agent_query_api_ai_stack_orchestrate_multi_agent_query_post: {
+        parameters: {
+            query: {
+                query: string;
+                coordination_mode?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": string[];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_MultiAgentQueryData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_ai_agents_api_ai_stack_agents_get: {
         parameters: {
             query?: never;
@@ -163667,42 +164184,6 @@ export interface operations {
             };
         };
     };
-    multi_agent_query_api_ai_stack_orchestrate_multi_agent_query_post: {
-        parameters: {
-            query: {
-                query: string;
-                coordination_mode?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": string[];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_MultiAgentQueryData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     legacy_rag_search_api_ai_stack_legacy_rag_search_post: {
         parameters: {
             query: {
@@ -163731,6 +164212,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_loop_status_api_knowledge_base_rag_loop_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoopStatusResponse"];
+                };
+            };
+        };
+    };
+    approve_loop_variant_api_knowledge_base_rag_loop_approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoopApproveResponse"];
+                };
+            };
+        };
+    };
+    reject_loop_variant_api_knowledge_base_rag_loop_reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoopRejectResponse"];
                 };
             };
         };
@@ -163850,66 +164391,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_loop_status_api_knowledge_base_rag_loop_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoopStatusResponse"];
-                };
-            };
-        };
-    };
-    approve_loop_variant_api_knowledge_base_rag_loop_approve_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoopApproveResponse"];
-                };
-            };
-        };
-    };
-    reject_loop_variant_api_knowledge_base_rag_loop_reject_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoopRejectResponse"];
                 };
             };
         };
@@ -164266,6 +164747,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccessControlCleanupResponse"];
+                };
+            };
+        };
+    };
+    list_schedulers_api_admin_schedulers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchedulerStateResponse"];
                 };
             };
         };
@@ -165796,6 +166297,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grant_trust_api_a2a_trust_grant_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["A2ATrustGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_legacy_trust_api_a2a_trust_legacy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
         };
@@ -169243,7 +169801,7 @@ export interface operations {
                 /** @description Filter by company */
                 company_id: string;
                 /** @description Filter by gate type */
-                type?: components["schemas"]["llc__models__enums__ApprovalType"] | null;
+                type?: components["schemas"]["ApprovalType"] | null;
             };
             header?: never;
             path?: never;

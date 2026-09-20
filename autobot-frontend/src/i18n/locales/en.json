@@ -6468,7 +6468,20 @@
       "closePanel": "Close panel",
       "tabParticipants": "Participants",
       "tabActivity": "Activity",
-      "tabNotifications": "Notifications"
+      "tabNotifications": "Notifications",
+      "tabInvitations": "Invitations"
+    },
+    "invitations": {
+      "loading": "Loading invitations...",
+      "noInvitations": "No pending invitations",
+      "sessionLabel": "Session {id}",
+      "invitedAt": "Invited {time}",
+      "justNow": "just now",
+      "minutesAgo": "{count}m ago",
+      "accept": "Accept",
+      "decline": "Decline",
+      "respondError": "Couldn't process this response. Please try again.",
+      "bellTitle": "Pending invitations"
     }
   },
   "research": {
@@ -7852,6 +7865,8 @@
     "systemHealth": "System Health",
     "providerFallback": "Provider Fallback",
     "advancedControl": "Advanced Control",
+    "adminPricing": "Model Pricing",
+    "adminMcpServers": "MCP Servers",
     "sharedLinks": "Shared Chat Links",
     "companyOs": "Company OS",
     "llcDashboard": "Dashboard",
@@ -9433,5 +9448,12 @@
     "errorSetRate": "Could not save the rate.",
     "errorClearRate": "Could not clear the rate.",
     "errorSetStepCost": "Could not save this step's cost inputs."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Settings",
+      "hideSettingsButton": "Hide settings",
+      "settingsHeading": "Transcriber settings"
+    }
   }
 }

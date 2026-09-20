@@ -96,24 +96,35 @@ class VisionProcessor(BaseModalProcessor):
         """Load CLIP and BLIP-2 models for vision processing."""
         torch = _get_torch()
 
+        # #13034: pinned to exact, integrity-verified revisions instead of the
+        # mutable default branch -- see autobot_shared/pinned_model_registry.py.
+        from autobot_shared.pinned_model_registry import get_pinned_revision, verify_cached_model
+
+        clip_repo_id = "openai/clip-vit-base-patch32"
+        clip_revision = get_pinned_revision(clip_repo_id)
+        blip_repo_id = "Salesforce/blip2-opt-2.7b"
+        blip_revision = get_pinned_revision(blip_repo_id)
+
+        from autobot_shared.pinned_model_registry import ModelIntegrityError
+
         try:
-            # Load CLIP model for image embeddings and classification
+            # Load CLIP model for image embeddings and classification.
+            # #17124: load into locals and verify BEFORE assigning to self.* --
+            # assigning first (the prior shape) left a tampered model reachable
+            # if verify_cached_model raised and the broad except below swallowed
+            # it (fail-open).
             self.logger.info("Loading CLIP model...")
-            self.clip_model = CLIPModel.from_pretrained(
-                "openai/clip-vit-base-patch32"
-            ).to(  # nosec B615  # HuggingFace model loaded by name; revision pinning managed operationally
-                self.device
-            )
-            self.clip_processor = CLIPProcessor.from_pretrained(  # nosec B615
-                "openai/clip-vit-base-patch32", use_fast=True
-            )
+            clip_model = CLIPModel.from_pretrained(clip_repo_id, revision=clip_revision).to(self.device)
+            clip_processor = CLIPProcessor.from_pretrained(clip_repo_id, revision=clip_revision, use_fast=True)
+            verify_cached_model(clip_repo_id)
+            clip_model.eval()
+            self.clip_model = clip_model
+            self.clip_processor = clip_processor
 
             # Load BLIP-2 model for image captioning and VQA
             # Using smaller model for memory efficiency
             self.logger.info("Loading BLIP-2 model...")
-            self.blip_processor = Blip2Processor.from_pretrained(  # nosec B615
-                "Salesforce/blip2-opt-2.7b", use_fast=True
-            )
+            blip_processor = Blip2Processor.from_pretrained(blip_repo_id, revision=blip_revision, use_fast=True)
 
             # Check if accelerate is available for device_map
             try:
@@ -124,22 +135,32 @@ class VisionProcessor(BaseModalProcessor):
 
             # Load BLIP-2 model with device_map only if accelerate is available
             if accelerate_available and torch.cuda.is_available():
-                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(  # nosec B615
-                    "Salesforce/blip2-opt-2.7b",
+                blip_model = Blip2ForConditionalGeneration.from_pretrained(
+                    blip_repo_id,
+                    revision=blip_revision,
                     torch_dtype=torch.float16,
                     device_map="auto",
                 )
             else:
-                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(  # nosec B615
-                    "Salesforce/blip2-opt-2.7b",
+                blip_model = Blip2ForConditionalGeneration.from_pretrained(
+                    blip_repo_id,
+                    revision=blip_revision,
                     torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
                 ).to(self.device)
-
-            # Set models to evaluation mode
-            self.clip_model.eval()
-            self.blip_model.eval()
+            verify_cached_model(blip_repo_id)
+            blip_model.eval()
+            self.blip_processor = blip_processor
+            self.blip_model = blip_model
 
             self.logger.info("Vision models loaded successfully")
+        except ModelIntegrityError as e:
+            # #17124: named, distinct from a generic load failure -- a tampered
+            # cached model was detected. Whichever model's verify raised never
+            # assigned its self.* attributes; a model that already verified
+            # successfully in this call (e.g. CLIP, if BLIP-2 is the one that
+            # failed) stays assigned and usable.
+            self.logger.error("SECURITY: vision model integrity check failed, refusing to serve: %s", e)
+            self.logger.warning("VisionProcessor will raise errors when processing - models unavailable")
         except Exception as e:
             self.logger.error("Failed to load vision models: %s", e)
             # Issue #466: Will raise error on process() - no placeholder fallback

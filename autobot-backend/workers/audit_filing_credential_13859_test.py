@@ -18,6 +18,7 @@ grant/audit/revocation, never as ambient state on a host.
 from __future__ import annotations
 
 import importlib
+import logging
 
 import pytest
 
@@ -176,3 +177,80 @@ class TestTheGapIsReportedEvenWhenItWorks:
         monkeypatch.setattr(audit_tasks, "run_or_schedule", lambda coro: _boom())
 
         assert audit_tasks._resolve_filing_token() is None
+
+
+# Four distinct shapes chosen to defeat different accidental-pass modes: one
+# shaped like a real credential (but not one -- `-` where a real PAT uses `_`,
+# and plainly-fake content, so this cannot be mistaken for a live secret by a
+# scanner or a reader), one carrying format-string/shell metacharacters (would
+# corrupt or hide itself in a %-style log call), one carrying a newline (log
+# injection -- would split across caplog records if interpolated raw), and one
+# that could be mistaken for the vault KEY name rather than the secret VALUE.
+_ADVERSARIAL_TOKENS = [
+    "ghp-FAKE-TEST-TOKEN-SHAPE-not-a-real-credential",
+    "tok-with-%s-and-{braces}-and-$(shell)",
+    "tok-with-\nnewline-CRITICAL-fake-injected-log-line",
+    "GH_TOKEN=tok-that-looks-like-its-own-assignment",
+]
+
+
+class TestTheTokenValueNeverReachesALogOrException:
+    """Runtime leak check across every credential-adjacent log call site
+    (#13859 follow-up, #17097).
+
+    #14057's review manually verified no leakage against four adversarial
+    token shapes by running the real `gh` binary -- that check needs a live
+    network call and cannot be a repo test. This is the automatable half:
+    OUR code must never interpolate the token value into a log message or
+    exception, regardless of what the token looks like or what a lower-level
+    call raises. Whether `gh` itself ever echoes a value back is a separate
+    guarantee this suite does not, and cannot, cover.
+    """
+
+    @pytest.mark.parametrize("token", _ADVERSARIAL_TOKENS)
+    def test_gh_available_never_logs_the_token(self, monkeypatch, caplog, token):
+        monkeypatch.setattr(audit_tasks, "_resolve_filing_token", lambda: token)
+        # Realistic gh failure text: names the variable, never a value, per
+        # gh's own real behavior on a bad token (verified manually in #14057).
+        monkeypatch.setattr(
+            audit_tasks,
+            "_run",
+            lambda cmd, cwd=None, env=None: (1, "", "gh: authentication failed, check GH_TOKEN"),
+        )
+
+        with caplog.at_level(logging.WARNING):
+            audit_tasks._gh_available()
+
+        assert caplog.records, "the failure path must log something, or this test proves nothing"
+        assert all(token not in r.message for r in caplog.records)
+
+    @pytest.mark.parametrize("token", _ADVERSARIAL_TOKENS)
+    def test_file_issue_never_logs_the_token_on_failure(self, monkeypatch, caplog, token):
+        monkeypatch.setattr(audit_tasks, "_resolve_filing_token", lambda: token)
+        monkeypatch.setattr(audit_tasks, "_run", lambda cmd, cwd=None, env=None: (1, "", "gh: validation failed"))
+
+        with caplog.at_level(logging.ERROR):
+            result = audit_tasks._file_issue("t", "b")
+
+        assert result is False
+        assert caplog.records
+        assert all(token not in r.message for r in caplog.records)
+
+    @pytest.mark.parametrize("token", _ADVERSARIAL_TOKENS)
+    def test_a_vault_read_failure_logs_only_the_exception_class_never_its_message(self, monkeypatch, caplog, token):
+        """Even a buggy dependency that raises WITH the token in its own
+        message text must not leak it here -- only `type(exc).__name__` may
+        reach the log, never `str(exc)`."""
+
+        def _boom():
+            raise RuntimeError(token)
+
+        monkeypatch.setattr(audit_tasks, "_read_filing_token", _boom)
+        monkeypatch.setattr(audit_tasks, "run_or_schedule", lambda coro: _boom())
+
+        with caplog.at_level(logging.WARNING):
+            result = audit_tasks._resolve_filing_token()
+
+        assert result is None
+        assert caplog.records
+        assert all(token not in r.message for r in caplog.records)

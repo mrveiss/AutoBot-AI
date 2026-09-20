@@ -6461,7 +6461,20 @@
       "closePanel": "Aizvērt paneli",
       "tabParticipants": "Dalībnieki",
       "tabActivity": "Aktivitāte",
-      "tabNotifications": "Paziņojumi"
+      "tabNotifications": "Paziņojumi",
+      "tabInvitations": "Uzaicinājumi"
+    },
+    "invitations": {
+      "loading": "Notiek uzaicinājumu ielāde...",
+      "noInvitations": "Nav gaidošu uzaicinājumu",
+      "sessionLabel": "Sesija {id}",
+      "invitedAt": "Uzaicināts {time}",
+      "justNow": "tikko",
+      "minutesAgo": "pirms {count} min",
+      "accept": "Pieņemt",
+      "decline": "Noraidīt",
+      "respondError": "Neizdevās apstrādāt šo atbildi. Lūdzu, mēģiniet vēlreiz.",
+      "bellTitle": "Gaidošie uzaicinājumi"
     }
   },
   "research": {
@@ -7845,6 +7858,8 @@
     "systemHealth": "Sistēmas veselība",
     "providerFallback": "Nodrošinātāja rezerve",
     "advancedControl": "Papildu vadība",
+    "adminPricing": "Modeļu cenas",
+    "adminMcpServers": "MCP serveri",
     "llcRoles": "Lomas"
   },
   "llcCompanyStatus": {
@@ -9433,5 +9448,12 @@
     "errorSetRate": "Likmi neizdevās saglabāt.",
     "errorClearRate": "Likmi neizdevās notīrīt.",
     "errorSetStepCost": "Soļa izmaksu datus neizdevās saglabāt."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Iestatījumi",
+      "hideSettingsButton": "Slēpt iestatījumus",
+      "settingsHeading": "Transkribētāja iestatījumi"
+    }
   }
 }

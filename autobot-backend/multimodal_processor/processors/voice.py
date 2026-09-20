@@ -109,34 +109,62 @@ class VoiceProcessor(BaseModalProcessor):
             self._load_models()
 
     def _load_models(self):
-        """Load Whisper and Wav2Vec2 models for audio processing."""
+        """Load Whisper and Wav2Vec2 models for audio processing.
+
+        #13034: pinned to exact, integrity-verified revisions instead of the
+        mutable default branch -- see autobot_shared/pinned_model_registry.py.
+        """
+        from autobot_shared.pinned_model_registry import get_pinned_revision, verify_cached_model
+
         torch = _get_torch()
+        whisper_repo_id = "openai/whisper-base"
+        whisper_revision = get_pinned_revision(whisper_repo_id)
+        wav2vec_repo_id = "facebook/wav2vec2-base-960h"
+        wav2vec_revision = get_pinned_revision(wav2vec_repo_id)
+
+        from autobot_shared.pinned_model_registry import ModelIntegrityError
 
         try:
-            # Load Whisper model for speech recognition
+            # Load Whisper model for speech recognition.
+            # #17124: load into locals and verify BEFORE assigning to self.* --
+            # assigning first (the prior shape) left a tampered model reachable
+            # if verify_cached_model raised and the broad except below swallowed
+            # it (fail-open).
             self.logger.info("Loading Whisper model...")
-            # HuggingFace model loaded by name; revision pinning managed operationally.
-            self.whisper_processor = WhisperProcessor.from_pretrained("openai/whisper-base")  # nosec B615
-            self.whisper_model = WhisperForConditionalGeneration.from_pretrained(  # nosec B615
-                "openai/whisper-base",
+            whisper_processor = WhisperProcessor.from_pretrained(whisper_repo_id, revision=whisper_revision)
+            whisper_model = WhisperForConditionalGeneration.from_pretrained(
+                whisper_repo_id,
+                revision=whisper_revision,
                 torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
             ).to(self.device)
+            verify_cached_model(whisper_repo_id)
+            whisper_model.eval()
+            self.whisper_processor = whisper_processor
+            self.whisper_model = whisper_model
 
             # Load Wav2Vec2 model for audio embeddings and feature extraction
             self.logger.info("Loading Wav2Vec2 model...")
-            self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(  # nosec B615
-                "facebook/wav2vec2-base-960h", use_fast=True
+            wav2vec_processor = Wav2Vec2Processor.from_pretrained(
+                wav2vec_repo_id, revision=wav2vec_revision, use_fast=True
             )
-            self.wav2vec_model = Wav2Vec2ForCTC.from_pretrained(  # nosec B615
-                "facebook/wav2vec2-base-960h",
+            wav2vec_model = Wav2Vec2ForCTC.from_pretrained(
+                wav2vec_repo_id,
+                revision=wav2vec_revision,
                 torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
             ).to(self.device)
-
-            # Set models to evaluation mode
-            self.whisper_model.eval()
-            self.wav2vec_model.eval()
+            verify_cached_model(wav2vec_repo_id)
+            wav2vec_model.eval()
+            self.wav2vec_processor = wav2vec_processor
+            self.wav2vec_model = wav2vec_model
 
             self.logger.info("Audio models loaded successfully")
+        except ModelIntegrityError as e:
+            # #17124: named, distinct from a generic load failure -- a tampered
+            # cached model was detected. Whichever model's verify raised never
+            # assigned its self.* attributes; a model that already verified
+            # successfully in this call stays assigned and usable.
+            self.logger.error("SECURITY: audio model integrity check failed, refusing to serve: %s", e)
+            self.logger.warning("VoiceProcessor will raise errors when processing - models unavailable")
         except Exception as e:
             self.logger.error("Failed to load audio models: %s", e)
             # Issue #466: Will raise error on process() - no placeholder fallback

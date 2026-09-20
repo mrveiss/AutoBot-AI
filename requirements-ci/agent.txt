@@ -7,4 +7,4 @@ kombu==5.6.2
 # import-mcp-resolves-to-the-real-SDK guard needs the real package
 # installed, and requirements_ci_drift_baseline.txt's "mcp" exemption
 # assumed no CI-scoped test imported it directly, which stopped being true.
-mcp>=2.1.1
+mcp>=2.2.0

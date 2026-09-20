@@ -65,6 +65,15 @@ _AUTH_TYPES_BY_NAME: dict = {
 }
 
 
+def resolve_auth_type(name: str) -> type | None:
+    """Look up a ConnectorAuth subclass by its class name (#16428).
+
+    Returns ``None`` for an unrecognised name -- callers decide how to
+    report that (a 400 naming the caller-supplied value beats a KeyError).
+    """
+    return _AUTH_TYPES_BY_NAME.get(name)
+
+
 def validate_config_against_schema(auth_cls: type, config: dict) -> list[str]:
     """Return a list of missing required fields for *auth_cls* given *config*.
 

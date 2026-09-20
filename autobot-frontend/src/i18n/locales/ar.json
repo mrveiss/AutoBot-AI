@@ -6461,7 +6461,20 @@
       "closePanel": "إغلاق اللوحة",
       "tabParticipants": "المشاركون",
       "tabActivity": "النشاط",
-      "tabNotifications": "الإشعارات"
+      "tabNotifications": "الإشعارات",
+      "tabInvitations": "الدعوات"
+    },
+    "invitations": {
+      "loading": "جارٍ تحميل الدعوات...",
+      "noInvitations": "لا توجد دعوات معلقة",
+      "sessionLabel": "الجلسة {id}",
+      "invitedAt": "تمت الدعوة {time}",
+      "justNow": "الآن",
+      "minutesAgo": "منذ {count} دقيقة",
+      "accept": "قبول",
+      "decline": "رفض",
+      "respondError": "تعذّرت معالجة هذا الرد. حاول مرة أخرى.",
+      "bellTitle": "الدعوات المعلقة"
     }
   },
   "research": {
@@ -7845,6 +7858,8 @@
     "systemHealth": "صحة النظام",
     "providerFallback": "احتياطي المزود",
     "advancedControl": "التحكم المتقدم",
+    "adminPricing": "تسعير النماذج",
+    "adminMcpServers": "خوادم MCP",
     "llcRoles": "الأدوار"
   },
   "llcCompanyStatus": {
@@ -9433,5 +9448,12 @@
     "errorSetRate": "تعذّر حفظ الأجر.",
     "errorClearRate": "تعذّر مسح الأجر.",
     "errorSetStepCost": "تعذّر حفظ بيانات تكلفة الخطوة."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "الإعدادات",
+      "hideSettingsButton": "إخفاء الإعدادات",
+      "settingsHeading": "إعدادات الناسخ"
+    }
   }
 }

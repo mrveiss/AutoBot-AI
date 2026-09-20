@@ -407,12 +407,13 @@ async def _handle_canvas_cancel(data: dict, current_user_id: str) -> None:
         logger.error(f"Error handling canvas_cancel: {e}")
 
 
-async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
+async def _handle_command_approval(websocket: WebSocket, data: dict, user: dict) -> None:
     """Handle command approval message from frontend (Issue #336 - extracted helper).
 
     Args:
         websocket: The WebSocket connection
         data: The command approval data
+        user: The connection's verified user -- the only approver (#17052)
     """
     logger.info("Received command approval via WebSocket: %s", data)
 
@@ -422,17 +423,10 @@ async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
         return
 
     approved = data.get("approved", False)
-    user_id = data.get("user_id", "web_user")
-
     try:
-        from services.agent_terminal import AgentTerminalService
+        from api.agent_terminal_access import approve_over_websocket
 
-        service = AgentTerminalService()
-        result = await service.approve_command(
-            session_id=terminal_session_id,
-            approved=approved,
-            user_id=user_id,
-        )
+        result = await approve_over_websocket(data, user)
 
         logger.info("Command approval result: %s", result.get("status"))
 
@@ -606,12 +600,13 @@ async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_man
     return broadcast_event
 
 
-async def _websocket_message_receive_loop(websocket: WebSocket, current_user_id: str) -> None:
+async def _websocket_message_receive_loop(websocket: WebSocket, current_user_id: str, user: dict) -> None:
     """Main message receive loop for WebSocket (Issue #315 - extracted).
 
     Args:
         websocket: The WebSocket connection
         current_user_id: Authenticated user ID for ownership checks
+        user: The verified user dict, for decisions that need more than an id (#17052)
     """
     while True:
         # Check connection state before each operation
@@ -637,16 +632,17 @@ async def _websocket_message_receive_loop(websocket: WebSocket, current_user_id:
                 continue
 
         # Issue #336: Use extracted helper for message handling
-        await _handle_websocket_message(websocket, message, current_user_id)
+        await _handle_websocket_message(websocket, message, current_user_id, user)
 
 
-async def _handle_websocket_message(websocket: WebSocket, message: str, current_user_id: str) -> None:
+async def _handle_websocket_message(websocket: WebSocket, message: str, current_user_id: str, user: dict) -> None:
     """Handle incoming WebSocket message (Issue #336 - extracted helper).
 
     Args:
         websocket: The WebSocket connection
         message: The raw message string
         current_user_id: Authenticated user ID from the WebSocket session
+        user: The verified user dict from the WebSocket session
     """
     try:
         data = json.loads(message)
@@ -657,7 +653,7 @@ async def _handle_websocket_message(websocket: WebSocket, message: str, current_
         elif msg_type == "pong":
             logger.debug("Received pong from client")
         elif msg_type == "command_approval":
-            await _handle_command_approval(websocket, data)
+            await _handle_command_approval(websocket, data, user)
         elif msg_type == "canvas_cancel":
             await _handle_canvas_cancel(data, current_user_id)
     except json.JSONDecodeError:
@@ -673,6 +669,8 @@ _ws_clients_lock = asyncio.Lock()
 
 # Lock for thread-safe access to _npu_events_subscribed (Issue #513 - race condition fix)
 import threading
+
+from autobot_shared.websocket_subprotocol import accept_websocket
 
 _npu_events_lock = threading.Lock()
 
@@ -693,18 +691,16 @@ async def websocket_test_endpoint(websocket: WebSocket):
     """Simple test WebSocket endpoint without event manager integration."""
     if not await enforce_ws_origin(websocket):
         return
-    # Issue #2818: Authenticate before accepting connection.
-    # Issue #12366: accept-then-close on rejection so the client gets a real
-    # close frame (code + reason) instead of an HTTP 403 indistinguishable
-    # from a missing route.
+    # Issue #2818: Authenticate before accepting connection. Issue #12366: accept-then-close on rejection so the
+    # client gets a real close frame (code + reason) instead of an HTTP 403 indistinguishable from a missing route.
     user = await authenticate_websocket(websocket)
     if user is None:
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Authentication required")
         return
 
     try:
-        await websocket.accept()
+        await accept_websocket(websocket)
         logger.info("Test WebSocket connected successfully")
         await websocket.send_json({"type": "connected", "message": "Test connection successful"})
 
@@ -807,13 +803,11 @@ async def websocket_endpoint(websocket: WebSocket):
     """
     if not await enforce_ws_origin(websocket):
         return
-    # Issue #2818: Authenticate before accepting connection.
-    # Issue #12366: accept-then-close on rejection so the client gets a real
-    # close frame (code + reason) instead of an HTTP 403 indistinguishable
-    # from a missing route.
+    # Issue #2818: Authenticate before accepting connection. Issue #12366: accept-then-close on rejection so the
+    # client gets a real close frame (code + reason) instead of an HTTP 403 indistinguishable from a missing route.
     user = await authenticate_websocket(websocket)
     if user is None:
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Authentication required")
         return
 
@@ -821,7 +815,7 @@ async def websocket_endpoint(websocket: WebSocket):
     current_user_id: str = user.get("user_id") or user.get("id") or user.get("username", "")
 
     try:
-        await websocket.accept()
+        await accept_websocket(websocket)
         logger.info("WebSocket connected from client: %s", websocket.client)
 
         await websocket.send_json(
@@ -843,7 +837,7 @@ async def websocket_endpoint(websocket: WebSocket):
     _register_event_manager_broadcast(broadcast_event)
 
     try:
-        await _websocket_message_receive_loop(websocket, current_user_id)
+        await _websocket_message_receive_loop(websocket, current_user_id, user)
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected normally")
     except Exception as e:
@@ -875,18 +869,16 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
     """
     if not await enforce_ws_origin(websocket):
         return
-    # Issue #2818: Authenticate before accepting connection.
-    # Issue #12366: accept-then-close on rejection so the client gets a real
-    # close frame (code + reason) instead of an HTTP 403 indistinguishable
-    # from a missing route.
+    # Issue #2818: Authenticate before accepting connection. Issue #12366: accept-then-close on rejection so the
+    # client gets a real close frame (code + reason) instead of an HTTP 403 indistinguishable from a missing route.
     user = await authenticate_websocket(websocket)
     if user is None:
-        await websocket.accept()
+        await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Authentication required")
         return
 
     try:
-        await websocket.accept()
+        await accept_websocket(websocket)
         logger.info("NPU Worker WebSocket connected from client: %s", websocket.client)
 
         # Add to connected clients (thread-safe)

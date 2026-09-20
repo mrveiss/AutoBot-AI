@@ -31,12 +31,15 @@ from api.schemas_system import (
     DesktopControlReleaseRequest,
     VncProxyStatusResponse,
 )
+from api.vnc_handshake_bridge import authenticate_both_legs, get_vnc_password
 from api.ws_security import enforce_ws_desktop_auth, enforce_ws_origin
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from constants.network_constants import NetworkConstants
+from security.vnc_rfb_auth import VncAuthError
 from type_defs.common import Metadata
 
 router = APIRouter()
@@ -99,6 +102,34 @@ async def _forward_client_to_vnc(websocket: WebSocket, vnc_ws, vnc_type: str) ->
         logger.info("[%s] Frontend disconnected", vnc_type)
     except Exception as e:
         logger.error("[%s] Error forwarding to VNC: %s", vnc_type, e)
+
+
+async def _authenticate_then_relay(websocket: WebSocket, vnc_ws, vnc_type: str) -> None:
+    """Answer the real VNC server's password challenge server-side, offer the
+    browser security-type "None", then hand off to the plain byte relay
+    (#16299 -- closes the VITE_*_VNC_PASSWORD leak: the browser's noVNC
+    client never sees or needs the password).
+
+    Raises VncAuthError (caught by the caller) on any handshake failure --
+    never falls back to an unauthenticated or partially-authenticated
+    connection.
+    """
+    password = await get_vnc_password(vnc_type)
+    vnc_leftover, browser_leftover = await authenticate_both_legs(vnc_ws, websocket, password)
+    # Bytes already read past the handshake boundary on either leg belong to
+    # the framebuffer protocol the plain relay is about to take over -- send
+    # them on before the relay's own receive loop starts, or they're lost.
+    if vnc_leftover:
+        await websocket.send_bytes(vnc_leftover)
+    if browser_leftover:
+        await vnc_ws.send_bytes(browser_leftover)
+
+    # Run both forwarding tasks concurrently using extracted helpers (Issue #315)
+    await asyncio.gather(
+        _forward_client_to_vnc(websocket, vnc_ws, vnc_type),
+        _forward_vnc_to_client(websocket, vnc_ws, vnc_type),
+        return_exceptions=True,
+    )
 
 
 async def _forward_vnc_to_client(websocket: WebSocket, vnc_ws, vnc_type: str) -> None:
@@ -416,7 +447,7 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     endpoint = VNC_ENDPOINTS[vnc_type]
     ws_url = endpoint.replace("http://", "wss://") + "/websockify"
 
-    await websocket.accept()
+    await accept_websocket(websocket)
     logger.info(
         "VNC WebSocket proxy connected: %s → %s (user=%s)",
         vnc_type,
@@ -438,16 +469,14 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
         # concurrent pool resize defers recreation instead of closing it mid-stream.
         async with http_client.tracked_session() as session:
             async with session.ws_connect(ws_url) as vnc_ws:
-                # Run both forwarding tasks concurrently using extracted helpers (Issue #315)
-                await asyncio.gather(
-                    _forward_client_to_vnc(websocket, vnc_ws, vnc_type),
-                    _forward_vnc_to_client(websocket, vnc_ws, vnc_type),
-                    return_exceptions=True,
-                )
+                await _authenticate_then_relay(websocket, vnc_ws, vnc_type)
 
     except aiohttp.ClientError as e:
         logger.error("[%s] Failed to connect to VNC WebSocket: %s", vnc_type, e)
         await websocket.close(code=1011, reason="VNC server unavailable")
+    except VncAuthError as e:
+        logger.error("[%s] VNC authentication failed: %s", vnc_type, e)
+        await websocket.close(code=1011, reason="VNC authentication failed")
     except Exception as e:
         logger.error("[%s] WebSocket proxy error: %s", vnc_type, e)
         await websocket.close(code=1011, reason="Internal server error")

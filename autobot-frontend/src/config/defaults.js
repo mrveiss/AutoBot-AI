@@ -82,24 +82,24 @@ export const DEFAULT_CONFIG = {
   },
 
   // VNC Service Configuration
+  // #16299: no password fields -- the backend authenticates to the real VNC
+  // server itself and offers the browser security-type "None"
+  // (api/vnc_handshake_bridge.py).
   vnc: {
     desktop: {
       host: config.vnc.desktop.host,
       port: String(config.vnc.desktop.port),
-      protocol: config.httpProtocol,
-      password: config.vnc.desktop.password
+      protocol: config.httpProtocol
     },
     terminal: {
       host: config.vnc.terminal.host,
       port: String(config.vnc.terminal.port),
-      protocol: config.httpProtocol,
-      password: config.vnc.terminal.password
+      protocol: config.httpProtocol
     },
     playwright: {
       host: config.vnc.playwright.host,
       port: String(config.vnc.playwright.port),
-      protocol: config.httpProtocol,
-      password: config.vnc.playwright.password
+      protocol: config.httpProtocol
     }
   },
 

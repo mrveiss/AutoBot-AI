@@ -6461,7 +6461,20 @@
       "closePanel": "Zamknij panel",
       "tabParticipants": "Uczestnicy",
       "tabActivity": "Aktywność",
-      "tabNotifications": "Powiadomienia"
+      "tabNotifications": "Powiadomienia",
+      "tabInvitations": "Zaproszenia"
+    },
+    "invitations": {
+      "loading": "Ładowanie zaproszeń...",
+      "noInvitations": "Brak oczekujących zaproszeń",
+      "sessionLabel": "Sesja {id}",
+      "invitedAt": "Zaproszono {time}",
+      "justNow": "przed chwilą",
+      "minutesAgo": "{count} min temu",
+      "accept": "Akceptuj",
+      "decline": "Odrzuć",
+      "respondError": "Nie udało się przetworzyć tej odpowiedzi. Spróbuj ponownie.",
+      "bellTitle": "Oczekujące zaproszenia"
     }
   },
   "research": {
@@ -7845,6 +7858,8 @@
     "systemHealth": "Kondycja systemu",
     "providerFallback": "Przełączanie dostawcy",
     "advancedControl": "Sterowanie zaawansowane",
+    "adminPricing": "Ceny modeli",
+    "adminMcpServers": "Serwery MCP",
     "llcRoles": "Role"
   },
   "llcCompanyStatus": {
@@ -9433,5 +9448,12 @@
     "errorSetRate": "Nie udało się zapisać stawki.",
     "errorClearRate": "Nie udało się wyczyścić stawki.",
     "errorSetStepCost": "Nie udało się zapisać danych kosztowych kroku."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Ustawienia",
+      "hideSettingsButton": "Ukryj ustawienia",
+      "settingsHeading": "Ustawienia transkrybera"
+    }
   }
 }

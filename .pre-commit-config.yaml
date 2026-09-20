@@ -605,7 +605,7 @@ repos:
     hooks:
       - id: bandit
         args: [-c, .bandit]
-        files: ^(autobot-backend/|autobot-slm-backend/|autobot_shared/)
+        files: ^(autobot-backend/|autobot-slm-backend/|autobot_shared/|autobot-npu-worker/)
         exclude: (code_analysis/|_test\.py|\.e2e_test\.py|\.integration_test\.py|\.performance_test\.py|conftest\.py)$
         additional_dependencies: ["bandit[toml]"]
 
@@ -927,6 +927,21 @@ repos:
         always_run: true
         stages: [pre-commit]
         description: "Copies tracked post-commit hook into .git/hooks/ so it heals stash-pop conflicts"
+
+  # Bootstrap: install post-merge hook from tracked source (Issue #16934)
+  # Mirrors the install-post-checkout pattern above. The post-merge hook
+  # chains to doc-sync, moved here from post-commit so a worktree's own
+  # unmerged docs can no longer reach the shared, live autobot_docs collection.
+  - repo: local
+    hooks:
+      - id: install-post-merge
+        name: 'Install post-merge hook (Issue #16934)'
+        entry: bash -c 'SRC="scripts/hooks/post-merge"; DST="$(git rev-parse --git-common-dir)/hooks/post-merge"; [ -f "$SRC" ] && { [ ! -f "$DST" ] || ! diff -q "$SRC" "$DST" >/dev/null 2>&1; } && cp "$SRC" "$DST" && chmod +x "$DST" && echo "post-merge hook installed" || true'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Copies tracked post-merge hook into .git/hooks/ so doc-sync runs on merge/pull, not on commit"
 
   # AutoBot custom: canonical-check Wave 0 (#7458). The three runners discover
   # rule modules from their respective registries and emit pre-commit-style

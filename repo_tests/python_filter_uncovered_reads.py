@@ -55,6 +55,12 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         "autobot-slm-frontend/src/composables/useAutobotApi.ts",
         "autobot-slm-frontend/src/types/generated/api.ts",
         "autobot-slm-frontend/src/views/tools/admin/TerminalTool.vue",
+        # #17129: doc_index_worktree_contamination_16934_test.py's "CLAUDE.md" is a
+        # literal it writes inside a synthetic tmp_path repo fixture, never a read of
+        # the real root-level file -- covering the real path in the filter would run
+        # twelve shards on every CLAUDE.md edit for a guard that does not depend on
+        # its content. Recorded, not covered, per this file's own trade-off rule.
+        "CLAUDE.md",
         "constraints/shared.txt",
         "docker/generate-secrets.sh",
         "docker/secrets-init.sh",
@@ -70,6 +76,17 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         "requirements-gpu-torch.txt",
         "requirements-gpu.txt",
         "requirements.txt",
+        # #17133: "README.md" is a literal pre_push_open_pr_cap_17006_test.py
+        # writes inside its own synthetic tmp_path repo fixture (_seed_repo),
+        # never a read of the real root-level file -- same shape as the
+        # CLAUDE.md entry above (#17129).
+        "README.md",
+        # #17133: secrets_baseline_reasons.py's SPECIFIC_REASONS dict carries
+        # this path as a (filename, type, hash) key, never opens the file --
+        # the guard works off the baseline's stored hash, not this doc's
+        # live content, so covering it would run twelve shards on every
+        # unrelated edit to this doc for a guard that does not depend on it.
+        "docs/developer/GITHUB_FILING_CREDENTIAL_ROTATION.md",
     }
 )
 
@@ -84,4 +101,16 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: LOWERED 39 -> 38 by #16237: the filter now covers the ratchet base guard's
 #: workflow, because `workflow_rc_capture_test.py` runs its audit step on a
 #: planted failing path and has to run whenever that step changes.
-MAX_UNCOVERED_READS = 38
+#:
+#: RAISED 38 -> 39 by #17129: `CLAUDE.md` above is a new bypass (a guard's
+#: tmp_path fixture literal, not a real-file dependency), not a denominator
+#: correction -- the same run's other new find,
+#: `.github/workflows/auto-fix-generated-types.yml`, was covered in the filter
+#: instead and so is not counted here.
+#:
+#: RAISED 39 -> 41 by #17133: `README.md` (a synthetic tmp_path fixture
+#: literal, same shape as the CLAUDE.md entry) and
+#: `docs/developer/GITHUB_FILING_CREDENTIAL_ROTATION.md` (a baseline-reasons
+#: dict key, never opened) above are both new bypasses, not a denominator
+#: correction.
+MAX_UNCOVERED_READS = 41

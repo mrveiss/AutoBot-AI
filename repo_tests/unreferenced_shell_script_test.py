@@ -232,9 +232,9 @@ class TestTheBatchThisIssueResolved:
         """Both were unrunnable from any directory: each named a path #781 removed."""
         installer = (REPO_ROOT / SCRIPT_DIR / "install-doc-sync-hook.sh").read_text(encoding="utf-8")
         assert (
-            'HOOK_SOURCE="$PROJECT_ROOT/autobot-infrastructure/shared/scripts/hooks/post-commit-doc-sync"' in installer
+            'HOOK_SOURCE="$PROJECT_ROOT/autobot-infrastructure/shared/scripts/hooks/post-merge-doc-sync"' in installer
         )
-        assert (REPO_ROOT / SCRIPT_DIR / "hooks/post-commit-doc-sync").is_file()
+        assert (REPO_ROOT / SCRIPT_DIR / "hooks/post-merge-doc-sync").is_file()
 
         forwarder = (REPO_ROOT / SCRIPT_DIR / "utilities/start-seq-forwarder.sh").read_text(encoding="utf-8")
         assert 'FORWARDER="${SCRIPT_DIR}/../seq_log_forwarder.py"' in forwarder

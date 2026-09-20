@@ -118,6 +118,24 @@
       register: github_sync
       tags: [always]
 
+    # #16310: skipped, not swallowed, when GitHub is unreachable (same
+    # `github_sync is not failed` gate the offline-tolerance design already
+    # uses below) -- an unshallow attempt would fail for the identical
+    # reason and add nothing. When GitHub WAS reachable, this must fail
+    # loudly: the checkout on disk predates the shallow-clone guard and is
+    # shallow today regardless of `update: true`/`force: true` above (a
+    # plain fetch never deepens an already-shallow repo), and every
+    # component's bootstrap plan needs full history.
+    - name: "[PRE-FLIGHT] Ensure code_source has full history, not a shallow clone (#16310)"
+      ansible.builtin.command:
+        cmd: >-
+          /opt/autobot/autobot-slm-backend/venv/bin/python3
+          {{ git_repo_root }}/autobot-slm-backend/scripts/sync_deletion_planner.py
+          ensure-full-history --repo-root {{ git_repo_root }}
+      changed_when: false
+      when: github_sync is not failed
+      tags: [always]
+
     - name: "[PRE-FLIGHT] Warn if GitHub sync skipped"
       ansible.builtin.debug:
         msg: >-
@@ -465,8 +483,20 @@
       tags: ['frontend', 'slm-nginx', 'provision']
 
     - name: "SLM | Stat user frontend package.json for co-location detection"
+      # #16970: this bare `hosts: all` play never loads roles/frontend's own
+      # `frontend_dist_dir` default, so the fallback used a hardcoded absolute
+      # path -- flagged by the SSOT hardcoded-value detector once #16970's own
+      # change to this file surfaced it. `autobot.base_dir` (group_vars/all.yml,
+      # the SSOT for /opt/autobot, nested under the `autobot:` key -- a bare
+      # `base_dir` is undefined and `default()` evaluates its argument eagerly,
+      # so that raised on every run where `frontend_dist_dir` is unset, the
+      # normal case) replaces the literal; the resolved path is unchanged.
+      # (vehicle merge: combined with #16970's own later move of this default
+      # from .../dist to .../current -- the staged-swap symlink roles/frontend
+      # itself defaults frontend_dist_dir to -- so the merged literal matches
+      # that role default with autobot.base_dir substituted for the SSOT.)
       ansible.builtin.stat:
-        path: "{{ frontend_dist_dir | default('/opt/autobot/autobot-frontend/dist') | dirname }}/package.json"
+        path: "{{ frontend_dist_dir | default(autobot.base_dir + '/autobot-frontend/current') | dirname }}/package.json"
       register: _post_frontend_colocated_check
       when: _slm_nginx_config_stat.stat.exists
       tags: ['frontend', 'slm-nginx', 'provision']
@@ -505,6 +535,73 @@
         backup: true
       when: _is_slm_frontend_colocated | bool
       register: _slm_nginx_rerendered
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    # #16979: this phase can run on a host whose SLM nginx site was
+    # provisioned long before -- deploy-slm-manager.yml, a separate playbook
+    # run -- and the render above only touches sites-available. If that
+    # host's sites-enabled entry is a stale non-symlink file (the same #1122
+    # class of drift roles/slm_manager/tasks/nginx_site.yml now also guards
+    # against), nginx would keep serving it and this re-render would be
+    # silently inert, same failure mode as the original bug. Same fix here:
+    # detect, back up outside sites-enabled/ (nginx loads everything in that
+    # directory), link, and verify -- in this file, next to the render.
+    - name: "SLM | Stat sites-enabled file to detect non-symlink (#16979)"
+      ansible.builtin.stat:
+        path: "/etc/nginx/sites-enabled/{{ slm_nginx_config | default('autobot-slm') }}"
+      register: _slm_colocated_sites_enabled_stat
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Back up non-symlink sites-enabled file before replacing it (#16979)"
+      ansible.builtin.command:
+        cmd: >-
+          mv /etc/nginx/sites-enabled/{{ slm_nginx_config | default('autobot-slm') }}
+          /etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}.enabled-backup.{{
+          _slm_colocated_sites_enabled_stat.stat.mtime | int }}
+      when:
+        - _is_slm_frontend_colocated | bool
+        - _slm_colocated_sites_enabled_stat.stat.exists
+        # order-independent (#16979 review): default(false) instead of relying
+        # on the list's short-circuit order.
+        - not (_slm_colocated_sites_enabled_stat.stat.islnk | default(false))
+      changed_when: true
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Enable nginx site (symlink to sites-available) (#16979)"
+      ansible.builtin.file:
+        src: "/etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}"
+        dest: "/etc/nginx/sites-enabled/{{ slm_nginx_config | default('autobot-slm') }}"
+        state: link
+      register: _slm_colocated_sites_enabled_linked
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Stat sites-enabled after linking (#16979)"
+      ansible.builtin.stat:
+        path: "/etc/nginx/sites-enabled/{{ slm_nginx_config | default('autobot-slm') }}"
+      register: _slm_colocated_sites_enabled_check
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    # AC3 (#16979): fail loudly rather than let nginx quietly serve the
+    # wrong file.
+    - name: "SLM | Assert sites-enabled resolves to the rendered site (#16979)"
+      ansible.builtin.assert:
+        that:
+          - _slm_colocated_sites_enabled_check.stat.exists
+          - _slm_colocated_sites_enabled_check.stat.islnk
+          - >-
+            _slm_colocated_sites_enabled_check.stat.lnk_source ==
+            '/etc/nginx/sites-available/' ~ (slm_nginx_config | default('autobot-slm'))
+        fail_msg: >-
+          /etc/nginx/sites-enabled/{{ slm_nginx_config | default('autobot-slm') }} is not a symlink
+          resolving to /etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }} --
+          nginx is not serving the rendered SLM site config (#16979).
+        success_msg: >-
+          sites-enabled/{{ slm_nginx_config | default('autobot-slm') }} resolves to the rendered
+          site config.
+      when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
     # Re-build the SLM frontend so VITE_API_URL='/slm' is baked in (#3268, #3426).
@@ -572,6 +669,7 @@
       when: >-
         (_slm_nginx_rerendered is defined and _slm_nginx_rerendered is changed)
         or (_frontend_site_disabled is defined and _frontend_site_disabled is changed)
+        or (_slm_colocated_sites_enabled_linked is defined and _slm_colocated_sites_enabled_linked is changed)
       changed_when: false
       tags: ['frontend', 'slm-nginx', 'provision']
 
@@ -582,6 +680,7 @@
       when: >-
         (_slm_nginx_rerendered is defined and _slm_nginx_rerendered is changed)
         or (_frontend_site_disabled is defined and _frontend_site_disabled is changed)
+        or (_slm_colocated_sites_enabled_linked is defined and _slm_colocated_sites_enabled_linked is changed)
       tags: ['frontend', 'slm-nginx', 'provision']
 
 # -------------------------------------------------------------------
