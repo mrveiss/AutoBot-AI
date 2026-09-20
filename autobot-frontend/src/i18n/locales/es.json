@@ -7860,6 +7860,7 @@
     "advancedControl": "Control avanzado",
     "adminPricing": "Precios de modelos",
     "adminMcpServers": "Servidores MCP",
+    "adminPermissionScopes": "Ámbitos de permisos",
     "llcRoles": "Roles"
   },
   "llcCompanyStatus": {
@@ -9113,6 +9114,12 @@
       "deleteTitle": "Eliminar servidor MCP",
       "deleteConfirm": "¿Está seguro de que desea eliminar",
       "deleteUndone": "Esta acción no se puede deshacer."
+    },
+    "permissionScopes": {
+      "title": "Ámbitos de permisos",
+      "subtitle": "Vocabulario de permisos detallado y paquetes de ámbitos para claves de API",
+      "comingSoonTitle": "Disponible en una versión posterior",
+      "comingSoonMessage": "Los ámbitos de permisos detallados —un vocabulario de permisos, paquetes de ámbitos y la aplicación de ámbitos en claves de API— no están disponibles en esta versión. Esta página le permitirá definirlos y asignarlos una vez que estén disponibles."
     }
   },
   "components": {
