@@ -169,7 +169,7 @@ class SprintAutoCloseService(LLCServiceBase):
         Args:
             session: Async SQLAlchemy session.
             sprint_id: Sprint to close.
-            approval_id: ID of the APPROVED LLCApproval row.
+            approval_id: ID of the APPROVED Approval row (#17043).
             decided_by: Agent that granted approval.
 
         Returns:
@@ -191,9 +191,9 @@ class SprintAutoCloseService(LLCServiceBase):
             )
 
         # -- Validate the approval itself is APPROVED (GH#8473) --
-        from ..models.approval import LLCApproval as _LLCApproval
+        from models.approval import Approval as _Approval  # noqa: PLC0415 -- #17043
 
-        approval_row = await session.execute(select(_LLCApproval).where(_LLCApproval.id == approval_id))
+        approval_row = await session.execute(select(_Approval).where(_Approval.id == approval_id))
         approval_obj = approval_row.scalar_one_or_none()
         if approval_obj is None:
             raise ValueError(f"Approval {approval_id} not found")

@@ -11,7 +11,9 @@ Access: admin/superadmin (``require_role``). This is preview only, on purpose:
 deletion is never exposed as a bare admin-gated route here, because the owner's
 rule requires every removal to go through a human-approved review queue
 (#17043) -- this module has no delete endpoint until that lands, and won't
-gain one that bypasses it afterwards either.
+gain one that bypasses it afterwards either. Deletion is proposed through the
+existing ``POST /approval-gates`` instead; approving it runs
+``services.orphan_storage_cleanup_action`` (registered below, #17039 review).
 """
 
 from fastapi import APIRouter, Depends
@@ -24,6 +26,7 @@ from api.schemas_orphan_storage import (
 )
 from auth_rbac import require_role
 from services.orphan_storage import list_all_candidates
+from services.orphan_storage_cleanup_action import register as register_orphan_storage_cleanup_action
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_role("admin", "superadmin"))])
 
@@ -32,6 +35,11 @@ router = APIRouter(prefix="/admin", dependencies=[Depends(require_role("admin", 
 # so a test that imports that module for its functions doesn't also mutate
 # the global registry. register_detector() is idempotent regardless.
 register_code_source_clone_detector()
+
+# Same reasoning: the approved-cleanup executor is registered at import time,
+# not lazily -- it must be wired before any approve() call can reach it, and
+# both registries are idempotent to re-registration.
+register_orphan_storage_cleanup_action()
 
 
 @router.get("/orphan-storage", response_model=OrphanStorageListResponse)
