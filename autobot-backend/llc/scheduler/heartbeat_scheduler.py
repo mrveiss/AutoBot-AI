@@ -42,6 +42,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_float
+from autobot_shared.feature_flags import is_feature_enabled
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
@@ -846,7 +847,11 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
     ephemeral, run-scoped LLC API key so the woken agent can authenticate its
     LLC API calls; the key is revoked when the run finishes.
     """
-    agent = apply_org_role_bound(agent)  # #16950: bounded by its org role, or refused with the reason
+    if is_feature_enabled("org_role_bound"):
+        # #16950/#16974: bounded by its org role, or refused with the reason. Off by
+        # default (owner decision #16974) until copilot_local/copilot_subscription can
+        # actually enforce a bound -- see org_role_authority.py's module docstring.
+        agent = apply_org_role_bound(agent)
     adapter_type = agent.get("adapter_type") or "autobot_agent"
     logger.debug("Dispatching adapter=%s agent=%s context_keys=%s", adapter_type, agent["agent_id"], sorted(context))
 

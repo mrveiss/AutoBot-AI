@@ -251,7 +251,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/roles.py": 741,
     "autobot-backend/llc/api/sprints.py": 1223,
     "autobot-backend/llc/api/work_items.py": 1416,
-    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1073,
+    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1078,  # #16974: flag-gated org-role-bound enforcement wrap
     "autobot-backend/llc/services/portability.py": 936,
     "autobot-backend/llc/services/template.py": 643,
     "autobot-backend/llc/services/work_item_service.py": 1100,
@@ -498,7 +498,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/redis_client.py": 679,
     "autobot_shared/redis_management/connection_manager.py": 1519,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3298,  # #14981: AUTOBOT_GROUNDING_STATS_TTL
+    "autobot_shared/ssot_config.py": 3307,  # #16974: org_role_bound_enabled feature flag
     "autobot_shared/ssot_config_test.py": 782,
     "autobot_shared/ssot_constants.py": 896,
     "autobot_shared/user_management/team_service.py": 725,

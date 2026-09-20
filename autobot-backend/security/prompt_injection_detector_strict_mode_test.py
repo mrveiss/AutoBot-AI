@@ -102,10 +102,19 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 #: 'autobot-backend/*.py' | grep -v '_test\.py$' | wc -l`, independently
 #: cross-checked -- a local reach-test pass is not reliable evidence for this
 #: one, per #17072 review). Population minus the unchanged growth allowance.
+#: Re-pinned 2944 -> 2947 (#16974): measured population 3247 via
+#: `_tracked_backend_python_files()` directly. This branch adds one new
+#: non-test .py file (llc/org_role_authority.py) -- the other two new files
+#: (llc/tests/test_org_role_authority.py, llc/tests/test_placeholder_run_id_guard.py)
+#: are real tests but count here too, because this guard's exclusion is
+#: `endswith("_test.py")` and llc/tests uses the `test_*.py` prefix
+#: convention, not the `*_test.py` suffix this guard was written against.
+#: Not a bug worth fixing in scope; the population is genuinely what the
+#: guard measures. Population minus the unchanged growth allowance.
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2944,
+    floor=2947,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )

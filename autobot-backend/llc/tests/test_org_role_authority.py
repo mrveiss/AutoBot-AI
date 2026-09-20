@@ -11,7 +11,7 @@ refuses a bounded role; the in-process adapter attributes the run to the org age
 """
 
 import inspect
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -127,15 +127,36 @@ class TestApplyAtDispatch:
 
 
 @pytest.mark.asyncio
-async def test_the_scheduler_refuses_before_any_adapter_is_resolved():
-    """The real dispatch point: every heartbeat and comment-wake run passes it."""
+async def test_the_scheduler_refuses_before_any_adapter_is_resolved_when_the_flag_is_on():
+    """The real dispatch point, with enforcement on: every heartbeat/comment-wake run passes it (#16974)."""
     from llc.scheduler import heartbeat_scheduler
 
-    with patch.object(heartbeat_scheduler, "get_adapter") as get_adapter:
-        with pytest.raises(HeartbeatDispatchSkipped):
-            await heartbeat_scheduler._dispatch_adapter(_agent("worker", adapter="copilot_local"), {})
+    with patch.object(heartbeat_scheduler, "is_feature_enabled", return_value=True):
+        with patch.object(heartbeat_scheduler, "get_adapter") as get_adapter:
+            with pytest.raises(HeartbeatDispatchSkipped):
+                await heartbeat_scheduler._dispatch_adapter(_agent("worker", adapter="copilot_local"), {})
 
     get_adapter.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_the_scheduler_does_not_enforce_when_the_flag_is_off():
+    """Default is off (#16974 owner decision): a deployment that never set the flag runs exactly as before."""
+    from llc.scheduler import heartbeat_scheduler
+
+    with patch.object(heartbeat_scheduler, "is_feature_enabled", return_value=False):
+        with patch.object(heartbeat_scheduler, "get_adapter") as get_adapter:
+            with patch.object(heartbeat_scheduler, "_dispatch_registry_adapter", AsyncMock(return_value=None)):
+                await heartbeat_scheduler._dispatch_adapter(_agent("worker", adapter="copilot_local"), {})
+
+    get_adapter.assert_called_once_with("copilot_local")
+
+
+def test_the_flag_defaults_off():
+    """The flag being absent/unset means 'do not enforce' -- never a silent opt-in (#16974)."""
+    from autobot_shared.feature_flags import is_feature_enabled
+
+    assert is_feature_enabled("org_role_bound") is False
 
 
 def test_both_dispatch_sources_carry_the_role():
