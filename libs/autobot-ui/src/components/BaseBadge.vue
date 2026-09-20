@@ -26,7 +26,7 @@ withDefaults(
 </script>
 
 <template>
-  <span :class="['aui-badge', `aui-badge--neutral`, `aui-badge--${size}`]">
+  <span :class="['aui-badge', `aui-badge--${variant}`, `aui-badge--${size}`]">
     <slot />
   </span>
 </template>
