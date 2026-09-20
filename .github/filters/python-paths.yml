@@ -185,3 +185,12 @@ python:
   # here, a change confined to this file -- the only change that could add
   # `install-git-hooks.sh` back in -- skips the guard.
   - '.github/workflows/auto-fix-generated-types.yml'
+  # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`
+  # table names files under this tree by concrete literal (baseline keys are
+  # (filename, type, hashed_secret) triples) -- the same filter-gap shape as
+  # the `docker/.env.docker` entry above (#17096). Without an entry here, a
+  # change confined to one of these locale files -- the exact shape that
+  # lands a new, unbaselined finding unseen, which #17173 exists to track --
+  # skips `python_filter_covers_its_guards_test.py`'s own coverage check on
+  # that citation, in addition to `Secret Detection`'s path-filter gap.
+  - 'autobot-slm-frontend/src/locales/**'
