@@ -87,9 +87,6 @@ const selectedCandidates = computed(() =>
 async function fetchOrphanStorage(): Promise<void> {
   storageLoading.value = true
   storageError.value = ''
-  // bb's review, #17157: a stale propose-result from a previous fetch would otherwise
-  // linger next to a row whose underlying candidate has since changed.
-  proposalResults.value = []
   try {
     orphanStorage.value = await api.getOrphanStorage()
   } catch (err) {
@@ -98,6 +95,19 @@ async function fetchOrphanStorage(): Promise<void> {
   } finally {
     storageLoading.value = false
   }
+}
+
+// #17157 follow-up: a stale propose-result from a previous fetch must not linger next to a
+// row whose underlying candidate has since changed -- but the clear can only run at the START
+// of a user-initiated re-list. fetchOrphanStorage() itself is called from other contexts too
+// (mirroring repairResource's fetchOrphans() call below, which is exactly where the same clear
+// living inside the fetch function raced a just-written result and silently erased it -- see
+// #17157's regression comment on fetchOrphans()). Keeping the clear here, in a wrapper only the
+// user-initiated call sites use, means a future "resync after proposing" caller can call the
+// bare fetchOrphanStorage() the same safe way repairResource already has to.
+async function refreshOrphanStorage(): Promise<void> {
+  proposalResults.value = []
+  await fetchOrphanStorage()
 }
 
 function toggleCandidate(c: OrphanStorageCandidate): void {
@@ -198,9 +208,6 @@ async function fetchUsers(): Promise<void> {
 async function fetchOrphans(): Promise<void> {
   orphansLoading.value = true
   orphansError.value = ''
-  // bb's review, #17157: same staleness as fetchOrphanStorage -- a repair result from a
-  // previous fetch (or a previous resourceType) must not linger next to a different row.
-  repairResults.value = {}
   try {
     const data = await api.getOrphans(resourceType.value)
     orphans.value = data.orphans
@@ -210,6 +217,21 @@ async function fetchOrphans(): Promise<void> {
   } finally {
     orphansLoading.value = false
   }
+}
+
+// #17157 regression, root-caused by a reviewer: repairResource()'s success path writes
+// repairResults, then -- still in the same synchronous stretch, before any await yields --
+// calls fetchOrphans(). When the clear lived inside fetchOrphans() itself, Vue's reactivity
+// coalesced the write and the clear into a single flush and the just-set success message was
+// wiped before it ever rendered. A successful repair showed no confirmation at all.
+//
+// The clear belongs to "the user asked to see a fresh list" (initial mount, the Refresh
+// button), not to every invocation of the fetch. repairResource() calls the bare fetchOrphans()
+// below precisely so it can NOT race its own write -- do not change that call to use this
+// wrapper.
+async function refreshOrphans(): Promise<void> {
+  repairResults.value = {}
+  await fetchOrphans()
 }
 
 function formatConditions(conditions: Record<string, unknown>): string {
@@ -316,9 +338,9 @@ async function fetchAudit(): Promise<void> {
 }
 
 onMounted(() => {
-  fetchOrphanStorage()
+  refreshOrphanStorage()
   fetchUsers()
-  fetchOrphans()
+  refreshOrphans()
   fetchAudit()
 })
 </script>
@@ -339,7 +361,7 @@ onMounted(() => {
         <button
           class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 text-sm"
           :disabled="storageLoading"
-          @click="fetchOrphanStorage"
+          @click="refreshOrphanStorage"
         >
           {{ $t('dataHygiene.refresh') }}
         </button>
@@ -518,7 +540,7 @@ onMounted(() => {
           class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 text-sm"
           :disabled="orphansLoading"
           data-testid="resources-load-button"
-          @click="fetchOrphans"
+          @click="refreshOrphans"
         >
           {{ $t('dataHygiene.resources.load') }}
         </button>

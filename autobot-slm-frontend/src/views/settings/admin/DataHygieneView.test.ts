@@ -221,4 +221,32 @@ describe('DataHygieneView (#17040)', () => {
     expect(wrapper.findAll('[data-testid="resource-row"]')[1]!.find('[data-testid="repair-result-failure"]').exists()).toBe(false)
     expect(wrapper.findAll('[data-testid="resource-row"]')[1]!.find('[data-testid="repair-result-success"]').exists()).toBe(false)
   })
+
+  it('keeps showing the success confirmation after a repair, once the resulting auto-refresh settles', async () => {
+    // Regression test: repairResource() writes repairResults on success, then -- still in the
+    // same synchronous stretch, before any await yields -- calls fetchOrphans() to resync the
+    // list. A first attempt at #17157's stale-result fix put the repairResults clear INSIDE
+    // fetchOrphans() itself, so that internal call wiped the just-written success message before
+    // it ever rendered: a successful repair showed no confirmation at all. This asserts the
+    // message survives past every promise the repair-and-refresh chain resolves, not just past
+    // the repair call alone.
+    const wrapper = await mountAndSettle()
+
+    const rows = wrapper.findAll('[data-testid="resource-row"]')
+    await rows[0]!.find('[data-testid="resource-owner-select"]').setValue('user-1')
+
+    client().post.mockResolvedValue({ data: { resource_type: 'knowledge_fact', resource_id: 'fact-1', new_owner_id: 'user-1' } })
+
+    await rows[0]!.find('[data-testid="resource-repair-button"]').trigger('click')
+    // repairResource() awaits the POST, then awaits its own internal fetchOrphans() refetch
+    // (a second GET) -- flush enough microtask rounds for both to fully settle, not just the
+    // first one, or this test would pass even with the regression still present.
+    await flushPromises()
+    await flushPromises()
+    await flushPromises()
+
+    const successInRow0 = wrapper.findAll('[data-testid="resource-row"]')[0]!.find('[data-testid="repair-result-success"]')
+    expect(successInRow0.exists()).toBe(true)
+    expect(successInRow0.text()).toContain('user-1')
+  })
 })
