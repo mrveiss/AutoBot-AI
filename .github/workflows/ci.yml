@@ -215,6 +215,11 @@ jobs:
     - uses: actions/checkout@v7
 
     - uses: ./.github/actions/setup-python-suite
+      # #16394: named so the SLM venv's own path (the `slm-venv` output) is
+      # reachable from later steps in this job -- the composite action
+      # deliberately does not activate it onto $GITHUB_PATH, unlike the
+      # backend venv, so it must be reached explicitly by this output.
+      id: setup-python-suite
 
     # #16264: requirements-ci.txt drifted below two declared floors
     # (websockets, langchain-community) with nothing here noticing --
@@ -224,9 +229,39 @@ jobs:
     # requirements-ci.txt (see setup-python-suite's cache key), so checking
     # all twelve would report the same drift twelve times for one PR-blocking
     # signal.
+    #
+    # #16394: scoped with --roots to the files THIS (backend) venv actually
+    # installs -- requirements-ci.txt, requirements-ci-test.txt and
+    # autobot-backend/requirements.txt, same pattern
+    # scripts/setup-ci-parity-env.sh already uses for the same reason. Before
+    # the SLM venv split below, the default (unscoped) sweep also read
+    # autobot-slm-backend/requirements.txt and reported ITS websockets>=17.1
+    # floor against this interpreter's <16 install -- a real shortfall for
+    # this interpreter, but not this venv's drift to fix, since this venv
+    # never installs SLM's requirements at all. That reported shortfall is
+    # exactly what pipeline-scripts/check_dependency_floors.py's
+    # KNOWN_CROSS_VENV_EXEMPTIONS used to paper over; scoping the sweep to
+    # what this venv actually installs makes the exemption unnecessary rather
+    # than silencing it. The SLM venv gets its own scoped check below, judged
+    # against its own install.
     - name: Fail on a declared dependency floor the CI install does not meet (#16264)
       if: matrix.shard == 1
-      run: python pipeline-scripts/check_dependency_floors.py --strict
+      run: >-
+        python pipeline-scripts/check_dependency_floors.py --strict
+        --roots requirements-ci.txt requirements-ci-test.txt autobot-backend/requirements.txt
+
+    # #16394: the SLM venv's own strict floor check, run under ITS OWN
+    # interpreter and scoped to exactly what it installs -- so SLM's declared
+    # websockets>=17.1 floor is judged against the SLM venv's actual install
+    # (17.1.x+, satisfying it), not the backend venv's <16 build. This is the
+    # other half of the pair above; together they are what makes the
+    # KNOWN_CROSS_VENV_EXEMPTIONS entry removed in this same change
+    # unnecessary rather than just quieter.
+    - name: Fail on a declared dependency floor the SLM CI install does not meet (#16394)
+      if: matrix.shard == 1
+      run: >-
+        ${{ steps.setup-python-suite.outputs.slm-venv }}/bin/python pipeline-scripts/check_dependency_floors.py --strict
+        --roots requirements-ci-test.txt autobot-slm-backend/requirements.txt
 
     # #13927: repo_tests/promtool_rules_test.py runs `promtool check rules` over
     # every deployed rule file and `promtool test rules` over every behavioural
@@ -387,6 +422,15 @@ jobs:
       # Runs even when the invocation above failed: it is a separate interpreter
       # testing a separate tree (#13300).
       if: ${{ !cancelled() }}
+      env:
+        # #16394: SLM's tests now run under the SLM venv's OWN interpreter
+        # (built from autobot-slm-backend/requirements.txt, not the shared
+        # requirements-ci.txt the backend venv above installs), instead of the
+        # ambient `python` "Activate virtualenv for subsequent steps" put on
+        # $GITHUB_PATH -- that one is still the BACKEND venv. Only the
+        # interpreter changes here; every pytest-split/duration/exit-5-tolerance
+        # /shard argument below is unchanged.
+        SLM_PYTHON: ${{ steps.setup-python-suite.outputs.slm-venv }}/bin/python
       run: |
         echo "Running unit tests for autobot-slm-backend (shard ${{ matrix.shard }}/12)..."
         # A SECOND durations file, not the backend one: pytest-split's
@@ -414,7 +458,7 @@ jobs:
         # empties one, and that must stay announced rather than red. The empty
         # shard is printed, and 5 remains the only tolerated code.
         set +e
-        python -m pytest \
+        "$SLM_PYTHON" -m pytest \
           autobot-slm-backend \
           -n auto --dist loadscope \
           -p repo_tests.stable_shard \
