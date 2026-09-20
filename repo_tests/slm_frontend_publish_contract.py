@@ -78,7 +78,15 @@ CLAUSES: Tuple[Clause, ...] = (
         name="builds with build:slm",
         why="build:slm pins VITE_API_URL=/slm; a plain `vite build` serves the SLM UI with the wrong API base.",
         patterns={
-            "ansible": r"npm run build:slm",
+            # #15603 shares this task with the user-frontend publish, which
+            # passes slm_frontend_publish_build_script: "build" at its own
+            # include_tasks call sites (roles/frontend/tasks/main.yml and
+            # friends) -- the SLM-frontend call sites (provision-fleet-roles.yml,
+            # slm_manager/tasks/main.yml, update-all-nodes.yml's first include)
+            # leave it unset, so build:slm is what actually runs there. Matches
+            # the exact default idiom, not just the literal command, so this
+            # clause still breaks if the default is ever changed away from it.
+            "ansible": r"npm run \{\{ slm_frontend_publish_build_script \| default\('build:slm'\) \}\}",
             "shell": r"npm run build:slm",
             "python": r'"build:slm"',
         },

@@ -156,3 +156,53 @@ async def test_mutation_on_missing_secret_raises_not_found(coord, session):
             secret_id=uuid.uuid4(),
             grantee=VaultRef(VaultKind.USER, str(_GRANTEE_USER)),
         )
+
+
+async def test_system_visibility_secret_from_the_ui_path_is_readable_by_the_coordinator(coord, session):
+    """#17099: a "System"-visibility secret entered through the UI's create-secret
+    form must land where EnvelopeSecretsService/SecretsCoordinator read from --
+    not the legacy per-user file store, which never declared this field. Uses a
+    name that is deliberately NOT a known LLM provider key (#10088 Task 7's
+    mirror only ever covered that one name), and calls the actual UI-path
+    function (`api.secrets._create_system_vault_secret`), not the coordinator
+    directly, so this proves the wiring, not just the coordinator's own API.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    from api.schemas_system import ChatSecretScope, SecretCreateRequest
+    from api.secrets import _create_system_vault_secret
+    from autobot_shared.status_enums import SecretType
+    from services.secrets_principal_resolver import ADMIN_PERMISSION
+
+    request = SecretCreateRequest(
+        name="a-non-llm-system-secret",
+        type=SecretType.API_KEY,
+        scope=ChatSecretScope.GENERAL,
+        value="s3cret-value",  # pragma: allowlist secret
+        visibility="system",
+    )
+
+    async def _one_session():
+        yield session
+
+    with (
+        # _create_system_vault_secret imports get_coordinator INSIDE the function
+        # (api/secrets.py:681), so api.secrets never holds that attribute and
+        # patching it there raises AttributeError. Patch the module it is imported
+        # from, which the deferred import resolves at call time.
+        patch("api.envelope_secrets.get_coordinator", return_value=coord),
+        patch("llc.deps.get_session", _one_session),
+        patch(
+            "user_management.middleware.rbac_middleware.rbac_middleware.get_user_permissions",
+            AsyncMock(return_value={ADMIN_PERMISSION}),
+        ),
+    ):
+        created = await _create_system_vault_secret(request, str(_ADMIN))
+
+    assert created["name"] == "a-non-llm-system-secret"
+    assert created["owner_vault"] == VaultRef(VaultKind.SYSTEM).to_str()
+
+    read_back = await coord.read(
+        session, user_id=_ADMIN, permissions={ADMIN_PERMISSION}, secret_id=uuid.UUID(created["id"])
+    )
+    assert read_back == b"s3cret-value"

@@ -54,6 +54,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api.code_sync import resolve_and_queue_self_update
+from autobot_shared.fastapi_validation_handlers import register_validation_error_handlers
 from services.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,10 @@ def create_local_admin_app() -> FastAPI:
     default ``jsonable_encoder`` serializes it the same either way.
     """
     app = FastAPI(title="AutoBot SLM local admin", docs_url=None, redoc_url=None, openapi_url=None)
+    # #16428 review: no request body exists on this socket's one route today,
+    # so the payload-echo leak can't fire yet -- registered anyway so a future
+    # body param doesn't reopen it silently.
+    register_validation_error_handlers(app)
 
     @app.post("/self-update")
     async def local_self_update(db: Annotated[AsyncSession, Depends(get_db)]):

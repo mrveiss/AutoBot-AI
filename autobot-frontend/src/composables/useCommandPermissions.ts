@@ -44,16 +44,16 @@ export function useCommandPermissions() {
    * POST /agent-terminal/sessions/{terminalSessionId}/approve
    * Returns the raw response object so the caller can inspect status.
    */
+  // The approver is the signed-in caller; the server records it (#17052).
   const approveOrDeny = async (
     terminalSessionId: string,
-    approved: boolean,
-    userId = 'web_user'
+    approved: boolean
   ): Promise<ApproveResult> => {
     errorApprove.value = null
     return wrapApprove(async () => {
       const result = await apiClient.post<ApproveResult>(
         `${getApiBase()}/agent-terminal/sessions/${terminalSessionId}/approve`,
-        { approved, user_id: userId }
+        { approved }
       )
       logger.debug('approveOrDeny response:', { approved, status: result.status })
       return result

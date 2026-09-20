@@ -437,8 +437,11 @@ class BaseAgent(ABC):
             )
 
             # Process the request; anything it sends continues the originator's chain
+            # (#16950), and it runs through the same tracking and work-claim path as every
+            # other caller (#16986), now that a peer's request can actually arrive here.
+            # Both sides of this merge are wanted: the context wraps the tracked call.
             with acting_for(origin) if origin else contextlib.nullcontext():
-                response = await self.process_request(agent_request)
+                response = await self.execute_with_tracking(agent_request)
 
             # Convert AgentResponse back to communication message
             response_message = StandardMessage(

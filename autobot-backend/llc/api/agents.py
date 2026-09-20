@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
@@ -26,9 +25,9 @@ from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
-from ..models.heartbeat_run import LLCHeartbeatRun
 from ..org_role_authority import describe_role_bound
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
+from ..services.agent_presence_queries import agent_org_nodes_with_latest_heartbeat
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["llc-agents"])
@@ -56,30 +55,8 @@ async def list_agents(
     """
     effective_company_id = company_id or str(ctx.org_id)
 
-    # Latest heartbeat run per agent, keyed by the logical agent_id *slug* — the
-    # dual-keyspace column shared by heartbeat/controls/budgets, NOT the UUID PK
-    # (joining on the wrong one silently returns 0 rows in Postgres; see AgentOrgNode).
-    latest_runs = (
-        select(
-            LLCHeartbeatRun.agent_id,
-            func.max(LLCHeartbeatRun.created_at).label("latest_at"),
-        )
-        .where(LLCHeartbeatRun.company_id == effective_company_id)
-        .group_by(LLCHeartbeatRun.agent_id)
-        .subquery()
-    )
-
-    # Full roster from the org chart, LEFT JOINed to each agent's latest run.
     result = await session.execute(
-        select(AgentOrgNode, LLCHeartbeatRun)
-        .outerjoin(latest_runs, latest_runs.c.agent_id == AgentOrgNode.agent_id)
-        .outerjoin(
-            LLCHeartbeatRun,
-            (LLCHeartbeatRun.agent_id == latest_runs.c.agent_id)
-            & (LLCHeartbeatRun.created_at == latest_runs.c.latest_at),
-        )
-        .where(AgentOrgNode.company_id == effective_company_id)
-        .order_by(AgentOrgNode.name)
+        agent_org_nodes_with_latest_heartbeat(effective_company_id).order_by(AgentOrgNode.name)
     )
 
     return [

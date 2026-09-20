@@ -52,6 +52,7 @@ from chat_workflow.tool_dispatch_guards import (
     enforce_config_protection,
     enforce_fact_forcing,
     enforce_forbidden_work,
+    enforce_peer_messages,
     enforce_pre_action_verifier,
     enforce_repetition,
     enforce_work_item_approval,
@@ -1320,19 +1321,12 @@ class ToolHandlerMixin:
     def _init_terminal_tool(self):
         """Initialize terminal tool for command execution."""
         try:
-            import api.agent_terminal as agent_terminal_api
+            from api.agent_terminal_access import ensure_agent_terminal_service
             from tools.terminal_tool import TerminalTool
 
-            # CRITICAL: Access the global singleton instance directly
-            # This ensures sessions created here are visible to the approval API
-            if agent_terminal_api._agent_terminal_service_instance is None:
-                from services.agent_terminal import AgentTerminalService
-
-                # Pass self to prevent circular initialization loop
-                agent_terminal_api._agent_terminal_service_instance = AgentTerminalService(chat_workflow_manager=self)
-                logger.info("Initialized global AgentTerminalService singleton")
-
-            agent_service = agent_terminal_api._agent_terminal_service_instance
+            # CRITICAL: the one singleton, so sessions created here are visible to the
+            # approval API. Passing self prevents a circular initialization loop.
+            agent_service = ensure_agent_terminal_service(chat_workflow_manager=self)
             self.terminal_tool = TerminalTool(agent_terminal_service=agent_service)
             logger.info("Terminal tool initialized successfully with singleton service")
         except Exception as e:
@@ -1465,9 +1459,7 @@ class ToolHandlerMixin:
         if not self.terminal_tool:
             return {"status": "error", "error": "Terminal tool not available"}
 
-        # Ensure terminal session exists for this conversation
         if not self.terminal_tool.active_sessions.get(session_id):
-            # Create session
             session_result = await self.terminal_tool.create_session(
                 agent_id=f"chat_agent_{session_id}",
                 conversation_id=session_id,
@@ -1478,7 +1470,6 @@ class ToolHandlerMixin:
             if session_result.get("status") != "success":
                 return session_result
 
-        # Execute command
         result = await self.terminal_tool.execute_command(
             conversation_id=session_id, command=command, description=description
         )
@@ -2214,7 +2205,6 @@ class ToolHandlerMixin:
                 command,
                 repairable_error.message,
             )
-            # Emit REPAIRABLE_ERROR hook
             await _emit_repairable_error(
                 Exception(repairable_error.message),
                 session_id,
@@ -2232,7 +2222,6 @@ class ToolHandlerMixin:
                 },
             )
         else:
-            # Emit CRITICAL_ERROR hook for non-repairable errors
             await _emit_critical_error(Exception(error), session_id, {"command": command})
             additional_response_parts.append(f"\n\n❌ Command execution failed: {error}")
             yield WorkflowMessage(
@@ -2264,17 +2253,14 @@ class ToolHandlerMixin:
         # AttributeError out of the tool-call generator.
         combined = f"{str(error or '').lower()} {str(stderr or '').lower()}"
 
-        # Check for critical (non-repairable) errors first
         if any(p in combined for p in _CRITICAL_ERROR_PATTERNS):
             logger.warning("[Issue #655] Critical error (out of memory): %s", error)
             return None
 
-        # Check against repairable error patterns
         result = _match_repairable_error(combined, command, error)
         if result:
             return result
 
-        # Default: treat as repairable with generic suggestion
         return RepairableException(
             message=f"Command failed: {error}",
             suggestion="Check the error details and try an alternative approach",
@@ -3273,6 +3259,10 @@ class ToolHandlerMixin:
         """
         return enforce_work_item_approval(tool_call, ctx, execution_results)
 
+    def _enforce_peer_messages(self, ctx: "LLMIterationContext" | None) -> None:
+        """Drain queued peer messages into ctx.context (#16948) -- never blocks."""
+        return enforce_peer_messages(ctx)
+
     async def _dispatch_tool_call(
         self,
         tool_call: dict[str, Any],
@@ -3293,6 +3283,9 @@ class ToolHandlerMixin:
         everything else falls through to MCP/unknown handling.
         """
         tool_name = tool_call["name"]
+
+        # #16948: peer messages are context, drained at this same live seam.
+        self._enforce_peer_messages(ctx)
 
         # GH#11145: enforce the acting agent's forbidden_work manifest at the single
         # production dispatch seam — before any tool-specific branch. Every tool call

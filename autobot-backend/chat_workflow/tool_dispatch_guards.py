@@ -338,3 +338,22 @@ def enforce_work_item_approval(
             "work_item_id": work_item_id,
         },
     )
+
+
+def enforce_peer_messages(ctx: "LLMIterationContext | None") -> None:
+    """Drain the "chat" role's peer inbox into `ctx.context` at this seam (#16948).
+
+    Never blocks: a peer message is context, never an instruction (#16946
+    owner ruling) -- any tool call it prompts still goes through every gate
+    above, exactly as it would for a human-typed message. A no-op without a
+    `ctx` to carry the drained messages onto.
+    """
+    if ctx is None:
+        return None
+    from protocols.agent_kind import AgentKind
+    from protocols.peer_inbox import get_peer_inbox_directory
+
+    drained = get_peer_inbox_directory().inbox_for(kind=AgentKind.AI_STACK, tenant_id=None, name="chat").drain()
+    if drained:
+        ctx.context.setdefault("peer_messages", []).extend(e.to_dict() for e in drained)
+    return None

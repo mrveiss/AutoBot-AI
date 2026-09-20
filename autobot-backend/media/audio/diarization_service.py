@@ -12,6 +12,7 @@ import asyncio
 from typing import Any, List, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.pinned_model_registry import get_pinned_revision
 
 logger = get_logger(__name__)
 
@@ -90,9 +91,17 @@ class DiarizationService:
         if self._pipeline is None:
             logger.info(f"Loading Pyannote pipeline: {self.model_name}")
             try:
+                # Pinned to a verified revision, never the mutable default branch
+                # (#17087). No weight-digest verification here: this repo is a
+                # pipeline definition (config.yaml), not weights, and config.yaml
+                # is gated -- the segmentation/embedding sub-models it points to
+                # cannot be resolved and pinned without an authenticated,
+                # license-accepted HF session. See pinned_model_registry.py's
+                # entry for this repo_id for the full reasoning.
                 self._pipeline = Pipeline.from_pretrained(
                     self.model_name,
                     use_auth_token=None,  # Add HF token support if needed
+                    revision=get_pinned_revision(self.model_name),
                 )
                 logger.info("Pyannote pipeline loaded successfully")
             except Exception as exc:

@@ -31,7 +31,24 @@ for _p in (_WORKTREE_ROOT, _BACKEND_DIR):
 # web_fetch.cache calls config.web_fetch_cache_ttl (a MiscConfig field) directly
 # on AutoBotConfig, which fails in test env.  Tests here don't exercise web_fetch
 # at runtime; stubs satisfy the import chain only.
-if "web_fetch" not in sys.modules:
+#
+# #17138: this used to be masked by knowledge/connectors/__init__.py eagerly
+# importing web_crawler.py (and so the REAL web_fetch) the moment ANY test
+# file touched the connectors package -- long before pytest ever collected
+# this file, so the `if "web_fetch" not in sys.modules` guard below always
+# saw the real module and never actually stubbed anything. Now that nothing
+# imports web_crawler.py until something asks the registry for that type,
+# this file can be the FIRST thing to import it, install the stub, and leak
+# it into every later test needing the real web_fetch.WebFetcher (observed:
+# test_web_crawler_acceptance.py's mock.patch("web_fetch.WebFetcher.fetch")
+# failing with "MagicMock does not have the attribute 'fetch'"). Popping the
+# stub names once this file's own connector imports below no longer need
+# them (they already bound `from web_fetch import X` names into their own
+# module namespace) restores the old isolation without depending on import
+# order elsewhere.
+_WF_STUB_NAMES = ("web_fetch", "web_fetch.extractors", "web_fetch.frontier", "web_fetch.cache", "web_fetch.fetcher")
+_installed_wf_stub = "web_fetch" not in sys.modules
+if _installed_wf_stub:
 
     def _make_wf_stub(name: str) -> types.ModuleType:
         m = types.ModuleType(name)
@@ -62,6 +79,25 @@ from knowledge.connectors.models import (
     SyncResult,
 )
 from knowledge.connectors.web_crawler import WebCrawlerConnector
+
+if _installed_wf_stub:
+    # Only remove what we installed -- never a real module some earlier
+    # import chain legitimately put there.
+    for _name in _WF_STUB_NAMES:
+        sys.modules.pop(_name, None)
+    # Popping the web_fetch stub alone is not enough: knowledge.connectors.
+    # web_crawler was imported ABOVE, while the stub was still active, so its
+    # `from web_fetch import (..., WebFetcher, ...)` names are already bound
+    # to the stub's MagicMocks and cached in sys.modules under that name --
+    # restoring the real web_fetch afterward does not retroactively fix an
+    # already-imported module's own namespace. This file's own already-bound
+    # `WebCrawlerConnector` reference keeps working regardless (a class
+    # object outlives its defining module being evicted from sys.modules),
+    # but a LATER test file importing knowledge.connectors.web_crawler fresh
+    # -- or patching "knowledge.connectors.web_crawler.WebFetcher.fetch" --
+    # needs a real re-import against the now-real web_fetch, not the cached
+    # stub-poisoned module object.
+    sys.modules.pop("knowledge.connectors.web_crawler", None)
 
 # ---------------------------------------------------------------------------
 # Helpers

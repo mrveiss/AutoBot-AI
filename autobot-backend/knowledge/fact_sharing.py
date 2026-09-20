@@ -62,7 +62,9 @@ class FactSharingMixin:
         }
 
     async def _share_single_fact(self, fact_id: str, shared_with: List[str], shared_by: str) -> None:
-        """Share a single fact with users. Helper for share_facts (#689)."""
+        """Share a single fact with users. Helper for share_facts (#689).
+        #16709: routes through the canonical share_fact() index, not a second one
+        that never set visibility=SHARED."""
         fact_key = "fact:%s" % fact_id
         raw = await asyncio.to_thread(self.redis_client.hget, fact_key, "metadata")
         if not raw:
@@ -71,23 +73,20 @@ class FactSharingMixin:
         raw_str = raw.decode("utf-8") if isinstance(raw, bytes) else raw
         metadata = json.loads(raw_str) if isinstance(raw_str, str) else raw_str
 
-        existing_shared = metadata.get("shared_with", [])
-        merged = list(set(existing_shared + shared_with))
-        metadata["shared_with"] = merged
+        ownership_manager = getattr(self, "ownership_manager", None)
+        if ownership_manager is None:
+            raise ValueError("Ownership management not available")
+
+        metadata = await ownership_manager.share_fact(fact_id, user_ids=shared_with, fact_metadata=metadata)
         metadata["shared_by"] = shared_by
         metadata["shared_at"] = datetime.now(tz=timezone.utc).isoformat()
 
         await asyncio.to_thread(self.redis_client.hset, fact_key, "metadata", json.dumps(metadata))
 
-        for user_id in shared_with:
-            await asyncio.to_thread(
-                self.redis_client.sadd,
-                "user:shared_facts:%s" % user_id,
-                fact_id,
-            )
-
     async def get_shared_facts(self, user_id: str) -> List[Dict[str, Any]]:
         """Get all facts shared with a user (#689).
+        #16709: reads the canonical index share_fact/set_owner write, not the
+        second one check_access never agreed with.
 
         Args:
             user_id: Recipient user ID
@@ -96,14 +95,11 @@ class FactSharingMixin:
             List of fact dicts with content and metadata
         """
         try:
-            raw_ids = await asyncio.to_thread(self.redis_client.smembers, "user:shared_facts:%s" % user_id)
-            fact_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in (raw_ids or [])]
-            facts = []
-            for fid in fact_ids:
-                fact = self.get_fact(fid)
-                if fact:
-                    facts.append(fact)
-            return facts
+            ownership_manager = getattr(self, "ownership_manager", None)
+            if ownership_manager is None:
+                return []
+            fact_ids = await ownership_manager.get_shared_facts(user_id)
+            return [fact for fid in fact_ids if (fact := self.get_fact(fid))]
         except Exception as e:
             logger.error("Failed to get shared facts for %s: %s", user_id, e)
             return []
