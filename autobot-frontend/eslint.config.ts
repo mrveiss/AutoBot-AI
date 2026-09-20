@@ -178,6 +178,15 @@ export default defineConfigWithVueTs(
     },
   },
   {
+    // A vitest reporter's entire job is terminal output (#16919) -- it runs in the
+    // Node test-runner process, not the app bundle, and has no createLogger to defer to.
+    name: 'app/console-allowed-in-test-reporters',
+    files: ['src/test/dependency-floor-reporter.ts'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  {
     // Build/check scripts and test fixtures run in Node.js, not the app bundle.
     name: 'app/console-allowed-in-scripts',
     files: ['scripts/**/*.{ts,js,mjs,mts}', 'scripts/**/__tests__/**'],
