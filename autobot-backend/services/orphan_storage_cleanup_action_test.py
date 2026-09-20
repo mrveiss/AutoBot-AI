@@ -106,7 +106,13 @@ class TestExecuteOrphanStorageDelete:
         assert audited["result"] == "failed"
         assert audited["details"]["reason"] == "no longer orphaned"
 
-    async def test_a_context_missing_the_candidate_is_a_no_op_not_a_crash(self, monkeypatch):
+    async def test_a_context_missing_the_candidate_raises_rather_than_returning_quietly(self, monkeypatch):
+        """#17141: a silent return here left the approval reading APPROVED
+        with nothing durable. Raising hands this to approval_execution's
+        dispatcher, the sole owner of failure recording -- see
+        test_a_malformed_context_is_recorded_by_the_dispatcher below for the
+        durable trail this produces end to end."""
+
         async def _delete(*_args):
             raise AssertionError("delete_candidate must not be called without a candidate")
 
@@ -115,7 +121,8 @@ class TestExecuteOrphanStorageDelete:
         approval = _approval(action="orphan_storage_delete")
         session = _FakeSession()
 
-        await orphan_storage_cleanup_action.execute_orphan_storage_delete(approval, session)
+        with pytest.raises(ValueError, match="missing provider/candidate_id"):
+            await orphan_storage_cleanup_action.execute_orphan_storage_delete(approval, session)
 
         assert session.added == []
         assert session.commits == 0
@@ -155,6 +162,47 @@ class TestRegistration:
 
         assert called == {"provider": "code_source_clone", "candidate_id": "xyz"}
         assert session.commits == 1
+
+    async def test_a_malformed_context_is_recorded_by_the_dispatcher_not_silently_dropped(self, monkeypatch):
+        """#17141 AC3: the malformed-context path records through
+        approval_execution's dispatcher, the same as any other handler
+        failure -- this module has no recording logic of its own to keep in
+        sync with it."""
+        from services import approval_execution
+
+        monkeypatch.setattr(approval_execution, "_REGISTRY", {})
+        orphan_storage_cleanup_action.register()
+
+        audited = {}
+
+        async def _audit_log(operation, **kwargs):
+            audited["operation"] = operation
+            audited.update(kwargs)
+            return True
+
+        monkeypatch.setattr(approval_execution, "audit_log", _audit_log)
+
+        # No provider/candidate_id in context -- the malformed shape.
+        approval = _approval(action="orphan_storage_delete")
+        session = _FakeSession()
+
+        await approval_execution.run_post_approval_actions(approval, session)
+        # No raise reaching here proves the dispatcher's own never-crash guarantee held.
+
+        assert session.commits == 1
+        comment = session.added[0]
+        assert comment.approval_id == approval.id
+        assert "orphan_storage_delete" in comment.body
+        # safe_error_reason() falls back to the class name alone for anything
+        # that isn't an OSError -- ValueError's own message text is not
+        # trusted generically by the dispatcher, on the same "never leak a
+        # path" principle, even though this particular message is safe.
+        assert "ValueError" in comment.body
+
+        assert audited["operation"] == "approval.post_action_failed"
+        assert audited["result"] == "error"
+        assert audited["resource"] == "orphan_storage_delete"
+        assert audited["details"]["approval_id"] == str(approval.id)
 
 
 async def _noop():
