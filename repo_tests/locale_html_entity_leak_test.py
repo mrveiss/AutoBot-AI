@@ -70,9 +70,10 @@ def test_the_sweep_reached_the_locale_files() -> None:
 
 def test_no_locale_value_contains_an_html_entity() -> None:
     leaks = _entity_leaks()
-    assert not leaks, "these locale values store an HTML entity as text, which `{{ $t(...) }}` "
-    "renders literally instead of decoding:\n" + "\n".join(
-        f"  {f} [{k}] contains {e}" for f, k, e in leaks
+    assert not leaks, (
+        "these locale values store an HTML entity as text, which `{{ $t(...) }}` "
+        "renders literally instead of decoding:\n"
+        + "\n".join(f"  {f} [{k}] contains {e}" for f, k, e in leaks)
     )
 
 

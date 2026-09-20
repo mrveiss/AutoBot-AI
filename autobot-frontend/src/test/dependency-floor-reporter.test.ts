@@ -42,39 +42,43 @@ describe('findShortfalls (negative control over the whole scan)', () => {
   })
 
   it('reports nothing when every installed version meets its declared floor', async () => {
-    vi.doMock('node:fs', () => ({
-      existsSync: () => true,
-      readFileSync: (path: string) => {
+    vi.doMock('node:fs', () => {
+      const existsSync = () => true
+      const readFileSync = (path: string) => {
         if (path.endsWith('package.json') && !path.includes('node_modules')) {
           return JSON.stringify({ dependencies: { vue: '^3.5.0' }, devDependencies: {} })
         }
         return JSON.stringify({ version: '3.5.0' })
-      },
-    }))
+      }
+      return { existsSync, readFileSync, default: { existsSync, readFileSync } }
+    })
     const { findShortfalls } = await import('./dependency-floor-reporter')
     expect(findShortfalls()).toEqual([])
   })
 
   it('reports a shortfall when an installed version is below the declared floor -- proves the scan is not vacuous', async () => {
-    vi.doMock('node:fs', () => ({
-      existsSync: () => true,
-      readFileSync: (path: string) => {
+    vi.doMock('node:fs', () => {
+      const existsSync = () => true
+      const readFileSync = (path: string) => {
         if (path.endsWith('package.json') && !path.includes('node_modules')) {
           return JSON.stringify({ dependencies: {}, devDependencies: { vitest: '^5.0.0' } })
         }
         return JSON.stringify({ version: '4.1.9' })
-      },
-    }))
+      }
+      return { existsSync, readFileSync, default: { existsSync, readFileSync } }
+    })
     const { findShortfalls } = await import('./dependency-floor-reporter')
     const found = findShortfalls()
     expect(found).toEqual([{ name: 'vitest', declared: '^5.0.0', installed: '4.1.9' }])
   })
 
   it('reports a package as missing (not a version shortfall) when node_modules has no entry for it', async () => {
-    vi.doMock('node:fs', () => ({
-      existsSync: () => false,
-      readFileSync: (_path: string) => JSON.stringify({ dependencies: {}, devDependencies: { jsdom: '^30.0.1' } }),
-    }))
+    vi.doMock('node:fs', () => {
+      const existsSync = () => false
+      const readFileSync = (_path: string) =>
+        JSON.stringify({ dependencies: {}, devDependencies: { jsdom: '^30.0.1' } })
+      return { existsSync, readFileSync, default: { existsSync, readFileSync } }
+    })
     const { findShortfalls } = await import('./dependency-floor-reporter')
     expect(findShortfalls()).toEqual([{ name: 'jsdom', declared: '^30.0.1', installed: null }])
   })

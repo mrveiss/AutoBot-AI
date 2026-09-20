@@ -30,6 +30,9 @@ import type { Reporter, SerializedError, TestModule, TestRunEndReason } from 'vi
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('DependencyFloorReporter')
 
 const FRONTEND_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))))
 
@@ -98,15 +101,15 @@ class DependencyFloorReporter implements Reporter {
     const shortfalls = findShortfalls()
     if (shortfalls.length === 0) return
 
-    console.warn(
-      `\n⚠ ${shortfalls.length} installed package(s) are below what package.json declares — ` +
+    logger.warn(
+      `${shortfalls.length} installed package(s) are below what package.json declares — ` +
         'a pass or fail here is not evidence about what CI (which runs `npm ci`) will do:',
     )
     for (const s of shortfalls.slice(0, 20)) {
-      console.warn(`  ${s.name}: installed ${s.installed ?? '(not installed)'}, declared ${s.declared}`)
+      logger.warn(`  ${s.name}: installed ${s.installed ?? '(not installed)'}, declared ${s.declared}`)
     }
     if (shortfalls.length > 20) {
-      console.warn(`  ... and ${shortfalls.length - 20} more`)
+      logger.warn(`  ... and ${shortfalls.length - 20} more`)
     }
   }
 }
