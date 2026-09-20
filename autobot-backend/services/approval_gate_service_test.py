@@ -29,6 +29,13 @@ def _make_approval(*, status: str = ApprovalStatus.PENDING.value) -> MagicMock:
     a.id = uuid.uuid4()
     a.status = status
     a.company_id = None
+    # #17141 review: an unconfigured MagicMock attribute is truthy and
+    # supports .get(), so run_post_approval_actions's `(approval.context or
+    # {}).get("action")` would read a mock object as a real, unregistered
+    # action name -- these tests are about decision-comment authorship, not
+    # post-approval dispatch, so a real approval's actual default (no
+    # context at all) is what they mean to simulate.
+    a.context = None
     return a
 
 
