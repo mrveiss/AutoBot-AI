@@ -3380,6 +3380,7 @@
       "actor": "Actor",
       "empty": "No audit entries found.",
       "loading": "Loading…",
+      "moreAvailable": "More entries exist than shown here — narrow by operation to see them all.",
       "operation": "Operation",
       "partialError": "Some audit queries failed — this list may be incomplete: {operations}",
       "resource": "Resource",

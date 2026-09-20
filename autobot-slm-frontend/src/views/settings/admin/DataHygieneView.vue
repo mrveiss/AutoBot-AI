@@ -87,6 +87,9 @@ const selectedCandidates = computed(() =>
 async function fetchOrphanStorage(): Promise<void> {
   storageLoading.value = true
   storageError.value = ''
+  // bb's review, #17157: a stale propose-result from a previous fetch would otherwise
+  // linger next to a row whose underlying candidate has since changed.
+  proposalResults.value = []
   try {
     orphanStorage.value = await api.getOrphanStorage()
   } catch (err) {
@@ -195,6 +198,9 @@ async function fetchUsers(): Promise<void> {
 async function fetchOrphans(): Promise<void> {
   orphansLoading.value = true
   orphansError.value = ''
+  // bb's review, #17157: same staleness as fetchOrphanStorage -- a repair result from a
+  // previous fetch (or a previous resourceType) must not linger next to a different row.
+  repairResults.value = {}
   try {
     const data = await api.getOrphans(resourceType.value)
     orphans.value = data.orphans
@@ -270,10 +276,14 @@ function formatAuditTime(ts: number): string {
 const auditEntries = ref<AuditLogEntry[]>([])
 const auditLoading = ref(false)
 const auditPartialError = ref('')
+// bb's review, #17157: each operation caps at AUDIT_LIMIT_PER_OPERATION and the response
+// already says whether more exist (has_more) -- surfaced rather than left silently truncated.
+const auditHasMore = ref(false)
 
 async function fetchAudit(): Promise<void> {
   auditLoading.value = true
   auditPartialError.value = ''
+  auditHasMore.value = false
   const outcomes = await Promise.allSettled(
     AUDIT_OPERATIONS.map((operation) =>
       api.getAuditLogs({ operation, limit: AUDIT_LIMIT_PER_OPERATION }),
@@ -282,9 +292,11 @@ async function fetchAudit(): Promise<void> {
 
   const entries: AuditLogEntry[] = []
   const failedOperations: string[] = []
+  let hasMore = false
   outcomes.forEach((outcome, i) => {
     if (outcome.status === 'fulfilled') {
       entries.push(...outcome.value.entries)
+      hasMore = hasMore || outcome.value.has_more
     } else {
       failedOperations.push(AUDIT_OPERATIONS[i])
       logger.error(`Error fetching audit logs for operation ${AUDIT_OPERATIONS[i]}:`, outcome.reason)
@@ -292,6 +304,7 @@ async function fetchAudit(): Promise<void> {
   })
   entries.sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0))
   auditEntries.value = entries
+  auditHasMore.value = hasMore
 
   // #17040 AC: a failed query is never swallowed into an empty-looking list --
   // it is named explicitly, distinct from "no matching entries".
@@ -625,6 +638,9 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
+        <p v-if="auditHasMore" class="text-xs text-gray-500 mt-2" data-testid="audit-has-more">
+          {{ $t('dataHygiene.audit.moreAvailable') }}
+        </p>
       </div>
     </section>
   </div>
