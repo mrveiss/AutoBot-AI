@@ -102,14 +102,22 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 #: 'autobot-backend/*.py' | grep -v '_test\.py$' | wc -l`, independently
 #: cross-checked -- a local reach-test pass is not reliable evidence for this
 #: one, per #17072 review). Population minus the unchanged growth allowance.
-#: Re-pinned 2944 -> 2945 (#17125): measured population 3245 after re-parenting
-#: this PR's migration onto #17072's own new head -- one new non-test .py file
-#: (the migration itself). Same direct-count method, population minus the
-#: unchanged growth allowance.
+#: Re-pinned 2944 -> 2945 (#16937): measured population 3245 -- that PR added
+#: one new non-test .py file (security/unicode_normalization.py). Landed via
+#: #17155.
+#: Re-pinned 2945 -> 2946 (#17125): #17125 and #16937 each independently
+#: re-pinned to the same 2945 for their own +1 file, measured against
+#: different bases -- neither survives merging both in. Re-measured on the
+#: actual merged tree at base 358606d25a (origin/main, post-#17155):
+#: population 3246 via `git ls-files -- 'autobot-backend/*.py' | grep -v
+#: '_test\.py$' | wc -l`, direct count, not a local guard pass (#17144).
+#: This branch's own contribution is one new non-test .py file (the
+#: re-parented migration itself). Population minus the unchanged growth
+#: allowance.
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2945,
+    floor=2946,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )
