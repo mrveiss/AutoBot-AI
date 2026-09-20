@@ -178,10 +178,14 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: allowance, same formula as the #17133 re-pin.
 #: Re-pinned 6473 -> 6481 (#17072): measured population 6881 after #17072's own file
 #: additions (8 net over main, 7 more than the allowance absorbs). Same formula again.
+#: Re-pinned 6481 -> 6484 (#17138): measured population 6884 after merging main (the
+#: #17043-17056 approval-consolidation vehicle's own files) plus this PR's own 3 new
+#: test files -- this guard's SCANNED glob has no _test.py exclusion, unlike the
+#: prompt-injection-detector-strict-mode floor checked in the same push. Same formula.
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6481,
+    floor=6484,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
