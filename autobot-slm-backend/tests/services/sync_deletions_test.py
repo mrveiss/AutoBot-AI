@@ -87,7 +87,7 @@ try:
     _real_load("services.deploy_artifacts", _SERVICES_DIR / "deploy_artifacts.py")
     _real_load("services.drift_checker", _SERVICES_DIR / "drift_checker.py")
     _real_load("services.deployed_dir_resolver", _SERVICES_DIR / "deployed_dir_resolver.py")
-    _real_load("services.git_subprocess", _SERVICES_DIR / "git_subprocess.py")
+    _gs = _real_load("services.git_subprocess", _SERVICES_DIR / "git_subprocess.py")
     _real_load("services.host_state_filter", _SERVICES_DIR / "host_state_filter.py")
     _sd = _real_load("services.sync_deletions", _SERVICES_DIR / "sync_deletions.py")
 finally:
@@ -471,7 +471,13 @@ async def test_bootstrap_adds_zero_candidates_for_a_venv_full_of_files(tmp_path,
         calls.append(args)
         return await real_run_git(*args, **kwargs)
 
+    # #16310: the is-shallow-repository check now lives in
+    # services.git_subprocess.is_shallow_repository, which calls run_git via
+    # its OWN module's global -- a separate name binding from _sd.run_git
+    # (sync_deletions.py's `from ... import run_git`). Both must be patched
+    # with the SAME counting wrapper to see all three calls.
     monkeypatch.setattr(_sd, "run_git", counting_run_git)
+    monkeypatch.setattr(_gs, "run_git", counting_run_git)
 
     plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_a, present_paths=present_paths)
 
@@ -502,6 +508,7 @@ async def test_bootstrap_makes_a_bounded_number_of_git_calls_regardless_of_file_
         return await real_run_git(*args, **kwargs)
 
     monkeypatch.setattr(_sd, "run_git", counting_run_git)
+    monkeypatch.setattr(_gs, "run_git", counting_run_git)
 
     plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_b, present_paths=present_paths)
 

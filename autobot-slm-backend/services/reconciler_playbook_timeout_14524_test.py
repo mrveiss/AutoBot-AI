@@ -145,7 +145,9 @@ def test_restart_service_via_ansible_passes_the_playbook_timeout_through():
     finally:
         real_playbook_executor_module.get_playbook_executor = original_getter
 
-    assert result is True
+    success, cause = result
+    assert success is True
+    assert cause is None, f"a successful restart must not report a failure cause, got {cause!r}"
     assert captured.get("timeout_s") == reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S, (
         f"expected timeout_s={reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S} to reach execute_playbook, "
         f"got {captured.get('timeout_s')!r} (captured kwargs: {sorted(captured)})"
@@ -196,7 +198,7 @@ def test_remediate_failed_service_uses_its_own_playbook_timeout_constant():
     try:
         service = reconciler.ReconcilerService()
         node = SimpleNamespace(node_id="node-14524", hostname="node-14524", ansible_target="node-14524")
-        service_row = SimpleNamespace(service_name="autobot-pg-backup")
+        service_row = SimpleNamespace(service_name="autobot-pg-backup", extra_data=None)
         db = _FakeSession()
         result = asyncio.run(service._remediate_failed_service(db, node, service_row))
     finally:
@@ -244,7 +246,9 @@ def test_restart_service_via_ansible_returns_false_on_a_timed_out_run():
     finally:
         real_playbook_executor_module.get_playbook_executor = original_getter
 
-    assert result is False, "a timed-out playbook run must never be reported as a successful restart"
+    success, cause = result
+    assert success is False, "a timed-out playbook run must never be reported as a successful restart"
+    assert cause and "180s" in cause, f"the timeout cause must be captured, got {cause!r}"
 
 
 class _Clock:
@@ -271,6 +275,9 @@ class _FakeSession:
         pass
 
     async def commit(self):
+        pass
+
+    async def refresh(self, _obj):
         pass
 
 
@@ -323,7 +330,7 @@ def test_escalation_reachable_at_the_shipped_default():
 
     async def _bounded_but_successful_restart(*_args, **_kwargs):
         clock.advance(reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S)
-        return True  # the run itself succeeds -- heartbeat is what never verifies
+        return True, None  # the run itself succeeds -- heartbeat is what never verifies
 
     async def _never_verifies(*_args, **_kwargs):
         clock.advance(reconciler.REMEDIATION_HEARTBEAT_WAIT_S)
@@ -381,7 +388,7 @@ def test_floor_extension_matters_once_an_operator_raises_the_playbook_timeout():
 
     async def _slow_but_successful_restart(*_args, **_kwargs):
         clock.advance(reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S)
-        return True
+        return True, None
 
     async def _never_verifies(*_args, **_kwargs):
         clock.advance(reconciler.REMEDIATION_HEARTBEAT_WAIT_S)

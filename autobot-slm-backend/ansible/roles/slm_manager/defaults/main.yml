@@ -79,7 +79,12 @@ slm_nginx_config: autobot-slm
 # flag is true.
 # ==========================================================
 slm_colocated_frontend: false
-frontend_dist_dir: "{{ slm_base_dir }}/autobot-frontend/dist"
+# #15603: `current`, the atomically-flipped symlink the staged publish task
+# creates — see roles/frontend/defaults/main.yml's matching definition for
+# the full reasoning. Both must move together; they resolve to the same path
+# by default (frontend_install_dir and slm_base_dir both default to
+# /opt/autobot) but are independently declared.
+frontend_dist_dir: "{{ slm_base_dir }}/autobot-frontend/current"
 frontend_backend_host: 127.0.0.1
 frontend_backend_port: 8001
 frontend_backend_protocol: http

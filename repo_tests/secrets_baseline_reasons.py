@@ -185,6 +185,20 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "not a secret value. Re-hashed and confirmed (#17096)."
     ),
     (
+        "docs/developer/GITHUB_FILING_CREDENTIAL_ROTATION.md",
+        "Secret Keyword",
+        "665b1e3851eefefa3fb878654292f16597d25155",  # pragma: allowlist secret
+    ): (
+        'the literal `"secret_type": "api_key"` in a POST /api/v2/secrets JSON '  # pragma: allowlist secret
+        "example -- the same enum-style `secret_type` field-name false "
+        "positive as test_orphan_secret_repair.py's entry above (identical "
+        "literal, hence identical hashed_secret); the adjacent "
+        '`"value": "<the PAT from step 1>"` line is an angle-bracket '
+        "instructional placeholder, not itself a match. Independently "
+        "re-hashed plain SHA1('api_key') and confirmed against this exact "
+        "hashed_secret (#17133 CodeQL/secrets batch)."
+    ),
+    (
         "autobot-slm-backend/ansible/roles/vnc/tasks/register-vnc-password.yml",
         "Secret Keyword",
         "d5ab78d646b6f314df50654a6e03ecba9b684662",  # pragma: allowlist secret
