@@ -18,6 +18,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from repo_tests._paths import repo_root
+
 import pytest
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -25,7 +27,11 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 
-_SERVER_PATH = Path(__file__).parent / "ai_api_server.py"
+#: Lives in repo_tests/ (#17134): the tree this server sits in is in no pytest
+#: testpaths entry and in no CI pytest invocation, so a test placed next to it
+#: would never run -- the same silence collection_coverage_test.py exists to
+#: remove. Same reasoning, verbatim, as repo_tests/infra_script_imports_resolve_test.py.
+_SERVER_PATH = repo_root() / "autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py"
 _LEAKED_MARKER = "not-a-real-value-but-must-never-appear-in-a-422"  # pragma: allowlist secret
 
 

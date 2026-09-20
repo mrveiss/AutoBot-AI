@@ -14,7 +14,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 # Import the security API module
+import api.security as security_api
 from api.security import CommandApprovalRequest, router
+
+#: An interactive human principal, the shape require_interactive_human accepts
+#: (auth_method "session" is in _INTERACTIVE_AUTH_METHODS; "root" matches no
+#: non-human username prefix).
+_interactive_human = lambda: {"username": "root", "role": "admin", "auth_method": "session"}  # noqa: E731
 
 # Logger name used by api/security.py (``get_logger(__name__)``). The endpoints
 # answer with a generic ``detail`` and keep the underlying exception in the log
@@ -31,6 +37,11 @@ class TestSecurityAPI:
         """Set up test fixtures"""
         self.app = FastAPI()
         self.app.include_router(router, prefix="/api/security")
+        # #17052 gated approve-command behind require_interactive_human. The shared
+        # test stub's principal is auth_method="stub", which is deliberately NOT an
+        # interactive human, so supply one here rather than widening the stub -- that
+        # would satisfy the guard by default in every backend test (fail-open).
+        self.app.dependency_overrides[security_api.get_current_user] = _interactive_human
 
         # Mock enhanced security layer
         self.mock_security_layer = MagicMock()
@@ -441,6 +452,11 @@ class TestSecurityAPIIntegration:
         """Set up test fixtures"""
         self.app = FastAPI()
         self.app.include_router(router, prefix="/api/security")
+        # #17052 gated approve-command behind require_interactive_human. The shared
+        # test stub's principal is auth_method="stub", which is deliberately NOT an
+        # interactive human, so supply one here rather than widening the stub -- that
+        # would satisfy the guard by default in every backend test (fail-open).
+        self.app.dependency_overrides[security_api.get_current_user] = _interactive_human
 
         # Use real enhanced security layer (mocked where needed)
         with patch("api.security.SecurityLayer") as MockSecurityLayer:
