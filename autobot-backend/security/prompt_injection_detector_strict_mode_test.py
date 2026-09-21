@@ -118,7 +118,7 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2948,  # provisional: re-derived below after all merges
+    floor=2949,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )
