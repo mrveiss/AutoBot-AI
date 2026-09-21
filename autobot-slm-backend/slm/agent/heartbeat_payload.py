@@ -88,6 +88,12 @@ def build_heartbeat_payload(
     # meaning "this agent does not report GPUs" and [] keeps meaning "none present".
     if "gpu" in health:
         extra_data["gpu"] = health["gpu"]
+    # #15495: always sent together -- services/node_capability.py's merge gate
+    # relies on all three being present as the "this agent knows about #15495" signal.
+    if "total_ram_mb" in health:
+        extra_data["total_ram_mb"] = health["total_ram_mb"]
+        extra_data["npu_present"] = health["npu_present"]
+        extra_data["free_disk_model_dir_mb"] = health["free_disk_model_dir_mb"]
     return {
         "cpu_percent": health.get("cpu_percent", 0.0),
         "memory_percent": health.get("memory_percent", 0.0),
