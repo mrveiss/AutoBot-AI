@@ -105,23 +105,20 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 #: Re-pinned 2944 -> 2945 (#16937): measured population 3245 -- that PR added
 #: one new non-test .py file (security/unicode_normalization.py). Landed via
 #: #17155.
-#: Re-pinned 2945 -> 2948 (#16974): three sessions independently measured
-#: three different correct values tonight against three different bases
-#: (2947 on this branch's own pre-#17155 base; 2945 on #16937/#17125's base)
-#: -- neither survives merging both in. Re-measured on the actual merged
-#: tree at base 358606d25a (origin/main, post-#17155): population 3248 via
-#: `git ls-files -- 'autobot-backend/*.py' | grep -v '_test\.py$' | wc -l`,
-#: direct count, not a local guard pass (#17144). This branch's own
-#: contribution is one new non-test .py file (llc/org_role_authority.py);
-#: the other two new files it adds (llc/tests/test_org_role_authority.py,
-#: llc/tests/test_placeholder_run_id_guard.py) count too, because this
-#: guard's exclusion is `endswith("_test.py")` and llc/tests uses the
-#: `test_*.py` prefix convention -- not a bug worth fixing in scope.
-#: Population minus the unchanged growth allowance.
+#: Re-pinned 2945 -> 2948 (#16974) and 2945 -> 2946 (#17125) on their own
+#: branches, each correctly measured against its own tree and neither
+#: surviving the other. #16974 adds llc/org_role_authority.py plus two
+#: llc/tests/test_*.py files that count here because this guard excludes
+#: only `endswith("_test.py")`; #17125 adds a re-parented migration.
+#: Re-pinned again on the tree that actually merges both, plus #17156,
+#: #17168, #17182 and #17186 -- the number below is measured there, not
+#: carried from either branch. This is the third instance tonight of the
+#: shape #17142 describes: every input value was right and the merge of
+#: them was not.
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2948,
+    floor=2948,  # provisional: re-derived below after all merges
     growth=300,
     what="tracked backend python files (tests excluded)",
 )

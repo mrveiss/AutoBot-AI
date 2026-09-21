@@ -94992,6 +94992,12 @@ export interface components {
              * @description Link TTL in seconds; omit for no expiry
              */
             expires_in_seconds?: number | null;
+            /**
+             * Require Login
+             * @description Restrict access to authenticated users only (#16861)
+             * @default false
+             */
+            require_login: boolean;
         } & {
             [key: string]: unknown;
         };
