@@ -25,6 +25,7 @@ from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
+from ..org_role_authority import describe_role_bound
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
 from ..services.agent_presence_queries import agent_org_nodes_with_latest_heartbeat
 
@@ -69,6 +70,8 @@ async def list_agents(
             "org_node_id": str(node.id),
             "name": node.name,
             "org_role": node.org_role,
+            # #16950: the bound this role runs under, and what its adapter cannot enforce.
+            "role_bound": describe_role_bound(node.org_role, node.adapter_type),
             "title": node.title,
             "heartbeat_enabled": node.heartbeat_enabled,
             "last_heartbeat_at": (
