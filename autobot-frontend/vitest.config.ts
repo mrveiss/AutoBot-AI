@@ -5,7 +5,11 @@ import { mergeConfig, defineConfig, configDefaults, type UserConfig } from 'vite
 import viteConfig from './vite.config'
 
 // Issue #156 Fix: Define reporters outside to avoid type conflict (no as const - vitest expects mutable array)
-const reporters = process.env.CI ? ['junit', 'default'] : ['default']
+// #16919: the dependency-floor banner only makes sense locally -- CI's `npm ci` always
+// installs exactly what package.json declares, so it would never have anything to report.
+const reporters = process.env.CI
+  ? ['junit', 'default']
+  : ['default', './src/test/dependency-floor-reporter.ts']
 
 // Issue #156 Fix: Type assertion to resolve mergeConfig/defineConfig type conflict
 // Vite 7 fix: resolve viteConfig if it is a function
