@@ -10,7 +10,7 @@ it. It did not always say so, and the omission was invisible for as long as
 every caller happened to supply privilege from above.
 
 Every original consumer reached it from a play with play-level `become: true`
-(`playbooks/rotate-certs.yml:33,71,148,214`). The #16020 consolidation then
+(every play in `playbooks/rotate-certs.yml` sets it). The #16020 consolidation then
 routed a second path here -- `_shared/tasks/ensure_node_tls_cert.yml`, included
 from `playbooks/update-all-nodes.yml` Plays 1/2/2b, which set `become` PER TASK
 instead. **A nested `include_tasks` does not inherit a per-task `become`**, so
@@ -34,8 +34,6 @@ red naming that task.
 """
 
 from __future__ import annotations
-
-from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root

@@ -24,8 +24,8 @@
 #
 # It used to be ambient and that broke the fleet update. Every original consumer
 # reached this file from a play with play-level `become: true`
-# (playbooks/rotate-certs.yml:33,71,148,214) so the omission was invisible. The
-# #16020 consolidation then routed a second path here --
+# (every play in playbooks/rotate-certs.yml sets it) so the omission was
+# invisible. The #16020 consolidation then routed a second path here --
 # _shared/tasks/ensure_node_tls_cert.yml, included from playbooks/update-all-nodes.yml
 # Plays 1/2/2b, which set `become` PER TASK rather than per play. A nested
 # include_tasks does not inherit a per-task become, so the directory was created
