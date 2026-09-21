@@ -41542,6 +41542,8 @@ export interface paths {
          * @description Emergency stop for all autonomous operations
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #16843: reports which tasks were actually found and paused,
+         *     and whether that pause is durable, instead of a fixed success string.
          */
         post: operations["emergency_system_stop_api_advanced_control_system_emergency_stop_post"];
         delete?: never;
@@ -54974,20 +54976,6 @@ export interface components {
             active_sessions: unknown[];
             /** Count */
             count: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * AdvancedControlEmergencyStopResponse
-         * @description Response for POST /system/emergency-stop.
-         */
-        AdvancedControlEmergencyStopResponse: {
-            /** Success */
-            success: boolean;
-            /** Message */
-            message: string;
-            /** Takeover Request Id */
-            takeover_request_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -72896,6 +72884,24 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EmergencyStopReportResponse
+         * @description Reports which tasks were actually found and registered for pause.
+         */
+        EmergencyStopReportResponse: {
+            /** Success */
+            success: boolean;
+            /** Message */
+            message: string;
+            /** Takeover Request Id */
+            takeover_request_id: string;
+            /** Tasks Paused */
+            tasks_paused: string[];
+            /** Durable */
+            durable: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -158936,7 +158942,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdvancedControlEmergencyStopResponse"];
+                    "application/json": components["schemas"]["EmergencyStopReportResponse"];
                 };
             };
         };
