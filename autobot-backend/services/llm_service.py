@@ -59,6 +59,7 @@ from services.llm_fallback_chain import (
     resolve_attempt_provider,
     track_attempt,
 )
+from services.llm_usage_recording import record_response_usage
 
 try:
     from services.provider_health import ProviderHealthManager, ProviderStatus
@@ -631,7 +632,7 @@ class LLMService:
                 response.processing_time = processing_time
 
             self._calculate_cache_hit_rate(response)
-            self._track_usage(response, session_id)
+            await self._track_usage(response, session_id)
 
             span.set_attribute("llm.model", actual_model)
             span.set_attribute("llm.cached", False)
@@ -965,7 +966,7 @@ class LLMService:
             # #10597: cache successful responses for identical future requests.
             if cache_key and response.content:
                 await self._optimized_store_cache(cache_key, response, request.request_id)
-            self._track_usage(response, conversation_id)
+            await self._track_usage(response, conversation_id)
             return response, None, None
 
         # GH#8998: Check if this is a rate limit error that should trigger fallback
@@ -985,7 +986,7 @@ class LLMService:
             " → ".join(attempted_models),
         )
         await self._mark_exhausted(conversation_id, attempted_models, current_model, request.request_id)
-        self._track_usage(response, conversation_id)
+        await self._track_usage(response, conversation_id)
         return response, None, None
 
     async def _attempt_stream_once(
@@ -1170,22 +1171,14 @@ class LLMService:
             ),
         )
 
-    def _track_usage(self, response: LLMResponse, conversation_id: str | None) -> None:
-        """Forward usage data to the cost tracker when available."""
-        if not response.usage:
-            return
-        try:
-            from services.llm_cost_tracker import LLMCostTracker
+    async def _track_usage(self, response: LLMResponse, session_id: str | None) -> None:
+        """Persist this response's tokens so cost tracking and budget policy see them.
 
-            tracker = LLMCostTracker()
-            tracker.record(
-                provider=response.provider,
-                model=response.model,
-                usage=response.usage,
-                conversation_id=conversation_id,
-            )
-        except Exception as exc:
-            logger.debug("Cost tracking skipped: %s", exc)
+        ``session_id`` is whichever conversation/session identifier the calling
+        path holds; it lands in the usage record's ``session_id``. See
+        ``services/llm_usage_recording`` for why this is a delegation (#16845).
+        """
+        await record_response_usage(response, session_id)
 
 
 # ---------------------------------------------------------------------------
