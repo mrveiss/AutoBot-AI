@@ -107,6 +107,46 @@ python:
   - 'tools/git-hooks/**'
   - 'scripts/install-git-hooks.sh'
 
+  # #16249: the CI wrappers under pipeline-scripts/ and the one library they
+  # source. Each has a python-suite test that runs the script, so a change
+  # confined to a wrapper computed `python != 'true'`, the required-context shim
+  # reported `python-suite` green, and the tests that exercise the change never
+  # ran. No pattern in this file matched them -- `**/*.py` does not match a
+  # `.sh`, and there was no `pipeline-scripts` entry at all.
+  #
+  # Four wrappers, not the one the issue names. check_baseline_no_growth.sh and
+  # detect-hardcoded-values.sh have the same shape and the same sibling tests,
+  # so fixing only the reported one would leave the same bypass open.
+  # pr-queue-open-list.sh is the fourth, and it was missed by the enumeration
+  # that found the other three: that sweep paired a script with a test by NAME,
+  # and this script is hyphenated while its test is underscored
+  # (pr_queue_open_list_test.py). The guard added alongside this change pairs
+  # them by CONTENT -- does the test name the script -- and caught it. A
+  # name-based enumeration of a hyphen/underscore boundary is exactly the shape
+  # that goes quiet rather than wrong.
+  #
+  # The two libraries are here because a wrapper refuses to run without what it
+  # sources. git-scope.sh is sourced by check-pre-commit-hook-pr.sh and
+  # check_baseline_no_growth.sh; hardcoded-value-rules.sh by
+  # check_baseline_no_growth.sh and detect-hardcoded-values.sh.
+  #
+  # The wrappers spell the source two ways -- one resolves against the script's
+  # own directory, the other through `${REPO_ROOT}`/`${PROJECT_ROOT}` -- and both
+  # variables are assigned `$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)`,
+  # checked in each script rather than inferred from the name. Reading only the
+  # first spelling is how hardcoded-value-rules.sh was missed on the first pass.
+  #
+  # The transitive closure was checked, not assumed, per the issue's "not
+  # verified" note: neither library sources anything. Both look like they might
+  # -- git-scope.sh contains the word `source` four times and
+  # hardcoded-value-rules.sh six -- and every occurrence is prose in a comment.
+  - 'pipeline-scripts/check-pre-commit-hook-pr.sh'
+  - 'pipeline-scripts/check_baseline_no_growth.sh'
+  - 'pipeline-scripts/detect-hardcoded-values.sh'
+  - 'pipeline-scripts/pr-queue-open-list.sh'
+  - 'scripts/lib/git-scope.sh'
+  - 'scripts/lib/hardcoded-value-rules.sh'
+
   # #15650: repo_tests/slm_frontend_shell_publish_test.py reads this script to
   # prove the SLM frontend build-and-publish cannot drift back to the shape that
   # caused the #15430/#15462 outages. Without an entry here, editing the script
@@ -185,3 +225,12 @@ python:
   # here, a change confined to this file -- the only change that could add
   # `install-git-hooks.sh` back in -- skips the guard.
   - '.github/workflows/auto-fix-generated-types.yml'
+  # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`
+  # table names files under this tree by concrete literal (baseline keys are
+  # (filename, type, hashed_secret) triples) -- the same filter-gap shape as
+  # the `docker/.env.docker` entry above (#17096). Without an entry here, a
+  # change confined to one of these locale files -- the exact shape that
+  # lands a new, unbaselined finding unseen, which #17173 exists to track --
+  # skips `python_filter_covers_its_guards_test.py`'s own coverage check on
+  # that citation, in addition to `Secret Detection`'s path-filter gap.
+  - 'autobot-slm-frontend/src/locales/**'
