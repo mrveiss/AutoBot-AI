@@ -102,15 +102,23 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 #: 'autobot-backend/*.py' | grep -v '_test\.py$' | wc -l`, independently
 #: cross-checked -- a local reach-test pass is not reliable evidence for this
 #: one, per #17072 review). Population minus the unchanged growth allowance.
-#: Re-pinned 2944 -> 2945 (#16937): measured population 3245 -- this PR adds
-#: one new non-test .py file (security/unicode_normalization.py). Same
-#: direct-count method, population minus the unchanged growth allowance.
-#: (#17125 independently re-pins to the same 2945 for its own +1 file; if
-#: that lands first this entry is a no-op re-measurement, not a conflict.)
+#: Re-pinned 2944 -> 2945 (#16937): measured population 3245 -- that PR added
+#: one new non-test .py file (security/unicode_normalization.py). Landed via
+#: #17155.
+#: Re-pinned 2945 -> 2948 (#16974) and 2945 -> 2946 (#17125) on their own
+#: branches, each correctly measured against its own tree and neither
+#: surviving the other. #16974 adds llc/org_role_authority.py plus two
+#: llc/tests/test_*.py files that count here because this guard excludes
+#: only `endswith("_test.py")`; #17125 adds a re-parented migration.
+#: Re-pinned again on the tree that actually merges both, plus #17156,
+#: #17168, #17182 and #17186 -- the number below is measured there, not
+#: carried from either branch. This is the third instance tonight of the
+#: shape #17142 describes: every input value was right and the merge of
+#: them was not.
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2945,
+    floor=2949,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )
