@@ -37,13 +37,6 @@
   failed_when: false
   tags: ['deps', 'nginx']
 
-- name: "nginx | Install nginx"
-  ansible.builtin.apt:
-    name: nginx
-    state: present
-  become: true
-  tags: ['deps', 'nginx']
-
 # #16020: nginx must not be started before the keypair its config references
 # exists. Every AutoBot nginx vhost carries `ssl_certificate
 # /etc/autobot/certs/server-cert.pem`, and `nginx -t` runs in ExecStartPre --
@@ -54,8 +47,30 @@
 #
 # This role previously did three things -- refresh apt, install nginx, start it
 # -- and starting was the only one that could fail for a reason outside itself.
-- name: "nginx | Ensure the shared node TLS keypair exists (#16020)"
+#
+# #17172: this MUST run before the apt install below, not merely before our own
+# start task. apt's postinst starts nginx itself during `state: present`, and
+# that start is not ours to reorder. On a re-provision of a node whose
+# `sites-enabled` vhost already references the cert, a missing keypair makes the
+# postinst's `nginx -t` fail and the package fail to configure:
+#
+#   apt-get ... install 'nginx=1.24.0-2ubuntu7.18' failed:
+#   E: Sub-process /usr/bin/dpkg returned an error code (1)
+#
+# A fresh host does not hit it -- stock nginx config references no certificate --
+# which is why this passes on most nodes and fails on a re-provisioned one.
+#
+# The reorder is free: this include is a directory, a stat, an openssl call and
+# a chmod. It has no dependency on nginx being installed.
+- name: "nginx | Ensure the shared node TLS keypair exists (#16020, #17172)"
   ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
+  tags: ['deps', 'nginx']
+
+- name: "nginx | Install nginx"
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+  become: true
   tags: ['deps', 'nginx']
 
 - name: "nginx | Ensure service is enabled and running"

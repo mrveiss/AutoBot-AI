@@ -47,6 +47,12 @@ from llm_shared.models import LLMRequest
 from llm_shared.tiered_routing.tier_router import get_tiered_router
 from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
 from services.llm_cost_tracker import get_cost_tracker
+from services.llm_usage_recording import (
+    ESTIMATED_TOKENS,
+    MEASURED_TOKENS,
+    record_response_usage,
+    record_token_usage,
+)
 
 logger = get_logger(__name__)
 
@@ -284,6 +290,18 @@ async def _stream_generator(
         await svc.record_spend(api_key_record, cost_usd)
         await svc.publish_usage_event(api_key_record, model_name, prompt_tokens, completion_tokens, cost_usd)
 
+    # #16845: the per-key stream above is telemetry keyed by API key; budget policy
+    # reads LLMUsageRecords, and nothing on this path was writing one. Recorded
+    # unconditionally -- gateway traffic without an API key record still spends.
+    await record_token_usage(
+        provider=getattr(provider, "provider_name", "") or "",
+        model=model_name,
+        input_tokens=prompt_tokens,
+        output_tokens=completion_tokens,
+        endpoint="/v1/chat/completions",
+        metadata=dict(ESTIMATED_TOKENS),
+    )
+
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -400,6 +418,14 @@ async def chat_completions(
         usage.completion_tokens,
     )
     llm_response.hidden_params["response_cost"] = cost_usd
+
+    # #16845: priced under resolved_model, so the record must name it too.
+    await record_response_usage(
+        llm_response,
+        endpoint="/v1/chat/completions",
+        model=resolved_model,
+        metadata=dict(MEASURED_TOKENS),
+    )
 
     response = ChatCompletionResponse(
         id=completion_id,

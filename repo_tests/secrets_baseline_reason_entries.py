@@ -544,4 +544,21 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "whole-tree scan never ran against it on main (#17173, filed for the "
         "filter/scope mismatch itself)."
     ),
+    (
+        "autobot-slm-frontend/src/locales/en.json",
+        "Secret Keyword",
+        "7e62ee8a07aaaeb03be8a824b49f02fc7ecc6fda",  # pragma: allowlist secret
+    ): (
+        "the i18n display label `API Keys & Tokens` (setupWizardView.aPIKeysAmpTokens), "
+        "not a credential. The key name contains `Keys`/`Tokens`, which trips the "
+        "Secret Keyword denylist; the value is a heading shown on the setup wizard. "
+        "Independently confirmed rather than inferred: plain SHA1 of the literal "
+        "`API Keys & Tokens` reproduces this exact hashed_secret, and SHA1 of the "
+        "pre-#17153 spelling `API Keys &amp; Tokens` reproduces "
+        "476cb7b9c1683329fb0baf710c66a4677617c50b, the legacy-tracked entry this "
+        "one replaces. #17153 decoded that HTML entity because it was rendering "
+        "literally in the GUI, which changed the string and therefore its hash -- "
+        "the audited verdict carries over unchanged because the value is the same "
+        "display heading either way."
+    ),
 }
