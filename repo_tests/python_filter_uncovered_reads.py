@@ -50,6 +50,7 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         ".mcp/autobot-mcp-server.js",
         ".pre-commit-config.yaml",
         "autobot-frontend/scripts/check-ts-delta.sh",
+        "autobot-frontend/src/components/terminal/SSHTerminal.vue",
         "autobot-frontend/src/types/generated/api.ts",
         "autobot-slm-frontend/openapi.json",
         "autobot-slm-frontend/src/composables/useAutobotApi.ts",
@@ -113,4 +114,10 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: `docs/developer/GITHUB_FILING_CREDENTIAL_ROTATION.md` (a baseline-reasons
 #: dict key, never opened) above are both new bypasses, not a denominator
 #: correction.
-MAX_UNCOVERED_READS = 41
+#:
+#: RAISED 41 -> 42 by #17020: `autobot-frontend/src/components/terminal/
+#: SSHTerminal.vue` above is a new bypass -- frontend_ws_client_route_pin_17020_test.py
+#: reads it by concrete literal path to pin its WebSocket URL against the real
+#: backend route, and `autobot-frontend/src/components/` is outside the python
+#: filter's trees. A new bypass, not a denominator correction.
+MAX_UNCOVERED_READS = 42
