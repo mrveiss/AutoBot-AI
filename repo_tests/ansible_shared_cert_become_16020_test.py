@@ -12,9 +12,11 @@ every caller happened to supply privilege from above.
 Every original consumer reached it from a play with play-level `become: true`
 (every play in `playbooks/rotate-certs.yml` sets it). The #16020 consolidation then
 routed a second path here -- `_shared/tasks/ensure_node_tls_cert.yml`, included
-from `playbooks/update-all-nodes.yml` Plays 1/2/2b, which set `become` PER TASK
-instead. **A nested `include_tasks` does not inherit a per-task `become`**, so
-on that path the wrapper created the directory as root and then `openssl` ran
+from `playbooks/update-all-nodes.yml` Plays 1, 2 and 2b. Those plays declare
+privilege per task, and **on the chain reaching this file nothing declared it at
+all**: not the play, not the `include_tasks` line, and not the tasks here. The
+wrapper's own sibling tasks each carry `become: true` individually, so the cert
+directory was created as root while `openssl`, one include deeper, ran
 unprivileged and could not write into it:
 
     fatal: FAILED! => {"changed": true, "cmd": ["openssl", "req", "-x509", ...
