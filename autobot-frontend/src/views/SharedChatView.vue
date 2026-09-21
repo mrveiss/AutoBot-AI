@@ -141,6 +141,8 @@ onMounted(async () => {
       error.value = t('chat.share.linkNotFound')
     } else if (status === 410) {
       error.value = t('chat.share.linkExpired')
+    } else if (status === 401) {
+      error.value = t('chat.share.loginRequired')
     } else {
       error.value = t('errors.genericError')
       logger.error('Failed to load shared chat:', err)
