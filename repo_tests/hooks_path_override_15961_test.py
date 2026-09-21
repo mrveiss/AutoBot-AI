@@ -191,10 +191,16 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: alone against the 6487 allowance, the pair does not. Sixth re-pin of this
 #: floor in one night and the second caused purely by combining PRs that each
 #: measured correctly -- see #17142.
+#: Re-pinned 6488 -> 6491 (#17153): measured 6891 after #17153 and #17184 landed
+#: -- three new counting files between them (locale_html_entity_leak_test.py,
+#: ansible_shared_cert_become_16020_test.py, ansible_nginx_cert_before_install_17172_test.py).
+#: Same #17142 shape a third time: each PR fit alone against the 6889 allowance,
+#: the pair did not, and neither author could have seen the other's contribution.
+#: Population minus the unchanged growth allowance.
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6488,
+    floor=6491,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
