@@ -108,9 +108,20 @@ class HybridSearcher:
 
         Issue #17207: previously a later view's result object was dropped entirely, so
         any view-specific field it carried was lost.
+
+        Nested mappings are merged by the same rule rather than kept whole. A flat
+        ``setdefault`` treats ``metadata`` as one opaque value, so a later view's
+        ``metadata.source`` was still discarded whenever the first view supplied any
+        ``metadata`` at all -- the same field-level loss this helper exists to stop,
+        one level down. Scalar conflicts are unchanged: the first view still wins.
         """
         for key, value in incoming.items():
-            existing.setdefault(key, value)
+            if key not in existing:
+                existing[key] = value
+                continue
+            current = existing[key]
+            if isinstance(current, dict) and isinstance(value, dict):
+                HybridSearcher._merge_view_result(current, value)
 
     def build_rrf_results(
         self,
@@ -223,6 +234,14 @@ class HybridSearcher:
         except Exception as e:
             logger.error("Hybrid search failed: %s", e)
             fallback = await self.semantic_search(query, top_k=limit, filters=semantic_filters, mode="vector")
+            # Shape parity: the fused path always attaches these two keys, so a caller
+            # reading them unconditionally would raise KeyError only on the degraded
+            # path -- the failure mode hardest to notice. They are empty rather than
+            # invented: no fusion ran, so no view agreement was measured. The
+            # discriminator is ``fused``, not a zero count.
+            for result in fallback:
+                result.setdefault("view_contributions", {})
+                result.setdefault("view_count", 0)
             return fallback, {"fused": False, "error": str(e), "views": {}}
 
     async def search(
@@ -238,8 +257,10 @@ class HybridSearcher:
         Issue #281 refactor: Uses RRF with k=60 for fusion.
         Issue #3242: board_filter is threaded into the semantic ``where`` clause.
         Issue #17207: delegates to ``search_with_provenance``; each result carries
-        ``view_contributions`` and ``view_count``. Use ``search_with_provenance`` when
-        per-view execution status is needed.
+        ``view_contributions`` and ``view_count``. On the degraded fallback path those
+        are ``{}`` and ``0`` because no fusion ran -- an empty map here means "not
+        fused", not "no view agreed". This return value cannot express the difference;
+        use ``search_with_provenance`` and read ``fused`` when it matters.
 
         Args:
             query: Search query

@@ -131,6 +131,40 @@ class TestResultMerging:
 
         assert result_map["A"]["content"] == "sem"
 
+    def test_nested_metadata_from_a_later_view_survives(self):
+        """A later view's unique metadata field must not be lost to the first view's dict.
+
+        Both legs always supply ``metadata`` (it carries fact_id), so a flat
+        ``setdefault`` treats it as an already-present key and discards the later
+        view's whole mapping -- the field-level loss #17207 exists to stop, one
+        level down.
+        """
+        searcher = _searcher()
+        scores, result_map, contributions = {}, {}, {}
+
+        sem = _fact("A")
+        kw = _fact("A")
+        kw["metadata"]["source"] = "keyword-index"
+        searcher.process_rrf_results([sem], scores, result_map, K, SEM, contributions)
+        searcher.process_rrf_results([kw], scores, result_map, K, KW, contributions)
+
+        assert result_map["A"]["metadata"]["source"] == "keyword-index"
+        assert result_map["A"]["metadata"]["fact_id"] == "A"
+
+    def test_first_view_wins_on_a_nested_conflict(self):
+        """Merging nested mappings must not weaken first-view-wins for conflicts."""
+        searcher = _searcher()
+        scores, result_map, contributions = {}, {}, {}
+
+        sem = _fact("A")
+        sem["metadata"]["source"] = "semantic-index"
+        kw = _fact("A")
+        kw["metadata"]["source"] = "keyword-index"
+        searcher.process_rrf_results([sem], scores, result_map, K, SEM, contributions)
+        searcher.process_rrf_results([kw], scores, result_map, K, KW, contributions)
+
+        assert result_map["A"]["metadata"]["source"] == "semantic-index"
+
 
 # ---------------------------------------------------------------------------
 # View execution status -- "found nothing" is not "did not look"
@@ -193,6 +227,27 @@ class TestViewStatus:
         assert "fuse fail" in status["error"]
         assert status["views"] == {}
         assert [r["metadata"]["fact_id"] for r in results] == ["A"]
+
+    @pytest.mark.asyncio
+    async def test_fallback_results_carry_the_documented_keys(self):
+        """The degraded path must not hand back a different result shape.
+
+        The fused path always attaches ``view_contributions`` and ``view_count``. If
+        the fallback omits them, a caller reading them unconditionally raises
+        KeyError only when fusion has already failed -- the moment it is least
+        likely to be noticed. They are empty, not invented: no fusion ran, so no
+        view agreement was measured, and ``fused`` is what says so.
+        """
+        searcher = _searcher(semantic=[_fact("A")], keyword=[_fact("B")])
+
+        with patch.object(searcher, "build_rrf_results", side_effect=RuntimeError("fuse fail")):
+            results, status = await searcher.search_with_provenance("q", 5)
+
+        assert results, "fallback returned nothing, so the shape assertion would be vacuous"
+        for result in results:
+            assert result["view_contributions"] == {}
+            assert result["view_count"] == 0
+        assert status["fused"] is False, "an empty map here means not-fused, not no-agreement"
 
 
 # ---------------------------------------------------------------------------
