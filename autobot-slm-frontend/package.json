@@ -33,7 +33,7 @@
     "axios": "^1.20.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.32",
-    "vue-i18n": "^11.4.10",
+    "vue-i18n": "^11.4.12",
     "vue-router": "^5.3.1"
   },
   "overrides": {
@@ -51,7 +51,7 @@
     "@storybook/vue3": "^10.6.0",
     "@storybook/vue3-vite": "^10.6.0",
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.1",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/test-utils": "^2.5.0",
     "@vue/tsconfig": "^0.9.1",
