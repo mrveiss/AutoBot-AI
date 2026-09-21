@@ -2224,6 +2224,15 @@ class FeatureConfig(RedactedSettings):
     # still costs nothing extra.
     cross_vendor_review_enabled: bool = Field(default=False, alias="AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED")
 
+    # Issue #16950/#16974: enforce each Company OS agent's org-role tool bound at
+    # dispatch. Off by default -- copilot_local/copilot_subscription take no
+    # tool-permission flags today, so turning this on refuses every dispatch to
+    # those two adapters (codex_subscription is already a non-functional stub).
+    # Flips on once those adapters can actually enforce a bound, or the owner
+    # accepts the refusal; whether the underlying CLI even exposes such a flag
+    # is unknown and external to this repo.
+    org_role_bound_enabled: bool = Field(default=False, alias="AUTOBOT_FEATURE_ORG_ROLE_BOUND")
+
 
 class CostModelConfig(RedactedSettings):
     """Operator-supplied monthly cost estimates for hardware components.

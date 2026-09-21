@@ -39,6 +39,7 @@ from models.database import (
     Setting,
 )
 from services.db_transaction_errors import is_connection_level_db_error
+from services.node_capability import apply_capability_profile
 from services.service_categorizer import categorize_service
 from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
 from services.service_remediation_tracker import (
@@ -1675,8 +1676,6 @@ class ReconcilerService:
     ) -> bool:
         """Update basic metrics and optional fields.
 
-        Helper for update_node_heartbeat (Issue #665).
-
         Returns whether a managed service is CURRENTLY churning (#14465), for
         `_calculate_node_status` to act on.
         """
@@ -1693,6 +1692,7 @@ class ReconcilerService:
             return False
 
         node.extra_data = {**(node.extra_data or {}), **extra_data}
+        await apply_capability_profile(db, node.node_id, extra_data)
         services_data = extra_data.get("discovered_services") or extra_data.get("services")
         if not services_data:
             return False

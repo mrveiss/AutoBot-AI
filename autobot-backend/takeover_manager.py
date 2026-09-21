@@ -202,8 +202,7 @@ class TakeoverManager:
         """
         self.memory_manager = memory_manager or MemoryManager()
         self._redis = _redis  # None = use get_async_redis_client(); set in tests
-        # H1: per-process latch — once any Redis op fails, stay in fallback mode.
-        # None = not yet probed; True = Redis working; False = latched to fallback.
+        # H1: per-process latch -- see _redis_client()'s docstring.
         self._redis_available: bool | None = None
         self._redis_warning_logged = False
 
@@ -271,6 +270,9 @@ class TakeoverManager:
                 exc,
             )
             self._redis_available = False
+
+    def is_durable(self) -> bool:  # False once latched to fallback (#16843)
+        return self._redis_available is not False
 
     # ------------------------------------------------------------------
     # pending_requests helpers
@@ -1294,10 +1296,8 @@ class TakeoverManager:
         }
 
 
-# ---------------------------------------------------------------------------
-# Module-level sync dispatch table (used by execute_takeover_action and
-# _execute_action for non-async handlers to avoid code duplication)
-# ---------------------------------------------------------------------------
+# Module-level sync dispatch table (used by execute_takeover_action /
+# _execute_action for non-async handlers, avoids code duplication)
 
 
 def _execute_action_sync(action_type: str, action_data: Dict[str, Any]) -> Dict[str, Any]:
