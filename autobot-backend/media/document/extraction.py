@@ -32,14 +32,17 @@ needs no import-path change. Nothing in this module calls into
 
 from __future__ import annotations
 
+import importlib.util
 import io
+import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-from media.document.zip_formats import sniff_zip_format
+from media.document.zip_formats import SUFFIX_BY_FORMAT, sniff_zip_format
 
 logger = get_logger(__name__)
 
@@ -52,18 +55,15 @@ _ZIP_MAGIC = b"PK"
 _DOCX_MARKER = b"word/"
 _DOCX_SNIFF_BYTES = 2000
 
-# #13884: fraction of pages that must carry text before an extraction counts as
-# usable. Default 0.5 — a document where most pages are unreadable is a scan,
-# whatever the remaining pages contain. Override when a corpus is legitimately
+# #13884: fraction of pages that must carry text before an extraction counts as usable. Default 0.5 — a document where
+# most pages are unreadable is a scan, whatever the remaining pages contain. Override when a corpus is legitimately
 # mixed (title pages, plates, appendices of figures).
 DEFAULT_MIN_TEXT_PAGE_RATIO = 0.5
 
-# #13884 finding 1: the ratio above counts a page as readable when it carries a
-# single character, which a scanner/DMS/Bates page-number stamp satisfies on
-# every page. Measured against synthesized fixtures (reportlab + PIL): a
-# "Page N of 10" stamp averages ~13 characters/page, a Bates+"CONFIDENTIAL"
-# stamp ~25; a genuine single-field born-digital page (an invoice with five
-# short lines) averages ~109, and ordinary dense prose ~3900. 50 sits between
+# #13884 finding 1: the ratio above counts a page as readable when it carries a single character, which a
+# scanner/DMS/Bates page-number stamp satisfies on every page. Measured against synthesized fixtures (reportlab +
+# PIL): a "Page N of 10" stamp averages ~13 characters/page, a Bates+"CONFIDENTIAL" stamp ~25; a genuine single-field
+# born-digital page (an invoice with five short lines) averages ~109, and ordinary dense prose ~3900. 50 sits between
 # the stamp cluster and the real-content cluster with margin on both sides.
 DEFAULT_MIN_CHARS_PER_PAGE = 50.0
 
@@ -517,6 +517,67 @@ def extract_plain_text(raw: bytes) -> ExtractedDocument:
     return ExtractedDocument(format="text", text=text)
 
 
+#: ZIP-based formats this module has no reader of its own for. ``docx`` is
+#: excluded because :func:`extract_docx` above already handles it.
+OFFICE_FORMATS = frozenset(SUFFIX_BY_FORMAT) - {"docx"}
+
+# : The third-party module each office format's parser imports. Checked before : delegating so a missing library stays
+# a DEPENDENCY error: the shared sync : parser catches every exception per candidate and reports one "extraction :
+# failed" string, which would otherwise report a deployment gap as a bad : document -- the exact conflation the
+# pipeline's two error paths exist to : prevent (#13895, and the comment on DocumentDependencyError above).
+_OFFICE_PARSER_MODULE = {
+    "xlsx": "openpyxl",
+    "pptx": "pptx",
+    "odt": "odf",
+    "ods": "odf",
+    "odp": "odf",
+    "odg": "odf",
+}
+
+
+def extract_office(raw: bytes, detected: str) -> ExtractedDocument:
+    """Extract a spreadsheet, presentation or OpenDocument file (#16784).
+
+    These formats used to fall through to :func:`extract_plain_text`, which
+    decoded their ZIP bytes as if they were text. The result was binary noise
+    presented as document text, flowing onward into the knowledge base and into
+    prompts through retrieval. Silent garbage is worse than a refusal: nothing
+    downstream could tell a bad document from one this path could not read.
+
+    ``utils.document_parser`` already owns working parsers for all six, so this
+    delegates rather than forking a second implementation. It raises on failure
+    instead of returning empty text, so the caller's existing error handling
+    names the format rather than reporting success with nothing in it.
+    """
+    # Local import, deliberately: utils.document_parser imports FROM this
+    # module, so a module-level import here is a cycle. Deferred to call time,
+    # when both modules are fully loaded.
+    from utils.document_parser import parse_document_text
+
+    module = _OFFICE_PARSER_MODULE[detected]
+    if importlib.util.find_spec(module) is None:
+        raise DocumentDependencyError(f"{module} is required to extract {detected} documents")
+
+    with tempfile.NamedTemporaryFile(suffix=SUFFIX_BY_FORMAT[detected], delete=False) as handle:
+        handle.write(raw)
+        path = Path(handle.name)
+    try:
+        text, metadata = parse_document_text(path)
+    except ValueError as exc:
+        raise DocumentExtractionError(f"cannot extract {detected}: {exc}") from exc
+    finally:
+        path.unlink(missing_ok=True)
+
+    if not metadata.get("extraction_success"):
+        reason = metadata.get("extraction_error", "no parser succeeded")
+        raise DocumentExtractionError(f"cannot extract {detected}: {reason}")
+
+    # tables_attempted stays False on purpose (#13895): these parsers fold sheet and table content into the text
+    # rather than populating `tables`, so claiming tables were attempted would make an empty `tables` mean "none
+    # found" when it means "not collected separately".
+    return ExtractedDocument(format=detected, text=text)
+
+
 def extract_document(raw: bytes, mime_type: str = "") -> ExtractedDocument:
     """Detect the format and extract, dispatching to the format-specific reader."""
     detected = detect_format(raw, mime_type)
@@ -524,4 +585,6 @@ def extract_document(raw: bytes, mime_type: str = "") -> ExtractedDocument:
         return extract_pdf(raw)
     if detected == "docx":
         return extract_docx(raw)
+    if detected in OFFICE_FORMATS:
+        return extract_office(raw, detected)
     return extract_plain_text(raw)

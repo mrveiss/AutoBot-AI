@@ -78,6 +78,24 @@
       register: github_sync
       tags: [always]
 
+    # #16310: skipped, not swallowed, when GitHub is unreachable (same
+    # `github_sync is not failed` gate the offline-tolerance design already
+    # uses below) -- an unshallow attempt would fail for the identical
+    # reason and add nothing. When GitHub WAS reachable, this must fail
+    # loudly: the checkout on disk predates the shallow-clone guard and is
+    # shallow today regardless of `update: true`/`force: true` above (a
+    # plain fetch never deepens an already-shallow repo), and every
+    # component's bootstrap plan needs full history.
+    - name: "[PRE-FLIGHT] Ensure code_source has full history, not a shallow clone (#16310)"
+      ansible.builtin.command:
+        cmd: >-
+          /opt/autobot/autobot-slm-backend/venv/bin/python3
+          {{ git_repo_root }}/autobot-slm-backend/scripts/sync_deletion_planner.py
+          ensure-full-history --repo-root {{ git_repo_root }}
+      changed_when: false
+      when: github_sync is not failed
+      tags: [always]
+
     - name: "[PRE-FLIGHT] Warn if GitHub sync skipped"
       ansible.builtin.debug:
         msg: >-

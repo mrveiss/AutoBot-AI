@@ -546,6 +546,7 @@
       "linkExpired": "Link expired",
       "linkExpires": "Link expires",
       "linkNotFound": "Link not found",
+      "loginRequired": "Jums jāpiesakās, lai skatītu šo saiti.",
       "linkPasswordProtected": "Link password protected",
       "linkReady": "Link ready",
       "optionalPassword": "Optional password",
@@ -558,6 +559,11 @@
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
       "shareWithUsers": "Share with users",
+      "requireLogin": "Nepieciešama pieteikšanās, lai skatītu",
+      "requireLoginHint": "Šo saiti var atvērt tikai pieteikušies lietotāji",
+      "viewCount": "Skatījumi",
+      "lastAccessedAt": "Pēdējo reizi apmeklēts",
+      "lastAccessedNever": "Nekad",
       "unlock": "Unlock",
       "wrongPassword": "Wrong password"
     },
@@ -7860,6 +7866,7 @@
     "advancedControl": "Papildu vadība",
     "adminPricing": "Modeļu cenas",
     "adminMcpServers": "MCP serveri",
+    "adminPermissionScopes": "Atļauju tvērumi",
     "llcRoles": "Lomas"
   },
   "llcCompanyStatus": {
@@ -9113,6 +9120,12 @@
       "deleteTitle": "Dzēst MCP serveri",
       "deleteConfirm": "Vai tiešām vēlaties dzēst",
       "deleteUndone": "Šo darbību nevar atsaukt."
+    },
+    "permissionScopes": {
+      "title": "Atļauju tvērumi",
+      "subtitle": "Detalizēts atļauju vārdu krājums un tvērumu komplekti API atslēgām",
+      "comingSoonTitle": "Būs pieejams nākamajā laidienā",
+      "comingSoonMessage": "Detalizēti atļauju tvērumi — atļauju vārdu krājums, tvērumu komplekti un API atslēgu tvērumu izpilde — šajā laidienā nav pieejami. Šī lapa ļaus tos definēt un piešķirt, tiklīdz tie būs pieejami."
     }
   },
   "components": {
@@ -9448,5 +9461,12 @@
     "errorSetRate": "Likmi neizdevās saglabāt.",
     "errorClearRate": "Likmi neizdevās notīrīt.",
     "errorSetStepCost": "Soļa izmaksu datus neizdevās saglabāt."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Iestatījumi",
+      "hideSettingsButton": "Slēpt iestatījumus",
+      "settingsHeading": "Transkribētāja iestatījumi"
+    }
   }
 }

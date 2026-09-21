@@ -200,6 +200,7 @@
     "advancedControl": "בקרה מתקדמת",
     "adminPricing": "תמחור דגמים",
     "adminMcpServers": "שרתוני MCP",
+    "adminPermissionScopes": "היקפי הרשאות",
     "llcRoles": "תפקידים"
   },
   "llcCompanyStatus": {
@@ -5266,6 +5267,7 @@
       "linkExpired": "Link expired",
       "linkExpires": "Link expires",
       "linkNotFound": "Link not found",
+      "loginRequired": "עליך להתחבר כדי לצפות בקישור זה.",
       "linkPasswordProtected": "Link password protected",
       "linkReady": "Link ready",
       "optionalPassword": "Optional password",
@@ -5278,6 +5280,11 @@
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
       "shareWithUsers": "Share with users",
+      "requireLogin": "נדרשת התחברות לצפייה",
+      "requireLoginHint": "רק משתמשים מחוברים יכולים לפתוח קישור זה",
+      "viewCount": "צפיות",
+      "lastAccessedAt": "גישה אחרונה",
+      "lastAccessedNever": "מעולם לא",
       "unlock": "Unlock",
       "wrongPassword": "Wrong password"
     },
@@ -9113,6 +9120,12 @@
       "deleteTitle": "מחיקת שרת MCP",
       "deleteConfirm": "האם אתה בטוח שברצונך למחוק",
       "deleteUndone": "לא ניתן לבטל פעולה זו."
+    },
+    "permissionScopes": {
+      "title": "היקפי הרשאות",
+      "subtitle": "אוצר מילים מפורט של הרשאות וחבילות היקף עבור מפתחות API",
+      "comingSoonTitle": "בקרוב בגרסה עתידית",
+      "comingSoonMessage": "היקפי הרשאות מפורטים — אוצר מילים של הרשאות, חבילות היקף ואכיפת היקף על מפתחות API — אינם זמינים בגרסה זו. עמוד זה יאפשר להגדיר ולהקצות אותם לאחר השקתם."
     }
   },
   "components": {
@@ -9448,5 +9461,12 @@
     "errorSetRate": "לא ניתן היה לשמור את התעריף.",
     "errorClearRate": "לא ניתן היה לנקות את התעריף.",
     "errorSetStepCost": "לא ניתן היה לשמור את נתוני עלות השלב."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "הגדרות",
+      "hideSettingsButton": "הסתר הגדרות",
+      "settingsHeading": "הגדרות התמלול"
+    }
   }
 }

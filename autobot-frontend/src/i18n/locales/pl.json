@@ -546,6 +546,7 @@
       "linkExpired": "Link expired",
       "linkExpires": "Link expires",
       "linkNotFound": "Link not found",
+      "loginRequired": "Musisz się zalogować, aby zobaczyć ten link.",
       "linkPasswordProtected": "Link password protected",
       "linkReady": "Link ready",
       "optionalPassword": "Optional password",
@@ -558,6 +559,11 @@
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
       "shareWithUsers": "Share with users",
+      "requireLogin": "Wymagane logowanie do wyświetlenia",
+      "requireLoginHint": "Tylko zalogowani użytkownicy mogą otworzyć ten link",
+      "viewCount": "Wyświetlenia",
+      "lastAccessedAt": "Ostatni dostęp",
+      "lastAccessedNever": "Nigdy",
       "unlock": "Unlock",
       "wrongPassword": "Wrong password"
     },
@@ -7860,6 +7866,7 @@
     "advancedControl": "Sterowanie zaawansowane",
     "adminPricing": "Ceny modeli",
     "adminMcpServers": "Serwery MCP",
+    "adminPermissionScopes": "Zakresy uprawnień",
     "llcRoles": "Role"
   },
   "llcCompanyStatus": {
@@ -9113,6 +9120,12 @@
       "deleteTitle": "Usuń serwer MCP",
       "deleteConfirm": "Czy na pewno chcesz usunąć",
       "deleteUndone": "Tej czynności nie można cofnąć."
+    },
+    "permissionScopes": {
+      "title": "Zakresy uprawnień",
+      "subtitle": "Szczegółowe słownictwo uprawnień i pakiety zakresów dla kluczy API",
+      "comingSoonTitle": "Dostępne w kolejnej wersji",
+      "comingSoonMessage": "Szczegółowe zakresy uprawnień — słownictwo uprawnień, pakiety zakresów oraz egzekwowanie zakresów kluczy API — nie są dostępne w tej wersji. Ta strona umożliwi ich definiowanie i przypisywanie po ich udostępnieniu."
     }
   },
   "components": {
@@ -9448,5 +9461,12 @@
     "errorSetRate": "Nie udało się zapisać stawki.",
     "errorClearRate": "Nie udało się wyczyścić stawki.",
     "errorSetStepCost": "Nie udało się zapisać danych kosztowych kroku."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Ustawienia",
+      "hideSettingsButton": "Ukryj ustawienia",
+      "settingsHeading": "Ustawienia transkrybera"
+    }
   }
 }

@@ -546,6 +546,7 @@
       "linkExpired": "Link expired",
       "linkExpires": "Link expires",
       "linkNotFound": "Link not found",
+      "loginRequired": "يجب تسجيل الدخول لعرض هذا الرابط.",
       "linkPasswordProtected": "Link password protected",
       "linkReady": "Link ready",
       "optionalPassword": "Optional password",
@@ -558,6 +559,11 @@
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
       "shareWithUsers": "Share with users",
+      "requireLogin": "يتطلب تسجيل الدخول للعرض",
+      "requireLoginHint": "يمكن للمستخدمين المسجلين فقط فتح هذا الرابط",
+      "viewCount": "المشاهدات",
+      "lastAccessedAt": "آخر وصول",
+      "lastAccessedNever": "أبدًا",
       "unlock": "Unlock",
       "wrongPassword": "Wrong password"
     },
@@ -7860,6 +7866,7 @@
     "advancedControl": "التحكم المتقدم",
     "adminPricing": "تسعير النماذج",
     "adminMcpServers": "خوادم MCP",
+    "adminPermissionScopes": "نطاقات الصلاحيات",
     "llcRoles": "الأدوار"
   },
   "llcCompanyStatus": {
@@ -9113,6 +9120,12 @@
       "deleteTitle": "حذف خادم MCP",
       "deleteConfirm": "هل أنت متأكد من رغبتك في الحذف",
       "deleteUndone": "لا يمكن التراجع عن هذا الإجراء."
+    },
+    "permissionScopes": {
+      "title": "نطاقات الصلاحيات",
+      "subtitle": "مفردات صلاحيات دقيقة وحزم نطاقات لمفاتيح API",
+      "comingSoonTitle": "قادم في إصدار لاحق",
+      "comingSoonMessage": "نطاقات الصلاحيات الدقيقة — مفردات الصلاحيات، وحزم النطاقات، وإنفاذ نطاقات مفاتيح API — غير متوفرة في هذا الإصدار. ستتيح لك هذه الصفحة تحديدها وتعيينها بمجرد إطلاقها."
     }
   },
   "components": {
@@ -9448,5 +9461,12 @@
     "errorSetRate": "تعذّر حفظ الأجر.",
     "errorClearRate": "تعذّر مسح الأجر.",
     "errorSetStepCost": "تعذّر حفظ بيانات تكلفة الخطوة."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "الإعدادات",
+      "hideSettingsButton": "إخفاء الإعدادات",
+      "settingsHeading": "إعدادات الناسخ"
+    }
   }
 }

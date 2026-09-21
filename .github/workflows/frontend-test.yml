@@ -21,6 +21,8 @@ on:
     # file stays authoritative (#13405).
     paths:
       - 'autobot-frontend/**'
+      # #14786: mirror of the filter file's own entry -- see its comment.
+      - 'libs/autobot-ui/**'
       - '.github/workflows/frontend-test.yml'
       - '.github/workflows/frontend-required-context.yml'
       - '.github/filters/frontend-paths.yml'
@@ -221,6 +223,21 @@ jobs:
         working-directory: autobot-frontend
         run: npm run test:coverage
 
+      # #14786: the shared kit (libs/autobot-ui) has its own package.json, own
+      # devDependencies and own vitest.config.ts, separate from autobot-frontend's
+      # -- `npm ci` above never installs or runs them. No package-lock.json is
+      # committed for this package (it is consumed by both apps via a `file:`
+      # dependency, never installed as its own top-level project until now), so
+      # `npm install` here, not `npm ci`. No coverage step yet -- that is a later
+      # AC on #14786, not this batch.
+      - name: Install shared UI kit dependencies
+        working-directory: libs/autobot-ui
+        run: npm install
+
+      - name: Run shared UI kit tests
+        working-directory: libs/autobot-ui
+        run: npm test
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v6
         with:
@@ -244,6 +261,7 @@ jobs:
         if: always()
         run: |
           rm -rf autobot-frontend/node_modules || true
+          rm -rf libs/autobot-ui/node_modules || true
 
   # Job 1b (RELOCATED, not removed): the skip-success shim for the required
   # "Unit & Integration Tests" context now lives in

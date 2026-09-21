@@ -774,8 +774,8 @@ async def test_lock_wait_timeout_raises_instead_of_refreshing_unsynchronized(mon
     monkeypatch.setattr(oauth_flow, "refresh_access_token", _must_not_run)
     monkeypatch.setattr(LeaderLease, "update_leadership", AsyncMock(return_value=False))
     monkeypatch.setattr(ConnectorCredentialStore, "_refresh_lock_available", staticmethod(AsyncMock(return_value=True)))
-    monkeypatch.setattr(mod, "_REFRESH_WAIT_S", 0.3)
-    monkeypatch.setattr(mod, "_REFRESH_POLL_S", 0.05)
+    monkeypatch.setattr(mod, "_refresh_wait_s", lambda: 0.3)
+    monkeypatch.setattr(mod, "_refresh_poll_s", lambda: 0.05)
     # The waiter now also re-attempts acquisition each poll, so keep it losing.
     monkeypatch.setattr(LeaderLease, "update_leadership", AsyncMock(return_value=False))
 
@@ -1010,23 +1010,34 @@ def test_the_wait_floor_follows_the_lock_ttl(monkeypatch):
 
 
 def test_the_module_constant_carries_the_floor_not_just_the_helper(monkeypatch):
-    """`LeaderLease(ttl_ms=...)` reads `_REFRESH_LOCK_TTL_MS`, bound once at
-    import — not `_configured_lock_ttl_ms()`.
+    """`LeaderLease(ttl_ms=...)` reads `_refresh_lock_ttl_ms()`, cached (via
+    `functools.lru_cache`) after its first real call — not re-derived from
+    `_configured_lock_ttl_ms()` on every use.
 
-    Every other test here calls the helper with a post-import `setenv`, which is
-    unaffected by how that constant was actually bound. Un-wire the binding line
-    and they all still pass while production goes back to `ttl_ms=0`. This one
-    reloads the module with the environment set the way a process actually starts
-    and asserts on the constant itself.
+    #17138 changed WHEN that first computation happens (lazily, on first use,
+    not at module import — so a caller that never refreshes an OAuth token
+    never imports `knowledge.connectors.oauth_flow`'s `aiohttp` dependency)
+    but not the "compute once" contract #14238 relied on. Every other test
+    here calls the helper with a post-env `setenv`, which is unaffected by
+    whether the value was cached correctly. Un-wire the `lru_cache` (call
+    `_configured_lock_ttl_ms()` fresh at each call site instead) and this
+    still passes — the real regression it guards is the cached function
+    itself losing the derivation, not the caching per se — so it also pins
+    that the cached VALUE is the floored one, not a raw env passthrough.
+    This one reloads the module (a fresh, empty cache) with the environment
+    set the way a process actually starts, calls the lazy accessor once
+    (forcing its first real computation), and asserts on the cached result.
     """
     import importlib
 
     monkeypatch.setenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "0")
     reloaded = importlib.reload(mod)
     try:
-        assert reloaded._REFRESH_LOCK_TTL_MS >= reloaded._derived_lock_ttl_ms()
+        ttl_ms = reloaded._refresh_lock_ttl_ms()
+        wait_s = reloaded._refresh_wait_s()
+        assert ttl_ms >= reloaded._derived_lock_ttl_ms()
         # The compounding effect: a zero TTL also collapsed this wait floor.
-        assert reloaded._REFRESH_WAIT_S >= (reloaded._REFRESH_LOCK_TTL_MS / 1000.0) + 5.0
+        assert wait_s >= (ttl_ms / 1000.0) + 5.0
     finally:
         monkeypatch.delenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", raising=False)
         importlib.reload(mod)

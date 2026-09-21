@@ -248,9 +248,25 @@ symmetric difference.
 |---|---|---|---|---|
 | file-size | `EXCLUDED_PREFIXES` | yes | yes | **497 vs 497** |
 | citations (#15896) | docstring bodies unreadable by the filter | no | no | 8 vs 26 |
-| commit-trailer | history unexamined; only PR ranges | no | no | 4 vs 7,087 |
-| `inline_generics` | counter matches inside comments (#15771) | no | no | 577 vs 573 |
+| commit-trailer | history unexamined; only PR ranges | **yes** (#15897) | no | 4 vs 7,087 |
+| `inline_generics` | counter matches inside comments (#15771) | no | no | 562 vs 558 (`autobot-frontend`), 87 vs 86 (`autobot-slm-frontend`) |
 | hardcoded-values | `HV_SCAN_EXTENSIONS`; systemd units unreachable (#15903) | partly | no | **not independently re-derived** |
+
+**`inline_generics` re-measured 2026-09-20 (#15897), superseding the 577/573 this
+page originally cited.** The enforced baselines in
+`repo_tests/frontend_api_contract_ratchet_test.py` had already moved to 562 and 87
+by unrelated work between this issue's filing and this re-derivation — a reminder
+that any number on this page decays the moment something else touches the file it
+describes, which is the whole reason a re-derivation states its own date. The true,
+comment-stripped population, independently re-counted (`git ls-files` enumeration,
+a comment-aware character scan — not `Path.rglob` over raw text, which is what the
+live detector uses) is 558 for `autobot-frontend` (4 JSDoc example lines, all
+`* apiClient.get<...>` inside a `/** */` block) and 86 for `autobot-slm-frontend`
+(1 JSDoc line). **The enforced constants stay at 562/87 — the detector's own
+output — until #15771 fixes the comment-matching defect itself; that issue owns
+the detector, not this page.** Lowering the enforced baseline to 558/86 without
+also fixing the detector would fail the ratchet on its own very next run, since
+`_measure()` calls the unfixed detector and would report 562/87 again immediately.
 
 ### Why commit-trailer is the clearest case
 
@@ -262,11 +278,32 @@ work.
 The defect is entirely in what the number **4** communicates. Under a header
 reading *"a RATCHET, not an allowlist… entries may only be REMOVED"*, a reader
 takes four outstanding violations in a nearly-clean tree. It is four gate events.
-The fix is one paragraph saying what the count is a count of.
+The fix is one paragraph saying what the count is a count of — now in
+`.github/commit-trailer-baseline.txt`'s own header, so a reader hits it at the
+number, not only on this page. **Not guarded**: nothing pins that the paragraph
+stays present, unlike file-size's `EXCLUDED_PREFIXES`. A comment can still drift
+silently; only a test closes that gap, and none exists for this one yet.
 
 That case separates **"the boundary is invisible"** from **"the code is wrong"**
 more cleanly than any of the others, and it is why rule 1 is about disclosure
 rather than coverage.
+
+### hardcoded-values stays un-re-derived, stated rather than left ambiguous (#15897)
+
+Deliberately out of scope for this pass, not merely unfinished. The other four
+ratchets each match ONE thing — a line-size ceiling, a docstring citation shape, a
+trailer regex, a call-site pattern — so a second implementation is one enumerator
+and one matcher. `detect-hardcoded-values.sh` is a dozen independent detector
+categories (IPs, ports, model names, URLs, filesystem paths, DSNs, timeouts, role
+strings, and more, each in `scripts/lib/hardcoded-value-rules.sh`) feeding one
+1,404-entry baseline. Re-deriving it to the same standard as the other four means
+an independent second implementation *per category*, not one script — doing that
+at the quality bar the worked example above sets is its own effort, not a spare
+hour inside this PR. `--audit-baseline` (mentioned above) already checks
+**staleness** — an entry claiming more findings than the current scan produces —
+which is the checkable direction. It answers nothing about **blindness**, the
+direction this whole page is about, which is why the summary table still marks
+this row outstanding rather than checked off.
 
 ## The secrets baseline: scan, audit, strip (#16353)
 
@@ -321,6 +358,48 @@ above is specific to an **unlabelled** entry with a zero line number — which i
 exactly why the strip is the *last* step, applied only once nothing unlabelled
 remains, and never a substitute for running audit first.
 
+## A guard whose backlog can reach zero needs synthetic fixtures, not the live one (#15762)
+
+A shrink-only baseline is meant to empty out. When it does, a test suite that
+drove its assertions off the *live* baseline stops proving anything — and if
+that suite also used the live baseline as its **input fixture**, finishing the
+backlog breaks the tests, not just weakens them.
+
+This happened for real: `pipeline-scripts/check_hook_exec_bits.py`'s
+`_KNOWN_DORMANT` baseline (#14181) had two tests built against it —
+`next(iter(guard._KNOWN_DORMANT))` and an assertion that it was non-empty. Both
+held only while a real violation remained to classify. #15750 fixed the last
+one, `_KNOWN_DORMANT` emptied, and both tests failed — **not because the guard
+regressed, but because it succeeded.** A guard whose tests stop working when its
+backlog reaches zero punishes finishing the work, and the cheapest way to make
+CI green again would have been to reintroduce the violation.
+
+**The fix, and the rule going forward:** every test for a shrink-only baseline
+takes a synthetic instance of that baseline — `monkeypatch.setattr(guard,
+"_KNOWN_DORMANT", frozenset({"a/planted/path"}))`, never `guard._KNOWN_DORMANT`
+read live — paired with a synthetic mode/state map, never the repository's own
+index. `pipeline-scripts/check_hook_exec_bits_test.py` now has this shape
+throughout: `test_a_stale_fixed_dormant_entry_is_detected` and
+`test_a_still_dormant_entry_is_not_flagged` prove the detector works using a
+planted entry; the one test that reads the *live* baseline
+(`test_no_known_dormant_entry_has_already_been_fixed`) asserts a property of
+the current tree (nothing is stale right now) and is allowed to pass vacuously,
+because the two synthetic tests beside it are what prove the check itself is
+alive. That split — one live assertion, at least one synthetic proof the
+assertion isn't vacuous — is the pattern to copy, not a special case for this
+one guard.
+
+**Checked against the other two named shrink-only baselines, not assumed
+clean:** the file-size ratchet already has this — `test_an_entry_whose_file_is_
+now_compliant_fails` asserts every `KNOWN_LARGE` entry fails the guard's own
+`verdict()` if the file is at `MAX_LINES`, using the hook's real function
+against a synthetic size, not the live tree. `hardcoded_values_baseline.txt`
+has it too, via a different mechanism: `detect-hardcoded-values.sh
+--audit-baseline` is wired into `.github/workflows/ssot-coverage.yml` and fails
+on a baseline entry that no longer matches anything in a fresh scan. Neither
+needed new work here — this section exists so the next guard author checks
+rather than assumes.
+
 ## Checklist for a new ratchet
 
 - [ ] The population boundary is stated where a reader meets the baseline
@@ -330,3 +409,4 @@ remains, and never a substitute for running audit first.
 - [ ] The second derivation replicated the predicate — anchoring, exemptions, and all
 - [ ] Both the detector and the re-derivation have a known positive they must find before their output is read
 - [ ] The pinned quantity is the one the rule limits, so a change the rule should welcome cannot move it
+- [ ] If the baseline can shrink to zero, its tests use a synthetic instance of it — never the live baseline as the test fixture

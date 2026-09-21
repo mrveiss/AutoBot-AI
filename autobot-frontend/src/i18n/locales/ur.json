@@ -200,6 +200,7 @@
     "advancedControl": "ایڈوانسڈ کنٹرول",
     "adminPricing": "ماڈل قیمت",
     "adminMcpServers": "MCP سرورز",
+    "adminPermissionScopes": "اجازت کے دائرے",
     "llcRoles": "کردار"
   },
   "llcCompanyStatus": {
@@ -5266,6 +5267,7 @@
       "linkExpired": "Link expired",
       "linkExpires": "Link expires",
       "linkNotFound": "Link not found",
+      "loginRequired": "اس لنک کو دیکھنے کے لیے آپ کا لاگ ان ہونا ضروری ہے۔",
       "linkPasswordProtected": "Link password protected",
       "linkReady": "Link ready",
       "optionalPassword": "Optional password",
@@ -5278,6 +5280,11 @@
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
       "shareWithUsers": "Share with users",
+      "requireLogin": "دیکھنے کے لیے لاگ ان ضروری ہے",
+      "requireLoginHint": "صرف لاگ ان صارفین ہی یہ لنک کھول سکتے ہیں",
+      "viewCount": "مناظر",
+      "lastAccessedAt": "آخری رسائی",
+      "lastAccessedNever": "کبھی نہیں",
       "unlock": "Unlock",
       "wrongPassword": "Wrong password"
     },
@@ -9113,6 +9120,12 @@
       "deleteTitle": "MCP سرور حذف کریں",
       "deleteConfirm": "کیا آپ واقعی حذف کرنا چاہتے ہیں",
       "deleteUndone": "یہ واپس نہیں ہو سکتا।"
+    },
+    "permissionScopes": {
+      "title": "اجازت کے دائرے",
+      "subtitle": "API کیز کے لیے تفصیلی اجازت کی لغت اور دائرہ بنڈل",
+      "comingSoonTitle": "بعد کے ورژن میں آ رہا ہے",
+      "comingSoonMessage": "تفصیلی اجازت کے دائرے — ایک اجازت کی لغت، دائرہ بنڈل، اور API کیز کے دائرے کا نفاذ — اس ورژن میں دستیاب نہیں ہیں۔ یہ صفحہ لانچ ہونے کے بعد انہیں متعین اور تفویض کرنے کی سہولت دے گا۔"
     }
   },
   "components": {
@@ -9448,5 +9461,12 @@
     "errorSetRate": "نرخ محفوظ نہیں ہو سکا۔",
     "errorClearRate": "نرخ صاف نہیں ہو سکا۔",
     "errorSetStepCost": "مرحلے کی لاگت کے اعداد محفوظ نہیں ہو سکے۔"
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "ترتیبات",
+      "hideSettingsButton": "ترتیبات چھپائیں",
+      "settingsHeading": "ٹرانسکرائبر کی ترتیبات"
+    }
   }
 }

@@ -12,13 +12,16 @@ deploy:
 system_dependencies:
   - nodejs   # v20 via NodeSource — shared with slm-backend
 
-services:
-  - name: autobot-slm-frontend-build
-    type: oneshot
-    start_order: 3
-    exec_start: "bash -c 'cd /opt/autobot/autobot-slm-frontend && npm ci && npm run build'"
-    user: autobot-slm-frontend
-  # Served by nginx managed by autobot-slm-backend role; no separate service needed
+# #15603: no services entry. This used to declare a `oneshot` build step
+# (`npm ci && npm run build`, unstaged — the exact defect roles/_shared/tasks/
+# build_publish_slm_frontend.yml exists to close) whose `exec_start` nothing
+# in the codebase ever reads: `ManifestService.exec_start` is a modeled field
+# (autobot-slm-backend/models/manifest.py) with zero consumers. The real,
+# live build/publish mechanism is the `ansible_role: slm_manager` named
+# below, via that shared task file — this duplicated it, incorrectly, in a
+# form nothing executed. Served by nginx managed by autobot-slm-backend
+# role; no separate runtime service needed either.
+services: []
 
 ports: []   # Port 443 served by nginx from autobot-slm-backend role
 

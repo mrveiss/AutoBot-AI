@@ -597,6 +597,7 @@
       "linkExpired": "Link expired",
       "linkExpires": "Link expires",
       "linkNotFound": "Link not found",
+      "loginRequired": "You must be signed in to view this link.",
       "linkPasswordProtected": "Link password protected",
       "linkReady": "Link ready",
       "optionalPassword": "Optional password",
@@ -609,6 +610,11 @@
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
       "shareWithUsers": "Share with users",
+      "requireLogin": "Require login to view",
+      "requireLoginHint": "Only signed-in users can open this link",
+      "viewCount": "Views",
+      "lastAccessedAt": "Last accessed",
+      "lastAccessedNever": "Never",
       "unlock": "Unlock",
       "wrongPassword": "Wrong password"
     },
@@ -7867,6 +7873,7 @@
     "advancedControl": "Advanced Control",
     "adminPricing": "Model Pricing",
     "adminMcpServers": "MCP Servers",
+    "adminPermissionScopes": "Permission Scopes",
     "sharedLinks": "Shared Chat Links",
     "companyOs": "Company OS",
     "llcDashboard": "Dashboard",
@@ -9113,6 +9120,12 @@
       "deleteTitle": "Delete MCP Server",
       "deleteConfirm": "Are you sure you want to delete",
       "deleteUndone": "This cannot be undone."
+    },
+    "permissionScopes": {
+      "title": "Permission Scopes",
+      "subtitle": "Fine-grained permission vocabulary and scope bundles for API keys",
+      "comingSoonTitle": "Coming in a later release",
+      "comingSoonMessage": "Fine-grained permission scopes — a permission vocabulary, scope bundles, and API-key scope enforcement — are not available in this release. This page will let you define and assign them once they ship."
     }
   },
   "components": {
@@ -9448,5 +9461,12 @@
     "errorSetRate": "Could not save the rate.",
     "errorClearRate": "Could not clear the rate.",
     "errorSetStepCost": "Could not save this step's cost inputs."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Settings",
+      "hideSettingsButton": "Hide settings",
+      "settingsHeading": "Transcriber settings"
+    }
   }
 }

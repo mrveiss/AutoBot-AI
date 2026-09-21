@@ -170,10 +170,53 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: number has to move, and saying it is zero is what makes that visible.
 #: `growth=400` is the judgement call -- roughly a week of this repo's growth -- and
 #: is the only figure here not taken from a measurement.
+#: Re-pinned 6412 -> 6421 (#17133): measured population 6821 exceeded the
+#: declared allowance (skips=1 + growth=400 = 401) by 8. Population minus the
+#: unchanged growth allowance, per that same growth judgement call above.
+#: Re-pinned 6421 -> 6473 (#17134): measured population 6873 after the security train
+#: merged main and the command-approvals branch. Population minus the unchanged growth
+#: allowance, same formula as the #17133 re-pin.
+#: Re-pinned 6473 -> 6481 (#17072): measured population 6881 after #17072's own file
+#: additions (8 net over main, 7 more than the allowance absorbs). Same formula again.
+#: Re-pinned 6481 -> 6484 (#17138): measured population 6884 after merging main (the
+#: #17043-17056 approval-consolidation vehicle's own files) plus this PR's own 3 new
+#: test files -- this guard's SCANNED glob has no _test.py exclusion, unlike the
+#: prompt-injection-detector-strict-mode floor checked in the same push. Same formula.
+#: Re-pinned 6484 -> 6486 (#17147): measured population 6886 once #17139, #17140,
+#: #17145 and #17146 were consolidated. Each fit on its own -- #17145 measured 6884
+#: and re-pinned to 6484 for it -- but their added files combine, and the allowance
+#: had one file of headroom. Population minus the unchanged growth allowance.
+#: Re-pinned 6486 -> 6488 (#17154): measured 6888 once #17148 and #16937 were
+#: consolidated. #17148 adds no counting files and #16937 adds two; each fit
+#: alone against the 6487 allowance, the pair does not. Sixth re-pin of this
+#: floor in one night and the second caused purely by combining PRs that each
+#: measured correctly -- see #17142.
+#: Re-pinned 6488 -> 6491 (#17153): on `main` the population measured 6891 after
+#: #17153 and #17184 landed -- three new counting files between them
+#: (locale_html_entity_leak_test.py, ansible_shared_cert_become_16020_test.py,
+#: ansible_nginx_cert_before_install_17172_test.py) -- and floor 6488 left a gap
+#: of 403 against the 401 allowance, so every PR touching repo_tests went red.
+#: Same #17142 shape a third time: each of those PRs fit alone against the 6889
+#: allowance, the pair did not, and neither author could see the other's
+#: contribution.
+#:
+#: Landing from this vehicle branch the population is 6885, not 6891 -- the
+#: consolidation nets out six counting files -- so the floor is pinned ABOVE
+#: `population - growth` (6485) on purpose. Re-derived on the tree this actually
+#: merges from, not on `main`, because a floor computed against a different tree
+#: is the mistake this comment already records twice. A higher floor is the
+#: stricter direction: it narrows the gap, leaving 7 files of headroom here
+#: rather than the 1 that 6491 leaves against `main`'s larger population.
+#: Re-pinned 6491 -> 6507 (vehicle v0.9.1): measured 6907 on the tree that
+#: merges #16974, #17125, #17156, #17168, #17182 and #17186 together. Each
+#: fit alone against main's 6891; the six together do not. Seventh re-pin of
+#: this floor and the fourth caused purely by combining PRs that each
+#: measured correctly -- #17142. Consolidating them into one vehicle is what
+#: made the collision surface once here instead of six times in sequence.
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6412,
+    floor=6507,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",

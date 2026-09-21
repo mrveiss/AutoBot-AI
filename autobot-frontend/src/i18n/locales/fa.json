@@ -200,6 +200,7 @@
     "advancedControl": "کنترل پیشرفته",
     "adminPricing": "قیمت‌گذاری مدل‌ها",
     "adminMcpServers": "سرورهای MCP",
+    "adminPermissionScopes": "دامنه‌های مجوز",
     "llcRoles": "نقش‌ها"
   },
   "llcCompanyStatus": {
@@ -5266,6 +5267,7 @@
       "linkExpired": "Link expired",
       "linkExpires": "Link expires",
       "linkNotFound": "Link not found",
+      "loginRequired": "برای مشاهده این پیوند باید وارد شوید.",
       "linkPasswordProtected": "Link password protected",
       "linkReady": "Link ready",
       "optionalPassword": "Optional password",
@@ -5278,6 +5280,11 @@
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
       "shareWithUsers": "Share with users",
+      "requireLogin": "برای مشاهده نیاز به ورود است",
+      "requireLoginHint": "فقط کاربران واردشده می‌توانند این پیوند را باز کنند",
+      "viewCount": "بازدیدها",
+      "lastAccessedAt": "آخرین دسترسی",
+      "lastAccessedNever": "هرگز",
       "unlock": "Unlock",
       "wrongPassword": "Wrong password"
     },
@@ -9113,6 +9120,12 @@
       "deleteTitle": "حذف سرور MCP",
       "deleteConfirm": "آیا مطمئن هستید که می‌خواهید حذف کنید",
       "deleteUndone": "این عمل قابل بازگشت نیست."
+    },
+    "permissionScopes": {
+      "title": "دامنه‌های مجوز",
+      "subtitle": "واژگان دقیق مجوز و بسته‌های دامنه برای کلیدهای API",
+      "comingSoonTitle": "به‌زودی در نسخه‌ای بعدی",
+      "comingSoonMessage": "دامنه‌های مجوز دقیق — واژگان مجوز، بسته‌های دامنه و اجرای دامنه کلید API — در این نسخه در دسترس نیستند. این صفحه پس از عرضه، امکان تعریف و تخصیص آن‌ها را فراهم می‌کند."
     }
   },
   "components": {
@@ -9448,5 +9461,12 @@
     "errorSetRate": "ذخیرهٔ نرخ ممکن نشد.",
     "errorClearRate": "پاک کردن نرخ ممکن نشد.",
     "errorSetStepCost": "ذخیرهٔ داده‌های هزینهٔ گام ممکن نشد."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "تنظیمات",
+      "hideSettingsButton": "پنهان کردن تنظیمات",
+      "settingsHeading": "تنظیمات رونویس‌گر"
+    }
   }
 }

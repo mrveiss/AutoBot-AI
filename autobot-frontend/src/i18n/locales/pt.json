@@ -546,6 +546,7 @@
       "linkExpired": "Link expired",
       "linkExpires": "Link expires",
       "linkNotFound": "Link not found",
+      "loginRequired": "Você precisa estar conectado para ver este link.",
       "linkPasswordProtected": "Link password protected",
       "linkReady": "Link ready",
       "optionalPassword": "Optional password",
@@ -558,6 +559,11 @@
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
       "shareWithUsers": "Share with users",
+      "requireLogin": "Exigir login para visualizar",
+      "requireLoginHint": "Apenas usuários autenticados podem abrir este link",
+      "viewCount": "Visualizações",
+      "lastAccessedAt": "Último acesso",
+      "lastAccessedNever": "Nunca",
       "unlock": "Unlock",
       "wrongPassword": "Wrong password"
     },
@@ -7860,6 +7866,7 @@
     "advancedControl": "Controle avançado",
     "adminPricing": "Preços de modelos",
     "adminMcpServers": "Servidores MCP",
+    "adminPermissionScopes": "Escopos de permissão",
     "llcRoles": "Funções"
   },
   "llcCompanyStatus": {
@@ -9113,6 +9120,12 @@
       "deleteTitle": "Excluir servidor MCP",
       "deleteConfirm": "Tem certeza de que deseja excluir",
       "deleteUndone": "Esta ação não pode ser desfeita."
+    },
+    "permissionScopes": {
+      "title": "Escopos de permissão",
+      "subtitle": "Vocabulário detalhado de permissões e pacotes de escopo para chaves de API",
+      "comingSoonTitle": "Chegará em uma versão posterior",
+      "comingSoonMessage": "Escopos de permissão detalhados — um vocabulário de permissões, pacotes de escopo e a aplicação de escopos em chaves de API — não estão disponíveis nesta versão. Esta página permitirá defini-los e atribuí-los assim que forem lançados."
     }
   },
   "components": {
@@ -9448,5 +9461,12 @@
     "errorSetRate": "Não foi possível guardar o valor.",
     "errorClearRate": "Não foi possível limpar o valor.",
     "errorSetStepCost": "Não foi possível guardar os dados de custo do passo."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Configurações",
+      "hideSettingsButton": "Ocultar configurações",
+      "settingsHeading": "Configurações do transcritor"
+    }
   }
 }

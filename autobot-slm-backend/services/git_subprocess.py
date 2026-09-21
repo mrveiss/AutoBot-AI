@@ -13,6 +13,7 @@ the code_source checkout, and this is the one place that does it.
 from __future__ import annotations
 
 import asyncio
+import enum
 import logging
 from pathlib import Path
 
@@ -33,6 +34,11 @@ logger = logging.getLogger(__name__)
 # interactive credential prompt on a misconfigured remote) must not stall a
 # sync or a drift check indefinitely (#16310).
 GIT_TIMEOUT_S = env_float("AUTOBOT_SYNC_GIT_TIMEOUT_S", 30.0)
+
+# `git fetch --unshallow` downloads the ENTIRE history the shallow clone
+# skipped -- on a monorepo-sized checkout that is minutes, not seconds, so it
+# gets its own, longer bound rather than sharing GIT_TIMEOUT_S (#16310).
+UNSHALLOW_TIMEOUT_S = env_float("AUTOBOT_SYNC_UNSHALLOW_TIMEOUT_S", 600.0)
 
 
 async def run_git(repo_root: str, *args: str, timeout: float = GIT_TIMEOUT_S) -> tuple[str, int]:
@@ -80,6 +86,90 @@ def component_pathspec(repo_root: str, source_dir: str) -> str:
     ``drift_checker._NONSTANDARD_COMPONENT_PATHS``) still diff correctly.
     """
     return Path(source_dir).resolve().relative_to(Path(repo_root).resolve()).as_posix()
+
+
+class ShallowCheck(enum.Enum):
+    """Tri-state result of asking whether a repo is a shallow clone (#17118).
+
+    A plain ``bool`` collapses "verified not shallow" and "could not tell"
+    into the same ``False`` -- a broken *repo_root* (not a git repository, a
+    corrupted ``.git``, git unavailable, a wedged process) then reads
+    identically to a genuine full-depth clone. ``UNKNOWN`` makes that a
+    third, distinct value every caller has to name explicitly instead of
+    silently falling through an ``if``.
+    """
+
+    SHALLOW = "shallow"
+    FULL = "full"
+    UNKNOWN = "unknown"
+
+
+async def is_shallow_repository(repo_root: str) -> ShallowCheck:
+    """Whether *repo_root* is a shallow git clone -- SHALLOW, FULL, or
+    UNKNOWN when that could not be determined (#16310, tri-state #17118).
+
+    UNKNOWN covers every way ``git rev-parse --is-shallow-repository``
+    fails to give a clean answer: ``run_git``'s own collapse of "could not
+    run at all" (timeout, spawn failure) into ``rc=1``, and git running but
+    the command itself failing (*repo_root* is not a git repository, a
+    corrupted ``.git``, or any other rev-parse error) -- both are "could not
+    tell", not "not shallow". Only a clean rev-parse with a real
+    ``true``/``false`` line counts as a determination.
+
+    Shared by :func:`ensure_full_history` (fixes it) and
+    ``services/sync_deletions.py``'s bootstrap guard (refuses to plan against
+    it) -- one answer to "is this clone shallow", asked with the same `git
+    rev-parse` both callers would otherwise duplicate.
+    """
+    output, rc = await run_git(repo_root, "rev-parse", "--is-shallow-repository")
+    if rc != 0:
+        return ShallowCheck.UNKNOWN
+    stripped = output.strip()
+    if stripped == "true":
+        return ShallowCheck.SHALLOW
+    if stripped == "false":
+        return ShallowCheck.FULL
+    return ShallowCheck.UNKNOWN
+
+
+async def ensure_full_history(repo_root: str) -> tuple[bool, str]:
+    """Unshallow *repo_root* in place if it is a shallow clone (#16310).
+
+    A shallow ``code_source`` checkout makes
+    ``services.sync_deletions.compute_bootstrap_plan``'s ``git log
+    --diff-filter=AR`` see only the commits the shallow fetch kept, so it
+    silently finds almost nothing to delete. The clone came from initial
+    provisioning, before anything here passed ``--depth`` -- so the fix is
+    not "never create a shallow clone" (nothing does), it is "never leave
+    one shallow": every fetch of the source checkout ensures full depth
+    first.
+
+    Returns ``(ok, message)``. ``ok`` is False on an unshallow that failed,
+    on one that ran and reported success but left the repository shallow
+    anyway, or when shallowness could not be determined at all (#17118) --
+    the caller must fail loudly on every one of those, never proceed as if
+    full history is now available (that is exactly how the original bug
+    stayed invisible: an empty, error-free bootstrap plan that still wrote
+    the marker).
+    """
+    status = await is_shallow_repository(repo_root)
+    if status is ShallowCheck.UNKNOWN:
+        return False, f"could not determine whether {repo_root} is a shallow clone"
+    if status is ShallowCheck.FULL:
+        return True, f"{repo_root} already has full history"
+
+    logger.info("git_subprocess: %s is a shallow clone -- unshallowing (#16310)", repo_root)
+    _output, rc = await run_git(repo_root, "fetch", "--unshallow", timeout=UNSHALLOW_TIMEOUT_S)
+    if rc != 0:
+        return False, f"git fetch --unshallow failed in {repo_root}"
+
+    status = await is_shallow_repository(repo_root)
+    if status is ShallowCheck.SHALLOW:
+        return False, f"{repo_root} is still a shallow clone after `git fetch --unshallow`"
+    if status is ShallowCheck.UNKNOWN:
+        return False, f"could not confirm {repo_root} is no longer shallow after `git fetch --unshallow`"
+
+    return True, f"{repo_root} unshallowed"
 
 
 async def last_commit_for_path(repo_root: str, pathspec: str) -> str | None:

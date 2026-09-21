@@ -35,3 +35,17 @@ def require_interactive_human(user: Optional[Mapping[str, Any]], action: str) ->
         user.get("username"),
     )
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=HUMAN_DECISION_REQUIRED)
+
+
+def classify_author_type(user: Optional[Mapping[str, Any]]) -> str:
+    """ "human" for an interactive login, "system" for the internal service
+    key, "agent" for everything else -- a run/device JWT (#17056).
+
+    Never derived from a literal default or a request body: an approval
+    comment's ``author_type`` must say who actually made it.
+    """
+    if is_interactive_human(user):
+        return "human"
+    if user and user.get("service"):
+        return "system"
+    return "agent"

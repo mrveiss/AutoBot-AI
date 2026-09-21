@@ -111,9 +111,19 @@ class ONNXModelManager(OpenVINODeviceSelectionMixin, ModelConversionMixin):
 
             self._initialize_onnx_runtime()
 
-            # Load tokenizer
+            # Load tokenizer -- same trust_remote_code decision as the download
+            # that populated model_path (#17087): only nomic-embed-text's config
+            # actually declares an auto_map to custom code; the others are
+            # vanilla BertModel with nothing to trust.
             logger.info(f"Loading tokenizer for {model_name}...")
-            tokenizer = AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True)
+            trust_remote_code = SUPPORTED_MODELS.get(model_name, {}).get("trust_remote_code", False)
+            # nosec B615 -- str(model_path) is the LOCAL directory ensure_model_downloaded()
+            # already populated via _download_and_convert(), which downloaded and verified
+            # this exact model against its pinned revision (#17087). No Hub resolution happens
+            # here, so a revision= kwarg would be a no-op, not an additional guarantee.
+            tokenizer = AutoTokenizer.from_pretrained(  # nosec B615
+                str(model_path), trust_remote_code=trust_remote_code
+            )
             self._tokenizers[model_name] = tokenizer
 
             # Issue #165: Determine model type for device selection
