@@ -403,6 +403,7 @@ class SharedLinkCreateRequest(BaseModel):
 
     password: str | None = Field(None, min_length=1, max_length=128, description="Optional access password")
     expires_in_seconds: int | None = Field(None, ge=60, description="Link TTL in seconds; omit for no expiry")
+    require_login: bool = Field(False, description="Restrict access to authenticated users only (#16861)")
 
 
 class SharedLinkData(BaseModel):
@@ -413,6 +414,9 @@ class SharedLinkData(BaseModel):
     has_password: bool
     expires_at: datetime | None
     created_at: datetime
+    require_login: bool
+    view_count: int
+    last_accessed_at: datetime | None
 
 
 class SharedLinkAdminItem(BaseModel):
@@ -425,6 +429,9 @@ class SharedLinkAdminItem(BaseModel):
     has_password: bool
     expires_at: datetime | None
     created_at: datetime
+    require_login: bool
+    view_count: int
+    last_accessed_at: datetime | None
 
 
 class SharedLinkAccessRequest(BaseModel):
