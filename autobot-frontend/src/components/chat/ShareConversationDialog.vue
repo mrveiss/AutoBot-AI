@@ -138,6 +138,20 @@
               <i class="fas fa-clock"></i>
               {{ $t('chat.share.linkExpires', { date: formatExpiry(createdLink.expires_at) }) }}
             </div>
+            <div v-if="createdLink.require_login" class="flex items-center gap-1.5 text-xs text-autobot-text-secondary">
+              <i class="fas fa-user-shield"></i>
+              {{ $t('chat.share.requireLogin') }}
+            </div>
+            <div class="flex items-center gap-3 text-xs text-autobot-text-secondary">
+              <span class="flex items-center gap-1">
+                <i class="fas fa-eye"></i>
+                {{ $t('chat.share.viewCount') }}: {{ createdLink.view_count }}
+              </span>
+              <span class="flex items-center gap-1">
+                <i class="fas fa-history"></i>
+                {{ $t('chat.share.lastAccessedAt') }}: {{ createdLink.last_accessed_at ? formatExpiry(createdLink.last_accessed_at) : $t('chat.share.lastAccessedNever') }}
+              </span>
+            </div>
             <button
               class="text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
               :disabled="revoking"
@@ -177,6 +191,17 @@
                 <option :value="2592000">{{ $t('chat.share.expiry30d') }}</option>
               </select>
             </div>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                v-model="requireLogin"
+                type="checkbox"
+                class="rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
+              />
+              <span class="text-sm text-autobot-text-primary">{{ $t('chat.share.requireLogin') }}</span>
+            </label>
+            <p v-if="requireLogin" class="text-xs text-autobot-text-secondary">
+              {{ $t('chat.share.requireLoginHint') }}
+            </p>
           </div>
         </template>
       </div>
@@ -246,6 +271,9 @@ interface SharedLinkData {
   has_password: boolean
   expires_at: string | null
   created_at: string
+  require_login: boolean
+  view_count: number
+  last_accessed_at: string | null
 }
 
 const props = defineProps<{
@@ -274,6 +302,7 @@ const sharing = ref(false)
 // ---- link share ----
 const linkPassword = ref('')
 const expirySeconds = ref<number | null>(null)
+const requireLogin = ref(false)
 const createdLink = ref<SharedLinkData | null>(null)
 const creatingLink = ref(false)
 const revoking = ref(false)
@@ -340,7 +369,7 @@ const handleShare = async () => {
 const handleCreateLink = async () => {
   creatingLink.value = true
   try {
-    const body: Record<string, unknown> = {}
+    const body: Record<string, unknown> = { require_login: requireLogin.value }
     if (linkPassword.value.trim()) body.password = linkPassword.value.trim()
     if (expirySeconds.value) body.expires_in_seconds = expirySeconds.value
 
@@ -388,6 +417,7 @@ const resetLinkForm = () => {
   createdLink.value = null
   linkPassword.value = ''
   expirySeconds.value = null
+  requireLogin.value = false
 }
 
 const formatExpiry = (iso: string) => new Date(iso).toLocaleString()
@@ -404,6 +434,7 @@ watch(() => props.visible, (val) => {
   createdLink.value = null
   linkPassword.value = ''
   expirySeconds.value = null
+  requireLogin.value = false
   copied.value = false
 })
 

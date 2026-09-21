@@ -72,6 +72,7 @@ class CommentWakeService:
                 AgentOrgNode.adapter_config,
                 AgentOrgNode.context_mode,
                 AgentOrgNode.heartbeat_enabled,
+                AgentOrgNode.org_role,
             ).where(AgentOrgNode.id == assignee_node_pk)
         )
         agent_row = agent_result.mappings().first()
@@ -152,6 +153,8 @@ class CommentWakeService:
             "adapter_config": agent_row.get("adapter_config") or {},
             "context_mode": agent_row.get("context_mode"),
             "company_id": str(company_id),
+            # #16950: the dispatch bounds the run by this role, and refuses it without one.
+            "org_role": agent_row.get("org_role"),
         }
 
         return run.id, agent_config, context

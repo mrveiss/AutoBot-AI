@@ -60,6 +60,7 @@ _SUBSYSTEM_FLAG_MAP: dict[str, str] = {
     "osint": "osint_enabled",
     "kb_enterprise_connectors": "kb_enterprise_connectors",
     "kb_mock_connector": "kb_mock_connector",
+    "org_role_bound": "org_role_bound_enabled",
 }
 
 F = TypeVar("F", bound=Callable)
