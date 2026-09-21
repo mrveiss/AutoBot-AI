@@ -211,7 +211,7 @@
   ansible.builtin.pip:
     name:
       - fastapi>=0.141.1
-      - uvicorn[standard]>=0.52.4
+      - uvicorn[standard]>=0.53.0
       - python-multipart>=0.0.32
       - aiofiles>=25.1.0
     virtualenv: "{{ tts_install_dir }}/venv"
