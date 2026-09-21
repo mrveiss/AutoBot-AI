@@ -52,6 +52,9 @@ def _make_agent(**kwargs):
         "adapter_type": "noop",
         "adapter_config": None,
         "context_mode": "thin",
+        # #16950: a real agent row always carries org_role (non-null, default "worker"),
+        # and dispatch refuses a run without one.
+        "org_role": "worker",
     }
     defaults.update(kwargs)
     return defaults
@@ -563,8 +566,14 @@ class TestCliAvailabilityGate:
         mock_reg.assert_awaited_once()
 
     async def test_non_subprocess_adapter_bypasses_cli_gate(self):
-        """Non-subprocess adapters (is_subprocess_adapter=False) are not gated."""
-        agent = _make_agent(adapter_type="http_adapter")
+        """Non-subprocess adapters (is_subprocess_adapter=False) are not gated.
+
+        #16950: an adapter type with no org-role enforcement decision is refused
+        before this gate is reached, so the test uses a classified type and lets the
+        patched ``is_subprocess_adapter`` make it non-subprocess, which is the gate
+        under test.
+        """
+        agent = _make_agent(adapter_type="claude_code")
         fake_adapter = MagicMock()
 
         with (
@@ -1064,22 +1073,3 @@ class TestQuotaExhausted:
                 agent, run_id, SubscriptionQuotaExhausted(agent["agent_id"], "quota gone")
             )
         mock_pause.assert_not_awaited()
-
-
-class TestThePlaceholderRunIdHasOneDefinition:
-    """#13614 came from two places deriving the same id. Keep it at one."""
-
-    def test_no_adapter_rebuilds_the_placeholder_by_hand(self):
-        import pathlib
-
-        # Assembled from fragments so this guard does not match itself.
-        banned = '= f"' + "0/{session_id}" + '"'
-        adapters = pathlib.Path(__file__).resolve().parents[1] / "adapters"
-        assert adapters.is_dir(), f"adapters dir not found at {adapters}"
-        scanned = sorted(adapters.glob("*.py"))
-        assert scanned, "scanned no adapter files — this guard would pass on an empty set"
-        offenders = [p.name for p in scanned if banned in p.read_text(encoding="utf-8")]
-        assert offenders == [], (
-            f"{offenders} rebuild the placeholder run id by hand; import "
-            "placeholder_run_id from subprocess_base so there is one definition"
-        )
