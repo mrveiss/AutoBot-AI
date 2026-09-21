@@ -6467,6 +6467,98 @@
         "title": "NodeActionsResponse",
         "type": "object"
       },
+      "NodeCapabilityProfileResponse": {
+        "description": "One node's hardware capability profile. Unset fields mean \"not yet reported\".",
+        "properties": {
+          "free_disk_model_dir_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Disk Model Dir Mb"
+          },
+          "gpu_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Model"
+          },
+          "gpu_present": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Present"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "npu_present": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Npu Present"
+          },
+          "total_ram_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Ram Mb"
+          },
+          "total_vram_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Vram Mb"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "node_id"
+        ],
+        "title": "NodeCapabilityProfileResponse",
+        "type": "object"
+      },
       "NodeCodeVersionResponse": {
         "description": "Per-role version entry for a node.",
         "properties": {
@@ -24293,6 +24385,71 @@
         "summary": "Acknowledge Remediation",
         "tags": [
           "nodes"
+        ]
+      }
+    },
+    "/api/nodes/{node_id}/capability-profile": {
+      "get": {
+        "description": "A node's hardware capability profile -- all-unknown fields if it has never reported one.",
+        "operationId": "get_node_capability_profile_api_nodes__node_id__capability_profile_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "node_id",
+            "required": true,
+            "schema": {
+              "title": "Node Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeCapabilityProfileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Node Capability Profile",
+        "tags": [
+          "nodes",
+          "capability-profile"
         ]
       }
     },

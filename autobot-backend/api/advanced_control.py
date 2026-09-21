@@ -11,6 +11,7 @@ import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
+from api.schemas_emergency_stop import EmergencyStopReportResponse
 from api.schemas_system import (
     StreamingSessionRequest,
     StreamingSessionResponse,
@@ -21,7 +22,6 @@ from api.schemas_system import (
 )
 from api.schemas_workflows import (
     AdvancedControlActiveTakeoversListResponse,
-    AdvancedControlEmergencyStopResponse,
     AdvancedControlHealthResponse,
     AdvancedControlInfoResponse,
     AdvancedControlPendingTakeoversListResponse,
@@ -44,6 +44,7 @@ from constants.threshold_constants import TimingConstants
 from desktop_streaming_manager import get_desktop_streaming
 from memory import TaskPriority  # canonical enum (#10626)
 from metrics.system_monitor import evaluate_resource_thresholds
+from services.emergency_stop import execute_emergency_stop
 from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
@@ -456,7 +457,7 @@ async def get_system_status(
     return response
 
 
-@router.post("/system/emergency-stop", response_model=AdvancedControlEmergencyStopResponse)
+@router.post("/system/emergency-stop", response_model=EmergencyStopReportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="emergency_system_stop",
@@ -469,22 +470,10 @@ async def emergency_system_stop(
     Emergency stop for all autonomous operations
 
     Issue #744: Requires admin authentication.
+    Issue #16843: reports which tasks were actually found and paused,
+    and whether that pause is durable, instead of a fixed success string.
     """
-    # Request emergency takeover
-    request_id = await get_takeover_manager().request_takeover(
-        trigger=TakeoverTrigger.CRITICAL_ERROR,
-        reason="Emergency stop activated",
-        requesting_agent="emergency_system",
-        priority=TaskPriority.CRITICAL,
-        auto_approve=True,
-    )
-
-    logger.warning("Emergency stop activated: %s", request_id)
-    return {
-        "success": True,
-        "message": "Emergency stop activated",
-        "takeover_request_id": request_id,
-    }
+    return await execute_emergency_stop()
 
 
 @router.get("/system/health", response_model=AdvancedControlHealthResponse)
