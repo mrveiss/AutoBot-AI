@@ -37,6 +37,7 @@ def _fact(fact_id: str, **extra):
 
 
 def _searcher(semantic=None, keyword=None) -> HybridSearcher:
+    """Build a searcher whose retrieval views return the supplied fixtures."""
     return HybridSearcher(
         semantic_search_func=AsyncMock(return_value=semantic if semantic is not None else []),
         keyword_search_func=AsyncMock(return_value=keyword if keyword is not None else []),
@@ -55,6 +56,7 @@ KW = HybridSearcher.VIEW_KEYWORD
 
 class TestProvenanceCapture:
     def test_records_rank_and_contribution_per_view(self):
+        """Each view should retain its rank and reciprocal-rank contribution."""
         searcher = _searcher()
         scores, result_map, contributions = {}, {}, {}
 
@@ -77,6 +79,7 @@ class TestProvenanceCapture:
         assert set(contributions["agreed"]) == {"sem", "kw", "graph"}
 
     def test_view_count_surfaces_on_results(self):
+        """Fused results should expose the number and identities of contributing views."""
         searcher = _searcher()
         scores, result_map, contributions = {}, {}, {}
         searcher.process_rrf_results([_fact("A")], scores, result_map, K, SEM, contributions)
@@ -107,6 +110,7 @@ class TestProvenanceCapture:
 
 class TestResultMerging:
     def test_later_view_fields_are_merged(self):
+        """Fields unique to a later view should survive result fusion."""
         searcher = _searcher()
         scores, result_map, contributions = {}, {}, {}
 
@@ -118,6 +122,7 @@ class TestResultMerging:
         assert result_map["A"]["keyword_score"] == 0.9, "later view's field was discarded"
 
     def test_first_view_wins_on_conflict(self):
+        """A later view should not overwrite fields captured from the first view."""
         searcher = _searcher()
         scores, result_map, contributions = {}, {}, {}
 
@@ -135,6 +140,7 @@ class TestResultMerging:
 class TestViewStatus:
     @pytest.mark.asyncio
     async def test_empty_view_distinguishable_from_failed_view(self):
+        """Status should distinguish a successful empty view from a failed view."""
         empty = _searcher(semantic=[_fact("A")], keyword=[])
         _, empty_status = await empty.search_with_provenance("q", 5)
 
@@ -166,6 +172,7 @@ class TestViewStatus:
 
     @pytest.mark.asyncio
     async def test_all_views_failing_propagates(self):
+        """Total retrieval failure should remain visible to the caller."""
         searcher = HybridSearcher(
             semantic_search_func=AsyncMock(side_effect=RuntimeError("sem down")),
             keyword_search_func=AsyncMock(side_effect=RuntimeError("kw down")),
@@ -176,6 +183,7 @@ class TestViewStatus:
 
     @pytest.mark.asyncio
     async def test_fusion_failure_falls_back_and_says_so(self):
+        """Fusion errors should trigger semantic fallback and an explicit status."""
         searcher = _searcher(semantic=[_fact("A")], keyword=[_fact("B")])
 
         with patch.object(searcher, "build_rrf_results", side_effect=RuntimeError("fuse fail")):
