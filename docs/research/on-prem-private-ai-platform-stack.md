@@ -187,7 +187,7 @@ already grades **8 of 17 control layers "Drifted"**. It is a known, unclosed gap
 
 | Capability | Evidence in this platform | Reference work |
 |---|---|---|
-| **Hybrid retrieval** | BM25 + dense in parallel, fused by Reciprocal Rank Fusion k=60 — `knowledge/search_components/hybrid_search.py:79-138`, `bm25.py:20-90`; `mode="hybrid"` is the default (`search.py:619`) *(swept)* | Claims "hybrid search"; no implementation visible |
+| **Hybrid retrieval** | BM25 + dense in parallel, fused by Reciprocal Rank Fusion k=60 — `knowledge/search_components/hybrid_search.py:79-138`, `bm25.py:20-90`; `mode="hybrid"` is the default (`knowledge/search.py:622` (`_run_search` at :614)) *(swept)* | Claims "hybrid search"; no implementation visible |
 | **Cross-encoder reranking** | Real `sentence_transformers.CrossEncoder` (`ms-marco-MiniLM-L-6-v2`) — `search_components/reranking.py:324-497`, default-on via `rag_config.py:46` *(swept)* | Not mentioned |
 | **Agentic / iterative retrieval** | LLM query rewrite + up to 3 refinement rounds gated by a sufficiency verdict — `search_components/agentic_search.py:178,216-245`, default-on *(swept)* | Claims "agentic reasoning, multi-step retrieval"; no detail |
 | **Citations, end to end** | `Citation` schema `api/schemas_chat.py:165-178` → built at `api/chat.py:658-679` → rendered in `CitationsDisplay.vue` *(swept)* | Claims "citation tracking" |
@@ -285,7 +285,7 @@ own engineers would reasonably believe is active.
 | A1 | Admin-configured retention never executes; `anonymize_instead_of_delete` stored and ignored; deletion is always hard-delete | `tasks/chat_retention.py:31` reads a flat env value; `RetentionPolicy` rows are never queried | An operator sets a data-handling policy and nothing happens — silent, and the failure mode is unrecoverable data loss or unlawful retention |
 | A2 | Audit docstrings assert "tamper-resistant", "append-only", "immutable" over plain appends | `security_layer.py:669-679`; `services/audit_logger.py` docstring; `models/workflow_audit.py:22-27`; 0 hash-chaining primitives repo-wide | The claim is the defect. An auditor tests log integrity directly, and a false assertion converts a gap into a credibility failure |
 | A3 | Sensitive-tool approval gate is opt-in per work item and produces no durable record on the common path; credential *read/export* has no gate at all | `chat_workflow/tool_dispatch_guards.py:290-334` returns early without a declared category | The gate exists, is documented, and does not fire on an ordinary chat turn |
-| A4 | Per-key model allow-list and budget are bypassed entirely by the internal chat surface; rate limiting is per-IP, so a fixed key evades it by rotating client IP | `api/chat.py` imports no limiter; allow-list check guarded by `if api_key_record is not None` at `api/openai_compat.py:313` | Two enforced-looking controls with a documented bypass each |
+| A4 | Per-key model allow-list and budget are bypassed entirely by the internal chat surface; rate limiting is per-IP, so a fixed key evades it by rotating client IP | `api/chat.py` imports no limiter; allow-list check guarded by `if api_key_record is not None:` (openai_compat.py:331) at `api/openai_compat.py:331` | Two enforced-looking controls with a documented bypass each |
 | A5 | `ComplianceManager` names SOC2/GDPR/ISO27001/HIPAA/PCI_DSS and is referenced only by its own package re-export | `security/enterprise/compliance_manager.py:45-52`; 2 hits, both in `__init__.py` | Framework names in code read as capability in any due-diligence review |
 | A6 | End-user SSO/MFA: a 916-line SSO framework and an MFA model stub, neither reachable | `security/enterprise/sso_integration.py`; `user_management/models/mfa.py` | Unfinished work, not dead code — **wire it in, never delete** (project rule) |
 
@@ -293,7 +293,7 @@ own engineers would reasonably believe is active.
 
 | # | Gap | Evidence |
 |---|---|---|
-| B1 | No single enforcement point — 3 inbound surfaces, 3 credential systems, 4th mechanism for internal tool calls; `org_id` never passed from the gateway, so the registry's per-org branch is unreachable | `api/openai_compat.py:343`, `api/anthropic_compat.py:290` both omit `org_id` |
+| B1 | No single enforcement point — 3 inbound surfaces, 3 credential systems, 4th mechanism for internal tool calls; `org_id` never passed from the gateway, so the registry's per-org branch is unreachable | `api/openai_compat.py:361`, `api/anthropic_compat.py:308` both omit `org_id` |
 | B2 | No correlation id spanning input → tools → model → approvals → output; breaks at `Approval` (no `session_id` column) and at each LLM call's own `uuid4` | `models/approval.py:58-125`; `llm_shared/models.py:172` |
 | B3 | Six audit implementations; the consolidation toward `services/audit/audit.py` is documented in its own module docstring and incomplete | `services/audit/audit.py:5-17` |
 | B4 | Egress is an address deny-list, not a destination allow-list; `guard_egress=` at 28 sites against ~103 shared-client callers; ~51 files call `requests`/`httpx`/`aiohttp` directly | `autobot_shared/http_client_manager.py:209-272` |
@@ -496,3 +496,9 @@ scope.
 4. **P3 needs the doc-to-callsite tie** — the cheapest version is #17219's correction pass; the
    durable version is a check that a doc claiming a control names the enforcing symbol, and that the
    symbol is reachable.
+
+### Citation audit 2026-09-21
+
+Re-verified the file:line citations published in the filed issues against the working tree. Confirmed exactly: `tool_dispatch_guards.py:310`, `models/approval.py` (0 hits for `session_id`), `llm_shared/models.py:172`, `ssot_config.py:2138`, `models/process_run.py:104`, `sso_integration.py` 916 lines, `mfa.py` 19 lines. **Wrong by ~18 lines and corrected in #17221 and #17223:** the allow-list guard is at `openai_compat.py:331` (not :313) and provider selection at :361 (not :343); anthropic equivalents :275/:308. Every finding held on re-verification — only the coordinates were off.
+
+**Second citation audit:** running the new `verify-citations` gate over this doc flagged an ambiguous bare `search.py` reference at line 619. Resolving it showed the coordinate was also wrong — line 619 is `category: str | None = None`; the `mode: str = "hybrid"` default is at `knowledge/search.py:622`, `_run_search` at :614, and `enable_reranking: bool = False` at :230 (not :229). The finding held; the coordinates did not. The gate caught what the spot-check missed.
