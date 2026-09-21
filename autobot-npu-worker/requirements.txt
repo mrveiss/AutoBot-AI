@@ -31,7 +31,7 @@ openvino  # version from constraints/shared.txt (#15408)
 # already states for the same worker; fastapi's is a security floor (it
 # requires starlette >=0.52.1, the O(n^2) Range-header DoS).
 fastapi>=0.141.1
-uvicorn[standard]>=0.52.4
+uvicorn[standard]>=0.53.0
 
 # Model tooling (#15671), moved here from the same inline `name:` list.
 # pillow carries the floor `autobot-backend/requirements.txt` states for it
