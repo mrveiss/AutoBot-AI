@@ -17,6 +17,28 @@
 #   cert_label     - optional log label (slm/backend/frontend); defaults to 'node'
 #
 # Discoverable: grep -rn "generate_self_signed_cert.yml" lists all consumers.
+#
+# BOTH TASKS SET `become: true` THEMSELVES (#16020). They write to root-owned
+# paths -- /etc/autobot/certs is 0755 root:root -- so privilege is a property of
+# this file, not of whoever includes it.
+#
+# It used to be ambient and that broke the fleet update. Every original consumer
+# reached this file from a play with play-level `become: true`
+# (every play in playbooks/rotate-certs.yml sets it) so the omission was
+# invisible. The #16020 consolidation then routed a second path here --
+# _shared/tasks/ensure_node_tls_cert.yml, included from playbooks/update-all-nodes.yml
+# Plays 1, 2 and 2b. Those plays declare privilege per task, and on the chain
+# that reaches this file nothing declares it at all: the play does not, the
+# `include_tasks` line does not, and until this change neither did the tasks
+# here. `ensure_node_tls_cert.yml`'s own sibling tasks each carry `become: true`
+# individually -- which is why the cert directory was created as root while
+# openssl, one include deeper, ran unprivileged and could not write into it:
+#
+#   fatal: FAILED! => {"changed": true, "cmd": ["openssl", "req", "-x509", ...
+#     "-keyout", "/etc/autobot/certs/server-key.pem", ...]}
+#
+# That path is the one a GUI self-update takes, so the failure only ever
+# appeared on code-sync, never in provisioning.
 
 - name: "Certs [{{ cert_label | default('node') }}] | Generate new self-signed cert"
   ansible.builtin.command:
@@ -28,6 +50,7 @@
       -out {{ _cert_file }}
       -subj '{{ _cert_subject }}'
   changed_when: true
+  become: true
 
 - name: "Certs [{{ cert_label | default('node') }}] | Set key permissions"
   ansible.builtin.file:
@@ -35,3 +58,4 @@
     mode: "0600"
     owner: root
     group: root
+  become: true
