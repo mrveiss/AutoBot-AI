@@ -186,17 +186,31 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: #17145 and #17146 were consolidated. Each fit on its own -- #17145 measured 6884
 #: and re-pinned to 6484 for it -- but their added files combine, and the allowance
 #: had one file of headroom. Population minus the unchanged growth allowance.
-#: Re-pinned 6486 -> 6488 independently on two branches: #16843 (this PR's own
-#: 4 new files) and #17154/#17142's consolidation of #17148 + #16937. Both
-#: landed on the same number by coincidence, not by measuring the same tree.
-#: Re-pinned again on #16843's merge of current main (base 358606d25):
-#: measured population 6890 directly on the merged tree, not taken from
-#: either side of the conflict. Population minus the unchanged growth
-#: allowance.
+#: Re-pinned 6486 -> 6488 (#17154): measured 6888 once #17148 and #16937 were
+#: consolidated. #17148 adds no counting files and #16937 adds two; each fit
+#: alone against the 6487 allowance, the pair does not. Sixth re-pin of this
+#: floor in one night and the second caused purely by combining PRs that each
+#: measured correctly -- see #17142.
+#: Re-pinned 6488 -> 6491 (#17153): on `main` the population measured 6891 after
+#: #17153 and #17184 landed -- three new counting files between them
+#: (locale_html_entity_leak_test.py, ansible_shared_cert_become_16020_test.py,
+#: ansible_nginx_cert_before_install_17172_test.py) -- and floor 6488 left a gap
+#: of 403 against the 401 allowance, so every PR touching repo_tests went red.
+#: Same #17142 shape a third time: each of those PRs fit alone against the 6889
+#: allowance, the pair did not, and neither author could see the other's
+#: contribution.
+#:
+#: Landing from this vehicle branch the population is 6885, not 6891 -- the
+#: consolidation nets out six counting files -- so the floor is pinned ABOVE
+#: `population - growth` (6485) on purpose. Re-derived on the tree this actually
+#: merges from, not on `main`, because a floor computed against a different tree
+#: is the mistake this comment already records twice. A higher floor is the
+#: stricter direction: it narrows the gap, leaving 7 files of headroom here
+#: rather than the 1 that 6491 leaves against `main`'s larger population.
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6490,
+    floor=6491,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",

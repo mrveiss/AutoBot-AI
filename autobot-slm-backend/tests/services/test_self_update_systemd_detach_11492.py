@@ -79,7 +79,7 @@ _DEFAULT_SHARED_DIR = _pe.SELF_UPDATE_SHARED_DIR
 
 def _executor(ansible_dir: Path) -> "_pe.PlaybookExecutor":
     ex = _pe.PlaybookExecutor.__new__(_pe.PlaybookExecutor)  # skip __init__ (env probing)
-    ex.ansible_dir = ansible_dir
+    ex.ansible_dir, ex._ansible_dir_explicit = ansible_dir, True  # explicit; refresh must never override (#17150)
     return ex
 
 

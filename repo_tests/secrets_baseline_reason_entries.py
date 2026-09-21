@@ -527,4 +527,38 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "line 204's fake `user:hunter2@` basic-auth URL fixture (the source_url/url field-name "
         "variant) for test_source_url_and_url_fields_are_also_redacted."
     ),
+    (
+        "autobot-slm-frontend/src/locales/en.json",
+        "Secret Keyword",
+        "f4e7a8740db0b7a0bfd8e63077261475f61fc2a6",  # pragma: allowlist secret
+    ): (
+        "line 3407 -- an i18n display label (a column/field header the Data Hygiene "
+        "page's #17040 batch introduced, #17157), not a credential. The JSON key is "
+        "named `secret`, which trips the Secret Keyword denylist; the value it maps "
+        "to is simply the display word Secret. Same false-positive shape as the 7 "
+        "entries already baselined under this identical hashed_secret for "
+        "autobot-frontend's own i18n/locales/*.json files -- independently re-hashed "
+        "plain SHA1 of that display word and confirmed the match, not asserted from "
+        "the filename alone. Landed unbaselined because Secret Detection is gated by "
+        "a path filter that #17157's frontend/locale-only diff didn't trigger, so the "
+        "whole-tree scan never ran against it on main (#17173, filed for the "
+        "filter/scope mismatch itself)."
+    ),
+    (
+        "autobot-slm-frontend/src/locales/en.json",
+        "Secret Keyword",
+        "7e62ee8a07aaaeb03be8a824b49f02fc7ecc6fda",  # pragma: allowlist secret
+    ): (
+        "the i18n display label `API Keys & Tokens` (setupWizardView.aPIKeysAmpTokens), "
+        "not a credential. The key name contains `Keys`/`Tokens`, which trips the "
+        "Secret Keyword denylist; the value is a heading shown on the setup wizard. "
+        "Independently confirmed rather than inferred: plain SHA1 of the literal "
+        "`API Keys & Tokens` reproduces this exact hashed_secret, and SHA1 of the "
+        "pre-#17153 spelling `API Keys &amp; Tokens` reproduces "
+        "476cb7b9c1683329fb0baf710c66a4677617c50b, the legacy-tracked entry this "
+        "one replaces. #17153 decoded that HTML entity because it was rendering "
+        "literally in the GUI, which changed the string and therefore its hash -- "
+        "the audited verdict carries over unchanged because the value is the same "
+        "display heading either way."
+    ),
 }

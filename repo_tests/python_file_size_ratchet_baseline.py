@@ -355,7 +355,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1468,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1216,
-    "autobot-backend/services/llm_service.py": 1206,
+    "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
     "autobot-backend/services/load_balancer.py": 693,
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 634,
@@ -471,7 +471,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/services/drift_checker.py": 839,
     "autobot-slm-backend/services/drift_checker_test.py": 1351,
     "autobot-slm-backend/services/inventory_builder.py": 710,
-    "autobot-slm-backend/services/playbook_executor.py": 1362,
+    "autobot-slm-backend/services/playbook_executor.py": 1406,  # #17150: ansible_dir self-heal, re-detect before sync
     "autobot-slm-backend/services/reconciler.py": 2219,
     # Not legacy debt: created after this guard existed (#14465/#14548). Tracked
     # as a live violation, not #5060 backlog -- see #14630.
