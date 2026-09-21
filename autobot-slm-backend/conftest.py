@@ -426,6 +426,14 @@ _REAL_SERVICE_MODULES = (
     # #16712: reconciler.py imports this at module scope; its co-located test
     # drives the real read/write/clear logic, not MagicMocks.
     "service_remediation_tracker",
+    # #15495: the pure hardware-capability -> LLM tier-set mapping and the
+    # node capability-profile store, both added with co-located tests that
+    # import them directly. Without a real load they resolve to MagicMocks
+    # depending on shard order, so `recommend_tier_set` would return a Mock
+    # that is truthy and iterates empty -- a silently wrong tier set rather
+    # than an error (the #14307 reasoning this list exists for).
+    "capability_tiers",
+    "node_capability",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for
