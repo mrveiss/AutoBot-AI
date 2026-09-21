@@ -25,10 +25,10 @@ prometheus-client>=0.26.0
 # Web framework
 fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=1.6.0
 starlette>=1.6.0              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
-uvicorn[standard]>=0.52.4
+uvicorn[standard]>=0.53.0
 
 # Database - PostgreSQL (Issue #786)
-sqlalchemy>=2.0.52
+sqlalchemy>=2.0.54
 asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
 psycopg2-binary>=2.9.13  # Sync PostgreSQL driver for migrations
 
@@ -38,7 +38,7 @@ pydantic-settings>=2.15.0
 typing_extensions>=4.16.0  # For Python 3.8 compatibility
 
 # Authentication
-PyJWT[crypto]>=2.13.0
+PyJWT[crypto]>=2.14.0
 bcrypt>=5.0.0  # Direct bcrypt API — passlib removed (#2669)
 python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
 
@@ -75,7 +75,7 @@ croniter>=6.2.4
 # SSO Integration (Issue #576 Phase 4)
 authlib>=1.8.0  # OAuth2/OIDC client
 ldap3>=2.9.1  # LDAP/Active Directory
-pysaml2>=7.5.4  # SAML 2.0 Service Provider
+pysaml2>=7.5.5  # SAML 2.0 Service Provider
 
 # 2FA/MFA (Issue #576 Phase 5)
 pyotp>=2.10.0  # TOTP generation and verification
