@@ -6,6 +6,19 @@
 #   sudo apt install sshpass  # Required for password-based SSH connections
 #
 
+-c ../constraints/shared.txt  # single source of truth for shared versions (#10524); pins transitive numpy
+
+# #16394: previously satisfied only by CI's shared backend venv (autobot-backend/
+# requirements.txt's own dependency closure), never declared here. Giving SLM
+# tests their own venv (#16394) surfaced them as real collection failures --
+# tests/test_bi_dashboard.py needs real numpy (no stub) and a jinja2 fallback
+# stub only if the real package is absent; migrations/migrate_system_secrets_
+# to_vault_test.py and user_management/services/sso_e2e_test.py need the real
+# `sqlite+aiosqlite://` SQLAlchemy driver for in-memory async DB tests.
+numpy  # version from constraints/shared.txt
+jinja2>=3.1.2,<4.0.0
+aiosqlite>=0.22.1  # matches autobot-backend/requirements.txt's pin
+
 # Prometheus metrics (Issue #937: shared monitoring implementation)
 prometheus-client>=0.26.0
 
@@ -34,7 +47,7 @@ redis[asyncio]>=8.1.0
 
 # Async utilities
 aiofiles>=25.1.0
-websockets>=17.1,<18       # Issue #3098: SLM's own independent floor -- SLM's code never imports websockets directly (it arrives transitively through uvicorn[standard]>=0.52.4, which only requires >=13.0), but this is the version already running in SLM production, so it must not be lowered without cause. #16264 briefly lowered this to match autobot-backend/requirements.txt's <16 langgraph-sdk cap after ci.yml's python-shard job (#13300) installs SLM's tests into the SAME venv as the backend and surfaced a floor conflict there -- that is a CI-venv-sharing artifact, not a reason to downgrade SLM production. The mismatch is a named exemption in pipeline-scripts/check_dependency_floors.py, pending a genuinely separate SLM venv (#16394).
+websockets>=17.1,<18       # Issue #3098: SLM's own independent floor -- SLM's code never imports websockets directly (it arrives transitively through uvicorn[standard]>=0.52.4, which only requires >=13.0), but this is the version already running in SLM production, so it must not be lowered without cause. #16264 briefly lowered this to match autobot-backend/requirements.txt's <16 langgraph-sdk cap after ci.yml's python-shard job (#13300) installed SLM's tests into the SAME venv as the backend and surfaced a floor conflict there -- that was a CI-venv-sharing artifact, not a reason to downgrade SLM production, and #16391 reverted it in favor of a named exemption in pipeline-scripts/check_dependency_floors.py. #16394 gave the SLM suite its own venv, built from this file, so ci.yml's strict floor check is now scoped per venv and that exemption is gone -- do not re-add it; a floor conflict here again means a venv split broke, not that this line should move.
 
 # Ansible integration
 ansible-runner>=2.4.3
