@@ -16,8 +16,8 @@ A packaged, self-hosted generative-AI platform aimed at banks, insurers, healthc
 government and defence — buyers who cannot send data to a hosted model API. It sells the *whole
 stack as one purchase*: inference serving, vector retrieval, document ingestion, an API gateway,
 and an end-user workspace, installed inside the customer's own data centre, private-cloud VPC, or a
-fully air-gapped network. Maturity: commercially shipping, with an appliance ("pre-configured
-server arrives ready to run"), a cloud-marketplace listing, hardware and data-centre partners, and
+fully air-gapped network. Maturity: commercially shipping, with an appliance option (a pre-built
+server shipped ready to deploy), a cloud-marketplace listing, hardware and data-centre partners, and
 a managed-on-prem option operated by certified partners. Its open-source predecessor (a 2023
 private-RAG framework, ~57k stars / ~8k forks self-reported) is still maintained and positioned as
 the free developer-facing core; the commercial product adds multi-user, governance, and deployment
@@ -35,7 +35,7 @@ Three layers, each sold as a separable component:
 |---|---|
 | **Serving/core layer** | Local model serving, GPU orchestration with dynamic allocation and failover, agentic RAG engine (hybrid search + multi-step retrieval + citation tracking), document-ingestion pipeline (OCR, metadata extraction, chunking, "100+ formats"), distributed async queues for ingestion/indexing/background jobs |
 | **Gateway layer** | The single policy choke point: OpenAI- **and** Anthropic-compatible endpoints, token-scoped auth, per-token/user/team rate limits, admin-defined allow-lists of models *and* knowledge bases, guardrails with input/output inspection, full request/response audit capture, usage analytics |
-| **Workspace layer** | End-user surface: chat, semantic search over internal corpora, an inline-AI document editor, shared projects with role-based access, group chats where several humans share one AI conversation, and "agent flows" for repeatable document work (summarisation, RFP drafting, structured extraction) |
+| **Workspace layer** | End-user surface: chat, semantic search over internal corpora, an inline-AI document editor, shared projects with role-based access, group chats where several humans share one AI conversation, and named reusable automations for repeatable document work (summarisation, proposal drafting, structured extraction) |
 
 Key patterns:
 
@@ -55,9 +55,9 @@ Key patterns:
 Four ideas from their engineering writing are transferable regardless of what one thinks of the
 product:
 
-1. **Action-level authorization, not app-level.** The argument: an agent holding one credential can
-   "search thousands of records, combine information across systems, create derivative files, and
-   trigger downstream actions within minutes", so the *same* identity produces wildly different risk
+1. **Action-level authorization, not app-level.** The argument: an agent holding a single credential
+   can read large volumes of records, join information across systems, generate derivative files and
+   trigger downstream actions in one short session, so the *same* identity produces wildly different risk
    depending on the action sequence. Their decision inputs are five: accountability (user + service
    account + agent identity + active role + delegated authority), exact resource (with labels and
    ownership), operation *verb* (read / search / modify / delete / share / approve / execute treated
@@ -85,8 +85,9 @@ product:
 4. **Four-domain stack decomposition** used as a buyer's checklist: infrastructure (GPU, server,
    network, storage, redundancy) · model (selection, quantization, routing, context) · platform
    (ingestion, vector search, RAG/agents, connectors, multi-tenancy) · governance (access, audit,
-   usage monitoring, rate limits, data boundaries). Their thesis line — *"the hard part isn't the
-   model, it's the infrastructure choices"* — is the honest part of the pitch.
+   usage monitoring, rate limits, data boundaries). Their recurring argument — that what buyers
+   underestimate is the infrastructure and operational choices rather than the model — is the honest
+   part of the pitch.
 
 ## Strengths
 
@@ -105,10 +106,11 @@ product:
 
 ## Weaknesses / Limitations
 
-- **Nearly every claim is unfalsifiable from outside.** "100+ formats", "hundreds of concurrent
-  users", "production-ready in under 3 hours", "ready in days not months" carry no methodology,
-  no workload definition, and no third-party verification. Two of their own pages contradict on
-  timeline ("under one week" vs "under 3 hours").
+- **Nearly every claim is unfalsifiable from outside.** A three-figure supported-format count,
+  concurrency stated only in hundreds of users, and same-day time-to-production all carry no
+  methodology, no workload definition, and no third-party verification. Two of their own pages
+  contradict each other on deployment timeline, one giving a figure roughly an order of magnitude
+  longer than the other.
 - **Sizing is a lead-capture form, not a model.** The hardware calculator takes exactly two inputs
   (user band, use case) and publishes no formula, VRAM figure, or SKU. Capacity planning — the
   genuinely hard part — stays behind a sales conversation.
@@ -128,7 +130,7 @@ product:
 
 **Visible (all vendor self-reported, none independently verified):** ~57k stars / ~8k forks / ~5k
 developers on the open-source core · six compliance regimes claimed · deploy in under 3 hours ·
-production in under a week · "hundreds of concurrent users" · 100+ ingestion formats · model range
+production in under a week · concurrency stated only in hundreds of users · 100+ ingestion formats · model range
 8B → 405B · unlimited usage at fixed cost · named large-enterprise logos as users of the *free* core
 (note the sleight: open-source adoption is cited as evidence for the commercial product).
 
