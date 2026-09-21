@@ -233,6 +233,19 @@ for _schema in ("npu_schemas", "gpu_schemas"):
     _schema_spec.loader.exec_module(_schema_mod)
     setattr(sys.modules["models"], _schema, _schema_mod)
 
+# #15495: models/node_capability.py is REAL for a different reason than the
+# pair above -- it declares a SQLAlchemy Core Table, not a Pydantic model, and
+# services/node_capability.py needs its real columns (``.c.node_id`` etc.) to
+# build meaningful insert/update/select statements. It imports only
+# sqlalchemy, which is already stubbed harmlessly above (attribute access on
+# the stub auto-vivifies rather than raising).
+_ncap_path = Path(__file__).parent / "models" / "node_capability.py"
+_ncap_spec = _ss_importlib_util.spec_from_file_location("models.node_capability", _ncap_path)
+_ncap_mod = _ss_importlib_util.module_from_spec(_ncap_spec)
+sys.modules["models.node_capability"] = _ncap_mod
+_ncap_spec.loader.exec_module(_ncap_mod)
+setattr(sys.modules["models"], "node_capability", _ncap_mod)
+
 
 # ── services ──────────────────────────────────────────────────────────────────
 # The services.* modules api/code_sync.py and api/setup_wizard.py import are

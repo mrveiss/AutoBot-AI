@@ -50,6 +50,31 @@ _STATE_CHANGE_CHANNEL_TEMPLATE = "autobot:services:{service}:state_change"
 # service_discovery.py for why this is a plain constant, not env-backed.
 _SERVICE_DISCOVERY_TTL = SERVICE_DISCOVERY_TTL_S
 
+# CPU-model string only, no vendor runtime import (#15495). autobot-backend/
+# utils/hardware_metrics.py's _check_npu_availability() confirms via
+# openvino.runtime.Core() too, but openvino is not an SLM-agent dependency --
+# importing it here would add a heavy ML runtime to every fleet node just to
+# answer a presence question. False negative on non-Intel NPUs (AMD XDNA,
+# Qualcomm); "Ultra" branding is specific enough that a false positive isn't.
+_INTEL_NPU_CPU_MARKER = "Intel(R) Core(TM) Ultra"
+
+
+def _npu_present() -> bool:
+    """Best-effort Intel NPU presence check via /proc/cpuinfo (#15495)."""
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8") as f:
+            return _INTEL_NPU_CPU_MARKER in f.read()
+    except OSError:
+        return False
+
+
+def _free_disk_model_dir_mb() -> int | None:
+    """Free space on AUTOBOT_MODELS_DIR, or None when it doesn't exist yet (#15495)."""
+    models_path = get_config().models_path
+    if not models_path.exists():
+        return None
+    return int(psutil.disk_usage(str(models_path)).free / (1024 * 1024))
+
 
 class HealthCollector:
     """
@@ -100,6 +125,12 @@ class HealthCollector:
             "uptime_seconds": int(datetime.now().timestamp() - psutil.boot_time()),
             # #16280: NVIDIA/AMD GPUs, measured where the vendor tool answers.
             "gpu": probe_gpus(),
+            # #15495: LLM hardware capability profile. Always present, like the
+            # fields above -- a missing key would mean "this agent predates
+            # #15495", which services/node_capability.py's merge gate relies on.
+            "total_ram_mb": int(psutil.virtual_memory().total / (1024 * 1024)),
+            "npu_present": _npu_present(),
+            "free_disk_model_dir_mb": _free_disk_model_dir_mb(),
         }
 
         # Collect service statuses

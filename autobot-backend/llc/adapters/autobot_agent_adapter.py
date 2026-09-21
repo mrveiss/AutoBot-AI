@@ -540,4 +540,7 @@ def _build_agent_request(run_id: str, context: Dict[str, Any]) -> AgentRequest:
             "source": "llc_heartbeat",
             "run_id": run_id,
         },
+        # #16946 owner decision 2: an autonomous run's originator is the org agent itself.
+        originator=context.get("agent_id") or None,
+        chain=[context["agent_id"]] if context.get("agent_id") else [],
     )

@@ -153,7 +153,7 @@ def test_an_empty_git_listing_is_fatal_not_clean(guard, monkeypatch):
     monkeypatch.setattr(guard.subprocess, "run", lambda *a, **k: _Result())
 
     with pytest.raises(SystemExit) as excinfo:
-        guard._tracked_modes(Path('.'))
+        guard._tracked_modes(Path("."))
 
     assert "refusing to report clean" in str(excinfo.value)
 
@@ -167,7 +167,7 @@ def test_a_failed_git_listing_is_fatal(guard, monkeypatch):
     monkeypatch.setattr(guard.subprocess, "run", lambda *a, **k: _Result())
 
     with pytest.raises(SystemExit) as excinfo:
-        guard._tracked_modes(Path('.'))
+        guard._tracked_modes(Path("."))
 
     assert "git ls-files failed" in str(excinfo.value)
 
@@ -250,9 +250,9 @@ def test_a_cwd_relative_run_loses_a_violation_it_should_have_classified(guard, m
 
     anchored = {target: "100644"}  # the violation: tracked, not executable
     blocking, known = guard._split_findings(anchored, root)
-    assert known == [d for d in known if target in d] and known, (
-        f"an anchored run must classify {target} as dormant, got known={known!r}"
-    )
+    assert (
+        known == [d for d in known if target in d] and known
+    ), f"an anchored run must classify {target} as dormant, got known={known!r}"
     assert not blocking, f"{target} is baselined, so it must not block: {blocking!r}"
 
     # What a subdirectory run actually produces: the same file keyed by a path
@@ -306,6 +306,42 @@ def test_the_staleness_check_would_catch_a_dead_entry(guard, monkeypatch):
         for _, entry in guard._local_hook_entries(root / config_path)
     }
     assert guard._KNOWN_DORMANT - targets, "a dead baseline entry must be detected as stale"
+
+
+def test_a_stale_fixed_dormant_entry_is_detected(guard, monkeypatch):
+    """The shrink-side check itself (#15762): membership is not mode.
+
+    Synthetic fixture, not the live baseline -- `_KNOWN_DORMANT` is empty as of
+    #15750 (see the staleness pair above for why that makes it unusable as a
+    fixture), and this asserts the detector still works when there IS
+    something to detect.
+    """
+    monkeypatch.setattr(guard, "_KNOWN_DORMANT", frozenset({"tools/lint/already_fixed.py"}))
+
+    stale_fix = guard.stale_fixed_dormant_entries({"tools/lint/already_fixed.py": "100755"})
+
+    assert stale_fix == {
+        "tools/lint/already_fixed.py"
+    }, "an entry whose exec bit is already 100755 must be reported, not silently dropped"
+
+
+def test_a_still_dormant_entry_is_not_flagged(guard, monkeypatch):
+    """Contrast case: a genuinely still-dormant entry must not false-positive."""
+    monkeypatch.setattr(guard, "_KNOWN_DORMANT", frozenset({"tools/lint/still_dormant.py"}))
+
+    assert guard.stale_fixed_dormant_entries({"tools/lint/still_dormant.py": "100644"}) == set()
+
+
+def test_no_known_dormant_entry_has_already_been_fixed(guard):
+    """The live check (#15762): every currently-baselined entry is still a real violation.
+
+    `_KNOWN_DORMANT` is empty right now, so this passes vacuously -- the two
+    tests above are what prove the check itself works, the same split the
+    staleness pair above already uses.
+    """
+    modes = guard._tracked_modes(guard._repo_root())
+    stale_fix = guard.stale_fixed_dormant_entries(modes)
+    assert not stale_fix, f"_KNOWN_DORMANT entries already fixed, but not removed: {sorted(stale_fix)}"
 
 
 def test_a_slashless_entry_is_left_to_pre_commits_path_search(guard, tmp_path, monkeypatch):

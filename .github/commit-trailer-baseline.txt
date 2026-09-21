@@ -4,6 +4,20 @@
 # trailer must be fixed before it lands, not recorded here. The gate has no
 # mechanism to add to this file, and adding one would defeat the rule.
 #
+# WHAT THE ENTRY COUNT IS NOT (#15897)
+#
+# This file's line count is not a census of banned-trailer commits in this
+# repository's history. The gate that reads it is scoped to `pull_request`,
+# comparing `BASE..HEAD` — it examines only the commits a PR introduces, by
+# design, never the branch's full history. Applying the same predicate this
+# gate uses (anchored, case-insensitive, owner/bot exemptions applied) to
+# every commit on `main` finds roughly 7,000 more matches than this file has
+# entries, almost all of them predating this policy — legitimately out of
+# scope, not a backlog. Rewriting that history to strip them means force-
+# pushing a shared branch out from under every worktree and session based on
+# it, which the project's own rules forbid for a cosmetic correction. See
+# docs/developer/RATCHET_BASELINES.md for the full measurement and reasoning.
+#
 # WHY THESE FOUR EXIST
 #
 # The repository's `.git/config` on the maintainer's workstation carried a local

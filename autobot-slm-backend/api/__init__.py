@@ -15,6 +15,7 @@ from .autobot_teams import router as autobot_teams_router
 from .autobot_users import router as autobot_users_router
 from .blue_green import router as blue_green_router
 from .browser import router as browser_router
+from .capability_profile import router as capability_profile_router
 from .code_sync import router as code_sync_router
 from .config import node_config_router
 from .config import router as config_router
@@ -60,6 +61,12 @@ from .websocket import router as websocket_router
 # mounted here gets exactly that and nothing more. Mounted here because
 # api/monitoring.py and main.py are both at their file-size ceilings.
 monitoring_router.include_router(gpu_router)
+
+# #15495: a node's capability profile belongs on the node resource itself, so
+# it is served as /api/nodes/{node_id}/capability-profile, inheriting
+# nodes_router's own include-level auth from main.py. Mounted here rather
+# than added to api/nodes.py because that file is at its file-size ceiling.
+nodes_router.include_router(capability_profile_router)
 
 __all__ = [
     "agents_router",
