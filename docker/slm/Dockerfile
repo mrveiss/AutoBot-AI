@@ -29,9 +29,16 @@ COPY autobot_shared/ /app/autobot_shared/
 RUN python3 -m pip install --no-cache-dir /app/autobot_shared
 
 # Install SLM dependencies
+#
+# #16394: requirements.txt now carries `-c ../constraints/shared.txt`, whose
+# relative path is invalid in this flattened image layout — same shape as
+# docker/backend/Dockerfile's own `-c` line, so it is stripped below and
+# re-applied by an explicit `-c` flag against a copy placed at the path that
+# relative reference used to resolve to from the repo root.
+COPY constraints/shared.txt /app/constraints/shared.txt
 COPY autobot-slm-backend/requirements.txt /tmp/requirements.txt
-RUN grep -v -E "(autobot_shared|^-r )" /tmp/requirements.txt > /app/requirements-filtered.txt || true \
-    && python3 -m pip install --no-cache-dir -r /app/requirements-filtered.txt
+RUN grep -v -E "(autobot_shared|^-r |^-c )" /tmp/requirements.txt > /app/requirements-filtered.txt || true \
+    && python3 -m pip install --no-cache-dir -c /app/constraints/shared.txt -r /app/requirements-filtered.txt
 
 
 # ---- Production stage ----

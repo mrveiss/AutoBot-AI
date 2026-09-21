@@ -137,31 +137,52 @@ class TestShortfalls:
 
 
 class TestIsExempt:
-    """#16264: KNOWN_CROSS_VENV_EXEMPTIONS matches by (package, file), not by line."""
+    """#16264: KNOWN_CROSS_VENV_EXEMPTIONS matches by (package, file), not by line.
+
+    Uses a SYNTHETIC exemptions mapping passed explicitly, not the real
+    ``checker.KNOWN_CROSS_VENV_EXEMPTIONS`` -- #16394 emptied that dict (see
+    ``TestKnownCrossVenvExemptions`` below) and it must stay empty, so this
+    class exercises ``is_exempt``'s matching MECHANISM on its own terms,
+    independent of whatever the dict's real content is on a given day.
+    """
+
+    _EXEMPTIONS = {("websockets", "autobot-slm-backend/requirements.txt"): "test fixture"}
 
     def test_exempted_pair_is_exempt(self):
         declaration = checker.Declaration(
             source="autobot-slm-backend/requirements.txt:37", name="websockets", operator=">=", required="17.1"
         )
-        assert checker.is_exempt(checker.Shortfall(declaration, "15.0.1")) is True
+        assert checker.is_exempt(checker.Shortfall(declaration, "15.0.1"), self._EXEMPTIONS) is True
 
     def test_same_package_different_file_is_not_exempt(self):
         declaration = checker.Declaration(
             source="autobot-backend/requirements.txt:12", name="websockets", operator=">=", required="17.1"
         )
-        assert checker.is_exempt(checker.Shortfall(declaration, "15.0.1")) is False
+        assert checker.is_exempt(checker.Shortfall(declaration, "15.0.1"), self._EXEMPTIONS) is False
 
     def test_different_package_same_file_is_not_exempt(self):
         declaration = checker.Declaration(
             source="autobot-slm-backend/requirements.txt:1", name="fastapi", operator=">=", required="0.141.1"
         )
-        assert checker.is_exempt(checker.Shortfall(declaration, "0.135.2")) is False
+        assert checker.is_exempt(checker.Shortfall(declaration, "0.135.2"), self._EXEMPTIONS) is False
 
     def test_line_number_does_not_matter(self):
         declaration = checker.Declaration(
             source="autobot-slm-backend/requirements.txt:999", name="websockets", operator=">=", required="17.1"
         )
-        assert checker.is_exempt(checker.Shortfall(declaration, "15.0.1")) is True
+        assert checker.is_exempt(checker.Shortfall(declaration, "15.0.1"), self._EXEMPTIONS) is True
+
+    def test_default_exemptions_argument_is_the_real_dict_and_it_is_empty(self):
+        """The default falls through to the module dict -- which #16394 keeps empty.
+
+        Without an explicit mapping, nothing is ever exempt any more; this is
+        the mechanism-level twin of ``TestKnownCrossVenvExemptions``' content
+        assertion below.
+        """
+        declaration = checker.Declaration(
+            source="autobot-slm-backend/requirements.txt:37", name="websockets", operator=">=", required="17.1"
+        )
+        assert checker.is_exempt(checker.Shortfall(declaration, "15.0.1")) is False
 
 
 class TestAuditRefusesAnEmptyEnumeration:
@@ -268,18 +289,26 @@ class TestMainExitCodes:
 
 
 class TestKnownCrossVenvExemptions:
-    """#16264: the SLM/backend websockets floor mismatch is a named exception, not a silent one."""
+    """#16394: KNOWN_CROSS_VENV_EXEMPTIONS must stay empty.
 
-    def test_exemption_set_is_exactly_the_expected_pair(self):
-        assert set(checker.KNOWN_CROSS_VENV_EXEMPTIONS) == {
-            ("websockets", "autobot-slm-backend/requirements.txt"),
-        }
+    Its one-ever entry (#16264/#16391) -- websockets vs
+    autobot-slm-backend/requirements.txt -- existed only because ci.yml's
+    python-shard job shared ONE venv between the backend and SLM test suites,
+    so SLM's floor was judged against the backend venv's capped websockets
+    install. #16394 gave the SLM suite its own venv, built from its own
+    requirements.txt, with ci.yml's floor-check steps each scoped (via
+    --roots) to what that venv actually installs -- so the strict gate passes
+    for both services without exempting anything.
 
-    def test_exempted_pair_does_not_fail_strict(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("autobot-slm-backend/requirements.txt",))
-        monkeypatch.setattr(checker, "installed_versions", lambda names: {"websockets": "15.0.1"})
-        _write(tmp_path, "autobot-slm-backend/requirements.txt", "websockets>=17.1,<18\n")
-        assert checker.main(["--root", str(tmp_path), "--strict"]) == 0
+    This is the invariant the issue asked for: a contributor hitting the same
+    cross-venv floor conflict again must build a proper separate venv, the way
+    this one now works, rather than quietly reaching for this dict as a
+    shortcut. If this test ever needs to change, that decision -- not a
+    reflexive fix to make a red test green -- deserves its own scrutiny.
+    """
+
+    def test_exemption_dict_is_empty(self):
+        assert checker.KNOWN_CROSS_VENV_EXEMPTIONS == {}
 
     def test_non_exempted_below_floor_pin_still_fails(self, tmp_path, monkeypatch):
         monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("r.txt",))
