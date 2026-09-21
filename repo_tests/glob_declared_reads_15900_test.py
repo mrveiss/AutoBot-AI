@@ -268,6 +268,18 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
         "(#16299); `autobot-frontend/` is outside the python filter's trees",
     ),
+    "autobot-frontend/src/i18n/locales/*.json": (
+        {"repo_tests/locale_html_entity_leak_test.py"},
+        "scans every main-frontend locale file for an HTML entity leaking through "
+        "{{ $t(...) }} (#17152); `autobot-frontend/src/i18n/` is outside the python filter's "
+        "trees",
+    ),
+    # `autobot-slm-frontend/src/locales/*.json` DRAINED (#17174): that PR widened
+    # .github/filters/python-paths.yml to cover `autobot-slm-frontend/src/locales/**`
+    # (for an unrelated secrets-baseline fix in the same tree), so the
+    # locale_html_entity_leak_test.py sweep over this specific path is no longer
+    # uncovered -- confirmed by reading the filter file directly, not assumed from
+    # the guard's own failure message alone.
     "docker/*.yml": (
         {"repo_tests/chromadb_bind_not_hardcoded_15317_test.py"},
         "sweeps compose files for a hardcoded ChromaDB bind address (#15317); `docker/` is "
