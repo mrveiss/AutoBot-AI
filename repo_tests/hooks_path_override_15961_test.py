@@ -207,10 +207,16 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: is the mistake this comment already records twice. A higher floor is the
 #: stricter direction: it narrows the gap, leaving 7 files of headroom here
 #: rather than the 1 that 6491 leaves against `main`'s larger population.
+#: Re-pinned 6491 -> 6507 (vehicle v0.9.1): measured 6907 on the tree that
+#: merges #16974, #17125, #17156, #17168, #17182 and #17186 together. Each
+#: fit alone against main's 6891; the six together do not. Seventh re-pin of
+#: this floor and the fourth caused purely by combining PRs that each
+#: measured correctly -- #17142. Consolidating them into one vehicle is what
+#: made the collision surface once here instead of six times in sequence.
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6491,
+    floor=6507,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",

@@ -46,7 +46,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/agents/system_knowledge_manager.py": 843,
     "autobot-backend/agents/web_researcher.py": 1435,
     "autobot-backend/ai_hardware_accelerator.py": 1040,
-    "autobot-backend/api/advanced_control.py": 626,
+    "autobot-backend/api/advanced_control.py": 615,
     "autobot-backend/api/agent.py": 1380,
     "autobot-backend/api/agent_config.py": 1371,
     "autobot-backend/api/agent_terminal.py": 773,
@@ -132,7 +132,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/rum.py": 604,
     "autobot-backend/api/schemas_agent.py": 2225,
     "autobot-backend/api/schemas_analytics.py": 3587,
-    "autobot-backend/api/schemas_chat.py": 725,
+    "autobot-backend/api/schemas_chat.py": 732,
     "autobot-backend/api/schemas_code.py": 3266,
     "autobot-backend/api/schemas_knowledge.py": 5156,
     "autobot-backend/api/schemas_system.py": 4346,  # #16444 review: RequestValidationError import comment
@@ -251,13 +251,13 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/roles.py": 741,
     "autobot-backend/llc/api/sprints.py": 1223,
     "autobot-backend/llc/api/work_items.py": 1416,
-    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1076,
+    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1078,  # #16974: flag-gated org-role-bound enforcement wrap
     "autobot-backend/llc/services/portability.py": 936,
     "autobot-backend/llc/services/template.py": 643,
     "autobot-backend/llc/services/work_item_service.py": 1100,
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,
-    "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1085,
+    "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1075,
     "autobot-backend/llc/tests/test_replay.py": 605,
     "autobot-backend/llc/tests/test_review_gate.py": 632,
     "autobot-backend/llc/tests/test_role_assignments.py": 728,
@@ -498,7 +498,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/redis_client.py": 679,
     "autobot_shared/redis_management/connection_manager.py": 1519,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3298,  # #14981: AUTOBOT_GROUNDING_STATS_TTL
+    "autobot_shared/ssot_config.py": 3307,  # #16974: org_role_bound_enabled feature flag
     "autobot_shared/ssot_config_test.py": 782,
     "autobot_shared/ssot_constants.py": 896,
     "autobot_shared/user_management/team_service.py": 725,

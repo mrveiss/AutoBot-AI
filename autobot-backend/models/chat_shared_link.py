@@ -12,7 +12,7 @@ protection, expiry, and revoke support.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
@@ -32,6 +32,9 @@ class ChatSharedLink(Base):
         created_by: Username or user ID of the link creator
         is_active: False after the link is revoked
         created_at: Creation timestamp
+        view_count: Number of times the link has been accessed (#16861)
+        last_accessed_at: Timestamp of the last access; None if never accessed (#16861)
+        require_login: If True, only authenticated users can access (#16861)
     """
 
     __tablename__ = "chat_shared_links"
@@ -81,6 +84,28 @@ class ChatSharedLink(Base):
         DateTime(timezone=True),
         default=now_utc,
         nullable=False,
+    )
+
+    view_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        server_default="0",
+        comment="Number of times this link has been accessed",
+    )
+
+    last_accessed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp of the last access; NULL if never accessed",
+    )
+
+    require_login: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        server_default="false",
+        comment="If True, only authenticated users can access (no public access)",
     )
 
     @property
