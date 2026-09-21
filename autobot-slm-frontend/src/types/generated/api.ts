@@ -3189,6 +3189,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/nodes/{node_id}/capability-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Node Capability Profile
+         * @description A node's hardware capability profile -- all-unknown fields if it has never reported one.
+         */
+        get: operations["get_node_capability_profile_api_nodes__node_id__capability_profile_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/nodes/{node_id}/certificate": {
         parameters: {
             query?: never;
@@ -10170,6 +10190,30 @@ export interface components {
             actions: components["schemas"]["PostSyncAction"][];
             /** Node Id */
             node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * NodeCapabilityProfileResponse
+         * @description One node's hardware capability profile. Unset fields mean "not yet reported".
+         */
+        NodeCapabilityProfileResponse: {
+            /** Free Disk Model Dir Mb */
+            free_disk_model_dir_mb?: number | null;
+            /** Gpu Model */
+            gpu_model?: string | null;
+            /** Gpu Present */
+            gpu_present?: boolean | null;
+            /** Node Id */
+            node_id: string;
+            /** Npu Present */
+            npu_present?: boolean | null;
+            /** Total Ram Mb */
+            total_ram_mb?: number | null;
+            /** Total Vram Mb */
+            total_vram_mb?: number | null;
+            /** Updated At */
+            updated_at?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -19685,6 +19729,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_node_capability_profile_api_nodes__node_id__capability_profile_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeCapabilityProfileResponse"];
                 };
             };
             /** @description Validation Error */

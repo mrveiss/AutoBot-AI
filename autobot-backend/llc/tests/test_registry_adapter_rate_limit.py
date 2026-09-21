@@ -51,6 +51,9 @@ def _make_agent(**kwargs):
         "adapter_type": "claude_code",
         "adapter_config": {"output_dir": "/tmp"},
         "context_mode": "thin",
+        # #16950: a real agent row always carries org_role (non-null, default "worker"),
+        # and dispatch refuses a run without one.
+        "org_role": "worker",
     }
     defaults.update(kwargs)
     return defaults
