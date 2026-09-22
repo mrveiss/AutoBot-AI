@@ -54,6 +54,19 @@ def _by_model_key(model_id: str) -> str:
     return f"{_BY_MODEL_PREFIX}:{model_id.lower()}"
 
 
+def _is_renewable_price_key(key: str) -> bool:
+    """Whether *key* holds a price whose TTL may be re-armed through an outage.
+
+    Excludes two things that live under the same prefix and must not be renewed:
+    an operator override, which carries no TTL by design (#16229) and would be
+    given a deadline it was never meant to have; and the refresh-status and
+    cross-check records, which describe *when a refresh last succeeded* -- and a
+    failed refresh whose status key had been renewed would report itself as
+    recent, which is the manufactured freshness this whole area is about.
+    """
+    return not key.startswith(_OVERRIDE_PREFIX) and key not in (_STATUS_KEY, _CROSSCHECK_KEY)
+
+
 def _as_text(key) -> str:
     """Redis keys come back as bytes or str depending on decode_responses."""
     return key.decode() if isinstance(key, (bytes, bytearray)) else str(key)
@@ -241,15 +254,18 @@ class PricingRedisStore:
             return 0
         renewed = 0
         try:
-            for pattern in (f"{_KEY_PREFIX}:*", f"{_BY_MODEL_PREFIX}:*"):
-                keys = [k async for k in redis.scan_iter(pattern)]
-                # The override prefix sits under _KEY_PREFIX and carries no TTL
-                # by design (#16229) -- an EXPIRE on it would give an operator's
-                # standing override a deadline it was never meant to have.
-                keys = [k for k in keys if not _as_text(k).startswith(_OVERRIDE_PREFIX)]
-                for key in keys:
-                    if await redis.expire(key, _TTL_SECONDS):
-                        renewed += 1
+            # One scan, not one per prefix: `_BY_MODEL_PREFIX` is nested under
+            # `_KEY_PREFIX`, so scanning both double-counted every index key and
+            # issued a redundant EXPIRE for it. Caught by this method's own test
+            # asserting the count, which is why the count is returned at all.
+            seen: set[str] = set()
+            async for raw_key in redis.scan_iter(f"{_KEY_PREFIX}:*"):
+                key = _as_text(raw_key)
+                if key in seen or not _is_renewable_price_key(key):
+                    continue
+                seen.add(key)
+                if await redis.expire(raw_key, _TTL_SECONDS):
+                    renewed += 1
         except Exception as exc:  # noqa: BLE001 -- best effort; the caller logs the outcome
             logger.warning("PricingRedisStore.renew_price_ttls failed partway (%d done): %s", renewed, exc)
         return renewed
