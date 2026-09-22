@@ -44,6 +44,23 @@ pytestmark = pytest.mark.asyncio
 DEFAULT_MODEL = ANTHROPIC_CLAUDE_SONNET4_6
 
 
+@pytest.fixture(autouse=True)
+def _seed_pricing_cache():
+    """#15860's property moved from a static table to the live catalogue (#16230):
+    the default model has to be *in* the cache for this file to be testing what it
+    says it tests, rather than passing on a refusal.
+
+    3.00/15.00 is the price the canonical table carries for this model
+    (`autobot_shared/model_pricing.py`), so no assertion below changes value.
+    Only this one model is seeded, so a test that needs an *unpriced* model
+    still gets one.
+    """
+    from llc.tests._pricing_seed import seeded_pricing_cache
+
+    with seeded_pricing_cache("claude-sonnet-4-6", 3.00, 15.00):
+        yield
+
+
 @pytest_asyncio.fixture
 async def engine():  # noqa: ANN201
     eng = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)

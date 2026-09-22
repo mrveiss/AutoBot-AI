@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from autobot_shared.local_models import LOCAL_MODEL_NAMES
+from autobot_shared.local_models import LOCAL_MODEL_NAMES, is_local_model
 from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_snapshot
 
 
@@ -82,3 +82,57 @@ def build_pricing_payload() -> Dict[str, Any]:
         "models": pricing_list,
         "total_models": len(pricing_list),
     }
+
+
+#: The rate an unmatched model is estimated at, per 1M tokens. Carried over from
+#: the static-table version (#3528) and named here rather than left as two bare
+#: floats inside a method: they are the one price in this module that no
+#: catalogue supplies, and #16233's census cannot see a scalar literal the way it
+#: sees a table.
+#:
+#: Not zero, deliberately -- an unmatched model reading as free is #15860's
+#: defect, and this is an analytics projection where a rough number beats a
+#: confident nothing. Not the catalogue's average either, which would be a
+#: figure nobody chose.
+UNMATCHED_MODEL_INPUT_PER_1M = 1.0
+UNMATCHED_MODEL_OUTPUT_PER_1M = 5.0
+
+
+def estimate_pattern_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    """Estimate one LLM request's cost for the pattern analytics (#16230).
+
+    Extracted from `analytics_llm_patterns.py`, which is grandfathered at its
+    file-size ceiling (#5060) and may not grow.
+
+    Distinct from `LLMCostTracker.calculate_cost` in two ways that are not
+    accidental but are also not obviously right, tracked for consolidation:
+    the match here is bidirectional substring rather than longest-prefix (the
+    #2030 shape), and an unmatched model falls to a nominal rate rather than
+    $0.00. Changing either would move published analytics numbers, so it is not
+    folded in as part of the pricing migration.
+    """
+    model_lower = model.lower()
+
+    if is_local_model(model_lower):
+        return 0.0
+
+    try:
+        snapshot = get_cached_snapshot()
+    except PricingCacheCold:
+        # An analytics estimate, not a billing figure (unlike llc/services/budget.py,
+        # which refuses): a cold or stale cache falls to the same "nothing matched"
+        # default below rather than raising.
+        snapshot = {}
+
+    for model_name, pricing in snapshot.items():
+        if model_name in model_lower or model_lower in model_name:
+            return round(
+                (input_tokens / 1_000_000) * pricing.input_per_1m + (output_tokens / 1_000_000) * pricing.output_per_1m,
+                6,
+            )
+
+    return round(
+        (input_tokens / 1_000_000) * UNMATCHED_MODEL_INPUT_PER_1M
+        + (output_tokens / 1_000_000) * UNMATCHED_MODEL_OUTPUT_PER_1M,
+        6,
+    )

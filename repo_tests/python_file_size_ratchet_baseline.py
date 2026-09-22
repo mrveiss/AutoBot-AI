@@ -69,7 +69,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/analytics_embedding_patterns.py": 603,
     "autobot-backend/api/analytics_evolution.py": 1202,
     "autobot-backend/api/analytics_export.py": 656,
-    "autobot-backend/api/analytics_llm_patterns.py": 1013,
+    "autobot-backend/api/analytics_llm_patterns.py": 995,
     "autobot-backend/api/analytics_log_patterns.py": 1039,
     "autobot-backend/api/analytics_pattern_learning.py": 1067,
     "autobot-backend/api/analytics_performance.py": 791,

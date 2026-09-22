@@ -41,6 +41,22 @@ from models.agent_org import AgentOrgNode
 SLUG = "shared-slug"
 
 
+@pytest.fixture(autouse=True)
+def _seed_pricing_cache():
+    """`ingest_cost_event` prices against the live catalogue now (#16230), and a
+    cold cache raises `UnpricedModel` before this test's UPDATE ever runs.
+
+    3.00/15.00 is the price the canonical table carries for this model
+    (`autobot_shared/model_pricing.py`), so no assertion below changes value.
+    Only this one model is seeded, so a test that needs an *unpriced* model
+    still gets one.
+    """
+    from llc.tests._pricing_seed import seeded_pricing_cache
+
+    with seeded_pricing_cache("claude-sonnet-4-6", 3.00, 15.00):
+        yield
+
+
 @pytest_asyncio.fixture
 async def engine():  # noqa: ANN201
     eng = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
