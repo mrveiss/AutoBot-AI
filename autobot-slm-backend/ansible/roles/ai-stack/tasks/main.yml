@@ -199,7 +199,7 @@
       bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
       {{ code_source_dir }}/autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt
       {{ code_source_dir }}
-      > /tmp/autobot-requirements-ai-filtered.{{ inventory_hostname }}.txt
+      > /tmp/requirements-ai-filtered.{{ inventory_hostname }}.txt
   changed_when: false
   delegate_to: localhost
   become: false
@@ -208,7 +208,7 @@
 
 - name: Write filtered AI-stack requirements to the target (#17242)
   ansible.builtin.copy:
-    src: "/tmp/autobot-requirements-ai-filtered.{{ inventory_hostname }}.txt"
+    src: "/tmp/requirements-ai-filtered.{{ inventory_hostname }}.txt"
     dest: "{{ ai_install_dir }}/requirements-ai-filtered.txt"
     owner: "{{ ai_user }}"
     mode: "0644"

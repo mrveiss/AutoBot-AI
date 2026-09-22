@@ -32,8 +32,11 @@ import pathlib
 
 import yaml
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-_ANSIBLE = _REPO_ROOT / "autobot-slm-backend" / "ansible"
+from repo_tests._paths import repo_root
+
+# #15925: the repository root is derived in one place. Re-deriving it from
+# __file__ binds this guard to its own depth in the tree.
+_ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 
 # Modules whose payload runs on the TARGET unless the task is delegated.
 _EXEC_MODULES = {
