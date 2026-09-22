@@ -44,6 +44,12 @@ Research reports covering hardware integration, system conflicts, and technology
 | [[homelab-nas-app-marketplace-distribution]] | Compose-based NAS/homelab app-store platforms as a distribution channel — AutoBot's release pipeline already publishes signed images and has zero NPU/device coupling in the containerized path; gaps are a `build:`-only compose file, two helper scripts bind-mounted from the repo, and no lean/cloud-provider-default profile for small hardware (umbrella #16829, children #16830–#16833) |
 | [[provider-quota-headroom-and-account-pooling]] | Multi-provider AI quota-manager pattern vs AutoBot's provider fallback stack — no cross-worker headroom store, one credential per provider per tenant (no account pool/swap), rate-limit response headers read for GitHub-style integrations but never for LLM providers, buckets are operator-guessed env RPM never reconciled against observed limits, no hardware/KMS-rooted vault key (umbrella #15021, children #15022, #15026–#15030; unrelated discovery #15031) |
 
+| [[on-prem-private-ai-platform-stack]] | A commercial on-premise private-AI platform for regulated industries, compared against AutoBot — the gap is not features but reachability: declared controls that do not execute on a production path (umbrella #17217, children #17218–#17229) |
+
+| [[free-llm-api-free-tiers-inventory]] | A curated inventory of permanently-free LLM API tiers, assessed for whether it could offset development token spend — it cannot (wrong API, wrong account, 1–3 orders of magnitude short), and integration value is near zero since adapters already exist for 5 of 16 providers. The finding is three governance gaps it exposed in our own LLM path: provider calls bypass egress guarding, prompts carry no sensitivity class, and provider records carry no data-use policy (umbrella #17248, children #17249–#17251; standalone #17252) |
+
+| [[offline-first-appliance-orchestrator]] | A self-hosted appliance server whose product is an orchestration layer rather than a feature set — a management app that installs, configures and updates a fleet of third-party containers so the user never touches Docker. Assessed against our own update path: the transferable parts are the single-command install posture and the resume-after-restart plan, and the audit surfaced `ansible/roles/dependency_patching/` as fully wired after three wrong readings of one grep — the method, not the role, is the finding (#17257) |
+
 ## Related Sections
 
 - [[../analysis/_index\|Analysis]] — Analysis based on research

@@ -166,7 +166,7 @@
 # exists to unbreak.
 - name: "AI Stack | Deploy requirements-ai.txt before installing from it (#14809)"
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt"
     dest: "{{ ai_install_dir }}/requirements-ai.txt"
     owner: "{{ ai_user }}"
     group: "{{ ai_group }}"
@@ -188,21 +188,45 @@
 # than with a second sed here: the backend role and services/role_registry.py
 # already share that script for exactly this, and it says so in its own header
 # (#11117). It was never wired in here, which is the whole bug.
-- name: Create filtered AI-stack requirements file (#14272)
+# #17242: generated ON THE CONTROLLER. `code_source` is the git checkout and
+# nothing syncs it to a remote node, so running this script out of it on an
+# ai_stack host exits 127 -- the same defect #17242 hit in the backend role, in
+# a role that never runs on the manager at all. The source manifest is read from
+# the same controller path the deploy task above uses.
+- name: "AI Stack | Unique id for this run's controller temp files (#17242)"
+  ansible.builtin.set_fact:
+    _req_run_id: "{{ 999999999 | random }}"
+  # Set once per host per run, so the generate step and the copy that reads
+  # its output agree. inventory_hostname alone was not enough: two runs for
+  # the SAME host share a controller file, and the later generation can
+  # replace it before the earlier copy reads it.
+
+- name: Create filtered AI-stack requirements (on the controller, #14272, #17242)
   ansible.builtin.shell:
     cmd: >-
       bash {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/scripts/build-filtered-requirements.sh
-      {{ ai_install_dir }}/requirements-ai.txt
+      {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/{{ ai_stack_requirements_rel }}
       {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}
-      > {{ ai_install_dir }}/requirements-ai-filtered.txt
-  become_user: "{{ ai_user }}"
-  changed_when: true
+      > /tmp/filtered-requirements-ai.{{ inventory_hostname }}.{{ _req_run_id }}.txt
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  when: _ai_requirements_file.stat.exists
+  tags: ['ai', 'deploy']
+
+- name: Write filtered AI-stack requirements to the target (#17242)
+  ansible.builtin.copy:
+    src: "/tmp/filtered-requirements-ai.{{ inventory_hostname }}.{{ _req_run_id }}.txt"
+    dest: "{{ ai_install_dir }}/filtered-requirements-ai.txt"
+    owner: "{{ ai_user }}"
+    mode: "0644"
+  become: true
   when: _ai_requirements_file.stat.exists
   tags: ['ai', 'deploy']
 
 - name: Install AI Python packages from requirements-ai.txt
   ansible.builtin.pip:
-    requirements: "{{ ai_install_dir }}/requirements-ai-filtered.txt"
+    requirements: "{{ ai_install_dir }}/filtered-requirements-ai.txt"
     virtualenv: "{{ ai_install_dir }}/venv"
     # #16641: see "Upgrade pip in venv" above.
     virtualenv_command: "python3.14 -m venv"

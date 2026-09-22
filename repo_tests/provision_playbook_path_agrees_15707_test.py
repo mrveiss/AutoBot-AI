@@ -58,7 +58,7 @@ def ansible_playbook_path() -> str:
 
 
 def default_repo_path() -> str:
-    """`DEFAULT_REPO_PATH`'s fallback, read from git_tracker rather than restated.
+    r"""`DEFAULT_REPO_PATH`'s fallback, read from git_tracker rather than restated.
 
     Deliberately does **not** strip comments, unlike the readers above, and is
     safe only because the pattern is anchored `^DEFAULT_REPO_PATH` with no
