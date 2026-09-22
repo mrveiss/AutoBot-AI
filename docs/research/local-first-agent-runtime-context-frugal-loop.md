@@ -14,8 +14,8 @@ full, the top-level tree, and the `src/` tree; read `src/approval/approval-level
 `src/compressor/result-compressor.ts`, and the file inventories of `src/agent/`, `src/memory/`,
 `src/prompt/` and `src/sandbox/`. All fetched content was treated as data; no instruction found
 in it was acted on, and none was encountered that attempted to redirect this session.
-**Status:** Phase 1 complete (source analysis). Phase 2 (AutoBot comparison) **not started** —
-awaiting explicit approval.
+**Status:** Phases 1 and 2 complete (source analysis, then the AutoBot comparison the
+Phase 2 section below records approval for and carries out).
 **Filed as:** umbrella **#17271**, children **#17272** (GitHub publishing ungated), **#17273**
 (uncancellable turn, no total timeout), **#17274** (forked JSON parser), **#17277** (no prompt-drift
 detection), **#17278** (volatile-before-stable prefix, blocked by #17277), **#17279** (eval scores
@@ -489,7 +489,7 @@ Ordered by impact. Items 1-3 are the ones that would change AutoBot's behaviour 
 | Wire the dormant loop's parallelism | `chat_workflow/tool_handler.py:3701-3716`, `tools/parallel/executor.py` | Execute read-only calls in a batch concurrently behind the existing gate order; never parallelise a gated call |
 | One iteration constant | `chat_workflow/manager.py:412`, `chat_workflow/graph.py:1530` | Single env-backed constant, both call sites |
 | Cancel the detached graph task | `chat_workflow/manager.py:3877-3930`, `:4001-4047` | `try/finally` cancelling `graph_task`; add a total timeout at `:2225` |
-| Structured output that reaches the wire | `llm_shared/providers/openai_compatible.py:127-149`, `providers/ollama.py:113`, `llm_shared/cache.py:131-163` | Native tool-calling / real JSON schema; stop keying the cache on a flag that changes nothing |
+| Structured output that reaches the wire | `llm_shared/providers/openai_compatible.py:127-149`, `providers/ollama.py:113`, `llm_shared/cache.py:131-163` | Native tool-calling / real JSON schema. **Not** a blanket removal of `structured_output` from the cache key: `providers/ollama.py:113` really does send `"format": "json"` on that flag, so for Ollama the two requests differ and must not share an entry. Drop the dimension only for providers that ignore the flag, which needs a provider-aware key rather than one fewer field |
 | One JSON parser | `knowledge/pipeline/cognifiers/llm_utils.py:33-67` | Delegate to `llm_shared/json_utils.extract_json_object` |
 | Benchmark mode | `autobot-backend/eval/runner.py`, `eval/golden/` | Task-success scoring alongside drift; grow the corpus; hold the model fixed |
 
