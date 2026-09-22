@@ -30,11 +30,17 @@ class _PopulatedCollection:
         return 1
 
 
-def _call(node_id="pkg.mod.Thing", max_depth=None, collection=None, result=None):
+#: Distinguishes "caller did not pass a collection" from "caller passed None on
+#: purpose". `None` is a real input here -- it means the collection is
+#: unavailable -- so it cannot double as the default.
+_DEFAULT = object()
+
+
+def _call(node_id="pkg.mod.Thing", max_depth=None, collection=_DEFAULT, result=None):
     """Invoke the endpoint function directly, with its two dependencies stubbed."""
     from api.codebase_analytics.endpoints import impact
 
-    if collection is None:
+    if collection is _DEFAULT:
         collection = _PopulatedCollection()
 
     async def _fake_find_impact(_collection, root_id, max_depth=None):  # noqa: ARG001
