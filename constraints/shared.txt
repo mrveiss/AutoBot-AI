@@ -18,4 +18,4 @@ numpy>=2.5.3,<3.0.0
 # files, ansible roles/playbook, a group_var, a setup.py extra and install.sh), so
 # every dependabot bump failed CI until the other six were hand-edited (#15408).
 # `openvino-dev` has no release compatible with this floor -- see #14447/#14452/#14453.
-openvino>=2026.3.1
+openvino>=2026.4.0
