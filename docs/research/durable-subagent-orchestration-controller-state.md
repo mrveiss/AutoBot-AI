@@ -25,9 +25,9 @@ state. The user designs a *responsibility tree* (a reusable, versioned "team" of
 publishes a revision, and starts a run against it. A parent agent delegates to its direct
 children through controller tools; the controller commits the fan-out, persists the parent's
 wait, supervises every return, and resumes the parent once every child has returned a terminal
-result. It drives two external agent CLIs as execution backends, exposes a React console and an
-HTTP/MCP API, and installs itself as a per-user background service (systemd / LaunchAgent /
-Scheduled Task) so runs survive a closed terminal.
+result. It drives two external agent CLIs as execution backends, exposes a browser-based console and an
+HTTP plus tool-protocol API, and installs itself as a per-user background service on each major
+desktop OS so runs survive a closed terminal.
 
 Maturity: a few hundred source files of Python against a comparable mass of tests — the test
 ratio is genuinely high. Single contributor, a heavy release cadence over a short life, and a
@@ -39,13 +39,13 @@ identity change requiring a migration path for existing installs.
 
 - **Controller-owned state, provider-agnostic.** Every durable fact — assignments, waves, waits,
   checkpoints, replans, capabilities — lives in relational tables
-  (`persistence/models/runtime/{delegation,waiting,dispatch,team,replan}.py`), never in a
+  (its relational model layer), never in a
   provider transcript. The provider session is disposable execution, not the record.
 - **The agent's tool call *is* the transaction.** Children are given an MCP server
-  (`interfaces/mcp/node/server.py`) exposing a fixed catalog of "node operations"
-  (`runtime/node_operations/catalog.py`): `get_current_context`, `set_work_plan`, `checkpoint`,
+  (its child-facing tool server) exposing a fixed catalog of "node operations"
+  (its fixed operation catalog): `get_current_context`, `set_work_plan`, `checkpoint`,
   `delegate`, replan operations, `open_human_request`, `start_command_run`. Calling `delegate`
-  atomically stages the whole wave and commits it (`runtime/delegation/fan_out.py`
+  atomically stages the whole wave and commits it (its fan-out module
   → `stage_delegation_wave`, with an `IntegrityError` → `CONFLICT` guard so two parents cannot
   hand the same child two open assignments).
 - **Delegation ends the parent's process rather than blocking it.** A successful `delegate`
@@ -53,40 +53,40 @@ identity change requiring a migration path for existing installs.
   The parent is not a polling loop and not a suspended coroutine — it simply exits.
 - **Fan-in is a database join, not a wait.** Each child's terminal checkpoint settles exactly one
   pending wave member in the same transaction as the checkpoint itself
-  (`runtime/delegation/settlement.py` → `settle_wave_member_for_checkpoint`, a conditional
+  (its settlement module → `settle_wave_member_for_checkpoint`, a conditional
   `UPDATE ... RETURNING` guarded by an `EXISTS` on the wave still being open). When the last
   member settles, the wave settles and emits a `DelegationWaveSettled` signal; a handler opens
   *at most one* successor dispatch for the parent
-  (`runtime/delegation/continuation.py` → `open_delegation_wave_successor`), which relaunches the
+  (its continuation module → `open_delegation_wave_successor`), which relaunches the
   parent agent with a fresh context containing every child result in delegation order.
 - **Post-commit signal router.** An in-process typed `asyncio.Queue` dispatcher
-  (`runtime/post_commit/router.py`) carries ~15 disposable scheduling hints
-  (`post_commit/signals.py`: `WaveMemberSettled`, `DelegationWaveSettled`, `ReplanCommitted`,
+  (its post-commit signal router) carries ~15 disposable scheduling hints
+  (its signal definitions: `WaveMemberSettled`, `DelegationWaveSettled`, `ReplanCommitted`,
   `HumanRequestDue`, `CommandRunDue`, `CommandProcessExited`, `WatchdogDue`, …). Routes are
   immutable after lifespan entry and each signal type has exactly one handler.
 - **Signals are hints, never the source of truth.** If the queue is full, `publish` returns
   `False` and marks runtime health — and the caller falls back to performing the continuation
-  inline (`settlement.py`, the `if not accepted:` branch). On controller start, a paginated
+  inline (the settlement module, the `if not accepted:` branch). On controller start, a paginated
   startup audit re-reads every recoverable row family from the database and republishes the
-  signals (`runtime/startup_audit.py`, `runtime/post_commit/bootstrap.py`). Crash recovery is
+  signals (its startup-audit module, its startup bootstrap). Crash recovery is
   therefore a database scan, not a memory reconstruction.
-- **Layered package boundaries:** `runtime/` (domain + transactions), `persistence/`,
-  `interfaces/{cli,http,mcp,web_console}`, `integrations/<provider>/`, `platform/` (OS services,
-  workspace files, per-OS process guardians), `operator/` (a conversational front-end that calls
+- **Layered package boundaries:** a domain/transaction layer, a persistence layer, an
+  interface layer, a per-provider integration layer, an OS-services layer (service management,
+  workspace files, per-OS process guardians), and a conversational front-end that calls
   the *same* controller operations as the GUI, explicitly so chat cannot create a second copy of
   product truth).
 
 ### Notable Implementation Details
 
 - **Provider isolation strips the child agent's own orchestration machinery.**
-  `integrations/claude/isolation.py` launches each child with subagents, artifacts, slash
+  its provider-isolation module launches each child with subagents, artifacts, slash
   commands, bundled skills, project instruction files, background tasks, auto-memory and
   marketplace auto-install all disabled, via a settings blob plus a dozen `*_DISABLE_*`
   environment variables, and an always-disallowed tool list. The design rule is one orchestration
   authority per run: the controller. Nested provider-native delegation is not merely discouraged,
   it is made unavailable — and startup fails loudly (`ClaudeStartupIsolationError`) if the pinned
   CLI cannot prove the requested boundary.
-- **Capabilities deny by default and narrow only downward.** `runtime/capabilities.py` resolves a
+- **Capabilities deny by default and narrow only downward.** its capability resolver resolves a
   member's *requested* capability set against a controller ceiling; the resolver has no widening
   path, and every effective value keeps its `CapabilitySource` so the console can show *why* a
   member may or may not ask a human, run a command, or reach the network. A denied capability
@@ -97,7 +97,7 @@ identity change requiring a migration path for existing installs.
   (execution failure only: closes the dispatch and attempt, keeps the assignment open, lets the
   controller open a fresh attempt while budget remains). Changed feedback or scope explicitly
   requires a *fresh assignment*, never `retry` — the code enforces the split by preparing a
-  separate "semantic retry" dispatch (`runtime/checkpoint/semantic_retry.py`) that re-resolves
+  separate "semantic retry" dispatch (its semantic-retry module) that re-resolves
   provider route, capabilities and team reads from scratch.
 - **Provider success is not task success.** The prompt contract states that provider terminal
   success and another member's green checkpoint are *inputs to judgment*, not proof; only a
@@ -118,7 +118,7 @@ identity change requiring a migration path for existing installs.
   history are not rewritten.
 - **Per-OS process ownership is taken seriously.** Separate POSIX and Windows guardians, process
   owners, ownership-recovery and workspace-file/lease implementations
-  (`runtime/command_run/`, `platform/workspace_files/`), rather than a shared lowest common
+  (its managed-command layer, its workspace-file layer), rather than a shared lowest common
   denominator.
 - **Waves are bounded to 1–8 children** per delegate call, checked before staging
   (`require_wave_size`).
@@ -153,7 +153,7 @@ identity change requiring a migration path for existing installs.
   guarantee "only the controller orchestrates" quietly weakens without any test failing upstream.
 - **"No polling" is narrower than the marketing.** The *parent agent* does not poll — true and
   valuable. The *controller* still runs deadline machinery: watchdog inactivity timeouts, human
-  request deadlines, command-run deadlines (`post_commit/deadlines.py`, `WatchdogDue`). Timer
+  request deadlines, command-run deadlines (its deadline module, `WatchdogDue`). Timer
   supervision moved down a layer; it did not disappear.
 - **The console is not under the permissive licence the project advertises.** It is
   source-available under a sustainable-use style licence inherited from the UI it was derived
@@ -221,7 +221,7 @@ honesty is stronger still. The gap is durability and reachability, not governanc
 
 #### 1. Startup re-derivation of in-flight work from the durable row — **adopt**
 
-- **Source pattern:** `runtime/startup_audit.py` + `post_commit/bootstrap.py` paginate every
+- **Source pattern:** its startup-audit module + its startup bootstrap paginate every
   recoverable row family on controller start and republish the work signals, with an explicit
   pagination guard so a non-progressing scan raises instead of looping.
 - **Already-exists audit:** AutoBot *already owns this pattern* in two places —
@@ -249,7 +249,7 @@ honesty is stronger still. The gap is durability and reachability, not governanc
 
 #### 2. A denial that names the next legal action — **adopt**
 
-- **Source pattern:** `runtime/capabilities.py` pairs each denied capability with a
+- **Source pattern:** its capability resolver pairs each denied capability with a
   `next_legal_action` string (e.g. for a denied command run: *"avoid long command; for example,
   run focused tests one by one rather than the whole test suite"*) which reaches the agent's
   prompt as advice rather than an opaque refusal.
@@ -309,7 +309,7 @@ honesty is stronger still. The gap is durability and reachability, not governanc
 #### 5. Publish-failure inline fallback — **rejected-by-hidden-metrics**
 
 - **Source pattern:** when the post-commit queue rejects a signal, the caller performs the
-  continuation inline (`settlement.py`, the `if not accepted:` branch).
+  continuation inline (the settlement module, the `if not accepted:` branch).
 - **Already-exists audit:** no inline fallback anywhere in AutoBot;
   `services/gateway/message_queue.py:63-66` catches `asyncio.QueueFull` and does
   `self.logger.error("Message queue full, dropping message")` — drop plus a log line.
