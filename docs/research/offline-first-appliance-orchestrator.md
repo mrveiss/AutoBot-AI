@@ -622,6 +622,7 @@ findings matched **closed** issues and were handled as such rather than re-filed
 | [#17266](https://github.com/mrveiss/AutoBot-AI/issues/17266) | Two marketplace endpoints have no auth dependency; install not admin-gated | refs #16755 |
 | [#17267](https://github.com/mrveiss/AutoBot-AI/issues/17267) | Container hardening copy-pasted across three Docker clients | refs #17265 |
 | [#17268](https://github.com/mrveiss/AutoBot-AI/issues/17268) | Knowledge vectorization bypasses the canonical progress tracker | refs #6506 |
+| [#17270](https://github.com/mrveiss/AutoBot-AI/issues/17270) | Frontend bundle keeps a rollback target nothing can trigger — flip is a shell command | sub-issue of #10016 |
 | [#2871](https://github.com/mrveiss/AutoBot-AI/issues/2871) | **Reopened** — benchmarking still returns hardcoded "(simulated)" constants | closed 2026-03-30 COMPLETED, no comment, no evidence; code unchanged |
 
 Comments posted instead of new issues: [#16755](https://github.com/mrveiss/AutoBot-AI/issues/16755)
@@ -635,4 +636,15 @@ detected-state gap its ACs did not cover).
 - *`dependency_patching` orphaned* — **the claim was false**; #17257 was closed for this exact
   error hours earlier. See the correction in §8.
 - *Single vector-store implementation* — recorded as a known limitation (§7f); `knowledge/backends/base.py`
-  works as designed, the absence of a second adapter is not itself a defect.
+  works as designed, and #5062 (closed) scoped only the `BaseCollection` ABC, which was delivered.
+  The absence of a second adapter is not itself a defect.
+- *Execution snapshot/restore routes using `get_current_user` rather than an admin gate* — flagged
+  during the sweep, then **withdrawn after following the chain**. `api/execution_snapshots.py`
+  enforces ownership inside each handler: strict user-id extraction failing closed (`:84-86`),
+  container `autobot-owner` label check before snapshot (`:90-101`), list filtered by
+  `user_id` (`:163-166`), and `backend.restore(..., caller_user_id=user_id)` returning 403 on
+  denial. These are per-user resources, correctly scoped — the route-level grep was the wrong
+  altitude for the question.
+- *`knowledge_population.py` using `asyncio.create_task` rather than Celery* — checked, not filed.
+  `docs/architecture/async-work.md` documents deliberate non-Beat async patterns; this is one, not
+  a deviation.
