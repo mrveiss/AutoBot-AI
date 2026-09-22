@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import time
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -113,3 +114,20 @@ async def _index_code_background(task_id: str, root_dir: str, force: bool):
             task_id=task_id,
             error_message=str(e),
         )
+
+
+def start_code_indexing(task_id: str, root_dir: str, force: bool) -> None:
+    """Dispatch the background index, retaining the task.
+
+    Not a bare ``asyncio.create_task``: the loop holds only a weak reference to a
+    discarded task, so it can be collected mid-flight and an exception inside it
+    has nowhere to surface -- the status row would sit at "running" forever.
+    ``fire_and_forget`` keeps the reference and logs a failure.
+
+    Lives here rather than at the route so the caller stays one line: that module
+    sits at its size ceiling and may not grow (#5060).
+    """
+    fire_and_forget(
+        _index_code_background(task_id, root_dir, force),
+        name=f"index_code:{task_id}",
+    )

@@ -18,15 +18,30 @@ from unittest.mock import patch
 import pytest
 
 
-def _call(node_id="pkg.mod.Thing", max_depth=None, collection=object(), result=None):
+class _PopulatedCollection:
+    """A graph collection that reports a non-zero size.
+
+    #17254 added an empty-graph check: a zero count means the graph was never
+    built, which is the opposite answer to "nothing calls this". These tests
+    exercise the populated path, so they must look populated.
+    """
+
+    def count(self) -> int:
+        return 1
+
+
+def _call(node_id="pkg.mod.Thing", max_depth=None, collection=None, result=None):
     """Invoke the endpoint function directly, with its two dependencies stubbed."""
     from api.codebase_analytics.endpoints import impact
+
+    if collection is None:
+        collection = _PopulatedCollection()
 
     async def _fake_find_impact(_collection, root_id, max_depth=None):  # noqa: ARG001
         return result
 
     with (
-        patch.object(impact, "get_code_collection", return_value=collection),
+        patch.object(impact, "get_code_graph_collection", return_value=collection),
         patch.object(impact, "find_impact", _fake_find_impact),
     ):
         response = asyncio.run(impact.analyze_impact(node_id=node_id, max_depth=max_depth))
@@ -107,6 +122,30 @@ def test_no_confidence_score_is_synthesised():
         assert not any(forbidden in key.lower() for key in body), f"{forbidden!r} leaked into the response"
 
 
+class _EmptyCollection:
+    """A graph collection that exists but holds nothing."""
+
+    def count(self) -> int:
+        return 0
+
+
+def test_an_empty_graph_is_not_an_empty_impact():
+    """#17254: the collection existing is not the graph being built.
+
+    Before this, the endpoint answered `indexed: true` with an empty reach set
+    over a collection that structurally never held node/edge records -- "nothing
+    calls this", asserted confidently from nothing. "Nothing calls this" and
+    "nothing has been indexed" are opposite answers and were indistinguishable.
+    """
+    status, body = _call(collection=_EmptyCollection())
+
+    assert status == 200
+    assert body["indexed"] is False, (
+        "an empty graph reported as indexed -- the caller cannot tell an unbuilt " "graph from a node nothing calls"
+    )
+    assert "reached" not in body
+
+
 def test_a_missing_graph_is_not_a_missing_node():
     """`indexed: false` rather than 404.
 
@@ -144,7 +183,7 @@ def test_max_depth_override_reaches_the_engine(depth):
         return _Result()
 
     with (
-        patch.object(impact, "get_code_collection", return_value=object()),
+        patch.object(impact, "get_code_graph_collection", return_value=_PopulatedCollection()),
         patch.object(impact, "find_impact", _capture),
     ):
         asyncio.run(impact.analyze_impact(node_id="x", max_depth=depth))

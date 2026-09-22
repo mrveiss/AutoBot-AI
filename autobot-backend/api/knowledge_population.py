@@ -1171,9 +1171,9 @@ async def index_code(request: dict = None):
         total_items=0,
     )
 
-    from api.knowledge_code_indexing import _index_code_background  # #4835: extracted (#5060)
+    from api.knowledge_code_indexing import start_code_indexing  # #4835: extracted (#5060)
 
-    asyncio.create_task(_index_code_background(task_id, root_dir, force))
+    start_code_indexing(task_id, root_dir, force)
 
     logger.info("Queued code indexing task: %s (root=%s force=%s)", task_id, root_dir, force)
 

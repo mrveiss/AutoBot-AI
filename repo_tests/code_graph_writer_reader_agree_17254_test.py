@@ -82,12 +82,70 @@ def test_the_reader_does_not_query_the_inventory_collection():
 
 
 def test_the_indexer_endpoint_is_routed():
-    """#4835: the body was complete and the decorator was missing, twice."""
-    route_file = _text(_ROUTE)
-    index_code_at = route_file.index("async def index_code(")
-    preceding = route_file[:index_code_at]
+    """#4835: the body was complete and the decorator was missing, twice.
 
-    assert preceding.rstrip().endswith('@router.post("/index/code")'), (
-        "index_code has no route decorator — the indexer has no HTTP trigger, and the "
+    Read with `ast`, not by scanning text: a substring check passes on a comment
+    or a docstring mentioning the decorator, which is the same shape of false
+    pass this guard exists to catch one level down.
+    """
+    import ast
+
+    tree = ast.parse(_text(_ROUTE))
+    decorated = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)) and node.name == "index_code"
+    ]
+
+    assert decorated, "index_code is gone from the route module — this guard would pass vacuously"
+    posts = [
+        d
+        for fn in decorated
+        for d in fn.decorator_list
+        if isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr == "post"
+    ]
+
+    assert posts, (
+        "index_code carries no @router.post decorator — the indexer has no HTTP trigger, and the "
         "status endpoint reports on a job nothing can start (#4835)"
     )
+
+
+# ---------------------------------------------------------------------------
+# Contrast fixtures for the route predicate. Reading the live module proves
+# today's state and nothing about the check itself.
+# ---------------------------------------------------------------------------
+
+_ROUTED_SRC = """
+@router.post("/index/code")
+async def index_code(request: dict = None):
+    return {}
+"""
+
+_UNROUTED_SRC = """
+# @router.post("/index/code")  -- a comment naming the decorator
+async def index_code(request: dict = None):
+    return {}
+"""
+
+
+def _is_routed(source: str) -> bool:
+    """Whether index_code carries a router .post decorator, read structurally."""
+    import ast
+
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)) and node.name == "index_code":
+            for d in node.decorator_list:
+                if isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr == "post":
+                    return True
+    return False
+
+
+def test_the_route_predicate_accepts_a_decorated_endpoint():
+    """The negative half: a real decorator must not read as missing."""
+    assert _is_routed(_ROUTED_SRC)
+
+
+def test_the_route_predicate_rejects_a_decorator_in_a_comment():
+    """The positive half, and the exact false pass a substring check would give."""
+    assert not _is_routed(_UNROUTED_SRC), "a commented-out decorator read as a live route — the check is lexical again"
