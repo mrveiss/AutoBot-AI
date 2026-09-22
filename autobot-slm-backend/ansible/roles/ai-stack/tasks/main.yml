@@ -204,9 +204,9 @@
 - name: Create filtered AI-stack requirements (on the controller, #14272, #17242)
   ansible.builtin.shell:
     cmd: >-
-      bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
-      {{ code_source_dir }}/{{ ai_stack_requirements_rel }}
-      {{ code_source_dir }}
+      bash {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/scripts/build-filtered-requirements.sh
+      {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/{{ ai_stack_requirements_rel }}
+      {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}
       > /tmp/filtered-requirements-ai.{{ inventory_hostname }}.{{ _req_run_id }}.txt
   changed_when: false
   delegate_to: localhost

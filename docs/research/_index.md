@@ -48,7 +48,7 @@ Research reports covering hardware integration, system conflicts, and technology
 
 | [[free-llm-api-free-tiers-inventory]] | A curated inventory of permanently-free LLM API tiers, assessed for whether it could offset development token spend — it cannot (wrong API, wrong account, 1–3 orders of magnitude short), and integration value is near zero since adapters already exist for 5 of 16 providers. The finding is three governance gaps it exposed in our own LLM path: provider calls bypass egress guarding, prompts carry no sensitivity class, and provider records carry no data-use policy (umbrella #17248, children #17249–#17251; standalone #17252) |
 
-| [[offline-first-appliance-orchestrator]] | A self-hosted appliance server whose product is an orchestration layer rather than a feature set — a management app that installs, configures and updates a fleet of third-party containers so the user never touches Docker. Assessed against our own update path: the transferable parts are the single-command install posture and the resume-after-restart plan, and the audit surfaced `ansible/roles/dependency_patching/` as fully implemented and invoked by nothing (#17257) |
+| [[offline-first-appliance-orchestrator]] | A self-hosted appliance server whose product is an orchestration layer rather than a feature set — a management app that installs, configures and updates a fleet of third-party containers so the user never touches Docker. Assessed against our own update path: the transferable parts are the single-command install posture and the resume-after-restart plan, and the audit surfaced `ansible/roles/dependency_patching/` as implemented and wired to playbooks that nothing runs (#17257) |
 
 ## Related Sections
 

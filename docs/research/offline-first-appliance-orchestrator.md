@@ -308,7 +308,7 @@ not a runtime API call. Its `TRUSTED_REGISTRIES` / digest-pin warnings push the 
 | Call sites that load models | **13 non-test files** | `grep -rl from_pretrained --include='*.py'`, tests excluded |
 | In-repo manifest for *builtin skills* | exists — good precedent | `autobot-backend/skills/builtin/*/SKILL.md` (12), loaded by `skills/registry.py` with `_SOURCE_PRIORITY = {builtin:100, custom:50, hub:30, external:20}` — in-repo beats remote on collision |
 | In-repo catalogue of **downloadable models/content** | **absent** | `config/llm_models.yaml` (502 lines) configures routing/params for *already-reachable API models*, not pullable weights; greps for `model_catalog`, `models.json`, `content_catalog` → 0 hits |
-| Bulk pre-seed / prefetch command ("download everything this install will need") | **absent** | `grep -rliE 'preseed|pre_seed|prefetch|seed_models|download_all_models'` → hits are unrelated cache-warming (`memory/manager.py`, `utils/advanced_cache_manager.py`); no model-seeding entry point |
+| Bulk pre-seed / prefetch command ("download everything this install will need") | **absent** | `grep -rliE 'preseed\|pre_seed\|prefetch\|seed_models\|download_all_models'` → hits are unrelated cache-warming (`memory/manager.py`, `utils/advanced_cache_manager.py`); no model-seeding entry point |
 
 **The delta is narrow and concrete.** #17226 AC#2 ("every runtime external dependency enumerated,
 with a documented pre-seed procedure") does not need a new subsystem — it needs the pinned registry
@@ -507,9 +507,20 @@ scenario matrix, so each new "should this proceed?" branch ships with no harness
 ### The unfinished work this exposes
 
 `ansible/roles/dependency_patching/` is **fully implemented** — venv tar.gz backup, 7-day retention
-(`autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml:10-12`), and a `playbooks/rollback-dependencies.yml` — and is **invoked by
-nothing**: `grep -rln "dependency_patching" api/*.py services/*.py` → 0 hits;
-`grep -n dependency_patching playbooks/update-all-nodes.yml playbooks/system-update.yml` → 0 hits.
+(`autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml:10-12`), and a
+`playbooks/rollback-dependencies.yml` — and is **reachable only by hand**.
+
+> **Correction (2026-09-22).** An earlier revision of this paragraph said the role was "invoked by
+> nothing", citing two greps. That was wrong, and wrong in an instructive way: the greps covered
+> `api/*.py`, `services/*.py` and two named playbooks, and the role is in fact invoked by four —
+> `patch-dependencies.yml` (four times), `rollback-dependencies.yml`, `patch-system-packages.yml`
+> and `rollback-system-packages.yml`. An empty result from a scope that could not contain the
+> answer was read as an absence. See `docs/developer/MEASUREMENT_DISCIPLINE.md`.
+
+What survives is narrower: **nothing runs those playbooks.** No service, API route or scheduled
+task references `patch-dependencies.yml` or `rollback-dependencies.yml`
+(`grep -rn "patch-dependencies|patch_dependencies" --include=*.py autobot-slm-backend/` → 0 hits
+outside tests), and `playbooks/update-all-nodes.yml` does not include the role → 0 hits.
 Meanwhile the whole-machine self-update path it was built for has **no rollback at all** — the real
 `_snapshot_component` / `_rollback_component` pair (`api/code_sync.py:2467-2584`, with a genuine
 health gate at `:2592-2636` so a slow-but-healthy restart is never wrongly reverted) is called only
