@@ -48,9 +48,16 @@
   failed_when: false
   tags: ['backend', 'config']
 
-- name: "Backend | Set backend_ai_stack_host=10.255.255.254 on WSL2 hosts (#3503)"
+- name: "Backend | Set backend_ai_stack_host on WSL2 hosts (#3503, #17244)"
   ansible.builtin.set_fact:
-    backend_ai_stack_host: "10.255.255.254"
+    # #17244: ask the locality question too, not just "is this WSL2".
+    # The WSL2 gateway address reaches the Windows side; it is the right
+    # answer only when the AI stack is NOT on this node. When the stack is
+    # co-located, loopback is. This mirrors the backend_chromadb_host task
+    # below, which has always asked role_ai_stack_active -- the two sat
+    # twelve lines apart and disagreed. Behaviour is unchanged whenever the
+    # stack is not on this node, which is the case #3503 fixed.
+    backend_ai_stack_host: "{{ '127.0.0.1' if (role_ai_stack_active | default(false) | bool) else '10.255.255.254' }}"
   when:
     - _proc_version.content is defined
     - (_proc_version.content | b64decode | lower) is search('microsoft')
@@ -945,21 +952,45 @@
   # constraints AND root runtime deps are actually applied on deploy (#11117,
   # #11135). services/role_registry.py's backend post_sync_cmd invokes the same
   # script, so both deploy paths share one implementation instead of drifting.
-  - name: Create filtered backend requirements file
-    ansible.builtin.shell:
+  # #17242: generated ON THE CONTROLLER, not on the target. `code_source` is the
+  # git checkout and no task syncs it to a remote node, so running this script
+  # from it on the target exits 127 on every host that is not the manager --
+  # which is why this passed for as long as the manager was the only backend
+  # host. Same reason `_shared/tasks/sync_deletions.yml` delegates its own
+  # code_source reads to localhost.
+  #
+  # The output is carried in a registered variable rather than through a file,
+  # which also removes the fixed `/tmp/requirements-filtered.txt`: a shared name
+  # in a world-writable directory that every host in the run would have
+  # collided on the moment this task moved to the controller.
+  - name: Create filtered backend requirements (on the controller, #17242)
+    ansible.builtin.command:
       cmd: >-
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
-        {{ backend_code_dir }}/requirements.txt
+        {{ code_source_dir }}/autobot-backend/requirements.txt
         {{ code_source_dir }}
-        > /tmp/requirements-filtered.txt
-    become_user: "{{ backend_user }}"
+    register: _backend_filtered_requirements
+    changed_when: false
+    delegate_to: localhost
+    become: false
+
+  - name: Write filtered backend requirements to the target (#17242)
+    ansible.builtin.copy:
+      content: "{{ _backend_filtered_requirements.stdout }}\n"
+      dest: "{{ backend_code_dir }}/requirements-filtered.txt"
+      owner: "{{ backend_user }}"
+      mode: "0644"
+    become: true
 
   # (#2872) Removed failed_when: false — pip install failures must surface.
   # The Ansible pip module raises on any pip error; the old bypass (Issue #892)
   # masked real dependency failures during deployment.
   - name: Install filtered backend requirements
+    # #17242: reads the copy written above, inside the backend tree. The old
+    # path was a fixed name under /tmp, shared by every host and pre-creatable
+    # by any local user.
     ansible.builtin.pip:
-      requirements: "/tmp/requirements-filtered.txt"
+      requirements: "{{ backend_code_dir }}/requirements-filtered.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
       # #16641: see "Upgrade pip" above.
       virtualenv_command: "python3.14 -m venv"

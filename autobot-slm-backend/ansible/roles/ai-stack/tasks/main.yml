@@ -188,15 +188,31 @@
 # than with a second sed here: the backend role and services/role_registry.py
 # already share that script for exactly this, and it says so in its own header
 # (#11117). It was never wired in here, which is the whole bug.
-- name: Create filtered AI-stack requirements file (#14272)
-  ansible.builtin.shell:
+# #17242: generated ON THE CONTROLLER. `code_source` is the git checkout and
+# nothing syncs it to a remote node, so running this script out of it on an
+# ai_stack host exits 127 -- the same defect #17242 hit in the backend role, in
+# a role that never runs on the manager at all. The source manifest is read from
+# the same controller path the deploy task above uses.
+- name: Create filtered AI-stack requirements (on the controller, #14272, #17242)
+  ansible.builtin.command:
     cmd: >-
       bash {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/scripts/build-filtered-requirements.sh
-      {{ ai_install_dir }}/requirements-ai.txt
+      {{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt
       {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}
-      > {{ ai_install_dir }}/requirements-ai-filtered.txt
-  become_user: "{{ ai_user }}"
-  changed_when: true
+  register: _ai_filtered_requirements
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  when: _ai_requirements_file.stat.exists
+  tags: ['ai', 'deploy']
+
+- name: Write filtered AI-stack requirements to the target (#17242)
+  ansible.builtin.copy:
+    content: "{{ _ai_filtered_requirements.stdout }}\n"
+    dest: "{{ ai_install_dir }}/requirements-ai-filtered.txt"
+    owner: "{{ ai_user }}"
+    mode: "0644"
+  become: true
   when: _ai_requirements_file.stat.exists
   tags: ['ai', 'deploy']
 
