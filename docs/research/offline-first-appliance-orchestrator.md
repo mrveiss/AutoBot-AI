@@ -268,14 +268,35 @@ composable and its tests, no component declares `local-only` / `requires-network
 previously called this dead infrastructure; the banner and queue landed, the classification did
 not.)
 
-- **Visible benefit:** features that cannot work air-gapped grey out with a reason instead of
-  failing at call time.
-- **Hidden cost:** every UI surface must be classified, and a wrong classification is worse than
-  none — a `local-only` feature mislabelled `requires-network` disappears in exactly the
-  deployment it was built for. Needs a default-open policy (unclassified = available).
-- **Verdict:** adopt-with-conditions — two distinct signals (`backendReachable`, `internetReachable`),
-  not one `isOnline`; classification rolled out per surface, not big-bang.
-- **Effort:** moderate (backend probe + signal split trivial; classifying surfaces is the cost).
+**A recorded decision governs this, and it was checked before recommending anything.**
+[#6566](https://github.com/mrveiss/AutoBot-AI/issues/6566) (closed, PR #6599) ruled that the
+frontend tier must **not** be used for backend-executed features: web research, RAG and cloud LLMs
+run on the backend, so they "cannot be gated by browser→backend connectivity", and the JSDoc now
+explicitly forbids it. [#6565](https://github.com/mrveiss/AutoBot-AI/issues/6565) separately fixed
+the banner copy that had claimed otherwise.
+
+That ruling is correct and this analysis defers to it. It also localises the gap precisely:
+**classifying UI surfaces is not the fix, and proposing it would reverse a merged decision.** The
+missing piece is a *backend* signal, because only the backend knows whether the host has a WAN
+path — which is the signal that could gate web research or a cloud provider.
+
+**And the framing matters: an air-gapped install is not a degraded one.** Every service is
+reachable, the system is fully healthy, and "online" in the LAN sense is the *correct* answer.
+Internet-absence is a **declared, valid operating state**, not a fault — so the mode must present
+as policy ("this install has no internet by design, these features are off") and never as an error
+banner or a retry loop. Two orthogonal facts, never one `isOnline` boolean:
+
+| Signal | Question | Who can answer it | Today |
+|---|---|---|---|
+| `backendReachable` | can the browser reach AutoBot? | frontend | `useNetworkStatus.ts` — works, correctly scoped |
+| `internetReachable` | does the host have a WAN path? | **backend only** | **does not exist** (see §5) |
+
+- **Visible benefit:** internet-dependent features can be switched off by declared policy rather
+  than failing at call time on a box that is working exactly as intended.
+- **Hidden cost:** a pessimistically-wrong signal disables working features; needs hysteresis
+  (reuse the 2-failure shape at `useNetworkStatus.ts:56-69`, do not invent a second one).
+- **Verdict:** adopt — **backend-side only**. Keep `useNetworkStatus` as-is and honour #6566.
+- **Effort:** moderate.
 
 ## 2. Silent fallback is the anti-pattern #17226 is already arguing against
 
@@ -504,35 +525,40 @@ makes every gate above cheap to add and cheap to test. Ours has ~20 incident-dri
 tests named after issue numbers (`tests/api/test_code_sync_*`, `test_*_<issue>.py`) rather than a
 scenario matrix, so each new "should this proceed?" branch ships with no harness to test it against.
 
-### The unfinished work this exposes
+### CORRECTION — a claim in this section was wrong
 
-`ansible/roles/dependency_patching/` is **fully implemented and fully wired**, and an earlier
-revision of this section said otherwise three times. The record, because the method is the
-lesson:
+An earlier draft of this section stated that `ansible/roles/dependency_patching/` is "invoked by
+nothing" and is orphaned unfinished work. **That is false.** The role is fully wired:
 
-> **Correction (2026-09-22).** This paragraph first claimed the role was "invoked by nothing",
-> then — after review — "reachable only by hand". **Both were wrong.** Verified references:
-> `playbooks/patch-dependencies.yml` (five invocations, phases 1-5),
-> `rollback-dependencies.yml`, `patch-system-packages.yml`, `rollback-system-packages.yml`;
-> `ansible/deploy.sh` runs both dependency playbooks behind the `--patch-dependencies`,
-> `--patch-dependencies-check` and `--rollback-dependencies` flags (`autobot-slm-backend/ansible/deploy.sh:359-388`,
-> `:491-493`, `:646-649`); and `autobot-backend/api/settings.py:213` is an admin route that
-> triggers `patch-dependencies.yml` as a Celery task.
->
-> Each wrong version came from a grep whose scope could not contain the answer — first
-> Python-only plus two named playbooks, then the same scope with `grep -rn` and an alternation
-> `|`, which `grep` treats **literally** without `-E`, so it matched nothing for a reason
-> unrelated to the question. An empty result from a broken instrument read as an absence, twice.
-> See `docs/developer/MEASUREMENT_DISCIPLINE.md`.
+- `ansible/playbooks/patch-system-packages.yml` — six `- role: dependency_patching` invocations
+  (lines 70, 85, 100, 115, 130, 145)
+- `ansible/playbooks/rollback-system-packages.yml` — invocations at lines 59, 71
+- `ansible/playbooks/patch-dependencies.yml` / `rollback-dependencies.yml`, driven by `ansible/deploy.sh`
+- `autobot-backend/api/settings.py` — `POST /settings/updates/run` (`run_system_update_endpoint`,
+  admin-gated) triggers `patch-dependencies.yml` as a Celery task
 
-Meanwhile the whole-machine self-update path it was built for has **no rollback at all** — the real
-`_snapshot_component` / `_rollback_component` pair (`api/code_sync.py:2467-2584`, with a genuine
-health gate at `:2592-2636` so a slow-but-healthy restart is never wrongly reverted) is called only
-from the per-component drift-resolve path (`:3032`), never from `_ansible_self_update`.
+The false claim came from a grep scoped to `api/*.py`, `services/*.py` and two named playbooks — a
+scope that could not contain the answer. **[#17257](https://github.com/mrveiss/AutoBot-AI/issues/17257)
+was closed on 2026-09-22 for this exact error**, hours before this analysis repeated it. Recorded
+here as a worked example of the failure `MEASUREMENT_DISCIPLINE.md` names: a negative asserted from
+a grep whose scope was never checked against the claim.
 
-Per the project's own rule — *debris is unfinished work; cleanup means finishing it* — the
-`dependency_patching` role is not dead code to delete, it is a rollback mechanism to **wire into
-`update-all-nodes.yml`**.
+### What survives, verified directly
+
+`ansible/playbooks/update-all-nodes.yml` (2,260 lines) — the playbook actually run by
+`POST /self-update` and stage 3 of `POST /update-all` — contains **no** rollback, snapshot, backup
+or free-disk task: `grep -niE 'rollback|snapshot|backup|disk|free_space|dependency_patching'`
+returns only five unrelated prose comments ("already on disk", "the file on disk"). The
+`patch-dependencies.yml` path, which *does* have venv backup and rollback, is reachable from
+`ansible/deploy.sh` and the admin settings route, but **is not invoked by the self-update path**.
+
+Likewise `_snapshot_component` / `_rollback_component` (`api/code_sync.py:2467-2584`, with a real
+health gate at `:2592-2636` so a slow-but-healthy restart is never wrongly reverted) are called
+only from the per-component drift-resolve path (`:3032`), never from `_ansible_self_update`.
+
+So the accurate finding is narrower and still real: **the rollback and disk-gate mechanisms exist
+in this repo and are not connected to the whole-machine self-update path** — a wiring gap, not
+missing machinery, and not an orphaned role.
 
 - **Verdict:** adopt the decision-layer pattern — **high value, and it is the single highest-value
   item in this report**. Refactor the self-update decision into a side-effect-free verdict
@@ -577,3 +603,36 @@ start performs no outbound DNS") are decision-shaped in exactly the same way.
 Recommended sequencing: (1) fold §1/§3/§5 into #17226 as implementation notes and one new AC for
 the detected-state probe; (2) file §7a–§7e separately — they are outside air-gap scope and must not
 ride on it; (3) treat §8 as its own umbrella, decision-extraction first.
+
+---
+
+# Issues filed (2026-09-22)
+
+Dedupe sweep ran `gh issue list --search … --state all` over 22 queries before filing. Four
+findings matched **closed** issues and were handled as such rather than re-filed.
+
+| # | Finding | Parent / link |
+|---|---|---|
+| [#17260](https://github.com/mrveiss/AutoBot-AI/issues/17260) | Connectivity signals measure service state only; nothing measures internet availability | sub-issue of #17226 |
+| [#17261](https://github.com/mrveiss/AutoBot-AI/issues/17261) | The update decision is not a value — so no gate, backoff or dry-run can exist | sub-issue of #17217 |
+| [#17262](https://github.com/mrveiss/AutoBot-AI/issues/17262) | Whole-machine self-update path has no disk gate and no rollback | sub-issue of #10016 |
+| [#17263](https://github.com/mrveiss/AutoBot-AI/issues/17263) | Pre-seed manifest half-built: 6 of 13 load sites, nothing walks the registry | sub-issue of #17226, `blocked_by` #17264 |
+| [#17264](https://github.com/mrveiss/AutoBot-AI/issues/17264) | Model pulls bypass Celery: no job, no progress, no disk precheck, no GUI caller | follow-up to closed #8344 |
+| [#17265](https://github.com/mrveiss/AutoBot-AI/issues/17265) | Docker unreachable silently downgrades to uncontainerized host execution | sub-issue of #17226 |
+| [#17266](https://github.com/mrveiss/AutoBot-AI/issues/17266) | Two marketplace endpoints have no auth dependency; install not admin-gated | refs #16755 |
+| [#17267](https://github.com/mrveiss/AutoBot-AI/issues/17267) | Container hardening copy-pasted across three Docker clients | refs #17265 |
+| [#17268](https://github.com/mrveiss/AutoBot-AI/issues/17268) | Knowledge vectorization bypasses the canonical progress tracker | refs #6506 |
+| [#2871](https://github.com/mrveiss/AutoBot-AI/issues/2871) | **Reopened** — benchmarking still returns hardcoded "(simulated)" constants | closed 2026-03-30 COMPLETED, no comment, no evidence; code unchanged |
+
+Comments posted instead of new issues: [#16755](https://github.com/mrveiss/AutoBot-AI/issues/16755)
+(plugin capabilities — added the in-process `importlib` detail that sets the blast radius) and
+[#17226](https://github.com/mrveiss/AutoBot-AI/issues/17226) (implementation notes + the
+detected-state gap its ACs did not cover).
+
+**Not filed, deliberately:**
+
+- *Frontend feature classification* — would reverse #6566's merged ruling. See §1.
+- *`dependency_patching` orphaned* — **the claim was false**; #17257 was closed for this exact
+  error hours earlier. See the correction in §8.
+- *Single vector-store implementation* — recorded as a known limitation (§7f); `knowledge/backends/base.py`
+  works as designed, the absence of a second adapter is not itself a defect.
