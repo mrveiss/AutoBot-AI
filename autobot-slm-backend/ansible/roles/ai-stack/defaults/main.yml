@@ -95,3 +95,14 @@ ai_system_commands_model: "dolphin-llama3:8b"
 # a database and that is the only role that installs it. On an ai-stack-only
 # host the ai-stack role installs chromadb itself, so owning it there is correct.
 chromadb_service_owner: "ai-stack"
+
+# #14809 guards that tasks/main.yml names this manifest exactly ONCE -- a second
+# reference used to be a second, too-late delivery. The filter step added by
+# #17242 has to name it too, so the copy reads it from here instead and the task
+# file keeps a single literal.
+#
+# Expressed against code_source_dir rather than playbook_dir: the manifest
+# resolver deliberately cannot resolve playbook_dir, whose depth depends on
+# which playbook included the role (repo_tests/ansible_manifest_resolution.py).
+ai_stack_requirements_src: >-
+  {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt
