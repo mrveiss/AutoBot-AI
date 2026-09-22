@@ -22,9 +22,9 @@ commits. Positioned for emergency-preparedness, off-grid and offline-education u
   app, a log viewer, MySQL, Redis, and two sidecars. Every *installed capability* is an additional
   container the admin app writes into / manages through the same compose project — the app's own
   state of the world is the Docker daemon, not a separate inventory.
-- **MVC monolith, server-rendered SPA.** A single TypeScript backend (AdonisJS-style layout:
-  `controllers / services / jobs / models / validators / middleware`) with an Inertia + Tailwind
-  frontend — one deployable, no frontend/backend split to keep in sync.
+- **MVC monolith, server-rendered SPA.** A single TypeScript backend laid out as
+  `controllers / services / jobs / models / validators / middleware`, with a server-rendered
+  single-page frontend — one deployable, no frontend/backend split to keep in sync.
 - **Service layer holds the weight.** 28 services; the largest are the Docker driver (~96 KB),
   RAG (~88 KB), benchmark (~76 KB), then per-domain content services (map tiles, archive catalogue,
   drug reference, model runtime). All orchestration logic is in services, not controllers.
@@ -137,7 +137,7 @@ Read: repository metadata, `README.md`, `install/management_compose.yaml`, the u
 watcher script, and directory listings for `admin/app/{services,jobs}`, `admin/commands`,
 `install/`, `collections/`, `.github/`. **No agent-directed instructions, prompt-injection text, or
 "ignore previous instructions" patterns were observed in what was read.** Not read: the ~4.4 MB
-archive blobs, `admin/inertia`, `admin/database`, controllers, or individual service sources beyond
+archive blobs, the frontend and database directories, controllers, or individual service sources beyond
 the watcher script — those were not inspected, so no claim is made about them either way.
 
 ---
