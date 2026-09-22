@@ -97,6 +97,90 @@ PLAY RECAP *****
     assert "Update apt cache" in result
 
 
+def test_one_host_failing_several_tasks_is_not_several_hosts():
+    """N failures on one host must never be reported as N hosts.
+
+    The pre-existing multi-failure test uses two hosts with one failure each, so
+    failure count and host count coincide and a conflated counter reads correct.
+    This is the case that discriminates them.
+    """
+    output = """
+TASK [backend : Slurp marker] ****
+fatal: [node-a]: FAILED! => {"msg": "file not found: /opt/x/.marker"}
+
+TASK [backend : Slurp legacy marker] ****
+fatal: [node-a]: FAILED! => {"msg": "file not found: /opt/x/.deployed_commit"}
+
+TASK [backend : Create filtered requirements] ****
+fatal: [node-a]: FAILED! => {"msg": "non-zero return code"}
+
+PLAY RECAP *****
+"""
+    result = _extract_failure_summary(output)
+
+    assert "3 failures on 1 host" in result
+    assert "3 hosts failed" not in result, "failure events were counted as hosts"
+
+
+def test_ignored_failures_are_not_reported():
+    """A task ansible ignored by design is not a failure.
+
+    ignore_errors: true still prints a full `fatal:` line and only then
+    `...ignoring`. Both marker reads in sync_deletions.yml rely on this, so every
+    first provision emits two of them.
+    """
+    output = """
+TASK [backend : Slurp marker] ****
+fatal: [node-a]: FAILED! => {"msg": "file not found: /opt/x/.marker"}
+...ignoring
+
+TASK [backend : Create filtered requirements] ****
+fatal: [node-a]: FAILED! => {"msg": "non-zero return code"}
+
+PLAY RECAP *****
+"""
+    result = _extract_failure_summary(output)
+
+    assert "1 host failed" in result
+    assert "non-zero return code" in result
+    assert ".marker" not in result, "an ignored failure was reported as a failure"
+
+
+def test_a_run_whose_only_failures_were_ignored_reports_nothing():
+    """A deploy that succeeded must not be presented as a failed one."""
+    output = """
+TASK [backend : Slurp marker] ****
+fatal: [node-a]: FAILED! => {"msg": "file not found: /opt/x/.marker"}
+...ignoring
+
+TASK [backend : Slurp legacy marker] ****
+fatal: [node-a]: FAILED! => {"msg": "file not found: /opt/x/.deployed_commit"}
+...ignoring
+
+PLAY RECAP *****
+"""
+    assert _extract_failure_summary(output) == ""
+
+
+def test_ignoring_is_not_borrowed_from_a_later_task():
+    """A real failure must not be silenced by the NEXT task's ...ignoring."""
+    output = """
+TASK [backend : Create filtered requirements] ****
+fatal: [node-a]: FAILED! => {"msg": "non-zero return code"}
+
+TASK [backend : Optional probe] ****
+fatal: [node-a]: FAILED! => {"msg": "probe missing"}
+...ignoring
+
+PLAY RECAP *****
+"""
+    result = _extract_failure_summary(output)
+
+    assert "non-zero return code" in result, "a real failure was silenced"
+    assert "probe missing" not in result
+    assert "1 host failed" in result
+
+
 def test_unreachable_host():
     """Unreachable hosts should be reported as 'unreachable' not 'failed'."""
     output = """
