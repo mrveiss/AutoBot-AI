@@ -153,3 +153,65 @@ class InMemoryStorage:
     def exists(self, key: str):
         """Check if a key exists in storage."""
         return key in self.data
+
+
+#: The code GRAPH lives in its own collection, separate from `autobot_code`.
+#:
+#: #17254: the graph writer and the graph reader used to disagree about where it
+#: lives, and neither shared collection is safe to host it. `autobot_code` is
+#: recreated wholesale by the inventory indexer (`chromadb_storage.py`, which
+#: calls `delete_collection`), and `autobot_docs` is recreated by the document
+#: indexer (`doc_indexer.py`). Putting nodes and edges in either means the other
+#: subsystem's next re-index destroys the graph, and the impact endpoint then
+#: answers "nothing is affected" with `indexed: true` — a confident wrong answer
+#: whose correctness depends on who re-indexed last.
+CODE_GRAPH_COLLECTION = "autobot_code_graph"
+_CODE_GRAPH_DESCRIPTION = "Code graph: resolved call nodes and edges (record_type=node|edge)"
+
+
+def get_code_graph_collection():
+    """The code-graph collection (sync). Mirrors get_code_collection."""
+    try:
+        chroma_path = _PROJECT_ROOT / "data" / "chromadb"
+        chroma_client = get_default_client(db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False)
+        collection = chroma_client.get_or_create_collection(
+            name=CODE_GRAPH_COLLECTION,
+            metadata={"description": _CODE_GRAPH_DESCRIPTION},
+        )
+        logger.info("ChromaDB %s collection ready (%s items)", CODE_GRAPH_COLLECTION, collection.count())
+        return collection
+    except Exception as e:
+        logger.error("ChromaDB code-graph connection failed: %s", e)
+        return None
+
+
+async def get_code_graph_collection_async():
+    """The code-graph collection (async). Mirrors get_code_collection_async."""
+    try:
+        chroma_path = _PROJECT_ROOT / "data" / "chromadb"
+        async_client = await get_async_default_client(
+            db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
+        )
+        collection = await async_client.get_or_create_collection(
+            name=CODE_GRAPH_COLLECTION,
+            metadata={"description": _CODE_GRAPH_DESCRIPTION},
+        )
+        count = await collection.count()
+        logger.info("ChromaDB %s collection ready (%s items)", CODE_GRAPH_COLLECTION, count)
+        return collection
+    except Exception as e:
+        logger.error("ChromaDB code-graph connection failed: %s", e)
+        return None
+
+
+async def require_code_graph_collection():
+    """The code-graph collection, or raise. For callers that cannot proceed without it.
+
+    Keeps the "why this collection" rationale at the collection, not at each
+    call site — `knowledge_population.py` is a grandfathered file that may not
+    grow (#14236), and the explanation belongs here regardless.
+    """
+    collection = await get_code_graph_collection_async()
+    if collection is None:
+        raise RuntimeError(f"{CODE_GRAPH_COLLECTION} unavailable; cannot index the code graph")
+    return collection
