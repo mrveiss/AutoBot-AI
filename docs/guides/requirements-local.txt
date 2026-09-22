@@ -1,6 +1,6 @@
 # Core AutoBot Local Dependencies (minimal for orchestrator)
 fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=0.52.1 (#15661)
-uvicorn[standard]>=0.52.4
+uvicorn[standard]>=0.53.0
 python-dotenv>=1.1.0
 redis>=8.1.0
 psutil>=5.9.0
