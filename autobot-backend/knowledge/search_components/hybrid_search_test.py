@@ -225,8 +225,38 @@ class TestViewStatus:
 
         assert status["fused"] is False
         assert "fuse fail" in status["error"]
-        assert status["views"] == {}
         assert [r["metadata"]["fact_id"] for r in results] == ["A"]
+
+    @pytest.mark.asyncio
+    async def test_fusion_failure_keeps_what_the_views_already_reported(self):
+        """A fusion error must not throw away view status that was already classified.
+
+        The views ran, succeeded and were classified before fusion raised. Reporting
+        ``views: {}`` there says "nothing is known about the views" when in fact
+        everything is -- the same collapse of "did not look" into "found nothing"
+        this whole change exists to stop, one level up.
+        """
+        searcher = _searcher(semantic=[_fact("A")], keyword=[_fact("B")])
+
+        with patch.object(searcher, "build_rrf_results", side_effect=RuntimeError("fuse fail")):
+            _results, status = await searcher.search_with_provenance("q", 5)
+
+        assert set(status["views"]) == {SEM, KW}, "the classified view status was discarded on a fusion failure"
+        assert all(v["status"] == "ok" for v in status["views"].values())
+
+    @pytest.mark.asyncio
+    async def test_total_view_failure_still_reports_no_view_status(self):
+        """The contrast: when the views themselves fail there IS nothing to keep.
+
+        _run_views raises before returning, so no classification exists. An empty
+        views map here is the honest answer, not a discarded one.
+        """
+        searcher = _searcher()
+        searcher.semantic_search = AsyncMock(side_effect=RuntimeError("sem down"))
+        searcher.keyword_search = AsyncMock(side_effect=RuntimeError("kw down"))
+
+        with pytest.raises(RuntimeError):
+            await searcher.search_with_provenance("q", 5)
 
     @pytest.mark.asyncio
     async def test_fallback_results_carry_the_documented_keys(self):

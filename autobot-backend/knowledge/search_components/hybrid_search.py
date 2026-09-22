@@ -221,8 +221,14 @@ class HybridSearcher:
             ``{"fused": bool, "error": str | None, "views": {view: {...}}}``
         """
         semantic_filters = self._build_semantic_filters(category, board_filter)
+        # Bound outside the try: when the failure is in FUSION rather than in the
+        # views, the views already ran and were classified, and discarding that is
+        # the exact loss this issue is about. Total view failure leaves it empty,
+        # because _run_views raises before returning and there is nothing to keep.
+        classified_views: Dict[str, Dict[str, Any]] = {}
         try:
             semantic_results, keyword_results, status = await self._run_views(query, limit, category, semantic_filters)
+            classified_views = status.get("views", {})
             rrf_scores: Dict[str, float] = {}
             result_map: Dict[str, Dict[str, Any]] = {}
             contributions: ContributionMap = {}
@@ -242,7 +248,7 @@ class HybridSearcher:
             for result in fallback:
                 result.setdefault("view_contributions", {})
                 result.setdefault("view_count", 0)
-            return fallback, {"fused": False, "error": str(e), "views": {}}
+            return fallback, {"fused": False, "error": str(e), "views": classified_views}
 
     async def search(
         self,
