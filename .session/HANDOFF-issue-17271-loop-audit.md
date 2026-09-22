@@ -5,9 +5,17 @@ pr: #17296
 base_at_push: aec5e09cfbbf0ff1101adbe72828f362598b4b67
 base_branch: main  (NOT Dev_new_gui — renamed 2026-09-12; `release` is the release branch)
 gates: docs-only branch. wiring=N/A duplication=N/A backend-tests=N/A (no code changed).
-  RAN and passed: pre-commit repo-conventions incl. third-party-name + doc-cross-link check
-  (#13876); pre-push repo_tests 6/6 after fix. Distinguish these from the code gates, which
-  were not run because nothing they measure was touched.
+  RAN and passed: the doc-cross-link half of pre-commit repo-conventions (#13876); pre-push
+  repo_tests 6/6 after fix. Distinguish these from the code gates, which were not run because
+  nothing they measure was touched.
+  DID NOT RUN, and an earlier revision of this line wrongly claimed it did: the third-party-name
+  half of that same hook. scripts/lint-conventions.sh:141-146 takes a "SKIPPED (not passed)"
+  branch when no denylist is readable, and on this machine CONVENTIONS_DENYLIST is unset and the
+  documented default file does not exist; the CONVENTIONS_DENYLIST repo secret is unset too, so
+  CI emits a ::warning:: and skips it as well (code-quality.yml:388-390). Anonymisation on this
+  branch was verified by hand, not by a gate. Tracked at #15333. Reading aggregate hook output as
+  covering a check that opted out of reporting is exactly what that script's wording exists to
+  prevent.
 needs_rebase_before_merge: no  (branch is up to date with origin/main at handoff)
 worktree: /home/martins/AutoBot-Ai/.worktrees/issue-17271-loop-audit  (locked; safe to remove after merge)
 
