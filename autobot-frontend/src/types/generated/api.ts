@@ -84466,7 +84466,11 @@ export interface components {
          */
         ModelPricingResponse: {
             /** Pricing Date */
-            pricing_date: string;
+            pricing_date?: string | null;
+            /** Pricing Date Unknown Reason */
+            pricing_date_unknown_reason?: string | null;
+            /** Sources */
+            sources?: string[];
             /** Currency */
             currency: string;
             /** Models */
