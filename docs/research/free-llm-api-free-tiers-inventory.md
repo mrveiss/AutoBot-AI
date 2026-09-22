@@ -236,3 +236,21 @@ orders of magnitude of quota short. The two things actually worth taking are int
 (policy metadata with an expiry date; cross-run failure-streak retirement), and they are worth
 taking whether or not a single free tier is ever wired in. Gap 2 (egress guard scope) is a
 finding that stands on its own and does not depend on any of this being adopted.
+
+## Filed
+
+The governance gaps above are tracked; the inventory itself is not adopted.
+
+| Issue | Scope | Wave |
+|---|---|---|
+| **#17248** | Umbrella — the LLM path cannot answer *"may this prompt go to this provider?"* | — |
+| #17249 | LLM provider calls bypass the egress mechanism entirely | 1, no blockers |
+| #17250 | No prompt-sensitivity classification at any call site | 1, blocks #17251 |
+| #17251 | Provider records carry no data-use or licence policy | 2, blocked by #17250 |
+| #17252 | Provider degradation has no cross-run failure streak (reliability, not governance) | standalone |
+
+#17233 already records that the egress guard is an address deny-list rather than a destination
+allow-list. It is **not** a duplicate of #17249: its measured population is shared-client callers
+plus direct `requests`/`httpx`/`aiohttp` callers, and LLM providers are a third bucket that
+reaches the network through vendor SDKs, so that issue's ruling would not reach them. #13623
+(connector/credential/egress umbrella) is adjacent and deliberately untouched.
