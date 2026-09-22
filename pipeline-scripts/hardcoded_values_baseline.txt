@@ -1390,11 +1390,11 @@
 1|other|autobot_shared/env_registry.py|http://10.0.0.4:9090
 1|other|autobot_shared/env_registry.py|http://10.255.255.254:8001
 1|other|autobot_shared/env_registry.py|http://otel-collector:4317
-1|ssot|autobot_shared/env_registry_ai.py|:11434
+1|ssot|autobot_shared/env_registry.py|:11434
 1|ssot|autobot_shared/env_registry.py|:8001
 1|ssot|autobot_shared/env_registry.py|:9090
-1|ssot|autobot_shared/env_registry_ai.py|gemma2:2b
-1|ssot|autobot_shared/env_registry_ai.py|llama3.2:1b
+1|ssot|autobot_shared/env_registry.py|gemma2:2b
+1|ssot|autobot_shared/env_registry.py|llama3.2:1b
 1|other|autobot_shared/models/pagination.py|offset=0
 1|ssot|autobot_shared/network_utils.py|:8443
 1|other|autobot_shared/repo_path.py|"/opt/autobot/code_source/autobot-backend/services/x.py
