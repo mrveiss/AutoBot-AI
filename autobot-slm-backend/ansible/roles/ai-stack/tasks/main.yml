@@ -199,7 +199,7 @@
       bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
       {{ code_source_dir }}/autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt
       {{ code_source_dir }}
-      > /tmp/requirements-ai-filtered.{{ inventory_hostname }}.txt
+      > /tmp/filtered-requirements-ai.{{ inventory_hostname }}.txt
   changed_when: false
   delegate_to: localhost
   become: false
@@ -208,8 +208,8 @@
 
 - name: Write filtered AI-stack requirements to the target (#17242)
   ansible.builtin.copy:
-    src: "/tmp/requirements-ai-filtered.{{ inventory_hostname }}.txt"
-    dest: "{{ ai_install_dir }}/requirements-ai-filtered.txt"
+    src: "/tmp/filtered-requirements-ai.{{ inventory_hostname }}.txt"
+    dest: "{{ ai_install_dir }}/filtered-requirements-ai.txt"
     owner: "{{ ai_user }}"
     mode: "0644"
   become: true
@@ -218,7 +218,7 @@
 
 - name: Install AI Python packages from requirements-ai.txt
   ansible.builtin.pip:
-    requirements: "{{ ai_install_dir }}/requirements-ai-filtered.txt"
+    requirements: "{{ ai_install_dir }}/filtered-requirements-ai.txt"
     virtualenv: "{{ ai_install_dir }}/venv"
     # #16641: see "Upgrade pip in venv" above.
     virtualenv_command: "python3.14 -m venv"

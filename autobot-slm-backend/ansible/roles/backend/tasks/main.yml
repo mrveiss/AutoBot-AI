@@ -969,15 +969,15 @@
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/autobot-backend/requirements.txt
         {{ code_source_dir }}
-        > /tmp/requirements-filtered.{{ inventory_hostname }}.txt
+        > /tmp/filtered-requirements.{{ inventory_hostname }}.txt
     changed_when: false
     delegate_to: localhost
     become: false
 
   - name: Write filtered backend requirements to the target (#17242)
     ansible.builtin.copy:
-      src: "/tmp/requirements-filtered.{{ inventory_hostname }}.txt"
-      dest: "{{ backend_code_dir }}/requirements-filtered.txt"
+      src: "/tmp/filtered-requirements.{{ inventory_hostname }}.txt"
+      dest: "{{ backend_code_dir }}/filtered-requirements.txt"
       owner: "{{ backend_user }}"
       mode: "0644"
     become: true
@@ -990,7 +990,7 @@
     # path was a fixed name under /tmp, shared by every host and pre-creatable
     # by any local user.
     ansible.builtin.pip:
-      requirements: "{{ backend_code_dir }}/requirements-filtered.txt"
+      requirements: "{{ backend_code_dir }}/filtered-requirements.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
       # #16641: see "Upgrade pip" above.
       virtualenv_command: "python3.14 -m venv"
@@ -1051,7 +1051,7 @@
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/requirements-gpu-torch.txt
         {{ code_source_dir }}
-        > /tmp/requirements-gpu-torch-filtered.{{ inventory_hostname }}.txt
+        > /tmp/filtered-requirements-gpu-torch.{{ inventory_hostname }}.txt
     changed_when: false
     delegate_to: localhost
     become: false
@@ -1059,8 +1059,8 @@
 
   - name: "Backend | Stage filtered requirements-gpu-torch.txt onto the target (#17243)"
     ansible.builtin.copy:
-      src: "/tmp/requirements-gpu-torch-filtered.{{ inventory_hostname }}.txt"
-      dest: "{{ backend_code_dir }}/requirements-gpu-torch-filtered.txt"
+      src: "/tmp/filtered-requirements-gpu-torch.{{ inventory_hostname }}.txt"
+      dest: "{{ backend_code_dir }}/filtered-requirements-gpu-torch.txt"
       owner: "{{ backend_user }}"
       mode: "0644"
     become: true
@@ -1072,7 +1072,7 @@
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/requirements-gpu-faiss.txt
         {{ code_source_dir }}
-        > /tmp/requirements-gpu-faiss-filtered.{{ inventory_hostname }}.txt
+        > /tmp/filtered-requirements-gpu-faiss.{{ inventory_hostname }}.txt
     changed_when: false
     delegate_to: localhost
     become: false
@@ -1080,8 +1080,8 @@
 
   - name: "Backend | Stage filtered requirements-gpu-faiss.txt onto the target (#17243)"
     ansible.builtin.copy:
-      src: "/tmp/requirements-gpu-faiss-filtered.{{ inventory_hostname }}.txt"
-      dest: "{{ backend_code_dir }}/requirements-gpu-faiss-filtered.txt"
+      src: "/tmp/filtered-requirements-gpu-faiss.{{ inventory_hostname }}.txt"
+      dest: "{{ backend_code_dir }}/filtered-requirements-gpu-faiss.txt"
       owner: "{{ backend_user }}"
       mode: "0644"
     become: true
@@ -1093,7 +1093,7 @@
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/requirements-gpu.txt
         {{ code_source_dir }}
-        > /tmp/requirements-gpu-filtered.{{ inventory_hostname }}.txt
+        > /tmp/filtered-requirements-gpu.{{ inventory_hostname }}.txt
     changed_when: false
     delegate_to: localhost
     become: false
@@ -1101,8 +1101,8 @@
 
   - name: "Backend | Stage filtered requirements-gpu.txt onto the target (#17243)"
     ansible.builtin.copy:
-      src: "/tmp/requirements-gpu-filtered.{{ inventory_hostname }}.txt"
-      dest: "{{ backend_code_dir }}/requirements-gpu-filtered.txt"
+      src: "/tmp/filtered-requirements-gpu.{{ inventory_hostname }}.txt"
+      dest: "{{ backend_code_dir }}/filtered-requirements-gpu.txt"
       owner: "{{ backend_user }}"
       mode: "0644"
     become: true
@@ -1110,7 +1110,7 @@
 
   - name: "Backend | Install CUDA torch requirements (requirements-gpu-torch.txt) (#15162)"
     ansible.builtin.pip:
-      requirements: "{{ backend_code_dir }}/requirements-gpu-torch-filtered.txt"
+      requirements: "{{ backend_code_dir }}/filtered-requirements-gpu-torch.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
       # #16641: see "Upgrade pip" above.
       virtualenv_command: "python3.14 -m venv"
@@ -1143,7 +1143,7 @@
 
   - name: "Backend | Install GPU faiss requirements (requirements-gpu-faiss.txt) (#15163)"
     ansible.builtin.pip:
-      requirements: "{{ backend_code_dir }}/requirements-gpu-faiss-filtered.txt"
+      requirements: "{{ backend_code_dir }}/filtered-requirements-gpu-faiss.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
       # #16641: see "Upgrade pip" above.
       virtualenv_command: "python3.14 -m venv"
@@ -1159,7 +1159,7 @@
   # duplicate CUDA-torch download happens here.
   - name: "Backend | Install GPU/vLLM requirements (requirements-gpu.txt) (#10288)"
     ansible.builtin.pip:
-      requirements: "{{ backend_code_dir }}/requirements-gpu-filtered.txt"
+      requirements: "{{ backend_code_dir }}/filtered-requirements-gpu.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
       # #16641: see "Upgrade pip" above.
       virtualenv_command: "python3.14 -m venv"
