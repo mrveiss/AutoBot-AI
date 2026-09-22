@@ -14,11 +14,19 @@ this module is where it belongs, because this is the only part that schedules.
 
 from __future__ import annotations
 
+import asyncio
+
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from llc.scheduler.base import PollLoopScheduler
 from llm_shared.pricing.sync_cache import LOCAL_CACHE_REFRESH_INTERVAL_S, refresh_snapshot
 
 logger = get_logger(__name__)
+
+#: Bound on the one refresh awaited before the app serves traffic. Long enough
+#: for a healthy Redis round-trip, short enough that an unreachable one does not
+#: hold up startup -- the cache then begins cold, which is a handled state.
+FIRST_REFRESH_TIMEOUT_S: float = env_float("AUTOBOT_PRICING_FIRST_REFRESH_TIMEOUT_S", 10.0)
 
 
 class PricingCacheScheduler(PollLoopScheduler):
@@ -65,6 +73,29 @@ async def start_pricing_cache_scheduler(app) -> None:
     """
     logger.info("Pricing cache scheduler: starting")
     try:
+        # One refresh awaited BEFORE the poll task, not left to the first tick
+        # (#16230 review). `start()` creates the task without awaiting it, so
+        # the cache stayed cold until that tick's Redis read returned -- and in
+        # that window `budget.py::ingest_cost_event` converts cold to
+        # UnpricedModel and rejects the request outright. It does not record a
+        # zero cost; it refuses. Moving the scheduler earlier in lifespan only
+        # narrows the window, it does not close it, because the width is a
+        # Redis round-trip and not an ordering question.
+        #
+        # Bounded and non-fatal: a slow or unreachable Redis must not hold up
+        # startup, and failing here leaves exactly the cold cache that every
+        # caller already handles. What it buys is that the common case -- Redis
+        # up -- has no window at all.
+        try:
+            count = await asyncio.wait_for(refresh_snapshot(), timeout=FIRST_REFRESH_TIMEOUT_S)
+            logger.info("Pricing cache scheduler: seeded %d model price(s) before serving", count)
+        except Exception as exc:  # noqa: BLE001 -- degrades to cold, which is a handled state
+            logger.warning(
+                "Pricing cache scheduler: initial refresh did not complete (%s); the cache starts "
+                "cold and pricing-dependent requests will refuse until the first tick succeeds",
+                exc,
+            )
+
         scheduler = PricingCacheScheduler()
         scheduler.start()
         app.state.pricing_cache_scheduler = scheduler

@@ -102,3 +102,54 @@ def test_no_price_table_exists_outside_the_permitted_set() -> None:
         "`pricing_refresh._build_sources`) instead. If a literal really is the only option, add it "
         "to _PERMITTED in this file with the reason — that edit is the review."
     )
+
+
+# ---------------------------------------------------------------------------
+# Contrast fixtures for the sweep itself (#16230 review).
+#
+# Every test above runs the discoverer over the live tree, which proves what the
+# tree contains today and nothing about whether the discoverer would notice a
+# change. The mutation check in the module docstring was done by hand once; this
+# is the same check, run every time.
+# ---------------------------------------------------------------------------
+
+import ast  # noqa: E402
+
+from repo_tests.model_pricing_tables_agree_15912_test import _prices_from_dict, _prices_from_list  # noqa: E402
+
+_UNPERMITTED_DICT = '_SNEAKY = {"some-model": {"input": 1.0, "output": 2.0}, "other": {"input": 3.0, "output": 4.0}}'
+_UNPERMITTED_LIST = '_BASELINE = [("some-model", 1.0, 2.0), ("other-model", 3.0, 4.0)]'
+_NOT_A_TABLE = '_LIMITS = {"a": {"min": 1.0, "max": 2.0}, "b": {"min": 3.0, "max": 4.0}}'
+
+
+def _detects(source: str) -> bool:
+    """Whether the shape-matchers see a price table in *source*."""
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        value = node.value
+        if isinstance(value, ast.Dict):
+            prices = _prices_from_dict(value)
+        elif isinstance(value, ast.List):
+            prices = _prices_from_list(value)
+        else:
+            continue
+        if len(prices) >= 2:
+            return True
+    return False
+
+
+def test_the_sweep_detects_an_unpermitted_dict_table():
+    """The positive half: the census can only work if a new table is visible."""
+    assert _detects(_UNPERMITTED_DICT)
+
+
+def test_the_sweep_detects_an_unpermitted_tuple_list_table():
+    """The other recognised shape — the five provider baselines use it."""
+    assert _detects(_UNPERMITTED_LIST)
+
+
+def test_the_sweep_does_not_flag_a_two_key_mapping_that_is_not_prices():
+    """The negative half. Without it, a matcher that returned True on every
+    two-entry dict would pass both tests above and flag the whole tree."""
+    assert not _detects(_NOT_A_TABLE)

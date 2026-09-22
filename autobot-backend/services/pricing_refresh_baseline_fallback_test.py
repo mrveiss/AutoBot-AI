@@ -38,6 +38,7 @@ def _store(existing=None):
     for name in ("set_refresh_status", "retain_refresh_status", "set_crosscheck"):
         setattr(store, name, AsyncMock())
     store.get_all_by_model = AsyncMock(return_value=existing or {})
+    store.renew_price_ttls = AsyncMock(return_value=len(existing or {}) * 2)
     store.set_many = AsyncMock(side_effect=lambda merged: len(merged))
     store.set_model_index = AsyncMock(side_effect=lambda merged: len(merged))
     return store
@@ -129,14 +130,46 @@ async def test_a_raising_source_counts_as_down_too():
 
 
 @pytest.mark.asyncio
-async def test_a_populated_store_is_left_alone_when_both_catalogues_are_down():
+async def test_a_populated_store_is_not_overwritten_when_both_catalogues_are_down():
     """Yesterday's live prices beat literals frozen in a source file."""
     store = _store(existing={"gpt-4o": _mp("openai", "gpt-4o", 2.5, 10.0, "litellm")})
     summary = await _refresh(_source("litellm", {}), _source("openrouter", {}), store)
 
     store.set_many.assert_not_called()
     store.set_model_index.assert_not_called()
-    assert summary["baseline_fallback"] == {"used": False, "reason": "store already populated"}
+    assert summary["baseline_fallback"]["used"] is False
+    assert summary["baseline_fallback"]["reason"] == "store already populated"
+
+
+@pytest.mark.asyncio
+async def test_a_populated_store_has_its_ttls_renewed_rather_than_being_left_to_expire():
+    """Not overwriting is not the same as keeping (#16230 review).
+
+    Prices carry a TTL of the refresh cadence plus one hour, so they survive
+    exactly one missed refresh. Writing nothing on this path let them expire
+    about an hour after the failed refresh and the store emptied itself anyway
+    -- the outcome the no-overwrite rule exists to prevent. The earlier version
+    of this test asserted `set_many` was not called and stopped there, which
+    passed throughout the defect.
+    """
+    store = _store(existing={"gpt-4o": _mp("openai", "gpt-4o", 2.5, 10.0, "litellm")})
+    summary = await _refresh(_source("litellm", {}), _source("openrouter", {}), store)
+
+    store.renew_price_ttls.assert_awaited_once()
+    assert summary["baseline_fallback"]["ttls_renewed"] == 2
+    # EXPIRE only -- renewal must not become a rewrite, or a stale price would
+    # come back looking freshly fetched.
+    store.set_many.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_an_empty_store_seeds_baselines_instead_of_renewing_nothing():
+    """The contrast: renewal is for a store that HAS something to renew."""
+    store = _store(existing={})
+    summary = await _refresh(_source("litellm", {}), _source("openrouter", {}), store)
+
+    store.renew_price_ttls.assert_not_awaited()
+    assert summary["baseline_fallback"]["used"] is True
 
 
 # --- rule 3: a baseline price can never read as a live one ------------------

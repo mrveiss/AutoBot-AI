@@ -50,7 +50,10 @@ async def test_a_failed_tick_keeps_the_previous_snapshot_unchanged():
     snapshot_before = sync_cache._snapshot
 
     scheduler = sync_cache_scheduler.PricingCacheScheduler()
-    with patch.object(sync_cache, "refresh_snapshot", AsyncMock(side_effect=RuntimeError("redis down"))):
+    # The scheduler imported refresh_snapshot into ITS module, so patching the
+    # name on sync_cache leaves the bound symbol alone and the tick would call
+    # the real one. Introduced by the module split; the test kept passing.
+    with patch.object(sync_cache_scheduler, "refresh_snapshot", AsyncMock(side_effect=RuntimeError("redis down"))):
         await scheduler._tick()
 
     assert sync_cache._snapshot is snapshot_before

@@ -95,12 +95,25 @@ async def _write_baseline_fallback(store, summary: dict) -> dict:
     """
     existing = await store.get_all_by_model()
     if existing:
+        # Keeping them is not the same as leaving them alone. Prices carry a TTL
+        # of the refresh cadence plus one hour, so writing nothing here lets them
+        # expire about an hour later and the store empties itself -- the exact
+        # outcome this branch exists to prevent (#16230 review). EXPIRE only:
+        # values and provenance are untouched, so nothing here can make a stale
+        # price look newly fetched.
+        renewed = await store.renew_price_ttls()
         logger.warning(
             "pricing_refresh: both live catalogues failed; keeping the %d prices already in the "
-            "store rather than overwriting them with hardcoded baselines (#16230)",
+            "store rather than overwriting them with hardcoded baselines, and re-arming the TTL on "
+            "%d key(s) so they survive the outage rather than expiring through it (#16230)",
             len(existing),
+            renewed,
         )
-        summary["baseline_fallback"] = {"used": False, "reason": "store already populated"}
+        summary["baseline_fallback"] = {
+            "used": False,
+            "reason": "store already populated",
+            "ttls_renewed": renewed,
+        }
         return summary
 
     merged: dict = {}

@@ -31,6 +31,11 @@ Closes GH#7081.
 
 from __future__ import annotations
 
+# The pricing variables were split out of this file when it reached the 600-line
+# hard limit (#16230). Imported here rather than from env_registry.py, which is
+# grandfathered at its own ceiling and has no line to spare: the split is an
+# implementation detail of this component and should not cost the loader a line.
+from autobot_shared import env_registry_pricing  # noqa: E402,F401
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
@@ -469,117 +474,6 @@ register_env_var(
     )
 )
 
-#: Default pricing catalogue URLs, keyed by the variable that overrides each (#16229).
-#: One home for the value: live_sources.py reads it back from REGISTRY, so the code,
-#: the registry and the generated docs table cannot drift apart.
-_PRICING_LITELLM_FILE = "model_prices_and_context_window.json"
-_PRICING_URL_DEFAULTS = {
-    "AUTOBOT_PRICING_LITELLM_URL": "https://raw.githubusercontent.com/BerriAI/litellm/main/" + _PRICING_LITELLM_FILE,
-    "AUTOBOT_PRICING_OPENROUTER_URL": "https://openrouter.ai/api/v1/models",
-}
-
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_PRICING_CROSSCHECK_TOLERANCE_PERCENT",
-        type=float,
-        default=10.0,
-        description=(
-            "Percent difference between LiteLLM's and OpenRouter's price for one model above which the "
-            "pricing refresh flags a disagreement. Flagged, never resolved silently (#16229)."
-        ),
-        component="pricing",
-    )
-)
-
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_PRICING_FETCH_TIMEOUT_SECONDS",
-        type=float,
-        default=30.0,
-        description=(
-            "Total timeout, in seconds, for one live pricing catalogue fetch. A timed-out fetch is a failed "
-            "refresh and leaves stored prices to age, never looking fresh (#16229)."
-        ),
-        component="pricing",
-    )
-)
-
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_PRICING_LITELLM_URL",
-        type=str,
-        default=_PRICING_URL_DEFAULTS["AUTOBOT_PRICING_LITELLM_URL"],
-        description=(
-            "URL of LiteLLM's model price map, the primary live pricing catalogue. Fetched public-only "
-            "through the egress guard (#16229)."
-        ),
-        component="pricing",
-    )
-)
-
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_PRICING_OPENROUTER_URL",
-        type=str,
-        default=_PRICING_URL_DEFAULTS["AUTOBOT_PRICING_OPENROUTER_URL"],
-        description=(
-            "URL of OpenRouter's public models API, the cross-check pricing catalogue. Fetched public-only "
-            "through the egress guard (#16229)."
-        ),
-        component="pricing",
-    )
-)
-
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_PRICING_REFRESH_INTERVAL_HOURS",
-        type=int,
-        default=24,
-        description=(
-            "Hours between automatic pricing refreshes: the Celery beat cadence, and the floor under the "
-            "Redis TTL so stored prices can never expire before the next scheduled refresh (#16231)."
-        ),
-        component="pricing",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_PRICING_LOCAL_CACHE_REFRESH_INTERVAL_S",
-        type=int,
-        default=300,
-        description=(
-            "Seconds between re-reads of the pricing store into each process's own in-memory mirror "
-            "(llm_shared/pricing/sync_cache.py, #16230). Independent of "
-            "AUTOBOT_PRICING_REFRESH_INTERVAL_HOURS, which is how often Redis itself is refreshed from "
-            "the live catalogues: this only has to stay close enough to that upstream write to be a "
-            "mirror, and a short interval also recovers a worker that restarted mid-cycle rather than "
-            "leaving it cold for the rest of the daily cadence."
-        ),
-        component="pricing",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_PRICING_LOCAL_CACHE_MAX_AGE_S",
-        type=int,
-        default=3600,
-        description=(
-            "Age, in seconds, past which a process's pricing mirror is refused as stale rather than "
-            "served (PricingCacheStale, #16230). This is what stops a scheduler that quietly stopped "
-            "refreshing from looking identical to one that is working -- above this bound a reader gets "
-            "an exception, never an old price presented as current. Must exceed "
-            "AUTOBOT_PRICING_LOCAL_CACHE_REFRESH_INTERVAL_S by enough to survive a few failed ticks."
-        ),
-        component="pricing",
-    )
-)
 
 register_env_var(
     EnvVarSpec(

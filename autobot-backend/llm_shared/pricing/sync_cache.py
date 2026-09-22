@@ -52,7 +52,7 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
@@ -66,7 +66,10 @@ logger = get_logger(__name__)
 #: that upstream write to be a mirror, and a short interval also recovers a
 #: worker that restarted mid-cycle quickly rather than leaving it cold for
 #: however long is left of the daily cadence.
-LOCAL_CACHE_REFRESH_INTERVAL_S: int = env_int("AUTOBOT_PRICING_LOCAL_CACHE_REFRESH_INTERVAL_S", 300)
+#: Clamped to >= 1 (#16230 review): `env_int` rejects malformed input but accepts
+#: 0 and negatives, and a non-positive interval reaches `PollLoopScheduler` as a
+#: timeout that polls continuously.
+LOCAL_CACHE_REFRESH_INTERVAL_S: int = env_int_clamped("AUTOBOT_PRICING_LOCAL_CACHE_REFRESH_INTERVAL_S", 300, min_v=1)
 
 #: How old the snapshot may get before `get_cached_price` stops trusting it.
 #: A failed tick keeps the previous snapshot rather than clearing it (see
@@ -79,7 +82,29 @@ LOCAL_CACHE_REFRESH_INTERVAL_S: int = env_int("AUTOBOT_PRICING_LOCAL_CACHE_REFRE
 #: `LOCAL_CACHE_REFRESH_INTERVAL_S`: that is how often this process retries,
 #: this is how many failed retries it takes before the result is no longer
 #: trusted.
-MAX_SNAPSHOT_AGE_S: int = env_int("AUTOBOT_PRICING_LOCAL_CACHE_MAX_AGE_S", 3600)
+MAX_SNAPSHOT_AGE_S: int = env_int_clamped("AUTOBOT_PRICING_LOCAL_CACHE_MAX_AGE_S", 3600, min_v=1)
+
+#: The two settings are only meaningful together, so they are validated together
+#: (#16230 review). A max age at or below the refresh interval makes the snapshot
+#: stale before the next tick can possibly replace it, so every read raises
+#: `PricingCacheStale` and `budget.py` refuses every cost event -- a pricing
+#: outage produced entirely by configuration, with nothing in the logs naming the
+#: cause. Three intervals is the floor because the scheduler is allowed to miss
+#: ticks: `_tick` deliberately keeps the previous snapshot when a refresh fails,
+#: and that tolerance is worthless if one failure is already past the bound.
+_MIN_AGE_MULTIPLE = 3
+if MAX_SNAPSHOT_AGE_S < LOCAL_CACHE_REFRESH_INTERVAL_S * _MIN_AGE_MULTIPLE:
+    _raised = LOCAL_CACHE_REFRESH_INTERVAL_S * _MIN_AGE_MULTIPLE
+    logger.warning(
+        "AUTOBOT_PRICING_LOCAL_CACHE_MAX_AGE_S=%ds is below %dx the refresh interval of %ds; "
+        "raising it to %ds. Below that the snapshot expires before a single failed tick can be "
+        "retried and every price read would refuse (#16230).",
+        MAX_SNAPSHOT_AGE_S,
+        _MIN_AGE_MULTIPLE,
+        LOCAL_CACHE_REFRESH_INTERVAL_S,
+        _raised,
+    )
+    MAX_SNAPSHOT_AGE_S = _raised
 
 
 class PricingCacheCold(Exception):

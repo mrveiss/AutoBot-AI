@@ -50,24 +50,72 @@ _SSOT_CONSTANTS_FILE = _REPO / "autobot_shared" / "ssot_constants.py"
 _MIN_LOCAL_CONSTANTS = 10
 
 
-def _local_constant_values() -> tuple[str, ...]:
+def _local_constant_values(source: str | None = None) -> tuple[str, ...]:
     """The string value of every module-level ``LOCAL_*`` constant.
 
-    Only plain ``NAME = "literal"`` assignments are considered — every
-    existing ``LOCAL_*`` entry is one, and a computed value would not be the
-    kind of stray constant this guard exists to catch.
+    Both ``NAME = "literal"`` and ``NAME: str = "literal"`` are read. Only the
+    plain form was, and ``ast.AnnAssign`` is a different node type — so
+    ``LOCAL_FOO: str = "foo"`` was invisible, and adding one in that style would
+    have left this guard reporting agreement over a constant it never saw
+    (#16230 review). A computed value is still ignored: it is not the kind of
+    stray constant this guard exists to catch.
+
+    Takes *source* so the detector can be driven against a fixture rather than
+    only against the live file — a detector checked only on today's tree proves
+    today's tree, not the detector.
     """
-    tree = ast.parse(_SSOT_CONSTANTS_FILE.read_text(encoding="utf-8"))
+    text = source if source is not None else _SSOT_CONSTANTS_FILE.read_text(encoding="utf-8")
+    tree = ast.parse(text)
     values = []
     for node in ast.iter_child_nodes(tree):
-        if not isinstance(node, ast.Assign):
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        else:
             continue
         if not (isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)):
             continue
-        for target in node.targets:
+        for target in targets:
             if isinstance(target, ast.Name) and target.id.startswith("LOCAL_"):
                 values.append(node.value.value)
     return tuple(values)
+
+
+# ---------------------------------------------------------------------------
+# Contrast fixtures. Reading the live file proves what ssot_constants.py says
+# today and nothing about whether the detector would notice a change.
+# ---------------------------------------------------------------------------
+
+_FIXTURE_PLAIN = 'LOCAL_ALPHA = "alpha"\nOTHER = "not-local"\n'
+_FIXTURE_ANNOTATED = 'LOCAL_BETA: str = "beta"\n'
+_FIXTURE_COMPUTED = 'LOCAL_GAMMA = "gam" + "ma"\n'
+
+
+def test_the_detector_reads_a_plain_assignment():
+    assert _local_constant_values(_FIXTURE_PLAIN) == ("alpha",)
+
+
+def test_the_detector_reads_an_annotated_assignment():
+    """The positive half of the review finding: this returned () before."""
+    assert _local_constant_values(_FIXTURE_ANNOTATED) == ("beta",)
+
+
+def test_the_detector_ignores_a_computed_value():
+    """The negative half — broadening the parser must not make it match anything."""
+    assert _local_constant_values(_FIXTURE_COMPUTED) == ()
+
+
+def test_a_missing_name_is_detectable_at_all():
+    """The whole assertion, run against a fixture whose answer is known.
+
+    Without this, every other test here passes because the tree happens to be
+    correct today, and a detector that silently stopped detecting would look
+    identical.
+    """
+    found = set(_local_constant_values(_FIXTURE_PLAIN + _FIXTURE_ANNOTATED))
+    assert sorted(found - {"alpha"}) == ["beta"], "a LOCAL_* value absent from the set was not reported"
+    assert not (found - {"alpha", "beta"}), "the detector invented a value no fixture declares"
 
 
 def test_the_constant_table_is_read_and_is_not_empty():

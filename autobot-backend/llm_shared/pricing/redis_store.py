@@ -54,6 +54,11 @@ def _by_model_key(model_id: str) -> str:
     return f"{_BY_MODEL_PREFIX}:{model_id.lower()}"
 
 
+def _as_text(key) -> str:
+    """Redis keys come back as bytes or str depending on decode_responses."""
+    return key.decode() if isinstance(key, (bytes, bytearray)) else str(key)
+
+
 def _override_key(model_id: str) -> str:
     return f"{_OVERRIDE_PREFIX}:{model_id.lower()}"
 
@@ -107,20 +112,39 @@ class PricingRedisStore:
         redis = await self._redis()
         if redis is None:
             raise ConnectionError("PricingRedisStore: no Redis client available")
-        pattern = f"{_BY_MODEL_PREFIX}:*"
+        result = await self._read_pattern(redis, f"{_BY_MODEL_PREFIX}:*")
+        # Operator overrides last, so they win (#16230 review). An override is
+        # the emergency lever -- `set_override` is what every cold-cache warning
+        # in this codebase tells an operator to reach for -- and it wrote to a
+        # prefix this read did not scan, so the synchronous budget and cost
+        # paths went on using the catalogue price and the lever did nothing.
+        result.update(await self._read_pattern(redis, f"{_OVERRIDE_PREFIX}:*"))
+        return result
+
+    async def _read_pattern(self, redis, pattern: str) -> dict[str, ModelPricing]:
+        """Every parseable entry under *pattern*, keyed by lower-case model id.
+
+        A record that will not parse raises rather than being dropped. Dropping
+        it produced the failure this store exists to prevent: `refresh_snapshot`
+        installs whatever comes back with a fresh `fetched_at`, so a catalogue
+        missing one paid model looks exactly as healthy as a complete one, and
+        that model silently becomes unpriced. Raising instead leaves the
+        previous snapshot in place -- stale but whole -- which is the behaviour
+        `PricingCacheScheduler._tick` is already written for (#16316).
+        """
         keys = [k async for k in redis.scan_iter(pattern)]
         if not keys:
             return {}
         values = await redis.mget(*keys)
         result: dict[str, ModelPricing] = {}
-        for raw in values:
+        for key, raw in zip(keys, values):
             if raw is None:
                 continue
             try:
                 pricing = ModelPricing.from_dict(json.loads(raw))
-                result[pricing.model_id.lower()] = pricing
-            except Exception:
-                pass
+            except Exception as exc:
+                raise ValueError(f"PricingRedisStore: unparseable pricing record at {key!r}") from exc
+            result[pricing.model_id.lower()] = pricing
         return result
 
     async def get_all_for_provider(self, provider: str) -> dict[str, ModelPricing]:
@@ -193,6 +217,42 @@ class PricingRedisStore:
             if "/" not in name and ":" not in name:
                 index.setdefault(name, pricing.to_dict())
         return await self._setex_many([(_by_model_key(name), value) for name, value in index.items()])
+
+    async def renew_price_ttls(self) -> int:
+        """Re-arm the TTL on every stored price without touching its value (#16230 review).
+
+        Prices carry a TTL of the refresh cadence plus one hour, so they survive
+        exactly one missed refresh and no more. When both live catalogues fail,
+        `pricing_refresh._write_baseline_fallback` deliberately writes nothing
+        rather than overwriting real prices with frozen baselines -- but leaving
+        them untouched is not the same as keeping them: they expire about an
+        hour later and the store empties itself anyway, which is the outcome
+        that rule existed to prevent.
+
+        Renewal is `EXPIRE`, never a rewrite: values, provenance, `source` and
+        `crosscheck` are all left exactly as the last successful refresh wrote
+        them, so nothing here can make stale prices look newly fetched. Only
+        their deadline moves.
+
+        Returns the number of keys re-armed.
+        """
+        redis = await self._redis()
+        if redis is None:
+            return 0
+        renewed = 0
+        try:
+            for pattern in (f"{_KEY_PREFIX}:*", f"{_BY_MODEL_PREFIX}:*"):
+                keys = [k async for k in redis.scan_iter(pattern)]
+                # The override prefix sits under _KEY_PREFIX and carries no TTL
+                # by design (#16229) -- an EXPIRE on it would give an operator's
+                # standing override a deadline it was never meant to have.
+                keys = [k for k in keys if not _as_text(k).startswith(_OVERRIDE_PREFIX)]
+                for key in keys:
+                    if await redis.expire(key, _TTL_SECONDS):
+                        renewed += 1
+        except Exception as exc:  # noqa: BLE001 -- best effort; the caller logs the outcome
+            logger.warning("PricingRedisStore.renew_price_ttls failed partway (%d done): %s", renewed, exc)
+        return renewed
 
     async def _setex_many(self, items: list[tuple[str, dict]]) -> int:
         """Pipeline SETEX of (key, JSON-able value) pairs; return count of successful writes."""
