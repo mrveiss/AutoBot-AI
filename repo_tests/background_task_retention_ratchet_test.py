@@ -148,7 +148,9 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
     "autobot-backend/ai_hardware_accelerator.py": 1,
     "autobot-backend/api/analytics.py": 1,
     "autobot-backend/api/analytics_bug_prediction.py": 1,
-    "autobot-backend/api/knowledge_population.py": 4,
+    # 4 -> 3 (#4835): index_code's dispatch converted to fire_and_forget. The
+    # census only shrinks, so the number comes down with the conversion.
+    "autobot-backend/api/knowledge_population.py": 3,
     "autobot-backend/api/long_running_operations.py": 1,
     "autobot-backend/chat_workflow/manager.py": 2,
     "autobot-backend/chat_workflow/tool_handler.py": 2,

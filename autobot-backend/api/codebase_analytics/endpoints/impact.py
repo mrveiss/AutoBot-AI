@@ -32,7 +32,7 @@ from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_h
 from autobot_shared.logging_manager import get_logger
 from services.knowledge.impact_analysis import find_impact
 
-from ..storage import get_code_collection
+from ..storage import get_code_graph_collection
 
 logger = get_logger(__name__)
 
@@ -62,7 +62,10 @@ async def analyze_impact(
     does not exist", and collapsing them would send an operator hunting for a
     typo in their node id.
     """
-    collection = await asyncio.to_thread(get_code_collection)
+    # #17254: the code GRAPH collection, not the inventory one. This endpoint
+    # used to read autobot_code, whose only writer never writes record_type,
+    # so every query returned an empty reach set with indexed: true.
+    collection = await asyncio.to_thread(get_code_graph_collection)
     if collection is None:
         return JSONResponse(
             status_code=200,
@@ -70,6 +73,26 @@ async def analyze_impact(
                 "indexed": False,
                 "node_id": node_id,
                 "message": "The code graph collection is not available — run an index first.",
+            },
+        )
+
+    # #17254: an EMPTY graph is not an empty impact. Reporting indexed: true over
+    # a collection holding no nodes is the exact failure this issue was filed for
+    # -- "nothing calls this" and "nothing has been indexed" are opposite answers
+    # and were indistinguishable. The collection is dedicated to the graph, so a
+    # zero count means the graph has not been built, never that it is empty of
+    # relationships.
+    graph_size = await asyncio.to_thread(collection.count)
+    if not graph_size:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "indexed": False,
+                "node_id": node_id,
+                "message": (
+                    "The code graph collection exists but is empty — run POST "
+                    "/api/knowledge_base/index/code and retry."
+                ),
             },
         )
 

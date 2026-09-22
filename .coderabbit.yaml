@@ -25,6 +25,25 @@ reviews:
   review_status: true
   collapse_walkthrough: true
 
+  # Signal, not volume. Every finding on #17241 was valid -- including three that
+  # were real bugs in new code and one that exposed a detector blind spot -- so
+  # `profile: assertive` above stays. What is switched off here is the wrapper
+  # around each finding, not the finding.
+  #
+  # The largest single block per comment: a restatement of the finding addressed
+  # to an AI agent, duplicating the prose immediately above it.
+  enable_prompt_for_ai_agents: false
+  # Walkthrough chrome. None of it is read here: the PR body states the intent,
+  # and labels and reviewers are decided by the repo's own rules, not suggested.
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  suggested_labels: false
+  suggested_reviewers: false
+  # Cross-references are guessed from text and have been wrong often enough that
+  # checking each one costs more than finding the real link by hand.
+  related_issues: false
+  related_prs: false
+
   auto_review:
     enabled: true
     drafts: false

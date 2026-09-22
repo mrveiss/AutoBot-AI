@@ -207,6 +207,22 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: is the mistake this comment already records twice. A higher floor is the
 #: stricter direction: it narrows the gap, leaving 7 files of headroom here
 #: rather than the 1 that 6491 leaves against `main`'s larger population.
+#: Re-pinned 6509 -> 6511 (#17256): measured 6911 on the tree that merges this
+#: branch with main. Two new files -- api/knowledge_code_indexing.py and
+#: repo_tests/code_graph_writer_reader_agree_17254_test.py -- put it one past the
+#: 401 allowance. Ninth re-pin; the population was verified by enumerating the
+#: same globs the discover uses (6880 globbed + 31 extensionless shell scripts)
+#: rather than by adding two to the number CI last reported.
+#:
+#: Re-pinned 6507 -> 6509 (#17241): measured 6909. The previous pin was taken at
+#: 6907 and tolerates 401 (growth 400 + skips 1); this branch adds two guard
+#: files -- ansible_code_source_delegation_17243 and
+#: ai_stack_manifest_agreement_17242 -- which puts the population 402 above the
+#: floor and one file past the tolerance. Eighth re-pin, and the fifth where the
+#: branch measured correctly on its own and only collides once combined (#17142).
+#: Raising a reach FLOOR is the stricter direction: it asserts the sweep must
+#: reach MORE, unlike a size ceiling, which may only come down.
+#:
 #: Re-pinned 6491 -> 6507 (vehicle v0.9.1): measured 6907 on the tree that
 #: merges #16974, #17125, #17156, #17168, #17182 and #17186 together. Each
 #: fit alone against main's 6891; the six together do not. Seventh re-pin of
@@ -216,7 +232,7 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6507,
+    floor=6511,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
