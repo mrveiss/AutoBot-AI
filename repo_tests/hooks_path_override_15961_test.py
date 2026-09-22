@@ -229,10 +229,21 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: this floor and the fourth caused purely by combining PRs that each
 #: measured correctly -- #17142. Consolidating them into one vehicle is what
 #: made the collision surface once here instead of six times in sequence.
+#: Re-pinned 6511 -> 6523 (#16230): measured 6923 on the tree that merges this
+#: branch with main, not on main -- a floor computed against a different tree is
+#: the mistake this comment already records twice. Floor = population - growth.
+#: Tenth re-pin. This branch's own contribution is eight counting files
+#: (sync_cache_scheduler.py and its test, analytics_cost_pricing.py,
+#: schemas_analytics_pricing.py, calculators_test.py, _pricing_seed.py,
+#: pricing_refresh_baseline_fallback_test.py, no_new_hardcoded_price_table_16233_test.py)
+#: against 401 of allowance that main had already used 404 of on its own -- so
+#: this branch did not cause the red and could not have avoided it. That is the
+#: #17142 shape once more, and at ten re-pins the allowance is the thing to
+#: question, not the floor: 400 has not tracked how fast this tree adds files.
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6511,
+    floor=6523,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
