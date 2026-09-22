@@ -283,3 +283,40 @@ register_env_var(
         component="ai",
     )
 )
+
+
+# Moved here from env_registry.py (#16230): three "ai"-component specs that had
+# stayed in the parent while every other component's had been split out. The
+# parent is grandfathered at its ceiling and the pricing split needed one line
+# there. Their three hardcoded-value baseline rows moved with them -- relocating
+# a spec must not silently drop the record of what it contains.
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CLASSIFICATION_MODEL",
+        type=str,
+        default="gemma2:2b",
+        description="Ollama model name used for intent classification.",
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_OLLAMA_BASE_URL",
+        type=str,
+        default=None,
+        description="Base URL of the local Ollama API (e.g. http://localhost:11434).",
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ORCHESTRATOR_MODEL",
+        type=str,
+        default="llama3.2:1b",
+        description="Ollama model name used for the main orchestrator/routing loop.",
+        component="ai",
+    )
+)

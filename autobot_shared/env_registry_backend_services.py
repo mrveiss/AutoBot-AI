@@ -31,11 +31,6 @@ Closes GH#7081.
 
 from __future__ import annotations
 
-# The pricing variables were split out of this file when it reached the 600-line
-# hard limit (#16230). Imported here rather than from env_registry.py, which is
-# grandfathered at its own ceiling and has no line to spare: the split is an
-# implementation detail of this component and should not cost the loader a line.
-from autobot_shared import env_registry_pricing  # noqa: E402,F401
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(

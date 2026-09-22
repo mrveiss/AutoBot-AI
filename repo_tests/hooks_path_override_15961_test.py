@@ -243,7 +243,12 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6523,
+    # Re-pinned 6523 -> 6525 (#16230): measured 6925 on the merged tree, two files
+    # after the 6523 pin taken earlier in the same session. Eleventh re-pin, second
+    # within one branch. Filed as its own issue rather than absorbed again: a floor
+    # that needs re-pinning twice in one day is telling you the growth allowance is
+    # wrong, not that the floor is.
+    floor=6525,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
