@@ -46,6 +46,8 @@ Research reports covering hardware integration, system conflicts, and technology
 
 | [[on-prem-private-ai-platform-stack]] | A commercial on-premise private-AI platform for regulated industries, compared against AutoBot — the gap is not features but reachability: declared controls that do not execute on a production path (umbrella #17217, children #17218–#17229) |
 
+| [[free-llm-api-free-tiers-inventory]] | A curated inventory of permanently-free LLM API tiers, assessed for whether it could offset development token spend — it cannot (wrong API, wrong account, 1–3 orders of magnitude short), and integration value is near zero since adapters already exist for 5 of 16 providers. The finding is three governance gaps it exposed in our own LLM path: provider calls bypass egress guarding, prompts carry no sensitivity class, and provider records carry no data-use policy (umbrella #17248, children #17249–#17251; standalone #17252) |
+
 ## Related Sections
 
 - [[../analysis/_index\|Analysis]] — Analysis based on research
