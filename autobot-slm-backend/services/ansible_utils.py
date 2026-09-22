@@ -100,6 +100,39 @@ def _msg_from_following_lines(lines: list[str], index: int) -> str:
     return ""
 
 
+# Lines that end a single task's output block. Scanning for ``...ignoring`` stops
+# here so one task's ignored failure is never attributed to another's.
+_RESULT_BOUNDARY = ("TASK [", "RUNNING HANDLER [", "fatal:", "ok:", "changed:", "skipping:", "PLAY")
+
+
+def _failure_was_ignored(lines: list[str], index: int) -> bool:
+    """True when ansible printed ``...ignoring`` for the ``fatal:`` at *index*.
+
+    A task with ``ignore_errors: true`` still prints a full ``fatal:`` line and
+    only then ``...ignoring``. Keying on ``fatal:`` alone therefore reports a task
+    that succeeded by design.
+
+    That is the normal first-provision path, not an edge case: both marker reads in
+    ``roles/_shared/tasks/sync_deletions.yml`` are ``ignore_errors: true`` because a
+    host with nothing deployed yet has no marker to read, so every first run emits
+    two ignored failures. Counting them buries the one real failure among them.
+    """
+    # Scan to the next result boundary, not to a fixed line count. Under the
+    # yaml callback one task result can run to hundreds of lines -- a numeric
+    # cap would stop inside the result and report an ignored failure as a real
+    # one, which is the bug this helper exists to prevent. The boundary list is
+    # what bounds the scan; end-of-input bounds the last result.
+    for j in range(index + 1, len(lines)):
+        stripped = lines[j].strip()
+        if not stripped:
+            continue
+        if stripped.startswith("...ignoring"):
+            return True
+        if stripped.startswith(_RESULT_BOUNDARY):
+            return False
+    return False
+
+
 def _extract_failure_summary(output: str) -> str:
     """Parse Ansible stdout and return a human-readable failure summary.
 
@@ -109,6 +142,7 @@ def _extract_failure_summary(output: str) -> str:
     """
     lines = output.splitlines()
     failures: list[str] = []
+    failed_hosts: list[str] = []
     current_task = ""
 
     i = 0
@@ -126,9 +160,10 @@ def _extract_failure_summary(output: str) -> str:
             if handler_match:
                 current_task = handler_match.group(1).strip()
 
-        if line.startswith("fatal:"):
+        if line.startswith("fatal:") and not _failure_was_ignored(lines, i):
             host_match = re.search(r"fatal: \[([^\]]+)\]", line)
             host = host_match.group(1) if host_match else "unknown host"
+            failed_hosts.append(host)
             failure_type = "UNREACHABLE" if "UNREACHABLE" in line else "FAILED"
 
             # #14298: the message lives on the fatal line itself under the
@@ -145,9 +180,19 @@ def _extract_failure_summary(output: str) -> str:
     if not failures:
         return ""
 
-    count = len(failures)
-    noun = "host" if count == 1 else "hosts"
-    return f"{count} {noun} failed \u2014 " + "; ".join(failures)
+    # Count hosts and failures separately. `failures` holds one entry per `fatal:`
+    # line, so reporting its length as a host count made one host failing three
+    # tasks read as "3 hosts failed" -- on a two-host run, more hosts than exist.
+    host_count = len(dict.fromkeys(failed_hosts))
+    failure_count = len(failures)
+    if failure_count == host_count:
+        noun = "host" if host_count == 1 else "hosts"
+        headline = f"{host_count} {noun} failed"
+    else:
+        f_noun = "failure" if failure_count == 1 else "failures"
+        h_noun = "host" if host_count == 1 else "hosts"
+        headline = f"{failure_count} {f_noun} on {host_count} {h_noun}"
+    return f"{headline} \u2014 " + "; ".join(failures)
 
 
 def parse_unreachable_hosts(output: str) -> list[str]:

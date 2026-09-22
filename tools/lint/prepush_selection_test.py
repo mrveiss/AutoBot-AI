@@ -65,3 +65,92 @@ def test_every_selected_test_is_printed_with_its_reason():
     assert format_selection({"a_test.py": "changed", "b_test.py": "co-located with b.py"}) == (
         "a_test.py\tchanged\nb_test.py\tco-located with b.py\n"
     )
+
+
+# ---------------------------------------------------------------------------
+# #17241: tree-scanning guards. Every red on that PR was a guard that scans the
+# repository by glob or enumerates every tracked file. Neither rule above can
+# reach one: they are co-located with nothing, so the push saw green and CI
+# failed ten minutes later, four times.
+# ---------------------------------------------------------------------------
+
+_DECLARED = {
+    "*.yml": frozenset({"repo_tests/test_deploy_constraint_rewrite_14272.py"}),
+    "*.md": frozenset({"repo_tests/doc_sync_hook_resolves_indexer_15845_test.py"}),
+}
+
+
+def test_a_changed_file_runs_the_guards_that_declare_a_matching_glob():
+    """The shard-3 and shard-11 reds: an ansible edit and a new research doc."""
+    chosen = select(
+        ["autobot-slm-backend/ansible/roles/backend/tasks/main.yml"],
+        patterns=_PATTERNS,
+        ignores=(),
+        exists=lambda rel: True,
+        declared_globs=_DECLARED,
+    )
+
+    assert "repo_tests/test_deploy_constraint_rewrite_14272.py" in chosen
+    assert "glob" in chosen["repo_tests/test_deploy_constraint_rewrite_14272.py"]
+
+
+def test_a_glob_that_does_not_match_selects_nothing():
+    """The contrast: matching everything would be as useless as matching nothing."""
+    chosen = select(
+        ["autobot-backend/api/chat.py"],
+        patterns=_PATTERNS,
+        ignores=(),
+        exists=lambda rel: True,
+        declared_globs=_DECLARED,
+    )
+
+    assert "repo_tests/test_deploy_constraint_rewrite_14272.py" not in chosen
+    assert "repo_tests/doc_sync_hook_resolves_indexer_15845_test.py" not in chosen
+
+
+def test_adding_a_guard_runs_the_guards_that_police_guards():
+    """The shard-2 and shard-8 reds: a new repo_tests file is checked by both."""
+    chosen = _run(
+        ["repo_tests/ansible_code_source_delegation_17243_test.py"],
+        present={
+            "repo_tests/ansible_code_source_delegation_17243_test.py",
+            "repo_tests/glob_declared_reads_15900_test.py",
+            "repo_tests/one_repo_root_spelling_15925_test.py",
+        },
+    )
+
+    assert "repo_tests/glob_declared_reads_15900_test.py" in chosen
+    assert "repo_tests/one_repo_root_spelling_15925_test.py" in chosen
+
+
+def test_a_non_guard_change_does_not_drag_in_the_guard_police():
+    """They run when repo_tests changes, not on every push."""
+    chosen = _run(["autobot-backend/api/chat.py"], present={"autobot-backend/api/chat_test.py"})
+
+    assert "repo_tests/glob_declared_reads_15900_test.py" not in chosen
+
+
+def test_a_renamed_guard_police_entry_fails_open():
+    """A stale entry must not block a push; exists() drops it."""
+    chosen = _run(["repo_tests/some_new_guard_test.py"], present={"repo_tests/some_new_guard_test.py"})
+
+    assert "repo_tests/glob_declared_reads_15900_test.py" not in chosen
+    assert chosen == {"repo_tests/some_new_guard_test.py": "changed"}
+
+
+def test_the_record_is_parsed_as_data_not_imported():
+    """The real record must yield real globs, or the selection silently does nothing."""
+    from tools.lint.prepush_selection import GLOB_RECORD, glob_declared_guards
+
+    declared = glob_declared_guards((_REPO_ROOT / GLOB_RECORD).read_text(encoding="utf-8"))
+
+    assert len(declared) >= 10, f"only {len(declared)} globs parsed; the record shape changed"
+    assert all(isinstance(guards, frozenset) and guards for guards in declared.values())
+
+
+def test_an_unparseable_record_degrades_instead_of_breaking_the_push():
+    """A syntax error in the record must not make every push fail."""
+    from tools.lint.prepush_selection import glob_declared_guards
+
+    assert glob_declared_guards("def broken(:\n") == {}
+    assert glob_declared_guards("SOMETHING_ELSE = 1\n") == {}
