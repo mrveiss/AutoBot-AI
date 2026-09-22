@@ -38,6 +38,13 @@
       rev-parse HEAD
   register: _deployed_commit_git
   changed_when: false
+  # #17243: read code_source on the CONTROLLER. It is the git checkout and no
+  # task syncs it to a remote node, so this git call fails on any non-manager
+  # caller that does not pass deployed_commit_value in. sync_deletions.yml
+  # delegates the identical `rev-parse HEAD` for the same reason -- two shared
+  # tasks doing one operation should not disagree about where it runs.
+  delegate_to: localhost
+  become: false
   when: deployed_commit_value | default('') | length == 0
   tags: ['slm', 'deploy']
 
