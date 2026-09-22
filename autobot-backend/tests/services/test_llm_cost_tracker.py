@@ -2,240 +2,251 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for LLM cost tracker pricing. Issue #1961."""
+"""Tests for LLM cost tracker pricing. Issues #1961, #16230.
 
-from datetime import date, timedelta
+Rewritten for #16230. This module used to import ``MODEL_PRICING`` from
+``services.llm_cost_tracker`` and assert properties of that hardcoded table --
+completeness, orderings, zero-priced local models. The table is gone; pricing
+is runtime state mirrored from Redis by ``llm_shared.pricing.sync_cache``.
+
+Two of the old properties do not survive that move and are **not** restated
+here as weaker versions of themselves:
+
+* *"every required model has an entry"* was a commit-time fact about a literal.
+  Whether the live catalogue covers a model is a property of Redis at runtime,
+  and a repo test that asserted it would be asserting nothing.
+* *"opus costs more than haiku"*, *"gpt-4.1 is cheaper than gpt-4-turbo"* were
+  assertions about the table's numbers. The numbers now come from a vendor
+  catalogue, and pinning them here would pin a copy of it.
+
+What replaces them is the behaviour those tests existed to protect, which is
+checkable against an injected snapshot: the right price is *selected* (exact →
+longest-prefix → tier-correct fallback pattern), a local model is free without
+consulting the cache at all, and a cold or stale cache degrades loudly to
+$0.00 rather than silently pricing off fabricated data.
+"""
+
+import logging
+import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_shared.local_models import LOCAL_MODEL_NAMES
 from constants.model_constants import (
-    ANTHROPIC_CLAUDE35_SONNET,
     ANTHROPIC_CLAUDE_HAIKU4_5,
     ANTHROPIC_CLAUDE_OPUS4,
     ANTHROPIC_CLAUDE_SONNET4,
-    GOOGLE_GEMINI20_FLASH,
-    GOOGLE_GEMINI25_FLASH,
-    GOOGLE_GEMINI25_PRO,
-    LOCAL_CODELLAMA,
-    LOCAL_DEEPSEEK_CODER,
-    LOCAL_DEEPSEEK_R1,
-    LOCAL_GEMMA2,
-    LOCAL_GEMMA3,
-    LOCAL_LLAMA3,
-    LOCAL_LLAMA31,
-    LOCAL_LLAMA32,
-    LOCAL_LLAMA33,
-    LOCAL_MISTRAL,
-    LOCAL_MIXTRAL,
-    LOCAL_PHI3,
-    LOCAL_PHI4,
-    LOCAL_QWEN3,
-    LOCAL_QWEN25,
-    OPENAI_GPT4_TURBO,
     OPENAI_GPT4O,
     OPENAI_GPT41,
-    OPENAI_GPT41_MINI,
-    OPENAI_GPT41_NANO,
     OPENAI_O3,
     OPENAI_O3_MINI,
-    OPENAI_O4_MINI,
 )
-from services.llm_cost_tracker import (
-    MODEL_PRICING,
-    PRICING_STALENESS_DAYS,
-    PRICING_VERSION,
-    LLMCostTracker,
-    _check_pricing_staleness,
-)
+from llm_shared.pricing import sync_cache
+from llm_shared.pricing.sources import ModelPricing
+from services.llm_cost_tracker import LLMCostTracker
 from tests.fixtures.mocks import make_async_redis, make_redis_pipeline
 
-
-class TestModelPricingCompleteness:
-    """Verify MODEL_PRICING covers all required 2025-2026 models."""
-
-    REQUIRED_MODELS = [
-        # Anthropic Claude 4.x
-        ANTHROPIC_CLAUDE_OPUS4,
-        ANTHROPIC_CLAUDE_SONNET4,
-        ANTHROPIC_CLAUDE_HAIKU4_5,
-        # OpenAI GPT-4.1 family
-        OPENAI_GPT41,
-        OPENAI_GPT41_MINI,
-        OPENAI_GPT41_NANO,
-        # OpenAI reasoning
-        OPENAI_O3,
-        OPENAI_O3_MINI,
-        OPENAI_O4_MINI,
-        # Google Gemini 2.5
-        GOOGLE_GEMINI25_PRO,
-        GOOGLE_GEMINI25_FLASH,
-        # Existing baseline models
-        OPENAI_GPT4O,
-        ANTHROPIC_CLAUDE35_SONNET,
-        GOOGLE_GEMINI20_FLASH,
-    ]
-
-    LOCAL_MODELS = [
-        LOCAL_LLAMA3,
-        LOCAL_LLAMA31,
-        LOCAL_LLAMA32,
-        LOCAL_LLAMA33,
-        LOCAL_MISTRAL,
-        LOCAL_MIXTRAL,
-        LOCAL_CODELLAMA,
-        LOCAL_QWEN25,
-        LOCAL_QWEN3,
-        LOCAL_DEEPSEEK_CODER,
-        LOCAL_DEEPSEEK_R1,
-        LOCAL_PHI3,
-        LOCAL_PHI4,
-        LOCAL_GEMMA2,
-        LOCAL_GEMMA3,
-    ]
-
-    @pytest.mark.parametrize("model", REQUIRED_MODELS)
-    def test_model_has_pricing(self, model):
-        """Every required model must have an entry in MODEL_PRICING."""
-        assert model in MODEL_PRICING, f"Missing pricing for {model}"
-
-    @pytest.mark.parametrize("model", REQUIRED_MODELS)
-    def test_pricing_has_input_and_output(self, model):
-        """Each pricing entry must contain both input and output keys."""
-        if model in MODEL_PRICING:
-            assert "input" in MODEL_PRICING[model], f"{model} missing 'input' key"
-            assert "output" in MODEL_PRICING[model], f"{model} missing 'output' key"
-
-    def test_no_negative_prices(self):
-        """No model should have a negative price."""
-        for model, pricing in MODEL_PRICING.items():
-            assert pricing["input"] >= 0, f"{model} has negative input price"
-            assert pricing["output"] >= 0, f"{model} has negative output price"
-
-    @pytest.mark.parametrize("model", LOCAL_MODELS)
-    def test_local_models_are_free(self, model):
-        """All local/Ollama models must be priced at $0."""
-        if model in MODEL_PRICING:
-            assert MODEL_PRICING[model]["input"] == 0.0, f"{model} local model should have input price 0.0"
-            assert MODEL_PRICING[model]["output"] == 0.0, f"{model} local model should have output price 0.0"
-
-    def test_paid_models_have_positive_output_price(self):
-        """Cloud API models must have a positive output price."""
-        cloud_prefixes = ("claude-", "gpt-", "o1", "o3", "gemini-")
-        for model, pricing in MODEL_PRICING.items():
-            if model.startswith(cloud_prefixes):
-                assert pricing["output"] > 0, f"Cloud model {model} should have positive output price"
-
-    def test_claude_opus_4_more_expensive_than_haiku(self):
-        """Opus tier should cost more than Haiku tier."""
-        opus = MODEL_PRICING[ANTHROPIC_CLAUDE_OPUS4]["output"]
-        haiku = MODEL_PRICING[ANTHROPIC_CLAUDE_HAIKU4_5]["output"]
-        assert opus > haiku, "Claude Opus 4 output should cost more than Haiku 4.5"
-
-    def test_gpt41_cheaper_than_gpt4_turbo(self):
-        """GPT-4.1 should be cheaper than GPT-4-turbo."""
-        gpt41 = MODEL_PRICING[OPENAI_GPT41]["input"]
-        turbo = MODEL_PRICING[OPENAI_GPT4_TURBO]["input"]
-        assert gpt41 < turbo, "GPT-4.1 input should cost less than GPT-4-turbo"
-
-    def test_o3_more_expensive_than_o3_mini(self):
-        """o3 reasoning should cost more than o3-mini."""
-        o3 = MODEL_PRICING[OPENAI_O3]["input"]
-        o3_mini = MODEL_PRICING[OPENAI_O3_MINI]["input"]
-        assert o3 >= o3_mini, "o3 input should cost at least as much as o3-mini"
-
-    def test_deepseek_api_models_have_positive_price(self):
-        """DeepSeek hosted API models should have a positive price."""
-        from constants.model_constants import DEEPSEEK_R1_API, DEEPSEEK_V3
-
-        for model in (DEEPSEEK_V3, DEEPSEEK_R1_API):
-            assert MODEL_PRICING[model]["input"] > 0, f"{model} should have positive input price"
-            assert MODEL_PRICING[model]["output"] > 0, f"{model} should have positive output price"
-
-    def test_pricing_version_is_valid_iso_date(self):
-        """PRICING_VERSION must be a valid ISO date string."""
-        try:
-            date.fromisoformat(PRICING_VERSION)
-        except ValueError:
-            pytest.fail(f"PRICING_VERSION {PRICING_VERSION!r} is not a valid ISO date")
+_LOGGER_NAME = "services.llm_cost_tracker"
 
 
-class TestPricingStaleness:
-    """Verify the staleness detection logic. Issue #1961."""
-
-    def test_fresh_pricing_emits_no_warning(self, caplog):
-        """No warning when pricing was updated today."""
-        today = date.today().isoformat()
-        with patch("services.llm_cost_tracker.PRICING_VERSION", today):
-            import logging
-
-            with caplog.at_level(logging.WARNING, logger="services.llm_cost_tracker"):
-                _check_pricing_staleness()
-        assert not any("days old" in r.message for r in caplog.records)
-
-    def test_stale_pricing_emits_warning(self, caplog):
-        """A WARNING must be emitted when the pricing table is past the threshold."""
-        stale_date = (date.today() - timedelta(days=PRICING_STALENESS_DAYS + 1)).isoformat()
-        with patch("services.llm_cost_tracker.PRICING_VERSION", stale_date):
-            import logging
-
-            with caplog.at_level(logging.WARNING, logger="services.llm_cost_tracker"):
-                _check_pricing_staleness()
-        assert any("days old" in r.message for r in caplog.records)
-
-    def test_invalid_pricing_version_emits_warning(self, caplog):
-        """An invalid PRICING_VERSION string must emit a WARNING."""
-        with patch("services.llm_cost_tracker.PRICING_VERSION", "not-a-date"):
-            import logging
-
-            with caplog.at_level(logging.WARNING, logger="services.llm_cost_tracker"):
-                _check_pricing_staleness()
-        assert any("valid ISO date" in r.message for r in caplog.records)
+def _price(model_id: str, inp: float, out: float) -> ModelPricing:
+    return ModelPricing(provider="test", model_id=model_id, input_per_1m=inp, output_per_1m=out)
 
 
-class TestUnknownModelFallback:
-    """Verify pattern-based pricing heuristics for unknown models. Issue #1961."""
+#: A deliberately small catalogue. Every entry is here because some test below
+#: names it; it is not a trimmed copy of the real one, and no test may assume a
+#: model it does not put in here itself.
+_CATALOGUE = {
+    ANTHROPIC_CLAUDE_OPUS4.lower(): _price(ANTHROPIC_CLAUDE_OPUS4, 15.0, 75.0),
+    ANTHROPIC_CLAUDE_SONNET4.lower(): _price(ANTHROPIC_CLAUDE_SONNET4, 3.0, 15.0),
+    ANTHROPIC_CLAUDE_HAIKU4_5.lower(): _price(ANTHROPIC_CLAUDE_HAIKU4_5, 1.0, 5.0),
+    OPENAI_GPT4O.lower(): _price(OPENAI_GPT4O, 2.5, 10.0),
+    OPENAI_GPT41.lower(): _price(OPENAI_GPT41, 2.0, 8.0),
+    OPENAI_O3.lower(): _price(OPENAI_O3, 10.0, 40.0),
+    OPENAI_O3_MINI.lower(): _price(OPENAI_O3_MINI, 1.1, 4.4),
+}
+
+
+@pytest.fixture(autouse=True)
+def _cold_cache():
+    """Every test starts from a never-populated cache and leaves one behind.
+
+    ``sync_cache._snapshot`` is a module global shared by every caller in the
+    process, so a test that populated it and did not clear it would hand the
+    next one a catalogue it never asked for -- the pricing equivalent of the
+    order-dependent pass this module is being rewritten away from.
+    """
+    sync_cache._reset_for_tests()
+    yield
+    sync_cache._reset_for_tests()
+
+
+def _populate(prices=None, age_s: float = 0.0) -> None:
+    """Install *prices* as the live snapshot, ``age_s`` seconds old."""
+    sync_cache._snapshot = sync_cache._Snapshot(
+        prices=_CATALOGUE if prices is None else prices,
+        fetched_at=time.monotonic() - age_s,
+    )
+
+
+class TestPriceSelection:
+    """Which catalogue entry a model name resolves to (#1961, #16230)."""
 
     def setup_method(self):
         self.tracker = LLMCostTracker()
 
-    def test_unknown_claude_sonnet_variant_uses_sonnet_pricing(self):
-        """An unrecognised claude-sonnet-X model should be priced like claude-sonnet."""
+    def test_an_exactly_known_model_uses_its_own_price(self):
+        _populate()
+        entry = _CATALOGUE[OPENAI_GPT4O.lower()]
+        cost = self.tracker.calculate_cost(OPENAI_GPT4O, 1_000_000, 1_000_000)
+        assert cost == round(entry.input_per_1m + entry.output_per_1m, 6)
+
+    def test_a_versioned_suffix_resolves_by_longest_prefix(self):
+        """``gpt-4o-2024-11-20`` is the same model as ``gpt-4o``."""
+        _populate()
+        entry = _CATALOGUE[OPENAI_GPT4O.lower()]
+        cost = self.tracker.calculate_cost(f"{OPENAI_GPT4O}-2024-11-20", 1_000_000, 0)
+        assert cost == round(entry.input_per_1m, 6)
+
+    def test_a_dotted_family_prefix_resolves_within_its_own_family(self):
+        """``gpt-4.1-preview`` is a GPT-4.1, not a GPT-4o and not a GPT-4-turbo."""
+        _populate()
+        entry = _CATALOGUE[OPENAI_GPT41.lower()]
+        cost = self.tracker.calculate_cost(f"{OPENAI_GPT41}-preview", 1_000_000, 0)
+        assert cost == round(entry.input_per_1m, 6)
+        assert cost != round(_CATALOGUE[OPENAI_GPT4O.lower()].input_per_1m, 6)
+
+    def test_o3_does_not_resolve_to_o3_mini(self):
+        """#2030's bidirectional-substring bug: prefix order must be longest-first.
+
+        Both keys are in the catalogue and one is a prefix of the other, so a
+        shortest-first scan would price ``o3`` at ``o3-mini``'s rate. The two
+        prices differ by ~9x, which is the whole reason this is pinned.
+        """
+        _populate()
+        cost = self.tracker.calculate_cost(OPENAI_O3, 1_000_000, 0)
+        assert cost == round(_CATALOGUE[OPENAI_O3.lower()].input_per_1m, 6)
+        assert cost != round(_CATALOGUE[OPENAI_O3_MINI.lower()].input_per_1m, 6)
+
+    def test_o3_mini_still_resolves_to_itself(self):
+        """The contrast: fixing the above must not send ``o3-mini`` to ``o3``."""
+        _populate()
+        cost = self.tracker.calculate_cost(OPENAI_O3_MINI, 1_000_000, 0)
+        assert cost == round(_CATALOGUE[OPENAI_O3_MINI.lower()].input_per_1m, 6)
+
+
+class TestUnknownModelFallback:
+    """Pattern-based pricing heuristics for models the catalogue lacks (#1961)."""
+
+    def setup_method(self):
+        self.tracker = LLMCostTracker()
+
+    def test_an_unknown_sonnet_variant_is_priced_as_sonnet(self):
+        _populate()
+        entry = _CATALOGUE[ANTHROPIC_CLAUDE_SONNET4.lower()]
         cost = self.tracker.calculate_cost("claude-sonnet-5-future", 1_000_000, 1_000_000)
-        expected_input = MODEL_PRICING["claude-sonnet-4-20250514"]["input"]
-        expected_output = MODEL_PRICING["claude-sonnet-4-20250514"]["output"]
-        assert cost == round(expected_input + expected_output, 6)
+        assert cost == round(entry.input_per_1m + entry.output_per_1m, 6)
 
-    def test_unknown_claude_opus_variant_uses_opus_pricing(self):
-        """An unrecognised claude-opus-X model should use opus-tier pricing."""
-        cost = self.tracker.calculate_cost("claude-opus-5-future", 1_000_000, 1_000_000)
-        expected_input = MODEL_PRICING["claude-opus-4-20250514"]["input"]
-        expected_output = MODEL_PRICING["claude-opus-4-20250514"]["output"]
-        assert cost == round(expected_input + expected_output, 6)
+    def test_an_unknown_opus_variant_is_priced_as_opus_not_as_generic_claude(self):
+        """Tier order, which is the property the old opus>haiku assertion protected.
 
-    def test_unknown_gpt41_variant_uses_gpt41_pricing(self):
-        """An unrecognised gpt-4.1-X model should be resolved via substring match."""
-        # "gpt-4.1-preview" contains "gpt-4.1" so it will match the known key.
-        cost = self.tracker.calculate_cost("gpt-4.1-preview", 1_000_000, 1_000_000)
-        expected_input = MODEL_PRICING["gpt-4.1"]["input"]
-        expected_output = MODEL_PRICING["gpt-4.1"]["output"]
-        assert cost == round(expected_input + expected_output, 6)
+        ``_FALLBACK_PATTERNS`` lists ``claude-opus`` before the bare ``claude``
+        catch-all. If that order were lost, an unknown Opus would be billed at
+        Sonnet's rate -- 5x under, silently.
+        """
+        _populate()
+        opus = _CATALOGUE[ANTHROPIC_CLAUDE_OPUS4.lower()]
+        sonnet = _CATALOGUE[ANTHROPIC_CLAUDE_SONNET4.lower()]
+        cost = self.tracker.calculate_cost("claude-opus-5-future", 1_000_000, 0)
+        assert cost == round(opus.input_per_1m, 6)
+        assert cost != round(sonnet.input_per_1m, 6)
 
-    def test_fully_unknown_model_returns_zero(self, caplog):
-        """A model with no name-pattern match must return 0.0 and log a warning."""
-        import logging
+    def test_an_unknown_haiku_variant_is_priced_as_haiku(self):
+        _populate()
+        entry = _CATALOGUE[ANTHROPIC_CLAUDE_HAIKU4_5.lower()]
+        cost = self.tracker.calculate_cost("claude-haiku-9-future", 1_000_000, 0)
+        assert cost == round(entry.input_per_1m, 6)
 
-        with caplog.at_level(logging.WARNING, logger="services.llm_cost_tracker"):
+    def test_a_fallback_whose_reference_model_is_absent_does_not_invent_a_price(self):
+        """The pattern matches but the catalogue has no Opus -- that is $0, not a guess."""
+        _populate({OPENAI_GPT4O.lower(): _CATALOGUE[OPENAI_GPT4O.lower()]})
+        assert self.tracker.calculate_cost("claude-opus-5-future", 1_000_000, 1_000_000) == 0.0
+
+    def test_a_fully_unknown_model_returns_zero_and_says_so(self, caplog):
+        _populate()
+        with caplog.at_level(logging.WARNING, logger=_LOGGER_NAME):
             cost = self.tracker.calculate_cost("totally-unknown-xyz-model", 100, 100)
         assert cost == 0.0
-        assert any("no pricing entry" in r.message for r in caplog.records)
+        assert any("no live catalogue price" in r.message for r in caplog.records)
 
-    def test_known_model_does_not_use_fallback(self):
-        """An exactly-known model must use its own pricing, not the fallback."""
-        exact_pricing = MODEL_PRICING["gpt-4o"]
-        cost = self.tracker.calculate_cost("gpt-4o", 1_000_000, 1_000_000)
-        expected = round(exact_pricing["input"] + exact_pricing["output"], 6)
-        assert cost == expected
+
+class TestLocalModelsAreFreeWithoutTheCatalogue:
+    """#16316: a local model is free by construction, checked before the cache."""
+
+    def setup_method(self):
+        self.tracker = LLMCostTracker()
+
+    @pytest.mark.parametrize("model", sorted(LOCAL_MODEL_NAMES))
+    def test_every_local_model_costs_nothing(self, model):
+        _populate()
+        assert self.tracker.calculate_cost(model, 1_000_000, 1_000_000) == 0.0
+
+    @pytest.mark.parametrize("model", sorted(LOCAL_MODEL_NAMES))
+    def test_every_local_model_costs_nothing_with_a_cold_cache(self, model, caplog):
+        """The stronger half: absence from the catalogue must not read as unknown.
+
+        The cache is never populated here, so a local model reaching the
+        snapshot lookup at all would raise ``PricingCacheCold`` internally and
+        take the degraded path. Both paths return 0.0, so the *value* cannot
+        tell them apart -- the warning is what distinguishes "free" from
+        "could not price it", and there must not be one.
+        """
+        with caplog.at_level(logging.WARNING, logger=_LOGGER_NAME):
+            assert self.tracker.calculate_cost(model, 1_000_000, 1_000_000) == 0.0
+        # Scoped to this module's logger: caplog collects whatever else happens
+        # to propagate, and an unrelated warning must not read as a pricing one.
+        mine = [r for r in caplog.records if r.name == _LOGGER_NAME]
+        assert not mine, f"{model} was priced through the cache, not recognised as local: {mine}"
+
+
+class TestColdAndStaleCacheDegradeLoudly:
+    """The staleness contract, moved off PRICING_VERSION onto the live snapshot.
+
+    ``calculate_cost`` is an analytics figure, not a budget gate, so it degrades
+    to $0.00 instead of refusing -- but never silently. ``llc/services/budget.py``
+    is the enforcement path and raises ``UnpricedModel`` for the same condition.
+    """
+
+    def setup_method(self):
+        self.tracker = LLMCostTracker()
+
+    def test_a_cold_cache_prices_at_zero_and_warns(self, caplog):
+        with caplog.at_level(logging.WARNING, logger=_LOGGER_NAME):
+            cost = self.tracker.calculate_cost(OPENAI_GPT4O, 1_000_000, 1_000_000)
+        assert cost == 0.0
+        assert any("pricing cache unavailable" in r.message for r in caplog.records)
+
+    def test_a_stale_cache_prices_at_zero_and_warns(self, monkeypatch, caplog):
+        """Populated but too old is the same answer as never populated.
+
+        ``PricingCacheStale`` subclasses ``PricingCacheCold`` precisely so this
+        caller does not have to distinguish them; this pins that it does not.
+        """
+        monkeypatch.setattr(sync_cache, "MAX_SNAPSHOT_AGE_S", 10)
+        _populate(age_s=11)
+        with caplog.at_level(logging.WARNING, logger=_LOGGER_NAME):
+            cost = self.tracker.calculate_cost(OPENAI_GPT4O, 1_000_000, 1_000_000)
+        assert cost == 0.0
+        assert any("pricing cache unavailable" in r.message for r in caplog.records)
+
+    def test_a_snapshot_inside_the_freshness_bound_still_prices(self, monkeypatch):
+        """The contrast, or the two tests above would pass on a cache that never works."""
+        monkeypatch.setattr(sync_cache, "MAX_SNAPSHOT_AGE_S", 10)
+        _populate(age_s=1)
+        entry = _CATALOGUE[OPENAI_GPT4O.lower()]
+        cost = self.tracker.calculate_cost(OPENAI_GPT4O, 1_000_000, 1_000_000)
+        assert cost == round(entry.input_per_1m + entry.output_per_1m, 6)
 
 
 class TestScanIterUsage:
