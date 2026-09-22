@@ -194,12 +194,12 @@
 # a role that never runs on the manager at all. The source manifest is read from
 # the same controller path the deploy task above uses.
 - name: Create filtered AI-stack requirements (on the controller, #14272, #17242)
-  ansible.builtin.command:
+  ansible.builtin.shell:
     cmd: >-
-      bash {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/scripts/build-filtered-requirements.sh
-      {{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt
-      {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}
-  register: _ai_filtered_requirements
+      bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
+      {{ code_source_dir }}/autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt
+      {{ code_source_dir }}
+      > /tmp/autobot-requirements-ai-filtered.{{ inventory_hostname }}.txt
   changed_when: false
   delegate_to: localhost
   become: false
@@ -208,7 +208,7 @@
 
 - name: Write filtered AI-stack requirements to the target (#17242)
   ansible.builtin.copy:
-    content: "{{ _ai_filtered_requirements.stdout }}\n"
+    src: "/tmp/autobot-requirements-ai-filtered.{{ inventory_hostname }}.txt"
     dest: "{{ ai_install_dir }}/requirements-ai-filtered.txt"
     owner: "{{ ai_user }}"
     mode: "0644"

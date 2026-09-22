@@ -57,11 +57,11 @@
     # below, which has always asked role_ai_stack_active -- the two sat
     # twelve lines apart and disagreed. Behaviour is unchanged whenever the
     # stack is not on this node, which is the case #3503 fixed.
-    backend_ai_stack_host: "{{ '127.0.0.1' if (role_ai_stack_active | default(false) | bool) else '10.255.255.254' }}"
+    backend_ai_stack_host: "{{ backend_wsl2_loopback_host if (role_ai_stack_active | default(false) | bool) else backend_wsl2_gateway_host }}"
   when:
     - _proc_version.content is defined
     - (_proc_version.content | b64decode | lower) is search('microsoft')
-    - backend_ai_stack_host == '127.0.0.1'
+    - backend_ai_stack_host == backend_ai_stack_host_shipped_default
   tags: ['backend', 'config']
 
 - name: "Backend | Set backend_chromadb_host on WSL2 hosts (#3541, #4084, #4087)"
@@ -964,19 +964,19 @@
   # in a world-writable directory that every host in the run would have
   # collided on the moment this task moved to the controller.
   - name: Create filtered backend requirements (on the controller, #17242)
-    ansible.builtin.command:
+    ansible.builtin.shell:
       cmd: >-
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/autobot-backend/requirements.txt
         {{ code_source_dir }}
-    register: _backend_filtered_requirements
+        > /tmp/autobot-requirements-filtered.{{ inventory_hostname }}.txt
     changed_when: false
     delegate_to: localhost
     become: false
 
   - name: Write filtered backend requirements to the target (#17242)
     ansible.builtin.copy:
-      content: "{{ _backend_filtered_requirements.stdout }}\n"
+      src: "/tmp/autobot-requirements-filtered.{{ inventory_hostname }}.txt"
       dest: "{{ backend_code_dir }}/requirements-filtered.txt"
       owner: "{{ backend_user }}"
       mode: "0644"
@@ -1028,9 +1028,45 @@
   # reporting the downgrade. Uses the repo-root requirements-gpu-torch.txt from
   # code_source (sibling of the autobot-backend subtree; not part of the
   # backend code rsync).
+  # #17243: these three manifests sit at the REPO ROOT inside code_source. The
+  # backend sync copies only code_source/autobot-backend/, so on a non-manager
+  # backend the root-level files are absent and pip aborts -- the same defect as
+  # #17242, one directory up, and missed by the first sweep because these are
+  # `pip:` tasks rather than shell ones. Stage them from the controller.
+  # Written out one task per manifest rather than as a loop: a loop renders the
+  # destination as `{{ backend_code_dir }}/{{ item }}`, and the manifest-resolution
+  # guard cannot tie a templated destination back to the manifest it carries, so
+  # the binding would read as "nothing installs it".
+  - name: "Backend | Stage requirements-gpu-torch.txt onto the target (#17243)"
+    ansible.builtin.copy:
+      src: "{{ code_source_dir }}/requirements-gpu-torch.txt"
+      dest: "{{ backend_code_dir }}/requirements-gpu-torch.txt"
+      owner: "{{ backend_user }}"
+      mode: "0644"
+    become: true
+    when: backend_gpu_available | default(false) | bool
+
+  - name: "Backend | Stage requirements-gpu-faiss.txt onto the target (#17243)"
+    ansible.builtin.copy:
+      src: "{{ code_source_dir }}/requirements-gpu-faiss.txt"
+      dest: "{{ backend_code_dir }}/requirements-gpu-faiss.txt"
+      owner: "{{ backend_user }}"
+      mode: "0644"
+    become: true
+    when: backend_gpu_available | default(false) | bool
+
+  - name: "Backend | Stage requirements-gpu.txt onto the target (#17243)"
+    ansible.builtin.copy:
+      src: "{{ code_source_dir }}/requirements-gpu.txt"
+      dest: "{{ backend_code_dir }}/requirements-gpu.txt"
+      owner: "{{ backend_user }}"
+      mode: "0644"
+    become: true
+    when: backend_gpu_available | default(false) | bool
+
   - name: "Backend | Install CUDA torch requirements (requirements-gpu-torch.txt) (#15162)"
     ansible.builtin.pip:
-      requirements: "{{ code_source_dir }}/requirements-gpu-torch.txt"
+      requirements: "{{ backend_code_dir }}/requirements-gpu-torch.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
       # #16641: see "Upgrade pip" above.
       virtualenv_command: "python3.14 -m venv"
@@ -1063,7 +1099,7 @@
 
   - name: "Backend | Install GPU faiss requirements (requirements-gpu-faiss.txt) (#15163)"
     ansible.builtin.pip:
-      requirements: "{{ code_source_dir }}/requirements-gpu-faiss.txt"
+      requirements: "{{ backend_code_dir }}/requirements-gpu-faiss.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
       # #16641: see "Upgrade pip" above.
       virtualenv_command: "python3.14 -m venv"
@@ -1079,7 +1115,7 @@
   # duplicate CUDA-torch download happens here.
   - name: "Backend | Install GPU/vLLM requirements (requirements-gpu.txt) (#10288)"
     ansible.builtin.pip:
-      requirements: "{{ code_source_dir }}/requirements-gpu.txt"
+      requirements: "{{ backend_code_dir }}/requirements-gpu.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
       # #16641: see "Upgrade pip" above.
       virtualenv_command: "python3.14 -m venv"

@@ -807,6 +807,12 @@
     # and pip aborts with "Could not open constraint file", the exact failure
     # scripts/build-filtered-requirements.sh warns about in its own header.
     # Stage the file onto the node and constrain against the local copy.
+    # Tagged `always` deliberately. The staged file is a precondition for the
+    # backend, npu/npu-worker, browser/browser-worker and deps task groups, so
+    # a tag selection like `--tags backend` would otherwise skip the staging
+    # and leave the pip step constraining against a file that is not there.
+    # Enumerating the union of consumer tags would go stale the moment another
+    # tagged consumer is added; `always` cannot, and this play already uses it.
     - name: "[PLAY 2] Ensure the constraints directory exists on the node (#17243)"
       ansible.builtin.file:
         path: "{{ autobot.base_dir }}/constraints"
@@ -814,6 +820,7 @@
         owner: autobot
         mode: "0755"
       become: true
+      tags: [always]
 
     - name: "[PLAY 2] Stage constraints/shared.txt onto the node (#17243)"
       ansible.builtin.copy:
@@ -822,6 +829,7 @@
         owner: autobot
         mode: "0644"
       become: true
+      tags: [always]
 
     - name: "[PLAY 2] Starting Node Update"
       debug:

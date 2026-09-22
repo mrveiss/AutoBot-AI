@@ -117,7 +117,12 @@ def _failure_was_ignored(lines: list[str], index: int) -> bool:
     host with nothing deployed yet has no marker to read, so every first run emits
     two ignored failures. Counting them buries the one real failure among them.
     """
-    for j in range(index + 1, min(index + 40, len(lines))):
+    # Scan to the next result boundary, not to a fixed line count. Under the
+    # yaml callback one task result can run to hundreds of lines -- a numeric
+    # cap would stop inside the result and report an ignored failure as a real
+    # one, which is the bug this helper exists to prevent. The boundary list is
+    # what bounds the scan; end-of-input bounds the last result.
+    for j in range(index + 1, len(lines)):
         stripped = lines[j].strip()
         if not stripped:
             continue
