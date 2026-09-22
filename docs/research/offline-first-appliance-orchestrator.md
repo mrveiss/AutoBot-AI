@@ -506,21 +506,25 @@ scenario matrix, so each new "should this proceed?" branch ships with no harness
 
 ### The unfinished work this exposes
 
-`ansible/roles/dependency_patching/` is **fully implemented** — venv tar.gz backup, 7-day retention
-(`autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml:10-12`), and a
-`playbooks/rollback-dependencies.yml` — and is **reachable only by hand**.
+`ansible/roles/dependency_patching/` is **fully implemented and fully wired**, and an earlier
+revision of this section said otherwise three times. The record, because the method is the
+lesson:
 
-> **Correction (2026-09-22).** An earlier revision of this paragraph said the role was "invoked by
-> nothing", citing two greps. That was wrong, and wrong in an instructive way: the greps covered
-> `api/*.py`, `services/*.py` and two named playbooks, and the role is in fact invoked by four —
-> `patch-dependencies.yml` (five times, phases 1-5), `rollback-dependencies.yml`, `patch-system-packages.yml`
-> and `rollback-system-packages.yml`. An empty result from a scope that could not contain the
-> answer was read as an absence. See `docs/developer/MEASUREMENT_DISCIPLINE.md`.
+> **Correction (2026-09-22).** This paragraph first claimed the role was "invoked by nothing",
+> then — after review — "reachable only by hand". **Both were wrong.** Verified references:
+> `playbooks/patch-dependencies.yml` (five invocations, phases 1-5),
+> `rollback-dependencies.yml`, `patch-system-packages.yml`, `rollback-system-packages.yml`;
+> `ansible/deploy.sh` runs both dependency playbooks behind the `--patch-dependencies`,
+> `--patch-dependencies-check` and `--rollback-dependencies` flags (`deploy.sh:359-388`,
+> `:491-493`, `:646-649`); and `autobot-backend/api/settings.py:213` is an admin route that
+> triggers `patch-dependencies.yml` as a Celery task.
+>
+> Each wrong version came from a grep whose scope could not contain the answer — first
+> Python-only plus two named playbooks, then the same scope with `grep -rn` and an alternation
+> `|`, which `grep` treats **literally** without `-E`, so it matched nothing for a reason
+> unrelated to the question. An empty result from a broken instrument read as an absence, twice.
+> See `docs/developer/MEASUREMENT_DISCIPLINE.md`.
 
-What survives is narrower: **nothing runs those playbooks.** No service, API route or scheduled
-task references `patch-dependencies.yml` or `rollback-dependencies.yml`
-(`grep -rn "patch-dependencies|patch_dependencies" --include=*.py autobot-slm-backend/` → 0 hits
-outside tests), and `playbooks/update-all-nodes.yml` does not include the role → 0 hits.
 Meanwhile the whole-machine self-update path it was built for has **no rollback at all** — the real
 `_snapshot_component` / `_rollback_component` pair (`api/code_sync.py:2467-2584`, with a genuine
 health gate at `:2592-2636` so a slow-but-healthy restart is never wrongly reverted) is called only
