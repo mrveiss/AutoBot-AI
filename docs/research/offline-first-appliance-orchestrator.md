@@ -515,7 +515,7 @@ lesson:
 > `playbooks/patch-dependencies.yml` (five invocations, phases 1-5),
 > `rollback-dependencies.yml`, `patch-system-packages.yml`, `rollback-system-packages.yml`;
 > `ansible/deploy.sh` runs both dependency playbooks behind the `--patch-dependencies`,
-> `--patch-dependencies-check` and `--rollback-dependencies` flags (`deploy.sh:359-388`,
+> `--patch-dependencies-check` and `--rollback-dependencies` flags (`autobot-slm-backend/ansible/deploy.sh:359-388`,
 > `:491-493`, `:646-649`); and `autobot-backend/api/settings.py:213` is an admin route that
 > triggers `patch-dependencies.yml` as a Celery task.
 >
