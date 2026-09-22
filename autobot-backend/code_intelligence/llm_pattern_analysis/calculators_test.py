@@ -154,3 +154,26 @@ def test_a_catalogue_cannot_shadow_the_default_fallback():
         {"default": ModelPricing(provider="mischief", model_id="default", input_per_1m=999.0, output_per_1m=999.0)}
     )
     assert live_pricing_per_1k()["default"] == _NON_MODEL_RATES_PER_1K["default"]
+
+
+# --- moved here from llm_pattern_analyzer_test.py (#16230) -----------------
+# `test_cost_calculation_gpt4` restated the hardcoded table's own numbers
+# ($0.03/$0.06 per 1K) and so would have kept passing while the catalogue said
+# something else entirely. The rate is injected now, so what is pinned is that
+# the projection *uses* it -- the claim the old assertion only appeared to make.
+
+
+def test_a_known_model_is_priced_at_the_catalogues_rate():
+    _populate(_catalogue(30.0, 60.0))
+    usage = TokenTracker().track_usage("gpt-4", 1000, 500)
+    expected = (1000 / 1000) * 0.03 + (500 / 1000) * 0.06
+    assert abs(usage.estimated_cost_usd - expected) < 0.001
+
+
+def test_ollama_is_free():
+    """Free by name, and free with no catalogue at all -- it is not a model."""
+    _populate(_catalogue(30.0, 60.0))
+    assert TokenTracker().track_usage("ollama", 1000, 500).estimated_cost_usd == 0.0
+
+    sync_cache._reset_for_tests()
+    assert TokenTracker().track_usage("ollama", 1000, 500).estimated_cost_usd == 0.0

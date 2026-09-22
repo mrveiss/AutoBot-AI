@@ -550,6 +550,39 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_PRICING_LOCAL_CACHE_REFRESH_INTERVAL_S",
+        type=int,
+        default=300,
+        description=(
+            "Seconds between re-reads of the pricing store into each process's own in-memory mirror "
+            "(llm_shared/pricing/sync_cache.py, #16230). Independent of "
+            "AUTOBOT_PRICING_REFRESH_INTERVAL_HOURS, which is how often Redis itself is refreshed from "
+            "the live catalogues: this only has to stay close enough to that upstream write to be a "
+            "mirror, and a short interval also recovers a worker that restarted mid-cycle rather than "
+            "leaving it cold for the rest of the daily cadence."
+        ),
+        component="pricing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_LOCAL_CACHE_MAX_AGE_S",
+        type=int,
+        default=3600,
+        description=(
+            "Age, in seconds, past which a process's pricing mirror is refused as stale rather than "
+            "served (PricingCacheStale, #16230). This is what stops a scheduler that quietly stopped "
+            "refreshing from looking identical to one that is working -- above this bound a reader gets "
+            "an exception, never an old price presented as current. Must exceed "
+            "AUTOBOT_PRICING_LOCAL_CACHE_REFRESH_INTERVAL_S by enough to survive a few failed ticks."
+        ),
+        component="pricing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_ORPHAN_GRACE_HOURS",
         type=int,
         default=24,

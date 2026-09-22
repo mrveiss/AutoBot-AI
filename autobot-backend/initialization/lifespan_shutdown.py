@@ -288,7 +288,7 @@ async def stop_periodic_schedulers(app: FastAPI, report: "_ShutdownReport") -> N
             report.failed("Community cluster task drain", cluster_stop_error)
 
     # #16230: drain the pricing cache mirror the same bounded, shielded way.
-    from llm_shared.pricing.sync_cache import stop_pricing_cache_scheduler
+    from llm_shared.pricing.sync_cache_scheduler import stop_pricing_cache_scheduler
 
     if await report.run("Pricing cache scheduler drain", stop_pricing_cache_scheduler(app)):
         logger.info("✅ Pricing cache scheduler stopped")

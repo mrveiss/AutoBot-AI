@@ -54,7 +54,6 @@ from typing import TYPE_CHECKING
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
-from llc.scheduler.base import PollLoopScheduler
 
 if TYPE_CHECKING:
     from llm_shared.pricing.sources import ModelPricing
@@ -208,61 +207,15 @@ def _reset_for_tests() -> None:
     _snapshot = None
 
 
-class PricingCacheScheduler(PollLoopScheduler):
-    """Periodically mirrors `PricingRedisStore` into this process's memory (#16230).
-
-    First non-LLC use of `PollLoopScheduler` -- nothing about the base class
-    is LLC-specific, and hand-rolling a second poll loop with its own
-    cancellation-safety contract was the alternative this reuses instead of
-    repeating.
-    """
-
-    _task_name = "PricingCacheScheduler"
-
-    def __init__(self, poll_interval: float = LOCAL_CACHE_REFRESH_INTERVAL_S) -> None:
-        super().__init__(poll_interval)
-
-    async def _tick(self) -> None:
-        try:
-            count = await refresh_snapshot()
-            logger.info("PricingCacheScheduler: mirrored %d model price(s) from Redis", count)
-        except Exception:
-            # #16316: a failed refresh must not clear an already-populated
-            # snapshot -- that would turn "Redis had a hiccup" into "every
-            # model looks unpriced". `refresh_snapshot` only replaces
-            # `_snapshot` on success (the exception is raised before the
-            # module global is touched), so a failed tick here leaves the
-            # previous snapshot, stale but real, in place.
-            logger.exception("PricingCacheScheduler: refresh failed, keeping the previous snapshot")
-
-
-async def start_pricing_cache_scheduler(app) -> None:
-    """Start `PricingCacheScheduler` and store it on `app.state` (#16230).
-
-    Defined here, not in `initialization/lifespan.py`, which is at its
-    file-size ratchet ceiling -- the scheduler this starts already lives in
-    this module, so this is where its own startup wrapper belongs too, matched
-    against the try/except-and-store-on-app.state shape every sibling
-    scheduler in that file uses.
-
-    NON-CRITICAL: a failed start leaves the snapshot permanently cold, which
-    every caller already treats as "cannot compute" rather than crashing --
-    the same posture `_init_llm_key_rotation_scheduler` and its siblings take
-    for their own optional background work.
-    """
-    logger.info("Pricing cache scheduler: starting")
-    try:
-        scheduler = PricingCacheScheduler()
-        scheduler.start()
-        app.state.pricing_cache_scheduler = scheduler
-        logger.info("Pricing cache scheduler: started")
-    except Exception as exc:
-        logger.warning("Pricing cache scheduler failed to start (non-critical): %s", exc)
-        app.state.pricing_cache_scheduler = None
-
-
-async def stop_pricing_cache_scheduler(app) -> None:
-    """Drain `PricingCacheScheduler`, mirroring the community-clustering shutdown shape."""
-    scheduler = getattr(app.state, "pricing_cache_scheduler", None)
-    if scheduler:
-        await scheduler.aclose()
+# `PricingCacheScheduler` and its lifespan wrappers used to live below this
+# line. They moved to `sync_cache_scheduler.py` (#16230) because they are the
+# only thing here that needs `llc.scheduler.base`, which hard-refuses to import
+# below Python 3.11 -- so importing a *price* dragged the LLC poll-loop
+# contract in with it, and every module that reads a price inherited that floor.
+# `services/llm_cost_tracker.py`, `llm_shared/tiered_routing/cost_router.py` and
+# `code_intelligence/.../calculators.py` all read prices and none of them
+# schedules anything.
+#
+# The cost of that coupling was not theoretical: it took this module's own test
+# file down at collect time on any sub-3.11 interpreter, so the local pre-push
+# gate could not run the tests for the code it was gating.

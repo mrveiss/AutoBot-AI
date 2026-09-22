@@ -158,24 +158,7 @@ async def test_refresh_snapshot_replaces_a_stale_snapshot_with_a_fresh_one(monke
     assert sync_cache.get_cached_price("claude-sonnet-4-0") is _PRICE
 
 
-# --- PricingCacheScheduler._tick: a failed refresh cannot make pricing look fresh ---
-
-
-@pytest.mark.asyncio
-async def test_a_failed_tick_keeps_the_previous_snapshot_unchanged():
-    """#16316's cold-cache rule, exercised through the scheduler's own tick.
-
-    Mirrors #16233 AC3 ("a failed refresh cannot make pricing look fresh"):
-    a tick that raises must neither clear `_snapshot` nor bump its
-    `fetched_at` -- either would let a Redis outage masquerade as a healthy,
-    freshly-refreshed cache.
-    """
-    _populate({"claude-sonnet-4-0": _PRICE}, age_s=5)
-    snapshot_before = sync_cache._snapshot
-
-    scheduler = sync_cache.PricingCacheScheduler()
-    with patch.object(sync_cache, "refresh_snapshot", AsyncMock(side_effect=RuntimeError("redis down"))):
-        await scheduler._tick()
-
-    assert sync_cache._snapshot is snapshot_before
-    assert sync_cache.get_cached_price("claude-sonnet-4-0") is _PRICE
+# `PricingCacheScheduler`'s own test moved to `sync_cache_scheduler_test.py`
+# (#16230): it is the only test here that touches `llc.scheduler.base`, and
+# importing it took this whole file down at collect time below Python 3.11 --
+# including the 14 tests that need nothing of the sort.

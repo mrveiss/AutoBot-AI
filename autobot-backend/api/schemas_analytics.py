@@ -228,21 +228,9 @@ class RecentUsageResponse(BaseModel):
     records: List[Any]
 
 
-class ModelPricingEntry(BaseModel):
-    model: str
-    provider: str
-    input_price_per_1m: float
-    output_price_per_1m: float
-    is_free: bool
-
-
-class ModelPricingResponse(BaseModel):
-    """Response for GET /cost/pricing."""
-
-    pricing_date: str
-    currency: str
-    models: List[ModelPricingEntry]
-    total_models: int
+# `ModelPricingEntry` / `ModelPricingResponse` moved to `api/analytics_cost_pricing.py`
+# (#16230): this file is grandfathered at its size ceiling and may not grow, and the
+# models now live beside the only thing that builds them.
 
 
 class CostEstimateResponse(BaseModel):
