@@ -44,6 +44,8 @@ Research reports covering hardware integration, system conflicts, and technology
 | [[homelab-nas-app-marketplace-distribution]] | Compose-based NAS/homelab app-store platforms as a distribution channel — AutoBot's release pipeline already publishes signed images and has zero NPU/device coupling in the containerized path; gaps are a `build:`-only compose file, two helper scripts bind-mounted from the repo, and no lean/cloud-provider-default profile for small hardware (umbrella #16829, children #16830–#16833) |
 | [[provider-quota-headroom-and-account-pooling]] | Multi-provider AI quota-manager pattern vs AutoBot's provider fallback stack — no cross-worker headroom store, one credential per provider per tenant (no account pool/swap), rate-limit response headers read for GitHub-style integrations but never for LLM providers, buckets are operator-guessed env RPM never reconciled against observed limits, no hardware/KMS-rooted vault key (umbrella #15021, children #15022, #15026–#15030; unrelated discovery #15031) |
 
+| [[on-prem-private-ai-platform-stack]] | A commercial on-premise private-AI platform for regulated industries, compared against AutoBot — the gap is not features but reachability: declared controls that do not execute on a production path (umbrella #17217, children #17218–#17229) |
+
 ## Related Sections
 
 - [[../analysis/_index\|Analysis]] — Analysis based on research
