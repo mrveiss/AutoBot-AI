@@ -55,7 +55,10 @@ def glob_declared_guards(record_text: str) -> Dict[str, frozenset]:
     """
     try:
         module = ast.parse(record_text)
-    except SyntaxError:
+    except (SyntaxError, ValueError):
+        # ValueError, not only SyntaxError: a null byte in the record makes
+        # ast.parse raise ValueError, which would propagate out of main() and
+        # fail EVERY push -- the opposite of this helper's contract.
         return {}
     for node in module.body:
         target = None
@@ -165,7 +168,11 @@ def main() -> int:
     patterns, ignores = pytest_settings((root / "pytest.ini").read_text(encoding="utf-8"))
     changed = [line.strip() for line in sys.stdin if line.strip()]
     record = root / GLOB_RECORD
-    declared = glob_declared_guards(record.read_text(encoding="utf-8")) if record.is_file() else {}
+    try:
+        declared = glob_declared_guards(record.read_text(encoding="utf-8")) if record.is_file() else {}
+    except (OSError, UnicodeDecodeError):
+        # An unreadable or undecodable record costs a selection, never a push.
+        declared = {}
     chosen = select(
         changed,
         patterns=patterns,

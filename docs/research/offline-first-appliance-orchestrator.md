@@ -513,7 +513,7 @@ scenario matrix, so each new "should this proceed?" branch ships with no harness
 > **Correction (2026-09-22).** An earlier revision of this paragraph said the role was "invoked by
 > nothing", citing two greps. That was wrong, and wrong in an instructive way: the greps covered
 > `api/*.py`, `services/*.py` and two named playbooks, and the role is in fact invoked by four —
-> `patch-dependencies.yml` (four times), `rollback-dependencies.yml`, `patch-system-packages.yml`
+> `patch-dependencies.yml` (five times, phases 1-5), `rollback-dependencies.yml`, `patch-system-packages.yml`
 > and `rollback-system-packages.yml`. An empty result from a scope that could not contain the
 > answer was read as an absence. See `docs/developer/MEASUREMENT_DISCIPLINE.md`.
 
