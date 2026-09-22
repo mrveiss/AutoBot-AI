@@ -207,6 +207,13 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: is the mistake this comment already records twice. A higher floor is the
 #: stricter direction: it narrows the gap, leaving 7 files of headroom here
 #: rather than the 1 that 6491 leaves against `main`'s larger population.
+#: Re-pinned 6509 -> 6511 (#17256): measured 6911 on the tree that merges this
+#: branch with main. Two new files -- api/knowledge_code_indexing.py and
+#: repo_tests/code_graph_writer_reader_agree_17254_test.py -- put it one past the
+#: 401 allowance. Ninth re-pin; the population was verified by enumerating the
+#: same globs the discover uses (6880 globbed + 31 extensionless shell scripts)
+#: rather than by adding two to the number CI last reported.
+#:
 #: Re-pinned 6507 -> 6509 (#17241): measured 6909. The previous pin was taken at
 #: 6907 and tolerates 401 (growth 400 + skips 1); this branch adds two guard
 #: files -- ansible_code_source_delegation_17243 and
@@ -225,7 +232,7 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6509,
+    floor=6511,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",

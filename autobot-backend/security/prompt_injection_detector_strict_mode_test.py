@@ -115,10 +115,14 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 #: carried from either branch. This is the third instance tonight of the
 #: shape #17142 describes: every input value was right and the merge of
 #: them was not.
+#: Re-pinned 2949 -> 2950 (#17256): measured 3250 tracked non-test backend python
+#: files. This branch adds api/knowledge_code_indexing.py, the module split out of
+#: knowledge_population.py so its size ceiling did not have to rise -- which puts
+#: the population one past the 300 allowance. Floor = population - growth.
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2949,
+    floor=2950,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )

@@ -9046,6 +9046,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/index/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Index Code
+         * @description Index source files in *root_dir* via AST-based CodeIndexer (#4835).
+         *
+         *     #4835 closed once with this body complete and undecorated — no HTTP trigger,
+         *     while the status route below reported on a job nothing could start.
+         *
+         *     Body (all optional):
+         *       ``root_dir`` — directory to scan (default: project root)
+         *       ``force``    — skip hash cache and re-index everything (default: false)
+         *
+         *     Returns immediately with task_id. Use /index/code/status/{task_id} to poll (#4912).
+         */
+        post: operations["index_code_api_knowledge_base_index_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/index/code/status/{task_id}": {
         parameters: {
             query?: never;
@@ -116343,6 +116372,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    index_code_api_knowledge_base_index_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
