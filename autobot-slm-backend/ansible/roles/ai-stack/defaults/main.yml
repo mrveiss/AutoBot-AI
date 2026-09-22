@@ -97,12 +97,12 @@ ai_system_commands_model: "dolphin-llama3:8b"
 chromadb_service_owner: "ai-stack"
 
 # #14809 guards that tasks/main.yml names this manifest exactly ONCE -- a second
-# reference used to be a second, too-late delivery. The filter step added by
-# #17242 has to name it too, so the copy reads it from here instead and the task
-# file keeps a single literal.
+# reference used to be a second, too-late delivery -- while #14272 reads the copy
+# task's src BASENAME, so that one literal has to live in the copy. The filter
+# step added by #17242 therefore composes the path from this relative tail.
 #
-# Expressed against code_source_dir rather than playbook_dir: the manifest
-# resolver deliberately cannot resolve playbook_dir, whose depth depends on
-# which playbook included the role (repo_tests/ansible_manifest_resolution.py).
-ai_stack_requirements_src: >-
-  {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt
+# Deliberately NOT a Jinja template: ansible_backend_path_defects_15560 renders
+# every templated default in this file against the other defaults only, so a
+# reference to autobot.base_dir (an inventory group_var, not a role default)
+# raises UndefinedError there. A plain string composes fine at the call site.
+ai_stack_requirements_rel: "autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt"

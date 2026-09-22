@@ -197,7 +197,7 @@
   ansible.builtin.shell:
     cmd: >-
       bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
-      {{ ai_stack_requirements_src }}
+      {{ code_source_dir }}/{{ ai_stack_requirements_rel }}
       {{ code_source_dir }}
       > /tmp/filtered-requirements-ai.{{ inventory_hostname }}.txt
   changed_when: false
