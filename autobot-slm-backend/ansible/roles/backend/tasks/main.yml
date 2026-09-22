@@ -963,20 +963,28 @@
   # which also removes the fixed `/tmp/requirements-filtered.txt`: a shared name
   # in a world-writable directory that every host in the run would have
   # collided on the moment this task moved to the controller.
+  - name: "Backend | Unique id for this run's controller temp files (#17242)"
+    ansible.builtin.set_fact:
+      _req_run_id: "{{ 999999999 | random }}"
+    # Set once per host per run, so the generate step and the copy that reads
+    # its output agree. inventory_hostname alone was not enough: two runs for
+    # the SAME host share a controller file, and the later generation can
+    # replace it before the earlier copy reads it.
+
   - name: Create filtered backend requirements (on the controller, #17242)
     ansible.builtin.shell:
       cmd: >-
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/autobot-backend/requirements.txt
         {{ code_source_dir }}
-        > /tmp/filtered-requirements.{{ inventory_hostname }}.txt
+        > /tmp/filtered-requirements.{{ inventory_hostname }}.{{ _req_run_id }}.txt
     changed_when: false
     delegate_to: localhost
     become: false
 
   - name: Write filtered backend requirements to the target (#17242)
     ansible.builtin.copy:
-      src: "/tmp/filtered-requirements.{{ inventory_hostname }}.txt"
+      src: "/tmp/filtered-requirements.{{ inventory_hostname }}.{{ _req_run_id }}.txt"
       dest: "{{ backend_code_dir }}/filtered-requirements.txt"
       owner: "{{ backend_user }}"
       mode: "0644"
@@ -1051,7 +1059,7 @@
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/requirements-gpu-torch.txt
         {{ code_source_dir }}
-        > /tmp/filtered-requirements-gpu-torch.{{ inventory_hostname }}.txt
+        > /tmp/filtered-requirements-gpu-torch.{{ inventory_hostname }}.{{ _req_run_id }}.txt
     changed_when: false
     delegate_to: localhost
     become: false
@@ -1059,7 +1067,7 @@
 
   - name: "Backend | Stage filtered requirements-gpu-torch.txt onto the target (#17243)"
     ansible.builtin.copy:
-      src: "/tmp/filtered-requirements-gpu-torch.{{ inventory_hostname }}.txt"
+      src: "/tmp/filtered-requirements-gpu-torch.{{ inventory_hostname }}.{{ _req_run_id }}.txt"
       dest: "{{ backend_code_dir }}/filtered-requirements-gpu-torch.txt"
       owner: "{{ backend_user }}"
       mode: "0644"
@@ -1072,7 +1080,7 @@
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/requirements-gpu-faiss.txt
         {{ code_source_dir }}
-        > /tmp/filtered-requirements-gpu-faiss.{{ inventory_hostname }}.txt
+        > /tmp/filtered-requirements-gpu-faiss.{{ inventory_hostname }}.{{ _req_run_id }}.txt
     changed_when: false
     delegate_to: localhost
     become: false
@@ -1080,7 +1088,7 @@
 
   - name: "Backend | Stage filtered requirements-gpu-faiss.txt onto the target (#17243)"
     ansible.builtin.copy:
-      src: "/tmp/filtered-requirements-gpu-faiss.{{ inventory_hostname }}.txt"
+      src: "/tmp/filtered-requirements-gpu-faiss.{{ inventory_hostname }}.{{ _req_run_id }}.txt"
       dest: "{{ backend_code_dir }}/filtered-requirements-gpu-faiss.txt"
       owner: "{{ backend_user }}"
       mode: "0644"
@@ -1093,7 +1101,7 @@
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/requirements-gpu.txt
         {{ code_source_dir }}
-        > /tmp/filtered-requirements-gpu.{{ inventory_hostname }}.txt
+        > /tmp/filtered-requirements-gpu.{{ inventory_hostname }}.{{ _req_run_id }}.txt
     changed_when: false
     delegate_to: localhost
     become: false
@@ -1101,7 +1109,7 @@
 
   - name: "Backend | Stage filtered requirements-gpu.txt onto the target (#17243)"
     ansible.builtin.copy:
-      src: "/tmp/filtered-requirements-gpu.{{ inventory_hostname }}.txt"
+      src: "/tmp/filtered-requirements-gpu.{{ inventory_hostname }}.{{ _req_run_id }}.txt"
       dest: "{{ backend_code_dir }}/filtered-requirements-gpu.txt"
       owner: "{{ backend_user }}"
       mode: "0644"

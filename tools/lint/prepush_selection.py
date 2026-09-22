@@ -69,7 +69,20 @@ def glob_declared_guards(record_text: str) -> Dict[str, frozenset]:
             recorded = ast.literal_eval(node.value)
         except (ValueError, TypeError, SyntaxError):
             return {}
-        return {glob: frozenset(guards) for glob, (guards, _reason) in recorded.items()}
+        # Valid Python of the WRONG SHAPE parses fine and then explodes on
+        # .items() or the tuple unpack, which would abort the hook rather than
+        # degrade -- this helper exists to fail open, and a record that changes
+        # shape must cost a selection, never a push.
+        if not isinstance(recorded, dict):
+            return {}
+        declared: Dict[str, frozenset] = {}
+        for glob, value in recorded.items():
+            if not isinstance(glob, str) or not isinstance(value, (tuple, list)) or not value:
+                continue
+            guards = value[0]
+            if isinstance(guards, (set, frozenset, tuple, list)):
+                declared[glob] = frozenset(str(g) for g in guards)
+        return declared
     return {}
 
 

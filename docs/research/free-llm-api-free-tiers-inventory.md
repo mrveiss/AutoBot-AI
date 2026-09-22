@@ -1,6 +1,6 @@
 # Source Analysis: a community-curated inventory of permanently-free LLM API tiers
 
-Research date: 2026-09-22 · Phase 1 only (source analysis; AutoBot comparison not yet approved)
+Research date: 2026-09-22 · Phases 1-2 (source analysis + AutoBot comparison, approved 2026-09-22)
 
 Driving question from the requester: *"we run out of token usage — is this real, is it safe to
 use, can we use it in our development process to not run out of tokens?"*

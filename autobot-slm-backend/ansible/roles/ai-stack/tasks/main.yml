@@ -193,13 +193,21 @@
 # ai_stack host exits 127 -- the same defect #17242 hit in the backend role, in
 # a role that never runs on the manager at all. The source manifest is read from
 # the same controller path the deploy task above uses.
+- name: "AI Stack | Unique id for this run's controller temp files (#17242)"
+  ansible.builtin.set_fact:
+    _req_run_id: "{{ 999999999 | random }}"
+  # Set once per host per run, so the generate step and the copy that reads
+  # its output agree. inventory_hostname alone was not enough: two runs for
+  # the SAME host share a controller file, and the later generation can
+  # replace it before the earlier copy reads it.
+
 - name: Create filtered AI-stack requirements (on the controller, #14272, #17242)
   ansible.builtin.shell:
     cmd: >-
       bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
       {{ code_source_dir }}/{{ ai_stack_requirements_rel }}
       {{ code_source_dir }}
-      > /tmp/filtered-requirements-ai.{{ inventory_hostname }}.txt
+      > /tmp/filtered-requirements-ai.{{ inventory_hostname }}.{{ _req_run_id }}.txt
   changed_when: false
   delegate_to: localhost
   become: false
@@ -208,7 +216,7 @@
 
 - name: Write filtered AI-stack requirements to the target (#17242)
   ansible.builtin.copy:
-    src: "/tmp/filtered-requirements-ai.{{ inventory_hostname }}.txt"
+    src: "/tmp/filtered-requirements-ai.{{ inventory_hostname }}.{{ _req_run_id }}.txt"
     dest: "{{ ai_install_dir }}/filtered-requirements-ai.txt"
     owner: "{{ ai_user }}"
     mode: "0644"
