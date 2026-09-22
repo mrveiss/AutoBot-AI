@@ -45,8 +45,8 @@ from autobot_shared.ssot_constants import (
     LOCAL_MIXTRAL,
     LOCAL_PHI3,
     LOCAL_PHI4,
-    LOCAL_QWEN25,
     LOCAL_QWEN3,
+    LOCAL_QWEN25,
 )
 
 LOCAL_MODEL_NAMES: frozenset[str] = frozenset(
