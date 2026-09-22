@@ -1135,8 +1135,12 @@ async def get_populate_status(task_id: str):
 # =========================================================================
 
 
+@router.post("/index/code")
 async def index_code(request: dict = None):
     """Index source files in *root_dir* via AST-based CodeIndexer (#4835).
+
+    #4835 closed once with this body complete and undecorated — no HTTP trigger,
+    while the status route below reported on a job nothing could start.
 
     Body (all optional):
       ``root_dir`` — directory to scan (default: project root)
@@ -1166,6 +1170,8 @@ async def index_code(request: dict = None):
         message="Code indexing started",
         total_items=0,
     )
+
+    from api.knowledge_code_indexing import _index_code_background  # #4835: extracted (#5060)
 
     asyncio.create_task(_index_code_background(task_id, root_dir, force))
 
@@ -1202,91 +1208,6 @@ async def get_index_code_status(task_id: str):
         }
 
     return task_status.to_response_dict()
-
-
-async def _index_code_background(task_id: str, root_dir: str, force: bool):
-    """Background task: index source files via AST-based CodeIndexer (#4912)."""
-    import time
-
-    from services.knowledge.code_indexer import CodeIndexer
-    from services.knowledge.doc_indexer import get_doc_indexer_service
-    from services.knowledge.task_status_manager import TaskStatusManager
-
-    start_time = time.time()
-
-    try:
-        logger.info("[%s] Starting background code indexing (root=%s force=%s)...", task_id, root_dir, force)
-
-        await TaskStatusManager.update_task(
-            task_id=task_id,
-            status="running",
-            message="Initializing indexer...",
-            progress_percent=5,
-        )
-
-        doc_svc = get_doc_indexer_service()
-        if not await doc_svc.initialize():
-            logger.error("[%s] Indexer initialization failed", task_id)
-            await TaskStatusManager.fail_task(
-                task_id=task_id,
-                error_message="Failed to initialize ChromaDB / embed model",
-            )
-            return
-
-        await TaskStatusManager.update_task(
-            task_id=task_id,
-            status="running",
-            message="Scanning and indexing source files...",
-            progress_percent=10,
-        )
-
-        # Reuse the same ChromaDB collection and embed model as DocIndexerService
-        # so code nodes live alongside doc chunks in the same vector store.
-        code_indexer = CodeIndexer(
-            collection=doc_svc._collection,
-            embed_model=doc_svc._embed_model,
-        )
-
-        result = await code_indexer.index_directory(root_dir, force)
-
-        elapsed = time.time() - start_time
-
-        # #13510: name the code this run could not read. Without it the caller sees
-        # a skip count and no way to tell an under-covered graph from a complete one
-        # — the whole point of counting these files instead of dropping them.
-        unsupported = result.unsupported_extensions
-        coverage_note = ""
-        if unsupported:
-            breakdown = ", ".join(f"{ext} x{count}" for ext, count in sorted(unsupported.items()))
-            coverage_note = f"; no extractor for {sum(unsupported.values())} code files ({breakdown})"
-
-        await TaskStatusManager.complete_task(
-            task_id=task_id,
-            message=(
-                f"Successfully indexed {result.success} code nodes "
-                f"({result.skipped} skipped, {result.failed} failed){coverage_note}"
-            ),
-            items_processed=result.success,
-            elapsed_seconds=elapsed,
-        )
-
-        logger.info(
-            "[%s] Code indexing completed: root=%s success=%d failed=%d skipped=%d unsupported=%s (%.1fs)",
-            task_id,
-            root_dir,
-            result.success,
-            result.failed,
-            result.skipped,
-            dict(sorted(unsupported.items())) or "none",
-            elapsed,
-        )
-    except Exception as e:
-        elapsed = time.time() - start_time
-        logger.error("[%s] Background code indexing failed: %s", task_id, e)
-        await TaskStatusManager.fail_task(
-            task_id=task_id,
-            error_message=str(e),
-        )
 
 
 # =========================================================================
