@@ -29,7 +29,8 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
-from llm_shared.accelerate_loader import lazy_accelerate
+
+from .accelerate_loader import lazy_accelerate
 
 logger = get_logger(__name__)
 

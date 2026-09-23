@@ -27,7 +27,8 @@ from dataclasses import dataclass
 from typing import Any, Set
 
 from autobot_shared.logging_manager import get_logger
-from llm_shared.accelerate_loader import lazy_accelerate
+
+from .accelerate_loader import lazy_accelerate
 
 logger = get_logger(__name__)
 
