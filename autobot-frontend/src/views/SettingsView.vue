@@ -67,7 +67,11 @@ Issue #753: User preference management interface
           <Icon name="plug" />
           {{ $t('settings.connection.title') }}
         </button>
+        <!-- #16494: every route behind this panel depends on require_admin
+             (autobot-backend/api/feature_flags.py, 8 of 8 routes), so a
+             non-admin could open the tab and only ever collect 403s. -->
         <button
+          v-if="userStore.isAdmin"
           @click="activeTab = 'featureflags'"
           :class="['settings-tab', { active: activeTab === 'featureflags' }]"
         >
@@ -273,7 +277,7 @@ Issue #753: User preference management interface
           </div>
         </section>
 
-        <section v-if="activeTab === 'featureflags'" class="settings-section">
+        <section v-if="activeTab === 'featureflags' && userStore.isAdmin" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
               <Icon name="shield-alt" />
@@ -391,8 +395,11 @@ import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import apiClient from '@/utils/ApiClient'
+import { useUserStore } from '@/stores/useUserStore'
 
 const logger = createLogger('SettingsView')
+// #16494: admin-only panels are hidden, not just refused server-side.
+const userStore = useUserStore()
 const { t } = useI18n()
 const { showToast } = useNotificationBus()
 

@@ -27,7 +27,11 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
           {{ t('settings.telemetry.recordHint') }}
         </p>
         <div class="toggle-wrapper">
-          <label class="toggle-switch">
+          <!-- #16494: GET /api/settings/telemetry is public on purpose, but
+               POST depends on check_admin_permission -- so everyone keeps
+               seeing the current state below, and only an admin is offered
+               the control that changes it. -->
+          <label v-if="userStore.isAdmin" class="toggle-switch">
             <input
               type="checkbox"
               v-model="telemetryEnabled"
@@ -84,11 +88,13 @@ import { useApiClient } from '@/plugins/api'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
+import { useUserStore } from '@/stores/useUserStore'
 
 const logger = createLogger('TelemetrySettingsPanel')
 const { t } = useI18n()
 const api = useApiClient()
 const { showToast } = useNotificationBus()
+const userStore = useUserStore()
 
 const telemetryEnabled = ref(true)
 const announcement = ref('')
