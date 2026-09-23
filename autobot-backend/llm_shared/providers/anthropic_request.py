@@ -5,10 +5,11 @@
 """
 Anthropic request-kwargs shaping — pure, no SDK, no I/O (extracted #17305).
 
-``providers/anthropic.py`` sat at 597 of the 600-line ceiling
-(``scripts/check_python_file_size.py``), and #17305 needed four more lines
-there to declare and apply native structured output. The ceiling's answer is
-to split, not to raise it (``docs/developer/RATCHET_BASELINES.md``), so the
+``providers/anthropic.py`` was 593 lines against a 600-line ceiling
+(``scripts/check_python_file_size.py``); #17305's import and ``output_config``
+merge took it to 597, and the two capability declarations it still needed would
+have crossed 600. The ceiling's answer is to split, not to raise it
+(``docs/developer/RATCHET_BASELINES.md``), so the
 request-shaping unit moved here: it is the half of the provider that takes a
 kwargs dict and returns a kwargs dict, with no client, no await and no
 response in it.
