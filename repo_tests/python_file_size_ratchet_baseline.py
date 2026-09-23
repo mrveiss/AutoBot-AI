@@ -442,7 +442,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 675,
-    "autobot-slm-backend/api/code_source.py": 720,
+    "autobot-slm-backend/api/code_source.py": 719,
     "autobot-slm-backend/api/code_sync.py": 6025,  # #16640: moved to api/_colocated_role_procedures.py
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,

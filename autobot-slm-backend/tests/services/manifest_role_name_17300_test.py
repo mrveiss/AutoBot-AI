@@ -57,15 +57,39 @@ def test_a_name_that_is_not_a_role_is_refused(name, loader):
     assert loader._manifest_path(name) is None
 
 
-def test_a_refused_name_never_reaches_the_filesystem(loader, tmp_path):
-    """`_load_from_disk` must return None on the guard, not on a missing file.
+#: A manifest that PASSES RoleManifest validation. The first version of this
+#: fixture said `name: pwned` and was a false negative: `_load_from_disk`
+#: swallows a validation error in its generic `except Exception` and returns
+#: None, so the test passed with the guard removed — it was asserting that
+#: pydantic rejects a malformed file, not that traversal was blocked. Caught by
+#: reverting the guard and watching the test stay green.
+_VALID_MANIFEST = """role: autobot-pwned
+description: a manifest planted outside the infra base
+deploy:
+  source: pwned/
+  destination: /opt/autobot/pwned/
+"""
 
-    The distinction matters: if the guard were removed, this would still return
-    None for a nonexistent path — so the assertion is that no manifest is loaded
-    even when one EXISTS at the traversed location.
+
+def test_a_refused_name_never_reaches_the_filesystem(loader, tmp_path):
+    """`_load_from_disk` returns None because the GUARD fired, not because the file was bad.
+
+    The planted manifest is schema-valid on purpose: with the guard removed this
+    traversal loads it and the test fails. That is the only way the assertion
+    means what it says.
     """
     outside = tmp_path.parent / "outside"
     outside.mkdir(exist_ok=True)
-    (outside / "manifest.yml").write_text("name: pwned\n", encoding="utf-8")
+    (outside / "manifest.yml").write_text(_VALID_MANIFEST, encoding="utf-8")
 
     assert loader._load_from_disk(f"../{outside.name}") is None
+
+
+def test_the_planted_manifest_really_is_loadable(loader, tmp_path):
+    """The control. Without it, _VALID_MANIFEST could drift back to being invalid
+    and silently restore the false negative the test above exists to avoid."""
+    inside = tmp_path / "pwned"
+    inside.mkdir()
+    (inside / "manifest.yml").write_text(_VALID_MANIFEST, encoding="utf-8")
+
+    assert loader._load_from_disk("pwned") is not None, "_VALID_MANIFEST no longer validates"
