@@ -10,7 +10,11 @@ Acceptance criteria:
   - User A answers a question; user B answering the same task's question → 403.
   - Admin user can steer/answer any task (bypass).
   - First caller establishes ownership (SET NX pattern).
-  - verify_task_owner degrades gracefully on Redis outage (fail-open).
+  - verify_task_owner DENIES when the ownership store is unreachable (#17060,
+    fail-closed). It used to fail open, which removed the only authorization on
+    /steer and /answer for every task at once, during the outage nobody is
+    watching. The admin bypass is checked before any Redis call, so an operator
+    still gets in.
 """
 
 from unittest.mock import patch
@@ -94,7 +98,13 @@ class TestVerifyTaskOwner:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_redis_outage_fails_open(self):
+    async def test_redis_outage_denies_a_non_admin(self):
+        """#17060: was fail-OPEN. An outage must not be a bypass.
+
+        The old behaviour returned True here, so while Redis was down any
+        signed-in user could steer or answer any task -- the control absent at
+        exactly the moment nobody is looking at it.
+        """
         from services.task_owner import verify_task_owner
 
         async def _boom(key):
@@ -102,7 +112,40 @@ class TestVerifyTaskOwner:
 
         with patch("services.task_owner.redis_get", new=_boom):
             result = await verify_task_owner("task-xyz", "user-A")
-        assert result is True  # fail-open: task interaction must not block
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_redis_outage_still_admits_an_admin(self):
+        """Fail-closed must not lock the operator out of a stuck task.
+
+        The admin bypass is checked before any Redis call, so it is unaffected
+        by the store being down -- which is what makes denying non-admins
+        acceptable rather than an outage of its own.
+        """
+        from services.task_owner import verify_task_owner
+
+        async def _boom(key):
+            raise ConnectionError("Redis down")
+
+        with patch("services.task_owner.redis_get", new=_boom):
+            result = await verify_task_owner("task-xyz", "user-A", user_role="admin")
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_a_failed_registration_reports_failure(self):
+        """#17060: a write that did not happen is not an established owner.
+
+        `register_task_owner` used to return True on a store error, telling its
+        caller ownership was recorded when nothing was stored.
+        """
+        from services.task_owner import register_task_owner
+
+        async def _boom(*args, **kwargs):
+            raise ConnectionError("Redis down")
+
+        with patch("services.task_owner.redis_get", new=_boom):
+            result = await register_task_owner("task-xyz", "user-A")
+        assert result is False
 
 
 class TestRegisterTaskOwner:

@@ -45,7 +45,8 @@ def _key(task_id: str) -> str:
 async def register_task_owner(task_id: str, user_id: str) -> bool:
     """Set owner for task_id if not already owned.  Returns True if this call
     established ownership (SET NX), False if another owner is already recorded.
-    On Redis error returns True (fail-open, gap logged).
+    On Redis error returns False (#17060): a failed write is not an established
+    owner, and saying it is was how an unowned task got adopted by its next caller.
     """
     try:
         client_key = _key(task_id)
@@ -63,8 +64,12 @@ async def register_task_owner(task_id: str, user_id: str) -> bool:
                 return existing_str == user_id
         return True
     except Exception as exc:
-        logger.warning("task_owner: Redis unavailable — ownership check skipped (task=%s): %s", task_id, exc)
-        return True  # fail-open: block Redis outage from halting all tasks
+        # #17060: registration reports its own failure rather than claiming the
+        # owner was recorded. Returning True here told the caller ownership was
+        # established when nothing was stored, so the next verify found no owner
+        # and -- before this change -- adopted whoever asked next.
+        logger.error("task_owner: could not record owner (task=%s user=%s): %s", task_id, user_id, exc)
+        return False
 
 
 async def verify_task_owner(task_id: str, user_id: str, user_role: str = "") -> bool:
@@ -85,8 +90,19 @@ async def verify_task_owner(task_id: str, user_id: str, user_role: str = "") -> 
         existing_str = existing.decode("utf-8") if isinstance(existing, bytes) else str(existing)
         return existing_str == user_id
     except Exception as exc:
-        logger.warning("task_owner: Redis unavailable — ownership check skipped (task=%s): %s", task_id, exc)
-        return True  # fail-open
+        # #17060: DENY on a store failure. This used to return True, so a Redis
+        # outage removed the only authorization on /steer and /answer for every
+        # task at once -- the control was absent exactly when nobody was looking
+        # at it. Fail-closed matches #16411/#16387; an operator keeps access
+        # through the admin bypass above, which is checked before any Redis call
+        # and therefore still works during the outage.
+        logger.error(
+            "task_owner: DENYING (task=%s user=%s) -- ownership store unreachable: %s",
+            task_id,
+            user_id,
+            exc,
+        )
+        return False
 
 
 async def release_task_owner(task_id: str) -> None:
