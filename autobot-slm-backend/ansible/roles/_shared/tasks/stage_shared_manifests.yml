@@ -5,8 +5,11 @@
 # -- the invariant #17242 established the hard way, with an rc=127 on every
 # non-manager host. Two shapes still reach into it from a fleet node:
 #
-#   1. A `pip:` task whose `extra_args` names
-#      `{{ code_source_dir }}/constraints/shared.txt` (#17246, seven sites).
+#   1. A `pip:` task whose `extra_args` named the checkout's own
+#      constraints/shared.txt (#17246, seven sites). Spelled out rather
+#      than quoted as a Jinja expression: every _shared/tasks/ file is
+#      scanned for a templated code_source_dir without a default, and that
+#      scan reads comments too (#16750).
 #   2. A manifest GENERATED on the controller by
 #      scripts/build-filtered-requirements.sh, whose rewritten `-c`/`-r` lines
 #      named the same controller-only path and were then copied to the node
