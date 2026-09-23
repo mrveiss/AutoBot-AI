@@ -294,5 +294,22 @@ class _StubPath:
     def parent(self):
         return _StubPath(self._p.rsplit("/", 1)[0], self._missing)
 
+    @property
+    def parents(self):
+        """#17332: the husk sweep asks for the venv root as `parents[1]`.
+
+        Modelled on pathlib's own sequence rather than stubbed to a single
+        value, so a caller that walks further up gets the right answer instead
+        of a plausible one.
+        """
+        parts = self._p.rstrip("/").split("/")
+        return [_StubPath("/".join(parts[:index]) or "/", self._missing) for index in range(len(parts) - 1, 0, -1)]
+
+    def glob(self, _pattern):
+        return []
+
+    def is_dir(self):
+        return False
+
     def __str__(self):
         return self._p
