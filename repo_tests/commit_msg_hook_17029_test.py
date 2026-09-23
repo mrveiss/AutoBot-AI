@@ -14,6 +14,7 @@ trailers. `tools/git-hooks/commit-msg` is now tracked, installed by
 Every test runs the real hook and the real lint script in a throwaway repository.
 """
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -25,7 +26,27 @@ from autobot_shared.paths import scrubbed_git_env
 
 _ROOT = repo_root()
 _HOOK = _ROOT / "tools" / "git-hooks" / "commit-msg"
-_LINT = ("scripts/lint-conventions.sh", "scripts/lib/git-scope.sh", "scripts/lib/git-root.sh")
+_LINT_SCRIPT = "scripts/lint-conventions.sh"
+
+# #15473: derived, not listed. The hardcoded tuple went stale the moment the
+# script gained a dependency it did not name -- lib/commit-subject.ere, the
+# shared commit-subject rule -- and the fixture then built a repo that was not a
+# checkout. The script correctly refused to run against it ("FATAL cannot read
+# the commit-subject rule"), and six tests read that refusal as the hook being
+# broken. scripts/lint_conventions_test.py already derives its fixture this way
+# for exactly this reason (#15245); this file is the second fixture with the
+# same shape and did not.
+_LIB_REF = re.compile(r"lib/([A-Za-z0-9_.-]+\.(?:sh|ere))")
+
+
+def _lint_files() -> tuple[str, ...]:
+    src = (_ROOT / _LINT_SCRIPT).read_text(encoding="utf-8")
+    names = sorted(set(_LIB_REF.findall(src)))
+    assert names, f"{_LINT_SCRIPT} reads nothing from scripts/lib/ -- the pattern has drifted"
+    rels = (_LINT_SCRIPT, *(f"scripts/lib/{n}" for n in names))
+    missing = [r for r in rels if not (_ROOT / r).is_file()]
+    assert not missing, f"{_LINT_SCRIPT} reads files that do not exist: {missing}"
+    return rels
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
@@ -36,7 +57,7 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
 def repo(tmp_path: Path) -> Path:
     """A throwaway repo carrying the real lint script, its libraries and the hook."""
     repo = tmp_path / "repo"
-    for rel in _LINT:
+    for rel in _lint_files():
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(_ROOT / rel, repo / rel)
     _git(tmp_path, "init", "--quiet", str(repo))

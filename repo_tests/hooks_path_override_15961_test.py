@@ -255,7 +255,16 @@ REACH = declare(
     # allowance, 5.8% of a ~6900-file tree, is the thing that is wrong.
     # Re-pinned 6527 -> 6529 (#17304): measured 6929 on the merged tree. THIRTEENTH
     # re-pin, fourth in two days. This branch adds two files. See #17142.
-    floor=6529,
+    # Re-pinned 6529 -> 6531 (#15473): measured 6931. FOURTEENTH re-pin, FIFTH in
+    # two days. This branch adds exactly two counting files
+    # (check_codeql_alert_ceiling.sh and its test) out of 401 of allowance, and
+    # main had consumed the other 399 before this branch existed -- so once again
+    # the branch that pays for the re-pin is not the branch that caused it. Five
+    # re-pins in two days, every one of them this same shape, is not a floor that
+    # keeps being set wrong: it is a growth allowance that does not describe how
+    # fast this tree adds files. #17142 has the standing argument; this is its
+    # fifth data point in 48 hours.
+    floor=6531,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
