@@ -28,10 +28,10 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.code_review_enums import ReviewCategory, ReviewSeverity
 from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
@@ -72,26 +72,10 @@ _HUNK_HEADER_RE = re.compile(r"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@")
 # ============================================================================
 
 
-class ReviewSeverity(str, Enum):
-    """Review comment severity levels."""
-
-    CRITICAL = "critical"
-    WARNING = "warning"
-    INFO = "info"
-    SUGGESTION = "suggestion"
-
-
-class ReviewCategory(str, Enum):
-    """Categories of review findings."""
-
-    SECURITY = "security"
-    PERFORMANCE = "performance"
-    STYLE = "style"
-    BUG_RISK = "bug_risk"
-    MAINTAINABILITY = "maintainability"
-    DOCUMENTATION = "documentation"
-    TESTING = "testing"
-    BEST_PRACTICE = "best_practice"
+# #14881: defined once in autobot_shared.code_review_enums and re-exported here,
+# so every existing `from code_intelligence.code_review_engine import
+# ReviewSeverity` keeps working. See the shared module's docstring for why the
+# API cannot import this package directly.
 
 
 @dataclass

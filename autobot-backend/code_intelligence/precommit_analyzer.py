@@ -20,11 +20,11 @@ import concurrent.futures
 import re
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.code_review_enums import CheckCategory, CheckSeverity
 from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
 from utils.line_index import LineIndex  # #12884
@@ -32,22 +32,11 @@ from utils.line_index import LineIndex  # #12884
 logger = get_logger(__name__)
 
 
-class CheckSeverity(str, Enum):
-    """Severity levels for pre-commit checks."""
-
-    BLOCK = "block"  # Prevents commit
-    WARN = "warn"  # Shows warning but allows commit
-    INFO = "info"  # Informational only
-
-
-class CheckCategory(str, Enum):
-    """Categories of pre-commit checks."""
-
-    SECURITY = "security"
-    QUALITY = "quality"
-    STYLE = "style"
-    DEBUG = "debug"
-    DOCS = "docs"
+# #14881: defined once in autobot_shared.code_review_enums and re-exported here,
+# so every existing `from code_intelligence.precommit_analyzer import
+# CheckSeverity` keeps working. The API schema cannot import this package --
+# conftest stubs it wholesale -- so a vocabulary shared with the API cannot be
+# owned here. See the shared module's docstring.
 
 
 @dataclass

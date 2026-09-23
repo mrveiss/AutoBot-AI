@@ -16,6 +16,7 @@ from fastapi import Query
 from pydantic import BaseModel, Field
 
 from api.schemas_common import SuccessMessageResponse
+from autobot_shared.code_review_enums import CheckCategory, CheckSeverity, ReviewCategory, ReviewSeverity
 from autobot_shared.status_enums import RiskLevel, Severity
 
 # #14881: these four are NOT redeclared here. The API used to carry a
@@ -24,8 +25,6 @@ from autobot_shared.status_enums import RiskLevel, Severity
 # and its enums retyped by hand, with nothing keeping them in step. The domain
 # classes carry the ``str`` mixin now, so one class serves both the engine and
 # the wire format.
-from code_intelligence.code_review_engine import ReviewCategory, ReviewSeverity
-from code_intelligence.precommit_analyzer import CheckCategory, CheckSeverity
 from constants import PATH
 from type_defs.common import Metadata
 
