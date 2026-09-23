@@ -145,23 +145,32 @@ def _summary_markdown(dead: list, split: dict, gui: list, pin_lines: list) -> st
     return "\n".join(lines) + "\n"
 
 
-def report_dead_surface(dead: list, pin: str = None) -> dict:
-    """Print the split, and put it in the job summary when running in CI (#16816).
+def report_dead_surface(dead: list, pin: str = None) -> list:
+    """Write the report to the job summary, and return it for a caller to print.
 
-    Printed, not logged: every other line this auditor emits is printed, and it
-    configures no logging at all -- so the logger calls this function used to
-    make went to a root logger at WARNING and emitted NOTHING. CI asked for the
-    measurement and silently received an empty answer, which is the same "looks
-    like it reports, reports nothing" shape #16816 exists to close, one level
-    further in.
+    Three constraints meet here and only one arrangement satisfies all of them.
+    Logging is what broke this originally: audit_api_wiring.py configures no
+    logging at all, so the logger calls this function used to make went to a
+    root logger at WARNING and emitted NOTHING. Printing from here instead
+    makes this module a library that prints, and #16008's guard -- rightly --
+    holds the print exemption to a property of CLI ENTRY POINTS, which this is
+    not. And the entry point that could print, the auditor, cannot currently be
+    edited at all: it carries pre-existing hardcoded-value findings in a
+    directory the repo-wide scan does not walk (so they cannot be baselined,
+    #17329) and a `main` of 106 body lines against a 65-line threshold, while
+    sitting at exactly its 895-line size ceiling.
+
+    So the report goes where it does not need the auditor's cooperation: the
+    GITHUB_STEP_SUMMARY file, which is the criterion #16816 AC1 actually asks
+    for. The lines are returned as well, so that the moment #17330 makes that
+    file editable, printing them to the job log is a one-line change at the
+    call site and nothing here moves.
     """
     split = classify_dead_surface(dead)
     gui = split["gui"]
     pin_lines = ratchet_lines(len(gui), read_pin() if pin is None else pin)
 
-    # The one emission point for this module; see report_lines().
-    for line in report_lines(dead, split, pin_lines):
-        print(line)  # noqa: print
+    lines = report_lines(dead, split, pin_lines)
 
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
@@ -171,4 +180,4 @@ def report_dead_surface(dead: list, pin: str = None) -> dict:
         with open(summary_path, "a", encoding="utf-8") as fh:
             fh.write(_summary_markdown(dead, split, gui, pin_lines))
 
-    return split
+    return lines
