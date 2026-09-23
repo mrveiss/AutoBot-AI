@@ -81,7 +81,7 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from autobot_shared.auth.mcp_bridge_scan import all_declared_tools  # noqa: E402
+from autobot_shared.auth.mcp_bridge_scan import all_declared_tools, bridge_files, bridge_name  # noqa: E402
 from autobot_shared.auth.mcp_tool_permissions import (  # noqa: E402
     _DECLARED_AHEAD_OF_TIME,
     TOOL_PERMISSIONS,
@@ -163,6 +163,39 @@ def bridge_discovery_gaps(base: pathlib.Path | None = None) -> list[str]:
     return problems
 
 
+def floor_membership_gaps(base: pathlib.Path | None = None) -> list[str]:
+    """Governed bridges with no per-bridge floor, and floors naming no bridge (#14631).
+
+    ``bridge_discovery_gaps`` iterates ``PER_BRIDGE_DISCOVERY_FLOOR.items()``, so a
+    bridge absent from that dict is never checked by it -- and the aggregate
+    ``DISCOVERY_FLOOR`` cannot catch the omission either, because a new bridge only
+    ever RAISES the sum. That is the gap ``manual_mcp`` sat in until #14586: adding
+    the twelfth bridge required hand-editing three separate lists, and the fourth
+    caught the miss only because it happened to use ``==`` rather than a subset
+    check -- a shard failure, not a design decision.
+
+    The filesystem scan is the SSOT here because it is the only one of the four
+    lists that cannot silently disagree with reality: it reads the files on disk
+    rather than a name someone remembered to type into a second place.
+    """
+    live = {bridge_name(path) for path in bridge_files(base)}
+    declared = set(PER_BRIDGE_DISCOVERY_FLOOR)
+    problems: list[str] = []
+    for missing in sorted(live - declared):
+        problems.append(
+            f"{missing}: governed by the bridge scan but absent from PER_BRIDGE_DISCOVERY_FLOOR, "
+            "so bridge_discovery_gaps() never checks it and DISCOVERY_FLOOR's sum only rises "
+            "when it is added. Give it a floor equal to the tool count it really registers."
+        )
+    for orphan in sorted(declared - live):
+        problems.append(
+            f"{orphan}: has a PER_BRIDGE_DISCOVERY_FLOOR entry but the bridge scan finds no such "
+            "bridge. Either the module was removed or renamed and the floor was stranded, or it "
+            "was added to EXCLUDED_BRIDGE_STEMS -- drop the floor entry with it."
+        )
+    return problems
+
+
 def tool_name_collisions(base: pathlib.Path | None = None) -> dict[str, list[str]]:
     """Tool names registered by more than one bridge (#14523).
 
@@ -224,6 +257,10 @@ def audit(base: pathlib.Path | None = None) -> tuple[int, list[str]]:
             f"(floor {DISCOVERY_FLOOR}) — the sweep broke, so a clean result below would "
             "assert nothing."
         )
+    # Runs BEFORE bridge_discovery_gaps: that check can only speak about bridges
+    # the floor dict already names, so a membership gap has to surface first or it
+    # reads as silence (#14631).
+    problems.extend(floor_membership_gaps(base))
     problems.extend(bridge_discovery_gaps(base))
 
     undeclared = undeclared_tools(base)
