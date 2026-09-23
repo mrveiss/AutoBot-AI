@@ -142,6 +142,9 @@ python:
   # hardcoded-value-rules.sh six -- and every occurrence is prose in a comment.
   - 'pipeline-scripts/check-pre-commit-hook-pr.sh'
   - 'pipeline-scripts/check_baseline_no_growth.sh'
+  # #15333: the open-alert ceiling gate, read by literal from
+  # codeql_alert_ceiling_is_wired_15333_test.py.
+  - 'pipeline-scripts/check_codeql_alert_ceiling.sh'
   - 'pipeline-scripts/detect-hardcoded-values.sh'
   - 'pipeline-scripts/pr-queue-open-list.sh'
   - 'scripts/lib/git-scope.sh'

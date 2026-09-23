@@ -76,9 +76,9 @@ jobs:
   quality:
     steps:
     - name: ceiling
-      run: ./pipeline-scripts/check_codeql_alert_ceiling.sh
+      run: bash pipeline-scripts/check_codeql_alert_ceiling.sh
 """
-_WF_NO_INVOCATION = _WF_OK.replace("./pipeline-scripts/check_codeql_alert_ceiling.sh", "true")
+_WF_NO_INVOCATION = _WF_OK.replace("bash pipeline-scripts/check_codeql_alert_ceiling.sh", "true")
 _WF_NO_PERMISSION = _WF_OK.replace("  security-events: read\n", "")
 _WF_SOFT_FAILED = _WF_OK.replace("    - name: ceiling\n", "    - name: ceiling\n      continue-on-error: true\n")
 

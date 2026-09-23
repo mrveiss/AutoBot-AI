@@ -253,7 +253,9 @@ REACH = declare(
     # files (two security regression tests); main had already consumed the rest
     # of the allowance. See #17142 -- at this cadence the 400-file growth
     # allowance, 5.8% of a ~6900-file tree, is the thing that is wrong.
-    floor=6527,
+    # Re-pinned 6527 -> 6529 (#15333): measured 6929 on the merged tree. See #17142 —
+    # thirteenth re-pin, and two open branches needed the same one independently.
+    floor=6529,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
