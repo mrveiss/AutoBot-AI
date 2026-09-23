@@ -29,6 +29,7 @@ Environment:
 
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -71,14 +72,36 @@ class ManifestLoader:
         self._infra_base = infra_base
         self._cache: Dict[str, Tuple[RoleManifest, float]] = {}
 
-    def _manifest_path(self, role_name: str) -> Path:
-        """Return the expected manifest.yml path for a role."""
-        return self._infra_base / role_name / "manifest.yml"
+    #: A role directory name. Ansible role names are lowercase with underscores
+    #: or hyphens; nothing legitimate contains a separator or a dot, so the
+    #: allowlist costs no real role anything (#17300).
+    _ROLE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+    def _manifest_path(self, role_name: str) -> Path | None:
+        """The manifest.yml path for *role_name*, or None if the name is not one.
+
+        #17300: `role_name` arrives from a `role` query parameter and a
+        `role_name` POST body field, and was joined as its own path segment with
+        no validation -- `role_name="../../../../etc"` walked out of the infra
+        base before `path.exists()` and `path.open()`. Returning None rather than
+        raising keeps the caller's existing "no manifest for this role" path,
+        which is the honest answer for a name that cannot be a role.
+        """
+        if not self._ROLE_NAME_RE.match(role_name or ""):
+            logger.warning("Rejected manifest lookup for a non-role name: %r (#17300)", role_name)
+            return None
+        candidate = (self._infra_base / role_name / "manifest.yml").resolve()
+        # Redundant after the allowlist, and kept so the containment property is
+        # checkable without first reasoning about what the regex excludes.
+        if not candidate.is_relative_to(self._infra_base.resolve()):
+            logger.warning("Rejected manifest path outside the infra base: %r (#17300)", role_name)
+            return None
+        return candidate
 
     def _load_from_disk(self, role_name: str) -> RoleManifest | None:
         """Load and parse manifest.yml for role_name."""
         path = self._manifest_path(role_name)
-        if not path.exists():
+        if path is None or not path.exists():
             logger.debug("Manifest not found for role %s at %s", role_name, path)
             return None
         try:

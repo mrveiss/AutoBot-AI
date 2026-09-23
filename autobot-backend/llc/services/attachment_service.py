@@ -57,10 +57,38 @@ def _resolve_storage_root() -> Path:
     return root
 
 
+#: Upper bound on the extension copied from an uploaded filename (#17300).
+_MAX_SUFFIX_LEN = 16
+
+
 def _storage_path(company_id: str, work_item_id: str, attachment_id: str, filename: str) -> Path:
-    ext = Path(filename).suffix
-    root = _resolve_storage_root()
-    return root / company_id / work_item_id / f"{attachment_id}{ext}"
+    """Where an attachment lives on disk, with every id proven to be a UUID first.
+
+    #17300: this built `root / company_id / ...` from an unvalidated query
+    parameter. `pathlib` discards everything left of an absolute segment, so
+    `company_id="/tmp/evil"` did not traverse out of the root -- it *replaced*
+    the root, which made this an arbitrary-write primitive rather than a
+    traversal bug. The format check existed, in `upload()`, and ran three lines
+    after the bytes had already been written.
+
+    Parsing each id here is the real fix: a value that is not a UUID cannot
+    become a path segment at all. The containment assertion below is
+    deliberately redundant -- it states the property a reader can check without
+    first reasoning about what `uuid.UUID` rejects.
+
+    Raises:
+        ValueError: if any id is not a UUID, or the result escapes the root.
+    """
+    safe = [str(uuid.UUID(str(part))) for part in (company_id, work_item_id, attachment_id)]
+    # `Path(filename).suffix` is taken from the final name component, so it can
+    # never contain a separator -- but it is attacker-supplied, so it is bounded
+    # rather than trusted.
+    ext = Path(filename).suffix[:_MAX_SUFFIX_LEN]
+    root = _resolve_storage_root().resolve()
+    dest = (root / safe[0] / safe[1] / f"{safe[2]}{ext}").resolve()
+    if not dest.is_relative_to(root):
+        raise ValueError(f"attachment path escaped the storage root: {dest}")
+    return dest
 
 
 def _extract_text(path: Path, filename: str) -> Optional[str]:
@@ -114,6 +142,9 @@ class AttachmentService:
             raise StorageBackendNotImplemented(f"Backend '{_STORAGE_BACKEND}' not implemented")
 
         attachment_id = str(uuid.uuid4())
+        # _storage_path validates before returning, so nothing reaches the
+        # filesystem until every id has been proven to be a UUID (#17300). The
+        # order is the fix: this used to write first and cast afterwards.
         dest = _storage_path(company_id, work_item_id, attachment_id, filename)
         _write_local(content, dest)
 
