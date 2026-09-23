@@ -22,10 +22,13 @@ unresolvable module as "no routes" would be the familiar defect of reading
 
 import ast
 import collections
-import pathlib
 import re
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+from repo_tests._paths import repo_root
+
+# #15925: the canonical spelling. A hand-rolled parent.parent is the thing
+# that guard exists to stop, and it is also simply wrong from a worktree.
+ROOT = repo_root()
 REG = ROOT / "autobot-backend" / "initialization" / "router_registry"
 API = ROOT / "autobot-backend"
 VERBS = {"get", "post", "put", "patch", "delete", "head", "options", "websocket"}
