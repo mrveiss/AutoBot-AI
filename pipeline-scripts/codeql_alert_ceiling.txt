@@ -26,9 +26,14 @@
 #   Up:   only with an issue number and a sentence saying why the finding cannot
 #         be adjudicated now. Raising it silently defeats the file.
 #
+# 9 -> 2 on 2026-09-23: #17301 merged and CodeQL's rescan of main closed the
+# seven alerts it fixed. Lowered in the same breath, because the gate refuses a
+# ceiling that sits above the real count -- it had to, or the seven just
+# adjudicated would be re-licensed for the next thing that trips.
+#
 # This is a ceiling on a COUNT, which is a blunt instrument: it cannot tell a
 # newly-introduced high-severity finding from an old low-severity one that a
 # rule update re-triggered. It is deliberately blunt. A count that may not grow
 # forces the question to be asked at the moment a finding appears, which is the
 # only thing that was missing.
-9
+2
