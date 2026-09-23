@@ -372,3 +372,8 @@ def test_the_workflow_job_skips_promotions_the_same_way() -> None:
     workflow = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "pr-template-check.yml"
     condition = " ".join(yaml.safe_load(workflow.read_text(encoding="utf-8"))["jobs"]["check-title"]["if"].split())
     assert "github.event.pull_request.base.ref == 'main'" in condition
+    # #15473 review: check-template's fork skip must NOT be copied here. A
+    # squash subject is permanent; a template convention is not.
+    assert (
+        "head.repo.full_name" not in condition
+    ), "check-title must not skip fork PRs -- their titles become permanent subjects too"

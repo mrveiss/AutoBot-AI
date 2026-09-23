@@ -105,13 +105,23 @@ jobs:
   # sections" would name a check that passed.
   check-title:
     name: Validate the PR title as a commit subject
-    # Same bot and fork skips as check-template, and for the same reasons: a bot
-    # writes its own title (`build(deps): bump x from a to b`), which carries no
-    # issue number by nature -- lint-conventions.sh exempts bot-authored commits
-    # on exactly that ground; and #14153, the convention is not shown to a
-    # drive-by contributor, whose title an owner can still edit at merge time.
+    # The bot skip is check-template's, and for the same reason: a bot writes its
+    # own title (`build(deps): bump x from a to b`), which carries no issue
+    # number by nature -- lint-conventions.sh exempts bot-authored commits on
+    # exactly that ground.
     #
-    # Plus one this job needs and check-template does not: base must be `main`.
+    # check-template's FORK skip is deliberately NOT copied (#15473 review). That
+    # skip is right for a template-fill convention a drive-by contributor was
+    # never shown (#14153); it is wrong here. This job guards a squash subject
+    # that becomes PERMANENT and unamendable on main -- the exact incident this
+    # job exists to prevent -- and the population least familiar with the
+    # convention is the one whose titles would go unchecked. The justification
+    # offered for skipping, that an owner can edit the title at merge time, is
+    # the same unenforced manual step whose absence caused the incident. The
+    # failure is also self-explanatory rather than a mystery red: it prints the
+    # rule, what the scope class accepts, and why it cannot be fixed later.
+    #
+    # Plus one check-template does not need: base must be `main`.
     # This gate judges a title as the SQUASH SUBJECT it will become, and a
     # main -> release promotion is not squashed. The last one landed as a merge
     # commit (b94f51a4c3, two parents, `Merge pull request #15326 from ...`),
@@ -126,7 +136,6 @@ jobs:
     # release..main, so a subject ON release is never in a scanned range.
     if: >
       github.event.pull_request.user.type != 'Bot' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     permissions:

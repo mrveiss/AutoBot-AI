@@ -233,7 +233,13 @@ else
   # %ae is carried too: a bot's *email* ends in `[bot]@users.noreply.github.com`
   # even where its display name is rewritten (a .mailmap entry would do exactly
   # that), so two independent signals have to fail before a bot commit is judged.
-  LOGLINES=$(git log --format='%h%x1f%an%x1f%ae%x1f%s' "${BASE_REF}..${HEAD_REF}") \
+  # %H as well as %h (#15473 review): exemptions match the FULL sha, and %h is
+  # kept only for the message. %h abbreviates to whatever is unambiguous in the
+  # local object store, so a prefix pattern written from a full clone missed in
+  # CI's shallow one -- and a prefix short enough for CI is a prefix that can
+  # collide with a future commit and silently exempt it from BOTH sub-checks.
+  # A full sha has neither failure mode.
+  LOGLINES=$(git log --format='%H%x1f%h%x1f%an%x1f%ae%x1f%s' "${BASE_REF}..${HEAD_REF}") \
     || die "git log failed for $RANGE"
   if [ -z "$LOGLINES" ]; then
     ok "no commits in range"
@@ -242,8 +248,10 @@ else
     while IFS= read -r line; do
       [ -n "$line" ] || continue
       SEEN=$((SEEN+1))
-      sha=${line%%$'\x1f'*}
+      sha_full=${line%%$'\x1f'*}
       rest=${line#*$'\x1f'}
+      sha=${rest%%$'\x1f'*}
+      rest=${rest#*$'\x1f'}
       author=${rest%%$'\x1f'*}
       rest=${rest#*$'\x1f'}
       email=${rest%%$'\x1f'*}
@@ -265,15 +273,23 @@ else
       # occurrence in 600 commits, and it is this one), so widening would be
       # lowering the rule to fit a mistake. Shrink-only -- an entry leaves when
       # history is rewritten, which for main means never.
-      # Seven characters, not the ten `%h` yields here: %h abbreviates to
-      # whatever is unambiguous in the LOCAL object store, and CI's shallow
-      # checkout has three objects in it, so the same commit printed `59f4be8`
-      # there and `59f4be872c` here. A ten-character pattern would have matched
-      # in this worktree and silently missed in the only place it has to fire.
-      # Seven is unique across every object in the repository
-      # (`git rev-parse --disambiguate=59f4be8` -> 1) and is git's own floor.
-      case "$sha" in
-        59f4be8*) continue ;;
+      # Subjects already on main that cannot be amended (#15473). A squash merge
+      # takes its subject from the PR TITLE, and nothing validated that until
+      # validate_pr_body.check_title -- so this one landed malformed and then
+      # failed the range check for every PR afterwards, including a release
+      # promotion carrying 682 commits.
+      #
+      # Recorded by FULL sha rather than by widening the pattern: `+` is not a
+      # scope separator this repository uses (one occurrence in 600 commits, and
+      # it is this one), so widening would be lowering the rule to fit a mistake.
+      # Full rather than abbreviated because `continue` skips BOTH the format
+      # check and the issue-reference check, so a prefix that ever collided would
+      # exempt an unrelated commit from the whole of check 3.
+      #
+      # Shrink-only -- an entry leaves when history is rewritten, which for main
+      # means never.
+      case "$sha_full" in
+        59f4be872c9c2288714a67c665f50f8eefaf694c) continue ;;
       esac
       if ! printf '%s' "$subj" | grep -qE "$SUBJECT_ERE"; then
         # #13921: the parsed author is echoed on failure. The previous version

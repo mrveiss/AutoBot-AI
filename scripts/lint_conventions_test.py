@@ -305,45 +305,194 @@ def test_a_missing_git_scope_library_is_fatal_not_clean(repo: Path) -> None:
 
 
 # ── SHA exemptions (#15473) ─────────────────────────────────────────────────
-# Check 3 can exempt a commit by SHA prefix, for subjects already on main that
-# no longer have an author who could amend them. Two ways that goes wrong, both
-# silent, so both are pinned here rather than left to review.
+# Check 3 can exempt a commit by SHA, for subjects already on main that no
+# longer have an author who could amend them. Several ways that goes wrong, all
+# silent, so each is pinned here rather than left to review.
 REPO_ROOT = SCRIPT.resolve().parent.parent
-_SHA_EXEMPTION = re.compile(r"^\s*([0-9a-f]{4,40})\*\)\s*continue\s*;;\s*$", re.MULTILINE)
-
-# git's own floor, and what CI prints. `%h` abbreviates to whatever is
-# unambiguous in the LOCAL object store; the code-quality job checks out at
-# fetch-depth 2, so that store holds three objects and every hash abbreviates
-# to seven characters. A pattern written from a full clone's abbreviation is
-# longer than that, matches in the worktree where it was authored, and misses
-# in the only place it has to fire.
-_CI_ABBREV_LEN = 7
+_SHA_EXEMPTION = re.compile(r"^\s*([0-9a-f]{4,40})\)\s*continue\s*;;\s*$", re.MULTILINE)
+_FULL_SHA_LEN = 40
 
 
 def _sha_exemptions() -> list[str]:
     return _SHA_EXEMPTION.findall(SCRIPT.read_text(encoding="utf-8"))
 
 
-def test_no_sha_exemption_is_longer_than_cis_abbreviation() -> None:
-    too_long = [s for s in _sha_exemptions() if len(s) > _CI_ABBREV_LEN]
-    assert not too_long, (
-        f"SHA exemptions longer than {_CI_ABBREV_LEN} characters cannot match CI's "
-        f"abbreviated %h and will never fire: {too_long}"
+def _is_shallow(repo: Path) -> bool:
+    res = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--is-shallow-repository"],
+        capture_output=True,
+        text=True,
+        env=scrubbed_git_env(),
     )
+    return res.stdout.strip() == "true"
 
 
-def test_every_sha_exemption_names_exactly_one_commit_in_this_repository() -> None:
-    """A prefix short enough for CI is also short enough to collide.
+def test_the_exemption_parser_finds_what_is_actually_there() -> None:
+    """A regex that matches nothing passes every test that iterates over it.
 
-    Ambiguity would exempt an unrelated commit, and an exemption resolving to
-    nothing is dead text that outlives whatever it was written for.
+    The tests below are `for sha in _sha_exemptions()` loops, so a drifted
+    pattern turns them green rather than red. Counted against an independent,
+    deliberately loose scan: if the two disagree the parser has drifted, and if
+    the last exemption is ever genuinely removed these tests go with it.
     """
-    for prefix in _sha_exemptions():
+    src = SCRIPT.read_text(encoding="utf-8")
+    loose = len(re.findall(r"^\s*[0-9a-f]{4,}[*)][^\n]*continue", src, re.MULTILINE))
+    assert loose > 0, "no sha exemption found at all -- remove these tests along with the last one"
+    assert (
+        len(_sha_exemptions()) == loose
+    ), f"the exemption parser found {len(_sha_exemptions())} of {loose} -- it has drifted"
+
+
+def test_every_sha_exemption_is_a_full_sha() -> None:
+    """Abbreviations were the first attempt, and they were wrong twice over.
+
+    `%h` abbreviates to whatever is unambiguous in the LOCAL object store, so a
+    ten-character pattern read off a full clone matched where it was authored
+    and missed in CI's shallow checkout, which prints seven. Shortening it to
+    seven fixed that and introduced the other half: `continue` skips BOTH the
+    format check and the issue-reference check, so a prefix that ever collided
+    would exempt an unrelated commit from the whole of check 3. A full sha has
+    neither failure mode, and this test needs no git at all -- which matters,
+    because the one below cannot always run.
+    """
+    wrong = [s for s in _sha_exemptions() if len(s) != _FULL_SHA_LEN]
+    assert not wrong, f"SHA exemptions must be full {_FULL_SHA_LEN}-character shas, got: {wrong}"
+
+
+def test_every_sha_exemption_names_a_commit_that_exists() -> None:
+    """An exemption resolving to nothing is dead text that outlives its reason.
+
+    SKIPPED, never passed, on a shallow checkout. `ci.yml`'s python-shard and
+    `coverage.yml` both use a bare `actions/checkout@v7`, i.e. fetch-depth 1, so
+    the object store there simply cannot answer. Asserting through that would
+    fail red in CI for a reason that has nothing to do with the change under
+    test, which is the defect this whole branch is about. "Could not look" is
+    the honest report; pre-push, which has full history, is where this is
+    actually checked.
+    """
+    if _is_shallow(REPO_ROOT):
+        pytest.skip("shallow checkout: the object store cannot answer whether these commits exist")
+    for sha in _sha_exemptions():
         res = subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "rev-parse", f"--disambiguate={prefix}"],
+            ["git", "-C", str(REPO_ROOT), "cat-file", "-e", f"{sha}^{{commit}}"],
             capture_output=True,
-            text=True,
             env=scrubbed_git_env(),
         )
-        matches = [line for line in res.stdout.splitlines() if line.strip()]
-        assert len(matches) == 1, f"SHA exemption '{prefix}' resolves to {len(matches)} objects, expected exactly 1"
+        assert res.returncode == 0, f"SHA exemption {sha} names no commit in this repository"
+
+
+def _tiny_repo(at: Path) -> Path:
+    at.mkdir()
+    _git(at.parent, "init", "-q", "-b", "main", str(at))
+    _git(at, "config", "user.email", "t@example.invalid")
+    _git(at, "config", "user.name", "t")
+    (at / "a").write_text("1", encoding="utf-8")
+    _git(at, "add", "-A")
+    _git(at, "commit", "-q", "-m", "chore(init): one (#1)")
+    return at
+
+
+def _head_of(repo: Path) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=scrubbed_git_env(),
+    ).stdout.strip()
+
+
+def test_shallow_detection_is_real_not_assumed(tmp_path: Path) -> None:
+    """The skip above is only honest if it actually fires on a shallow store.
+
+    Built by writing `.git/shallow`, which is what a depth-limited fetch writes
+    and what git reads to answer the question -- no clone needed, and this
+    repository's guard would refuse the clone anyway.
+    """
+    r = _tiny_repo(tmp_path / "shallow")
+    assert not _is_shallow(r), "a normal repo must not read as shallow"
+    (r / ".git" / "shallow").write_text(_head_of(r) + "\n", encoding="utf-8")
+    assert _is_shallow(r), "a repo with .git/shallow must read as shallow"
+
+
+def test_a_missing_object_is_distinguishable_from_a_present_one(tmp_path: Path) -> None:
+    """`cat-file -e` must actually fail on a sha that is not there.
+
+    The predecessor of this test used `rev-parse --disambiguate=`, which exits 0
+    with empty output for a missing object -- so it could not tell a dead
+    exemption from an absent one, and asserted `0 == 1` in CI instead.
+    """
+    r = _tiny_repo(tmp_path / "plain")
+
+    def exists(sha: str) -> bool:
+        return (
+            subprocess.run(
+                ["git", "-C", str(r), "cat-file", "-e", f"{sha}^{{commit}}"],
+                capture_output=True,
+                env=scrubbed_git_env(),
+            ).returncode
+            == 0
+        )
+
+    assert exists(_head_of(r))
+    assert not exists("0" * 40)
+
+
+# ── the shared rule file: fail-closed, and one rule across two engines ──────
+
+
+@pytest.mark.parametrize(
+    ("mutate", "why"),
+    [
+        (lambda p: p.unlink(), "the rule file is gone"),
+        (lambda p: p.write_text("", encoding="utf-8"), "the rule file is empty"),
+        (lambda p: p.write_text("# only a comment\n", encoding="utf-8"), "it holds no pattern"),
+        (lambda p: p.write_text("^a: .+\n^b: .+\n", encoding="utf-8"), "which of two patterns governs is unknowable"),
+    ],
+)
+def test_an_unusable_rule_file_is_fatal_not_clean(repo: Path, mutate, why: str) -> None:
+    """#15473 review: the python reader's equivalents were tested, the bash one's were not.
+
+    "Both readers fail closed" was asserted on one side and true only by
+    inspection on the other, which is the asymmetry that lets a guard rot.
+    """
+    mutate(repo / "scripts" / "lib" / "commit-subject.ere")
+    res = run(repo, "--all")
+    assert res.returncode != 0, f"{why}: the script reported success"
+    assert "commit-subject" in (res.stderr + res.stdout), f"{why}: the failure does not name the rule file"
+
+
+#: One table, both engines (#15473 review). Each side previously hard-coded its
+#: own expectations, so an edit to commit-subject.ere introducing a construct the
+#: two engines read differently -- `\b`, an interval quantifier, a POSIX bracket
+#: class -- would be caught only if someone remembered to update both tables the
+#: same way. The point of a shared rule file is that nobody has to remember.
+_CROSS_ENGINE_VECTORS = [
+    ("fix(deps): bump a pinned floor (#17304)", True),
+    ("fix(llc/frontend): slashed scope (#123)", True),
+    ("docs(architecture,design): comma-joined scope (#123)", True),
+    ("tech-debt: hyphenated type, no scope (#123)", True),
+    ("a11y(ui): digits in the type (#123)", True),
+    ("fix(deps+security): the subject that landed on main (#17304)", False),
+    ("fix(/llc): scope starting with a separator (#123)", False),
+    ("fix(-llc): scope starting with a hyphen (#123)", False),
+    ("Fix(deps): capitalised type (#123)", False),
+    ("no type at all (#123)", False),
+    ("fix(deps):no space after the colon (#123)", False),
+]
+
+
+def _shared_subject_pattern() -> str:
+    raw = (LIB_DIR / "commit-subject.ere").read_text(encoding="utf-8")
+    lines = [ln for ln in (x.strip() for x in raw.splitlines()) if ln and not ln.startswith("#")]
+    assert len(lines) == 1, f"commit-subject.ere must hold exactly one pattern, found {len(lines)}"
+    return lines[0]
+
+
+@pytest.mark.parametrize(("subject", "expected"), _CROSS_ENGINE_VECTORS)
+def test_grep_and_python_agree_on_the_shared_pattern(subject: str, expected: bool) -> None:
+    pattern = _shared_subject_pattern()
+    grep_ok = subprocess.run(["grep", "-qE", pattern], input=subject, text=True, capture_output=True).returncode == 0
+    python_ok = re.match(pattern, subject) is not None
+    assert grep_ok == python_ok, f"engines disagree on {subject!r}: grep={grep_ok} python={python_ok}"
+    assert grep_ok is expected, f"{subject!r}: expected {expected}, both engines said {grep_ok}"
