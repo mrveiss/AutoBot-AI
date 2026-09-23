@@ -37,7 +37,7 @@ from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_http import validate_path_or_http
+from autobot_shared.security.path_http import require_contained_path
 from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS
 from autobot_shared.time_utils import utc_timestamp
 from code_intelligence.merge_conflict_resolver import (
@@ -156,7 +156,7 @@ def _assert_safe_path(user_path: str) -> Path:
     """
     # #13579: the warning log moved into the shared helper, which logs the
     # offending value and returns none of it.
-    return validate_path_or_http(user_path, must_exist=False, allowed_roots=PROJECT_ALLOWED_ROOTS)
+    return require_contained_path(user_path, must_exist=False, allowed_roots=PROJECT_ALLOWED_ROOTS)
 
 
 async def _validate_conflict_file(file_path: str) -> Path:

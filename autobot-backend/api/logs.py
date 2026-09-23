@@ -35,7 +35,7 @@ from api.ws_security import open_authenticated_ws
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_http import validate_relative_path_or_http
+from autobot_shared.security.path_http import require_contained_relative_path
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
@@ -62,7 +62,7 @@ def _validate_log_path(filename: str) -> Path:
     stays within LOG_DIR.  Uses shared path validator (#1721, #2194).
     """
     # #13579: was 403 "Access denied".
-    return validate_relative_path_or_http(str(filename), LOG_DIR)
+    return require_contained_relative_path(str(filename), LOG_DIR)
 
 
 # Issue #514: Per-file locking to prevent concurrent write corruption

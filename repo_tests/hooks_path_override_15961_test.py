@@ -264,7 +264,13 @@ REACH = declare(
     # keeps being set wrong: it is a growth allowance that does not describe how
     # fast this tree adds files. #17142 has the standing argument; this is its
     # fifth data point in 48 hours.
-    floor=6531,
+    # Re-pinned 6531 -> 6536 (#16415 batch): measured 6936. FIFTEENTH re-pin,
+    # SIXTH in two days. This branch's own contribution is 4 counting files
+    # (path_http.py + its test, the durations guard, the route guard) against
+    # 401 of allowance that main had already spent 397 of. Same shape as the
+    # previous five and the reason #17142 exists: 400 is 5.8% of a ~6900-file
+    # tree and this tree spends it in under a week.
+    floor=6536,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",

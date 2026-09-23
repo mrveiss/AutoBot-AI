@@ -34,7 +34,7 @@ from api.schemas_workflows import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_http import validate_relative_path_or_http
+from autobot_shared.security.path_http import require_contained_relative_path
 from autobot_shared.security.path_validator import validate_relative_path
 from utils.catalog_http_exceptions import raise_server_error
 
@@ -50,7 +50,7 @@ def _safe_data_path(user_segment: str) -> Path:
 
     Uses shared path validator (#1721).
     """
-    return validate_relative_path_or_http(user_segment, DATA_DIR)
+    return require_contained_relative_path(user_segment, DATA_DIR)
 
 
 def format_size(size_bytes: int) -> str:

@@ -13,8 +13,8 @@ from fastapi import HTTPException
 from autobot_shared.security.path_http import (
     PATH_REFUSED_DETAIL,
     PATH_REFUSED_STATUS,
-    validate_path_or_http,
-    validate_relative_path_or_http,
+    require_contained_path,
+    require_contained_relative_path,
 )
 
 _REPO = pathlib.Path(__file__).resolve().parent.parent.parent
@@ -23,7 +23,7 @@ _REPO = pathlib.Path(__file__).resolve().parent.parent.parent
 @pytest.mark.parametrize("segment", ["../etc/passwd", "/etc/passwd", "a/../../b"])
 def test_a_rejected_relative_segment_is_always_the_same_refusal(tmp_path, segment: str) -> None:
     with pytest.raises(HTTPException) as exc:
-        validate_relative_path_or_http(segment, tmp_path)
+        require_contained_relative_path(segment, tmp_path)
     assert exc.value.status_code == PATH_REFUSED_STATUS
     assert exc.value.detail == PATH_REFUSED_DETAIL
 
@@ -31,7 +31,7 @@ def test_a_rejected_relative_segment_is_always_the_same_refusal(tmp_path, segmen
 @pytest.mark.parametrize("path", ["/etc/passwd", "../../etc/shadow"])
 def test_a_rejected_absolute_path_is_always_the_same_refusal(tmp_path, path: str) -> None:
     with pytest.raises(HTTPException) as exc:
-        validate_path_or_http(path, allowed_roots=[str(tmp_path)])
+        require_contained_path(path, allowed_roots=[str(tmp_path)])
     assert exc.value.status_code == PATH_REFUSED_STATUS
     assert exc.value.detail == PATH_REFUSED_DETAIL
 
@@ -46,7 +46,7 @@ def test_the_refusal_never_echoes_the_path_or_the_roots(tmp_path) -> None:
     secret_root = tmp_path / "very-distinctive-root-name"
     secret_root.mkdir()
     with pytest.raises(HTTPException) as exc:
-        validate_path_or_http("/etc/distinctive-probe-target", allowed_roots=[str(secret_root)])
+        require_contained_path("/etc/distinctive-probe-target", allowed_roots=[str(secret_root)])
     rendered = f"{exc.value.detail}"
     assert "distinctive-probe-target" not in rendered
     assert "very-distinctive-root-name" not in rendered
@@ -61,15 +61,15 @@ def test_a_tilde_segment_is_contained_not_rejected(tmp_path) -> None:
     does forbid it (THREAT_MODEL, section 1) -- a different function with a
     stricter contract, and the distinction is easy to misread as a gap here.
     """
-    out = validate_relative_path_or_http("~/secrets", tmp_path)
+    out = require_contained_relative_path("~/secrets", tmp_path)
     assert str(out).startswith(str(tmp_path))
 
 
 def test_an_accepted_path_is_returned_unchanged(tmp_path) -> None:
     """A guard that rejects everything passes every rejection test."""
     (tmp_path / "ok.txt").write_text("x", encoding="utf-8")
-    assert validate_relative_path_or_http("ok.txt", tmp_path).name == "ok.txt"
-    assert validate_path_or_http(str(tmp_path / "ok.txt"), allowed_roots=[str(tmp_path)]).name == "ok.txt"
+    assert require_contained_relative_path("ok.txt", tmp_path).name == "ok.txt"
+    assert require_contained_path(str(tmp_path / "ok.txt"), allowed_roots=[str(tmp_path)]).name == "ok.txt"
 
 
 def test_the_shared_status_is_not_403() -> None:

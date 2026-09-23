@@ -40,7 +40,7 @@ from api.schemas_system import (
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_http import validate_relative_path_or_http
+from autobot_shared.security.path_http import require_contained_relative_path
 from autobot_shared.security.path_validator import (
     SANDBOX_INVALID_PATH_CHARACTERS,
     SandboxPathError,
@@ -696,7 +696,7 @@ async def upload_file(
     # #13579: the detail was "Invalid filename"; it is now the shared "Invalid
     # path". One string for every refusal is the point -- a per-endpoint wording
     # is how six call sites came to disagree on the status code too.
-    target_file = validate_relative_path_or_http(file.filename, target_dir)
+    target_file = require_contained_relative_path(file.filename, target_dir)
 
     # Write file (Issue #281: uses helper)
     await _write_upload_file(target_file, content, overwrite)
@@ -1276,9 +1276,9 @@ def _validate_admin_path(path: str) -> Path:
     # #13579: was 403 "Path outside allowed directories" -- which both
     # disagreed with the other call sites and told the caller exactly which
     # boundary they had hit.
-    from autobot_shared.security.path_http import validate_path_or_http
+    from autobot_shared.security.path_http import require_contained_path
 
-    return validate_path_or_http(path, allowed_roots=list(_ADMIN_ALLOWED_DIRS))
+    return require_contained_path(path, allowed_roots=list(_ADMIN_ALLOWED_DIRS))
 
 
 def _entry_to_file_item(entry: Path) -> dict:

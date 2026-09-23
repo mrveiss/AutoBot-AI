@@ -65,7 +65,12 @@ def _refuse(kind: str, offending: object, exc: ValueError) -> HTTPException:
     return HTTPException(status_code=PATH_REFUSED_STATUS, detail=PATH_REFUSED_DETAIL)
 
 
-def validate_path_or_http(
+# Named `require_contained_*`, not `validate_path_or_http`: `grep "def
+# validate_path"` is the documented first move when auditing path handling, and
+# #13518 exists because false hits on that grep made a reviewer read schema
+# validators as containment helpers. A wrapper whose name starts with
+# `validate_path` puts a non-containment function back into those results.
+def require_contained_path(
     user_path: str,
     allowed_roots: Sequence[str] | None = None,
     *,
@@ -78,7 +83,7 @@ def validate_path_or_http(
         raise _refuse("path", user_path, exc) from exc
 
 
-def validate_relative_path_or_http(
+def require_contained_relative_path(
     user_segment: str,
     base_dir: str | Path,
     *,
