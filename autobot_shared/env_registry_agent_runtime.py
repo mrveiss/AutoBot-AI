@@ -502,3 +502,17 @@ register_env_var(
         component="agents",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_JUDGE_FAIL_CLOSED",
+        type=bool,
+        default=False,
+        description=(
+            "When true, a workflow step whose LLM judgment could not be read is HELD instead of approved. Default"
+            " false keeps #1464's fail-open posture; either way the evaluation result carries judge_available and"
+            " a degradation code, and the outcome is counted (judges/__init__.py, #17307)."
+        ),
+        component="judges",
+    )
+)

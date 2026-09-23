@@ -60,15 +60,20 @@ this module and ``judges/__init__.py``.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any, Union
 
 import pydantic
 
 from autobot_shared.env_utils import env_int
-from llm_shared.json_utils import extract_json_object
 from llm_shared.types import LLMType
+from llm_shared.validated_llm import (
+    ValidatedLLMError,
+    complete_validated,
+    llm_service_completer,
+    schema_repr,
+    validate_against,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +93,11 @@ EXTRACT_CHUNK_THRESHOLD_CHARS: int = env_int("AUTOBOT_EXTRACT_CHUNK_THRESHOLD", 
 # ---------------------------------------------------------------------------
 
 
-class ExtractionError(RuntimeError):
-    """Raised after all retry attempts are exhausted without a valid result."""
+#: The original name (#11520) of ``validated_llm.ValidatedLLMError`` -- the
+#: same class, not a subclass, so ``except ExtractionError`` at the three
+#: production callers keeps catching what it always caught after #17307 moved
+#: the retry-and-validate loop out of this module.
+ExtractionError = ValidatedLLMError
 
 
 # ---------------------------------------------------------------------------
@@ -107,56 +115,10 @@ def _build_system_prompt(schema_repr: str) -> str:
     )
 
 
-def _build_retry_prompt(previous_prompt: str, error_msg: str) -> str:
-    """Return a follow-up prompt that feeds the validation error back to the LLM."""
-    return (
-        f"{previous_prompt}\n\n"
-        f"Your previous response was invalid: {error_msg}\n"
-        "Please fix the JSON and try again. Return ONLY a valid JSON object."
-    )
-
-
-def _validate_pydantic(data: dict, schema: type[pydantic.BaseModel]) -> pydantic.BaseModel:
-    """Validate dict against a Pydantic model. Raises ValidationError on failure."""
-    return schema.model_validate(data)
-
-
-def _validate_json_schema(data: dict, schema: dict) -> None:
-    """Validate dict against JSON Schema (Draft 2020-12). Raises ValidationError."""
-    import jsonschema
-
-    validator = jsonschema.Draft202012Validator(schema)
-    validator.validate(data)
-
-
-def _schema_to_repr(schema: type[pydantic.BaseModel] | dict) -> str:
-    """Serialise the schema for inclusion in the LLM prompt."""
-    if isinstance(schema, dict):
-        return json.dumps(schema, ensure_ascii=False)
-    # Pydantic model class
-    return json.dumps(schema.model_json_schema(), ensure_ascii=False)
-
-
-async def _call_llm(prompt: str, llm_type: LLMType, llm_service: Any = None) -> str:
-    """Call the LLM and return the raw content string.
-
-    *llm_service* lets callers inject their own configured interface (any
-    object with the ``LLMService.chat`` signature) so per-agent SSOT
-    provider/endpoint/model routing is preserved; defaults to the shared
-    service singleton.
-    """
-    if llm_service is None:
-        from services.llm_service import get_llm_service
-
-        llm_service = get_llm_service()
-    response = await llm_service.chat(
-        messages=[{"role": "user", "content": prompt}],
-        llm_type=llm_type,
-        structured_output=True,
-    )
-    if response.error:
-        raise ExtractionError(f"LLM call failed: {response.error}")
-    return response.content
+# Schema serialisation, validation, the retry prompt and the loop itself all
+# live in ``llm_shared.validated_llm`` (#17307) -- extraction is one of its
+# callers, the judges and the decision seam are the others.
+_schema_to_repr = schema_repr
 
 
 async def _extract_single(
@@ -166,54 +128,24 @@ async def _extract_single(
     max_retries: int,
     llm_service: Any = None,
 ) -> pydantic.BaseModel | dict:
-    """Run the extraction + validation loop for a single text block.
+    """Extract one text block through the shared retry-and-validate loop.
 
-    On each attempt the full prompt is rebuilt so the model always has the
-    schema in view. The validation error from attempt N is prepended in the
-    prompt for attempt N+1.
+    The prompt shape is unchanged: the schema and the text ride in one user
+    message, which is what the extraction callers and their tests expect. What
+    changed with #17307 is that the loop, the schema serialisation and the
+    retry text are no longer this module's own copy -- and that the schema now
+    also travels to the provider as ``json_schema`` (#17305), so a provider
+    with native schema mode constrains the reply before the retry is needed.
     """
-    schema_repr = _schema_to_repr(schema)
-    base_prompt = f"{_build_system_prompt(schema_repr)}\n\n" f"Text to extract from:\n\n{text}"
-    prompt = base_prompt
-    last_error: str = ""
-
-    for attempt in range(1, max_retries + 1):
-        if attempt > 1:
-            prompt = _build_retry_prompt(base_prompt, last_error)
-            logger.debug(
-                "structured_ops.extract: retry %d/%d after error: %s",
-                attempt,
-                max_retries,
-                last_error,
-            )
-
-        raw = await _call_llm(prompt, llm_type, llm_service)
-
-        # --- Parse ---
-        try:
-            data = extract_json_object(raw)
-        except json.JSONDecodeError as exc:
-            last_error = f"JSONDecodeError: {exc}"
-            logger.warning("structured_ops: JSON parse failed (attempt %d): %s", attempt, exc)
-            if attempt >= max_retries:
-                raise ExtractionError(f"LLM returned non-JSON output after {max_retries} attempts: {exc}") from exc
-            continue
-
-        # --- Validate ---
-        try:
-            if isinstance(schema, dict):
-                _validate_json_schema(data, schema)
-                return data
-            else:
-                return _validate_pydantic(data, schema)
-        except Exception as exc:
-            last_error = str(exc)
-            logger.warning("structured_ops: validation failed (attempt %d): %s", attempt, exc)
-            if attempt >= max_retries:
-                raise ExtractionError(f"Schema validation failed after {max_retries} attempts: {exc}") from exc
-
-    # Should be unreachable — loop always returns or raises above.
-    raise ExtractionError("extract: exhausted all attempts without result")  # pragma: no cover
+    user_prompt = f"{_build_system_prompt(schema_repr(schema))}\n\nText to extract from:\n\n{text}"
+    return await complete_validated(
+        "",
+        user_prompt,
+        schema,
+        completer=llm_service_completer(schema, llm_type=llm_type, llm_service=llm_service),
+        max_retries=max_retries,
+        label="structured_ops.extract",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -337,10 +269,11 @@ async def extract(
     # If caller passed a Pydantic model, re-validate the merged dict.
     # Wrapped so the public ExtractionError-only contract holds even when the
     # merged result fails validation (#11520 review B1).
+    # `validate_against` returns the merged dict unchanged for a JSON Schema
+    # and a model instance for a Pydantic schema, so there is nothing to fall
+    # through to -- the previous trailing `return merged` was unreachable once
+    # the two validators became one call (#17307).
     try:
-        if not isinstance(schema, dict):
-            return _validate_pydantic(merged, schema)
-        _validate_json_schema(merged, schema)
+        return validate_against(merged, schema)
     except Exception as exc:
         raise ExtractionError(f"Merged chunk result failed schema validation: {exc}") from exc
-    return merged

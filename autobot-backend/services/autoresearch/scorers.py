@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_24_HOURS
+from llm_shared.decisions import LocalModelBackend, ScoreQuestion, decide
 
 logger = get_logger(__name__)
 
@@ -175,20 +176,25 @@ class ValBpbScorer(PromptScorer):
         )
 
 
-_RATING_PATTERN = re.compile(r"(\d+)\s*(?:/\s*10|out of\s*10)")
+#: The rating scale both LLM and human review scorers normalise against.
+_RATING_SCALE_MAX = 10
 
+#: The evaluator's framing. The reply *format* is no longer described here --
+#: the decision seam's schema owns that (#17307), and two descriptions of one
+#: format is how they drift apart.
 _JUDGE_SYSTEM_PROMPT = (
     "You are a prompt quality evaluator. Rate the following output on a scale "
-    "of 0-10 based on these criteria: {criteria}.\n\n"
-    'Respond with JSON: {{"rating": <0-10>, "reasoning": "<brief explanation>"}}'
+    "of 0-{scale} based on these criteria: {criteria}."
 )
 
 
 class LLMJudgeScorer(PromptScorer):
     """Score prompt variants using an LLM as judge.
 
-    Sends the prompt output to LLMService with evaluation criteria,
-    parses a 0-10 rating, normalizes to 0.0-1.0.
+    Sends the prompt output and the criteria through the typed-decision seam
+    (``llm_shared.decisions``) as one score question, and normalises the
+    0-10 answer to 0.0-1.0. #17307: an unreadable answer is an error result,
+    never a rating scraped out of prose.
     """
 
     def __init__(
@@ -212,23 +218,30 @@ class LLMJudgeScorer(PromptScorer):
         # subset_fraction: LLMJudgeScorer evaluates a single output text so
         # sub-sampling is not applicable; parameter accepted for interface compat.
         criteria_str = ", ".join(self._criteria)
-        system_msg = _JUDGE_SYSTEM_PROMPT.format(criteria=criteria_str)
+        system_msg = _JUDGE_SYSTEM_PROMPT.format(criteria=criteria_str, scale=_RATING_SCALE_MAX)
 
+        # #17307: the rating is a code-consumed verdict, so it comes through
+        # the typed-decision seam -- a reply that is not a number in range is
+        # retried against the schema and then RAISES, instead of a regex
+        # finding "7" somewhere in a refusal. A failed decision is reported as
+        # an error result, which the caller already handles; it is no longer
+        # indistinguishable from a genuine score of 0.
+        question = ScoreQuestion(
+            id="rating",
+            prompt=f"Rate this output against these criteria: {criteria_str}.",
+            minimum=0.0,
+            maximum=float(_RATING_SCALE_MAX),
+        )
         try:
-            response = await self._llm.chat(
-                messages=[
-                    {"role": "system", "content": system_msg},
-                    {
-                        "role": "user",
-                        "content": f"Evaluate this output:\n\n{prompt_output}",
-                    },
-                ],
-                temperature=0.1,
-                max_tokens=200,
+            result = await decide(
+                f"{system_msg}\n\n## Output to evaluate\n{prompt_output}",
+                [question],
+                backend=LocalModelBackend(llm_service=self._llm),
+                label="autoresearch.llm_judge_scorer",
             )
-            rating = self._parse_rating(response.content)
+            rating = int(round(float(result.value(question.id))))
         except Exception as exc:
-            logger.warning("LLMJudgeScorer: LLM call failed: %s", exc)
+            logger.warning("LLMJudgeScorer: decision failed: %s", exc)
             return ScorerResult(
                 score=0.0,
                 raw_score=None,
@@ -237,28 +250,11 @@ class LLMJudgeScorer(PromptScorer):
             )
 
         return ScorerResult(
-            score=rating / 10.0,
+            score=rating / _RATING_SCALE_MAX,
             raw_score=rating,
             metadata={"criteria": self._criteria},
             scorer_name=self.name,
         )
-
-    @staticmethod
-    def _parse_rating(content: str) -> int:
-        """Extract rating from LLM response — try JSON first, then regex."""
-        try:
-            data = json.loads(content)
-            raw = int(data["rating"])
-            return max(0, min(10, raw))
-        except (json.JSONDecodeError, KeyError, ValueError, TypeError):
-            pass
-
-        match = _RATING_PATTERN.search(content)
-        if match:
-            return max(0, min(10, int(match.group(1))))
-
-        logger.warning("LLMJudgeScorer: could not parse rating from: %s", content[:100])
-        return 0
 
 
 class HumanReviewScorer(AsyncRedisClientMixin, PromptScorer):
@@ -367,9 +363,9 @@ class HumanReviewScorer(AsyncRedisClientMixin, PromptScorer):
             )
 
         data = json.loads(raw if isinstance(raw, str) else raw.decode("utf-8"))
-        rating = max(0, min(10, int(data.get("score", 0))))
+        rating = max(0, min(_RATING_SCALE_MAX, int(data.get("score", 0))))
         return ScorerResult(
-            score=rating / 10.0,
+            score=rating / _RATING_SCALE_MAX,
             raw_score=rating,
             metadata={
                 "comment": data.get("comment", ""),

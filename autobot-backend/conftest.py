@@ -546,6 +546,9 @@ if "llm_shared" not in sys.modules:
     # #11520: canonical JSON parser and schema-typed extraction helper — lightweight,
     # no heavy deps; load real so tests importing them don't hit the stub.
     _real_load_and_bind("llm_shared.json_utils", _llm_root / "json_utils.py")
+    # #17307/#17308: shared validated loop + decision seam, imported at module level by five call sites.
+    _real_load_and_bind("llm_shared.validated_llm", _llm_root / "validated_llm.py")
+    _real_load_and_bind("llm_shared.decisions", _llm_root / "decisions.py")
     _real_load_and_bind("llm_shared.structured_ops", _llm_root / "structured_ops.py")
     _real_load_and_bind("llm_shared.optimization.rate_limiter", _llm_root / "optimization" / "rate_limiter.py")
     _real_load_and_bind("llm_shared.fallback_chain", _llm_root / "fallback_chain.py")
@@ -644,10 +647,7 @@ if "llm_shared" not in sys.modules:
     # bare env just gets the formula/None fallbacks).  It was previously
     # stubbed here, which silently fed MagicMocks to its own colocated
     # optimization/model_inspector_test.py (never-run-test-files pattern).
-    _real_load_and_bind(
-        "llm_shared.optimization.model_inspector",
-        _llm_root / "optimization" / "model_inspector.py",
-    )
+    _real_load_and_bind("llm_shared.optimization.model_inspector", _llm_root / "optimization" / "model_inspector.py")
 
     # #11618: Real-load llm_shared.hardware so patch("llm_shared.hardware.X") in
     # test_hardware.py targets the real module globals instead of the MagicMock

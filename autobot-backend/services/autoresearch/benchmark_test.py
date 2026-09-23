@@ -106,7 +106,10 @@ class TestScorerRegistration:
     async def test_llm_judge_scorer_parses_rating(self) -> None:
         llm = AsyncMock()
         mock_resp = MagicMock()
-        mock_resp.content = '{"rating": 7, "reasoning": "good"}'
+        # The typed-decision reply shape (#17307); `error = None` because the
+        # seam checks it and a bare MagicMock's `.error` is truthy.
+        mock_resp.content = json.dumps({"rating": {"answer": 7, "probability": 0.8}})
+        mock_resp.error = None
         llm.chat.return_value = mock_resp
 
         scorer = LLMJudgeScorer(llm_service=llm, criteria=["clarity"])

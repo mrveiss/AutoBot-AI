@@ -952,13 +952,13 @@ class TestClassifyAgreement:
 
     @pytest.mark.asyncio
     async def test_parses_agree_verdict(self, corroborating_verifier, mock_llm_service):
-        mock_llm_service.chat.return_value = _llm_response("AGREEMENT: AGREE\nRATIONALE: matches claim")
+        mock_llm_service.chat.return_value = _llm_response('{"agreement":{"answer":"agree","probability":0.9}}')
         verdict = await corroborating_verifier.classify_agreement("The sky is blue.", "The sky appears blue.")
         assert verdict == SourceAgreement.AGREE
 
     @pytest.mark.asyncio
     async def test_parses_contradict_verdict(self, corroborating_verifier, mock_llm_service):
-        mock_llm_service.chat.return_value = _llm_response("AGREEMENT: CONTRADICT\nRATIONALE: opposite claim")
+        mock_llm_service.chat.return_value = _llm_response('{"agreement":{"answer":"contradict","probability":0.9}}')
         verdict = await corroborating_verifier.classify_agreement("X is Y.", "X is definitely not Y.")
         assert verdict == SourceAgreement.CONTRADICT
 
@@ -1010,7 +1010,7 @@ class TestCorroborate:
     @pytest.mark.asyncio
     async def test_agreement_promotes_with_confidence(self, corroborating_verifier, mock_llm_service):
         """K independent agreeing sources -> verified with the configured base confidence."""
-        mock_llm_service.chat.return_value = _llm_response("AGREEMENT: AGREE\nRATIONALE: consistent")
+        mock_llm_service.chat.return_value = _llm_response('{"agreement":{"answer":"agree","probability":0.9}}')
         sources = [
             _source("f1", "https://b.example/page"),
             _source("f2", "https://c.example/page"),
@@ -1025,7 +1025,7 @@ class TestCorroborate:
     @pytest.mark.asyncio
     async def test_extra_sources_increase_confidence(self, corroborating_verifier, mock_llm_service):
         """More agreeing independent sources beyond K raises confidence further."""
-        mock_llm_service.chat.return_value = _llm_response("AGREEMENT: AGREE\nRATIONALE: consistent")
+        mock_llm_service.chat.return_value = _llm_response('{"agreement":{"answer":"agree","probability":0.9}}')
         sources = [
             _source("f1", "https://b.example/page"),
             _source("f2", "https://c.example/page"),
@@ -1041,7 +1041,7 @@ class TestCorroborate:
     @pytest.mark.asyncio
     async def test_contradiction_flags_for_review_and_blocks_promotion(self, corroborating_verifier, mock_llm_service):
         """A disagreeing independent source -> requires_human_review, never verified."""
-        mock_llm_service.chat.return_value = _llm_response("AGREEMENT: CONTRADICT\nRATIONALE: opposes claim")
+        mock_llm_service.chat.return_value = _llm_response('{"agreement":{"answer":"contradict","probability":0.9}}')
         sources = [
             _source("f1", "https://b.example/page"),
             _source("f2", "https://c.example/page"),
