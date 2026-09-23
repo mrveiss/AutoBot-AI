@@ -1308,7 +1308,7 @@ async def upload_attachment(
         row = await _attachment_service().upload(
             session,
             work_item_id=work_item_id,
-            company_id=company_id,
+            company_id=str(ctx.org_id),  # #17300: not the query param -- this builds the storage path
             filename=file.filename or "upload",
             content_type=file.content_type or "application/octet-stream",
             content=content,

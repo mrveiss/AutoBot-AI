@@ -57,10 +57,38 @@ def _resolve_storage_root() -> Path:
     return root
 
 
+#: Upper bound on the extension copied from an uploaded filename (#17300).
+_MAX_SUFFIX_LEN = 16
+
+
 def _storage_path(company_id: str, work_item_id: str, attachment_id: str, filename: str) -> Path:
-    ext = Path(filename).suffix
-    root = _resolve_storage_root()
-    return root / company_id / work_item_id / f"{attachment_id}{ext}"
+    """Where an attachment lives on disk, with every id proven to be a UUID first.
+
+    #17300: this built `root / company_id / ...` from an unvalidated query
+    parameter. `pathlib` discards everything left of an absolute segment, so
+    `company_id="/tmp/evil"` did not traverse out of the root -- it *replaced*
+    the root, which made this an arbitrary-write primitive rather than a
+    traversal bug. The format check existed, in `upload()`, and ran three lines
+    after the bytes had already been written.
+
+    Parsing each id here is the real fix: a value that is not a UUID cannot
+    become a path segment at all. The containment assertion below is
+    deliberately redundant -- it states the property a reader can check without
+    first reasoning about what `uuid.UUID` rejects.
+
+    Raises:
+        ValueError: if any id is not a UUID, or the result escapes the root.
+    """
+    safe = [str(uuid.UUID(str(part))) for part in (company_id, work_item_id, attachment_id)]
+    # `Path(filename).suffix` is taken from the final name component, so it can
+    # never contain a separator -- but it is attacker-supplied, so it is bounded
+    # rather than trusted.
+    ext = Path(filename).suffix[:_MAX_SUFFIX_LEN]
+    root = _resolve_storage_root().resolve()
+    dest = (root / safe[0] / safe[1] / f"{safe[2]}{ext}").resolve()
+    if not dest.is_relative_to(root):
+        raise ValueError(f"attachment path escaped the storage root: {dest}")
+    return dest
 
 
 def _extract_text(path: Path, filename: str) -> Optional[str]:
@@ -114,6 +142,15 @@ class AttachmentService:
             raise StorageBackendNotImplemented(f"Backend '{_STORAGE_BACKEND}' not implemented")
 
         attachment_id = str(uuid.uuid4())
+        # EVERY id is parsed before anything reaches the filesystem (#17300).
+        # _storage_path covers the three that form the path; these two do not,
+        # and were still cast below -- after the write. A malformed one raised
+        # there and left an orphaned file behind, repeatably, which is a disk
+        # filler. The same order-of-operations defect as the original, in the
+        # same function, for the parameters that happened not to be path
+        # segments.
+        uploaded_by_agent_uuid = uuid.UUID(uploaded_by_agent_id) if uploaded_by_agent_id else None
+        uploaded_by_user_uuid = uuid.UUID(uploaded_by_user_id) if uploaded_by_user_id else None
         dest = _storage_path(company_id, work_item_id, attachment_id, filename)
         _write_local(content, dest)
 
@@ -123,8 +160,8 @@ class AttachmentService:
             id=uuid.UUID(attachment_id),
             company_id=uuid.UUID(company_id),
             work_item_id=uuid.UUID(work_item_id),
-            uploaded_by_agent_id=uuid.UUID(uploaded_by_agent_id) if uploaded_by_agent_id else None,
-            uploaded_by_user_id=uuid.UUID(uploaded_by_user_id) if uploaded_by_user_id else None,
+            uploaded_by_agent_id=uploaded_by_agent_uuid,
+            uploaded_by_user_id=uploaded_by_user_uuid,
             filename=filename,
             content_type=content_type,
             size_bytes=len(content),

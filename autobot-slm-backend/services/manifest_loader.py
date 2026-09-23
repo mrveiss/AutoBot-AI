@@ -29,6 +29,7 @@ Environment:
 
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -71,14 +72,59 @@ class ManifestLoader:
         self._infra_base = infra_base
         self._cache: Dict[str, Tuple[RoleManifest, float]] = {}
 
-    def _manifest_path(self, role_name: str) -> Path:
-        """Return the expected manifest.yml path for a role."""
-        return self._infra_base / role_name / "manifest.yml"
+    #: A role directory name. Ansible role names are lowercase with underscores
+    #: or hyphens; nothing legitimate contains a separator, a dot or whitespace.
+    #: `fullmatch`, not `match`: with `match` the trailing `$` also matches
+    #: before a final newline, so "backend\n" was accepted (#17300 review).
+    _ROLE_NAME_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+
+    def _manifest_path(self, role_name: str) -> Path | None:
+        """The manifest.yml path for *role_name*, or None if it is not a real role.
+
+        #17300: `role_name` arrives from a `role` query parameter and a
+        `role_name` POST body field, and was joined as its own path segment with
+        no validation -- `role_name="../../../../etc"` walked out of the infra
+        base before `path.exists()` and `path.open()`.
+
+        The path is built from a DIRECTORY LISTING, not from the argument: the
+        argument only ever selects an entry that already exists under the infra
+        base. That is what makes traversal impossible rather than merely
+        difficult -- there is no string concatenation for an attacker to steer,
+        so the property holds without anyone having to reason about what the
+        allowlist excludes. The allowlist and the containment check remain as
+        two cheaper filters in front of it.
+
+        Returns None rather than raising, which is the caller's existing
+        "no manifest for this role" path and the honest answer for a name that
+        cannot be a role.
+        """
+        if not self._ROLE_NAME_RE.fullmatch(role_name or ""):
+            logger.warning("Rejected manifest lookup for a non-role name: %r (#17300)", role_name)
+            return None
+
+        base = self._infra_base.resolve()
+        try:
+            entries = {entry.name: entry for entry in base.iterdir() if entry.is_dir()}
+        except OSError as exc:
+            logger.warning("Cannot list the infra base %s: %s", base, exc)
+            return None
+
+        entry = entries.get(role_name)
+        if entry is None:
+            return None
+
+        candidate = (entry / "manifest.yml").resolve()
+        # A role directory that is a symlink out of the base resolves outside it;
+        # the listing alone would not catch that.
+        if not candidate.is_relative_to(base):
+            logger.warning("Rejected manifest path outside the infra base: %r (#17300)", role_name)
+            return None
+        return candidate
 
     def _load_from_disk(self, role_name: str) -> RoleManifest | None:
         """Load and parse manifest.yml for role_name."""
         path = self._manifest_path(role_name)
-        if not path.exists():
+        if path is None or not path.exists():
             logger.debug("Manifest not found for role %s at %s", role_name, path)
             return None
         try:
