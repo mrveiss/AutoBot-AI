@@ -359,7 +359,13 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         ok "vue-tsc: 0 errors"
       fi
     else
-      warn "node_modules missing — skipping vue-tsc (run 'npm install')"
+      # #16912: "skipping" was a warning and a zero exit, so a frontend change
+      # made where node_modules does not resolve -- every git worktree, before
+      # scripts/hooks/post-checkout started linking it -- pushed with NO type
+      # check and nothing in the transcript that read as unverified. A check
+      # that could not look is not a check that found nothing.
+      could_not_run "vue-tsc" \
+        "autobot-frontend/node_modules does not resolve from this tree (a fresh worktree gets it linked by scripts/hooks/post-checkout; otherwise run 'npm install' in the main checkout)"
     fi
 
     # Targeted test runs for changed test files + sibling __tests__/.
@@ -399,6 +405,12 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       else
         ok "vitest: all relevant tests pass"
       fi
+    elif [ -n "$all_tests" ]; then
+      # #16912: this branch did not exist -- tests were selected, node_modules
+      # was absent, and the hook fell through silently, so the push looked
+      # exactly like one where the tests had passed.
+      could_not_run "vitest" \
+        "autobot-frontend/node_modules does not resolve from this tree, so the $(echo "$all_tests" | grep -c .) selected test file(s) did not run"
     fi
   fi
 
