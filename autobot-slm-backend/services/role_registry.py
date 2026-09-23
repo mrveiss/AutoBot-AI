@@ -23,6 +23,26 @@ from services.role_manifest_shape import default_roles_for
 _BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
 _SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", "/opt/autobot/autobot-slm-agent")
 
+
+def _filtered_pip_install(
+    workdir: str, tag: str, requirements: str = "requirements.txt", *, pip_env: str = "", then: str = ""
+) -> str:
+    """One filtered-install deploy command; five roles hand-wrote it (#17166).
+
+    A bare ``pip install -r`` cannot resolve these files' constraints include,
+    hence the filter (#16889, #14272). ``tag`` is passed rather than derived
+    from ``workdir`` -- backend writes ``...-slm.txt``, slm-backend
+    ``...-slm-backend.txt``, and deriving it would change two live commands.
+    """
+    filtered = f"/tmp/requirements-filtered-{tag}.txt"
+    return (
+        f"cd {_BASE_DIR}/{workdir} && "
+        f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
+        f"{requirements} {_BASE_DIR}/code_source > {filtered} && "
+        f"{pip_env}venv/bin/pip install -r {filtered}{then}"
+    )
+
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -42,11 +62,9 @@ _SLM_ROLES = [
         # #16889: routed through build-filtered-requirements.sh -- same
         # rationale as the backend role's post_sync_cmd above; a bare
         # `pip install -r` can't resolve this file's constraints include.
-        "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-slm-backend && "  # #14275: venv/bin, not bare (see backend role above)
-            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh requirements.txt "
-            f"{_BASE_DIR}/code_source > /tmp/requirements-filtered-slm-backend.txt && "
-            "venv/bin/pip install -r /tmp/requirements-filtered-slm-backend.txt && venv/bin/alembic upgrade head"
+        # #14275: venv/bin, not bare (see the backend role below).
+        "post_sync_cmd": _filtered_pip_install(
+            "autobot-slm-backend", "slm-backend", then=" && venv/bin/alembic upgrade head"
         ),
         "required": True,
         "degraded_without": [],
@@ -131,14 +149,12 @@ _BACKEND_ROLES = [
         # A bare `pip install -r requirements.txt` would error on the
         # unresolvable include and, via the && short-circuit, silently skip
         # alembic (#11069).
-        "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-backend && "
-            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
-            f"requirements.txt {_BASE_DIR}/code_source "
-            "> /tmp/requirements-filtered-slm.txt && "
-            "PIP_USE_DEPRECATED=legacy-resolver PIP_DEFAULT_TIMEOUT=120 "
-            "venv/bin/pip install -r /tmp/requirements-filtered-slm.txt && "
-            "venv/bin/alembic upgrade head"
+        "post_sync_cmd": _filtered_pip_install(
+            "autobot-backend",
+            # Not "backend": this role has always written the slm-named temp file.
+            "slm",
+            pip_env="PIP_USE_DEPRECATED=legacy-resolver PIP_DEFAULT_TIMEOUT=120 ",
+            then=" && venv/bin/alembic upgrade head",
         ),
         "required": True,
         "degraded_without": [],
@@ -268,13 +284,7 @@ _AI_STACK_ROLES = [
         # The backend entry above has delegated to this script since #11134; the
         # ansible half of the same defect was #14272. Same script, so the two
         # deploy paths cannot drift apart again.
-        "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-ai-stack && "
-            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
-            f"requirements-ai.txt {_BASE_DIR}/code_source "
-            f"> /tmp/requirements-filtered-ai-stack.txt && "
-            f"venv/bin/pip install -r /tmp/requirements-filtered-ai-stack.txt"
-        ),
+        "post_sync_cmd": _filtered_pip_install("autobot-ai-stack", "ai-stack", "requirements-ai.txt"),
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "setup-ai-stack.yml",
@@ -318,13 +328,7 @@ _OPTIONAL_ROLES = [
         # The backend entry above has delegated to this script since #11134; the
         # ansible half of the same defect was #14272. Same script, so the two
         # deploy paths cannot drift apart again.
-        "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-npu-worker && "
-            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
-            f"requirements.txt {_BASE_DIR}/code_source "
-            f"> /tmp/requirements-filtered-npu-worker.txt && "
-            f"venv/bin/pip install -r /tmp/requirements-filtered-npu-worker.txt"
-        ),
+        "post_sync_cmd": _filtered_pip_install("autobot-npu-worker", "npu-worker"),
         "required": False,
         "degraded_without": ["GPU inference offloading — backend falls back to local Ollama"],
         "ansible_playbook": "setup-npu-worker.yml",
@@ -348,13 +352,7 @@ _OPTIONAL_ROLES = [
         # The backend entry above has delegated to this script since #11134; the
         # ansible half of the same defect was #14272. Same script, so the two
         # deploy paths cannot drift apart again.
-        "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-tts-worker && "
-            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
-            f"requirements.txt {_BASE_DIR}/code_source "
-            f"> /tmp/requirements-filtered-tts-worker.txt && "
-            f"venv/bin/pip install -r /tmp/requirements-filtered-tts-worker.txt"
-        ),
+        "post_sync_cmd": _filtered_pip_install("autobot-tts-worker", "tts-worker"),
         "required": False,
         "degraded_without": ["Voice synthesis — TTS features unavailable"],
         "ansible_playbook": "playbooks/deploy_role.yml",
