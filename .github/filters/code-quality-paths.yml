@@ -82,6 +82,8 @@ backend:
   # an address -- skips code-quality.
   - 'docs/**'
   - 'scripts/lib/**'
+  # #15473: the job runs this script; `scripts/lib/**` does not match it.
+  - 'scripts/lint-conventions.sh'
   - '.github/workflows/code-quality.yml'
   # #15608: this file and the complement shim are inputs to what `code-quality`
   # means. Editing either must run the REAL gate, not the shim reporting green

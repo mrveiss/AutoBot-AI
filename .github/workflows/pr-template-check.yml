@@ -99,3 +99,75 @@ jobs:
         # #16778, #16790 and #16791 in one afternoon. The two states now have
         # their own messages and their own tests.
         PR_BODY="$PR_BODY" python3 scripts/check_pr_template_sections.py
+
+  # #15887: its own job, not a second step on check-template. That job is named
+  # for the sections check; a title failure reported under "Validate PR template
+  # sections" would name a check that passed.
+  check-title:
+    name: Validate the PR title as a commit subject
+    # The bot skip is check-template's, and for the same reason: a bot writes its
+    # own title (`build(deps): bump x from a to b`), which carries no issue
+    # number by nature -- lint-conventions.sh exempts bot-authored commits on
+    # exactly that ground.
+    #
+    # check-template's FORK skip is deliberately NOT copied (#15473 review). That
+    # skip is right for a template-fill convention a drive-by contributor was
+    # never shown (#14153); it is wrong here. This job guards a squash subject
+    # that becomes PERMANENT and unamendable on main -- the exact incident this
+    # job exists to prevent -- and the population least familiar with the
+    # convention is the one whose titles would go unchecked. The justification
+    # offered for skipping, that an owner can edit the title at merge time, is
+    # the same unenforced manual step whose absence caused the incident. The
+    # failure is also self-explanatory rather than a mystery red: it prints the
+    # rule, what the scope class accepts, and why it cannot be fixed later.
+    #
+    # Plus one check-template does not need: base must be `main`.
+    # This gate judges a title as the SQUASH SUBJECT it will become, and a
+    # main -> release promotion is not squashed. The last one landed as a merge
+    # commit (b94f51a4c3, two parents, `Merge pull request #15326 from ...`),
+    # a subject GitHub composes and lint-conventions.sh exempts by prefix -- so
+    # the title never becomes a subject there and judging it as one is simply
+    # wrong. Verified against the branch rather than assumed: this gate red-
+    # flagged the open promotion PR #16801, whose title correctly carries no
+    # issue reference because a promotion is not an issue fix.
+    #
+    # The residual case -- someone squash-merging a promotion after all -- costs
+    # nothing: that subject lands on `release`, and the range check reads
+    # release..main, so a subject ON release is never in a scanned range.
+    if: >
+      github.event.pull_request.user.type != 'Bot' &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+    - uses: actions/checkout@v7
+
+    # #15473: the PR TITLE becomes the squash-merge commit subject, and until
+    # now nothing validated it. `fix(deps+security): ...` passed every local
+    # hook, merged, and put a subject on main that lint-conventions.sh then
+    # failed for every PR opened afterwards -- including a release promotion
+    # carrying 682 commits. A commit already on main cannot be amended, so the
+    # only cure is an exemption recorded by SHA; this step is the prevention.
+    #
+    # It lives in THIS workflow because `edited` is in its trigger list: the
+    # title at merge time is what becomes the subject, and a title changed
+    # after the last push is invisible to every synchronize-triggered workflow.
+    #
+    # Fetched via the CLI rather than read from the event payload: a title is
+    # attacker-controlled text and `${{ }}` interpolation into a shell script
+    # is the injection this repository forbids.
+    - name: Check the PR title can become a commit subject (#15473)
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        PR_TITLE=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json title --jq '.title') || {
+          echo "::error::PR title lookup failed — the title gate DID NOT RUN"
+          exit 1
+        }
+        python3 scripts/validate_pr_body.py --title-only "$PR_TITLE"

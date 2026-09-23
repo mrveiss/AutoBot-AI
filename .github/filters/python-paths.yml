@@ -142,10 +142,24 @@ python:
   # hardcoded-value-rules.sh six -- and every occurrence is prose in a comment.
   - 'pipeline-scripts/check-pre-commit-hook-pr.sh'
   - 'pipeline-scripts/check_baseline_no_growth.sh'
+  # #15333: the open-alert ceiling gate, read by literal from
+  # codeql_alert_ceiling_is_wired_15333_test.py.
+  - 'pipeline-scripts/check_codeql_alert_ceiling.sh'
   - 'pipeline-scripts/detect-hardcoded-values.sh'
   - 'pipeline-scripts/pr-queue-open-list.sh'
   - 'scripts/lib/git-scope.sh'
   - 'scripts/lib/hardcoded-value-rules.sh'
+  # #15473: the same shape one level out. scripts/lint_conventions_test.py runs
+  # lint-conventions.sh (34 tests) and scripts/validate_pr_body_test.py asserts
+  # the script and the python gate read one shared rule -- and NEITHER file was
+  # matched here. `**/*.py` does not match a `.sh`, and commit-subject.ere is
+  # not python either, so a change confined to the rule or to the linter
+  # computed `python != 'true'` and the tests that exist to catch exactly that
+  # never ran. The rule file is listed even though `scripts/lib/**` appears in
+  # code-quality-paths.yml: that filter decides whether the LINTER runs, this
+  # one decides whether its TESTS do, and they are not the same question.
+  - 'scripts/lint-conventions.sh'
+  - 'scripts/lib/commit-subject.ere'
 
   # #15650: repo_tests/slm_frontend_shell_publish_test.py reads this script to
   # prove the SLM frontend build-and-publish cannot drift back to the shape that

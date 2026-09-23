@@ -69,6 +69,16 @@ ok()   { printf '  ok    %s\n' "$1"; }
 note() { printf '  ----  %s\n' "$1"; }
 die()  { printf '  FATAL %s\n' "$1" >&2; exit 1; }
 
+# ── the commit-subject rule, loaded from its single source (#15473) ──────────
+# Fails closed: a rule file that cannot be read is not a subject that passes.
+SUBJECT_ERE_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/commit-subject.ere"
+[ -r "$SUBJECT_ERE_FILE" ] || die "cannot read the commit-subject rule at $SUBJECT_ERE_FILE"
+mapfile -t _subject_ere_lines < <(grep -vE '^[[:space:]]*(#|$)' "$SUBJECT_ERE_FILE")
+[ "${#_subject_ere_lines[@]}" -eq 1 ] \
+  || die "commit-subject.ere must hold exactly one pattern, found ${#_subject_ere_lines[@]}"
+SUBJECT_ERE="${_subject_ere_lines[0]}"
+[ -n "$SUBJECT_ERE" ] || die "the commit-subject rule is empty"
+
 # ── commit-msg mode: subject only, nothing else is knowable here ─────────────
 if [ "$MODE" = "--commit-msg" ]; then
   [ -n "$MSG_FILE" ] && [ -r "$MSG_FILE" ] || die "--commit-msg needs a readable file"
@@ -94,7 +104,7 @@ if [ "$MODE" = "--commit-msg" ]; then
   # itself authored; it now rejects 1, and that one is genuinely malformed —
   # capitalised, with no type at all. A linter whose own repository cannot
   # satisfy it gets ignored, which is worse than not having it.
-  if ! printf '%s' "$SUBJECT" | grep -qE '^[a-z][a-z0-9-]*(\([a-z0-9][a-z0-9._/,-]*\))?: .+'; then
+  if ! printf '%s' "$SUBJECT" | grep -qE "$SUBJECT_ERE"; then
     echo "  FAIL  subject is not '<type>(scope): <description>'"; exit 1
   fi
   if ! printf '%s' "$SUBJECT" | grep -qE '#[0-9]{3,}'; then
@@ -223,7 +233,13 @@ else
   # %ae is carried too: a bot's *email* ends in `[bot]@users.noreply.github.com`
   # even where its display name is rewritten (a .mailmap entry would do exactly
   # that), so two independent signals have to fail before a bot commit is judged.
-  LOGLINES=$(git log --format='%h%x1f%an%x1f%ae%x1f%s' "${BASE_REF}..${HEAD_REF}") \
+  # %H as well as %h (#15473 review): exemptions match the FULL sha, and %h is
+  # kept only for the message. %h abbreviates to whatever is unambiguous in the
+  # local object store, so a prefix pattern written from a full clone missed in
+  # CI's shallow one -- and a prefix short enough for CI is a prefix that can
+  # collide with a future commit and silently exempt it from BOTH sub-checks.
+  # A full sha has neither failure mode.
+  LOGLINES=$(git log --format='%H%x1f%h%x1f%an%x1f%ae%x1f%s' "${BASE_REF}..${HEAD_REF}") \
     || die "git log failed for $RANGE"
   if [ -z "$LOGLINES" ]; then
     ok "no commits in range"
@@ -232,8 +248,10 @@ else
     while IFS= read -r line; do
       [ -n "$line" ] || continue
       SEEN=$((SEEN+1))
-      sha=${line%%$'\x1f'*}
+      sha_full=${line%%$'\x1f'*}
       rest=${line#*$'\x1f'}
+      sha=${rest%%$'\x1f'*}
+      rest=${rest#*$'\x1f'}
       author=${rest%%$'\x1f'*}
       rest=${rest#*$'\x1f'}
       email=${rest%%$'\x1f'*}
@@ -246,7 +264,25 @@ else
       case "$author$email" in
         *'[bot]'*) continue ;;
       esac
-      if ! printf '%s' "$subj" | grep -qE '^[a-z][a-z0-9-]*(\([a-z0-9][a-z0-9._/,-]*\))?: .+'; then
+      # Subjects already on main that cannot be amended (#15473). A squash merge
+      # takes its subject from the PR TITLE, and nothing validated that until
+      # validate_pr_body.check_title -- so this one landed malformed and then
+      # failed the range check for every PR afterwards, including a release
+      # promotion carrying 682 commits.
+      #
+      # Recorded by FULL sha rather than by widening the pattern: `+` is not a
+      # scope separator this repository uses (one occurrence in 600 commits, and
+      # it is this one), so widening would be lowering the rule to fit a mistake.
+      # Full rather than abbreviated because `continue` skips BOTH the format
+      # check and the issue-reference check, so a prefix that ever collided would
+      # exempt an unrelated commit from the whole of check 3.
+      #
+      # Shrink-only -- an entry leaves when history is rewritten, which for main
+      # means never.
+      case "$sha_full" in
+        59f4be872c9c2288714a67c665f50f8eefaf694c) continue ;;
+      esac
+      if ! printf '%s' "$subj" | grep -qE "$SUBJECT_ERE"; then
         # #13921: the parsed author is echoed on failure. The previous version
         # rejected commits without saying who it thought wrote them, so a
         # non-firing exemption could only be diagnosed by inference.
