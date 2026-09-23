@@ -472,6 +472,23 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_CODE_SOURCE_ALLOWED_ROOTS",
+        type=str,
+        default="/opt/autobot",
+        description=(
+            "Comma-separated roots a code-source repo_path may live under (#17300). The value "
+            "arrives from a POST body and used to reach Path(...).is_dir()/.iterdir() unconfined, "
+            "so any authenticated user could probe for arbitrary paths on the host -- these routes "
+            "are gated by get_current_user, not by an admin role. The default is the default "
+            "repo_path, so an ordinary deployment needs no change; a checkout elsewhere is added "
+            "here rather than the code permitting everything by omission."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_ORPHAN_GRACE_HOURS",
         type=int,
         default=24,
