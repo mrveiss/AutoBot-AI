@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 from api.merge_conflict_resolution import router
 from auth_middleware import check_admin_permission
+from autobot_shared.security.path_http import PATH_REFUSED_DETAIL, PATH_REFUSED_STATUS
 
 # Mirror the real mount point so these tests exercise production URLs (#13183).
 # ``api.merge_conflict_resolution`` is registered in
@@ -164,8 +165,12 @@ class TestAnalyzeConflicts:
             json={"file_path": "/nonexistent/file.py"},
         )
 
-        assert response.status_code == 400
-        assert "Invalid or disallowed path" in response.json()["detail"]
+        # #13579: the per-endpoint wording is gone. Every path refusal in the
+        # backend now renders as the one shared detail, and this asserts against
+        # the constant rather than a copy of its text -- a second copy here is
+        # how the six call sites drifted apart in the first place.
+        assert response.status_code == PATH_REFUSED_STATUS
+        assert response.json()["detail"] == PATH_REFUSED_DETAIL
 
     def test_analyze_unsupported_file_type(self, client):
         """Test analysis of unsupported file type."""

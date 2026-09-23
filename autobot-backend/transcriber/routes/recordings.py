@@ -184,6 +184,15 @@ def _resolve_audio_path(filepath: str, upload_dir: Path) -> Path:
     and one pointing inside is harmless. Dropped rather than carried across, so
     nobody folds dead code into the shared helper.
     """
+    # #13579: NOT converged onto validate_path_or_http, deliberately. That helper
+    # answers 400 for every refusal, which is right where the resource's
+    # existence is not secret. Here it is: the next line already returns 404 for
+    # a file that is missing, so answering anything else for an out-of-bounds
+    # path would separate "not yours" from "not there" and let a caller map the
+    # upload directory one request at a time. 404 for both is strictly more
+    # opaque than the shared default, which is why this stays local rather than
+    # becoming a status-code parameter on a helper whose whole point is that the
+    # status is not a per-call decision.
     try:
         resolved_file = validate_path(filepath, allowed_roots=[str(upload_dir)])
     except ValueError:
