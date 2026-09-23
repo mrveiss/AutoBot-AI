@@ -943,15 +943,23 @@
       - restart backend
       - restart celery
 
-  # The filtered file is written to /tmp, so its sibling-relative `-c
-  # ../constraints/shared.txt` (#10524) and `-r ../requirements.txt` (#11135)
-  # includes would resolve relative to /tmp and fail (pip errors on a missing
-  # file). Delegate the filter+rewrite to the canonical
-  # scripts/build-filtered-requirements.sh (#11134), which rewrites both to the
-  # code_source path, which always exists as the git checkout, so the pinned
-  # constraints AND root runtime deps are actually applied on deploy (#11117,
-  # #11135). services/role_registry.py's backend post_sync_cmd invokes the same
-  # script, so both deploy paths share one implementation instead of drifting.
+  # The manifest's sibling-relative `-c ../constraints/shared.txt` (#10524) and
+  # `-r ../requirements.txt` (#11135) includes do not survive being moved, so
+  # the filter+rewrite is delegated to the canonical
+  # scripts/build-filtered-requirements.sh (#11134), which rewrites both to an
+  # absolute path so the pinned constraints AND root runtime deps are actually
+  # applied on deploy (#11117, #11135). services/role_registry.py's backend
+  # post_sync_cmd invokes the same script, so both deploy paths share one
+  # implementation instead of drifting.
+  #
+  # #17331: that absolute path is the NODE's staged copy, not `code_source`.
+  # The comment here used to assert that code_source "always exists as the git
+  # checkout" -- #17242 disproved the execution half of that claim and this is
+  # the other half: the path the rewrite bakes INTO the generated file is read
+  # by pip on the target, where code_source is absent, and provisioning aborted
+  # with "Could not open constraint file". The staging task below puts the two
+  # files on the node first; the third argument to the script names where they
+  # landed. See roles/_shared/tasks/stage_shared_manifests.yml.
   # #17242: generated ON THE CONTROLLER, not on the target. `code_source` is the
   # git checkout and no task syncs it to a remote node, so running this script
   # from it on the target exits 127 on every host that is not the manager --
@@ -971,12 +979,17 @@
     # the SAME host share a controller file, and the later generation can
     # replace it before the earlier copy reads it.
 
-  - name: Create filtered backend requirements (on the controller, #17242)
+  - name: "Backend | Stage the manifests this node's pip step reads (#17331)"
+    ansible.builtin.include_tasks: ../../_shared/tasks/stage_shared_manifests.yml
+    when: not (autobot_shared_manifests_staged | default(false))
+
+  - name: Create filtered backend requirements (on the controller, #17242, #17331)
     ansible.builtin.shell:
       cmd: >-
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/autobot-backend/requirements.txt
         {{ code_source_dir }}
+        {{ autobot.base_dir }}
         > /tmp/filtered-requirements.{{ inventory_hostname }}.{{ _req_run_id }}.txt
     changed_when: false
     delegate_to: localhost
@@ -1059,6 +1072,7 @@
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/requirements-gpu-torch.txt
         {{ code_source_dir }}
+        {{ autobot.base_dir }}
         > /tmp/filtered-requirements-gpu-torch.{{ inventory_hostname }}.{{ _req_run_id }}.txt
     changed_when: false
     delegate_to: localhost
@@ -1080,6 +1094,7 @@
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/requirements-gpu-faiss.txt
         {{ code_source_dir }}
+        {{ autobot.base_dir }}
         > /tmp/filtered-requirements-gpu-faiss.{{ inventory_hostname }}.{{ _req_run_id }}.txt
     changed_when: false
     delegate_to: localhost
@@ -1101,6 +1116,7 @@
         bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ code_source_dir }}/requirements-gpu.txt
         {{ code_source_dir }}
+        {{ autobot.base_dir }}
         > /tmp/filtered-requirements-gpu.{{ inventory_hostname }}.{{ _req_run_id }}.txt
     changed_when: false
     delegate_to: localhost

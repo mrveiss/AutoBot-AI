@@ -28,17 +28,58 @@ _CODE_SOURCE = "/opt/autobot/code_source"
 _RELATIVE_INCLUDE = re.compile(r"^\s*-(c|r)\s+(\.\./)+", re.MULTILINE)
 
 
-def _rewrite(body: str, tmp_path: Path) -> str:
+# #17331: the node-local root the ansible roles now pass as the script's third
+# argument. Distinct from _CODE_SOURCE on purpose -- the whole defect was the
+# two being assumed equal.
+_STAGED_ROOT = "/opt/autobot"
+
+
+def _rewrite(body: str, tmp_path: Path, rewrite_root: str | None = None) -> str:
     source = tmp_path / "requirements.txt"
     source.write_text(body, encoding="utf-8")
+    argv = ["bash", str(_SCRIPT), str(source), _CODE_SOURCE]
+    if rewrite_root is not None:
+        argv.append(rewrite_root)
     result = subprocess.run(
-        ["bash", str(_SCRIPT), str(source), _CODE_SOURCE],
+        argv,
         capture_output=True,
         text=True,
         check=False,
     )
     assert result.returncode == 0, result.stderr
     return result.stdout
+
+
+def test_the_rewrite_root_defaults_to_the_source_root(tmp_path):
+    """Omitting the third argument must keep the single-machine behaviour.
+
+    services/role_registry.py's post_sync_cmd reads and installs on the SLM
+    manager, where code_source is genuinely present, and passes two arguments.
+    """
+    out = _rewrite("-c ../constraints/shared.txt\n", tmp_path)
+
+    assert f"-c {_CODE_SOURCE}/constraints/shared.txt" in out
+
+
+def test_the_rewrite_root_overrides_the_source_root(tmp_path):
+    """#17331: generated from the checkout HERE, installed on a node THERE.
+
+    The file is written on the controller and copied to a fleet host, so the
+    path baked into it must be the host's -- pip resolves a nested `-c` against
+    the directory of the file containing it, and opens it wherever pip runs.
+    """
+    out = _rewrite(
+        "-c ../constraints/shared.txt\n-r ../requirements.txt\nnumpy\n",
+        tmp_path,
+        _STAGED_ROOT,
+    )
+
+    assert f"-c {_STAGED_ROOT}/constraints/shared.txt" in out
+    assert f"-r {_STAGED_ROOT}/requirements.txt" in out
+    assert _CODE_SOURCE not in out, (
+        "the controller's checkout must not appear in a file that a node reads"
+    )
+    assert "numpy" in out
 
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 6])

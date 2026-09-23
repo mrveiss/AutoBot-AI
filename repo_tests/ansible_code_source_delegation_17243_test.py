@@ -72,25 +72,30 @@ _CONTROLLER_DELEGATES = {"localhost", "127.0.0.1"}
 _MIN_TASKS_SEEN = 8
 
 # Pre-existing offenders, recorded so this guard blocks NEW instances today
-# instead of waiting until every old one is fixed. Each is a `pip:` task in a
-# role that runs on fleet nodes, reading a manifest out of the controller's
-# checkout -- the same defect as #17242, and the reason the widened detector
-# exists: the first sweep scanned only shell-style modules and reported six
-# sites when there were sixteen.
+# instead of waiting until every old one is fixed.
 #
 # This list may only SHRINK. `test_the_baseline_has_no_stale_entries` fails when
 # an entry stops being an offender, so a fix cannot silently leave its record
 # behind, and nothing can be added here to make a new violation pass.
 #
-# Tracked by #17246.
+# #17246 fixed six of the original seven: each now reads
+# `{{ autobot.base_dir }}/constraints/shared.txt`, staged onto the node by
+# `roles/_shared/tasks/stage_shared_manifests.yml`.
+#
+# The seventh is NOT a pip-path problem and is deliberately not forced into the
+# same shape. `roles/npu-worker` reads its whole MANIFEST out of the checkout,
+# and that manifest opens with `-e ../autobot_shared` (#15733) -- an editable
+# install of a sibling package tree. The other sites could be repointed because
+# only their `-c` named the checkout; here the editable does too, and the
+# obvious move (route it through build-filtered-requirements.sh, which strips
+# that line) would silently drop autobot_shared from the NPU venv. Nothing else
+# installs it there: `roles/autobot_shared` syncs to a PYTHONPATH directory and
+# only runs under `deploy_role == 'autobot_shared'`. Dropping it would be the
+# #11135 class of regression -- the exact failure this guard's own history is
+# made of -- so it waits on a decision about where autobot_shared lives on a
+# worker node, tracked by #17334.
 _KNOWN_UNSTAGED = frozenset({
-    "roles/agent_config/tasks/openvino.yml :: Set up OpenVINO environment in venv",
-    "roles/agent_config/tasks/playwright.yml :: Install Playwright via pip in venv",
-    "roles/agent_config/tasks/python_deps.yml :: Install Python packages from requirements.txt",
-    "roles/backend_services/tasks/main.yml :: Install Python dependencies",
-    "roles/browser/tasks/main.yml :: Browser | Install Playwright and FastAPI dependencies via pip",
     "roles/npu-worker/tasks/main.yml :: NPU Worker | Install worker dependencies from its manifest",
-    "roles/tts-worker/tasks/main.yml :: TTS Worker | Install pocket-tts and audio dependencies",
 })
 
 

@@ -1,0 +1,61 @@
+---
+# Stage the repo-root manifests that a node's pip steps read (#17331, #17246).
+#
+# `code_source` is the controller's git checkout and NOTHING syncs it to a node
+# -- the invariant #17242 established the hard way, with an rc=127 on every
+# non-manager host. Two shapes still reach into it from a fleet node:
+#
+#   1. A `pip:` task whose `extra_args` names
+#      `{{ code_source_dir }}/constraints/shared.txt` (#17246, seven sites).
+#   2. A manifest GENERATED on the controller by
+#      scripts/build-filtered-requirements.sh, whose rewritten `-c`/`-r` lines
+#      named the same controller-only path and were then copied to the node
+#      (#17331). pip resolves a nested `-c` against the directory of the file
+#      that contains it, so the path baked into the generated file is the path
+#      pip opens on the target.
+#
+# Both are fixed the same way, which is why this is one task file and not two:
+# put the files the node actually needs ON the node, at a path derived from the
+# SSOT base_dir, and point the consumers there. `playbooks/update-all-nodes.yml`
+# already did exactly this for its own three pip steps (#17243); this lifts that
+# into a shared task so a role carries its own precondition and does not depend
+# on which playbook happened to invoke it.
+#
+# `copy:` reads `src` on the CONTROLLER, which is where these files exist, so no
+# delegation is involved and none is wanted: the destination is the node.
+#
+# Idempotent and guarded by a per-host fact, so including it from several roles
+# in one run stages once. Including it is always safe.
+
+- name: "Shared manifests | Ensure the constraints directory exists on the node (#17331)"
+  ansible.builtin.file:
+    path: "{{ autobot.base_dir }}/constraints"
+    state: directory
+    owner: "{{ autobot.user }}"
+    mode: "0755"
+  become: true
+
+- name: "Shared manifests | Stage constraints/shared.txt onto the node (#17331)"
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../../constraints/shared.txt"
+    dest: "{{ autobot.base_dir }}/constraints/shared.txt"
+    owner: "{{ autobot.user }}"
+    mode: "0644"
+  become: true
+
+# The backend manifest's `-r ../requirements.txt` pulls ~23 root runtime deps
+# (paramiko, asyncssh, pypdf, python-docx/pptx, openpyxl, ...). #11135 filed
+# that as a silent drop when the line was stripped instead of rewritten; the
+# rewrite is only honest if the file it names is present on the node too.
+# It declares no includes of its own, so staging it needs nothing further.
+- name: "Shared manifests | Stage the root requirements.txt onto the node (#17331)"
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../../requirements.txt"
+    dest: "{{ autobot.base_dir }}/requirements.txt"
+    owner: "{{ autobot.user }}"
+    mode: "0644"
+  become: true
+
+- name: "Shared manifests | Record that this host is staged (#17331)"
+  ansible.builtin.set_fact:
+    autobot_shared_manifests_staged: true
