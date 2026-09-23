@@ -21,6 +21,24 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_PLAYBOOK_PIPE_LINE_LIMIT",
+        type=int,
+        default=10 * 1024 * 1024,
+        description=(
+            "Bytes of one playbook output line the executor will read. asyncio's "
+            "StreamReader defaults to 64 KiB, and a single ansible `fatal:` line "
+            "carries the whole task result as JSON -- for a pip task that embeds "
+            "pip's entire stderr and goes past 64 KiB routinely. Exceeding it used "
+            "to kill the reader with a bare ValueError, which then stood in for the "
+            "failure it had swallowed. Raise it only if a real line is larger; the "
+            "reader truncates and says so rather than dying either way."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_NODE_PROXY_TIMEOUT_SECONDS",
         type=float,
         default=15.0,

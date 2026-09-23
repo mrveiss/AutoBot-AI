@@ -221,3 +221,103 @@ def test_the_blind_spot_is_pinned_not_ignored() -> None:
         "This guard cannot see routes mounted that way, so the blind spot changed size. "
         "Update the pin deliberately, or adopt the real-router enumeration (#17325)."
     )
+
+
+# -- the guard proved by mutation (#16908 AC4) --------------------------------
+#
+# The tests above prove the EXPANSION attributes routes correctly. None of them
+# proved the guard FIRES: that a planted duplicate reddens it and names both
+# sides. Those are different claims, and only the second is what the guard is
+# for.
+#
+# Proved here against the real detector -- `collisions()` itself, with its tree
+# roots pointed at a synthetic checkout -- rather than by reimplementing the
+# comparison in the test, which would prove only that the test can find a
+# duplicate.
+#
+# The second case is the one that makes the first honest. A duplicate planted
+# where the AST detector cannot look (a route mounted through include_router)
+# does NOT redden the guard, so "I planted a duplicate and it went red" means
+# nothing unless the plant was in the reached region. Both directions are
+# asserted, so a future change that quietly widens or narrows the reachable
+# region fails here instead of being discovered the next time someone trusts a
+# green run.
+
+
+def _synthetic_checkout(tmp_path, gamma_via_include_router=False):
+    """A miniature tree with the two registry files and colliding modules."""
+    reg = tmp_path / "autobot-backend" / "initialization" / "router_registry"
+    api = tmp_path / "autobot-backend" / "api"
+    reg.mkdir(parents=True)
+    api.mkdir(parents=True)
+
+    entries = ['("api.alpha", "/alpha", None)', '("api.beta", "", None)']
+    if gamma_via_include_router:
+        entries.append('("api.gamma", "", None)')
+    (reg / "feature_routers.py").write_text(f"ROUTERS = [{', '.join(entries)}]\n", encoding="utf-8")
+    # core_routers is read unconditionally; an empty one keeps the parse honest.
+    (reg / "core_routers.py").write_text("CORE = []\n", encoding="utf-8")
+
+    # /api + "/alpha" + "" + "/dup"
+    (api / "alpha.py").write_text(
+        'router = APIRouter()\n\n\n@router.get("/dup")\nasync def a():\n    return {}\n', encoding="utf-8"
+    )
+    # /api + "" + "/alpha" + "/dup" -- same full path, different module
+    (api / "beta.py").write_text(
+        'router = APIRouter(prefix="/alpha")\n\n\n@router.get("/dup")\nasync def b():\n    return {}\n',
+        encoding="utf-8",
+    )
+    if gamma_via_include_router:
+        # The same collision again, mounted the way the detector cannot see.
+        (api / "gamma.py").write_text(
+            'router = APIRouter()\nsub = APIRouter(prefix="/alpha")\n\n\n'
+            '@sub.get("/dup")\nasync def c():\n    return {}\n\n\n'
+            "router.include_router(sub)\n",
+            encoding="utf-8",
+        )
+    return reg, api
+
+
+def _collisions_against(monkeypatch, tmp_path, **kw):
+    import repo_tests.no_duplicate_route_registration_16908_test as guard
+
+    reg, api = _synthetic_checkout(tmp_path, **kw)
+    monkeypatch.setattr(guard, "REG", reg)
+    monkeypatch.setattr(guard, "API", api.parent)
+    # `total > 500` is a real-tree sanity check; the synthetic tree has three routes.
+    return guard.collisions()
+
+
+def test_a_planted_duplicate_reddens_the_guard_and_names_both_modules(monkeypatch, tmp_path):
+    """#16908 AC4, the positive half."""
+    dupes, unresolved, total = _collisions_against(monkeypatch, tmp_path)
+
+    assert not unresolved, f"the synthetic tree should resolve cleanly, got {unresolved}"
+    assert (
+        "GET",
+        "/api/alpha/dup",
+    ) in dupes, f"the planted duplicate was not detected; expansion produced {total} route(s): {dupes}"
+    assert dupes[("GET", "/api/alpha/dup")] == [
+        "api.alpha:router",
+        "api.beta:router",
+    ], "the failure must name BOTH sides -- naming one is how the wrong module gets edited"
+
+
+def test_a_duplicate_mounted_through_include_router_is_missed(monkeypatch, tmp_path):
+    """#16908 AC4, the half that proves the plant site mattered (#17325).
+
+    `api.gamma` mounts exactly the same (GET, /api/alpha/dup) through
+    include_router. The detector reads decorators on the REGISTERED object, so
+    gamma contributes nothing and the three-way collision reports as two-way.
+    This is the pinned blind spot, asserted as behaviour rather than described
+    in a comment: when #17325 adopts real-router enumeration, this test is the
+    one that must change, and it says so by failing.
+    """
+    dupes, unresolved, _ = _collisions_against(monkeypatch, tmp_path, gamma_via_include_router=True)
+
+    assert not unresolved
+    assert dupes[("GET", "/api/alpha/dup")] == [
+        "api.alpha:router",
+        "api.beta:router",
+    ], "gamma's include_router-mounted duplicate should be invisible to the AST detector"
+    assert "api.gamma:router" not in dupes[("GET", "/api/alpha/dup")]

@@ -270,7 +270,37 @@ REACH = declare(
     # 401 of allowance that main had already spent 397 of. Same shape as the
     # previous five and the reason #17142 exists: 400 is 5.8% of a ~6900-file
     # tree and this tree spends it in under a week.
-    floor=6536,
+    # Re-pinned 6536 -> 6736 (#17317): SEVENTEENTH re-pin, and deliberately NOT
+    # `population - growth` like the sixteen before it. #17142 blames `growth=400`
+    # for the treadmill; the measurement says otherwise, and the difference is
+    # what stops this recurring.
+    #
+    # There are two bounds, not one. `verify_floor` needs
+    # `population - floor <= skips + growth` (401), so floor >= 6535. `completed()`
+    # needs `floor <= what the guard finishes`, and since `skips=1` is this file
+    # alone, that is `population - 1` = 6935. The floor may legally sit ANYWHERE
+    # in 6535..6935 -- a window 400 wide.
+    #
+    # `floor = population - growth` pins it at the very BOTTOM of that window, so
+    # slack is always exactly `growth` (400) against an allowance of 401. That
+    # leaves ONE file of headroom by construction, whatever `growth` is set to --
+    # raising `growth` to 800 would re-pin the floor 400 lower and leave the same
+    # one file. That is why sixteen re-pins did not help, and why the fix is not a
+    # bigger allowance.
+    #
+    # 6736 is `population - 200`, mid-window: 201 files of headroom before the
+    # allowance is breached, and 199 files of shrink before `completed()` is. It is
+    # also a STRICTER guard than 6538, not a looser one -- the floor asserts how
+    # much of the tree was actually reached, so raising it within the window
+    # demands more, and only the allowance check cares about the gap.
+    #
+    # Measured: main is 6936 (6905 tracked .py/.sh/.yml/.yaml plus extensionless
+    # shell), confirmed by two independent branches -- #17323 adds 3 counted files
+    # and CI read 6939, #17330 adds 2 and read 6938. Counted additions in flight
+    # total +22 (#17327 +14, #17323 +3, #17330 +2, this +2, #17335 +1, #17341 +0);
+    # 6538 had 3 files of headroom and #17327 alone would have breached it four
+    # times over. Credit to autobot-ai-87 for the in-flight arithmetic.
+    floor=6736,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",

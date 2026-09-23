@@ -126,7 +126,11 @@ def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
 REACH = declare(
     "audio-extension-allowlist",
     discover=_tracked_python_files,
-    floor=5450,
+    # Re-pinned 5450 -> 5752 (#17317): measured 6152 tracked python files. This
+    # one had NOT tripped before today; it does now because three merges landed
+    # in an hour. Same cause as hooks-path-override, different scope -- which is
+    # the point #17142 makes: it is the allowance that is wrong, not the floors.
+    floor=5752,
     growth=400,
     skips=300,
     what="tracked python files",
