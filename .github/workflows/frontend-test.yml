@@ -31,6 +31,12 @@ on:
       - 'autobot_shared/ssot_config.py'
       # #16337: the Security Scan job's audit gate.
       - 'pipeline-scripts/npm_audit_gate.py'
+      # #15002: the redactor drift guard runs in this suite and reads the
+      # terminal plugin's copy, so a plugin-only edit must still run it. The
+      # entry landed in the filter file in #15002 and was dropped from this
+      # mirror and ci.yml's, because the hardcoded-values hook made both files
+      # uneditable (#16260) -- restored here now that it does not.
+      - 'autobot-plugins/terminal/**'
   pull_request:
     # main is the integration branch every frontend PR merges into, so the
     # suite must run pre-merge, not only post-merge on the push trigger

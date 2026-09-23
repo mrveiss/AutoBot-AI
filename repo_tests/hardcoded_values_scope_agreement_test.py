@@ -28,8 +28,9 @@ import subprocess  # nosec B404 - fixed argv, no shell
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = repo_root()
 RULES = REPO / "scripts" / "lib" / "hardcoded-value-rules.sh"
 SCAN = REPO / "pipeline-scripts" / "detect-hardcoded-values.sh"
 HOOK = REPO / "autobot-infrastructure" / "shared" / "scripts" / "hooks" / "pre-commit-hardcoded-values"
