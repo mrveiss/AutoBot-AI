@@ -138,7 +138,12 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2955,
+    # Re-pinned 2955 -> 2956 (#17300): measured 3256, confirmed by CI and by
+    # `git ls-files -- 'autobot-backend/*.py' | grep -v _test.py$ | wc -l` on the
+    # merged tree. Two readings because a local run of this floor is only
+    # trustworthy since #17298 made the sweep import declarations from outside
+    # repo_tests/ -- before that it silently checked a smaller set.
+    floor=2956,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )

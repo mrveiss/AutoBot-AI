@@ -116,8 +116,16 @@ class TestCodeSourceValidation:
                 assert "/wrong/path" in exc_info.value.detail
 
     @pytest.mark.asyncio
-    async def test_validate_repo_path_case_mismatch_suggestion(self, mock_node):
-        """Test validation suggests correct path when case mismatch detected."""
+    async def test_validate_repo_path_does_not_disclose_the_similar_path(self, mock_node):
+        """#17300: the suggestion is computed and LOGGED, never returned.
+
+        This test previously asserted the opposite -- that "Did you mean: <path>?"
+        appears in the response. That was the defect: these routes are gated by
+        get_current_user only, not by an admin role, so the suggestion handed any
+        authenticated user one real filename from any directory on the node. The
+        assertion is inverted rather than deleted, so the property is pinned
+        rather than merely un-checked.
+        """
         with patch(_LOCAL_NODE_PATCH, return_value=False), patch("asyncio.create_subprocess_exec") as mock_exec:
             # First call: test -d fails
             mock_process = AsyncMock()
@@ -135,7 +143,8 @@ class TestCodeSourceValidation:
 
                 assert exc_info.value.status_code == 400
                 assert "does not exist" in exc_info.value.detail
-                assert "Did you mean: /opt/autobot/code_source?" in exc_info.value.detail
+                assert "/opt/autobot/code_source" not in exc_info.value.detail, "the sibling path leaked"
+                assert "Did you mean" not in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_validate_repo_path_timeout(self, mock_node):

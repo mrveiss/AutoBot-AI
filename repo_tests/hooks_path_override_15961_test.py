@@ -248,7 +248,12 @@ REACH = declare(
     # within one branch. Filed as its own issue rather than absorbed again: a floor
     # that needs re-pinning twice in one day is telling you the growth allowance is
     # wrong, not that the floor is.
-    floor=6525,
+    # Re-pinned 6525 -> 6527 (#17300): measured 6927 on the merged tree. TWELFTH
+    # re-pin, and the third inside a single day. This branch adds two counting
+    # files (two security regression tests); main had already consumed the rest
+    # of the allowance. See #17142 -- at this cadence the 400-file growth
+    # allowance, 5.8% of a ~6900-file tree, is the thing that is wrong.
+    floor=6527,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
