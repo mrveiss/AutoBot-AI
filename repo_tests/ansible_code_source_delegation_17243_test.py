@@ -31,7 +31,6 @@ from __future__ import annotations
 import pathlib
 
 import yaml
-
 from repo_tests._paths import repo_root
 
 # #15925: the repository root is derived in one place. Re-deriving it from
@@ -40,10 +39,14 @@ _ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 
 # Modules whose payload runs on the TARGET unless the task is delegated.
 _EXEC_MODULES = {
-    "shell", "ansible.builtin.shell",
-    "command", "ansible.builtin.command",
-    "script", "ansible.builtin.script",
-    "raw", "ansible.builtin.raw",
+    "shell",
+    "ansible.builtin.shell",
+    "command",
+    "ansible.builtin.command",
+    "script",
+    "ansible.builtin.script",
+    "raw",
+    "ansible.builtin.raw",
 }
 
 # Modules that READ A FILE on the target. Delegation is not an exemption here:
@@ -94,9 +97,11 @@ _MIN_TASKS_SEEN = 8
 # #11135 class of regression -- the exact failure this guard's own history is
 # made of -- so it waits on a decision about where autobot_shared lives on a
 # worker node, tracked by #17334.
-_KNOWN_UNSTAGED = frozenset({
-    "roles/npu-worker/tasks/main.yml :: NPU Worker | Install worker dependencies from its manifest",
-})
+_KNOWN_UNSTAGED = frozenset(
+    {
+        "roles/npu-worker/tasks/main.yml :: NPU Worker | Install worker dependencies from its manifest",
+    }
+)
 
 
 def _tasks(node):
@@ -208,8 +213,7 @@ def test_no_target_side_task_reads_code_source_undelegated():
     assert not offenders, (
         "these tasks execute on the target and read code_source, which exists only on "
         "the controller -- add `delegate_to: localhost` (see "
-        "_shared/tasks/sync_deletions.yml) or stage the file onto the node:\n  "
-        + "\n  ".join(offenders)
+        "_shared/tasks/sync_deletions.yml) or stage the file onto the node:\n  " + "\n  ".join(offenders)
     )
 
 

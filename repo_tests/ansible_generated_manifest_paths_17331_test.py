@@ -43,11 +43,9 @@ goes red naming that file; delete the `constraints/shared.txt` copy from
 
 from __future__ import annotations
 
-import pathlib
 import re
 
 import yaml
-
 from repo_tests._paths import repo_root
 
 _ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
@@ -56,8 +54,10 @@ _STAGING_TASKS = _ANSIBLE / "roles" / "_shared" / "tasks" / "stage_shared_manife
 
 # Modules whose payload is a command line the script can be invoked from.
 _EXEC_MODULES = {
-    "shell", "ansible.builtin.shell",
-    "command", "ansible.builtin.command",
+    "shell",
+    "ansible.builtin.shell",
+    "command",
+    "ansible.builtin.command",
 }
 
 # A floor, not a census. If the walk stops finding invocations at all, every
@@ -132,12 +132,14 @@ def _invocations() -> list[tuple[str, str, list[str], bool]]:
             text = _command_text(task)
             if _SCRIPT_NAME not in text:
                 continue
-            found.append((
-                path.relative_to(_ANSIBLE).as_posix(),
-                str(task.get("name", "<unnamed>"))[:70],
-                _invocation_args(text),
-                _delegates_to_controller(task),
-            ))
+            found.append(
+                (
+                    path.relative_to(_ANSIBLE).as_posix(),
+                    str(task.get("name", "<unnamed>"))[:70],
+                    _invocation_args(text),
+                    _delegates_to_controller(task),
+                )
+            )
     return found
 
 
@@ -181,8 +183,7 @@ def test_every_delegated_generation_names_a_target_side_root():
 
     assert not offenders, (
         "a manifest generated on the controller and installed on a node must "
-        "rewrite its includes to a path the NODE has (#17331, #17242):\n  "
-        + "\n  ".join(offenders)
+        "rewrite its includes to a path the NODE has (#17331, #17242):\n  " + "\n  ".join(offenders)
     )
 
 
@@ -198,15 +199,11 @@ def test_the_rewrite_root_is_staged_onto_the_node():
     )
     staged = _STAGING_TASKS.read_text(encoding="utf-8")
 
-    missing = [
-        include for include in _REWRITTEN_INCLUDES
-        if not re.search(r"dest:.*" + re.escape(include), staged)
-    ]
+    missing = [include for include in _REWRITTEN_INCLUDES if not re.search(r"dest:.*" + re.escape(include), staged)]
 
     assert not missing, (
         "build-filtered-requirements.sh rewrites these includes, so each must "
-        f"be staged onto the node by {_STAGING_TASKS.name} (#17331, #11135): "
-        + ", ".join(missing)
+        f"be staged onto the node by {_STAGING_TASKS.name} (#17331, #11135): " + ", ".join(missing)
     )
 
 
@@ -223,6 +220,5 @@ def test_every_role_that_generates_a_manifest_stages_its_includes():
     assert not offenders, (
         f"these generate a manifest whose includes are rewritten to a staged "
         f"path but never include {_STAGING_TASKS.name}, so the path is empty "
-        "when a playbook other than the updater runs them (#17331):\n  "
-        + "\n  ".join(offenders)
+        "when a playbook other than the updater runs them (#17331):\n  " + "\n  ".join(offenders)
     )

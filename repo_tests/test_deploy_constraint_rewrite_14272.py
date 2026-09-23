@@ -76,9 +76,7 @@ def test_the_rewrite_root_overrides_the_source_root(tmp_path):
 
     assert f"-c {_STAGED_ROOT}/constraints/shared.txt" in out
     assert f"-r {_STAGED_ROOT}/requirements.txt" in out
-    assert _CODE_SOURCE not in out, (
-        "the controller's checkout must not appear in a file that a node reads"
-    )
+    assert _CODE_SOURCE not in out, "the controller's checkout must not appear in a file that a node reads"
     assert "numpy" in out
 
 
@@ -252,8 +250,8 @@ def test_the_repo_file_still_carries_the_relative_include():
     """The premise of the whole fix. If this file ever stops using a relative
     constraint, the rewrite is dead code and should be reconsidered rather than
     left in place looking load-bearing."""
-    text = (
-        _REPO_ROOT / "autobot-infrastructure" / "shared" / "docker" / "ai-stack" / "requirements-ai.txt"
-    ).read_text(encoding="utf-8")
+    text = (_REPO_ROOT / "autobot-infrastructure" / "shared" / "docker" / "ai-stack" / "requirements-ai.txt").read_text(
+        encoding="utf-8"
+    )
 
     assert _RELATIVE_INCLUDE.search(text)
