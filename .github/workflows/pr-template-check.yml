@@ -105,14 +105,29 @@ jobs:
   # sections" would name a check that passed.
   check-title:
     name: Validate the PR title as a commit subject
-    # Same skip as check-template, and for the same reason: a bot writes its own
-    # title (`build(deps): bump x from a to b`), which carries no issue number by
-    # nature -- lint-conventions.sh exempts bot-authored commits on exactly that
-    # ground. Fork PRs skip for the #14153 reason: the convention is not shown to
-    # a drive-by contributor, and an owner merging the PR can still edit the title.
+    # Same bot and fork skips as check-template, and for the same reasons: a bot
+    # writes its own title (`build(deps): bump x from a to b`), which carries no
+    # issue number by nature -- lint-conventions.sh exempts bot-authored commits
+    # on exactly that ground; and #14153, the convention is not shown to a
+    # drive-by contributor, whose title an owner can still edit at merge time.
+    #
+    # Plus one this job needs and check-template does not: base must be `main`.
+    # This gate judges a title as the SQUASH SUBJECT it will become, and a
+    # main -> release promotion is not squashed. The last one landed as a merge
+    # commit (b94f51a4c3, two parents, `Merge pull request #15326 from ...`),
+    # a subject GitHub composes and lint-conventions.sh exempts by prefix -- so
+    # the title never becomes a subject there and judging it as one is simply
+    # wrong. Verified against the branch rather than assumed: this gate red-
+    # flagged the open promotion PR #16801, whose title correctly carries no
+    # issue reference because a promotion is not an issue fix.
+    #
+    # The residual case -- someone squash-merging a promotion after all -- costs
+    # nothing: that subject lands on `release`, and the range check reads
+    # release..main, so a subject ON release is never in a scanned range.
     if: >
       github.event.pull_request.user.type != 'Bot' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: read

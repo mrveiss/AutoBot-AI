@@ -60,7 +60,7 @@ class PRLookupError(RuntimeError):
 
 
 def pr_fields(ref: str) -> dict[str, str]:
-    """``{body, actor, branch, title}`` for the open PR named by *ref*.
+    """``{body, actor, branch, title, base}`` for the open PR named by *ref*.
 
     *ref* is whatever ``gh pr view`` accepts: a number or a branch name.
     Field names match ``pr-issue-validation.yml``'s ``PR_ACTOR``/``PR_BRANCH``/
@@ -69,7 +69,7 @@ def pr_fields(ref: str) -> dict[str, str]:
     """
     try:
         raw = subprocess.run(
-            ["gh", "pr", "view", ref, "--json", "body,author,headRefName,title"],
+            ["gh", "pr", "view", ref, "--json", "body,author,headRefName,title,baseRefName"],
             capture_output=True,
             text=True,
             timeout=DEFAULT_TIMEOUT_SECONDS,
@@ -93,6 +93,9 @@ def pr_fields(ref: str) -> dict[str, str]:
         "actor": (data.get("author") or {}).get("login") or "",
         "branch": data.get("headRefName") or "",
         "title": data.get("title") or "",
+        # #15473: the title gate judges a title as the squash subject it will
+        # become, and a main -> release promotion is merged, not squashed.
+        "base": data.get("baseRefName") or "",
     }
 
 
@@ -157,7 +160,7 @@ def check_title(title: str) -> tuple[bool, str]:
     return True, "PR title conforms to the commit-subject convention"
 
 
-def validate(body: str, actor: str = "", branch: str = "", title: str = "") -> bool:
+def validate(body: str, actor: str = "", branch: str = "", title: str = "", base: str = "main") -> bool:
     """Run every gate, print each one's own output, return the overall verdict."""
     sections_ok, section_lines = check_template_sections(body)
     for line in section_lines:
@@ -166,7 +169,16 @@ def validate(body: str, actor: str = "", branch: str = "", title: str = "") -> b
     batching_ok, batching_message = check_batching(body, actor=actor, branch=branch, title=title)
     logger.info("%s", batching_message)
 
-    title_ok, title_message = check_title(title)
+    # Defaults to "main" so --file mode, which has no PR to read a base from,
+    # gets the gate rather than skipping it: main is where all but the promotion
+    # PRs go, and a default that skipped would make the common case unguarded.
+    if base == "main":
+        title_ok, title_message = check_title(title)
+    else:
+        title_ok, title_message = True, (
+            f"PR title: not checked -- base is {base!r}, not 'main'. A promotion is merged, "
+            "not squashed, so its title never becomes a commit subject (#15473)."
+        )
     logger.info("%s", title_message)
 
     return sections_ok and batching_ok and title_ok
@@ -224,7 +236,13 @@ def main(argv: list[str] | None = None) -> int:
         except PRLookupError as exc:
             logger.error("::error::%s", exc)
             return 1
-        ok = validate(fields["body"], actor=fields["actor"], branch=fields["branch"], title=fields["title"])
+        ok = validate(
+            fields["body"],
+            actor=fields["actor"],
+            branch=fields["branch"],
+            title=fields["title"],
+            base=fields["base"],
+        )
     else:
         path = Path(args.file)
         try:

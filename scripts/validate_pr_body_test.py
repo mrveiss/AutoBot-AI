@@ -21,6 +21,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -128,6 +129,7 @@ def test_pr_fields_maps_gh_json_to_the_ci_field_names():
         "author": {"login": "mrveiss"},
         "headRefName": "issue-16859-pr-body-check",
         "title": "fix: wire the body gates into pre-push",
+        "baseRefName": "main",
     }
     completed = subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(payload), stderr="")
     with patch("validate_pr_body.subprocess.run", return_value=completed) as run:
@@ -138,6 +140,7 @@ def test_pr_fields_maps_gh_json_to_the_ci_field_names():
         "actor": "mrveiss",
         "branch": "issue-16859-pr-body-check",
         "title": payload["title"],
+        "base": "main",
     }
     args = run.call_args.args[0]
     assert args[:3] == ["gh", "pr", "view"]
@@ -149,7 +152,7 @@ def test_pr_fields_tolerates_missing_optional_json_keys():
     completed = subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps({"body": None}), stderr="")
     with patch("validate_pr_body.subprocess.run", return_value=completed):
         fields = pr_fields("16859")
-    assert fields == {"body": "", "actor": "", "branch": "", "title": ""}
+    assert fields == {"body": "", "actor": "", "branch": "", "title": "", "base": ""}
 
 
 def test_pr_fields_raises_when_gh_is_missing():
@@ -215,6 +218,7 @@ def test_main_pr_mode_uses_the_fetched_fields(capsys):
         "author": {"login": "mrveiss"},
         "headRefName": "b",
         "title": "fix(scope): a conforming subject (#16859)",
+        "baseRefName": "main",
     }
     completed = subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(payload), stderr="")
     with patch("validate_pr_body.subprocess.run", return_value=completed):
@@ -330,3 +334,41 @@ def test_the_exempt_prefixes_have_not_drifted_from_range_mode() -> None:
     assert len(cases) == 1, f"expected exactly one range-mode subject exemption, found {len(cases)}"
     shell_prefixes = tuple(pat.rstrip("*").strip('"').replace("\\ ", " ") for pat in cases[0].split("|"))
     assert shell_prefixes == _SUBJECT_EXEMPT_PREFIXES
+
+
+def test_a_promotion_pr_skips_the_title_gate_and_says_why() -> None:
+    """#15473: a main -> release promotion is merged, not squashed.
+
+    Its title never becomes a commit subject, so judging it as one is wrong --
+    and it red-flagged the real promotion PR, whose title correctly carries no
+    issue reference because a promotion is not an issue fix.
+    """
+    with (
+        patch("validate_pr_body.check_template_sections", return_value=(True, ["ok"])),
+        patch("validate_pr_body.check_batching", return_value=(True, "ok")),
+    ):
+        assert validate("anything", title="chore(release): promote main to release", base="release") is True
+
+
+def test_the_promotion_skip_is_not_the_default() -> None:
+    """A default that skipped would leave every ordinary PR unguarded.
+
+    --file mode has no PR to read a base from, so the default must be the
+    squash-merged case, which is all but the promotion PRs.
+    """
+    with (
+        patch("validate_pr_body.check_template_sections", return_value=(True, ["ok"])),
+        patch("validate_pr_body.check_batching", return_value=(True, "ok")),
+    ):
+        assert validate("anything", title="chore(release): promote main to release") is False
+
+
+def test_the_workflow_job_skips_promotions_the_same_way() -> None:
+    """Two enforcers again: the hook reads `base`, the workflow reads base.ref.
+
+    If only one of them skips, a promotion PR is either red in CI or red at
+    push -- and the one that is wrong is the one nobody is looking at.
+    """
+    workflow = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "pr-template-check.yml"
+    condition = " ".join(yaml.safe_load(workflow.read_text(encoding="utf-8"))["jobs"]["check-title"]["if"].split())
+    assert "github.event.pull_request.base.ref == 'main'" in condition
