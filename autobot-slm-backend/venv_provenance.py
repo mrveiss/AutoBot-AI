@@ -38,8 +38,12 @@ must uninstall it aborts:
     x Cannot uninstall cachetools None
     '-> The package's contents are unknown: no RECORD file was found
 
-Twelve packages on one host were in that state, and pip stops at the first, so
-each failed deploy revealed one. The marker is now written into `RECORD`
+Thirteen distributions across two venvs on one host were in that state, and pip
+stops at the first, so each failed deploy revealed one. The first sweep counted
+twelve because it looked in `autobot-backend/venv` alone and said "on one host";
+the thirteenth is `psycopg2_binary` in `autobot-slm-backend/venv` -- the SLM's
+own venv, which is the component that runs the builtin updater this repair is
+wired into. The marker is now written into `RECORD`
 (`write_provenance_marker`), which makes the invariant above true rather than
 assumed, and a husk left by the old behaviour is cleared before an install
 (`clear_provenance_husks`).

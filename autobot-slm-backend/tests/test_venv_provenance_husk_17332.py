@@ -17,8 +17,11 @@ uninstall it aborted:
     x Cannot uninstall cachetools None
     '-> The package's contents are unknown: no RECORD file was found
 
-Twelve packages on one host were in that state, found during a provisioning
-failure. pip stops at the first, so each failed deploy revealed one.
+Thirteen distributions across two venvs on one host were in that state, found
+during a provisioning failure. pip stops at the first, so each failed deploy
+revealed one. Counted as twelve at first, from `autobot-backend/venv` alone --
+a one-venv measurement reported as "on one host". The thirteenth is
+`psycopg2_binary` in `autobot-slm-backend/venv`.
 
 How the uninstall is modelled here: `_uninstall_like_pip` deletes exactly the
 paths `RECORD` names and then removes the directory if it is empty. That is
