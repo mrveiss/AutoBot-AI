@@ -22,15 +22,35 @@ fail() { printf '[codeql-ceiling] FAIL: %s\n' "$*" >&2; exit 1; }
 
 [ -r "$CEILING_FILE" ] || fail "no ceiling file at '$CEILING_FILE' — refusing to report a pass on an unrun check"
 
-ceiling=$(grep -vE '^\s*(#|$)' "$CEILING_FILE" | head -1 | tr -d '[:space:]')
-[[ "$ceiling" =~ ^[0-9]+$ ]] || fail "ceiling '$ceiling' in $CEILING_FILE is not a number"
+# Exactly one value, and outer whitespace only. `head -1` accepted a file with a
+# second number silently below the first, and `tr -d [:space:]` turned "9 0"
+# into "90" -- both make a malformed ceiling into a MORE permissive one, which
+# is the direction that matters (#17303 review).
+mapfile -t ceiling_values < <(grep -vE '^[[:space:]]*(#|$)' "$CEILING_FILE")
+[ "${#ceiling_values[@]}" -eq 1 ] \
+  || fail "expected exactly one value in $CEILING_FILE, found ${#ceiling_values[@]}: ${ceiling_values[*]}"
+ceiling="${ceiling_values[0]}"
+ceiling="${ceiling#"${ceiling%%[![:space:]]*}"}"   # trim leading
+ceiling="${ceiling%"${ceiling##*[![:space:]]}"}"   # trim trailing -- OUTER only, so "9 0" stays "9 0" and is rejected
+[[ "$ceiling" =~ ^[0-9]+$ ]] || fail "ceiling '${ceiling_values[0]}' in $CEILING_FILE is not a number"
 
 # --paginate: the API caps a page at 100, and the count is the whole point.
 open_json=$(gh api --paginate "repos/${REPO}/code-scanning/alerts?state=open&per_page=100" 2>/dev/null) \
   || fail "could not read code-scanning alerts for ${REPO} (token missing the security-events scope, or the API errored)"
 
-count=$(printf '%s' "$open_json" | jq -s 'add | length' 2>/dev/null)
-[[ "$count" =~ ^[0-9]+$ ]] || fail "could not count alerts from the API response"
+# Every page must BE an array before anything is counted. `jq -s 'add | length'`
+# returns a number for any JSON: an API error object with nine keys counted as
+# nine alerts, which at a ceiling of nine PASSED. A gate that accepts an error
+# body as a clean result is the exact failure this script was written to prevent,
+# so it was doing it to itself (#17303 review).
+count=$(printf '%s' "$open_json" | jq -es '
+  if length > 0 and all(.[]; type == "array")
+  then map(length) | add
+  else error("expected one or more JSON arrays, got something else")
+  end
+' 2>/dev/null)
+[[ "$count" =~ ^[0-9]+$ ]] \
+  || fail "the alerts API did not return a list of alerts (an error body, or an empty response)"
 
 printf '[codeql-ceiling] %s open alert(s), ceiling %s\n' "$count" "$ceiling"
 
