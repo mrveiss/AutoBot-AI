@@ -231,6 +231,33 @@ class PricingRedisStore:
                 index.setdefault(name, pricing.to_dict())
         return await self._setex_many([(_by_model_key(name), value) for name, value in index.items()])
 
+    async def count_price_keys(self) -> int:
+        """How many price keys exist, WITHOUT parsing any of them (#16230 review).
+
+        `get_all_by_model` raises on an unparseable record, which is right for
+        the snapshot mirror -- a partial catalogue installed with a fresh
+        `fetched_at` is indistinguishable from a complete one. It is wrong for a
+        caller that only needs to know whether the store holds anything, and
+        `pricing_refresh._write_baseline_fallback` was such a caller: one poison
+        record made it raise before either of its branches ran, so during a dual
+        catalogue outage neither the TTL renewal nor the baseline seed happened
+        and the store expired itself -- the exact outcome both branches exist to
+        prevent, disabled by the safety check in front of them.
+
+        SCAN only, same key filter as `renew_price_ttls`, so "is there anything
+        to renew" and "renew it" agree by construction rather than by reading
+        two similar predicates and hoping.
+        """
+        redis = await self._redis()
+        if redis is None:
+            raise ConnectionError("PricingRedisStore: no Redis client available")
+        seen: set[str] = set()
+        async for raw_key in redis.scan_iter(f"{_KEY_PREFIX}:*"):
+            key = _as_text(raw_key)
+            if _is_renewable_price_key(key):
+                seen.add(key)
+        return len(seen)
+
     async def renew_price_ttls(self) -> int:
         """Re-arm the TTL on every stored price without touching its value (#16230 review).
 

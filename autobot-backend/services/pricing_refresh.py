@@ -93,7 +93,12 @@ async def _write_baseline_fallback(store, summary: dict) -> dict:
     for every model -- every LLC agent run blocked until a vendor comes back.
     A stale price that is labelled stale is a better answer than no answer.
     """
-    existing = await store.get_all_by_model()
+    # count_price_keys, NOT get_all_by_model (#16230 review): the latter raises on
+    # an unparseable record, and raising HERE aborts before either branch runs --
+    # so one poison record would disable both the TTL renewal and the baseline
+    # seed during exactly the outage they were written for. This only needs to
+    # know whether the store holds anything, which needs no parsing.
+    existing = await store.count_price_keys()
     if existing:
         # Keeping them is not the same as leaving them alone. Prices carry a TTL
         # of the refresh cadence plus one hour, so writing nothing here lets them
@@ -106,7 +111,7 @@ async def _write_baseline_fallback(store, summary: dict) -> dict:
             "pricing_refresh: both live catalogues failed; keeping the %d prices already in the "
             "store rather than overwriting them with hardcoded baselines, and re-arming the TTL on "
             "%d key(s) so they survive the outage rather than expiring through it (#16230)",
-            len(existing),
+            existing,
             renewed,
         )
         summary["baseline_fallback"] = {

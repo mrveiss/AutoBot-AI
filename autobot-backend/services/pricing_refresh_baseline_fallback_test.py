@@ -38,6 +38,7 @@ def _store(existing=None):
     for name in ("set_refresh_status", "retain_refresh_status", "set_crosscheck"):
         setattr(store, name, AsyncMock())
     store.get_all_by_model = AsyncMock(return_value=existing or {})
+    store.count_price_keys = AsyncMock(return_value=len(existing or {}))
     store.renew_price_ttls = AsyncMock(return_value=len(existing or {}) * 2)
     store.set_many = AsyncMock(side_effect=lambda merged: len(merged))
     store.set_model_index = AsyncMock(side_effect=lambda merged: len(merged))
@@ -220,3 +221,44 @@ async def test_the_seeded_catalogue_covers_all_five_providers():
         "deepseek",
         "vertexai",
     }
+
+
+# --- the poison-record path (#16230 review) --------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_unparseable_record_does_not_abort_the_renewal():
+    """`get_all_by_model` raises on a bad record; this path must not depend on it.
+
+    The two fixes in this PR combined into a defect: `get_all_by_model` was made
+    to raise so a partial catalogue could never be installed as a whole one, and
+    this function was made to renew TTLs so preserved prices survive an outage.
+    Calling the first to decide whether to do the second meant ONE unparseable
+    record aborted before either branch ran -- no renewal, no seed -- during
+    exactly the dual-catalogue outage the renewal exists for. If the outage then
+    outlasted the TTL, every good price expired too.
+
+    So this asserts the decision is made by a reader that cannot raise on
+    content: the poisoned `get_all_by_model` is never consulted, and the renewal
+    happens anyway.
+    """
+    store = _store(existing={"gpt-4o": _mp("openai", "gpt-4o", 2.5, 10.0, "litellm")})
+    store.get_all_by_model = AsyncMock(side_effect=ValueError("unparseable pricing record at 'x'"))
+
+    summary = await _refresh(_source("litellm", {}), _source("openrouter", {}), store)
+
+    store.renew_price_ttls.assert_awaited_once()
+    assert summary["baseline_fallback"]["used"] is False
+    store.set_many.assert_not_called(), "baselines were seeded over a populated store"
+
+
+@pytest.mark.asyncio
+async def test_an_unparseable_record_on_an_empty_store_still_seeds():
+    """The contrast: unreadable and genuinely empty must stay distinguishable."""
+    store = _store(existing={})
+    store.get_all_by_model = AsyncMock(side_effect=ValueError("unparseable pricing record at 'x'"))
+
+    summary = await _refresh(_source("litellm", {}), _source("openrouter", {}), store)
+
+    assert summary["baseline_fallback"]["used"] is True
+    store.renew_price_ttls.assert_not_awaited()

@@ -194,3 +194,51 @@ async def test_renewal_does_not_rewrite_values():
     before = dict(fake.data)
     await store.renew_price_ttls()
     assert fake.data == before
+
+
+# --- count_price_keys ------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_counting_price_keys_does_not_parse_them():
+    """The whole point: a poison record must not make the count raise.
+
+    `get_all_by_model` raises on this same data by design. The count is what
+    `_write_baseline_fallback` uses instead, precisely so one bad record cannot
+    abort a TTL renewal during an outage.
+    """
+    store, _ = _store(
+        {
+            "model_pricing:by_model:gpt-4o": _json("gpt-4o", 2.5, 10.0),
+            "model_pricing:by_model:broken": "{not json",
+        }
+    )
+    assert await store.count_price_keys() == 2
+
+    with pytest.raises(ValueError):
+        await store.get_all_by_model()
+
+
+@pytest.mark.asyncio
+async def test_counting_applies_the_same_filter_as_renewal():
+    """The count answers "is there anything to renew", so it must agree with
+    what renewal actually touches -- overrides and status records excluded."""
+    data = {
+        "model_pricing:by_model:gpt-4o": _json("gpt-4o", 2.5, 10.0),
+        "model_pricing:override:gpt-4o": _json("gpt-4o", 99.0, 99.0),
+        "model_pricing:refresh_status": "{}",
+        "model_pricing:crosscheck": "{}",
+    }
+    store, _ = _store(data)
+    counted = await store.count_price_keys()
+    store2, fake2 = _store(data)
+    renewed = await store2.renew_price_ttls()
+
+    assert counted == renewed == 1
+    assert [k for k, _ in fake2.expired] == ["model_pricing:by_model:gpt-4o"]
+
+
+@pytest.mark.asyncio
+async def test_an_empty_store_counts_zero():
+    store, _ = _store({})
+    assert await store.count_price_keys() == 0
