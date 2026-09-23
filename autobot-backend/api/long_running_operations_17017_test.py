@@ -28,6 +28,30 @@ from utils.long_running_operations_framework import (
 )
 from utils.operation_timeout_integration import OperationIntegrationManager
 
+#: Route decorators on this router, by attribute name.
+_ROUTE_DECORATORS = {"get", "post", "put", "patch", "delete", "websocket"}
+
+#: A floor, not a census: a walk that finds no routes would make
+#: `test_every_route_on_this_router_declares_a_gate` pass by matching nothing.
+_MIN_ROUTES_SEEN = 10
+
+
+def _declares_a_gate(node) -> bool:
+    """Admin dependency, an authenticated-user parameter, or the socket's own check."""
+    import ast
+
+    for decorator in node.decorator_list:
+        if isinstance(decorator, ast.Call) and any(kw.arg == "dependencies" for kw in decorator.keywords):
+            return True
+    args = node.args
+    if any(arg.arg == "current_user" for arg in [*args.args, *args.kwonlyargs]):
+        return True
+    return any(
+        isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name) and inner.func.id == "open_authenticated_ws"
+        for inner in ast.walk(node)
+    )
+
+
 ALICE = {"username": "alice", "role": "user"}
 BOB = {"username": "bob", "role": "user"}
 ADMIN = {"username": "root", "role": "admin"}
@@ -213,3 +237,68 @@ def test_a_resumed_operation_keeps_its_original_creator(integration, caller, own
     assert response.status_code == 200, response.text
     resumed = integration.operation_manager.operations[response.json()["new_operation_id"]]
     assert resumed.metadata["created_by"] == owner
+
+
+# ---------------------------------------------------------------------------
+# #17010: no route on this router is anonymous — now, and after the next one
+# ---------------------------------------------------------------------------
+
+
+# The behavioural half of #17010's fourth criterion -- "unauthenticated requests
+# are refused" -- CANNOT be written here, and the reason is worth recording where
+# the next person will look for the test.
+#
+# `testkit/auth_middleware_stub.py` replaces the whole `auth_middleware` module in
+# `sys.modules` for backend tests, and its `check_admin_permission` stub takes no
+# request and refuses nothing. A test that mounted this router without the caller
+# overrides and posted to `/codebase/index` gets **501 from the route body** -- the
+# gate never ran, because in this process there is no gate. Asserting a refusal
+# against that stub would be asserting on the stub, and asserting the 501 would
+# read as "anonymous callers reach the route", which is a claim about the harness
+# dressed as a claim about production. Tracked as #17343.
+#
+# What CAN be checked here is that every route declares a gate, which is what the
+# router-level dependency #17010 asked for was meant to guarantee.
+
+
+def test_every_route_on_this_router_declares_a_gate():
+    """#17010 asked for a router-level dependency. This is the reason it is not one.
+
+    `get_current_user(request: Request)` cannot be a router-level dependency
+    here, because router dependencies apply to the WebSocket route too and
+    FastAPI has no `Request` to give it -- `/{operation_id}/progress` would
+    break. So the gate stays per-route, and per-route gating does not hold
+    itself: a route added without one is anonymous.
+
+    Nothing else would catch that. The repo-wide sweep cannot see this router
+    at all -- `router_auth_enumerator.REGISTRY` reads only `core_routers.py`
+    while this router is registered as a string tuple in `feature_routers.py`
+    (#16375). This test is that missing check, scoped to this module.
+    """
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(lro))
+    routes = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and any(
+            isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr in _ROUTE_DECORATORS
+            for d in node.decorator_list
+        )
+    ]
+
+    assert len(routes) >= _MIN_ROUTES_SEEN, (
+        f"only {len(routes)} route(s) found in {lro.__name__} -- this guard has stopped "
+        "reaching its subject, so its verdict means nothing"
+    )
+
+    ungated = [node.name for node in routes if not _declares_a_gate(node)]
+    assert not ungated, (
+        "route(s) on /api/long-running with no authentication gate (#17010):\n  "
+        + "\n  ".join(ungated)
+        + "\n\nEvery route needs one of: `dependencies=_ADMIN` on the decorator, "
+        "`current_user: dict = Depends(get_current_user)` in the signature, or "
+        "`open_authenticated_ws(...)` in the body for a WebSocket."
+    )
