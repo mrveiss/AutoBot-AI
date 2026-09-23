@@ -81,9 +81,9 @@ def test_an_unregistered_action_is_refused_at_creation(monkeypatch):
 
     assert response.status_code == 400
     assert "no registered post-approval handler" in response.json()["detail"]
-    assert not [o for o in session.added if isinstance(o, Approval)], (
-        "a refused proposal must not reach the review queue at all"
-    )
+    assert not [
+        o for o in session.added if isinstance(o, Approval)
+    ], "a refused proposal must not reach the review queue at all"
 
 
 def test_the_rejection_does_not_echo_the_caller_s_value_or_list_the_registry():
