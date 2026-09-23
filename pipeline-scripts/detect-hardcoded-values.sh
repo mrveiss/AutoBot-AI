@@ -60,17 +60,12 @@ for arg in "$@"; do
     esac
 done
 
-# Directories to scan. autobot-infrastructure (#14316) is in the list because
-# the deployment/ops scripts that actually touch hosts, paths and accounts have
-# no type system or linter enforcing indirection on them.
-SCAN_DIRS=(
-    "autobot-backend"
-    "autobot-frontend/src"
-    "autobot_shared"
-    "autobot-slm-backend"
-    "autobot-slm-frontend/src"
-    "autobot-infrastructure"
-)
+# Directories to scan: HV_SCAN_DIRS, from scripts/lib/hardcoded-value-rules.sh.
+# #17329: this list used to live here, which is why the pre-commit hook -- the
+# other caller of the same rule set -- did not apply it and blocked commits on
+# files this scan never visits. A scope two entry points must agree on belongs
+# with the rules they share, not inside one of them.
+SCAN_DIRS=("${HV_SCAN_DIRS[@]}")
 
 # Every scan directory must exist before anything is scanned (#14912 review).
 #
