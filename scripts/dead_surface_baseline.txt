@@ -1,0 +1,12 @@
+# The pinned count of backend paths NO part of the GUI can reach (#16816).
+#
+# UNMEASURED until CI has printed a real figure once. Measuring it locally means
+# importing the backend to dump its OpenAPI schema -- running codebase code
+# outside CI -- so the first number comes from the api-wiring job, is triaged,
+# and is written here.
+#
+# The pin only ever FALLS. A PR that closes a GUI gap lowers it in the same PR;
+# it is never raised to make a report quieter. Report-only today (#16816 AC3):
+# the comparison is printed, and nothing fails on it until the number has been
+# read and triaged.
+UNMEASURED
