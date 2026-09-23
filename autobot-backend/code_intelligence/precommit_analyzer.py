@@ -32,7 +32,7 @@ from utils.line_index import LineIndex  # #12884
 logger = get_logger(__name__)
 
 
-class CheckSeverity(Enum):
+class CheckSeverity(str, Enum):
     """Severity levels for pre-commit checks."""
 
     BLOCK = "block"  # Prevents commit
@@ -40,7 +40,7 @@ class CheckSeverity(Enum):
     INFO = "info"  # Informational only
 
 
-class CheckCategory(Enum):
+class CheckCategory(str, Enum):
     """Categories of pre-commit checks."""
 
     SECURITY = "security"

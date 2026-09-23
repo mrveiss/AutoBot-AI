@@ -72,7 +72,7 @@ _HUNK_HEADER_RE = re.compile(r"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@")
 # ============================================================================
 
 
-class ReviewSeverity(Enum):
+class ReviewSeverity(str, Enum):
     """Review comment severity levels."""
 
     CRITICAL = "critical"
@@ -81,7 +81,7 @@ class ReviewSeverity(Enum):
     SUGGESTION = "suggestion"
 
 
-class ReviewCategory(Enum):
+class ReviewCategory(str, Enum):
     """Categories of review findings."""
 
     SECURITY = "security"
