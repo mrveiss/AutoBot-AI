@@ -31,6 +31,7 @@ from services.inventory_builder import (
     write_temp_extra_vars,
     write_temp_inventory,
 )
+from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
 from services.provision_progress import TaskProgressTracker
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ logger = logging.getLogger(__name__)
 # PrivateTmp=true /tmp is namespaced anyway; the uid suffix protects runs
 # outside systemd (dev mode, manual uvicorn).
 ANSIBLE_LOCAL_TMP = f"/tmp/ansible_local_tmp_{os.getuid()}"  # nosec B108
+
 
 # #11492: the self-update ansible-playbook run (update-all-nodes.yml against
 # the SLM's own node) restarts autobot-slm-backend mid-run. The service is
@@ -537,17 +539,6 @@ class PlaybookExecutor:
         return output_lines
 
     @staticmethod
-    async def _iter_pipe_lines(process: asyncio.subprocess.Process):
-        """Yield decoded lines from a live child stdout pipe (Issue #880, #3033)."""
-        if not process.stdout:
-            return
-        while True:
-            line = await process.stdout.readline()
-            if not line:
-                break
-            yield line.decode("utf-8", errors="replace").rstrip()
-
-    @staticmethod
     async def _iter_log_file_lines(log_path: Path, process: asyncio.subprocess.Process):
         """Tail a log file for a detached run's output (#11492).
 
@@ -573,7 +564,7 @@ class PlaybookExecutor:
         progress_callback: Callable | None,
     ) -> List[str]:
         """Stream and parse live pipe output for progress. Helper for _run_subprocess."""
-        return await self._process_playbook_lines(self._iter_pipe_lines(process), progress_callback)
+        return await self._process_playbook_lines(iter_pipe_lines(process), progress_callback)
 
     async def _tail_playbook_log(
         self,
@@ -972,6 +963,11 @@ class PlaybookExecutor:
             stderr=stderr_target,
             cwd=str(self.ansible_dir),
             env=env,
+            # asyncio's default StreamReader limit is 64 KiB. One ansible
+            # `fatal:` line carries the whole task result as JSON, and for a
+            # `pip install` task that embeds pip's entire stderr -- routinely
+            # past 64 KiB. See iter_pipe_lines in services/playbook_output_stream.py.
+            limit=PIPE_LINE_LIMIT,
             # #14524: own process group, so a timeout can kill the WHOLE tree
             # (ansible-playbook's forked workers/ssh children too), not just
             # this one PID.
