@@ -163,7 +163,12 @@ async def retrieve_secret(session: AsyncSession, key: str) -> str | None:
     except VaultSecretNotFound:
         return None
     except VaultClientError as exc:
-        logger.warning("system-secrets-vault: read failed key=%s: %s", key, type(exc).__name__)
+        # The key is NOT logged, matching _find_vault_id_by_name above, which
+        # already refuses to log this same value and says why (#17300). The two
+        # sites disagreed: one withheld it as a CodeQL-traced secret source, the
+        # other printed it forty lines later. The caller knows which key it
+        # asked for; the exception type is the diagnostic this line adds.
+        logger.warning("system-secrets-vault: read failed (%s)", type(exc).__name__)
         return None
 
 

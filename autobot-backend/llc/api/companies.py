@@ -731,14 +731,13 @@ async def test_pm_config(
     try:
         pm_config = json.loads(decrypt_field(encrypted_config))
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to decrypt PM config",
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to decrypt PM config")
     try:
         health = await _test_pm_connectivity(pm_type, pm_config)
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        # #17300: str(exc) to the caller leaked the decrypted pm_config URL and its credentials.
+        logger.warning("PM connectivity test failed for %s: %s", pm_type, exc, exc_info=True)
+        return {"ok": False, "error": "Connectivity test failed; see server logs"}
     return {"ok": health.get("ok", False), "details": health}
 
 

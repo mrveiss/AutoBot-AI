@@ -4,6 +4,7 @@
 # Author: mrveiss
 """Unit tests for AttachmentService (GH#8253)."""
 
+import asyncio
 import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -197,7 +198,10 @@ async def test_get_text_returns_extracted():
 async def test_delete_removes_file(tmp_path: Path):
     svc = AttachmentService()
     fake_file = tmp_path / "test.txt"
-    fake_file.write_text("data", encoding="utf-8")
+    # to_thread, not a bare write_text: #7444's guard covers test files too, and
+    # it surfaced here only because #17300 touched this module. Fixed rather than
+    # exempted -- the rule is cheaper to keep uniform than to argue about.
+    await asyncio.to_thread(fake_file.write_text, "data", encoding="utf-8")
 
     row = _make_row(storage_path=str(fake_file))
     session = _make_session(scalar_one_or_none=row)
@@ -219,8 +223,13 @@ async def test_delete_removes_file(tmp_path: Path):
 
 
 def test_storage_path_structure(tmp_path: Path):
+    # #17300: the attachment id is now parsed as a UUID like the other two, so
+    # the old "att-001" placeholder is rejected. Production always passed a real
+    # one (`attachment_id = str(uuid.uuid4())` in upload()); only the fixture was
+    # ever a stand-in.
+    attachment_id = str(uuid.uuid4())
     with patch("llc.services.attachment_service._LOCAL_STORAGE_PATH", tmp_path):
-        path = _storage_path(_COMPANY, _WORK_ITEM, "att-001", "doc.md")
+        path = _storage_path(_COMPANY, _WORK_ITEM, attachment_id, "doc.md")
     assert path.suffix == ".md"
     assert _COMPANY in str(path)
     assert _WORK_ITEM in str(path)
