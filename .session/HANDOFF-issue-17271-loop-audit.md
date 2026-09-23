@@ -21,9 +21,18 @@ worktree: /home/martins/AutoBot-Ai/.worktrees/issue-17271-loop-audit  (locked; s
 
 ## What this branch contains
 
-Two files, no code: `docs/research/local-first-agent-runtime-context-frugal-loop.md` (new) and one
-row in `docs/research/_index.md`. A comparative audit of AutoBot's agent turn against an external
-local-first agent runtime.
+No code. Two comparative audits and their index rows:
+
+* `docs/research/local-first-agent-runtime-context-frugal-loop.md` (new) — AutoBot's agent turn
+  against an external local-first agent runtime. The reason this branch exists.
+* `docs/research/durable-subagent-orchestration-controller-state.md` (new) — delegation durability,
+  written by another session and landed here at its author's request. It was untracked in the
+  shared main checkout and is the evidence base all sixteen of #17275's issues cite by path.
+  Appended rather than given its own PR because `_index.md` is the same file this branch edits.
+
+An earlier revision of this section listed only the first, while the "Not mine" note below labelled
+the second as another session's work — between them they read as an instruction to delete a valid
+document. Both files are in scope here and both are reviewed.
 
 ## Constraint that outlives this branch
 

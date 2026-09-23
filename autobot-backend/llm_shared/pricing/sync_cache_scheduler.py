@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 
-from autobot_shared.env_utils import env_float
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 from llc.scheduler.base import PollLoopScheduler
 from llm_shared.pricing.sync_cache import LOCAL_CACHE_REFRESH_INTERVAL_S, refresh_snapshot
@@ -26,7 +26,11 @@ logger = get_logger(__name__)
 #: Bound on the one refresh awaited before the app serves traffic. Long enough
 #: for a healthy Redis round-trip, short enough that an unreachable one does not
 #: hold up startup -- the cache then begins cold, which is a handled state.
-FIRST_REFRESH_TIMEOUT_S: float = env_float("AUTOBOT_PRICING_FIRST_REFRESH_TIMEOUT_S", 10.0)
+#: Clamped to > 0 (#16230 review): `env_float` rejects malformed input but accepts
+#: 0 and negatives, and `asyncio.wait_for` with either cancels the refresh
+#: immediately -- turning the bound meant to CLOSE the cold-cache window into a
+#: guarantee of it, silently, with the timeout log line to explain it away.
+FIRST_REFRESH_TIMEOUT_S: float = env_float_clamped("AUTOBOT_PRICING_FIRST_REFRESH_TIMEOUT_S", 10.0, min_v=0.1)
 
 
 class PricingCacheScheduler(PollLoopScheduler):
