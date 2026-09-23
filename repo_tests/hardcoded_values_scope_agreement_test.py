@@ -24,7 +24,7 @@ the half that stops it drifting apart again -- a second literal list would
 reintroduce the gap while every individual file still looked right.
 """
 
-import subprocess  # nosec B404 - fixed argv, no shell
+import subprocess  # nosec B404  # fixed argv, no shell
 from pathlib import Path
 
 import pytest
@@ -52,7 +52,7 @@ def _code(path: Path) -> str:
 
 
 def _bash(script: str) -> subprocess.CompletedProcess:
-    return subprocess.run(  # nosec B603 B607 - fixed argv, no shell
+    return subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["bash", "-c", script],
         cwd=REPO,
         capture_output=True,
