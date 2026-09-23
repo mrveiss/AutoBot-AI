@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Any, Set
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared.accelerate_loader import lazy_accelerate
 
 logger = get_logger(__name__)
 
@@ -44,18 +45,6 @@ def _import_torch() -> Any:
         return torch
     except (ImportError, RuntimeError) as exc:
         raise RuntimeError("PyTorch is required for meta-device eviction. " "Install with: pip install torch") from exc
-
-
-def _import_accelerate() -> Any:
-    """Lazily import accelerate; raises ImportError with guidance if absent."""
-    try:
-        import accelerate  # noqa: PLC0415
-
-        return accelerate
-    except (ImportError, RuntimeError) as exc:
-        raise ImportError(
-            "accelerate is required for per-parameter meta-device eviction. " "Install with: pip install accelerate"
-        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +201,10 @@ def _evict_quantized_layer(layer: Any, layer_repr: str) -> None:
         layer_repr: Short description string for log messages.
     """
     _import_torch()  # ensure torch is present before importing accelerate
-    accelerate = _import_accelerate()
+    accelerate = lazy_accelerate(
+        error_message="accelerate is required for per-parameter meta-device eviction. "
+        "Install with: pip install accelerate"
+    )
     set_fn = accelerate.utils.set_module_tensor_to_device
 
     torch = _import_torch()

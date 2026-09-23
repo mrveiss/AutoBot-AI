@@ -20,12 +20,17 @@ imported lazily inside :func:`lazy_torch`, never at module import time.
 
 from __future__ import annotations
 
-import threading
 from typing import Any, Optional
 
-_torch: Any = None
-_torch_error: Optional[Exception] = None
-_torch_lock = threading.Lock()
+from .lazy_import import LazyModule
+
+#: #13049 C4: the caching and double-checked locking that used to live here now
+#: live in ``lazy_import.LazyModule``, so the accelerate loader could reuse them
+#: instead of becoming a third copy. Behaviour and signature are unchanged --
+#: including that a ``RuntimeError`` (torch present but failed to initialise) is
+#: re-raised unchanged while ``error_message`` applies only to a genuine
+#: ``ImportError``. That rule originated here; it is now stated once.
+_TORCH = LazyModule("torch")
 
 
 def lazy_torch(required: bool = True, error_message: Optional[str] = None) -> Any:
@@ -50,18 +55,4 @@ def lazy_torch(required: bool = True, error_message: Optional[str] = None) -> An
         The imported ``torch`` module, or ``None`` when ``required=False``
         and torch could not be imported.
     """
-    global _torch, _torch_error  # noqa: PLW0603
-    if _torch is None and _torch_error is None:
-        with _torch_lock:
-            if _torch is None and _torch_error is None:
-                try:
-                    import torch as _t  # noqa: PLC0415
-                except (ImportError, RuntimeError) as exc:
-                    _torch_error = exc
-                else:
-                    _torch = _t
-    if _torch is None and required:
-        if error_message and isinstance(_torch_error, ImportError):
-            raise ImportError(error_message) from _torch_error
-        raise _torch_error  # noqa: B904 - re-raising the cached original
-    return _torch
+    return _TORCH.load(required=required, error_message=error_message)

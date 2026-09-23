@@ -29,6 +29,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
+from llm_shared.accelerate_loader import lazy_accelerate
 
 logger = get_logger(__name__)
 
@@ -89,18 +90,6 @@ def _import_transformers() -> Any:
     except ImportError as exc:
         raise ImportError(
             "transformers is required for model inspection. " "Install with: pip install transformers"
-        ) from exc
-
-
-def _import_accelerate() -> Any:
-    """Lazily import accelerate; raises ImportError with guidance if absent."""
-    try:
-        import accelerate  # noqa: PLC0415
-
-        return accelerate
-    except ImportError as exc:
-        raise ImportError(
-            "accelerate is required for empty-weight model inspection. " "Install with: pip install accelerate"
         ) from exc
 
 
@@ -257,7 +246,10 @@ def _inspect_via_config(model_name: str) -> ModelInfo | None:
     """
     try:
         transformers = _import_transformers()
-        accelerate = _import_accelerate()
+        accelerate = lazy_accelerate(
+            error_message="accelerate is required for empty-weight model inspection. "
+            "Install with: pip install accelerate"
+        )
     except ImportError as exc:
         logger.warning("model_inspector: dependency missing for %s — %s", model_name, exc)
         return None
