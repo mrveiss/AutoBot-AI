@@ -371,8 +371,12 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     # Targeted test runs for changed test files + sibling __tests__/.
     # vitest below runs with cwd already inside autobot-frontend/, so every
     # path here must be relative to that dir, not the repo root $changed uses.
+    # #16912: `.spec.ts` too, not just `.test.ts`. vitest.config.ts runs both,
+    # and 51 of autobot-frontend's test files are named `.spec.ts` -- every one
+    # of them could be changed, pushed, and never selected here, which reads in
+    # the transcript exactly like a push whose tests were run and passed.
     test_files=$(echo "$changed" \
-      | grep -E '\.test\.ts$' \
+      | grep -E '\.(test|spec)\.ts$' \
       | sed 's|^autobot-frontend/||' \
       | head -10)
     # Also test corresponding __tests__/ for any composable changes
