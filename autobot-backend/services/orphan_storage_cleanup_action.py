@@ -78,9 +78,15 @@ async def execute_orphan_storage_delete(approval: "Approval", session: "AsyncSes
     )
 
 
+#: The production module that PROPOSES this action (#17315). Declared with the
+#: handler so the pair cannot drift: this gate shipped with an executor, a
+#: detector and no proposer at all, which made the handler unreachable.
+PROPOSED_BY = "api.admin_orphan_storage"
+
+
 def register() -> None:
     """Idempotent: re-registering just replaces the same key with an equal handler."""
-    register_post_approval_action(ACTION, execute_orphan_storage_delete)
+    register_post_approval_action(ACTION, execute_orphan_storage_delete, proposed_by=PROPOSED_BY)
 
 
-__all__ = ["ACTION", "execute_orphan_storage_delete", "register"]
+__all__ = ["ACTION", "PROPOSED_BY", "execute_orphan_storage_delete", "register"]
