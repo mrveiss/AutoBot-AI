@@ -27,6 +27,7 @@ from llm_shared.providers.custom_openai import CustomOpenAIProvider
 from llm_shared.providers.groq import GroqProvider
 from llm_shared.providers.mistral import MistralProvider
 from llm_shared.providers.nous_portal import NousPortalProvider
+from llm_shared.providers.ollama_provider import OllamaProvider as OllamaWrapper
 from llm_shared.providers.openai import OpenAIProvider
 from llm_shared.providers.openrouter import OpenRouterProvider
 from llm_shared.providers.vllm_base import VLLMBaseProvider
@@ -194,6 +195,69 @@ class TestVLLM:
 
 
 # ---------------------------------------------------------------------------
+# Ollama -- the provider that already honoured the flag
+# ---------------------------------------------------------------------------
+
+
+class TestOllama:
+    """The wire behaviour and the declaration have to agree (#17305).
+
+    `providers/ollama.py` sent `format: "json"` before this PR existed, so the
+    BaseProvider wrapper declaring the inherited NONE would log "not honoured
+    natively by provider=ollama" and record `structured_output_mode_applied:
+    none` on every structured call -- both false, and the inverse of the gap
+    AC4 exists to make visible.
+
+    The payload half of the pair is already pinned next door, by
+    ``ollama_test.py::test_format_json_set_when_structured_output_no_tools``
+    and ``::test_format_json_suppressed_when_tools_present``; these pin the
+    declaration to match it.
+    """
+
+    def _wrapper(self):
+        from llm_shared.providers.ollama_provider import OllamaProvider
+
+        return OllamaProvider(settings={"default_model": "llama3.1:8b"})
+
+    def test_the_wrapper_declares_what_its_delegate_sends(self):
+        from llm_shared.providers.ollama_provider import OllamaProvider
+
+        assert OllamaProvider.structured_output_mode is StructuredOutputMode.JSON_OBJECT
+
+    def test_applied_mode_is_json_object_for_an_ordinary_request(self):
+        assert self._wrapper().applied_structured_output_mode(_request()) is StructuredOutputMode.JSON_OBJECT
+
+    def test_a_chat_template_request_reports_none(self):
+        """That path POSTs to /api/generate with no `format` field (#4525)."""
+        request = _request()
+        request.metadata["chat_template"] = "chatml"
+
+        assert self._wrapper().applied_structured_output_mode(request) is StructuredOutputMode.NONE
+
+    def test_tools_on_a_tool_capable_model_report_none(self):
+        """ollama.py suppresses format=json when tools are sent (#7911)."""
+        from llm_shared.models import ToolDefinition
+
+        request = _request()
+        request.model_name = "llama3.1:8b"  # in _OLLAMA_TOOL_CAPABLE_MODELS
+        request.tools = [ToolDefinition(name="t", description="d", input_schema={"type": "object"})]
+
+        assert self._wrapper().applied_structured_output_mode(request) is StructuredOutputMode.NONE
+
+    def test_tools_on_a_model_without_tool_support_still_report_json_object(self):
+        """The suppression is conditional, so the report must be too."""
+        from llm_shared.models import ToolDefinition
+        from llm_shared.providers.ollama_provider import OllamaProvider
+
+        provider = OllamaProvider(settings={"default_model": "some-tiny-model:latest"})
+        request = _request()
+        request.model_name = "some-tiny-model:latest"
+        request.tools = [ToolDefinition(name="t", description="d", input_schema={"type": "object"})]
+
+        assert provider.applied_structured_output_mode(request) is StructuredOutputMode.JSON_OBJECT
+
+
+# ---------------------------------------------------------------------------
 # The capability flag itself (#17305 AC4)
 # ---------------------------------------------------------------------------
 
@@ -209,6 +273,7 @@ class TestCapabilityDeclaration:
             MistralProvider: StructuredOutputMode.JSON_OBJECT,
             AnthropicProvider: StructuredOutputMode.JSON_SCHEMA,
             VLLMBaseProvider: StructuredOutputMode.JSON_SCHEMA,
+            OllamaWrapper: StructuredOutputMode.JSON_OBJECT,
         }
         for provider_cls, mode in declared.items():
             assert provider_cls.structured_output_mode is mode, provider_cls.__name__

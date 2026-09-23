@@ -30,6 +30,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_ollama_url
 from constants.api_constants import PATH_OLLAMA_CHAT, PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS
 from llm_shared.models import LLMRequest, LLMResponse
+from llm_shared.structured_output import StructuredOutputMode
 from llm_shared.types import ProviderType
 
 from ..base_provider import BaseProvider
@@ -48,11 +49,42 @@ class OllamaProvider(BaseProvider):
     """
 
     provider_name = ProviderType.OLLAMA.value
+    # #17305: the delegate sends `format: "json"` (providers/ollama.py), so this
+    # provider honours `structured_output` on the wire -- it was the only one
+    # that did before #17305. Declaring the inherited NONE here would have made
+    # `note_structured_output` log "not honoured natively by provider=ollama" on
+    # every structured Ollama call and record `structured_output_mode_applied:
+    # none`, both false: the inverse of the AC4 gap this PR exists to surface.
+    structured_output_mode = StructuredOutputMode.JSON_OBJECT
 
     def __init__(self, settings: Dict[str, Any] | None = None) -> None:
         super().__init__(settings)
         self._base_url: str | None = None
         self._delegate = None
+
+    def applied_structured_output_mode(self, request: LLMRequest) -> StructuredOutputMode:
+        """Report what this request actually gets, not what the provider can do (#17305).
+
+        Two paths drop `format` even though the provider supports it, and a
+        capability flag that ignored them would be the same lie in the other
+        direction:
+
+        - a request carrying ``metadata["chat_template"]`` is rendered and POSTed
+          to ``/api/generate`` by ``_chat_completion_impl`` below, a payload with
+          no ``format`` field at all (#4525);
+        - ``providers/ollama.py`` suppresses ``format: "json"`` when tools will be
+          sent, because Ollama rejects the combination (#7911). That predicate is
+          imported rather than re-approximated -- two copies of "will tools be
+          sent" is how the two answers drift apart.
+        """
+        from llm_shared.providers.ollama import _model_supports_tools  # noqa: PLC0415
+
+        if request.metadata.get("chat_template"):
+            return StructuredOutputMode.NONE
+        model = request.model_name or self._get_setting("default_model", "")
+        if request.tools and _model_supports_tools(model):
+            return StructuredOutputMode.NONE
+        return super().applied_structured_output_mode(request)
 
     def _resolve_base_url(self) -> str:
         """Resolve the Ollama base URL from settings, SSOT config, or env."""
