@@ -11,11 +11,7 @@ logging component moves here — the three that were already there pay for the
 import line this module costs, and the component is more coherent for being
 in one place.
 
-Importing this module registers every variable below into
-``autobot_shared.env_registry.REGISTRY`` as a side effect, exactly like the
-``register_env_var(...)`` calls in ``env_registry.py`` itself. It is imported
-from there, after ``EnvVarSpec``/``register_env_var``/``REGISTRY`` are
-defined, so nothing ever observes a partially-populated registry.
+Registration contract (import side effect, ordering): see ``env_registry`` (#16415).
 """
 
 from __future__ import annotations

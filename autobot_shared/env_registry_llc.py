@@ -9,10 +9,7 @@ which the ratchet forbids. ``AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL`` moved here
 from its previous inline registration at the same time, so every LLC var
 lives in one place instead of being split by accident of when it was added.
 
-The import-as-side-effect registration contract this module relies on --
-why importing it is safe, and how it reaches ``env_registry.REGISTRY`` -- is
-stated once in ``env_registry_agent_runtime``'s docstring rather than
-repeated on every sibling; #16415 tracks consolidating it into one place.
+Registration contract (import side effect, ordering): see ``env_registry`` (#16415).
 
 Closes GH#7081.
 """
