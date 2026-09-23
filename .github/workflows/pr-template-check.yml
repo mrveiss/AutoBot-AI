@@ -99,3 +99,51 @@ jobs:
         # #16778, #16790 and #16791 in one afternoon. The two states now have
         # their own messages and their own tests.
         PR_BODY="$PR_BODY" python3 scripts/check_pr_template_sections.py
+
+  # #15887: its own job, not a second step on check-template. That job is named
+  # for the sections check; a title failure reported under "Validate PR template
+  # sections" would name a check that passed.
+  check-title:
+    name: Validate the PR title as a commit subject
+    # Same skip as check-template, and for the same reason: a bot writes its own
+    # title (`build(deps): bump x from a to b`), which carries no issue number by
+    # nature -- lint-conventions.sh exempts bot-authored commits on exactly that
+    # ground. Fork PRs skip for the #14153 reason: the convention is not shown to
+    # a drive-by contributor, and an owner merging the PR can still edit the title.
+    if: >
+      github.event.pull_request.user.type != 'Bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+    - uses: actions/checkout@v7
+
+    # #15473: the PR TITLE becomes the squash-merge commit subject, and until
+    # now nothing validated it. `fix(deps+security): ...` passed every local
+    # hook, merged, and put a subject on main that lint-conventions.sh then
+    # failed for every PR opened afterwards -- including a release promotion
+    # carrying 682 commits. A commit already on main cannot be amended, so the
+    # only cure is an exemption recorded by SHA; this step is the prevention.
+    #
+    # It lives in THIS workflow because `edited` is in its trigger list: the
+    # title at merge time is what becomes the subject, and a title changed
+    # after the last push is invisible to every synchronize-triggered workflow.
+    #
+    # Fetched via the CLI rather than read from the event payload: a title is
+    # attacker-controlled text and `${{ }}` interpolation into a shell script
+    # is the injection this repository forbids.
+    - name: Check the PR title can become a commit subject (#15473)
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        PR_TITLE=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json title --jq '.title') || {
+          echo "::error::PR title lookup failed — the title gate DID NOT RUN"
+          exit 1
+        }
+        python3 scripts/validate_pr_body.py --title-only "$PR_TITLE"

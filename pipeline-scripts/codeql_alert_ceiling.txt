@@ -31,9 +31,15 @@
 # ceiling that sits above the real count -- it had to, or the seven just
 # adjudicated would be re-licensed for the next thing that trips.
 #
+# 2 -> 0 on 2026-09-23: the last two were adjudicated and CodeQL's rescan of
+# main confirmed it. Measured, not assumed -- `state=open` returned 0 while
+# `state=dismissed` returned 393 in the same breath, so the zero is a count and
+# not a query that failed. At 0 the gate changes character: any new finding is
+# now a red check on the PR that introduces it, which is the point.
+#
 # This is a ceiling on a COUNT, which is a blunt instrument: it cannot tell a
 # newly-introduced high-severity finding from an old low-severity one that a
 # rule update re-triggered. It is deliberately blunt. A count that may not grow
 # forces the question to be asked at the moment a finding appears, which is the
 # only thing that was missing.
-2
+0

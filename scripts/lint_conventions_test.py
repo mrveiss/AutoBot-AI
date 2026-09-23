@@ -29,14 +29,19 @@ LIB_DIR = Path(__file__).resolve().parent / "lib"
 # empty output as a missing message rather than as a dead script. The fixture
 # now ships whatever the script actually sources, so the next library added
 # cannot silently empty this file's output again.
-_SOURCED_LIB = re.compile(r"lib/([A-Za-z0-9_.-]+\.sh)")
+# #15473: the rule text moved out of the script into lib/commit-subject.ere, so
+# "whatever the script reads from scripts/lib/" is no longer "whatever it
+# sources". A fixture that ships only *.sh gives the script an unreadable rule
+# file, and the script then dies at load -- which these tests would read as a
+# missing message rather than as a fixture that is not a checkout.
+_SOURCED_LIB = re.compile(r"lib/([A-Za-z0-9_.-]+\.(?:sh|ere))")
 
 
 def _required_libs() -> list[str]:
     names = sorted(set(_SOURCED_LIB.findall(SCRIPT.read_text(encoding="utf-8"))))
-    assert names, "lint-conventions.sh sources no scripts/lib/*.sh -- the pattern has drifted"
+    assert names, "lint-conventions.sh reads nothing from scripts/lib/ -- the pattern has drifted"
     missing = [n for n in names if not (LIB_DIR / n).is_file()]
-    assert not missing, f"lint-conventions.sh sources libraries that do not exist: {missing}"
+    assert not missing, f"lint-conventions.sh reads files that do not exist: {missing}"
     return names
 
 
@@ -297,3 +302,48 @@ def test_a_missing_git_scope_library_is_fatal_not_clean(repo: Path) -> None:
     res = run(repo, "--all")
     assert res.returncode != 0
     assert "refusing to report clean" in res.stderr
+
+
+# ── SHA exemptions (#15473) ─────────────────────────────────────────────────
+# Check 3 can exempt a commit by SHA prefix, for subjects already on main that
+# no longer have an author who could amend them. Two ways that goes wrong, both
+# silent, so both are pinned here rather than left to review.
+REPO_ROOT = SCRIPT.resolve().parent.parent
+_SHA_EXEMPTION = re.compile(r"^\s*([0-9a-f]{4,40})\*\)\s*continue\s*;;\s*$", re.MULTILINE)
+
+# git's own floor, and what CI prints. `%h` abbreviates to whatever is
+# unambiguous in the LOCAL object store; the code-quality job checks out at
+# fetch-depth 2, so that store holds three objects and every hash abbreviates
+# to seven characters. A pattern written from a full clone's abbreviation is
+# longer than that, matches in the worktree where it was authored, and misses
+# in the only place it has to fire.
+_CI_ABBREV_LEN = 7
+
+
+def _sha_exemptions() -> list[str]:
+    return _SHA_EXEMPTION.findall(SCRIPT.read_text(encoding="utf-8"))
+
+
+def test_no_sha_exemption_is_longer_than_cis_abbreviation() -> None:
+    too_long = [s for s in _sha_exemptions() if len(s) > _CI_ABBREV_LEN]
+    assert not too_long, (
+        f"SHA exemptions longer than {_CI_ABBREV_LEN} characters cannot match CI's "
+        f"abbreviated %h and will never fire: {too_long}"
+    )
+
+
+def test_every_sha_exemption_names_exactly_one_commit_in_this_repository() -> None:
+    """A prefix short enough for CI is also short enough to collide.
+
+    Ambiguity would exempt an unrelated commit, and an exemption resolving to
+    nothing is dead text that outlives whatever it was written for.
+    """
+    for prefix in _sha_exemptions():
+        res = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", f"--disambiguate={prefix}"],
+            capture_output=True,
+            text=True,
+            env=scrubbed_git_env(),
+        )
+        matches = [line for line in res.stdout.splitlines() if line.strip()]
+        assert len(matches) == 1, f"SHA exemption '{prefix}' resolves to {len(matches)} objects, expected exactly 1"

@@ -69,6 +69,16 @@ ok()   { printf '  ok    %s\n' "$1"; }
 note() { printf '  ----  %s\n' "$1"; }
 die()  { printf '  FATAL %s\n' "$1" >&2; exit 1; }
 
+# ── the commit-subject rule, loaded from its single source (#15473) ──────────
+# Fails closed: a rule file that cannot be read is not a subject that passes.
+SUBJECT_ERE_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/commit-subject.ere"
+[ -r "$SUBJECT_ERE_FILE" ] || die "cannot read the commit-subject rule at $SUBJECT_ERE_FILE"
+mapfile -t _subject_ere_lines < <(grep -vE '^[[:space:]]*(#|$)' "$SUBJECT_ERE_FILE")
+[ "${#_subject_ere_lines[@]}" -eq 1 ] \
+  || die "commit-subject.ere must hold exactly one pattern, found ${#_subject_ere_lines[@]}"
+SUBJECT_ERE="${_subject_ere_lines[0]}"
+[ -n "$SUBJECT_ERE" ] || die "the commit-subject rule is empty"
+
 # ── commit-msg mode: subject only, nothing else is knowable here ─────────────
 if [ "$MODE" = "--commit-msg" ]; then
   [ -n "$MSG_FILE" ] && [ -r "$MSG_FILE" ] || die "--commit-msg needs a readable file"
@@ -94,7 +104,7 @@ if [ "$MODE" = "--commit-msg" ]; then
   # itself authored; it now rejects 1, and that one is genuinely malformed —
   # capitalised, with no type at all. A linter whose own repository cannot
   # satisfy it gets ignored, which is worse than not having it.
-  if ! printf '%s' "$SUBJECT" | grep -qE '^[a-z][a-z0-9-]*(\([a-z0-9][a-z0-9._/,-]*\))?: .+'; then
+  if ! printf '%s' "$SUBJECT" | grep -qE "$SUBJECT_ERE"; then
     echo "  FAIL  subject is not '<type>(scope): <description>'"; exit 1
   fi
   if ! printf '%s' "$SUBJECT" | grep -qE '#[0-9]{3,}'; then
@@ -246,7 +256,26 @@ else
       case "$author$email" in
         *'[bot]'*) continue ;;
       esac
-      if ! printf '%s' "$subj" | grep -qE '^[a-z][a-z0-9-]*(\([a-z0-9][a-z0-9._/,-]*\))?: .+'; then
+      # #15473: subjects already on main that cannot be amended. A squash merge
+      # takes its subject from the PR title, and nothing validated that until
+      # validate_pr_body.check_title -- so this one landed malformed and then
+      # failed the range check for every PR afterwards, including a release
+      # promotion carrying 682 commits. Recorded by SHA rather than by widening
+      # the pattern: `+` is not a scope separator this repository uses (one
+      # occurrence in 600 commits, and it is this one), so widening would be
+      # lowering the rule to fit a mistake. Shrink-only -- an entry leaves when
+      # history is rewritten, which for main means never.
+      # Seven characters, not the ten `%h` yields here: %h abbreviates to
+      # whatever is unambiguous in the LOCAL object store, and CI's shallow
+      # checkout has three objects in it, so the same commit printed `59f4be8`
+      # there and `59f4be872c` here. A ten-character pattern would have matched
+      # in this worktree and silently missed in the only place it has to fire.
+      # Seven is unique across every object in the repository
+      # (`git rev-parse --disambiguate=59f4be8` -> 1) and is git's own floor.
+      case "$sha" in
+        59f4be8*) continue ;;
+      esac
+      if ! printf '%s' "$subj" | grep -qE "$SUBJECT_ERE"; then
         # #13921: the parsed author is echoed on failure. The previous version
         # rejected commits without saying who it thought wrote them, so a
         # non-firing exemption could only be diagnosed by inference.
