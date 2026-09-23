@@ -1,0 +1,21 @@
+# The commit-subject rule, in ONE place (#15473).
+#
+# Two halves of this rule already disagreed once: the branch commits were
+# checked and the squash subject was not, so `fix(deps+security): ...` merged
+# and put a permanently non-conforming subject on main. The fix added a PR-title
+# gate in Python, and a second copy of the pattern would have reintroduced the
+# same class of defect one layer up -- two enforcers of one rule, free to drift.
+#
+# Format: comment lines (#) and blank lines are ignored; exactly one remaining
+# line, which is a POSIX ERE. Both readers fail closed on anything else, because
+# a subject rule that cannot be loaded must not read as a subject that passes.
+#
+# Readers:
+#   scripts/lint-conventions.sh   -- grep -qE, commit-msg and range modes
+#   scripts/validate_pr_body.py   -- re.match, the PR-title gate
+#
+# Why the classes are this wide (#14076): the repo writes slashed scopes
+# (`fix(llc/frontend):`), comma-joined scopes (`docs(architecture,design):`) and
+# hyphenated types (`tech-debt:`, `a11y:`). The scope must still START
+# alphanumeric -- `fix(/llc):` and `fix(-llc):` are not scopes anyone intends.
+^[a-z][a-z0-9-]*(\([a-z0-9][a-z0-9._/,-]*\))?: .+

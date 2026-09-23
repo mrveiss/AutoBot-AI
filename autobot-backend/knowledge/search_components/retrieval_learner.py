@@ -23,13 +23,13 @@ import asyncio
 import hashlib
 import json
 import math
-import os
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
@@ -62,7 +62,7 @@ GLOBAL_USER = "__global__"
 # tenacity retry loop inside get_redis_client so a Redis outage cannot hang the
 # hot routing/planning path.  Override via env var for staging environments that
 # tolerate a slower Redis start-up.
-_REDIS_ACQUIRE_TIMEOUT = float(os.getenv("AUTOBOT_RETRIEVAL_REDIS_TIMEOUT", "1.5"))
+_REDIS_ACQUIRE_TIMEOUT = env_float("AUTOBOT_RETRIEVAL_REDIS_TIMEOUT", 1.5)
 
 
 # ---------------------------------------------------------------------------

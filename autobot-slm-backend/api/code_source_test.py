@@ -116,8 +116,16 @@ class TestCodeSourceValidation:
                 assert "/wrong/path" in exc_info.value.detail
 
     @pytest.mark.asyncio
-    async def test_validate_repo_path_case_mismatch_suggestion(self, mock_node):
-        """Test validation suggests correct path when case mismatch detected."""
+    async def test_validate_repo_path_does_not_disclose_the_similar_path(self, mock_node):
+        """#17300: the suggestion is computed and LOGGED, never returned.
+
+        This test previously asserted the opposite -- that "Did you mean: <path>?"
+        appears in the response. That was the defect: these routes are gated by
+        get_current_user only, not by an admin role, so the suggestion handed any
+        authenticated user one real filename from any directory on the node. The
+        assertion is inverted rather than deleted, so the property is pinned
+        rather than merely un-checked.
+        """
         with patch(_LOCAL_NODE_PATCH, return_value=False), patch("asyncio.create_subprocess_exec") as mock_exec:
             # First call: test -d fails
             mock_process = AsyncMock()
@@ -135,7 +143,8 @@ class TestCodeSourceValidation:
 
                 assert exc_info.value.status_code == 400
                 assert "does not exist" in exc_info.value.detail
-                assert "Did you mean: /opt/autobot/code_source?" in exc_info.value.detail
+                assert "/opt/autobot/code_source" not in exc_info.value.detail, "the sibling path leaked"
+                assert "Did you mean" not in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_validate_repo_path_timeout(self, mock_node):
@@ -221,6 +230,13 @@ class TestCodeSourceValidation:
 class TestLocalNodeValidation:
     """Tests for local (SLM Manager) path validation (#2721)."""
 
+    @pytest.fixture(autouse=True)
+    def _allow_tmp_roots(self, monkeypatch, tmp_path):
+        """#17300: repo_path is now confined to AUTOBOT_CODE_SOURCE_ALLOWED_ROOTS
+        (default /opt/autobot). These tests legitimately use tmp paths, so they
+        declare that root rather than the guard being weakened for them."""
+        monkeypatch.setenv("AUTOBOT_CODE_SOURCE_ALLOWED_ROOTS", str(tmp_path))
+
     @pytest.fixture
     def mock_node(self):
         """Create a mock node for testing."""
@@ -236,11 +252,18 @@ class TestLocalNodeValidation:
             await _validate_repo_path(mock_node, str(repo_dir))
 
     @pytest.mark.asyncio
-    async def test_validate_local_path_not_exists(self, mock_node):
-        """Test local validation fails when directory doesn't exist."""
+    async def test_validate_local_path_not_exists(self, mock_node, tmp_path):
+        """Local validation fails when the directory does not exist.
+
+        #17300: the path is INSIDE the allowed root on purpose. "/nonexistent/path"
+        now trips the root confinement first and returns a different 400, so this
+        test would silently stop exercising the does-not-exist branch it is named
+        for. Confinement itself is covered in
+        tests/api/code_source_path_confinement_17300_test.py.
+        """
         with patch(_LOCAL_NODE_PATCH, return_value=True):
             with pytest.raises(HTTPException) as exc_info:
-                await _validate_repo_path(mock_node, "/nonexistent/path")
+                await _validate_repo_path(mock_node, str(tmp_path / "nonexistent"))
 
             assert exc_info.value.status_code == 400
             assert "does not exist" in exc_info.value.detail

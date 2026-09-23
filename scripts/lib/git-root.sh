@@ -25,10 +25,13 @@
 #     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh"
 #     REPO_ROOT="$(git_repo_root)" || { echo "not a git repo" >&2; exit 2; }
 
-# Mirrors `autobot_shared.paths.AMBIENT_GIT_VARS` -- keep the two lists in
-# sync; a variable added to one side and not the other reopens the hole on
-# whichever language was missed.
-GIT_ROOT_AMBIENT_VARS=(GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE)
+# Mirrors `autobot_shared.paths.AMBIENT_GIT_VARS`. The two lists HAD diverged --
+# GIT_OBJECT_DIRECTORY and GIT_ALTERNATE_OBJECT_DIRECTORIES were added on the
+# Python side only, which is precisely the hole this comment warned about and
+# could not prevent (#15877). `repo_tests/ambient_git_vars_mirror_test.py` now
+# compares them, so the claim is checked rather than asserted.
+GIT_ROOT_AMBIENT_VARS=(GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE \
+                       GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES)
 
 # Print the repository root containing DIR (default: the caller's CWD), with
 # GIT_ROOT_AMBIENT_VARS unset for the git call. Prints nothing and returns 1
@@ -42,4 +45,36 @@ git_repo_root() {
     )" || return 1
     [ -n "$root" ] || return 1
     printf '%s\n' "$root"
+}
+
+# Run `git ls-files` under DIR with GIT_ROOT_AMBIENT_VARS unset. Remaining
+# arguments are passed to git verbatim, so every flag and pathspec form works:
+# `-v` for index bits, `-- '*.sh'` for a pathspec. Forcing a `--` in here looked
+# tidier and silently broke `-v`, turning a flag into a pathspec that matches
+# nothing -- an empty result that reads exactly like a clean tree.
+#
+# DIR is required and always explicit: making it optional would make
+# `git_tracked_files '*.sh'` ambiguous between a directory and a pathspec, and
+# the wrong reading enumerates the wrong tree -- the defect this helper exists
+# to remove, reintroduced through its own API.
+#
+# `git ls-files` has the same dependency as `--show-toplevel`: an inherited
+# GIT_DIR outranks `-C`, so a correct directory still enumerates the *other*
+# checkout's index, and answers without erroring (#14896, #15506).
+#
+# Returns git's own exit status. An empty result with status 0 is a real answer
+# -- a pathspec that matches nothing -- and is NOT an error here. Callers that
+# require a non-empty set must say so themselves; a floor belongs at the caller,
+# where "the tree is clean" and "the sweep lost its reach" are distinguishable.
+# That split mirrors tracked_paths()/enforce_reach() on the Python side.
+#
+#     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh"
+#     files="$(git_tracked_files "$REPO_ROOT" '*.sh')" || exit 2
+git_tracked_files() {
+    local dir="${1:?git_tracked_files: DIR required}"
+    shift
+    (
+        unset "${GIT_ROOT_AMBIENT_VARS[@]}"
+        git -C "$dir" ls-files "$@"
+    )
 }

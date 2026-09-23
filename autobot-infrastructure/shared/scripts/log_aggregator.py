@@ -823,7 +823,7 @@ class LogAggregator:
 
         # Create log rotation script
         rotation_script = self.project_root / "scripts" / "rotate_logs.sh"
-        rotation_script_content = """#!/bin/bash
+        rotation_script_content = f"""#!/bin/bash
 # AutoBot Log Rotation Script
 
 LOGS_DIR="{self.logs_dir}"

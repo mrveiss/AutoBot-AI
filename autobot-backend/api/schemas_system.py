@@ -10,9 +10,9 @@ import re
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from api.schemas_common import MAX_THOUGHT_COUNT, SuccessDataResponse, SuccessMessageResponse
 from api.schemas_secrets import StorableSecretType
@@ -2485,7 +2485,7 @@ class TerminalApproveCommandRequest(BaseModel):
     """Request to approve/deny pending command"""
 
     approved: bool = Field(..., description="Whether command is approved")
-    user_id: str | None = Field(None, description="User who made the decision")
+    user_id: str | None = Field(None, description="Ignored (#17052): the approver is the verified caller")
     comment: str | None = Field(None, description="Optional comment or reason for the decision")
     auto_approve_future: bool = Field(False, description="Auto-approve similar commands in the future")
     remember_for_project: bool = Field(False, description="Remember approval for this project")
@@ -2526,7 +2526,7 @@ class TaskAnswerRequest(BaseModel):
 class TerminalInterruptRequest(BaseModel):
     """Request to interrupt agent and take control"""
 
-    user_id: str = Field(..., description="User requesting control")
+    user_id: str | None = Field(None, description="Ignored (#17052): the actor is the verified caller")
 
 
 class TerminalHostSelectionRequest(BaseModel):
@@ -2775,18 +2775,15 @@ class VisionHealthResponse(BaseModel):
 class WakeWordCheckRequest(BaseModel):
     """Request to check text for wake word"""
 
-    text: str = Field(..., description="Text to check for wake word")
+    text: str = Field(..., max_length=1000, description="Text to check for wake word")
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Recognition confidence")
 
 
 class WakeWordCheckResponse(BaseModel):
-    """Response for wake word check"""
+    """Response for wake word check: whether the text matched, and the confidence only (#16247 ruling)."""
 
     detected: bool
-    wake_word: str = ""
     confidence: float = 0.0
-    timestamp: float = 0.0
-    metadata: Metadata = {}
 
 
 class WakeWordConfigRequest(BaseModel):
@@ -3530,7 +3527,7 @@ class SecretCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=256)
     type: StorableSecretType
     scope: ChatSecretScope
-    value: str = Field(..., min_length=1, max_length=65536)
+    value: str | None = Field(None, min_length=1, max_length=65536)
     chat_id: str | None = Field(None, max_length=128)
     description: str | None = Field("", max_length=1024)
     tags: List[str] = Field(default_factory=list)
@@ -3540,11 +3537,47 @@ class SecretCreateRequest(BaseModel):
     org_id: str | None = Field(None, max_length=128, description="Organization ID for org-level secrets")
     team_ids: List[str] = Field(default_factory=list, description="Team IDs for group-level secrets")
     shared_with: List[str] = Field(default_factory=list, description="User IDs to share with")
+    # #17099: the UI has offered "System" here since #685, but this field never
+    # existed -- Pydantic silently dropped it (no extra="forbid"), so every
+    # choice, System included, went through the legacy per-user file store
+    # unrouted. Only "system" gets special handling in create_secret(); every
+    # other value's current (unrouted) behaviour is unchanged by this field's
+    # mere existence.
+    visibility: Literal["private", "shared", "group", "organization", "system"] | None = Field(
+        None, description="A typo here must 422, not silently fall through to the legacy store (#16428 review)"
+    )
+
+    # #16428: bridges this secret to a connector's ConnectorCredentialStore
+    # entry (ADR-007) instead of this store's own file, per #13632's decision
+    # that connector credentials come from one store. All three are required
+    # together; value is unused on this path.
+    connector_id: str | None = Field(
+        None, max_length=128, description="Bridge to this connector's ConnectorCredentialStore entry"
+    )
+    auth_type: str | None = Field(
+        None, description="ConnectorAuth subclass name: BearerAuth, ApiKeyAuth, BasicAuth or OAuthRefreshAuth"
+    )
+    credentials: Dict[str, str] | None = Field(
+        None, description="Sensitive auth fields, validated against auth_type's schema"
+    )
 
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
         return _validate_secret_name(v)
+
+    @model_validator(mode="after")
+    def _validate_value_or_connector_bridge(self) -> "SecretCreateRequest":
+        if self.connector_id is not None:
+            # `credentials={}` is a present-but-incomplete dict, not an absent
+            # one -- whether its fields satisfy auth_type's schema is
+            # validate_config_against_schema's job (_create_connector_bridged_secret),
+            # not this presence check's.
+            if not self.auth_type or self.credentials is None:
+                raise ValueError("connector_id requires both auth_type and credentials")
+        elif self.value is None:
+            raise ValueError("value is required unless connector_id is set")
+        return self
 
     def to_secret_model(self, secret_id: str | None = None) -> "SecretModel":
         """Convert request to SecretModel."""
@@ -3578,6 +3611,10 @@ class SecretUpdateRequest(BaseModel):
     tags: List[str] | None = None
     expires_at: datetime | None = None
     metadata: Metadata | None = None
+    # #16428: rotates a connector-bridged secret's credential in
+    # ConnectorCredentialStore. Ignored for a non-bridged secret -- legacy
+    # secrets have never supported value rotation via this endpoint.
+    credentials: Dict[str, str] | None = Field(None, description="New sensitive auth fields, for a bridged secret")
 
     @field_validator("name")
     @classmethod

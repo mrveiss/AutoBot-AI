@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from autobot_shared.time_utils import utc_timestamp
-from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
+from services import deploy_artifacts
 from services.git_tracker import DEFAULT_REPO_PATH
 
 logger = logging.getLogger(__name__)
@@ -181,10 +181,10 @@ VISIBILITY_COMPONENTS = ALLOWED_COMPONENTS | EXTRA_VISIBILITY_COMPONENTS
 
 # Source/deployed path overrides for components whose layout does not follow
 # the code_source/<component> -> <SLM_DEPLOYED_ROOT>/<component> convention
-# assumed by get_default_source_dir/get_default_deployed_dir (#12450). Paths
-# are relative to DEFAULT_REPO_PATH / SLM_DEPLOYED_ROOT respectively. Verified
-# against the live ansible deploy tasks — do not add an entry without tracing
-# it to the actual unarchive/copy/synchronize task.
+# assumed by get_default_source_dir and services.deployed_dir_resolver's two
+# forms (#13539 B2). Paths are relative to DEFAULT_REPO_PATH / SLM_DEPLOYED_ROOT
+# respectively. Verified against the live ansible deploy tasks — do not add an
+# entry without tracing it to the actual unarchive/copy/synchronize task.
 _NONSTANDARD_COMPONENT_PATHS: dict[str, tuple[str, str]] = {
     # ai-stack has no top-level code_source/autobot-ai-stack dir; it lives
     # under autobot-infrastructure/ and deploys with --strip-components=4 so
@@ -220,8 +220,8 @@ _NONSTANDARD_COMPONENT_PATHS: dict[str, tuple[str, str]] = {
 # code_sync rsync excludes never disagree about what is an artifact — the
 # divergence that let ``*.egg-info`` be drift-skipped (#11440) yet still
 # rsync-churned. See services/deploy_artifacts.py for the shared definitions.
-_SKIP_DIRS = set(ARTIFACT_DIRS)
-_SKIP_DIR_SUFFIXES: tuple[str, ...] = ARTIFACT_DIR_SUFFIXES
+_SKIP_DIRS = set(deploy_artifacts.ARTIFACT_DIRS)
+_SKIP_DIR_SUFFIXES: tuple[str, ...] = deploy_artifacts.ARTIFACT_DIR_SUFFIXES
 
 # Paths that are deployment-generated and never present in the git source tree.
 # Exact-match paths and prefix patterns are checked against the POSIX relative
@@ -244,8 +244,7 @@ _EXPECTED_DRIFT_PREFIXES: tuple[str, ...] = ("autobot_shared/",)
 # Per-component entries that exist ONLY in the deployed tree — the deployment or
 # the running service creates them and source has no counterpart (#13851).
 # Unlike ``_EXPECTED_DRIFT_EXACT`` these are scoped to the component whose tree
-# they sit in, because the same relative path under a different component would
-# be ordinary source.
+# they sit in, because the same relative path under a different component would be ordinary source.
 #
 # Every entry is protected from the delete-style resolve as well as skipped by
 # the drift walk (see ``deploy_only_entries``) — the two disagreeing is what let
@@ -268,6 +267,7 @@ _EXPECTED_DRIFT_PREFIXES: tuple[str, ...] = ("autobot_shared/",)
 _DEPLOY_ONLY_ENTRIES: dict[str, frozenset[str]] = {
     "autobot-backend": frozenset({"config/npu_workers.yaml", "autobot_shared"}),
     "autobot-slm-backend": frozenset({"autobot_shared"}),
+    "autobot-slm-frontend": deploy_artifacts.SLM_FRONTEND_RELEASE_EXCLUDES,  # #16717
 }
 
 # Individual files inside an otherwise-1:1 component tree that are deployed as a
@@ -295,8 +295,8 @@ _RENDERED_FILES: dict[str, dict[str, str]] = {
 def _deployed_relpath(component: str) -> str:
     """Deployed path of *component* relative to the deployed root.
 
-    Mirrors :func:`get_default_deployed_dir` without the root prefix so
-    ownership between component trees can be reasoned about (#13851).
+    Mirrors ``services.deployed_dir_resolver._resolve_deployed_dir`` without the
+    root prefix so ownership between component trees can be reasoned about (#13851).
     """
     override = _NONSTANDARD_COMPONENT_PATHS.get(component)
     return override[1] if override else component
@@ -309,8 +309,7 @@ def owned_subtrees(component: str) -> frozenset[str]:
     deployed target is ``<root>/autobot-backend/plugins`` — so the backend's own
     drift walk found 17 plugin files, looked for them under
     ``code_source/autobot-backend/plugins/`` where they have never existed, and
-    reported them as drift. They were perfectly in sync with their real source
-    (#13851).
+    reported them as drift. They were perfectly in sync with their real source (#13851).
 
     A file owned by another component is that component's business: it must not
     count as drift for the component whose tree it happens to sit in, and it must
@@ -383,6 +382,8 @@ def _is_expected_drift(
     # the rendered artifacts, which rsync must not delete but the walk MUST
     # still compare (#13851).
     if rel_path in _DEPLOY_ONLY_ENTRIES.get(component, frozenset()):
+        return True
+    if deploy_artifacts.is_release_artifact(component, rel_path.split("/", 1)[0]):  # #16717
         return True
     if owned is None:
         raise ValueError("owned_subtrees must be supplied when component is given (#13851)")
@@ -812,26 +813,6 @@ def build_drift_report(
         "drift_detected": len(drifted) > 0,
         "checked_at": utc_timestamp(),
     }
-
-
-def get_default_deployed_dir(component: str = "autobot-slm-backend") -> str:
-    """Return the expected deployed path for *component* under /opt/autobot.
-
-    Reads ``SLM_DEPLOYED_ROOT`` from the environment so the path is
-    configurable without hardcoding. Components listed in
-    ``_NONSTANDARD_COMPONENT_PATHS`` (#12450) use their verified override
-    sub-path instead of the standard ``<root>/<component>`` convention.
-
-    Args:
-        component: Sub-directory name under the deployed root.
-
-    Returns:
-        Absolute path string for the deployed component directory.
-    """
-    deployed_root = os.environ.get("SLM_DEPLOYED_ROOT", "/opt/autobot")
-    override = _NONSTANDARD_COMPONENT_PATHS.get(component)
-    rel_path = override[1] if override else component
-    return str(Path(deployed_root) / rel_path)
 
 
 def get_default_source_dir(component: str = "autobot-slm-backend") -> str:

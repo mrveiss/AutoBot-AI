@@ -19,7 +19,7 @@ Beat pidfile MUST NOT reside on tmpfs (/run/autobot/ is wiped on reboot).
 import json
 import os
 import re
-import subprocess  # nosec B404  # internal git/gh CLI calls only
+import subprocess  # nosec B404  # internal gh CLI calls only; git goes through run_git
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +28,7 @@ from typing import Any, NamedTuple
 from celery.signals import beat_init, worker_ready
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from celery_app import celery_app
@@ -707,34 +708,29 @@ def _audit_beat_init(**_kwargs) -> None:
 
 
 def _changed_python_modules(since_iso: str | None, repo_root: Path) -> list[Path]:
-    """Return Python source files (non-test) changed in Dev_new_gui since *since_iso*.
+    """Return Python source files (non-test) changed in main since *since_iso*.
 
     Falls back to the last 6 hours when *since_iso* is None.
     """
-    if since_iso:
-        cmd = [
-            "git",
-            "log",
-            "origin/Dev_new_gui",
-            f"--since={since_iso}",
-            "--name-only",
-            "--pretty=format:",
-            "--diff-filter=ACMR",
-        ]
-    else:
-        cmd = [
-            "git",
-            "log",
-            "origin/Dev_new_gui",
-            "--since=6 hours ago",
-            "--name-only",
-            "--pretty=format:",
-            "--diff-filter=ACMR",
-        ]
-
-    code, out, _ = _run(cmd, cwd=str(repo_root))
-    if code != 0:
+    argv = [
+        "log",
+        "origin/main",
+        f"--since={since_iso}" if since_iso else "--since=6 hours ago",
+        "--name-only",
+        "--pretty=format:",
+        "--diff-filter=ACMR",
+    ]
+    # `_run` never raised; `run_git` propagates TimeoutExpired. This runs inside a
+    # Celery task with no handler above it, so an unhandled timeout would abort the
+    # whole audit rather than degrading to "no modules changed" (#16179 review).
+    try:
+        result = run_git(argv, cwd=str(repo_root))  # #16179
+    except Exception as exc:
+        logger.warning("changed-module probe failed, treating as no data: %s", exc)
         return []
+    if result.returncode != 0:
+        return []
+    out = result.stdout
 
     paths = []
     for line in out.splitlines():
@@ -777,7 +773,7 @@ def _testgap_findings(modules: list[Path], repo_root: Path) -> list[dict]:
             title = f"discovery: test gap — {rel} has no test file"
             body = (
                 f"## Test gap detected by audit_testgaps daemon\n\n"
-                f"Module `{rel}` was recently changed in `Dev_new_gui` and has no "
+                f"Module `{rel}` was recently changed in `main` and has no "
                 f"corresponding test file with test functions.\n\n"
                 f"**Expected locations:**\n"
                 f"- `{rel.parent}/{rel.stem}_test.py`\n"
@@ -962,11 +958,15 @@ def _verify_claim(claim: dict, repo_root: Path) -> bool:
 
     token = token_match.group(1).replace("-", "_")
     # Search for the token in Python source files
-    code, out, _ = _run(
-        ["git", "grep", "-rl", "--", token, "autobot-backend/"],
-        cwd=str(repo_root),
-    )
-    return code == 0 and bool(out.strip())
+    try:
+        result = run_git(["grep", "-rl", "--", token, "autobot-backend/"], cwd=str(repo_root))
+    except Exception as exc:
+        # False, not True: the caller has TWO buckets, so True files an unchecked
+        # claim as VERIFIED. Base returned (1, "", err) here and took this path to
+        # False, so True was a behaviour change, not a preserved contract (#16184 review).
+        logger.warning("claim probe failed for %s, recording unverified: %s", token, exc)
+        return False
+    return result.returncode == 0 and bool(result.stdout.strip())
 
 
 def _write_verification_doc(repo_root: Path, verified: list, unverified: list) -> Path:

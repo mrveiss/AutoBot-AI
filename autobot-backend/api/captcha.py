@@ -17,19 +17,27 @@ Endpoints:
 Related: Issue #206
 """
 
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_system import CaptchaPendingData
 from api.schemas_workflows import CaptchaResolutionRequest, CaptchaResolutionResponse
 from api.system_health import register_singleton_probe
+
+# #16375: every route needs an authenticated caller, including any added later.
+# Resolving or skipping a CAPTCHA acts on a workflow the caller is operating, so
+# it needs a known user — not admin: the operator who answers a CAPTCHA is not
+# necessarily an administrator, and requiring that would gate the routine case on
+# the rare role.
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from services.captcha_human_loop import CaptchaResolutionStatus, get_captcha_human_loop
 
-router = APIRouter(prefix="/captcha", tags=["captcha"])
+router = APIRouter(prefix="/captcha", tags=["captcha"], dependencies=[Depends(get_current_user)])
+
 logger = get_logger(__name__)
 
 

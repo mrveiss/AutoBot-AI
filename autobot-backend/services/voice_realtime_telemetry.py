@@ -34,13 +34,20 @@ logger = get_logger(__name__)
 
 # ── Realtime audio pricing (USD per second, gpt-4o-realtime-preview) ────────
 # Source: OpenAI pricing page – audio input $0.10/min, output $0.20/min
-# Update alongside PRICING_VERSION in llm_cost_tracker.py when prices change.
+# #16230: not sourced from llm_shared.pricing.sync_cache -- LiteLLM/OpenRouter
+# price LLM API calls per token, not Realtime WebRTC audio seconds, so this
+# axis has no live-catalogue equivalent to read. Update by hand when OpenAI's
+# published Realtime pricing changes.
 _AUDIO_COST_PER_SEC: dict[str, float] = {
     "input": 0.10 / 60,  # ~$0.001667/s
     "output": 0.20 / 60,  # ~$0.003333/s
 }
 
 # Token pricing for gpt-4o-realtime-preview (USD per 1M tokens)
+# #16230: kept alongside _AUDIO_COST_PER_SEC rather than split onto the live
+# catalogue -- one session's estimated_cost_usd below sums both axes for one
+# fixed model, and sourcing only this half live while audio stays hardcoded
+# would mix a live number with a frozen one in the same total for no benefit.
 _TOKEN_COST_PER_1M: dict[str, float] = {
     "input": 5.00,
     "output": 20.00,

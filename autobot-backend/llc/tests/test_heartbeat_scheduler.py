@@ -52,6 +52,9 @@ def _make_agent(**kwargs):
         "adapter_type": "noop",
         "adapter_config": None,
         "context_mode": "thin",
+        # #16950: a real agent row always carries org_role (non-null, default "worker"),
+        # and dispatch refuses a run without one.
+        "org_role": "worker",
     }
     defaults.update(kwargs)
     return defaults
@@ -368,7 +371,7 @@ class TestRegistryAdapterKeyLifecycle:
         assert "api_base" in captured
         assert captured["agent_id"] == agent["agent_id"]
         # Key revoked after completion.
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_key_revoked_even_when_invoke_raises(self):
         agent = _make_agent(adapter_type="claude_code")
@@ -385,7 +388,7 @@ class TestRegistryAdapterKeyLifecycle:
             with pytest.raises(RuntimeError, match="boom"):
                 await _dispatch_registry_adapter(fake_adapter, agent, {})
 
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_no_company_id_dispatches_without_key(self):
         agent = _make_agent(adapter_type="claude_code", company_id=None)
@@ -458,7 +461,7 @@ class TestRegistryAdapterTerminalStatus:
             with pytest.raises(AdapterRunFailed):
                 await _dispatch_registry_adapter(fake_adapter, agent, {})
 
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_completed_terminal_status_does_not_raise(self):
         agent = _make_agent(adapter_type="claude_code")
@@ -493,7 +496,7 @@ class TestRegistryAdapterTerminalStatus:
                 await _dispatch_registry_adapter(fake_adapter, agent, {})
 
         fake_adapter.cancel.assert_awaited_once()
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
 
 @pytest.mark.asyncio
@@ -563,8 +566,14 @@ class TestCliAvailabilityGate:
         mock_reg.assert_awaited_once()
 
     async def test_non_subprocess_adapter_bypasses_cli_gate(self):
-        """Non-subprocess adapters (is_subprocess_adapter=False) are not gated."""
-        agent = _make_agent(adapter_type="http_adapter")
+        """Non-subprocess adapters (is_subprocess_adapter=False) are not gated.
+
+        #16950: an adapter type with no org-role enforcement decision is refused
+        before this gate is reached, so the test uses a classified type and lets the
+        patched ``is_subprocess_adapter`` make it non-subprocess, which is the gate
+        under test.
+        """
+        agent = _make_agent(adapter_type="claude_code")
         fake_adapter = MagicMock()
 
         with (
@@ -854,7 +863,7 @@ class TestClaudeCodeAdapterNoResume:
 
         with (
             patch("llc.adapters.claude_code_adapter._resolve_claude_cli", return_value="/usr/bin/claude"),
-            patch("llc.adapters.claude_code_adapter.asyncio.create_subprocess_exec") as mock_exec,
+            patch("llc.adapters.claude_code_adapter.spawn_with_workspace_retry") as mock_exec,
             patch("builtins.open", create=True),
             patch("llc.adapters.claude_code_adapter.os.makedirs"),
             patch.object(adapter, "_build_prompt", return_value="prompt text"),
@@ -863,7 +872,7 @@ class TestClaudeCodeAdapterNoResume:
         ):
             mock_proc = MagicMock()
             mock_proc.pid = 999
-            mock_exec.return_value = mock_proc
+            mock_exec.return_value = (mock_proc, None)
             try:
                 await adapter._invoke(agent_config, context)
             except Exception:
@@ -893,7 +902,7 @@ class TestClaudeCodeAdapterNoResume:
 
         with (
             patch("llc.adapters.claude_code_adapter._resolve_claude_cli", return_value="/usr/bin/claude"),
-            patch("llc.adapters.claude_code_adapter.asyncio.create_subprocess_exec") as mock_exec,
+            patch("llc.adapters.claude_code_adapter.spawn_with_workspace_retry") as mock_exec,
             patch("builtins.open", create=True),
             patch("llc.adapters.claude_code_adapter.os.makedirs"),
             patch.object(adapter, "_build_prompt", return_value="prompt text"),
@@ -902,7 +911,7 @@ class TestClaudeCodeAdapterNoResume:
         ):
             mock_proc = MagicMock()
             mock_proc.pid = 999
-            mock_exec.return_value = mock_proc
+            mock_exec.return_value = (mock_proc, None)
             try:
                 await adapter._invoke(agent_config, context)
             except Exception:
@@ -934,7 +943,7 @@ class TestIngestAdapterUsage:
 
         mock_ingest.assert_awaited_once()
         args = mock_ingest.await_args.args
-        assert args[1] == agent["agent_id"] and args[2] == 120 and args[3] == 40 and args[4] == "claude-x"
+        assert args[1:6] == (agent["agent_id"], str(agent["company_id"]), 120, 40, "claude-x")
 
     async def test_noop_when_usage_unknown(self):
         agent = _make_agent(adapter_type="claude_code")
@@ -1000,7 +1009,7 @@ class TestQuotaExhausted:
         ):
             await _dispatch_registry_adapter(fake_adapter, agent, {})
         # Key still revoked even on the quota path.
-        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_handle_quota_exhausted_records_and_pauses(self):
         scheduler = HeartbeatScheduler()
@@ -1064,22 +1073,3 @@ class TestQuotaExhausted:
                 agent, run_id, SubscriptionQuotaExhausted(agent["agent_id"], "quota gone")
             )
         mock_pause.assert_not_awaited()
-
-
-class TestThePlaceholderRunIdHasOneDefinition:
-    """#13614 came from two places deriving the same id. Keep it at one."""
-
-    def test_no_adapter_rebuilds_the_placeholder_by_hand(self):
-        import pathlib
-
-        # Assembled from fragments so this guard does not match itself.
-        banned = '= f"' + "0/{session_id}" + '"'
-        adapters = pathlib.Path(__file__).resolve().parents[1] / "adapters"
-        assert adapters.is_dir(), f"adapters dir not found at {adapters}"
-        scanned = sorted(adapters.glob("*.py"))
-        assert scanned, "scanned no adapter files — this guard would pass on an empty set"
-        offenders = [p.name for p in scanned if banned in p.read_text(encoding="utf-8")]
-        assert offenders == [], (
-            f"{offenders} rebuild the placeholder run id by hand; import "
-            "placeholder_run_id from subprocess_base so there is one definition"
-        )

@@ -6,8 +6,8 @@ import TerminalOutput from './TerminalOutput.vue';
 
 const commandLines = [
   { content: '$ git status', type: 'command', timestamp: new Date() },
-  { content: 'On branch Dev_new_gui', type: 'output', timestamp: new Date() },
-  { content: 'Your branch is up to date with \'origin/Dev_new_gui\'.', type: 'output', timestamp: new Date() },
+  { content: 'On branch main', type: 'output', timestamp: new Date() },
+  { content: 'Your branch is up to date with \'origin/main\'.', type: 'output', timestamp: new Date() },
   { content: '', type: 'output', timestamp: new Date() },
   { content: 'nothing to commit, working tree clean', type: 'success', timestamp: new Date() },
 ];

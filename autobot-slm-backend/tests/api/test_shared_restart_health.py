@@ -244,12 +244,15 @@ def test_failed_url_less_dependent_triggers_rollback() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_rollback_without_snapshot_surfaces_manual_recovery() -> None:
-    """snapshot=None + unhealthy dependent → real _rollback_component records the
-    'manual recovery required' step and the sync still reports failure."""
+def test_rollback_without_snapshot_still_restarts() -> None:
+    """#15323: snapshot=None + unhealthy dependent → real _rollback_component
+    records "no snapshot available" AND still restarts — the old contract
+    left this exact path silently diverged (broken tree on disk, old code
+    still loaded, nothing but a "failed" job row); the restart is what makes
+    that state loud instead of invisible."""
     from api.code_sync import _rollback_component as real_rollback
 
-    steps, pip_ok, _ = _run_shared_post_sync(
+    steps, pip_ok, mocks = _run_shared_post_sync(
         {
             "_snapshot_component": AsyncMock(return_value=None),
             "_wait_component_healthy": AsyncMock(return_value=False),
@@ -258,7 +261,8 @@ def test_rollback_without_snapshot_surfaces_manual_recovery() -> None:
     )
 
     assert pip_ok is False
-    assert any("no snapshot available" in s and "manual recovery" in s for s in steps), steps
+    assert any("no snapshot available" in s for s in steps), steps
+    mocks["_restart_component_services"].assert_awaited()
 
 
 # ---------------------------------------------------------------------------

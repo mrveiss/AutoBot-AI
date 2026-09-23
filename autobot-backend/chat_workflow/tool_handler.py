@@ -52,10 +52,12 @@ from chat_workflow.tool_dispatch_guards import (
     enforce_config_protection,
     enforce_fact_forcing,
     enforce_forbidden_work,
+    enforce_peer_messages,
     enforce_pre_action_verifier,
     enforce_repetition,
     enforce_work_item_approval,
 )
+from chat_workflow.tool_permission_gate import permission_denial
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
@@ -990,6 +992,101 @@ def _build_mcp_approval_message(
     )
 
 
+def _build_schema_validation_error(
+    tool_name: str,
+    tool: dict[str, Any],
+    arguments: dict[str, Any],
+    tool_call: dict[str, Any],
+    max_schema_retries: int,
+    execution_results: list[dict[str, Any]],
+) -> WorkflowMessage | None:
+    """Validate *arguments* against tool's input_schema; None when valid (#4482).
+
+    Extracted from _try_mcp_dispatch (#11542, keeps the parent under 65 lines).
+    Appends to *execution_results* and returns a structured error
+    WorkflowMessage on failure, so the agent loop can feed it back as a
+    tool_result and self-correct. The retry counter is owned by the caller
+    (agent loop); this only surfaces the error clearly.
+    """
+    input_schema = tool.get("input_schema", {})
+    if not input_schema:
+        return None
+    schema_error = validate_tool_arguments(tool_name, arguments, input_schema)
+    if schema_error is None:
+        return None
+
+    retries_left = max_schema_retries - tool_call.get("_schema_retry_count", 0)
+    logger.info(
+        "[Issue #4482] Schema validation error for %s (retries_left=%d): %s",
+        tool_name,
+        retries_left,
+        schema_error["error"],
+    )
+    execution_results.append(
+        {
+            "tool": tool_name,
+            "status": "schema_error",
+            "error": schema_error["error"],
+            "schema_validation_failed": True,
+            "retries_left": retries_left,
+        }
+    )
+    return WorkflowMessage(
+        type="tool_result",
+        content=schema_error["error"],
+        metadata={
+            "tool_name": tool_name,
+            "schema_validation_failed": True,
+            "retries_left": retries_left,
+            "self_correction_hint": (
+                f"Fix the argument errors above and retry '{tool_name}' "
+                f"with corrected arguments. {retries_left} attempt(s) remaining."
+            ),
+        },
+    )
+
+
+async def _run_before_tool_execute_hook(
+    tool_name: str,
+    tool: dict[str, Any],
+    arguments: dict[str, Any],
+    role: str,
+    session_id: str,
+) -> WorkflowMessage | None:
+    """Run BEFORE_TOOL_EXECUTE for an internal-registry tool; None means proceed.
+
+    Extracted from _try_mcp_dispatch (#11542, keeps the parent under 65
+    lines). Issue #4261: wires the hook. Issue #14420: forwards the tool's
+    declared permission requirement (#13228 stage 1, resolved onto the
+    registry entry as `required_permission`) and the caller's RBAC role so
+    PermissionEnforcementExtension has something real to decide against.
+    """
+    should_execute = await _emit_before_tool_execute(
+        tool_name,
+        arguments,
+        session_id,
+        tool_permission=tool.get("required_permission"),
+        user_role=role,
+    )
+    if should_execute:
+        return None
+
+    logger.info("[Issue #4261] Tool execution cancelled by BEFORE_TOOL_EXECUTE hook: %s", tool_name)
+    cancellation_metadata = {"tool_name": tool_name, "cancelled_by_hook": True}
+    # Issue #14420 (review): the agent loop cannot otherwise tell a
+    # permission denial from any other hook veto and may retry the same
+    # call forever. A declared permission requirement is the only signal
+    # available at this call site without deeper hook introspection - the
+    # PermissionError detail itself correctly stays server-side.
+    if tool.get("required_permission") is not None:
+        cancellation_metadata["reason"] = "permission_denied"
+    return WorkflowMessage(
+        type="error",
+        content=f"Tool execution cancelled: {tool_name}",
+        metadata=cancellation_metadata,
+    )
+
+
 async def _try_mcp_dispatch(
     tool_name: str,
     tool_call: dict[str, Any],
@@ -1028,74 +1125,15 @@ async def _try_mcp_dispatch(
 
     arguments = tool_call.get("arguments", {})
 
-    # Issue #4482: Validate arguments against the tool's input_schema before
-    # dispatching.  Return a structured error WorkflowMessage so the agent
-    # loop can feed it back as a tool_result and retry.  The retry counter is
-    # owned by the caller (agent loop); here we just surface the error clearly.
-    input_schema = tool.get("input_schema", {})
-    if input_schema:
-        schema_error = validate_tool_arguments(tool_name, arguments, input_schema)
-        if schema_error is not None:
-            retries_left = max_schema_retries - tool_call.get("_schema_retry_count", 0)
-            logger.info(
-                "[Issue #4482] Schema validation error for %s (retries_left=%d): %s",
-                tool_name,
-                retries_left,
-                schema_error["error"],
-            )
-            execution_results.append(
-                {
-                    "tool": tool_name,
-                    "status": "schema_error",
-                    "error": schema_error["error"],
-                    "schema_validation_failed": True,
-                    "retries_left": retries_left,
-                }
-            )
-            return WorkflowMessage(
-                type="tool_result",
-                content=schema_error["error"],
-                metadata={
-                    "tool_name": tool_name,
-                    "schema_validation_failed": True,
-                    "retries_left": retries_left,
-                    "self_correction_hint": (
-                        f"Fix the argument errors above and retry '{tool_name}' "
-                        f"with corrected arguments. {retries_left} attempt(s) remaining."
-                    ),
-                },
-            )
-
-    # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for MCP tools
-    # Issue #14420: forward the tool's declared permission requirement
-    # (#13228 stage 1, resolved onto the registry entry as
-    # `required_permission`) and the caller's RBAC role so
-    # PermissionEnforcementExtension has something real to decide against.
-    should_execute = await _emit_before_tool_execute(
-        tool_name,
-        arguments,
-        session_id,
-        tool_permission=tool.get("required_permission"),
-        user_role=role,
+    schema_error_message = _build_schema_validation_error(
+        tool_name, tool, arguments, tool_call, max_schema_retries, execution_results
     )
-    if not should_execute:
-        logger.info(
-            "[Issue #4261] Tool execution cancelled by BEFORE_TOOL_EXECUTE hook: %s",
-            tool_name,
-        )
-        cancellation_metadata = {"tool_name": tool_name, "cancelled_by_hook": True}
-        # Issue #14420 (review): the agent loop cannot otherwise tell a
-        # permission denial from any other hook veto and may retry the same
-        # call forever. A declared permission requirement is the only signal
-        # available at this call site without deeper hook introspection - the
-        # PermissionError detail itself correctly stays server-side.
-        if tool.get("required_permission") is not None:
-            cancellation_metadata["reason"] = "permission_denied"
-        return WorkflowMessage(
-            type="error",
-            content=f"Tool execution cancelled: {tool_name}",
-            metadata=cancellation_metadata,
-        )
+    if schema_error_message is not None:
+        return schema_error_message
+
+    cancellation_message = await _run_before_tool_execute_hook(tool_name, tool, arguments, role, session_id)
+    if cancellation_message is not None:
+        return cancellation_message
 
     try:
         mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role)
@@ -1283,19 +1321,12 @@ class ToolHandlerMixin:
     def _init_terminal_tool(self):
         """Initialize terminal tool for command execution."""
         try:
-            import api.agent_terminal as agent_terminal_api
+            from api.agent_terminal_access import ensure_agent_terminal_service
             from tools.terminal_tool import TerminalTool
 
-            # CRITICAL: Access the global singleton instance directly
-            # This ensures sessions created here are visible to the approval API
-            if agent_terminal_api._agent_terminal_service_instance is None:
-                from services.agent_terminal import AgentTerminalService
-
-                # Pass self to prevent circular initialization loop
-                agent_terminal_api._agent_terminal_service_instance = AgentTerminalService(chat_workflow_manager=self)
-                logger.info("Initialized global AgentTerminalService singleton")
-
-            agent_service = agent_terminal_api._agent_terminal_service_instance
+            # CRITICAL: the one singleton, so sessions created here are visible to the
+            # approval API. Passing self prevents a circular initialization loop.
+            agent_service = ensure_agent_terminal_service(chat_workflow_manager=self)
             self.terminal_tool = TerminalTool(agent_terminal_service=agent_service)
             logger.info("Terminal tool initialized successfully with singleton service")
         except Exception as e:
@@ -1428,9 +1459,7 @@ class ToolHandlerMixin:
         if not self.terminal_tool:
             return {"status": "error", "error": "Terminal tool not available"}
 
-        # Ensure terminal session exists for this conversation
         if not self.terminal_tool.active_sessions.get(session_id):
-            # Create session
             session_result = await self.terminal_tool.create_session(
                 agent_id=f"chat_agent_{session_id}",
                 conversation_id=session_id,
@@ -1441,7 +1470,6 @@ class ToolHandlerMixin:
             if session_result.get("status") != "success":
                 return session_result
 
-        # Execute command
         result = await self.terminal_tool.execute_command(
             conversation_id=session_id, command=command, description=description
         )
@@ -2177,7 +2205,6 @@ class ToolHandlerMixin:
                 command,
                 repairable_error.message,
             )
-            # Emit REPAIRABLE_ERROR hook
             await _emit_repairable_error(
                 Exception(repairable_error.message),
                 session_id,
@@ -2195,7 +2222,6 @@ class ToolHandlerMixin:
                 },
             )
         else:
-            # Emit CRITICAL_ERROR hook for non-repairable errors
             await _emit_critical_error(Exception(error), session_id, {"command": command})
             additional_response_parts.append(f"\n\n❌ Command execution failed: {error}")
             yield WorkflowMessage(
@@ -2227,17 +2253,14 @@ class ToolHandlerMixin:
         # AttributeError out of the tool-call generator.
         combined = f"{str(error or '').lower()} {str(stderr or '').lower()}"
 
-        # Check for critical (non-repairable) errors first
         if any(p in combined for p in _CRITICAL_ERROR_PATTERNS):
             logger.warning("[Issue #655] Critical error (out of memory): %s", error)
             return None
 
-        # Check against repairable error patterns
         result = _match_repairable_error(combined, command, error)
         if result:
             return result
 
-        # Default: treat as repairable with generic suggestion
         return RepairableException(
             message=f"Command failed: {error}",
             suggestion="Check the error details and try an alternative approach",
@@ -2249,6 +2272,7 @@ class ToolHandlerMixin:
 
         Issue #665: Extracted from _process_tool_calls for single responsibility.
         Issue #654: Original respond tool handling logic.
+        #14529: ungated by decision — see chat_workflow/tool_permission_gate.
 
         Returns:
             Tuple of (message, break_loop_requested, respond_content)
@@ -2280,6 +2304,8 @@ class ToolHandlerMixin:
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
         ctx: "LLMIterationContext" | None = None,
+        session_id: str = "",
+        role: str = "user",
     ):
         """Handle the 'delegate' tool (Issue #657; GH#11207 execution).
 
@@ -2287,6 +2313,9 @@ class ToolHandlerMixin:
         record-only behaviour — no change to the live chat path. When on, it runs
         the subtask as a governed subagent (its ``forbidden_work`` constrains it) via
         the selected engine and returns the result. Yields WorkflowMessage(s).
+
+        #14529: gated on AGENT_EXECUTE, ABOVE the DELEGATION_ENABLED check
+        on purpose — below it, the permission would depend on a feature flag.
         """
         from chat_workflow.delegation import (
             DELEGATION_ENABLED,
@@ -2297,6 +2326,13 @@ class ToolHandlerMixin:
         params = tool_call.get("params", {})
         task = params.get("task", "")
         reason = params.get("reason", "Task delegation")
+
+        denial = await permission_denial(
+            "delegate", params, session_id, Permission.AGENT_EXECUTE.value, role, execution_results
+        )
+        if denial is not None:
+            yield denial
+            return
 
         if not DELEGATION_ENABLED:
             logger.info("[Issue #657] Delegate tool invoked (record-only): task=%s, reason=%s", task[:100], reason)
@@ -2335,7 +2371,6 @@ class ToolHandlerMixin:
         agent_type = params.get("agent_type", "research_agent")
         engine = params.get("engine", "claude_code")
         depth = int(ctx_dict.get("delegation_depth", 0))
-        parent_agent_id = ctx.agent_context.agent_id if ctx and ctx.agent_context else None
         from chat_workflow.session_role import DEFAULT_AUTH_ROLE  # noqa: PLC0415
 
         try:
@@ -2344,8 +2379,8 @@ class ToolHandlerMixin:
                 agent_type=agent_type,
                 depth=depth,
                 engine=engine,
-                parent_agent_id=parent_agent_id,
                 auth_role=ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE,
+                parent=ctx,  # #16950: the child inherits the parent's authority
             )
             execution_results.append(
                 {
@@ -2500,20 +2535,12 @@ class ToolHandlerMixin:
 
         # Issue #4261/#14469: Wire BEFORE_TOOL_EXECUTE hook for web_search,
         # declaring the browser-read permission it requires.
-        should_execute = await _emit_before_tool_execute(
-            "web_search",
-            params,
-            session_id,
-            tool_permission=Permission.MCP_BROWSER_READ.value,
-            user_role=role,
+        # #14529: folded onto the shared gate; also gains the execution_results record.
+        denial = await permission_denial(
+            "web_search", params, session_id, Permission.MCP_BROWSER_READ.value, role, execution_results
         )
-        if not should_execute:
-            logger.info("[Issue #4261] Web search cancelled by hook")
-            yield WorkflowMessage(
-                type="error",
-                content="Web search execution cancelled",
-                metadata={"tool": "web_search", "cancelled_by_hook": True, "reason": "permission_denied"},
-            )
+        if denial is not None:
+            yield denial
             return
 
         try:
@@ -2583,21 +2610,10 @@ class ToolHandlerMixin:
         # this tool name on the MCP-registry path — no bridge_name here (this
         # is the builtin path), so only the exact-name lookup can hit.
         declared_permission = required_permission(tool_name)
-        should_execute = await _emit_before_tool_execute(
-            tool_name,
-            params,
-            session_id,
-            tool_permission=declared_permission.value if declared_permission else None,
-            user_role=role,
-        )
-        if not should_execute:
-            logger.info("[#14491] Web research tool %s cancelled by permission hook (role=%s)", tool_name, role)
-            execution_results.append({"tool": tool_name, "status": "error", "error": "permission_denied"})
-            yield WorkflowMessage(
-                type="error",
-                content=f"{tool_name} execution cancelled",
-                metadata={"tool": tool_name, "cancelled_by_hook": True, "reason": "permission_denied"},
-            )
+        perm = declared_permission.value if declared_permission else None
+        denial = await permission_denial(tool_name, params, session_id, perm, role, execution_results)
+        if denial is not None:
+            yield denial
             return
 
         yield WorkflowMessage(
@@ -2656,21 +2672,11 @@ class ToolHandlerMixin:
         # context, never from LLM-supplied params.
         user_id = _cctx.get("user_id")
 
-        should_execute = await _emit_before_tool_execute(
-            tool_name,
-            params,
-            session_id,
-            tool_permission=Permission.WORKFLOW_CREATE.value,
-            user_role=role,
+        denial = await permission_denial(
+            tool_name, params, session_id, Permission.WORKFLOW_CREATE.value, role, execution_results
         )
-        if not should_execute:
-            logger.info("[#14491] LLC tool %s cancelled by permission hook (role=%s)", tool_name, role)
-            execution_results.append({"tool": tool_name, "status": "error", "error": "permission_denied"})
-            yield WorkflowMessage(
-                type="error",
-                content=f"{tool_name} execution cancelled",
-                metadata={"tool": tool_name, "cancelled_by_hook": True, "reason": "permission_denied"},
-            )
+        if denial is not None:
+            yield denial
             return
 
         try:
@@ -2798,6 +2804,7 @@ class ToolHandlerMixin:
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
         session_id: str = "",
+        role: str = "user",
     ):
         """Dispatch the extract_content builtin. Issue #11540.
 
@@ -2805,10 +2812,19 @@ class ToolHandlerMixin:
         whatever page the browser session is already on — post-login,
         post-click, post-form-fill — so it works behind auth walls a fresh
         fetch could never reach.
+
+        #14529: gated on MCP_BROWSER_READ — the hook never fired here at all.
         """
         params = tool_call.get("params", {})
         goal = params.get("goal", "")
         logger.info("[Issue #11540] extract_content: goal=%s", goal[:100])
+
+        denial = await permission_denial(
+            "extract_content", params, session_id, Permission.MCP_BROWSER_READ.value, role, execution_results
+        )
+        if denial is not None:
+            yield denial
+            return
 
         yield WorkflowMessage(
             type="tool_execution",
@@ -2839,6 +2855,7 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
     ):
         """Re-read a window of a tool result that was spilled out of context (#13919).
+        #14529: ungated by decision — see chat_workflow/tool_permission_gate.
 
         #13692 writes oversized tool output aside and leaves a bounded excerpt
         plus an anchor, and the excerpt's note tells the model to call this tool.
@@ -3242,6 +3259,10 @@ class ToolHandlerMixin:
         """
         return enforce_work_item_approval(tool_call, ctx, execution_results)
 
+    def _enforce_peer_messages(self, ctx: "LLMIterationContext" | None) -> None:
+        """Drain queued peer messages into ctx.context (#16948) -- never blocks."""
+        return enforce_peer_messages(ctx)
+
     async def _dispatch_tool_call(
         self,
         tool_call: dict[str, Any],
@@ -3262,6 +3283,9 @@ class ToolHandlerMixin:
         everything else falls through to MCP/unknown handling.
         """
         tool_name = tool_call["name"]
+
+        # #16948: peer messages are context, drained at this same live seam.
+        self._enforce_peer_messages(ctx)
 
         # GH#11145: enforce the acting agent's forbidden_work manifest at the single
         # production dispatch seam — before any tool-specific branch. Every tool call
@@ -3333,7 +3357,9 @@ class ToolHandlerMixin:
         if tool_name == "delegate":
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
-            async for msg in self._handle_delegate_tool(tool_call, execution_results, ctx):
+            async for msg in self._handle_delegate_tool(
+                tool_call, execution_results, ctx, session_id=session_id, role=role
+            ):
                 yield msg
             return
 
@@ -3416,10 +3442,11 @@ class ToolHandlerMixin:
         the shared gate. Adding a builtin that follows the standard gate takes a
         schema entry plus one row here — no new branch at the dispatch seam.
 
-        Issue #14469/#14491: ``role`` is forwarded to every handler that
-        declares a ``tool_permission`` (browser, web_search, execute_command,
-        web research) — live-page-extract/read_spilled_output remain
-        undeclared, tracked separately (#14491's per-branch table).
+        Issue #14469/#14491/#14529: ``role`` is forwarded to every handler
+        that declares a ``tool_permission`` — browser, web_search,
+        execute_command, web research, and now live-page-extract.
+        ``read_spilled_output`` stays undeclared by decision, not by omission;
+        the reasoning is on the handler itself.
         """
         if tool_name in BROWSER_TOOL_NAMES:  # Issue #1368: route to browser VM
             return self._handle_browser_tool(tool_call, execution_results, session_id, role=role)
@@ -3428,7 +3455,7 @@ class ToolHandlerMixin:
         if tool_name in WEB_RESEARCH_TOOL_NAMES:  # Issue #7509
             return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id, role=role)
         if tool_name in LIVE_PAGE_EXTRACT_TOOL_NAMES:  # Issue #11540
-            return self._handle_extract_content_tool(tool_call, execution_results, session_id)
+            return self._handle_extract_content_tool(tool_call, execution_results, session_id, role=role)
         if tool_name == "read_spilled_output":  # #13919: the excerpt's note names this
             return self._handle_read_spilled_output(tool_call, execution_results)
         if tool_name == "execute_command":
@@ -3607,7 +3634,7 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
         ctx: "LLMIterationContext | None",
     ):
-        """Handle the compose tool call — main chat agent only (GH#11568)."""
+        """Handle the compose tool call (GH#11568). #14529: ungated — see tool_permission_gate."""
         program: str = tool_call.get("params", {}).get("program", "")
         agent_id: str | None = ctx.agent_context.agent_id if (ctx and ctx.agent_context) else None
         subagent_msg = self._reject_delegated_compose(agent_id)

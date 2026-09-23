@@ -7,6 +7,12 @@
 name: No Commit Trailers
 
 on:
+  # #14054: the merge queue builds each entrant against base + the entries
+  # ahead of it and expects the required contexts to report against that
+  # temporary ref. A required context with no `merge_group:` trigger never
+  # fires, and the queue waits on it forever. Inert until the `merge_queue`
+  # ruleset rule is enabled -- this event does not exist before then.
+  merge_group:
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -19,7 +25,7 @@ on:
 # #13432 found that cancelling base-branch runs meant each merge cancelled the
 # previous merge's verification, and merges arrive faster than a suite completes -
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
-# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,17 +42,84 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          # NOT fetch-depth: 0 (#16207). This gate reads one regex over the PR's own
+          # commits, and a full clone is 12,874 commits on main -- measured at
+          # 13s of git for 1s of work, 93% of the job, paid on every PR. Deepest PR in
+          # the last 40 merged was 30 commits, so 100 is >3x the observed maximum.
+          #
+          # The depth is a guess about the future, so the scan refuses to run rather
+          # than trust it: the reachability check below turns "too shallow" into a
+          # loud failure instead of an empty range that reports clean.
+          #
+          # #16931: sized per PR. A release promotion (main -> release) carries every
+          # commit since the last release -- #16801 had 808 -- so it exceeds any fixed
+          # depth chosen for ordinary PRs, and the guard below refused it. Full history
+          # is fetched only for a PR deeper than 90 commits: exactly the set for which
+          # depth 100 is guaranteed to fail anyway, so this never spends the #16207 cost
+          # on a PR that would have passed. Ordinary PRs keep depth 100. Expressions
+          # have comparison but no arithmetic, hence a threshold, not `commits + N`.
+          fetch-depth: ${{ (github.event_name == 'merge_group' || github.event.pull_request.commits > 90) && '0' || '100' }}
 
       - name: Scan PR commits for banned trailers
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          # The TRUE number of commits in the PR, from GitHub rather than from the
+          # clone. This is what makes truncation detectable (#16210 review).
+          EXPECTED_COMMITS: ${{ github.event.pull_request.commits || '' }}
         run: |
           set -euo pipefail
           echo "Scanning commits ${BASE_SHA}..${HEAD_SHA}"
+          # An unreachable endpoint makes `git rev-list BASE..HEAD` scan nothing, and
+          # a gate that scans zero commits reports clean. That is worse than the
+          # seconds the shallow fetch saves, so it is checked explicitly (#16207).
+          for _endpoint in "${BASE_SHA}" "${HEAD_SHA}"; do
+            if ! git cat-file -e "${_endpoint}^{commit}" 2>/dev/null; then
+              echo "::error::${_endpoint} is not present in the checkout -- this PR is"
+              echo "::error::deeper than the checkout. Raise fetch-depth in this workflow;"
+              echo "::error::do NOT widen it back to 0 without re-measuring (#16207)."
+              exit 1
+            fi
+          done
+          # Endpoint presence is NOT enough. A PR with more of its own commits than
+          # the fetch depth leaves BOTH endpoints present while `git rev-list` returns
+          # a TRUNCATED, non-empty range -- no error, no warning, errexit untripped,
+          # and the oldest commits are never scanned. Reproduced at depth 100: a
+          # 150-commit branch yielded 99. The guard checked the endpoints; the risk
+          # was the range (#16210 review).
+          _scanned="$(git rev-list --count "${BASE_SHA}..${HEAD_SHA}")"
+          if [ -n "${EXPECTED_COMMITS}" ] && [ "${_scanned}" != "${EXPECTED_COMMITS}" ]; then
+            echo "::error::scanned ${_scanned} commits but GitHub reports ${EXPECTED_COMMITS}"
+            echo "::error::for this PR -- the checkout is too shallow and the oldest"
+            echo "::error::commits would go unexamined. Raise fetch-depth (#16207)."
+            exit 1
+          fi
           # Agent/tooling trailers are never allowed, for any author (#13654).
-          agent_re='Generated with \[?Claude|noreply@paperclip'
+          #
+          # #15848: ALL THREE ARMS ARE NOW ANCHORED to a trailer position. The
+          # promo and paperclip arms were deliberately left unanchored, on the
+          # reasoning that their tokens are implausible in prose. That reasoning
+          # did not survive contact: a commit message DOCUMENTING this policy has
+          # to quote the strings it bans, and was rejected by the check it
+          # describes. Measured cost in one session: three separate writes about
+          # the hazard refused for naming it, one of them a commit explaining the
+          # fix.
+          #
+          # Anchoring loses nothing, because a trailer is a line-position
+          # construct by definition -- git's own interpret-trailers only reads the
+          # final block, and every tool that emits these writes them at line
+          # start. `^[[:space:]]*` keeps an indented trailer caught, which is the
+          # form the Claude-Session arm was already written for.
+          #
+          # This is the mention-versus-invocation class #15835 fixed in
+          # .claude/hooks/block-dangerous-commands.sh: a pattern matching raw text
+          # cannot tell a use from a mention, and the cost lands on whoever
+          # documents the rule.
+          # The paperclip arm needs a trailer KEY before it, not `.*`: a bare
+          # `.*noreply@paperclip` re-defeats the anchor it sits behind, matching
+          # the address anywhere on the line. A trailer is `Key: value`, so that
+          # is what is required.
+          agent_re='^[[:space:]]*(Generated with \[?Claude|[A-Za-z0-9_-]+:.*noreply@paperclip|Claude-Session:)'
           # A Co-authored-by trailer is allowed only when the identity it names is
           # the commit's OWN author, the repository owner, or a bot. That lets
           # dependabot's self-attribution on its security bumps through — which is
@@ -59,7 +132,7 @@ jobs:
           owner_re='martins\.veiss@gmail\.com|Martins Veiss'
           # GitHub's squash merge stamps "Co-authored-by: github-actions[bot]" onto
           # the owner's own commit whenever the auto-fix workflow pushed to the
-          # branch. 22 of the last 60 commits on Dev_new_gui carry exactly that, so
+          # branch. 22 of the last 60 commits on main carry exactly that, so
           # a rule without this arm would reject a third of normal work.
           bot_ident_re='\[bot\]@users\.noreply\.github\.com|\[bot\]>'
           coauthor_re='^[[:space:]]*Co-authored-by:'
@@ -83,9 +156,33 @@ jobs:
               continue
             fi
             body="$(git log -1 --format='%B' "${sha}")"
+            # #15850 review: anchoring to `^` stops a MID-LINE mention being read
+            # as a trailer, but not one that BEGINS a line — and a commit body
+            # explaining this policy naturally starts a line with the string it
+            # quotes. Git's definition is positional: a trailer lives in the
+            # message's FINAL block. `interpret-trailers --parse` returns exactly
+            # that block, so prose above it is structurally out of scope rather
+            # than excluded by a pattern that has to guess. Falls back to the
+            # whole body if the helper is unavailable, which fails closed.
+            # #15850 review (CWE-693): `interpret-trailers --parse` returns only
+            # `Key: value` lines, so it DROPPED the promo footer — which is a bare
+            # line, not a trailer — and the check stopped detecting it entirely.
+            # Fixing the prose false-positive had opened a bypass.
+            #
+            # Scan the raw FINAL BLOCK instead: everything after the last blank
+            # line, exactly as written. That is where every tool writes its
+            # footer, structured or not, so the promo line is in scope again
+            # while prose earlier in the body is not.
+            #
+            # Residual, accepted deliberately: a commit whose LAST paragraph
+            # quotes a banned string is still rejected. Security wins that trade
+            # — the alternative is the bypass above — and the workaround is a
+            # trailing `Signed-off-by:` or a blank line, which is what such a
+            # commit has anyway.
+            trailers="$(printf '%s\n' "${body}" | awk 'BEGIN{RS=""} END{print}')"
             subject="$(git log -1 --format='%s' "${sha}")"
 
-            if printf '%s\n' "${body}" | grep -iqE "${agent_re}"; then
+            if printf '%s\n' "${trailers}" | grep -iqE "${agent_re}"; then
               bad+=("${sha} ${subject}")
               continue
             fi

@@ -24,8 +24,12 @@
 
   vars:
     github_repo: "https://github.com/mrveiss/AutoBot-AI.git"
-    git_repo_root: "/opt/autobot/code_source"
-    deploy_ref: "Dev_new_gui"
+    # #15705: the code_source checkout root, derived rather than restated.
+    # This is an alias for `code_source_dir` -- same directory, and the
+    # messages below already call it code_source -- so an explicit
+    # `code_source_dir` override steers it too.
+    git_repo_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
+    deploy_ref: "main"
 
   tasks:
     - name: "[PRE-FLIGHT] Verify code_source exists"
@@ -72,6 +76,24 @@
         force: true
       ignore_errors: true
       register: github_sync
+      tags: [always]
+
+    # #16310: skipped, not swallowed, when GitHub is unreachable (same
+    # `github_sync is not failed` gate the offline-tolerance design already
+    # uses below) -- an unshallow attempt would fail for the identical
+    # reason and add nothing. When GitHub WAS reachable, this must fail
+    # loudly: the checkout on disk predates the shallow-clone guard and is
+    # shallow today regardless of `update: true`/`force: true` above (a
+    # plain fetch never deepens an already-shallow repo), and every
+    # component's bootstrap plan needs full history.
+    - name: "[PRE-FLIGHT] Ensure code_source has full history, not a shallow clone (#16310)"
+      ansible.builtin.command:
+        cmd: >-
+          /opt/autobot/autobot-slm-backend/venv/bin/python3
+          {{ git_repo_root }}/autobot-slm-backend/scripts/sync_deletion_planner.py
+          ensure-full-history --repo-root {{ git_repo_root }}
+      changed_when: false
+      when: github_sync is not failed
       tags: [always]
 
     - name: "[PRE-FLIGHT] Warn if GitHub sync skipped"

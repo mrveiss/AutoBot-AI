@@ -1,12 +1,18 @@
 name: Docker Smoke Test
 
 on:
+  # #14054: the merge queue builds each entrant against base + the entries
+  # ahead of it and expects the required contexts to report against that
+  # temporary ref. A required context with no `merge_group:` trigger never
+  # fires, and the queue waits on it forever. Inert until the `merge_queue`
+  # ruleset rule is enabled -- this event does not exist before then.
+  merge_group:
   push:
     branches:
-      - Dev_new_gui
+      - main
   pull_request:
     branches:
-      - Dev_new_gui
+      - main
     # Required status check via branch protection (#6723) — must run on PR
   schedule:
     - cron: '0 10 * * 0'  # Every Sunday at 10 AM UTC
@@ -65,7 +71,7 @@ jobs:
           min-free-gb: '15'  # Increased from 10GB due to MVA-2869
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e  # v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
 
       - name: Cache Docker layers
         uses: actions/cache@v6
@@ -208,7 +214,7 @@ jobs:
 
       - name: Upload failure logs
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: docker-compose-logs
           path: failure-logs.txt

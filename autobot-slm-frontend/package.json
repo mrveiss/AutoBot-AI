@@ -14,6 +14,7 @@
     "lint:stylelint": "stylelint \"src/**/*.{css,vue}\"",
     "lint:fix": "eslint . --fix",
     "type-check": "vue-tsc --noEmit -p tsconfig.json",
+    "check:i18n": "node ../autobot-frontend/scripts/check-i18n-keys.mjs --root . --en src/locales/en.json",
     "gen:types:openapi": "python3 ../autobot-slm-backend/scripts/dump_openapi.py > openapi.json",
     "gen:types": "openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties",
     "verify:types": "git diff --exit-code src/types/generated/api.ts",
@@ -29,14 +30,14 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
     "@xterm/xterm": "^6.0.0",
-    "axios": "^1.19.0",
+    "axios": "^1.20.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.32",
-    "vue-i18n": "^11.4.8",
-    "vue-router": "^5.2.0"
+    "vue-i18n": "^11.4.12",
+    "vue-router": "^5.3.1"
   },
   "overrides": {
-    "js-yaml": "4.3.0",
+    "js-yaml": "4.3.2",
     "brace-expansion@5": ">=5.0.9",
     "minimatch@<10": {
       "brace-expansion": "2.1.4"
@@ -46,27 +47,27 @@
     }
   },
   "devDependencies": {
-    "@storybook/addon-docs": "^10.5.10",
-    "@storybook/vue3": "^10.5.10",
-    "@storybook/vue3-vite": "^10.5.10",
+    "@storybook/addon-docs": "^10.6.0",
+    "@storybook/vue3": "^10.6.0",
+    "@storybook/vue3-vite": "^10.6.0",
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.6.1",
     "@vitejs/plugin-vue": "^6.0.6",
-    "@vue/test-utils": "^2.4.11",
+    "@vue/test-utils": "^2.5.0",
     "@vue/tsconfig": "^0.9.1",
-    "eslint": "^10.8.1",
-    "eslint-plugin-vue": "^10.10.0",
+    "eslint": "^10.10.0",
+    "eslint-plugin-vue": "^10.11.0",
     "jsdom": "^30.0.1",
     "openapi-typescript": "^7.13.0",
-    "postcss": "^8.5.26",
+    "postcss": "^8.5.28",
     "postcss-html": "^2.0.0",
     "storybook": "^10.4.6",
-    "stylelint": "^17.14.1",
+    "stylelint": "^17.15.0",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.67.0",
+    "typescript-eslint": "^8.70.0",
     "vite": "^8.0.13",
-    "vitest": "^4.1.11",
+    "vitest": "^5.0.0",
     "vue-tsc": "^3.3.11"
   }
 }

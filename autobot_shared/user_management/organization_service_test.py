@@ -40,7 +40,7 @@ _SUBCLASSES = {
 _SRC = pathlib.Path(__file__).with_name("organization_service.py")
 
 # The surface the forked class exposed before the extraction, measured on
-# origin/Dev_new_gui. Losing one of these would break a caller silently.
+# origin/main. Losing one of these would break a caller silently.
 _PUBLIC_API = [
     "can_add_user",
     "create_organization",

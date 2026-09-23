@@ -28,6 +28,13 @@ class MFAVerifyRequest(BaseModel):
     code: str = Field(..., min_length=6, max_length=8)
 
 
+class MFAVerifySetupResponse(BaseModel):
+    """Outcome of enabling MFA from the initial TOTP code."""
+
+    success: bool
+    message: str
+
+
 class MFADisableRequest(BaseModel):
     """Request to disable MFA (requires password)."""
 

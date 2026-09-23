@@ -18,28 +18,45 @@
 #   --issue N     the issue this PR links to (required)
 #   --body FILE   the PR body you are about to post
 #   --message F   the commit message file you are about to pass to git commit -F
+#   --full        also run the required checks that import the backend or run a
+#                 suite. Minutes rather than seconds; skipped by default so the
+#                 fast path stays worth running before every push (#15933).
+#   --only ERE    run only the required status checks whose context name matches
+#                 ERE (a bash [[ =~ ]] regex). The rest are named once as not
+#                 selected -- neither skipped nor failed. '^$' selects none, which
+#                 leaves the body, message and branch gates (#15933).
 #
 # Exit 0 = every gate that can be checked locally would pass.
 
 set -uo pipefail
 
-ISSUE="" BODY_FILE="" MSG_FILE=""
+ISSUE="" BODY_FILE="" MSG_FILE="" FULL=0 ONLY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --issue)   ISSUE="$2";     shift 2 ;;
     --body)    BODY_FILE="$2"; shift 2 ;;
     --message) MSG_FILE="$2";  shift 2 ;;
-    -h|--help) sed -n '3,22p' "$0"; exit 0 ;;
+    --full)    FULL=1;         shift ;;
+    --only)    ONLY="$2";      shift 2 ;;
+    -h|--help) sed -n '3,29p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+
+# An ERE bash cannot compile makes `[[ =~ ]]` return 2, which `selected` below
+# would read as "no match" and so deselect every required check without a word.
+[[ "" =~ $ONLY ]]; [ $? -ne 2 ] || { echo "--only: not a valid ERE: $ONLY" >&2; exit 2; }
 
 # shellcheck source=scripts/lib/git-root.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || exit 2
 REPO_ROOT=$(git_repo_root) || exit 2
 cd "$REPO_ROOT" || exit 2
 
-BASE="${PREFLIGHT_BASE:-origin/Dev_new_gui}"
+BASE="${PREFLIGHT_BASE:-origin/main}"
+# Commits behind base that still allow a PR. Env-var backed, never a literal in
+# a condition: the number is a policy, and a policy nobody can change without
+# editing a script is one people route around instead (#15938).
+MAX_BEHIND="${PREFLIGHT_MAX_BEHIND:-50}"
 
 # Which interpreter runs the lint gates. CI runs 3.14; this box's default python3
 # is often older, and running the gates on it makes this script's whole premise
@@ -78,6 +95,48 @@ pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1"; FAILED=$((FAILED + 1)); }
 note() { printf '  --    %s\n' "$1"; }
 section() { printf '\n%s\n' "$1"; }
+
+# Report a gate this box cannot run, naming the reason. Never approximated:
+# a check that silently does something weaker than CI is worse than no check,
+# because it is read as coverage.
+SKIPPED=0
+# Use `skip_gate` (or `skip_check`, below, for a required check) when a gate
+# COULD NOT RUN; a bare `note` when a gate had NOTHING TO RUN. They look
+# identical in output and mean opposite things:
+# "no changed Python files" is a complete answer, "$BASE not found" is the
+# absence of one. Counting the no-ops would make SKIPPED non-zero on a docs-only
+# change and train the reader to ignore the number, which is how a counter stops
+# being read at all.
+# Counts, because `note` does not touch FAILED and the verdict was FAILED-only:
+# with three gates skipped the script still printed "pre-flight clean -- safe to
+# commit and push". Honest per line, overstated in aggregate. This is the same
+# defect the `migration-matrix` comment below names -- I fixed it at the one site
+# that prompted it and left the helper every other skip goes through.
+#
+# Defined up here with the other reporters: the branch and changed-file
+# sections call it long before the required checks do, and while it lived
+# beside those, each such call was "command not found" and went uncounted.
+skip_gate() { note "$1 -- $2"; SKIPPED=$((SKIPPED + 1)); }
+
+# --only (#15933): whether a required check's context matches the caller's
+# ERE. One it rules out is recorded, never dropped -- the required-checks
+# section closes with ONE note naming them all -- and is counted as neither
+# SKIPPED nor FAILED: the caller chose not to run it, which is neither "could
+# not run" nor "ran and failed".
+UNSELECTED=()
+selected() {
+  if [ -z "$ONLY" ] || [[ $1 =~ $ONLY ]]; then
+    return 0
+  fi
+  UNSELECTED+=("$1")
+  return 1
+}
+
+# `skip_gate` for a REQUIRED status check, which --only may deselect. The
+# branch and changed-file skips call `skip_gate` directly: they report a
+# missing base or an unusable limit, not a required check, and --only must
+# never hide either.
+skip_check() { selected "$1" || return 0; skip_gate "$1" "$2"; }
 
 # ---------------------------------------------------------------- interpreter
 section "interpreter"
@@ -128,7 +187,7 @@ section "branch"
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 case "$BRANCH" in
-  main|master|Dev_new_gui)
+  main|master|release)
     fail "on protected branch '$BRANCH' -- the pre-commit hook will refuse this" ;;
   *) pass "branch '$BRANCH' is not protected" ;;
 esac
@@ -183,8 +242,47 @@ if git rev-parse --verify --quiet "$BASE" >/dev/null; then
   else
     pass "no authorship trailers in $(git rev-list --count "$BASE..HEAD") commit(s)"
   fi
+
+  # Behind-base gate (#15938). A stale base makes "is this already done?" answer
+  # NO when the truth is yes, so the session builds work that already exists --
+  # and nothing pushes back on that answer, because doing more work never looks
+  # like a mistake. Freshness was previously a side effect of having a PR:
+  # auto-update-pr-branches.yml keeps PR branches current, and before the first
+  # push there was no mechanism at all. This is that mechanism.
+  #
+  # Measured AFTER a best-effort fetch. Against a stale remote-tracking ref the
+  # count is a lower bound, and a lower bound presented as a verdict is the same
+  # defect one level up -- so when the fetch fails the basis is stated rather
+  # than the number being quietly trusted.
+  behind_basis="a freshly fetched $BASE"
+  case "$BASE" in
+    origin/*)
+      git fetch --quiet origin "${BASE#origin/}" 2>/dev/null \
+        || behind_basis="the LAST FETCH (origin unreachable) -- treat as a lower bound" ;;
+    *) behind_basis="$BASE as it stands locally" ;;
+  esac
+  # A non-numeric override must not read as a pass. `[ "$behind" -gt "$MAX_BEHIND" ]`
+  # errors on a non-integer and the `else` branch then prints `ok` -- a
+  # misconfigured limit reporting the same success as a branch genuinely in
+  # range (#16128 review).
+  case "$MAX_BEHIND" in
+    ''|*[!0-9]*)
+      fail "PREFLIGHT_MAX_BEHIND is not a number: '$MAX_BEHIND' — refusing to report a limit that cannot be applied"
+      MAX_BEHIND="" ;;
+  esac
+  behind=$(git rev-list --count "HEAD..$BASE" 2>/dev/null || echo "")
+  if [ -z "$MAX_BEHIND" ]; then
+    skip_gate "behind-base check" "PREFLIGHT_MAX_BEHIND is not usable"
+  elif [ -z "$behind" ]; then
+    skip_gate "behind-base check" "cannot count commits between HEAD and $BASE"
+  elif [ "$behind" -gt "$MAX_BEHIND" ]; then
+    fail "branch is $behind commits behind $BASE (limit $MAX_BEHIND), measured against $behind_basis"
+    note "rebase before opening the PR:  git fetch origin && git rebase $BASE"
+  else
+    pass "branch is $behind commit(s) behind $BASE (limit $MAX_BEHIND), measured against $behind_basis"
+  fi
 else
-  note "$BASE not found -- skipping branch-commit checks (run git fetch)"
+  skip_gate "branch-commit checks" "$BASE not found -- run git fetch"
 fi
 
 # ---------------------------------------------------------------- PR body
@@ -258,28 +356,32 @@ fi
 section "changed files"
 
 if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
-  note "$BASE not found -- skipping lint (run git fetch)"
+  skip_gate "lint" "$BASE not found -- run git fetch"
 else
   mapfile -t CHANGED < <(git diff --name-only --diff-filter=ACMR "$BASE...HEAD"; git diff --name-only --diff-filter=ACMR HEAD)
-  mapfile -t PY < <(printf '%s\n' "${CHANGED[@]}" | sort -u | grep -E '\.py$' | while read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done)
+  # PY_FILES, never PY: PY is the interpreter chosen at the top (#13573), and
+  # reusing the name here overwrote it -- every later "$PY" then ran the first
+  # changed file as the interpreter or, with none changed, aborted the script
+  # under `set -u` before a single required check ran (#15933).
+  mapfile -t PY_FILES < <(printf '%s\n' "${CHANGED[@]}" | sort -u | grep -E '\.py$' | while read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done)
 
-  if [ "${#PY[@]}" -eq 0 ]; then
+  if [ "${#PY_FILES[@]}" -eq 0 ]; then
     note "no changed Python files"
   else
-    printf '  %d changed Python file(s)\n' "${#PY[@]}"
+    printf '  %d changed Python file(s)\n' "${#PY_FILES[@]}"
 
     # Same flags as .github/workflows/code-quality.yml. Different flags is how
     # a local green becomes a CI red.
-    if "$PY" -m black --check --line-length=120 "${PY[@]}" >/dev/null 2>&1; then
+    if "$PY" -m black --check --line-length=120 "${PY_FILES[@]}" >/dev/null 2>&1; then
       pass "black --line-length=120"
     else
-      fail "black -- run: python3 -m black --line-length=120 ${PY[*]}"
+      fail "black -- run: python3 -m black --line-length=120 ${PY_FILES[*]}"
     fi
 
-    if "$PY" -m isort --check-only --settings-path=. --line-length=120 "${PY[@]}" >/dev/null 2>&1; then
+    if "$PY" -m isort --check-only --settings-path=. --line-length=120 "${PY_FILES[@]}" >/dev/null 2>&1; then
       pass "isort --settings-path=. --line-length=120"
     else
-      fail "isort -- run: python3 -m isort --settings-path=. --line-length=120 ${PY[*]}"
+      fail "isort -- run: python3 -m isort --settings-path=. --line-length=120 ${PY_FILES[*]}"
     fi
 
     # #13521: flake8 checks a file named explicitly on the command line even when
@@ -298,7 +400,7 @@ else
                     | sed 's/#.*//' | tr ',' '\n' | tr -d ' ' | grep -vE '^\*|^$')
     FLAKE_BARE=$(printf '%s\n' "$FLAKE_ENTRIES" | grep -v '/' | tr '\n' '|' | sed 's/|$//')
     FLAKE_ANCHORED=$(printf '%s\n' "$FLAKE_ENTRIES" | grep '/' | tr '\n' '|' | sed 's/|$//')
-    mapfile -t PY_LINT < <(printf '%s\n' "${PY[@]}")
+    mapfile -t PY_LINT < <(printf '%s\n' "${PY_FILES[@]}")
     if [ -n "$FLAKE_BARE" ]; then
       mapfile -t PY_LINT < <(printf '%s\n' "${PY_LINT[@]}" | grep -vE "(^|/)(${FLAKE_BARE})(/|$)" || true)
     fi
@@ -328,7 +430,7 @@ else
     # property of the file you happened to touch, and blocking on it would stop
     # anyone editing a file that carries a stale suppression. Reported by the
     # dedicated sweep instead; a real finding still says "Issue:".
-    BANDIT_OUT=$("$PY" -m bandit -c .bandit -q "${PY[@]}" 2>&1 | grep -v "nosec encountered")
+    BANDIT_OUT=$("$PY" -m bandit -c .bandit -q "${PY_FILES[@]}" 2>&1 | grep -v "nosec encountered")
     if [ -z "$BANDIT_OUT" ]; then
       pass "bandit -c .bandit (no severity floor, as CI runs it)"
     else
@@ -388,10 +490,328 @@ else
   fi
 fi
 
+# ------------------------------------------------- required status checks
+#
+# Everything above predicts a gate that is cheap to run. This block covers the
+# TEN contexts the `Main` ruleset actually requires on main, because
+# those are the ones whose failure costs a push -- and a push costs an 8.9-minute
+# suite (#15932: ~6 commits per PR, 49 failed check-runs across 9 merged PRs,
+# so every PR goes red at least once on the way).
+#
+# Each entry names the SAME script its workflow invokes. The rule is that a
+# check here must not re-implement its gate: a local re-implementation drifts
+# from CI silently, which is the failure mode #13573 and #13521 both were.
+# Where a workflow's gate is inline YAML with no extractable script, the check
+# is reported as unavailable with that as its reason rather than approximated.
+#
+# Default gating is the PATH FILTER each `require_check` call below carries --
+# the same `.github/filters/*.yml` set the check's own workflow gates on, so a
+# diff outside those paths gets the identical "nothing to check" verdict
+# locally that it would get in CI. `--full` (#15933 AC4) bypasses every
+# filter inside `require_check` and forces each of them to actually run.
+#
+# `--only ERE` (#15933) narrows any run to the required checks whose context
+# matches, deciding before the filter does; `selected`, beside the other
+# reporters at the top of this file, says how the rest are still reported.
+#
+# Two narrower tiers sit on top of that, because a preflight nobody runs
+# saves nothing:
+#   --full-only   `api-wiring` builds the whole FastAPI app to dump its
+#                 OpenAPI schema -- materially heavier than a path-filtered
+#                 import, so it stays gated behind --full on top of (not
+#                 instead of) its own path filter.
+#   never         gates needing infrastructure this box does not reliably
+#                 have. `migration-matrix` needs a live PostgreSQL and is
+#                 reported unavailable unless AUTOBOT_MIGRATION_TEST_ADMIN_URL
+#                 is set. `smoke-test` needs a Docker daemon, three image
+#                 builds and a running compose stack CI budgets 45 minutes
+#                 for -- reported SKIPPED with that reason rather than
+#                 approximated. #15933 was filed claiming both were locally
+#                 reproducible; `smoke-test` is the one check this re-audit
+#                 leaves genuinely unmet, not faked.
+
+section "required status checks"
+
+# Run one required context locally. Args: <context> <path-filter-regex> <cmd...>
+# An empty path filter means the gate is unconditional.
+#
+# --full bypasses the path filter (#15933 AC4): every filtered check then
+# actually runs, regardless of whether ITS OWN filter's paths changed. Without
+# this, --full only widened the narrower --full-only tier (api-wiring, see
+# the section header above) while every ordinary require_check call kept
+# skipping on a diff outside its filter even when the caller explicitly asked
+# for a full run.
+require_check() {
+  local ctx="$1" filter="$2"; shift 2
+
+  # --only first: a deselected check prints nothing here, only its name at the end.
+  selected "$ctx" || return 0
+
+  if [ "$FULL" != "1" ] && [ -n "$filter" ] && [ "${#CHANGED[@]}" -gt 0 ]; then
+    if ! printf '%s\n' "${CHANGED[@]}" | grep -qE "$filter"; then
+      note "$ctx -- no matching paths changed (CI path-filters it too)"
+      return 0
+    fi
+  fi
+
+  # CWE-377: `>/tmp/preflight-$$.log` was a predictable name in a world-writable
+  # directory, created by a plain redirect. Anyone on the box could pre-create
+  # that path as a symlink and have the redirect follow it and truncate the
+  # target -- a write primitive against whoever runs the preflight, and the PID
+  # space is small enough to spray. `mktemp` is the actual remedy because it
+  # creates with O_EXCL and mode 600: the race is on *creation*, so an
+  # unpredictable name alone would not fix it. TMPDIR is honoured so a box that
+  # points it somewhere private is not overridden.
+  local log
+  log="$(mktemp "${TMPDIR:-/tmp}/preflight-XXXXXX")" || {
+    fail "$ctx -- could not create a log file"
+    return 1
+  }
+  # RETURN rather than a trailing `rm`: the old cleanup was skipped on any early
+  # exit from this function, which made the leak invisible on the happy path.
+  trap 'rm -f "$log"' RETURN
+
+  if "$@" >"$log" 2>&1; then
+    pass "$ctx"
+  else
+    fail "$ctx -- reproduce with: $*"
+    head -12 "$log" | sed 's/^/        /'
+  fi
+}
+
+if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
+  skip_gate "required status checks" "$BASE not found -- run git fetch"
+else
+  # verify-precommit-config: enforce-precommit.yml runs exactly these two, and
+  # runs them UNCONDITIONALLY. It carries no `paths:` key (see its own comment at
+  # :22-27: "a required check that is path-filtered out never reports, wedging
+  # any PR that touches only non-matching files"). So these two take an EMPTY
+  # filter. A filter here would skip, for a .py-only PR, the one gate CI can
+  # never skip -- and would print "no matching paths changed (CI path-filters it
+  # too)", which is false of this workflow. Silent and passing is the worst
+  # direction for a preflight to be wrong in.
+  require_check "verify-precommit-config (gating hooks)" \
+    '' \
+    "$PY" pipeline-scripts/check_gating_precommit_hooks.py
+
+  require_check "verify-precommit-config (hooks executed)" \
+    '' \
+    "$PY" pipeline-scripts/check_precommit_hooks_executed.py
+
+  # code-quality runs these repo-wide script gates alongside the lint above.
+  #
+  # All three share ONE filter, because CI gates the whole `code-quality` job on
+  # a single set: `.github/filters/code-quality-paths.yml`'s `backend`. Three
+  # hand-written per-check regexes were a second copy of that set, which the
+  # filter file itself forbids -- "SINGLE SOURCE OF TRUTH ... A second copy would
+  # drift, and the drift direction is silent". It had already drifted: none of
+  # the three matched `.flake8`, `.bandit`, `pyproject.toml`, `requirements*.txt`
+  # or `repo_tests/**`, so editing any of them ran code-quality in CI while the
+  # preflight reported "no matching paths changed" three times.
+  #
+  # Derived from the filter file AT RUNTIME -- there is no second copy to drift.
+  # The translation is explicit because dorny/paths-filter globs are anchored at
+  # the repo root:  `a/**` -> `^a/` (prefix),  a bare `a/b.c` -> `^a/b\.c$`
+  # (exact),  a leading `**/` -> unanchored suffix,  and `*` inside a segment
+  # -> `[^/]*` (never crossing `/`). Hand-inlining these 25 arms was tried first
+  # and was wrong on the first attempt -- the list was read truncated.
+  CQ_PATHS="$(_CQ_FILTER_FILE="${REPO_ROOT}/.github/filters/code-quality-paths.yml" "$PY" - <<'CQEOF'
+import os, re, yaml
+globs = yaml.safe_load(open(os.environ["_CQ_FILTER_FILE"]))["backend"]
+arms = []
+for g in globs:
+    if g.startswith("**/"):
+        # `(^|/)` is the boundary picomatch gives `**/`: it matches whole path
+        # segments, so `**/requirements*.txt` must NOT match `dev-requirements.txt`.
+        # Without it the arm matches mid-basename and the derived filter is wider
+        # than the filter file it claims to mirror -- over-running rather than
+        # under-running, but still not the same predicate.
+        arms.append("(^|/)" + re.escape(g[3:]).replace(r"\*", "[^/]*") + "$")
+    elif g.endswith("/**"):
+        arms.append("^" + re.escape(g[:-3]) + "/")
+    else:
+        arms.append("^" + re.escape(g).replace(r"\*", "[^/]*") + "$")
+print("|".join(arms))
+CQEOF
+)"
+  # Fail THIS check, never the script. PyYAML is not declared in requirements
+  # and the script deliberately supports a box that has not built the venv, so a
+  # missing import must not take the changed-file scan, the content checks and
+  # the summary down with it -- that would trade a narrow gap for a total one.
+  if [ -z "${CQ_PATHS}" ]; then
+    skip_check "code-quality (all three script gates)" \
+      "cannot derive the path set from .github/filters/code-quality-paths.yml (PyYAML missing?) -- these three were NOT checked"
+  else
+
+  require_check "code-quality (env var registry)" \
+    "$CQ_PATHS" \
+    "$PY" pipeline-scripts/check_env_var_registry.py
+
+  require_check "code-quality (nosec format)" \
+    "$CQ_PATHS" \
+    "$PY" scripts/check_nosec_format.py
+
+  require_check "code-quality (doc references)" \
+    "$CQ_PATHS" \
+    "$PY" pipeline-scripts/check-doc-references.py
+  fi
+
+  # Several workflows gate themselves on .github/filters/*.yml; this verifies
+  # the filters still name paths that exist, which is how a required context
+  # silently stops covering a tree.
+  require_check "workflow path filters" \
+    '\.github/' \
+    "$PY" pipeline-scripts/check_workflow_path_filters.py
+
+  # ---- api-wiring: builds the whole app, --full only (see the tier note above)
+  # --only is asked BEFORE the temporary dump is created, not left to
+  # require_check after it, so a deselected api-wiring allocates nothing.
+  if [ "$FULL" != "1" ]; then
+    skip_check "api-wiring" "builds the whole app to dump its OpenAPI schema -- re-run with --full"
+  elif selected "api-wiring"; then
+    # Same CWE-377 shape as require_check's log, one gate over: a predictable
+    # `$$` name in a world-writable directory, and never removed at all. Found by
+    # sweeping the file after fixing the reported site rather than by a second
+    # report -- the neighbour is never in the frame the report established.
+    openapi_dump="$(mktemp "${TMPDIR:-/tmp}/preflight-openapi-XXXXXX.json")" || {
+      fail "api-wiring -- could not create a temporary OpenAPI dump"
+      openapi_dump=""
+    }
+    if [ -n "$openapi_dump" ]; then
+      require_check "api-wiring" \
+        'autobot-backend/|autobot-frontend/src/' \
+        env PYTHONPATH="$REPO_ROOT:$REPO_ROOT/autobot-backend" AUTOBOT_SINGLE_USER=true \
+        "$PY" scripts/audit_api_wiring.py --dump-openapi "$openapi_dump"
+      rm -f "$openapi_dump"
+    fi
+  fi
+
+  # startup-import-smoke (#15933 re-audit): test_startup_imports.py documents
+  # itself as "Fast (<5s) -- pure imports, no Redis or network calls", so
+  # unlike api-wiring it belongs in the default, path-filtered tier rather
+  # than behind --full. Same command
+  # .github/workflows/startup-import-smoke.yml's "Run startup-import smoke
+  # test" step runs: `python -m pytest
+  # autobot-backend/tests/test_startup_imports.py -q --tb=line`. This
+  # previously ran `python -c 'import initialization.lifespan'` -- a
+  # narrower, hand-picked substitute for the workflow's actual gate, the
+  # exact drift this section exists to prevent.
+  require_check "startup-import-smoke" \
+    'autobot-backend/' \
+    "$PY" -m pytest autobot-backend/tests/test_startup_imports.py -q --tb=line
+
+  # #15933: these two were skipped outright because each needs an `npm ci`
+  # first, and a preflight that installs packages is a preflight that gets run
+  # once and then avoided. That reasoning stands -- so this CHECKS rather than
+  # installs, exactly as the Python side does at the top of this script with
+  # `setup-ci-parity-env.sh --check`: run the gate when the workspace is ready,
+  # name the single command when it is not, never install from in here.
+  #
+  # The freshness test is `node_modules/.package-lock.json` against
+  # `package-lock.json`. npm writes the former on every install, so a lockfile
+  # newer than it means the tree was installed from a different lockfile. This
+  # needs no npm invocation, which matters: asking npm whether npm needs to run
+  # is slow enough that people stop running the preflight.
+  #
+  # A stale tree is a `skip_check`, not a `note`: the gate COULD NOT RUN, and
+  # the distinction those two draw is the whole reason SKIPPED is counted.
+  frontend_deps_current() {
+    local ws="$REPO_ROOT/autobot-frontend"
+    [ -d "$ws/node_modules" ] || return 1
+    [ -f "$ws/node_modules/.package-lock.json" ] || return 1
+    [ ! "$ws/package-lock.json" -nt "$ws/node_modules/.package-lock.json" ]
+  }
+
+  # verify-generated-types needs NO node_modules, which is worth stating because
+  # the issue and this script both assumed it did. `npm run verify:types` is
+  # `git diff --exit-code src/types/generated/api.ts` -- a git command wearing an
+  # npm script's clothes. It runs unconditionally, so a stale workspace still
+  # gets this gate. The `test -f` first mirrors the workflow: npm reports a
+  # missing file as a script failure, and "the artefact is absent" and "the
+  # artefact differs" want different fixes.
+  require_check "verify-generated-types" \
+    '^autobot-frontend/' \
+    bash -c 'cd "$0/autobot-frontend" && test -f src/types/generated/api.ts && npm run verify:types' "$REPO_ROOT"
+
+  # frontend-test.yml's "Unit & Integration Tests" job runs `npm run
+  # test:integration` then `npm run test:coverage` -- not `test:unit`.
+  # (#10365 dropped a separate `test:unit` step: `test:coverage` is `vitest
+  # run --coverage` over the same default config `test:unit` uses, so a
+  # third step just ran every unit test again.) Match those two; both
+  # genuinely need the workspace installed.
+  if frontend_deps_current; then
+    require_check "Unit & Integration Tests" \
+      '^autobot-frontend/' \
+      bash -c 'cd "$0/autobot-frontend" && npm run test:integration && npm run test:coverage' "$REPO_ROOT"
+  else
+    skip_check "Unit & Integration Tests" \
+      "autobot-frontend/node_modules is absent or older than package-lock.json -- npm --prefix autobot-frontend ci"
+  fi
+
+  # ---- gates this box cannot reproduce -----------------------------------
+  if [ -n "${AUTOBOT_MIGRATION_TEST_ADMIN_URL:-}" ]; then
+    # A bare `note` does not touch FAILED, so the preflight could exit 0 with
+    # this gate unchecked -- "configured" read as "verified". Run it under
+    # --full (it is a suite, minutes not seconds); otherwise say plainly that
+    # it was not run, rather than that it was available.
+    if [ "$FULL" = "1" ]; then
+      require_check "migration-matrix" \
+        'autobot-backend/(models|migrations)/|alembic' \
+        "$PY" -m pytest autobot-backend/tests/migrations/ -q
+    else
+      skip_check "migration-matrix" \
+        "configured but NOT run -- it is a suite; re-run with --full, or: pytest autobot-backend/tests/migrations/"
+    fi
+  else
+    skip_check "migration-matrix" "needs a live PostgreSQL (set AUTOBOT_MIGRATION_TEST_ADMIN_URL)"
+  fi
+
+  # #15933 re-audit: left unmet on purpose, not faked. docker-smoke-test.yml
+  # needs a Docker daemon to build three images (backend/slm/frontend) and
+  # start the full compose stack via `docker compose --env-file
+  # docker/.env.docker up -d`, then health-polls for up to 15 minutes --
+  # CI budgets 45 minutes for the job overall. Not attempted here even when
+  # Docker IS available (this script never probes for a daemon, so it never
+  # claims one is absent): a run that slow defeats the fast-path premise this
+  # whole script exists for (#15932: "a preflight that takes as long as the
+  # suite changes nothing"). Reproduce manually if you want the real gate:
+  # docker compose --env-file docker/.env.docker up -d
+  skip_check "smoke-test" \
+    "needs a Docker daemon to build 3 images and start the full compose stack, health-polled up to 15 min (docker-smoke-test.yml) -- not attempted here regardless of Docker's availability, because CI's own worst case (45 min) would defeat a fast preflight; reproduce manually: docker compose --env-file docker/.env.docker up -d"
+  # python-suite (#17129): CI runs it as 12 parallel shards; the same tree run
+  # unsharded locally measures ~33 minutes (repo_tests/ alone), which defeats
+  # this script's fast-path premise the same way smoke-test's 45-minute worst
+  # case does above. Running only some shards would validate a different
+  # partition than CI's own, not a faster proxy for it. Reproduce manually:
+  # nice -n 19 python3 -m pytest repo_tests/ -q
+  skip_check "python-suite" \
+    "runs as 12 parallel CI shards; the unsharded equivalent takes ~33 min locally, which would defeat a fast preflight -- reproduce manually: nice -n 19 python3 -m pytest repo_tests/ -q"
+  skip_check "No open blocks-merge issues reference this PR" "reads GitHub issue state, not the working tree"
+
+  # `No commit trailers` is already predicted by the commit-message section
+  # above; naming it here keeps the required-context list complete rather than
+  # leaving the reader to notice the ninth entry is missing.
+  note "No commit trailers -- covered by the commit message section above"
+
+  # --only's ONE closing note (see `selected`): every required check it ruled
+  # out, by name, so a scoped run is never read as a complete one.
+  if [ "${#UNSELECTED[@]}" -gt 0 ]; then
+    unselected_names=$(printf '%s, ' "${UNSELECTED[@]}")
+    note "${#UNSELECTED[@]} required check(s) not selected by --only '$ONLY' -- not run, not counted as skipped: ${unselected_names%, }"
+  fi
+fi
+
 # ---------------------------------------------------------------- result
 printf '\n'
 if [ "$FAILED" -eq 0 ]; then
-  printf 'pre-flight clean -- safe to commit and push\n'
+  if [ "$SKIPPED" -gt 0 ]; then
+    printf 'pre-flight: no failures, but %d gate(s) were NOT run (listed above)\n' "$SKIPPED"
+  elif [ "${#UNSELECTED[@]}" -gt 0 ]; then
+    # Not "safe to push": the required checks --only left out never ran.
+    printf 'pre-flight: no failures in what --only selected; %d required check(s) were not selected (listed above)\n' "${#UNSELECTED[@]}"
+  else
+    printf 'pre-flight clean -- safe to commit and push\n'
+  fi
   exit 0
 fi
 printf '%d pre-flight failure(s) -- fix before pushing\n' "$FAILED"

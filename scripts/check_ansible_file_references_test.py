@@ -68,7 +68,7 @@ def test_only_ansible_paths_are_scanned(tmp_path):
 def test_a_deployed_src_reference_is_extracted():
     text = "    - pip:\n        requirements: /opt/autobot/src/autobot-npu-worker/requirements.txt\n"
 
-    assert guard._referenced_repo_paths(text) == [(2, "requirements", "autobot-npu-worker/requirements.txt")]
+    assert guard._referenced_repo_paths(text)[0] == [(2, "requirements", "autobot-npu-worker/requirements.txt")]
 
 
 @pytest.mark.parametrize(
@@ -81,7 +81,7 @@ def test_a_deployed_src_reference_is_extracted():
 )
 def test_paths_that_cannot_be_resolved_statically_are_skipped(line):
     """A guard that reports false positives gets switched off."""
-    assert guard._referenced_repo_paths(line + "\n") == []
+    assert guard._referenced_repo_paths(line + "\n")[0] == []
 
 
 # ------------------------------------------------------------- end-to-end
@@ -212,6 +212,40 @@ def test_patterns_needing_no_inventory_group_are_skipped(pattern, tmp_path):
     assert _run(tmp_path).returncode == 0
 
 
+def test_a_tree_with_no_ansible_content_is_refused_rather_than_passed(tmp_path):
+    """The #14896 defect this floor exists for.
+
+    Run from the wrong directory -- or after an `ansible/` directory is renamed
+    -- the walk reads no play, extracts no reference, and every violation list
+    comes back empty. That is byte-identical to a clean tree at the exit code,
+    so the guard has to refuse it rather than print its success line.
+    """
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("x = 1\n", encoding="utf-8")
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 1, result.stdout
+    assert "FIX THE SWEEP" in result.stderr
+    assert "reference(s) resolve" not in result.stdout
+
+
+def test_a_play_resolving_nothing_is_still_a_pass(tmp_path):
+    """The floor counts plays READ, not references resolved (#14896).
+
+    A play whose only host pattern is runtime-supplied resolves zero groups and
+    zero deployed-src paths. Flooring resolutions would fail this honest tree,
+    which is what made the first cut of the floor red on CI.
+    """
+    _inventory(tmp_path, "all:\n  children:\n    frontend:\n      hosts:\n        web-1: {}\n")
+    _play(tmp_path, "- name: Play\n  hosts: '{{ target_group }}'\n  tasks: []\n")
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "FIX THE SWEEP" not in result.stderr
+
+
 def test_the_allowlist_is_documented_with_a_tracking_issue():
     """An unexplained allowlist entry is indistinguishable from the bug it hides."""
     source = _SCRIPT.read_text(encoding="utf-8")
@@ -265,8 +299,126 @@ def test_the_workflow_installs_every_third_party_import_the_guard_needs():
 
     # Distribution names differ from import names for some packages.
     dist_for = {"yaml": "pyyaml", "pytest": "pytest"}
-    local = {_SCRIPT.stem}
+    # A top-level name that exists in the repository is not a dependency to
+    # install: actions/checkout puts it on disk, and the guard prepends the
+    # repo root to sys.path, so the import resolves to the checked-out copy
+    # whatever pip did. `tools.lint._scan_helpers` is one such import.
+    local = {_SCRIPT.stem} | {
+        entry.stem if entry.suffix == ".py" else entry.name
+        for entry in repo_root.iterdir()
+        # Nested checkouts are not this repository's top-level names (#15926).
+        if (entry.is_dir() or entry.suffix == ".py") and entry.name not in {".worktrees", ".claude"}
+    }
     third_party = {m for m in imported - stdlib - local if not m.startswith("_")}
 
     missing = {m for m in third_party if dist_for.get(m, m) not in declared}
     assert not missing, f"the workflow does not install: {sorted(missing)}"
+
+
+# --------------------------------------------- templated deploy root (#15687)
+
+
+_TEMPLATED_PLAYBOOK = """- name: Deploy
+  vars:
+    deployed_src_root: /opt/autobot/src
+  tasks:
+    - pip:
+        requirements: {{ deployed_src_root }}/autobot-npu-worker/requirements.txt
+"""
+
+
+def test_a_templated_deploy_root_still_resolves_to_a_repo_path():
+    """#15687 moves twenty literals behind a variable.
+
+    Without substitution every one of them leaves this guard's population, and
+    its only reach floor is `plays_read >= 1` -- so the loss would be silent and
+    #13744 would become undetectable again.
+    """
+    resolved, unresolvable = guard._referenced_repo_paths(_TEMPLATED_PLAYBOOK)
+
+    assert resolved == [(6, "requirements", "autobot-npu-worker/requirements.txt")]
+    assert unresolvable == [], "the templated value was reported unresolvable, not resolved"
+
+
+def test_a_wrong_path_behind_a_template_is_still_caught():
+    """#13744 restated against the templated form.
+
+    The original defect was `requirements: /opt/autobot/src/docker/npu-worker/
+    requirements.txt` -- a path that never existed in the repo, so the native
+    NPU deploy installed nothing and reported success. Spelling the root as a
+    variable must not turn that into a skip.
+    """
+    wrong = _TEMPLATED_PLAYBOOK.replace("autobot-npu-worker/requirements.txt", "docker/npu-worker/requirements.txt")
+
+    found, _ = guard._referenced_repo_paths(wrong)
+
+    assert found == [(6, "requirements", "docker/npu-worker/requirements.txt")], (
+        "the templated form resolved to nothing, so a nonexistent path behind a "
+        "variable would be skipped rather than reported"
+    )
+
+
+def test_an_unknown_variable_is_skipped_rather_than_guessed():
+    """The contrast case: resolution must not invent a value it does not have.
+
+    The unknown variable sits *inside* a deployed-src path on purpose. With it
+    at the front the value fails the prefix check regardless, so the test would
+    pass whether the substitution dropped the variable or kept it -- it could
+    not tell the two apart. Here, substituting an empty string yields
+    `/opt/autobot/src//requirements.txt` and reports a missing file that no one
+    wrote, while leaving the template unresolved correctly skips it.
+    """
+    text = (
+        "  tasks:\n"
+        "    - pip:\n"
+        "        requirements: /opt/autobot/src/{{ not_defined_anywhere }}/requirements.txt\n"
+    )
+
+    assert guard._referenced_repo_paths(text)[0] == []
+
+
+def test_a_variable_outside_a_vars_block_does_not_define_anything():
+    """Only `vars:` entries are substituted.
+
+    A map built from every `key: value` in the file would let an unrelated task
+    key -- `dest:`, `chdir:` -- shadow a variable name and silently change what
+    a reference resolves to.
+    """
+    text = (
+        "  tasks:\n"
+        "    - copy:\n"
+        "        deployed_src_root: /opt/autobot/src\n"
+        "    - pip:\n"
+        "        requirements: {{ deployed_src_root }}/autobot-npu-worker/requirements.txt\n"
+    )
+
+    assert guard._referenced_repo_paths(text)[0] == []
+
+
+def test_this_repository_still_resolves_its_deployed_src_references():
+    """The floor #15901 review asked for, and it lives here rather than in main().
+
+    `plays_read >= 1` detects a walk that read nothing and nothing else. It
+    cannot see a reference that stopped *resolving* -- `_referenced_repo_paths`
+    returns those separately and `main()` does not count them, so the reported
+    figure describes what survived. Templating the deploy root is exactly the
+    change that could have lost one silently.
+
+    The floor cannot go in `main()`: an arbitrary tree may legitimately contain
+    no deployed-src reference, which `test_a_play_resolving_nothing_is_still_a_pass`
+    protects. This is a fact about *this* repository, so it is asserted here.
+    """
+    root = pathlib.Path(__file__).resolve().parents[1]
+    resolved = 0
+    for play in guard._ansible_files(root):
+        try:
+            hits, _ = guard._referenced_repo_paths(play.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+        resolved += len(hits)
+
+    assert resolved >= guard.MIN_DEPLOYED_SRC_REFERENCES, (
+        f"only {resolved} deployed-src reference(s) resolve in this repository, floor is "
+        f"{guard.MIN_DEPLOYED_SRC_REFERENCES}. A reference stopped resolving and left the "
+        "guard's population rather than failing it."
+    )

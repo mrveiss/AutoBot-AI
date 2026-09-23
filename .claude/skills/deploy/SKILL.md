@@ -52,7 +52,7 @@ Before deploying anything:
 
    For **backend** changes:
    ```bash
-   ruff check autobot-user-backend/  # or autobot-slm-backend/
+   ruff check autobot-backend/  # or autobot-slm-backend/
    ```
 
    For **frontend** changes:
@@ -95,7 +95,7 @@ Before deploying anything:
    **Method B: Manual rsync (for quick iterations)**
    ```bash
    # Backend
-   ./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/
+   ./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh main autobot-backend/
 
    # Frontend
    ./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-user-frontend/

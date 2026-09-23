@@ -22,19 +22,30 @@ set -euo pipefail
 # =============================================================================
 
 readonly SCRIPT_VERSION="1.0.0"
-readonly INSTALL_MARKER="/opt/autobot/.autobot-installed"
 readonly LOG_DIR="/var/log/autobot"
 readonly LOG_FILE="${LOG_DIR}/install-$(date +%Y%m%d-%H%M%S).log"
 readonly AUTOBOT_BASE="/opt/autobot"
+readonly INSTALL_MARKER="${AUTOBOT_BASE}/.autobot-installed"
 readonly CODE_SOURCE="${AUTOBOT_BASE}/code_source"
 readonly SECRETS_FILE="/etc/autobot/slm-secrets.env"
+# The service account that owns ${AUTOBOT_BASE} and runs the AutoBot units, and the
+# account the SLM later reaches this node as (PathConfig.ssh_user, AUTOBOT_SSH_USER).
+# Named once here because this script runs before the repository, and so before
+# ssot-config.sh, exists on the host.
+readonly AUTOBOT_USER="autobot"
+readonly AUTOBOT_HOME="/home/${AUTOBOT_USER}"
 # #9956: Default SLM manager node_id. Must match the host/slm_node_id written
 # into the generated localhost inventory (generate_inventory) — that inventory
 # is the canonical definition; this constant mirrors it for the API
 # registration calls so the value is not duplicated as scattered literals.
 readonly SLM_NODE_ID="00-SLM-Manager"
-readonly DEFAULT_REPO="https://github.com/mrveiss/AutoBot-AI.git"
-readonly DEFAULT_BRANCH="Dev_new_gui"
+# External hosts the install reaches, each named once. The connectivity pre-flight
+# probes these same hosts, so it checks exactly what the install goes on to use.
+readonly REPO_HOST="github.com"
+readonly REPO_SLUG="mrveiss/AutoBot-AI"
+readonly DEFAULT_REPO="https://${REPO_HOST}/${REPO_SLUG}.git"
+readonly NODESOURCE_HOST="deb.nodesource.com"
+readonly DEFAULT_BRANCH="main"
 readonly REQUIRED_DISK_MB=5120
 readonly REQUIRED_MEM_MB=2048
 
@@ -291,7 +302,7 @@ Examples:
   sudo $0 --uninstall                        # Full uninstall (with confirmation)
   sudo $0 --uninstall --yes                  # Full uninstall (no prompt)
   sudo AUTOBOT_INSTALL_INTERFACE=eth2 \\
-       AUTOBOT_INSTALL_BRANCH=Dev_new_gui \\
+       AUTOBOT_INSTALL_BRANCH=${DEFAULT_BRANCH} \\
        AUTOBOT_SLM_ADMIN_PASSWORD=secret \\
        $0 --reinstall                        # Fully scripted reinstall (#7057)
 
@@ -353,9 +364,9 @@ preflight_checks() {
     fi
     success "Memory: ${total_mem_mb}MB total"
 
-    if ! curl -sf --max-time 5 https://github.com > /dev/null 2>&1; then
-        if ! curl -sf --max-time 5 https://deb.nodesource.com > /dev/null 2>&1; then
-            fatal "No internet connectivity (cannot reach github.com or deb.nodesource.com)"
+    if ! curl -sf --max-time 5 "https://${REPO_HOST}" > /dev/null 2>&1; then
+        if ! curl -sf --max-time 5 "https://${NODESOURCE_HOST}" > /dev/null 2>&1; then
+            fatal "No internet connectivity (cannot reach ${REPO_HOST} or ${NODESOURCE_HOST})"
         fi
     fi
     success "Internet connectivity OK"
@@ -417,21 +428,21 @@ system_setup() {
 
     if ! command -v node &>/dev/null; then
         run_ok "Adding NodeSource repository" \
-            bash -c 'curl -fsSL https://deb.nodesource.com/setup_20.x | bash -'
+            bash -c "curl -fsSL https://${NODESOURCE_HOST}/setup_20.x | bash -"
         run_ok "Installing Node.js" \
             env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs
     else
         success "  Node.js already installed ($(node --version))"
     fi
 
-    if ! id "autobot" &>/dev/null; then
-        run_ok "Creating autobot user" \
-            useradd -r -m -s /bin/bash -d /home/autobot autobot
-        echo "autobot ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/autobot
+    if ! id "${AUTOBOT_USER}" &>/dev/null; then
+        run_ok "Creating ${AUTOBOT_USER} user" \
+            useradd -r -m -s /bin/bash -d "${AUTOBOT_HOME}" "${AUTOBOT_USER}"
+        echo "${AUTOBOT_USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/autobot
         chmod 0440 /etc/sudoers.d/autobot
         success "  Passwordless sudo configured"
     else
-        success "  User 'autobot' already exists"
+        success "  User '${AUTOBOT_USER}' already exists"
     fi
 
     run_ok "Creating directory structure" \
@@ -445,13 +456,13 @@ system_setup() {
             /etc/autobot \
             /etc/autobot/ssh
 
-    chown -R autobot:autobot "${AUTOBOT_BASE}"
+    chown -R "${AUTOBOT_USER}:${AUTOBOT_USER}" "${AUTOBOT_BASE}"
     success "  Directory ownership set"
 
-    local ssh_key="/home/autobot/.ssh/autobot_key"
+    local ssh_key="${AUTOBOT_HOME}/.ssh/autobot_key"
     if [[ ! -f "${ssh_key}" ]]; then
         run_ok "Generating SSH key pair for fleet management" \
-            sudo -u autobot bash -c "mkdir -p /home/autobot/.ssh && ssh-keygen -t ed25519 -f ${ssh_key} -N '' -C 'autobot@slm'"
+            sudo -u "${AUTOBOT_USER}" bash -c "mkdir -p ${AUTOBOT_HOME}/.ssh && ssh-keygen -t ed25519 -f ${ssh_key} -N '' -C 'autobot@slm'"
     else
         success "  SSH key pair already exists"
     fi
@@ -461,7 +472,7 @@ system_setup() {
     if [[ -f "${ssh_key}" ]]; then
         cp "${ssh_key}" /etc/autobot/ssh/autobot_key
         cp "${ssh_key}.pub" /etc/autobot/ssh/autobot_key.pub
-        chown autobot:autobot /etc/autobot/ssh/autobot_key /etc/autobot/ssh/autobot_key.pub
+        chown "${AUTOBOT_USER}:${AUTOBOT_USER}" /etc/autobot/ssh/autobot_key /etc/autobot/ssh/autobot_key.pub
         chmod 0600 /etc/autobot/ssh/autobot_key
         chmod 0644 /etc/autobot/ssh/autobot_key.pub
         success "  SSH key published to /etc/autobot/ssh/"
@@ -489,14 +500,14 @@ code_deployment() {
         done
 
         run_ok "Fetching latest code" \
-            sudo -u autobot git -C "${CODE_SOURCE}" fetch origin
+            sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" fetch origin
         run_ok "Checking out ${GIT_BRANCH}" \
-            sudo -u autobot git -C "${CODE_SOURCE}" checkout "${GIT_BRANCH}"
+            sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" checkout "${GIT_BRANCH}"
         run_ok "Pulling latest changes" \
-            sudo -u autobot git -C "${CODE_SOURCE}" pull origin "${GIT_BRANCH}"
+            sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" pull origin "${GIT_BRANCH}"
     else
         run_ok "Cloning AutoBot repository (branch: ${GIT_BRANCH})" \
-            sudo -u autobot git clone -b "${GIT_BRANCH}" "${DEFAULT_REPO}" "${CODE_SOURCE}"
+            sudo -u "${AUTOBOT_USER}" git clone -b "${GIT_BRANCH}" "${DEFAULT_REPO}" "${CODE_SOURCE}"
     fi
 
     # Copy code from code_source to service directories where Ansible expects them
@@ -505,7 +516,7 @@ code_deployment() {
     for dir in "${CRITICAL_DIRS[@]}"; do
         if [[ -d "${CODE_SOURCE}/${dir}" ]]; then
             run_ok "Copying ${dir} to ${AUTOBOT_BASE}/${dir}" \
-                sudo -u autobot rsync -a --delete "${CODE_SOURCE}/${dir}/" "${AUTOBOT_BASE}/${dir}/"
+                sudo -u "${AUTOBOT_USER}" rsync -a --delete "${CODE_SOURCE}/${dir}/" "${AUTOBOT_BASE}/${dir}/"
             if [[ ! -d "${AUTOBOT_BASE}/${dir}" ]]; then
                 fatal "Distribution of ${dir} failed — destination directory not created"
             fi
@@ -593,7 +604,7 @@ SLM_HOST=${local_ip}
 NETWORK_SUBNET=${network_subnet}
 NETWORK_GATEWAY=${network_gateway}
 EOF
-        chown root:autobot "${SECRETS_FILE}"
+        chown "root:${AUTOBOT_USER}" "${SECRETS_FILE}"
         chmod 640 "${SECRETS_FILE}"
         success "  Secrets written to ${SECRETS_FILE}"
     else
@@ -637,7 +648,7 @@ EOF
     # pre-created here — a fixed /tmp/ansible_local_tmp locked out every
     # user except whoever created it first.
     mkdir -p /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp
-    chown autobot:autobot /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp
+    chown "${AUTOBOT_USER}:${AUTOBOT_USER}" /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp
 
     info "Running Ansible deployment (this may take several minutes)..."
     # #6600: keep `provision` so backend role applies to the SLM manager node in
@@ -761,11 +772,16 @@ register_local_node() {
     # Authenticate
     info "Authenticating with SLM API..."
     local token
+    # #15825: `|| true` is what makes the handler below reachable. Under
+    # `set -euo pipefail` a failed assignment aborts the script, so on any auth
+    # failure the installer died here and the two warn lines -- which read as
+    # careful handling -- could never run. `-f` is kept deliberately: on a 401
+    # we want no body to parse, not an error page fed to jq.
     token=$(curl -sfk --max-time 10 \
         -X POST "${api_url}/api/auth/login" \
         -H "Content-Type: application/json" \
         -d "{\"username\":\"admin\",\"password\":\"${ADMIN_PASSWORD}\"}" \
-        2>/dev/null | jq -r '.access_token // empty')
+        2>/dev/null | jq -r '.access_token // empty') || true
 
     if [[ -z "${token}" ]]; then
         warn "Could not authenticate with SLM API — skipping node registration"
@@ -777,7 +793,18 @@ register_local_node() {
     # Register this node with all single-host roles
     info "Registering local node (${local_ip})..."
     local http_code
-    http_code=$(curl -sfk --max-time 10 -o /dev/null -w "%{http_code}" \
+    # #15825: NO -f here. `-f` makes curl exit 22 on any HTTP >= 400, so the
+    # assignment failed under `set -e` and the `400)` arm below -- "already
+    # registered", an expected outcome on re-run -- was unreachable, as was the
+    # catch-all warn. Asking for %{http_code} and also asking curl to fail on
+    # the codes you are branching on are contradictory intents.
+    # A transport failure (DNS, refused, timeout) exits non-zero with no HTTP
+    # response at all, and under `set -euo pipefail` that aborts the assignment
+    # just as `-f` did -- the same dead end one layer down. `|| true` keeps the
+    # script alive and `${var:-000}` gives the wildcard arm below something to
+    # report, so "could not reach the API" surfaces as a manual-action warning
+    # rather than a silent exit.
+    http_code=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}" \
         -X POST "${api_url}/api/nodes" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${token}" \
@@ -791,24 +818,26 @@ register_local_node() {
                 \"slm-database\",
                 \"slm-monitoring\"
             ],
-            \"ssh_user\": \"autobot\",
+            \"ssh_user\": \"${AUTOBOT_USER}\",
             \"ssh_port\": 22,
             \"auth_method\": \"key\",
             \"import_existing\": true,
             \"auto_enroll\": false
-        }" 2>/dev/null)
+        }" 2>/dev/null) || true
 
-    case "${http_code}" in
+    case "${http_code:-000}" in
         201) success "Local node registered (${hostname_val} / ${local_ip})" ;;
         400) success "Local node already registered" ;;
-        *)   warn "Node registration returned HTTP ${http_code} — register manually via SLM UI"
+        *)   warn "Node registration returned HTTP ${http_code:-000} — register manually via SLM UI"
              return ;;
     esac
 
     # Auto-assign SLM Manager as code source (#2755)
     info "Assigning code source to SLM Manager..."
     local cs_code
-    cs_code=$(curl -sfk --max-time 10 -o /dev/null -w "%{http_code}" \
+    # #15825: same as above -- capturing the status code means not using -f,
+    # and a transport failure must reach the wildcard arm rather than abort.
+    cs_code=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}" \
         -X POST "${api_url}/api/code-source/assign" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${token}" \
@@ -816,11 +845,11 @@ register_local_node() {
             \"node_id\": \"${SLM_NODE_ID}\",
             \"repo_path\": \"${CODE_SOURCE}\",
             \"branch\": \"${GIT_BRANCH}\"
-        }" 2>/dev/null)
+        }" 2>/dev/null) || true
 
-    case "${cs_code}" in
+    case "${cs_code:-000}" in
         200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})" ;;
-        *)   warn "Code source assignment returned HTTP ${cs_code} — assign manually via SLM UI > Code Sync" ;;
+        *)   warn "Code source assignment returned HTTP ${cs_code:-000} — assign manually via SLM UI > Code Sync" ;;
     esac
 }
 
@@ -832,7 +861,7 @@ finalize() {
     phase "Finalize"
 
     echo "$(date -Iseconds) version=${SCRIPT_VERSION} branch=${GIT_BRANCH}" > "${INSTALL_MARKER}"
-    chown autobot:autobot "${INSTALL_MARKER}"
+    chown "${AUTOBOT_USER}:${AUTOBOT_USER}" "${INSTALL_MARKER}"
     success "Install marker written"
 
     local creds_file="/root/autobot-credentials.txt"
@@ -1024,7 +1053,7 @@ uninstall() {
     echo "    - PostgreSQL server and all databases"
     echo "    - Node.js, Grafana, Ansible"
     echo "    - APT repositories added by the installer"
-    echo "    - The 'autobot' system user"
+    echo "    - The '${AUTOBOT_USER}' system user"
     echo "    - Directories: /opt/autobot, /etc/autobot, /var/lib/slm, /var/log/autobot"
     echo
 
@@ -1178,12 +1207,12 @@ uninstall() {
     rm -f /etc/systemd/system/nginx.service.d/ssl-cert-check.conf 2>/dev/null || true
 
     # ---- Phase 6: Remove autobot user ----
-    info "Removing autobot user..."
-    if id "autobot" &>/dev/null; then
-        userdel -r autobot >> "${LOG_FILE}" 2>&1 && success "  Removed user: autobot" || warn "  Failed to remove user (may have running processes)"
+    info "Removing ${AUTOBOT_USER} user..."
+    if id "${AUTOBOT_USER}" &>/dev/null; then
+        userdel -r "${AUTOBOT_USER}" >> "${LOG_FILE}" 2>&1 && success "  Removed user: ${AUTOBOT_USER}" || warn "  Failed to remove user (may have running processes)"
     fi
-    if getent group autobot &>/dev/null; then
-        groupdel autobot >> "${LOG_FILE}" 2>&1 || true
+    if getent group "${AUTOBOT_USER}" &>/dev/null; then
+        groupdel "${AUTOBOT_USER}" >> "${LOG_FILE}" 2>&1 || true
     fi
 
     # ---- Done ----

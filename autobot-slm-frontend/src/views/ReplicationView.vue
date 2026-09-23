@@ -9,7 +9,7 @@
  * Manages Redis replication between nodes with Ansible orchestration (Issue #726 Phase 4).
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
@@ -86,9 +86,14 @@ onMounted(async () => {
   })
 })
 
-onUnmounted(() => {
-  ws.disconnect()
-})
+// #15225: no explicit ws.disconnect() here. useSlmWebSocket() is a
+// reference-counted singleton (consumerCount) shared with whatever else is
+// on screen. #15225 embeds this view as a tab inside OrchestrationView.vue,
+// which holds its own live connection via useOrchestrationManagement — an
+// unconditional disconnect() on tab-switch would tear that down out from
+// under the per-node tab too. The composable's own onUnmounted hook already
+// decrements consumerCount and only calls the real doDisconnect() when this
+// was the last consumer, so nothing further is needed here.
 
 async function fetchReplications(): Promise<void> {
   isLoading.value = true

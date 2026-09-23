@@ -10,11 +10,11 @@ Persists learned patterns to Redis for orchestrator routing decisions.
 """
 
 import json
-import os
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Dict, FrozenSet, List
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import utc_timestamp
@@ -34,12 +34,12 @@ OTHER_TASK_TYPE = "other"
 # GH#11534: per-tenant cap on distinct task_type keys — a backstop beyond the
 # allowlist. Never hard-coded (repo idiom, see chat_history/cache.py): overridable
 # via env so a runaway integration can't blow past it silently.
-MAX_TASK_TYPE_KEYS_PER_TENANT = int(os.environ.get("AUTOBOT_MAX_TASK_TYPE_KEYS_PER_TENANT", "64"))
+MAX_TASK_TYPE_KEYS_PER_TENANT = env_int("AUTOBOT_MAX_TASK_TYPE_KEYS_PER_TENANT", 64)
 
 # GH#11534: bounded per-key revision history so a single bad synthesized/imported
 # strategy can be rolled back without wiping all learned state (clear_strategy).
 REDIS_PATTERNS_HISTORY_KEY = "task:patterns:{tenant_id}:{task_type}:history"
-STRATEGY_HISTORY_MAX = int(os.environ.get("AUTOBOT_STRATEGY_HISTORY_MAX", "10"))
+STRATEGY_HISTORY_MAX = env_int("AUTOBOT_STRATEGY_HISTORY_MAX", 10)
 
 
 @lru_cache(maxsize=1)

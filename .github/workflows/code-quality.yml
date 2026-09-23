@@ -4,8 +4,14 @@
 name: Code Quality
 
 on:
+  # #14054: the merge queue builds each entrant against base + the entries
+  # ahead of it and expects the required contexts to report against that
+  # temporary ref. A required context with no `merge_group:` trigger never
+  # fires, and the queue waits on it forever. Inert until the `merge_queue`
+  # ruleset rule is enabled -- this event does not exist before then.
+  merge_group:
   push:
-    branches: [ main, Dev_new_gui, develop ]
+    branches: [ release, main, develop ]
     paths:
       - '**/*.py'
       - '**/requirements*.txt'
@@ -48,7 +54,16 @@ on:
       # satisfies branch protection.
       - 'docs/**'
       - 'scripts/lib/**'
+      # #15473: this workflow RUNS lint-conventions.sh, and a change confined to
+      # the linter did not trigger it -- the required-context shim then reported
+      # the job green on a linter nothing had executed.
+      - 'scripts/lint-conventions.sh'
       - '.github/workflows/code-quality.yml'
+      # #15608: the shared filter file and the complement shim publishing the
+      # same required context. Editing either must run the REAL gate, not the
+      # shim reporting green over its own change.
+      - '.github/filters/code-quality-paths.yml'
+      - '.github/workflows/code-quality-required-context.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
   # required-check context ("code-quality") always reports a conclusion. A
   # path-filtered required check that never triggers leaves the PR deadlocked on
@@ -57,7 +72,7 @@ on:
   # Branch-protection promotion to required is the separate owner-confirmed
   # follow-up (#10022).
   pull_request:
-    branches: [ main, Dev_new_gui, develop ]
+    branches: [ release, main, develop ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -66,6 +81,8 @@ concurrency:
 
 permissions:
   contents: read
+  # #15333: the open-alert ceiling below reads code-scanning alerts.
+  security-events: read
 
 jobs:
   changes:
@@ -78,51 +95,35 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
-          filters: |
-            backend:
-              - '**/*.py'
-              - '**/requirements*.txt'
-              - 'requirements-ci/**'
-              - 'repo_tests/**'
-              - 'pyproject.toml'
-              - '.flake8'
-              - '.bandit'
-              - '.pre-commit-config.yaml'
-              - 'pipeline-scripts/**'
-              - 'tools/lint/**'
-              - 'autobot-infrastructure/shared/scripts/**'
-              # #14584: was 'autobot-infrastructure/ansible/roles/slm_agent/files/**',
-              # a path that never existed (autobot-infrastructure/ has no ansible/
-              # tree at all) -- a stranded entry that matched nothing since it was
-              # added. Corrected to the real mirror path, and widened to the second
-              # canonical/mirror pair detect-agent-code-drift.sh now also checks.
-              - 'autobot-slm-backend/ansible/roles/slm_agent/files/**'
-              - 'autobot-slm-backend/ansible/roles/backend/files/**'
-              - 'autobot-backend/config/permission_rules.yaml'
-              - 'autobot-backend/static/error_messages.yaml'
-              - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
-              - '.github/actions/**'
-              # #15309: the watchdog inventory + systemd templates
-              # tools/lint/check_runner_watchdog_schedule.py --audit reads.
-              - 'scripts/runner-watchdog-inventory.yaml'
-              - 'scripts/systemd/runner-watchdog@.service'
-              - 'scripts/systemd/runner-watchdog@.timer'
-              # #15208: see the on.push.paths list above -- docs/ and the shared rule
-              # set are the documentation guard's inputs.
-              - 'docs/**'
-              - 'scripts/lib/**'
-              - '.github/workflows/code-quality.yml'
+          # #14054: dorny/paths-filter errors on an event it does not
+          # recognise unless `base` is given, and a failed `changes` job
+          # skips every job that needs it -- i.e. the required context
+          # never reports and the queue deadlocks. Empty on push/PR, so
+          # their existing behaviour is unchanged.
+          base: ${{ github.event.merge_group.base_sha || '' }}
+          # #15608: the path set is defined ONCE in
+          # .github/filters/code-quality-paths.yml and read by reference from
+          # both halves of the required-context pair -- this gate and the
+          # complement shim in code-quality-required-context.yml. A second
+          # inline copy is how the two sides drift apart, and the drift
+          # direction is silent: a shim that believes nothing changed while
+          # this gate believes otherwise publishes `code-quality` green for an
+          # audit that never ran.
+          filters: .github/filters/code-quality-paths.yml
 
   code-quality:
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
-    # Back on self-hosted (#15310). The MVA-2605 outage this was moved away from
-    # is over: both runners are online. This job is the slowest in the set at
-    # ~601s average and is a single unsharded job, so its wall-clock is one job's
-    # duration on either runner type — it gives up no parallelism by moving,
-    # unlike the sharded suites which stay hosted deliberately.
-    runs-on: [self-hosted, Linux, X64]
-    # Fail fast on self-hosted rather than GitHub's ~360min default (#11077).
+    if: github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'
+    # ubuntu-latest (#15395). This job publishes a REQUIRED context, and a
+    # required context pinned to a two-machine pool cannot report when that
+    # pool is down -- the #13401 deadlock, recurring as #15185 and #14444.
+    # Nothing here needs self-hosted hardware: the pins carried only the
+    # generic [self-hosted, Linux, X64] labels, never an npu/gpu/cuda one.
+    # It is the slowest job in the set (~601s self-hosted, unmeasured hosted --
+    # #15395 tracks recording the delta) and single unsharded, so it gives up
+    # no parallelism either way.
+    runs-on: ubuntu-latest
+    # Fail fast rather than GitHub's ~360min default (#11077).
     #
     # 60, not 30. The 30 came from a ~601s measurement taken on a GitHub-hosted
     # runner against a small diff, and it does not generalise: this job's work
@@ -144,8 +145,8 @@ jobs:
     #
     # What the evidence actually shows is two populations, not one:
     #
-    #   push on Dev_new_gui, small diff    10m54s   success
-    #   pull_request into main, 2195 files >60m     cancelled (twice)
+    #   push on main, small diff    10m54s   success
+    #   pull_request into release, 2195 files >60m     cancelled (twice)
     #
     # This job's cost scales with the number of changed files, so normal work
     # finishes in ~11 minutes and only a release-sized promotion is pathological.
@@ -183,10 +184,13 @@ jobs:
     # PATH instead (see .github/actions/setup-python-ci/action.yml). Also
     # fixes this step's own name, which named 3.12 while requesting 3.14 --
     # harmless, but sent debugging here to the wrong version first (#15313 aside).
-    - name: Set up Python 3.14
+    - name: Set up Python
       uses: ./.github/actions/setup-python-ci
       with:
-        python-version: '3.14'
+        # python-version omitted on purpose: the composite reads .python-version
+        # when it is empty (#13842). Passing python-version-file here is not the
+        # same thing -- that input belongs to actions/setup-python, and this
+        # composite does not declare it, so actionlint rejects it.
         cache-dependency-path: |
           requirements*.txt
           autobot-backend/requirements*.txt
@@ -248,7 +252,7 @@ jobs:
 
     - name: Block datetime.utcnow().isoformat() regressions (#5178 #5238 #5268)
       env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         HEAD_SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
@@ -314,15 +318,29 @@ jobs:
       # stage and a direct run of the hook still scan whole files.
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only pre-commit-no-print-console
 
+    - name: Block new local BaseModel definitions in API files (#6056, #16178)
+      # --changed-lines-only (#16178), and unlike the two scoped steps above, the
+      # pre-commit stage is scoped too: this hook had no baseline and no blocking
+      # CI step (enforce-precommit.yml runs every hook, but only as warnings), so
+      # its whole-file read blocked the commit itself, failing a change for a
+      # model it neither added nor could move (every original domain schemas_*.py
+      # is frozen at its size ceiling). With --python the wrapper cannot parse the
+      # validator's output, so it hands over the base it resolved and the hook
+      # scopes itself. A direct run of the hook still reads whole files.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only --python tools/lint/check_no_local_schemas.py --ext py
+
     - name: Check repo conventions — third-party names, doc cross-links (#13876)
       env:
         CONVENTIONS_DENYLIST_CONTENT: ${{ secrets.CONVENTIONS_DENYLIST }}
         # Bound through env rather than interpolated into the script body.
         # These are GitHub-generated SHAs, but keeping every ${{ }} out of
         # `run:` is the rule that does not need a per-field risk judgement.
-        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        # PR_HEAD_SHA and PR_NUMBER removed: neither was read by this step's
+        # body (PR_BASE_SHA above is, at git_scope_resolve_base). Verified
+        # unreferenced here and in scripts/lib/ and pipeline-scripts/ -- the
+        # PR_NUMBER hits there belong to pr-queue-open-list.sh, a different
+        # workflow's variable of the same name.
       run: |
         set -euo pipefail
         # The denylist of third-party product names is NOT stored in this repo:
@@ -466,7 +484,7 @@ jobs:
 
     - name: Security check with bandit
       run: |
-        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
+        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ autobot-npu-worker/ || {
           echo "⚠️ Security issues detected - review bandit output"
           exit 1
         }
@@ -494,25 +512,39 @@ jobs:
           exit 1
         }
 
+    - name: Sweep the whole tree for unregistered AUTOBOT_* env vars (#15807)
+      run: |
+        # The pre-commit hook only sees staged files, so a variable whose read
+        # landed in one commit and whose registration was dropped in another --
+        # the additive merge conflict in env_registry_backend.py produces exactly
+        # that -- was never inspected by anything. With no arguments this now
+        # sweeps every tracked .py file, and fails if the sweep itself reaches
+        # too few of them.
+        python3 pipeline-scripts/check_env_var_registry.py || {
+          echo "An AUTOBOT_* env var is read somewhere but not registered."
+          exit 1
+        }
+
     - name: Type-check autobot_shared (required)
       run: |
         # autobot_shared is the shared library and must be strictly typed.
-        # Errors in the backends are tracked in GH#7105.
+        # Errors in the backends are tracked in GH#15345 (#7105 is closed --
+        # it tracked wiring mypy in, not the errors it found).
         python3 -m mypy autobot_shared/ || {
           echo "mypy found type errors in autobot_shared/"
-          echo "Fix the errors above or suppress with '# type: ignore[code]  # GH#7105'"
+          echo "Fix the errors above or suppress with '# type: ignore[code]  # GH#15345'"
           exit 1
         }
 
     - name: Type-check autobot-backend (informational)
       run: |
         # Non-blocking: surfaces new regressions in trend output.
-        # 4133 pre-existing errors tracked for resolution in GH#7105.
+        # 4133 pre-existing errors tracked for resolution in GH#15345 (#7105 is closed).
         python3 -m mypy autobot-backend/ 2>&1 | tail -5 || true
 
     - name: Type-check autobot-slm-backend (informational)
       run: |
-        # Non-blocking: 1281 SQLAlchemy Column[T] errors tracked in GH#7105.
+        # Non-blocking: 1281 SQLAlchemy Column[T] errors tracked in GH#15345 (#7105 is closed).
         python3 -m mypy autobot-slm-backend/ 2>&1 | tail -5 || true
 
     - name: Enforce extension/skill/plugin import boundaries (#7372)
@@ -547,17 +579,29 @@ jobs:
 
     - name: Audit undefined names under autobot-infrastructure/shared/scripts (#14405)
       run: |
-        # `autobot-infrastructure/` is excluded by the pre-commit flake8 hook and
-        # named by no CI flake8 invocation, so nothing ever linted this tree; 12
-        # operator scripts accumulated 103 undefined names -- live NameErrors, not
-        # style. #14405 fixed all 12 and scoped a second pre-commit hook to the tree
-        # for F821. This has to run in a REQUIRED check for the same directional
-        # reason as #14419 and #14489: re-widening the exclusion lints FEWER files, so
-        # every lint step reports fewer violations and goes greener. It re-proves both
-        # halves -- the tree is F821-clean AND a pre-commit hook still reaches it --
-        # and fails below a discovery floor, because a sweep handed an empty file list
-        # reports a comfortable zero. There is no exemption list, deliberately.
-        python3 tools/lint/check_infra_scripts_undefined_names.py --audit
+        # Three trees are excluded by the pre-commit flake8 hook, named by no CI
+        # flake8 invocation that can fail (security.yml runs `|| true`), and listed
+        # in .flake8's own exclude. Nothing linted them; 12 operator scripts
+        # accumulated 103 undefined names -- live NameErrors, not style. #14405 fixed
+        # all 12 and scoped a second pre-commit hook to ONE of the three trees.
+        #
+        # #15914 is what that scoping cost: five classes in a SECOND excluded tree
+        # (`autobot-backend/code_analysis/`) each kept a `self.config = config` whose
+        # import had been dropped, so every construction raised NameError for six to
+        # nine months and `CodeQualityDashboard` was never runnable. A guard bounded
+        # by the exclusion that caused the defect finds only the instance already
+        # known about, so the sweep is now every tracked *.py and the hook carries no
+        # scope at all.
+        #
+        # This has to run in a REQUIRED check for the same directional reason as
+        # #14419 and #14489: re-widening an exclusion lints FEWER files, so every
+        # lint step reports fewer violations and goes greener. It re-proves both
+        # halves -- the repo is F821-clean AND a pre-commit hook reaches every
+        # tracked file -- and fails below a discovery floor, because a sweep handed
+        # an empty file list reports a comfortable zero. The file list comes from
+        # `git ls-files`, not from the lint config, so the two can disagree.
+        # There is no exemption list, deliberately.
+        python3 tools/lint/check_undefined_names.py --audit
 
     - name: Audit unexpanded shell placeholders in Python string constants (#14517)
       run: |
@@ -703,6 +747,21 @@ jobs:
         # filter covers all of them, so the next guard input added without a
         # matching filter entry fails loudly instead of silently going dark.
         python3 tools/lint/check_code_quality_guard_reach.py --audit
+
+    - name: The open CodeQL alert backlog may not grow (#15333, #17300)
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        # BLOCKING, and in this job rather than in codeql.yml on purpose: this is
+        # a REQUIRED check, and CodeQL itself is not. An alert therefore has to be
+        # adjudicated -- fixed, or dismissed with a written reason -- before a PR
+        # can merge, which is the step that was missing when 111 of them
+        # accumulated and an arbitrary file write hid among them (#17300).
+        #
+        # Fails closed on a missing token or an API error: "could not look" must
+        # never render as "found nothing".
+        ./pipeline-scripts/check_codeql_alert_ceiling.sh
 
     - name: Code quality summary
       if: always()

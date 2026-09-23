@@ -7,16 +7,18 @@ CostRouter — picks the cheapest available provider for the requested model cla
 
 Issue #6595: Cost-aware routing strategy.
 
-Uses MODEL_PRICING_PER_1M_TOKENS to score candidates and picks the one with the
-lowest blended cost (0.3 * input + 0.7 * output, matching typical chat ratios).
-When all candidates have zero cost (local models) it falls back to complexity
-scoring so routing is still meaningful.
+Uses the live pricing cache (#16230) to score candidates and picks the one
+with the lowest blended cost (0.3 * input + 0.7 * output, matching typical
+chat ratios). When all candidates have zero cost (local models, or no cost
+signal available at all) it falls back to complexity scoring so routing is
+still meaningful.
 """
 
 from typing import Dict, List, Tuple
 
+from autobot_shared.local_models import is_local_model
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import MODEL_PRICING_PER_1M_TOKENS
+from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_price
 
 from .complexity_scorer import TaskComplexityScorer
 from .tier_config import ComplexityResult, TierConfig, TierMetrics
@@ -28,11 +30,26 @@ _BLENDED_OUTPUT_WEIGHT = 0.7
 
 
 def _blended_cost(model: str) -> float:
-    """Return blended cost per 1M tokens; 0.0 for local / unknown models."""
-    pricing = MODEL_PRICING_PER_1M_TOKENS.get(model)
+    """Return blended cost per 1M tokens; 0.0 for local, unknown, or uncached models.
+
+    This is a synchronous routing hot path (see module docstring) that cannot
+    await Redis, so a cold or stale pricing cache (#16230) -- `PricingCacheCold`
+    and its `PricingCacheStale` subclass, caught together here -- falls into
+    the same 0.0 bucket a genuinely unpriced model always has. That is safe
+    specifically because `CostRouter.select()` already treats "every candidate
+    costs 0.0" as "no cost signal available" and falls back to complexity-based
+    tie-breaking: a cache outage degrades routing quality (cost stops being a
+    factor) rather than routing on a wrong price.
+    """
+    if is_local_model(model):
+        return 0.0
+    try:
+        pricing = get_cached_price(model)
+    except PricingCacheCold:
+        return 0.0
     if pricing is None:
         return 0.0
-    return pricing["input"] * _BLENDED_INPUT_WEIGHT + pricing["output"] * _BLENDED_OUTPUT_WEIGHT
+    return pricing.input_per_1m * _BLENDED_INPUT_WEIGHT + pricing.output_per_1m * _BLENDED_OUTPUT_WEIGHT
 
 
 class CostRouter:

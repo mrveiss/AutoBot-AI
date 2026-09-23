@@ -10,19 +10,19 @@
  */
 
 import { ref, computed } from 'vue'
-import { useAuthStore } from '@/stores/auth'
 import config, { getBackendUrl, getGrafanaUrl, getPrometheusUrl, getSlmApiBase } from '@/config/ssot-config'
 import slmApiClient from '@/utils/ApiClient'
 
-const authStore = useAuthStore()
 const testingConnection = ref(false)
 const connectionStatus = ref<'unknown' | 'connected' | 'failed'>('unknown')
 const connectionMessage = ref('')
 
-// Issue #1000: Use full display URLs — authStore.getApiUrl() returns '' (relative path for
-// nginx proxy). For display we need to resolve against window.location.origin.
+// Issue #1000: Use full display URLs. #15761 — the fallback used to be
+// authStore.getApiUrl(), which hard-returned '' in DEV and so diverged from
+// getSlmApiBase() (the resolver every real request in this app now goes
+// through). For display we need to resolve against window.location.origin.
 const origin = typeof window !== 'undefined' ? window.location.origin : ''
-const apiUrl = computed(() => origin || authStore.getApiUrl() || '(unavailable)')
+const apiUrl = computed(() => origin || getSlmApiBase() || '(unavailable)')
 const wsUrl = computed(() => `${config.wsBaseUrl}${getSlmApiBase()}/ws/events`)
 
 async function testConnection(): Promise<void> {

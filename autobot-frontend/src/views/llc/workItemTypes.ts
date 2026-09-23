@@ -33,6 +33,51 @@ export type WorkItemStatus =
   | 'blocked'
   | 'cancelled'
 
+/**
+ * What `GET /api/llc/boards/{id}/items` actually returns per card (#14075).
+ *
+ * `_work_item_summary` (autobot-backend/llc/api/boards.py:95-115) emits
+ * exactly these 11 keys. The board views used to assert `WorkItem` here,
+ * which is a claim TypeScript cannot check — and it was wrong: the summary
+ * carries none of `description`, `assignee_name`, `reviewer_user_id`,
+ * `reviewer_agent_id`, `sprint_id`, `labels`, `acceptance_criteria`,
+ * `acceptance_criteria_done` or `linked_pr_urls`.
+ *
+ * Typing the board payload honestly is what makes #14044 a compile-time
+ * concern rather than a blank panel: anything needing a detail field must
+ * fetch the item, because this type does not have one to read.
+ */
+export interface WorkItemSummary {
+  id: string
+  identifier: string
+  title: string
+  type: WorkItemType
+  status: WorkItemStatus
+  priority: WorkItemPriority
+  story_points: number | null
+  assignee_agent_id: string | null
+  assignee_user_id: string | null
+  assignee_type: 'user' | 'agent' | null
+  column_id: string
+}
+
+/**
+ * What a board card renders (#14075).
+ *
+ * The summary the endpoint sends, widened by the two fields the card template
+ * reads but no endpoint currently supplies: `assignee_name` — which exists
+ * nowhere in the LLC backend, so the avatar's `v-if` has always been false —
+ * and `linked_pr_urls`, which `work_items.py` returns for a single item but
+ * `_work_item_summary` does not include.
+ *
+ * They are optional rather than removed: the card is written to display them
+ * and should keep doing so once the payload carries them (#15431). Declaring
+ * them optional is what makes "absent today" visible instead of a runtime
+ * undefined behind a truthiness check.
+ */
+export type BoardCard = WorkItemSummary &
+  Partial<Pick<WorkItem, 'assignee_name' | 'linked_pr_urls'>>
+
 export interface WorkItem {
   id: string
   identifier: string

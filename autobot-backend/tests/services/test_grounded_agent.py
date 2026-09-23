@@ -14,7 +14,6 @@ Tests core functionality:
 - Causal trace generation
 
 Issue: #4070 (Knowledge Grounding Tier 4)
-
 This module contains 40+ tests verifying:
 - End-to-end grounded response generation
 - Claims from KB only
@@ -30,13 +29,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.grounded_agent import (
-    Claim,
-    ClaimStatus,
-    GroundedAgent,
-    GroundedResponse,
-    VerifiedClaim,
-)
+from services.grounded_agent import GroundedAgent
+from services.grounded_agent_models import Claim, ClaimStatus, GroundedResponse, VerifiedClaim
+from services.knowledge_grounding_models import VerificationMethod
 
 
 @pytest.fixture
@@ -66,7 +61,7 @@ def sample_verified_claim(sample_claim):
         kb_source="fact-123",
         confidence=0.95,
         evidence=["Found in KB monitoring facts"],
-        verification_method="kb_lookup",
+        verification_method=VerificationMethod.KB_LOOKUP.value,
     )
 
 

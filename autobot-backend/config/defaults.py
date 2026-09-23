@@ -75,6 +75,7 @@ def _get_memory_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
             "port": redis_port,
             "db": config.redis.db_knowledge,
             "password": config.redis.password,
+            "username": config.redis.username,
         },
         "chromadb": {
             "path": config.misc.chromadb_path or "data/chromadb",
@@ -254,6 +255,13 @@ def _get_simple_configs() -> Dict[str, Any]:
             "log_level": "INFO",
             "log_to_file": True,
             "log_file_path": "logs/autobot.log",
+            # #15587: declared to match the live config.yaml so a factory
+            # reset (rebuild from this schema) doesn't silently drop an
+            # operator's settings-UI choice for these four.
+            "console": True,
+            "log_requests": False,
+            "log_sql": False,
+            "max_file_size": 10,
         },
         "network": {
             "share": {
@@ -295,6 +303,7 @@ def _get_redis_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
         "port": redis_port,
         "db": config.redis.db_main,
         "password": config.redis.password,
+        "username": config.redis.username,
     }
 
 
@@ -326,6 +335,7 @@ def _get_task_transport_config(redis_host: str, redis_port: int) -> Dict[str, An
             "host": redis_host,
             "port": redis_port,
             "password": config.redis.password,
+            "username": config.redis.username,
             "db": config.redis.db_tasks,
         },
     }

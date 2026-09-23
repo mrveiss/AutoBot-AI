@@ -26,30 +26,47 @@ every verification call, so ``alg=none`` and cross-algorithm attacks are
 rejected before PyJWT is invoked.
 """
 
+import asyncio
 import logging
 import os
 import secrets
 from datetime import timedelta
-from typing import Callable
+from typing import Callable, NoReturn
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_jwt, hash_password
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
+from autobot_shared.auth.permissions import Permission
+from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.password_epoch import (
     is_token_revoked_by_password_change,
 )
 from config import settings
 from models.schemas import TokenResponse, UserCreate, UserResponse
+from services.api_key_audit import AUDIT_UNAVAILABLE_DETAIL, AuditUnavailable, audit_key_request
+from services.api_key_authority import legacy_grace_deadline, permission_allowed, role_for_user
+from services.api_key_routes import mark_key_permission
 from services.token_denylist import is_jti_revoked
 from user_management.models.user import User
+
+try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
+    from redis.exceptions import RedisError as _RedisError
+except ImportError:  # pragma: no cover - redis is a hard dep in deployments
+    _RedisError = ConnectionError  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
+
+# #16387: the narrow set of failure modes a revocation-check Redis call can
+# raise -- the client's own error type plus the connection/timeout errors it
+# can surface. Deliberately NOT `except Exception`: a check that cannot run
+# must be told apart from a genuine "not revoked" answer, and a blanket catch
+# would also swallow real bugs and relabel them as Redis outages.
+_REVOCATION_CHECK_FAILURES = (asyncio.TimeoutError, ConnectionError, OSError, _RedisError)
 
 
 class AuthService:
@@ -113,7 +130,14 @@ class AuthService:
         - HS256 → legacy SLM token; verified with ``settings.secret_key``.
         - Any other / ``none`` → rejected (algorithm-confusion guard).
 
-        Returns the normalized claims dict, or ``None`` on any failure.
+        Returns the normalized claims dict, or ``None`` when the token is
+        absent, malformed, expired, or actually revoked.
+
+        Raises ``HTTPException`` (401, matching ``get_current_user``'s normal
+        invalid-token response) when a revocation check itself cannot run --
+        the HS256 jti denylist or the password-epoch check -- because Redis
+        errored. Fail CLOSED (#16387): the caller must not treat "could not
+        check" as "not revoked".
         """
         alg = _peek_alg(token)
 
@@ -129,20 +153,47 @@ class AuthService:
             jti = claims.get("jti")
             if jti:
                 try:
-                    if await is_jti_revoked(jti):
-                        logger.warning("decode_token_async: HS256 token with jti=%r is revoked", jti)
-                        return None
-                except Exception:
-                    logger.warning("jti denylist check failed; failing open", exc_info=True)
+                    revoked = await is_jti_revoked(jti)
+                except _REVOCATION_CHECK_FAILURES as exc:
+                    # #16387: fail CLOSED. The jti denylist is the only record
+                    # of a logged-out or leaked-credential token; if Redis
+                    # cannot answer we cannot tell "not revoked" from
+                    # "unknown", so the token is denied rather than honoured.
+                    # This also gates the backend admin path reached through
+                    # the SLM proxy (#16374) -- a Redis outage takes that path
+                    # down too, which is the accepted trade-off (#16387).
+                    logger.error(
+                        "decode_token_async: jti denylist check failed (%s); denying token",
+                        exc.__class__.__name__,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid or expired token",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    ) from exc
+                if revoked:
+                    logger.warning("decode_token_async: HS256 token with jti=%r is revoked", jti)
+                    return None
 
             # #12924: the jti denylist revokes one token at a time and there is
             # no user->jti index, so it cannot express "every session opened
             # with the old password". The epoch check does that in one lookup.
             try:
-                if await is_token_revoked_by_password_change(claims):
-                    return None
-            except Exception:
-                logger.warning("password-epoch check failed; failing open", exc_info=True)
+                password_revoked = await is_token_revoked_by_password_change(claims)
+            except _REVOCATION_CHECK_FAILURES as exc:
+                # #16387: same fail-closed reasoning as the jti check above --
+                # a token this check cannot clear is denied, not honoured.
+                logger.error(
+                    "decode_token_async: password-epoch check failed (%s); denying token",
+                    exc.__class__.__name__,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired token",
+                    headers={"WWW-Authenticate": "Bearer"},
+                ) from exc
+            if password_revoked:
+                return None
 
             return claims
 
@@ -182,7 +233,7 @@ class AuthService:
 
     async def create_token_response(self, user: User) -> TokenResponse:
         """Create a token response for a user."""
-        role = Role.ADMIN.value if user.is_platform_admin else Role.USER.value
+        role = role_for_user(user.is_platform_admin).value
         access_token = self.create_access_token(
             data={"sub": user.username, "admin": user.is_platform_admin, "role": role}
         )
@@ -239,20 +290,16 @@ def require_permission(permission: Permission) -> Callable:
     return _check
 
 
-def _resolve_role(current_user: dict) -> Role:
-    """Derive the caller's Role from the JWT 'role' field or legacy admin flag."""
-    role_str = current_user.get("role")
-    if role_str:
-        try:
-            return Role(role_str)
-        except ValueError:
-            return Role.USER
-    return Role.ADMIN if current_user.get("admin", False) else Role.USER
-
-
 def _require_permission_or_403(current_user: dict, permission: Permission) -> dict:
-    """Raise 403 unless *current_user*'s role grants *permission*; else return it."""
-    if permission not in ROLE_PERMISSIONS.get(_resolve_role(current_user), []):
+    """Raise 403 unless the caller may exercise *permission*; else return it.
+
+    The decision is ``services.api_key_authority.permission_allowed``. The
+    caller's role must grant *permission*, and an API-key caller's scopes must
+    also carry it (#16040 AC2). So a key never exceeds its owner's role, nor
+    its own scopes. It lives there, free of FastAPI, so it can be tested
+    directly.
+    """
+    if not permission_allowed(current_user, permission):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Permission denied: {permission.value} required",
@@ -339,6 +386,7 @@ async def get_slm_db():
 
 
 async def get_api_key_user(
+    request: Request,
     x_api_key: str = Header(None, alias="X-API-Key"),
     db: AsyncSession = Depends(get_slm_db),
 ) -> dict:
@@ -369,24 +417,117 @@ async def get_api_key_user(
 
     api_key = await api_key_service.validate_key(x_api_key)
     if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired API key",
-            headers={"WWW-Authenticate": "ApiKey"},
-        )
+        await _reject_key(request, x_api_key, "Invalid or expired API key")
 
     user = await _get_user_for_api_key(db, api_key.user_id)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found for API key",
-        )
+        await _reject_key(request, x_api_key, "User not found for API key", api_key_id=str(api_key.id))
 
+    # The KEY's authority, not the USER's (#16040).
+    #
+    # This returned `user.is_platform_admin` unconditionally, so a key created
+    # with narrow scopes carried its owner's full authority -- platform admin
+    # included -- while the UI that issued it displayed the narrow scopes. The
+    # scope a person selected and the authority they granted were two different
+    # things, and nothing in the console showed the difference.
+    #
+    # It has never been exploitable: this dependency has no callers, so no route
+    # authenticates by API key through it. That is exactly why it is fixed now.
+    # An unwired dependency and a wired one are indistinguishable from the
+    # function body, and the first route to adopt this would have inherited the
+    # defect silently rather than by anyone deciding to.
+    #
+    # `admin` is an AND: a key cannot exceed its owner's authority, and it cannot
+    # exceed its own scopes either. `APIKey.has_scope` already implements exact,
+    # wildcard and global-admin matching, so the check belongs there rather than
+    # in a second copy here.
+    #
+    # `role` is the owner's, by the same rule a session gets. So the role half
+    # of the #16040 AC2 intersection checks the owner, and the key half checks
+    # the scopes. A key made before scopes were enforced keeps its owner's full
+    # authority until its grace period ends (AC5), and must then be re-issued.
+    deadline = await _legacy_grace_or_401(request, x_api_key, api_key)
     return {
         "sub": user.username,
-        "admin": user.is_platform_admin,
+        "role": role_for_user(user.is_platform_admin).value,
+        "admin": user.is_platform_admin and api_key.has_scope("admin:*"),
+        "scopes": list(api_key.scopes or []),
         "api_key_id": str(api_key.id),
+        "legacy_full_scope": deadline is not None,
     }
+
+
+async def _audit_or_503(request: Request, **row) -> None:
+    """Write the key request's audit row (#16294), or answer 503: an unaudited key request never proceeds."""
+    try:
+        await audit_key_request(request, **row)
+    except AuditUnavailable:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=AUDIT_UNAVAILABLE_DETAIL)
+
+
+async def _reject_key(request: Request, presented: str, reason: str, api_key_id: str | None = None) -> NoReturn:
+    """Audit a rejected key (#16294), then answer 401."""
+    await _audit_or_503(
+        request,
+        action="api_key_rejected",
+        allowed=False,
+        status=401,
+        presented_key=presented,
+        api_key_id=api_key_id,
+        reason=reason,
+    )
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=reason, headers={"WWW-Authenticate": "ApiKey"})
+
+
+async def _legacy_grace_or_401(request: Request, presented: str, api_key):
+    """Return a pre-enforcement key's grace deadline, or None for a scoped key (#16040 AC5).
+
+    A key inside its grace period is warned about on every use. A key whose
+    grace period has ended is refused with 401 until it is re-issued with
+    explicit scopes.
+    """
+    deadline = legacy_grace_deadline(api_key.created_at)
+    if deadline is None:
+        return None
+    if now_utc() >= deadline:
+        await _reject_key(
+            request,
+            presented,
+            "This API key predates scope enforcement and its grace period has ended; re-issue it",
+            api_key_id=str(api_key.id),
+        )
+    logger.warning(
+        "API key %s predates scope enforcement: it keeps its owner's full authority until %s; re-issue it",
+        api_key.key_prefix,
+        deadline.date().isoformat(),
+    )
+    return deadline
+
+
+def require_key_permission(permission: Permission) -> Callable:
+    """Like ``require_permission``, for a route that authenticates by API key (#16040 AC4).
+
+    The key's authority is its owner's role intersected with its scope bundle.
+    A key lacking the scope gets 403, not 401. Depending on this is what puts a
+    route on the key allow-list (``services/api_key_routes.py``, #16294), which
+    ships empty. Every decision is audited as a key request.
+    """
+
+    async def _check(request: Request, current_user: dict = Depends(get_api_key_user)) -> dict:
+        allowed = permission_allowed(current_user, permission)
+        await _audit_or_503(
+            request,
+            action="api_key_request" if allowed else "api_key_refused_scope",
+            allowed=allowed,
+            status=200 if allowed else 403,
+            presented_key=request.headers.get("X-API-Key"),
+            api_key_id=current_user.get("api_key_id"),
+            username=current_user.get("sub"),
+            permission=permission.value,
+        )
+        return _require_permission_or_403(current_user, permission)
+
+    return mark_key_permission(_check, permission)
 
 
 async def _get_user_for_api_key(db: AsyncSession, user_id):

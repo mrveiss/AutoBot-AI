@@ -16,8 +16,14 @@
 name: Migration Gate
 
 on:
+  # #14054: the merge queue builds each entrant against base + the entries
+  # ahead of it and expects the required contexts to report against that
+  # temporary ref. A required context with no `merge_group:` trigger never
+  # fires, and the queue waits on it forever. Inert until the `merge_queue`
+  # ruleset rule is enabled -- this event does not exist before then.
+  merge_group:
   push:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
     paths:
       - 'autobot-backend/migrations/**'
       - 'autobot-backend/tests/migrations/**'
@@ -36,7 +42,7 @@ on:
   # below; #13862 made the required context a separate reporting job so that
   # "nothing to verify" is stated rather than inferred from a skip.
   pull_request:
-    branches: [ main, Dev_new_gui ]
+    branches: [ release, main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -57,6 +63,12 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
+          # #14054: dorny/paths-filter errors on an event it does not
+          # recognise unless `base` is given, and a failed `changes` job
+          # skips every job that needs it -- i.e. the required context
+          # never reports and the queue deadlocks. Empty on push/PR, so
+          # their existing behaviour is unchanged.
+          base: ${{ github.event.merge_group.base_sha || '' }}
           filters: |
             migrations:
               - 'autobot-backend/migrations/**'
@@ -110,13 +122,41 @@ jobs:
         # structlog is required because test_unified_secrets_api.py mounts the
         # full FastAPI router which transitively imports security.service_auth
         # (structlog-based structured logging for HMAC service-auth).
+        # test_secrets_coordinator.py's #17099 test imports api.secrets, which used to
+        # drag in several eager package __init__ files, each pulling a third-party
+        # import that has nothing to do with migrations. #17138 fixed two of the four
+        # found (verified empirically, not just by re-reading the fix): connectors'
+        # __init__ no longer imports every connector at package-import time
+        # (gdrive.py -> aiohttp, #16444; nextcloud.py -> defusedxml, #17134 -- both
+        # now lazy, resolved on first real use by registry.ConnectorRegistry), and
+        # plugin_sdk/loader.py no longer binds jsonschema.Draft202012Validator at
+        # module level (reached via middleware/__init__ -> plugin_sdk/__init__ ->
+        # loader.py) -- so defusedxml and jsonschema are gone from this list.
+        #
+        # aiohttp and prometheus_client stay: #17138's own fix does not reach them.
+        # Confirmed by import-blocking the four names one at a time against a fresh
+        # `from api.secrets import _create_system_vault_secret` after the #17138 fix
+        # landed, rather than trusting the walk below to still be complete:
+        #   - aiohttp: api.secrets -> autobot_memory_graph -> autobot_memory_graph.
+        #     queries -> autobot_shared.security (eager __init__) -> ssrf_guard.py.
+        #     A DIFFERENT eager package __init__ than connectors', not touched here.
+        #   - prometheus_client: api.secrets -> auth_middleware -> security_layer ->
+        #     autobot_shared.monitoring (eager __init__) -> prometheus_metrics.py.
+        #     A third, also-untouched eager package __init__.
+        # Both are the same general pattern #17138's own issue named but did not
+        # scope to fix (autobot_shared.security and autobot_shared.monitoring have
+        # far wider callers than connectors/plugin_sdk) -- tracked as a follow-up
+        # rather than silently left for the next red run to rediscover.
+        #
+        # starlette is the only other name a static import-graph walk of
+        # api/secrets.py reports, and pip already installs it with fastapi.
         run: |
           python -m pip install --upgrade pip
           python -m pip install \
             "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite \
             pydantic pydantic-settings \
             bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \
-            cryptography fastapi structlog \
+            cryptography fastapi structlog aiohttp prometheus_client \
             pytest pytest-asyncio
 
       - name: Run migration matrix

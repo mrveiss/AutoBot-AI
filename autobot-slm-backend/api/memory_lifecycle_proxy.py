@@ -20,12 +20,12 @@ operator less than one that says which part it could not read.
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Dict
 
 import httpx
 from fastapi import APIRouter, Depends, Query
 
+from autobot_shared import node_proxy
 from autobot_shared.ssot_constants import QueryDefaults
 from config import settings
 from services.auth import get_current_user
@@ -38,17 +38,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/memory", tags=["memory-lifecycle"])
 
-_NODE_URL = os.getenv("AUTOBOT_BACKEND_URL", "") or settings.authority_base_url  # noqa: ssot-fallback
-_INTERNAL_API_KEY = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
-_TIMEOUT = float(os.getenv("AUTOBOT_NODE_PROXY_TIMEOUT_SECONDS", "15"))
-# Verify by DEFAULT, opt out explicitly — the same variable and polarity as
-# api/voice_proxy.py. An earlier revision here read
-# AUTOBOT_NODE_PROXY_VERIFY_TLS with a "false" default, which shipped
-# verification OFF unless an operator opted in: the inverse of the pattern
-# this module claims to follow, on a channel that carries the internal API
-# key. Reusing the existing variable also means one switch for all node
-# proxies rather than a second one only this module reads.
-_VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
+# URL, key, TLS policy and timeout all come from the shared node client (#14886).
+# An earlier revision here read its own AUTOBOT_NODE_PROXY_VERIFY_TLS with a
+# "false" default, shipping verification OFF unless an operator opted in — on
+# the channel that carries the internal API key (#14653). A per-module switch is
+# how that happens; there is now one switch for every node proxy, and this
+# module cannot hold an opinion about it.
+_NODE_URL = node_proxy.resolve_node_url(settings.authority_base_url)
+_INTERNAL_API_KEY = node_proxy.internal_api_key()
 
 _EMPTY_SECTIONS: Dict[str, Any] = {
     "reinforcement": {"hot": [], "cold": []},
@@ -79,7 +76,7 @@ async def get_memory_lifecycle(
         # A missing key is a configuration fault, not a node fault. Saying so is
         # the difference between an operator checking the node and checking a var.
         logger.error("memory lifecycle: AUTOBOT_INTERNAL_API_KEY not configured")
-        return {"nodes": [_unreachable(_NODE_URL, "internal_api_key_not_configured")], "degraded": True}
+        return {"nodes": [_unreachable(_NODE_URL, node_proxy.REASON_KEY_NOT_CONFIGURED)], "degraded": True}
 
     node = await _fetch_node(_NODE_URL, limit)
 
@@ -92,22 +89,16 @@ async def get_memory_lifecycle(
 async def _fetch_node(base_url: str, limit: int) -> Dict[str, Any]:
     """One node's lifecycle payload, or an unreachable placeholder."""
     if not base_url:
-        return _unreachable(base_url, "node_url_not_configured")
+        return _unreachable(base_url, node_proxy.REASON_URL_NOT_CONFIGURED)
 
     url = f"{base_url.rstrip('/')}/api/memory/lifecycle"
     try:
-        async with httpx.AsyncClient(verify=_VERIFY_TLS, timeout=_TIMEOUT) as client:
-            response = await client.get(
-                url,
-                params={"limit": limit},
-                headers={"X-Internal-API-Key": _INTERNAL_API_KEY},
-            )
-    except httpx.TimeoutException:
-        logger.warning("memory lifecycle: node timed out after %ss", _TIMEOUT)
-        return _unreachable(base_url, "node_timeout")
+        async with node_proxy.node_client() as client:
+            response = await client.get(url, params={"limit": limit}, headers=node_proxy.internal_headers())
     except httpx.HTTPError as exc:
-        logger.warning("memory lifecycle: node unreachable: %s", type(exc).__name__)
-        return _unreachable(base_url, "node_unreachable")
+        failure = node_proxy.classify_transport_error(exc)
+        logger.warning("memory lifecycle: %s (%s)", failure.reason, type(exc).__name__)
+        return _unreachable(base_url, failure.reason)
 
     if response.status_code != 200:
         # A non-200 is reported with its status rather than collapsed into

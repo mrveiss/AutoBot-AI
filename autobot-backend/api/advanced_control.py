@@ -11,6 +11,7 @@ import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
+from api.schemas_emergency_stop import EmergencyStopReportResponse
 from api.schemas_system import (
     StreamingSessionRequest,
     StreamingSessionResponse,
@@ -21,7 +22,6 @@ from api.schemas_system import (
 )
 from api.schemas_workflows import (
     AdvancedControlActiveTakeoversListResponse,
-    AdvancedControlEmergencyStopResponse,
     AdvancedControlHealthResponse,
     AdvancedControlInfoResponse,
     AdvancedControlPendingTakeoversListResponse,
@@ -38,11 +38,13 @@ from api.ws_security import enforce_ws_admin, enforce_ws_origin
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.websocket_subprotocol import accept_websocket
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.threshold_constants import TimingConstants
 from desktop_streaming_manager import get_desktop_streaming
 from memory import TaskPriority  # canonical enum (#10626)
 from metrics.system_monitor import evaluate_resource_thresholds
+from services.emergency_stop import execute_emergency_stop
 from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
@@ -167,10 +169,9 @@ async def request_takeover(
 
     Issue #744: Requires admin authentication.
     """
-    # Convert request strings to enums via direct name lookup so each enum is the
-    # single source of truth (#12208 — the old hand-maintained maps mirrored every
-    # member by hand and silently dropped any new one, rejecting a valid trigger
-    # with a 400). Enum member names are the UPPER strings the client sends.
+    # Convert request strings to enums via direct name lookup so each enum is the single source of truth (#12208 — the
+    # old hand-maintained maps mirrored every member by hand and silently dropped any new one, rejecting a valid
+    # trigger with a 400). Enum member names are the UPPER strings the client sends.
     try:
         trigger = TakeoverTrigger[request.trigger.upper()]
     except KeyError:
@@ -456,7 +457,7 @@ async def get_system_status(
     return response
 
 
-@router.post("/system/emergency-stop", response_model=AdvancedControlEmergencyStopResponse)
+@router.post("/system/emergency-stop", response_model=EmergencyStopReportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="emergency_system_stop",
@@ -469,22 +470,10 @@ async def emergency_system_stop(
     Emergency stop for all autonomous operations
 
     Issue #744: Requires admin authentication.
+    Issue #16843: reports which tasks were actually found and paused,
+    and whether that pause is durable, instead of a fixed success string.
     """
-    # Request emergency takeover
-    request_id = await get_takeover_manager().request_takeover(
-        trigger=TakeoverTrigger.CRITICAL_ERROR,
-        reason="Emergency stop activated",
-        requesting_agent="emergency_system",
-        priority=TaskPriority.CRITICAL,
-        auto_approve=True,
-    )
-
-    logger.warning("Emergency stop activated: %s", request_id)
-    return {
-        "success": True,
-        "message": "Emergency stop activated",
-        "takeover_request_id": request_id,
-    }
+    return await execute_emergency_stop()
 
 
 @router.get("/system/health", response_model=AdvancedControlHealthResponse)
@@ -539,7 +528,7 @@ async def monitoring_websocket(websocket: WebSocket):
         return
     if not await enforce_ws_admin(websocket):
         return
-    await websocket.accept()
+    await accept_websocket(websocket)
     logger.info("Monitoring WebSocket client connected")
 
     try:
@@ -581,7 +570,7 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
         return
     if not await enforce_ws_admin(websocket):
         return
-    await websocket.accept()
+    await accept_websocket(websocket)
 
     try:
         # Use the desktop streaming manager's WebSocket handler

@@ -50,7 +50,7 @@ redis-cli -h <database-ip> CONFIG SET maxmemory-policy allkeys-lru
 - Better than noeviction (current) which causes errors when full
 
 #### Persist Changes
-Add to `/etc/redis/redis.conf` on VM3:
+Add to `/etc/redis/redis.conf` on the database role:
 ```conf
 maxmemory 8gb
 maxmemory-policy allkeys-lru
@@ -286,7 +286,7 @@ redis-cli -h <database-ip> SLOWLOG GET 10
 ## Configuration File Template
 
 ```conf
-# /etc/redis/redis.conf on VM3 (<database-ip>)
+# /etc/redis/redis.conf on the database role (<database-ip>)
 
 # Network
 bind 0.0.0.0

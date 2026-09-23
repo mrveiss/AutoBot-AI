@@ -7,7 +7,7 @@ Comprehensive Security Audit Logging Service for AutoBot
 
 OWASP and NIST Compliant Audit Logging System
 Provides distributed, performant, and tamper-resistant audit logging
-across AutoBot's 6-VM infrastructure using Redis DB 10.
+across AutoBot's distributed, role-based infrastructure using Redis DB 10.
 
 Features:
 - OWASP Logging Cheat Sheet compliance

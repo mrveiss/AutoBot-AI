@@ -86,9 +86,6 @@ from .providers import (
     TransformersProvider,
 )
 
-# Issue #8168: Semantic similarity tier-3 cache
-from .semantic_cache import SemanticLLMCache
-
 # Streaming management
 from .streaming import StreamingManager
 
@@ -113,8 +110,6 @@ __all__ = [
     "LLMResponseCache",
     "CachedResponse",
     "get_llm_cache",
-    # Semantic cache (Issue #8168)
-    "SemanticLLMCache",
     # Fallback chains + coordinator (GH#8998)
     "FallbackChain",
     "FallbackChainManager",

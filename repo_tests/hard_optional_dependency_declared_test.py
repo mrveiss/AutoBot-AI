@@ -36,15 +36,17 @@ from __future__ import annotations
 
 import ast
 import functools
-import re
-import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import sys
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
+from repo_tests.declared_distributions import SKIP_PARTS, declared_distributions
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-_SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", ".claude", "venv", ".venv"}
+from tools.lint._scan_helpers import tracked_paths
+
+_REPO_ROOT = repo_root()
+_SKIP_PARTS = SKIP_PARTS
 
 # Top-level trees that must each contribute at least one parsed file. Flooring
 # only the AGGREGATE is what this guard shipped with, and the arithmetic says
@@ -87,51 +89,32 @@ _DIST_ALIASES = {
 # asserts each entry is STILL undeclared, so declaring one forces its exemption
 # out rather than leaving this file quietly guarding one path less than it
 # claims. THIS DICT ONLY SHRINKS.
-_KNOWN_UNDECLARED = {
-    ("autobot-backend/knowledge/tiering.py", "diskann"): "#15035",
-    ("autobot-backend/multimodal_processor/processors/voice.py", "librosa"): "#15035",
-    ("autobot-backend/services/execution/modal_backend.py", "modal"): "#15035",
-    ("autobot-infrastructure/shared/scripts/monitor_services.py", "flask"): "#15035",
-    ("autobot-infrastructure/shared/scripts/monitor_services.py", "flask_cors"): "#15035",
-}
+#
+# EMPTY as of #15035, which cleared the five this shipped with:
+#   * librosa and transformers -> autobot-backend/requirements-media.txt
+#   * modal                    -> autobot-backend/requirements-modal.txt
+#   * flask, flask-cors        -> autobot-infrastructure/shared/scripts/requirements.txt
+#   * diskann                  -> not a hard dependency after all. knowledge/tiering.py
+#     falls back to the declared `faiss` and only raises when BOTH are missing;
+#     the `if/elif/else` shape put that raise inside the DISKANN_AVAILABLE
+#     branch, which reads here as "raises without diskann". The module now uses
+#     early returns, so the detector sees what actually happens.
+#
+# The parametrization below therefore collects nothing. That is deliberate and
+# matches ``_KNOWN_BROKEN`` in ``infra_script_imports_resolve_test.py``: with no
+# live exemption, the detector's positive and negative controls at the bottom of
+# this file are what prove it still recognises the shape.
+_KNOWN_UNDECLARED: dict[tuple[str, str], str] = {}
 
 _STDLIB = set(sys.stdlib_module_names) | {"__future__"}
 
 
 def _tracked_python() -> list[Path]:
     """Tracked ``*.py``, from git rather than a walk — see the note in the sibling guard."""
-    out = subprocess.run(  # nosec B603  # fixed argv
-        ["git", "-C", str(_REPO_ROOT), "ls-files", "*.py"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-    return [_REPO_ROOT / line for line in out.splitlines() if line]
+    return [_REPO_ROOT / line for line in tracked_paths(_REPO_ROOT, "*.py")]
 
 
-def _declared_distributions() -> tuple[set[str], int]:
-    """Every distribution named by a requirements file or pyproject in this checkout."""
-    names: set[str] = set()
-    files = 0
-    for path in sorted(_REPO_ROOT.rglob("requirements*.txt")) + sorted(_REPO_ROOT.rglob("pyproject.toml")):
-        if any(part in _SKIP_PARTS for part in path.relative_to(_REPO_ROOT).parts):
-            continue
-        files += 1
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for line in text.splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            match = re.match(r'^["\']?([A-Za-z0-9][A-Za-z0-9._-]*)', line)
-            if match:
-                names.add(match.group(1).lower().replace("-", "_"))
-    return names, files
-
-
-_DECLARED, _REQUIREMENTS_FILES = _declared_distributions()
+_DECLARED, _REQUIREMENTS_FILES = declared_distributions(_REPO_ROOT)
 
 
 def _is_declared(top: str) -> bool:
@@ -284,9 +267,10 @@ def test_the_sweep_reached_the_tree() -> None:
         "detector stopped recognising it — the second makes every assertion "
         "below pass over nothing"
     )
-    assert _REQUIREMENTS_FILES >= 15, (
-        f"only read {_REQUIREMENTS_FILES} requirements/pyproject files — the "
-        "declaration oracle has gone blind and would report false findings"
+    assert _REQUIREMENTS_FILES >= 30, (
+        f"only read {_REQUIREMENTS_FILES} requirements/pyproject files, floor 30 "
+        f"(37 measured after the #15518 widening) — the declaration oracle has "
+        "gone blind and would report false findings"
     )
     assert len(_DECLARED) > 100, f"only {len(_DECLARED)} declared distributions found"
 

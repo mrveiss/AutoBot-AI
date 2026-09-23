@@ -19,13 +19,14 @@ Security: Commands are validated against dangerous patterns before execution.
 Execution: Uses PTY integration for commands to appear in user's terminal.
 """
 
-import asyncio
 import time
 from datetime import datetime, timezone
 from typing import AsyncGenerator, Tuple
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from security.command_patterns import check_dangerous_patterns, is_safe_command
+from services import pty_command
 from utils.command_utils import execute_shell_command_streaming
 
 from .command_explanation_service import (
@@ -55,10 +56,8 @@ logger = get_logger(__name__)
 # Issue #765: DANGEROUS_PATTERNS and SAFE_COMMANDS now imported from
 # src.security.command_patterns for centralized security pattern management
 
-# Unique marker written after each PTY command to capture the exit code.
-# Format written to terminal: echo '__AUTOBOT_EXIT__='$?
-# Format that appears in output: __AUTOBOT_EXIT__=<N>
-_PTY_EXIT_MARKER = "__AUTOBOT_EXIT__"
+#: Seconds a step command may run in the user's terminal before it is interrupted (#17078).
+_OVERSEER_COMMAND_TIMEOUT_S = env_int("AUTOBOT_OVERSEER_COMMAND_TIMEOUT_S", 60)
 
 
 def _build_no_command_result(task: "AgentTask", execution_time: float) -> StepResult:
@@ -128,26 +127,6 @@ def _build_execution_error_result(task: "AgentTask", error: Exception, execution
     )
 
 
-def _parse_pty_exit_code(output: str) -> Tuple[str, int]:
-    """
-    Extract exit code from PTY output containing the exit marker.
-
-    Searches for '__AUTOBOT_EXIT__=<N>' in output, strips the marker line,
-    and returns (cleaned_output, exit_code).  Returns exit_code=0 when
-    the marker is absent (e.g. older sessions without exit-code support).
-
-    Issue #935.
-    """
-    import re
-
-    match = re.search(rf"{_PTY_EXIT_MARKER}=(\d+)", output)
-    if match:
-        exit_code = int(match.group(1))
-        cleaned = re.sub(rf"\s*{_PTY_EXIT_MARKER}=\d+\s*", "", output).strip()
-        return cleaned, exit_code
-    return output, 0
-
-
 class StepExecutorAgent:
     """
     Executes a single task and provides two-part explanations.
@@ -177,7 +156,6 @@ class StepExecutorAgent:
         self.pty_session_id = pty_session_id or session_id
         self.explanation_service = explanation_service or get_command_explanation_service()
         self._command_executor = None
-        self._chat_history_manager = None
 
     def _validate_command(self, command: str) -> Tuple[bool, str | None]:
         """
@@ -536,217 +514,79 @@ class StepExecutorAgent:
                 key_findings=["See output above for details."],
             )
 
-    async def _get_chat_history_manager(self):
-        """Get or create chat history manager."""
-        if self._chat_history_manager is None:
-            try:
-                from chat_history import ChatHistoryManager
-
-                self._chat_history_manager = ChatHistoryManager()
-            except ImportError:
-                logger.warning("ChatHistoryManager not available")
-        return self._chat_history_manager
-
-    def _write_to_pty(self, text: str) -> bool:
-        """
-        Write text to PTY terminal.
-
-        Args:
-            text: Text to write (command + newline)
-
-        Returns:
-            True if written successfully
-        """
+    def _live_pty(self):
+        """The step's PTY, created if missing or dead; None if no PTY can be had."""
         if not PTY_AVAILABLE or not simple_pty_manager:
             logger.warning("[StepExecutor] PTY not available")
-            return False
-
+            return None
         try:
             pty = simple_pty_manager.get_session(self.pty_session_id)
+            if pty and pty.is_alive():
+                return pty
+            logger.warning("[StepExecutor] PTY session %s not found or not alive", self.pty_session_id)
+            from constants.path_constants import PATH
 
-            if not pty or not pty.is_alive():
-                logger.warning(
-                    "[StepExecutor] PTY session %s not found or not alive",
-                    self.pty_session_id,
-                )
-                # Try to create a new PTY session
-                from constants.path_constants import PATH
-
-                pty = simple_pty_manager.create_session(self.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT))
-                if not pty:
-                    logger.error("[StepExecutor] Failed to create PTY session")
-                    return False
-                logger.info("[StepExecutor] Created new PTY session %s", self.pty_session_id)
-
-            success = pty.write_input(text)
-            if success:
-                logger.debug("[StepExecutor] Wrote to PTY: %s", text[:50])
-            return success
-
+            pty = simple_pty_manager.create_session(self.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT))
+            if not pty:
+                logger.error("[StepExecutor] Failed to create PTY session")
+            return pty or None
         except Exception as e:
-            logger.error("[StepExecutor] Error writing to PTY: %s", e)
-            return False
+            logger.error("[StepExecutor] Error preparing PTY: %s", e)
+            return None
 
-    async def _stream_pty_execution(
-        self, command: str, task_id: str, chat_manager
-    ) -> AsyncGenerator[StreamChunk, None]:
+    async def _interrupt(self, pty) -> None:
+        """Ctrl+C the step's timed-out command in its own shell -- nothing else is written (#17078)."""
+        logger.warning("[StepExecutor] Step command timed out after %ss; interrupting", _OVERSEER_COMMAND_TIMEOUT_S)
+        pty.write_input("\x03")
+
+    async def _stream_pty_execution(self, pty, command: str, task_id: str) -> AsyncGenerator[StreamChunk, None]:
         """
-        Stream PTY execution output as StreamChunks.
+        Run *command* in the step's PTY and stream its status, output and return code.
 
-        Polls for output from chat history and yields chunks for the execution
-        status, stdout content, and return code.
-
-        Args:
-            command: The command being executed
-            task_id: Unique identifier for this execution
-            chat_manager: Chat history manager to poll for output
-
-        Yields:
-            StreamChunk objects for execution status, output, and return code.
-            Issue #620.
+        Output and exit code come from the PTY's own transcript (#17078): chat
+        history holds agent output under ``agent_terminal`` and only after the
+        fact, and the old ``__AUTOBOT_EXIT__=`` marker could be printed by the
+        command itself. A command that times out is interrupted and reported with
+        return code 124, never as a success.
         """
-        yield StreamChunk(
-            task_id=task_id,
-            step_number=0,
-            chunk_type="pty_execution",
-            content=f"Executing: {command}",
-            is_final=False,
+        yield StreamChunk(task_id, 0, "pty_execution", f"Executing: {command}", False)
+        marker, start = pty_command.new_marker(), pty.transcript_position()
+        if not pty.write_input(pty_command.typed_input(command, marker)):
+            yield StreamChunk(task_id, 0, "error", "Failed to write command to PTY", True)
+            return
+        exit_code, timed_out = await pty_command.await_exit_code(
+            pty, start, marker, _OVERSEER_COMMAND_TIMEOUT_S, on_timeout=lambda: self._interrupt(pty)
         )
-
-        # Poll for output completion (returns raw output including exit marker)
-        raw_output = await self._poll_pty_output(chat_manager, timeout=60.0)
-
-        # Extract real exit code from marker appended by _execute_command_streaming
-        clean_output, exit_code = _parse_pty_exit_code(raw_output)
-        logger.debug("[StepExecutor] PTY exit code: %d", exit_code)
-
-        # Yield final output (without the exit marker line)
-        yield StreamChunk(
-            task_id=task_id,
-            step_number=0,
-            chunk_type="stdout",
-            content=clean_output,
-            is_final=False,
-        )
-
-        # Yield actual return code detected from PTY (Issue #935)
-        yield StreamChunk(
-            task_id=task_id,
-            step_number=0,
-            chunk_type="return_code",
-            content=str(exit_code),
-            is_final=True,
-        )
+        output = pty_command.output_since(pty, start, command, marker)
+        if timed_out:
+            exit_code = pty_command.TIMED_OUT_RETURN_CODE
+            output += f"\n[timed out after {_OVERSEER_COMMAND_TIMEOUT_S}s and interrupted]"
+        elif exit_code is None:
+            exit_code, output = 1, output + "\n[the shell ended before the command reported an exit code]"
+        yield StreamChunk(task_id, 0, "stdout", output.strip(), False)
+        yield StreamChunk(task_id, 0, "return_code", str(exit_code), True)
 
     async def _execute_command_streaming(self, command: str) -> AsyncGenerator[StreamChunk, None]:
         """
         Execute a command in PTY terminal and stream output.
 
-        Uses PTY integration so commands appear in user's terminal.
-        Output is polled from chat history (where WebSocket handler saves it).
+        Uses PTY integration so commands appear in user's terminal; output and
+        exit code are read from the PTY itself (#17078).
         """
         logger.info("[StepExecutor] Executing command in PTY: %s", command[:100])
         task_id = f"exec_{self.pty_session_id}_{int(time.time())}"
 
         # Try PTY execution first (preferred - shows in user's terminal)
-        if PTY_AVAILABLE and simple_pty_manager:
-            # Append exit-code marker so we can detect the real return code
-            # from PTY output (Issue #935).
-            pty_command = f"{command}; echo '{_PTY_EXIT_MARKER}='$?"
-            if not self._write_to_pty(f"{pty_command}\n"):
-                logger.warning("[StepExecutor] PTY write failed, falling back to subprocess")
-            else:
-                # Poll for output from chat history (Issue #620: uses helper)
-                chat_manager = await self._get_chat_history_manager()
-                if chat_manager:
-                    async for chunk in self._stream_pty_execution(command, task_id, chat_manager):
-                        yield chunk
-                    return
+        pty = self._live_pty()
+        if pty is not None:
+            async for chunk in self._stream_pty_execution(pty, command, task_id):
+                yield chunk
+            return
 
         # Fallback: Use subprocess (output won't appear in user's terminal)
         logger.info("[StepExecutor] Using subprocess fallback for: %s", command[:50])
         async for chunk in self._execute_subprocess_streaming(command, task_id):
             yield chunk
-
-    def _extract_terminal_output(self, messages: list) -> str:
-        """
-        Aggregate all recent terminal output from chat messages.
-
-        Collects every non-prompt terminal message in chronological order so
-        multi-line command output (including the exit-code marker appended by
-        _execute_command_streaming) is captured as a single string.
-
-        Args:
-            messages: List of chat messages in chronological order
-
-        Returns:
-            Concatenated terminal output text (may include exit-code marker).
-            Issue #620, #935.
-        """
-        from utils.encoding_utils import strip_ansi_codes
-
-        parts = []
-        for msg in messages:
-            if msg.get("sender") == "terminal" and msg.get("text"):
-                text = strip_ansi_codes(msg["text"])
-                if text and not text.startswith("$"):
-                    parts.append(text)
-        return "\n".join(parts)
-
-    async def _poll_pty_output(
-        self,
-        chat_manager,
-        timeout: float = 60.0,
-        stability_threshold: float = 1.0,
-    ) -> str:
-        """
-        Poll chat history for PTY output until stable.
-
-        Args:
-            chat_manager: ChatHistoryManager instance
-            timeout: Maximum wait time
-            stability_threshold: Seconds of unchanged output to consider stable
-
-        Returns:
-            Collected output from chat history
-        """
-        start_time = time.time()
-        last_output = ""
-        last_change_time = start_time
-        poll_interval = 0.2
-
-        logger.debug("[StepExecutor] Polling for PTY output (timeout=%ss)", timeout)
-
-        while (time.time() - start_time) < timeout:
-            try:
-                messages = await chat_manager.get_session_messages(session_id=self.session_id, limit=10)
-                current_output = self._extract_terminal_output(messages)
-
-                # Terminate early when exit-code marker appears (Issue #935)
-                if current_output and _PTY_EXIT_MARKER in current_output:
-                    logger.debug("[StepExecutor] Exit marker found in PTY output")
-                    return current_output
-
-                # Check stability - output unchanged for threshold duration
-                if current_output and current_output == last_output:
-                    if (time.time() - last_change_time) >= stability_threshold:
-                        logger.info(
-                            "[StepExecutor] Output stabilized after %.2fs",
-                            time.time() - start_time,
-                        )
-                        return current_output
-                elif current_output != last_output:
-                    last_output = current_output
-                    last_change_time = time.time()
-
-            except Exception as e:
-                logger.warning("[StepExecutor] Polling error: %s", e)
-
-            await asyncio.sleep(poll_interval)
-            poll_interval = min(poll_interval * 1.2, 2.0)
-
-        logger.warning("[StepExecutor] Polling timeout reached")
-        return last_output
 
     async def _execute_subprocess_streaming(self, command: str, task_id: str) -> AsyncGenerator[StreamChunk, None]:
         """

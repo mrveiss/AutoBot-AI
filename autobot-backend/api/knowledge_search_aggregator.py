@@ -19,25 +19,31 @@ Endpoints:
 """
 
 import asyncio
+import json
 from typing import Any, Dict, List, Set
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 
 from api.schemas_knowledge import (
     ContextRequest,
     GraphRequest,
-    KnowledgeDocumentationSearchResponse,
-    KnowledgeDocumentationStatsResponse,
     KnowledgeMultiSourceContextResponse,
     KnowledgeMultiSourceGraphResponse,
     KnowledgeMultiSourceSearchResponse,
     KnowledgeMultiSourceStatsResponse,
     SearchRequest,
 )
+from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.relations import relations_by_direction
+from knowledge.search_filters import (
+    extract_user_context_from_request,
+    filter_search_results_by_permission,
+)
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -45,39 +51,97 @@ logger = get_logger(__name__)
 
 # Issue #336: Extracted helper for processing relation results
 def _process_outgoing_relation(rel: Dict[str, Any], fact_id: str, related_ids: Set[str], results: List[Dict]) -> None:
-    """Process a single outgoing relation (Issue #336 - extracted helper)."""
+    """Process a single outgoing relation (Issue #336 - extracted helper). Keys are "to"/"type" (#16708)."""
     if rel.get("target_fact"):
         target = rel["target_fact"]
         target["source"] = "graph_relation"
-        target["relation_type"] = rel.get("relation_type")
+        target["relation_type"] = rel.get("type")
         target["from_fact"] = fact_id
-        if rel.get("target_id") not in related_ids:
+        if rel.get("to") not in related_ids:
             results.append(target)
-            related_ids.add(rel.get("target_id"))
+            related_ids.add(rel.get("to"))
 
 
 def _process_incoming_relation(rel: Dict[str, Any], fact_id: str, related_ids: Set[str], results: List[Dict]) -> None:
-    """Process a single incoming relation (Issue #336 - extracted helper)."""
+    """Process a single incoming relation (Issue #336 - extracted helper). See #16708 note above."""
     if rel.get("source_fact"):
         source = rel["source_fact"]
         source["source"] = "graph_relation"
-        source["relation_type"] = rel.get("relation_type")
+        source["relation_type"] = rel.get("type")
         source["to_fact"] = fact_id
-        if rel.get("source_id") not in related_ids:
+        if rel.get("from") not in related_ids:
             results.append(source)
-            related_ids.add(rel.get("source_id"))
+            related_ids.add(rel.get("from"))
 
 
-async def _expand_fact_relations(kb: Any, fact_id: str, related_ids: Set[str], results: List[Dict]) -> None:
-    """Expand relations for a single fact (Issue #336 - extracted helper)."""
+async def _expand_fact_relations(
+    kb: Any,
+    fact_id: str,
+    related_ids: Set[str],
+    results: List[Dict],
+    user_id: str,
+    user_org_id: str | None,
+    user_group_ids: List[str],
+    is_admin: bool,
+) -> None:
+    """Expand relations for a single fact (Issue #336 - extracted helper).
+
+    #16665: a related fact (target_fact/source_fact) is a KB fact like any
+    other and is only included if *user_id* may see it.
+    """
     if not fact_id:
         return
     relations = await kb.get_fact_relations(fact_id, direction="both", include_fact_details=True)
-    if relations.get("success"):
-        for rel in relations.get("outgoing", []):
+    if not relations.get("success"):
+        return
+    ownership_manager = getattr(kb, "ownership_manager", None)
+    for rel in relations_by_direction(relations.get("relations", []), "outgoing"):  # #16708
+        if await _related_fact_is_accessible(
+            rel.get("target_fact"), ownership_manager, user_id, user_org_id, user_group_ids, is_admin
+        ):
             _process_outgoing_relation(rel, fact_id, related_ids, results)
-        for rel in relations.get("incoming", []):
+    for rel in relations_by_direction(relations.get("relations", []), "incoming"):
+        if await _related_fact_is_accessible(
+            rel.get("source_fact"), ownership_manager, user_id, user_org_id, user_group_ids, is_admin
+        ):
             _process_incoming_relation(rel, fact_id, related_ids, results)
+
+
+def _decode_fact_metadata(raw_fact: Dict[str, Any]) -> Dict[str, Any]:
+    """knowledge/facts.py hset()s "metadata" as a JSON *string* (#16665 review:
+    wrapping it un-decoded read every fact as owner_id=None, denying everyone
+    including the owner)."""
+    raw = raw_fact.get("metadata")
+    if not isinstance(raw, str):
+        return raw if isinstance(raw, dict) else {}
+    try:
+        decoded = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return decoded if isinstance(decoded, dict) else {}
+
+
+async def _related_fact_is_accessible(
+    related_fact: Dict[str, Any] | None,
+    ownership_manager,
+    user_id: str,
+    user_org_id: str | None,
+    user_group_ids: List[str],
+    is_admin: bool,
+) -> bool:
+    """#16665: a related fact reached via the relation graph is filtered the
+    same as a direct search result -- a relation is not an access grant."""
+    if not related_fact:
+        return False
+    filtered = await filter_search_results_by_permission(
+        [{"id": related_fact.get("id"), "metadata": _decode_fact_metadata(related_fact)}],
+        user_id=user_id,
+        user_org_id=user_org_id,
+        user_group_ids=user_group_ids,
+        ownership_manager=ownership_manager,
+        is_admin=is_admin,
+    )
+    return bool(filtered)
 
 
 def _build_relation_context(rel: Dict[str, Any], total_length: int, max_length: int, context_parts: List[str]) -> int:
@@ -87,7 +151,7 @@ def _build_relation_context(rel: Dict[str, Any], total_length: int, max_length: 
     content = rel["target_fact"].get("content", "")[:300]
     if total_length + len(content) > max_length:
         return total_length
-    rel_type = rel.get("relation_type", "related_to")
+    rel_type = rel.get("type", "related_to")  # #16708: real key is "type"
     context_parts.append(f"- [{rel_type}] {content}\n")
     return total_length + len(content)
 
@@ -128,8 +192,17 @@ async def _process_relations_for_citations(
     max_length: int,
     context_parts: List[str],
     total_length: int,
+    user_id: str,
+    user_org_id: str | None,
+    user_group_ids: List[str],
+    is_admin: bool,
 ) -> int:
-    """Process relations for citations. (Issue #315 - extracted)"""
+    """Process relations for citations. (Issue #315 - extracted)
+
+    #16665: a related fact's content only enters the LLM context if
+    *user_id* may see it -- a relation is not an access grant.
+    """
+    ownership_manager = getattr(kb, "ownership_manager", None)
     for citation in citations[:2]:
         if total_length >= max_length:
             break
@@ -138,102 +211,31 @@ async def _process_relations_for_citations(
             continue
 
         relations = await kb.get_fact_relations(fact_id, direction="outgoing", include_fact_details=True)
-        if not (relations.get("success") and relations.get("outgoing")):
+        if not (relations.get("success") and relations.get("relations")):  # #16708: real key is "relations"
             continue
 
         context_parts.append("## Related Information\n")
-        for rel in relations["outgoing"][:2]:
-            total_length = _build_relation_context(rel, total_length, max_length, context_parts)
+        for rel in relations["relations"][:2]:
+            if await _related_fact_is_accessible(
+                rel.get("target_fact"), ownership_manager, user_id, user_org_id, user_group_ids, is_admin
+            ):
+                total_length = _build_relation_context(rel, total_length, max_length, context_parts)
         context_parts.append("\n")
     return total_length
 
 
-def _process_single_doc_result(
-    doc: Dict[str, Any],
-    total_length: int,
-    max_length: int,
-    context_parts: List[str],
-    citations: List[Dict],
-) -> int:
-    """Process a single documentation result (Issue #315: extracted).
+# Documentation-searcher state, its two standalone routes, and the LLM-context
+# doc-processing helpers moved to api/knowledge_search_documentation.py
+# (#16665, #14236 file-size ceiling) -- indexed documentation carries no
+# per-user ownership/visibility, so it has no fact-visibility concern.
+from api.knowledge_search_documentation import (
+    get_documentation_searcher,
+)
+from api.knowledge_search_documentation import process_documentation_context as _process_documentation_context
 
-    Returns updated total_length.
-    """
-    content = doc.get("content", "")[:400]
-    if total_length + len(content) > max_length:
-        return total_length
-    source = doc.get("metadata", {}).get("source", "docs")
-    context_parts.append(f"[{source}]\n{content}\n\n")
-    citations.append(
-        {
-            "source": "documentation",
-            "file": doc.get("metadata", {}).get("source"),
-        }
-    )
-    return total_length + len(content)
-
-
-def _process_documentation_context(
-    query: str,
-    max_length: int,
-    context_parts: List[str],
-    citations: List[Dict],
-    total_length: int,
-) -> int:
-    """Process documentation search into context. (Issue #315 - extracted)"""
-    doc_searcher = get_documentation_searcher()
-    if not doc_searcher or not doc_searcher.is_documentation_query(query):
-        return total_length
-
-    doc_results = doc_searcher.search(query=query, n_results=2, score_threshold=0.3)
-    if not doc_results:
-        return total_length
-
-    context_parts.append("## AutoBot Documentation\n")
-    for doc in doc_results[:2]:
-        total_length = _process_single_doc_result(doc, total_length, max_length, context_parts, citations)
-    return total_length
-
-
-router = APIRouter(prefix="/multi-source", tags=["knowledge-multi-source"])
-
-
-# ============================================================================
-# Lazy-loaded Documentation Searcher (thread-safe)
-# ============================================================================
-
-import threading
-
-_documentation_searcher = None
-_documentation_searcher_lock = threading.Lock()
-
-
-def get_documentation_searcher():
-    """Get or create the documentation searcher instance (thread-safe)."""
-    global _documentation_searcher
-
-    if _documentation_searcher is not None:
-        return _documentation_searcher
-
-    with _documentation_searcher_lock:
-        # Double-check after acquiring lock
-        if _documentation_searcher is not None:
-            return _documentation_searcher
-
-        try:
-            from services.chat_knowledge_service import DocumentationSearcher
-
-            _documentation_searcher = DocumentationSearcher()
-            if _documentation_searcher.initialize():
-                logger.info("Documentation searcher initialized for multi-source API")
-                return _documentation_searcher
-            else:
-                logger.warning("Documentation searcher failed to initialize")
-                _documentation_searcher = None
-                return None
-        except Exception as e:
-            logger.warning("Could not initialize documentation searcher: %s", e)
-            return None
+# #15745: no route here had any auth dependency; anonymous callers could
+# search across every knowledge source (facts, graph relations, docs).
+router = APIRouter(prefix="/multi-source", tags=["knowledge-multi-source"], dependencies=[Depends(get_current_user)])
 
 
 # ============================================================================
@@ -246,7 +248,16 @@ def get_documentation_searcher():
 # ============================================================================
 
 
-async def _search_facts(kb, query: str, top_k: int, result: dict) -> None:
+async def _search_facts(
+    kb,
+    query: str,
+    top_k: int,
+    result: dict,
+    user_id: str,
+    user_org_id: str | None,
+    user_group_ids: List[str],
+    is_admin: bool,
+) -> None:
     """
     Search facts via KnowledgeBase.
 
@@ -257,20 +268,32 @@ async def _search_facts(kb, query: str, top_k: int, result: dict) -> None:
         query: Search query
         top_k: Number of results to return
         result: Result dict to populate
+
+    #16665: results are filtered to what *user_id* may see before storing.
     """
     try:
         # Issue #13009: exclude quarantined research facts (#12622).
         fact_results = await kb.search(query, top_k=top_k, filters=RESEARCH_QUARANTINE_FILTER)
         if fact_results.get("results"):
-            for fact in fact_results["results"]:
+            filtered = await filter_search_results_by_permission(
+                fact_results["results"],
+                user_id=user_id,
+                user_org_id=user_org_id,
+                user_group_ids=user_group_ids,
+                ownership_manager=getattr(kb, "ownership_manager", None),
+                is_admin=is_admin,
+            )
+            for fact in filtered:
                 fact["source"] = "knowledge_base"
-            result["facts"] = fact_results.get("results", [])
+            result["facts"] = filtered
         result["sources_searched"].append("facts")
     except Exception as e:
         logger.warning("Fact search failed: %s", e)
 
 
-async def _search_relations(kb, result: dict) -> None:
+async def _search_relations(
+    kb, result: dict, user_id: str, user_org_id: str | None, user_group_ids: List[str], is_admin: bool
+) -> None:
     """
     Expand facts with graph relations.
 
@@ -285,7 +308,9 @@ async def _search_relations(kb, result: dict) -> None:
         fact_ids = [f.get("id") or f.get("fact_id") for f in result["facts"]]
 
         for fact_id in fact_ids[:5]:  # Limit to top 5 to avoid too many queries
-            await _expand_fact_relations(kb, fact_id, related_ids, result["related_facts"])
+            await _expand_fact_relations(
+                kb, fact_id, related_ids, result["related_facts"], user_id, user_org_id, user_group_ids, is_admin
+            )
 
         result["sources_searched"].append("relations")
     except Exception as e:
@@ -326,7 +351,7 @@ def _search_documentation(query: str, doc_results_count: int, score_threshold: f
     operation="search",
     error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-async def search(req: Request, body: SearchRequest):
+async def search(req: Request, body: SearchRequest, current_user: Dict = Depends(get_current_user)):
     """
     Search across all knowledge sources in a multi-source query.
 
@@ -335,6 +360,8 @@ async def search(req: Request, body: SearchRequest):
     Returns results from all sources with source attribution.
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
+    is_admin = is_admin_role(current_user.get("role"))
 
     result = {
         "success": True,
@@ -347,11 +374,11 @@ async def search(req: Request, body: SearchRequest):
 
     # Search facts (Issue #620: uses helper)
     if "facts" in body.include_sources and kb is not None:
-        await _search_facts(kb, body.query, body.limit, result)
+        await _search_facts(kb, body.query, body.limit, result, user_id, user_org_id, user_group_ids, is_admin)
 
     # Expand with relations (Issue #620: uses helper)
     if "relations" in body.include_sources and body.expand_relations and kb is not None:
-        await _search_relations(kb, result)
+        await _search_relations(kb, result, user_id, user_org_id, user_group_ids, is_admin)
 
     # Search documentation (Issue #620: uses helper)
     if "documentation" in body.include_sources and body.doc_results > 0:
@@ -390,8 +417,7 @@ async def stats(req: Request):
         },
     }
 
-    # Knowledge base stats
-    # Issue #379: Parallelize independent KB stats calls with asyncio.gather()
+    # Knowledge base stats -- Issue #379: parallelize independent KB stats calls with asyncio.gather()
     if kb is not None:
         try:
             kb_stats, rel_stats = await asyncio.gather(
@@ -437,7 +463,7 @@ async def stats(req: Request):
     operation="get_llm_context",
     error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-async def get_llm_context(req: Request, body: ContextRequest):
+async def get_llm_context(req: Request, body: ContextRequest, current_user: Dict = Depends(get_current_user)):
     """
     Get formatted context for LLM prompts from multi-source knowledge endpoints.
 
@@ -448,8 +474,13 @@ async def get_llm_context(req: Request, body: ContextRequest):
     - Formatted context string
     - Source citations
     - Metadata about retrieved content
+
+    #16665: every fact entering the context is filtered to what the calling
+    user may see -- this feeds an LLM prompt, not just a display list.
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
+    is_admin = is_admin_role(current_user.get("role"))
 
     context_parts: List[str] = []
     citations: List[Dict] = []
@@ -460,6 +491,14 @@ async def get_llm_context(req: Request, body: ContextRequest):
         try:
             # Issue #13009: exclude quarantined research facts (#12622).
             fact_results = await kb.search(body.query, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
+            fact_results["results"] = await filter_search_results_by_permission(
+                fact_results.get("results", []),
+                user_id=user_id,
+                user_org_id=user_org_id,
+                user_group_ids=user_group_ids,
+                ownership_manager=getattr(kb, "ownership_manager", None),
+                is_admin=is_admin,
+            )
             total_length = _process_fact_results(
                 fact_results,
                 body.max_context_length,
@@ -474,7 +513,15 @@ async def get_llm_context(req: Request, body: ContextRequest):
     if body.include_relations and kb is not None and citations:
         try:
             total_length = await _process_relations_for_citations(
-                kb, citations, body.max_context_length, context_parts, total_length
+                kb,
+                citations,
+                body.max_context_length,
+                context_parts,
+                total_length,
+                user_id,
+                user_org_id,
+                user_group_ids,
+                is_admin,
             )
         except Exception as e:
             logger.warning("Relation context failed: %s", e)
@@ -503,97 +550,8 @@ async def get_llm_context(req: Request, body: ContextRequest):
     }
 
 
-@router.get("/documentation/search", response_model=KnowledgeDocumentationSearchResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_documentation",
-    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
-)
-async def search_documentation(
-    query: str,
-    n_results: int = 5,
-    score_threshold: float = 0.3,
-):
-    """
-    Search indexed AutoBot documentation.
-
-    Issue #250: Direct endpoint for documentation search.
-
-    Args:
-        query: Search query
-        n_results: Maximum results to return
-        score_threshold: Minimum relevance score (0-1)
-    """
-    doc_searcher = get_documentation_searcher()
-
-    if not doc_searcher:
-        return {
-            "success": False,
-            "message": "Documentation not indexed. " "Run: python tools/index_documentation.py --tier 1",
-            "results": [],
-        }
-
-    try:
-        results = doc_searcher.search(
-            query=query,
-            n_results=n_results,
-            score_threshold=score_threshold,
-        )
-
-        return {
-            "success": True,
-            "query": query,
-            "results": results,
-            "total_results": len(results),
-        }
-
-    except Exception as e:
-        logger.error("Documentation search failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Documentation search failed",
-        )
-
-
-@router.get("/documentation/stats", response_model=KnowledgeDocumentationStatsResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="documentation_stats",
-    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
-)
-async def documentation_stats():
-    """
-    Get statistics about indexed documentation.
-
-    Returns document count and indexing status.
-    """
-    doc_searcher = get_documentation_searcher()
-
-    if not doc_searcher or not doc_searcher._collection:
-        return {
-            "success": True,
-            "indexed": False,
-            "message": "Documentation not indexed",
-            "how_to_index": "Run: python tools/index_documentation.py --tier 1",
-        }
-
-    try:
-        doc_count = doc_searcher._collection.count()
-
-        return {
-            "success": True,
-            "indexed": True,
-            "collection_name": doc_searcher.collection_name,
-            "document_count": doc_count,
-        }
-
-    except Exception as e:
-        logger.error("Documentation stats failed: %s", e)
-        return {
-            "success": False,
-            "message": "Internal server error",
-        }
-
+# /documentation/search and /documentation/stats moved to
+# api/knowledge_search_documentation.py (#16665, #14236 file-size ceiling).
 
 # ============================================================================
 # Multi-Source Knowledge Graph Endpoint (for KnowledgeGraph.vue)
@@ -674,20 +632,44 @@ def _process_category_tree(
             _process_category_tree(children, nodes, edges, node["id"])
 
 
-async def _get_facts_for_graph(kb: Any, category_filter: str | None, max_facts: int) -> List[Dict[str, Any]]:
+async def _get_facts_for_graph(
+    kb: Any,
+    category_filter: str | None,
+    max_facts: int,
+    user_id: str,
+    user_org_id: str | None,
+    user_group_ids: List[str],
+    is_admin: bool,
+) -> List[Dict[str, Any]]:
     """Get facts for the graph with optional category filtering.
 
     Issue #707: Extracted helper for multi-source graph building.
+
+    #16665: the returned facts (and, transitively, every fact_id the graph's
+    relation edges reach -- _get_fact_relations_for_graph only ever sees IDs
+    this function already returned) are filtered to what *user_id* may see.
     """
     if category_filter:
-        # Get facts from specific category
+        # get_facts_in_category's facts carry metadata JSON-encoded, unlike
+        # kb.search()'s already-decoded results -- _decode_fact_metadata fixes
+        # the shape before filtering (#16665 review).
         result = await kb.get_facts_in_category(category_id=category_filter, include_descendants=True, limit=max_facts)
-        return result.get("facts", []) if result.get("success") else []
+        raw_facts = result.get("facts", []) if result.get("success") else []
+        facts = [{**fact, "metadata": _decode_fact_metadata(fact)} for fact in raw_facts]
     else:
         # Search for recent facts
         # Issue #13009: exclude quarantined research facts (#12622).
         result = await kb.search("*", top_k=max_facts, filters=RESEARCH_QUARANTINE_FILTER)
-        return result.get("results", [])
+        facts = result.get("results", [])
+
+    return await filter_search_results_by_permission(
+        facts,
+        user_id=user_id,
+        user_org_id=user_org_id,
+        user_group_ids=user_group_ids,
+        ownership_manager=getattr(kb, "ownership_manager", None),
+        is_admin=is_admin,
+    )
 
 
 async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relations: int = 100) -> List[Dict[str, Any]]:
@@ -704,8 +686,8 @@ async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relati
             if not result.get("success"):
                 continue
 
-            for rel in result.get("outgoing", [])[:5]:  # Limit per fact
-                target_id = rel.get("target_id")
+            for rel in relations_by_direction(result.get("relations", []), "outgoing")[:5]:  # #16708, limit per fact
+                target_id = rel.get("to")
                 if not target_id or target_id not in fact_ids:
                     continue
                 key = f"{fact_id}-{target_id}"
@@ -715,7 +697,7 @@ async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relati
                         {
                             "from": fact_id,
                             "to": target_id,
-                            "type": rel.get("relation_type", "related_to"),
+                            "type": rel.get("type", "related_to"),
                             "strength": rel.get("strength", 0.8),
                         }
                     )
@@ -876,7 +858,7 @@ def _update_category_fact_counts(nodes: List[Dict], facts: List[Dict[str, Any]])
     operation="get_multi_source_graph",
     error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-async def get_multi_source_graph(req: Request, body: GraphRequest):
+async def get_multi_source_graph(req: Request, body: GraphRequest, current_user: Dict = Depends(get_current_user)):
     """
     Get multi-source knowledge graph combining categories, facts, and relations.
 
@@ -892,6 +874,8 @@ async def get_multi_source_graph(req: Request, body: GraphRequest):
     - relations: List of edges with from, to, type, strength
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
+    is_admin = is_admin_role(current_user.get("role"))
 
     nodes: List[Dict[str, Any]] = []
     edges: List[Dict[str, Any]] = []
@@ -903,7 +887,9 @@ async def get_multi_source_graph(req: Request, body: GraphRequest):
     facts: List[Dict[str, Any]] = []
     if kb is not None:
         try:
-            facts = await _get_facts_for_graph(kb, body.category_filter, body.max_facts)
+            facts = await _get_facts_for_graph(
+                kb, body.category_filter, body.max_facts, user_id, user_org_id, user_group_ids, is_admin
+            )
         except Exception as e:
             logger.warning("Failed to get facts: %s", e)
 
@@ -950,6 +936,7 @@ async def get_multi_source_graph_simple(
     req: Request,
     max_facts: int = Query(50, ge=1, le=200, description="Maximum facts to include"),
     include_categories: bool = Query(True, description="Include category nodes"),
+    current_user: Dict = Depends(get_current_user),
 ):
     """
     GET version of multi-source graph for simple requests.
@@ -961,4 +948,4 @@ async def get_multi_source_graph_simple(
         max_facts=max_facts,
         include_categories=include_categories,
     )
-    return await get_multi_source_graph(req, body)
+    return await get_multi_source_graph(req, body, current_user)

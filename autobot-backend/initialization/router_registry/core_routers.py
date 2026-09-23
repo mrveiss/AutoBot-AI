@@ -11,17 +11,20 @@ and are imported at module level to fail fast if missing.
 """
 
 import api.pricing_health  # noqa: F401 — registers KnownProbes.PRICING probe (GH#6480)
+import api.secrets_store_health  # noqa: F401 — registers KnownProbes.SECRETS_STORE probe (#14126)
 import content_reach.health  # noqa: F401 — registers KnownProbes.CONTENT_REACH probe (#10932)
 
 # Core router imports - these are required for basic functionality
 from api.adapters import router as adapters_router  # Issue #1403
 from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
+from api.admin_orphan_repair import router as admin_orphan_repair_router  # #15779, #16927
+from api.admin_orphan_storage import router as admin_orphan_storage_router  # #17038, #17039
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
-from api.admin_schedulers import router as admin_schedulers_router  # GH#6594
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
 from api.agent_org import router as agent_org_router  # #1405
+from api.agent_presence import router as agent_presence_router  # #16965
 from api.approval_gates import router as approval_gates_router  # #1402
 from api.audit import router as audit_router
 from api.auth import router as auth_router
@@ -33,7 +36,9 @@ from api.chat_compare import router as chat_compare_router  # Issue #4414
 from api.chat_embed import router as chat_embed_router  # GH#9047
 from api.chat_presets import router as chat_presets_router  # GH#8595
 from api.collaboration import router as collaboration_router
+from api.collaboration_events import router as collaboration_events_router  # #16460
 from api.config_revisions import router as config_revisions_router  # #1404
+from api.coordination import router as coordination_router  # #15949
 from api.data_storage import router as data_storage_router
 from api.database_mcp import router as database_mcp_router
 from api.developer import router as developer_router
@@ -47,10 +52,12 @@ from api.intelligent_agent import router as intelligent_agent_router
 from api.jwks import auth_router as jwks_auth_router  # #10196
 from api.knowledge import router as knowledge_router
 from api.knowledge_ai_stack import router as knowledge_ai_stack_router
+from api.knowledge_ai_stack_extraction import router as knowledge_ai_stack_extraction_router
 from api.knowledge_audit import router as knowledge_audit_router
 from api.knowledge_boards import router as knowledge_boards_router
 from api.knowledge_categories import router as knowledge_categories_router
 from api.knowledge_chroma import router as knowledge_chroma_router  # MVA-2046
+from api.knowledge_claude_memory import router as knowledge_claude_memory_router
 from api.knowledge_cognition import router as knowledge_cognition_router
 from api.knowledge_collaboration import router as knowledge_collaboration_router
 from api.knowledge_collections import router as knowledge_collections_router
@@ -66,6 +73,8 @@ from api.knowledge_population import router as knowledge_population_router
 from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.knowledge_search import router as knowledge_search_router
 from api.knowledge_search_aggregator import router as knowledge_search_aggregator_router
+from api.knowledge_search_analytics import router as knowledge_search_analytics_router
+from api.knowledge_search_documentation import router as knowledge_search_documentation_router
 from api.knowledge_search_scoped import router as knowledge_search_scoped_router
 from api.knowledge_suggestions import router as knowledge_suggestions_router
 from api.knowledge_sync_queue import router as knowledge_sync_queue_router  # Issue #4453
@@ -78,6 +87,7 @@ from api.live_events import router as live_events_router  # Issue #6229
 from api.llm import router as llm_router
 from api.llm_providers import router as llm_providers_router
 from api.manual_mcp import router as manual_mcp_router
+from api.mcp_external_servers import router as mcp_external_servers_router
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
 from api.mobile_devices import router as mobile_devices_router  # GH#4463
@@ -128,17 +138,23 @@ def _get_system_routers() -> list:
         ),  # Issue #4461
         (admin_pricing_router, "", ["admin", "pricing"], "admin_pricing"),  # GH#6480
         (
+            admin_orphan_repair_router,
+            "",
+            ["admin", "orphan-repair"],
+            "admin_orphan_repair",
+        ),  # #15779
+        (
+            admin_orphan_storage_router,
+            "",
+            ["admin", "orphan-storage"],
+            "admin_orphan_storage",
+        ),  # #17038, #17039
+        (
             admin_retention_policies_router,
             "",
             ["admin", "retention"],
             "admin_retention_policies",
         ),  # MVA-3145, GH#8995
-        (
-            admin_schedulers_router,
-            "",
-            ["admin", "schedulers"],
-            "admin_schedulers",
-        ),  # GH#6594
         (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
         (jwks_auth_router, "/auth", ["auth", "jwks"], "jwks_auth"),  # #10196 /api/auth/jwks
@@ -149,6 +165,7 @@ def _get_system_routers() -> list:
         (chat_presets_router, "", ["chat"], "chat_presets"),  # GH#8595
         (benchmarks_router, "", ["benchmarks"], "benchmarks"),  # Issue #9024
         (collaboration_router, "", ["collaboration"], "collaboration"),
+        (collaboration_events_router, "", ["collaboration"], "collaboration_events"),  # #16460
         (
             telegram_bot_router,
             "",
@@ -204,6 +221,12 @@ def _get_core_knowledge_routers() -> list:
             "/knowledge_base",
             ["knowledge-search"],
             "knowledge_search",
+        ),
+        (
+            knowledge_search_analytics_router,
+            "/knowledge_base",
+            ["knowledge-search"],
+            "knowledge_search_analytics",
         ),
         (
             knowledge_search_scoped_router,
@@ -286,6 +309,12 @@ def _get_knowledge_organization_routers() -> list:
             ["knowledge-population"],
             "knowledge_population",
         ),
+        (
+            knowledge_claude_memory_router,
+            "/knowledge_base",
+            ["knowledge-population"],
+            "knowledge_claude_memory",
+        ),
     ]
 
 
@@ -332,6 +361,12 @@ def _get_knowledge_feature_routers() -> list:
             "knowledge_ai_stack",
         ),
         (
+            knowledge_ai_stack_extraction_router,
+            "/knowledge_base",
+            ["knowledge-ai-extraction"],
+            "knowledge_ai_stack_extraction",
+        ),
+        (
             knowledge_boards_router,
             "/knowledge_base",
             ["knowledge-boards"],
@@ -354,6 +389,12 @@ def _get_knowledge_feature_routers() -> list:
             "/knowledge_base",
             ["knowledge-multi-source", "knowledge-search"],
             "knowledge_search_aggregator",
+        ),
+        (
+            knowledge_search_documentation_router,
+            "/knowledge_base",
+            ["knowledge-multi-source"],
+            "knowledge_search_documentation",
         ),
         # #11072: knowledge_vectorization is NOT registered here — api/knowledge.py
         # already includes it into knowledge_router (mounted at /knowledge_base),
@@ -428,6 +469,7 @@ def _get_mcp_routers() -> list:
         (knowledge_mcp_router, "/knowledge", ["knowledge_mcp", "mcp"], "knowledge_mcp"),
         (vnc_mcp_router, "/vnc", ["vnc", "mcp"], "vnc_mcp"),
         (mcp_registry_router, "/mcp", ["mcp", "registry"], "mcp_registry"),
+        (mcp_external_servers_router, "/mcp", ["mcp", "mcp-external-servers"], "mcp_external_servers"),
         (
             sequential_thinking_mcp_router,
             "/sequential_thinking",
@@ -486,6 +528,8 @@ def _get_agent_routers() -> list:
         ),
         (overseer_router, "/overseer", ["overseer", "agent"], "overseer"),
         (agent_org_router, "/agents", ["agent-org"], "agent_org"),
+        (agent_presence_router, "", ["agent-presence"], "agent_presence"),  # #16965
+        (coordination_router, "/coordination", ["coordination", "agent"], "coordination"),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
         (memory_router, "/memory", ["memory"], "memory"),

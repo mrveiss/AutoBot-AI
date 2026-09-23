@@ -253,6 +253,50 @@
  * Use these for inline icon buttons and action bars
  * ============================================================ */
 
+/*
+ * Documented above (line 17) since #901, but never actually defined here —
+ * every view that used them (AdminUsersView.vue, VisionAutomationView.vue,
+ * AdminPricingView.vue, AdminMcpServersView.vue) carried its own identical
+ * copy instead. Defining it once, here, is what the comment already claimed.
+ */
+.btn-action-primary,
+.btn-action-secondary,
+.btn-action-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-action-primary {
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+}
+
+.btn-action-secondary {
+  background: transparent;
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.btn-action-danger {
+  background: var(--color-error);
+  color: var(--text-on-error);
+}
+
+.btn-action-primary:disabled,
+.btn-action-secondary:disabled,
+.btn-action-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-icon-action {
   display: inline-flex;
   align-items: center;
@@ -545,6 +589,18 @@
   font-weight: var(--font-normal);
 }
 
+/* Required-field marker, next to a .field-label. */
+.required {
+  color: var(--color-error);
+}
+
+/* Two fields side by side inside a .field-group's parent form. */
+.field-row.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-3);
+}
+
 .field-input,
 .field-select,
 .field-textarea {
@@ -795,4 +851,125 @@
   .stat-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ============================================================
+ * ADMIN: PRICING (AdminPricingView.vue, #16875)
+ * Moved out of that view's own <style> block -- one more
+ * component-local style block was exactly what
+ * repo_tests/frontend_fragmentation_ratchet_test.py exists to
+ * push back on, even for classes only that view currently uses.
+ * ============================================================ */
+
+.admin-pricing {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.admin-pricing-body {
+  padding: var(--spacing-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.provider-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--spacing-4);
+}
+
+.provider-card {
+  padding: var(--spacing-4);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+}
+
+.provider-name {
+  font-weight: var(--font-semibold);
+  text-transform: capitalize;
+}
+
+.provider-meta {
+  margin: 0;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
+  padding: var(--spacing-1) 0;
+}
+
+.meta-row dt {
+  color: var(--text-tertiary);
+}
+
+.meta-row dd {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.override-form,
+.override-remove-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-4);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.remove-row {
+  display: flex;
+  gap: var(--spacing-2);
+  align-items: center;
+}
+
+/* ============================================================
+ * ADMIN: MCP SERVERS (AdminMcpServersView.vue, #16875)
+ * Moved out of that view's own <style> block -- same reason as
+ * the Admin: Pricing section above.
+ * ============================================================ */
+
+.admin-mcp-servers {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.admin-mcp-servers-body {
+  padding: var(--spacing-6);
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.role-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-3);
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  font-size: var(--text-sm);
+}
+
+.checkbox-input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.modal-body-text {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }

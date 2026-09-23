@@ -19,6 +19,7 @@ import json
 import os
 from typing import List, Optional
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from orchestration.agent_registry import get_default_agents
@@ -26,7 +27,7 @@ from orchestration.agent_registry import get_default_agents
 logger = get_logger(__name__)
 
 # TTL for a session's role binding — env-tunable, never hard-coded.
-SESSION_ROLE_TTL_SECONDS: int = int(os.environ.get("AUTOBOT_SESSION_ROLE_TTL_SECONDS", str(24 * 3600)))
+SESSION_ROLE_TTL_SECONDS: int = env_int("AUTOBOT_SESSION_ROLE_TTL_SECONDS", 24 * 3600)
 
 # GH#11202: master switch for the chat approval gate. OFF by default — the gate
 # routes tool calls through the LangGraph approval interrupt, which the frontend
@@ -88,15 +89,29 @@ def resolve_auth_role(context: "dict | None") -> str:
     return value if isinstance(value, str) and value else DEFAULT_AUTH_ROLE
 
 
+#: The ``agent_id`` this overlay pinned, if any (#16950). ``build_governed_identity``
+#: honours an executor (unbounded) ``agent_id`` only when it equals this key, so a
+#: client's or a peer's dict naming an executor gets the default boundary instead.
+#: Like ``AUTH_ROLE_CONTEXT_KEY``, it is written or removed on every overlay and
+#: never left as the caller sent it.
+PINNED_ROLE_CONTEXT_KEY = "pinned_agent_id"
+
+
 def apply_role(context: "dict | None", role: Optional[str]) -> "dict | None":
     """Overlay a trusted *role* onto *context* as ``agent_id`` (GH#11186).
 
     A set role overrides any client-supplied ``agent_id`` (trusted server value
-    wins). ``None`` role returns *context* unchanged.
+    wins), and is recorded under ``PINNED_ROLE_CONTEXT_KEY`` as the overlay's own.
+    With no role, a client's ``agent_id`` is left alone. It can only name a
+    profile to restrict its own run, and ``build_governed_identity`` refuses one
+    that would widen it. But a client-supplied pin is always removed (#16950).
     """
     if not role:
+        if context and PINNED_ROLE_CONTEXT_KEY in context:
+            logger.debug("session_role.reject client-supplied %s", PINNED_ROLE_CONTEXT_KEY)
+            return {k: v for k, v in context.items() if k != PINNED_ROLE_CONTEXT_KEY}
         return context
-    return {**(context or {}), "agent_id": role}
+    return {**(context or {}), "agent_id": role, PINNED_ROLE_CONTEXT_KEY: role}
 
 
 class SessionRoleService(AsyncRedisClientMixin):

@@ -43,8 +43,13 @@ Environment="PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python"
 # this unit.
 EnvironmentFile={{ chromadb_authn_env_file }}
 
+# #15317: was a hardcoded 0.0.0.0 -- every interface, in front of four
+# unpatchable advisories including a pre-auth RCE, with the host firewall as
+# the only remaining control. chromadb_bind_host (group_vars/all.yml) defaults
+# to loopback; a multi-node install sets it explicitly and adds a
+# subnet-scoped firewall rule for the port.
 ExecStart={{ chromadb_install_dir }}/venv/bin/chroma run \
-    --host 0.0.0.0 \
+    --host {{ chromadb_bind_host }} \
     --port {{ chromadb_port }} \
     --path {{ chromadb_data_dir }}
 

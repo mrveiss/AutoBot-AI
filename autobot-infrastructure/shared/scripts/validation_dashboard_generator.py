@@ -612,14 +612,23 @@ class ValidationDashboardGenerator:
         return """
         body { margin: 0; padding: 20px; }
         .dashboard { max-width: 1400px; margin: 0 auto; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .stat-card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px; margin-bottom: 30px;
+        }
+        .stat-card {
+            background: white; padding: 25px; border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;
+        }
         .stat-value { font-size: 3em; font-weight: bold; margin: 10px 0; }
         .health-excellent { color: #4CAF50; }
         .health-good { color: #8BC34A; }
         .health-fair { color: #FF9800; }
         .health-needs_attention { color: #F44336; }
-        .phase-item { display: flex; padding: 15px; margin: 10px 0; border-left: 4px solid; background: #f8f9fa; border-radius: 5px; }
+        .phase-item {
+            display: flex; padding: 15px; margin: 10px 0; border-left: 4px solid;
+            background: #f8f9fa; border-radius: 5px;
+        }
         .alert { padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid; }
         .alert-critical { background: #ffebee; border-color: #f44336; }
         .alert-warning { background: #fff3e0; border-color: #ff9800; }
@@ -687,7 +696,7 @@ class ValidationDashboardGenerator:
         html_parts = []
 
         for phase in phase_details:
-            html_parts.append("""
+            html_parts.append(f"""
                 <div class="phase-item" style="border-color: {phase['status_color']}">
                     <div>
                         <strong>{phase['display_name']}</strong>
@@ -700,7 +709,9 @@ class ValidationDashboardGenerator:
                             <strong>{phase['completion_percentage']:.1f}%</strong>
                         </div>
                         <div class="phase-progress">
-                            <div class="phase-progress-bar" style="width: {phase['completion_percentage']}%; background: {phase['status_color']};"></div>
+                            <div class="phase-progress-bar"
+                                 style="width: {phase['completion_percentage']}%;
+                                        background: {phase['status_color']};"></div>
                         </div>
                     </div>
                 </div>
@@ -715,7 +726,7 @@ class ValidationDashboardGenerator:
 
         html_parts = []
         for alert in alerts:
-            html_parts.append("""
+            html_parts.append(f"""
                 <div class="alert alert-{alert['level']}">
                     <div style="font-weight: bold;">{alert['title']}</div>
                     <div>{alert['message']}</div>
@@ -731,7 +742,7 @@ class ValidationDashboardGenerator:
 
         html_parts = []
         for rec in recommendations[:5]:  # Show top 5 recommendations
-            html_parts.append("""
+            html_parts.append(f"""
                 <div class="recommendation">
                     <div class="recommendation-title">
                         {rec['title']}
@@ -803,7 +814,8 @@ def main():
                     system_overview = report.get("system_overview", {})
                     logger.info(f"System Maturity: {system_overview.get('overall_maturity', 0):.1f}%")
                     logger.info(
-                        f"Completed Phases: {system_overview.get('completed_phases', 0)}/{system_overview.get('total_phases', 0)}"
+                        f"Completed Phases: {system_overview.get('completed_phases', 0)}/"
+                        f"{system_overview.get('total_phases', 0)}"
                     )
                     logger.info(f"System Health: {system_overview.get('system_health', 'unknown')}")
                 else:

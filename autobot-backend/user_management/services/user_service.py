@@ -25,24 +25,20 @@ from user_management.models import Role, User, UserRole
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
 from user_management.services.session_service import SessionService
+from user_management.services.user_service_conflict import insert_user_or_raise_duplicate
+
+# Re-exported (not just imported) so `from user_management.services.user_service
+# import DuplicateUserError` keeps working unchanged -- the classes live in
+# user_service_errors.py (#15736) to keep this grandfathered file (#14236)
+# from growing past its recorded ceiling.
+from user_management.services.user_service_errors import (  # noqa: F401
+    DuplicateUserError,
+    InvalidCredentialsError,
+    UserNotFoundError,
+    UserServiceError,
+)
 
 logger = get_logger(__name__)
-
-
-class UserServiceError(Exception):
-    """Base exception for user service errors."""
-
-
-class UserNotFoundError(UserServiceError):
-    """Raised when user is not found."""
-
-
-class DuplicateUserError(UserServiceError):
-    """Raised when attempting to create a duplicate user."""
-
-
-class InvalidCredentialsError(UserServiceError):
-    """Raised when authentication fails."""
 
 
 class UserService(BaseService):
@@ -102,8 +98,8 @@ class UserService(BaseService):
         existing = await self._find_by_email_or_username(email, username)
         if existing:
             if existing.email.lower() == email_lower:
-                raise DuplicateUserError(f"User with email '{email}' already exists")
-            raise DuplicateUserError(f"User with username '{username}' already exists")
+                raise DuplicateUserError(f"User with email '{email}' already exists", field="email")
+            raise DuplicateUserError(f"User with username '{username}' already exists", field="username")
 
     def _build_user_object(
         self,
@@ -151,10 +147,9 @@ class UserService(BaseService):
             },
         )
 
-    async def _persist_user(self, user: User, role_ids: List[uuid.UUID] | None) -> None:
-        """Add user to session and assign roles. Issue #620."""
-        self.session.add(user)
-        await self.session.flush()
+    async def _persist_user(self, user: User, role_ids: List[uuid.UUID] | None, email: str, username: str) -> None:
+        """Insert user (SAVEPOINT-isolated against a race, #15772) and assign roles. Issue #620."""
+        await insert_user_or_raise_duplicate(self.session, user, email, username, self._find_by_email_or_username)
         if role_ids:
             await self._assign_roles(user.id, role_ids)
 
@@ -200,7 +195,7 @@ class UserService(BaseService):
             effective_org_id,
             is_platform_admin,
         )
-        await self._persist_user(user, role_ids)
+        await self._persist_user(user, role_ids, email, username)
         await self._log_user_creation(user, email, username, effective_org_id, is_platform_admin)
         logger.info("Created user: %s (id=%s)", username, user.id)
         return user
@@ -346,7 +341,7 @@ class UserService(BaseService):
         if new_value_lower != current_value.lower():
             existing = await lookup_func(new_value)
             if existing and existing.id != user_id:
-                raise DuplicateUserError(f"{field_name.title()} '{new_value}' already in use")
+                raise DuplicateUserError(f"{field_name.title()} '{new_value}' already in use", field=field_name)
             changes[field_name] = {"old": current_value, "new": new_value_lower}
             setattr(user, field_name, new_value_lower)
 

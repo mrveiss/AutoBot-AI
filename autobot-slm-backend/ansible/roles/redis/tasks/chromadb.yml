@@ -22,7 +22,7 @@
 
 - name: "ChromaDB | Enforce venv target Python version (env-drift fix)"
   ansible.builtin.include_role:
-    name: python314
+    name: python_interpreter
     tasks_from: ensure_venv_version
   vars:
     venv_path: "{{ chromadb_install_dir }}/venv"
@@ -37,22 +37,36 @@
   become_user: "{{ redis_owner }}"
   tags: ['redis', 'chromadb']
 
+# #16641: without this, pip falls back to shelling out to the standalone
+# `virtualenv` executable, absent from these hosts -- matches the
+# interpreter "ChromaDB | Create Python venv" above already targets.
 - name: "ChromaDB | Upgrade pip in venv"
   ansible.builtin.pip:
     name: pip
     state: latest
     virtualenv: "{{ chromadb_install_dir }}/venv"
+    virtualenv_command: "python3.14 -m venv"
   become: true
   become_user: "{{ redis_owner }}"
   environment:
     HOME: "{{ chromadb_install_dir }}"
   tags: ['redis', 'chromadb']
 
+# #15598: the standalone ChromaDB service venv has no requirements manifest of
+# its own, so the floor must stay literal here. It is the specifier text
+# `autobot-backend/requirements.txt` and the ai-stack manifest both declare --
+# `>=0.5` admitted a chromadb two majors below the one the backend that reads
+# this instance is built against. The upper bound comes across with the floor
+# for the reason those manifests state next to it -- it guards against breaking
+# API changes above 2.x -- and an unbounded floor in a venv with no `-c` would
+# resolve straight past it.
+# #16641: see "ChromaDB | Upgrade pip in venv" above.
 - name: "ChromaDB | Install chromadb package"
   ansible.builtin.pip:
-    name: "chromadb>=0.5"
+    name: "chromadb>=1.5.9,<2.0.0"
     state: present
     virtualenv: "{{ chromadb_install_dir }}/venv"
+    virtualenv_command: "python3.14 -m venv"
     extra_args: "--timeout 300"
   become: true
   become_user: "{{ redis_owner }}"

@@ -28,10 +28,142 @@ fi
 
 log()   { printf "${BLU}[pre-push]${CLR} %s\n" "$*" >&2; }
 warn()  { printf "${YEL}[pre-push WARN]${CLR} %s\n" "$*" >&2; }
+
+# A timed-out check DID NOT RUN. Spelling that like a warning and exiting zero made
+# the gate's coverage inversely proportional to the risk of the push: a two-file
+# change was verified and a 162-file change was not, and `WARN ... skipping` reads
+# as a note rather than as "this was never tested" (#15985).
+#
+# So a timeout fails the push. The opt-out names itself in the output, because an
+# escape hatch nobody can see in the transcript is indistinguishable from the bug.
+ALLOW_TIMEOUT="${AUTOBOT_PREPUSH_ALLOW_TIMEOUT:-0}"
+ALLOW_UNRUNNABLE="${AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE:-0}"
+did_not_run() {
+    # $1 = tool, $2 = seconds
+    if [ "$ALLOW_TIMEOUT" = "1" ]; then
+        warn "$1 DID NOT RUN (timed out after ${2}s) — allowed by AUTOBOT_PREPUSH_ALLOW_TIMEOUT=1"
+        return 0
+    fi
+    printf "${RED}[pre-push DID NOT RUN]${CLR} %s timed out after %ss — this push is NOT verified.\n" "$1" "$2" >&2
+    printf "${RED}[pre-push DID NOT RUN]${CLR} Run it yourself, or re-push with AUTOBOT_PREPUSH_ALLOW_TIMEOUT=1 to accept an unverified push.\n" >&2
+    EXIT_CODE=1
+}
+could_not_run() {
+    # $1 = tool, $2 = the reason, quoted from the tool's own output.
+    #
+    # NOT the same as a failure, and not the same as a pass (#16711 follow-on).
+    # A check that cannot execute on this interpreter found nothing because it
+    # did not look -- MEASUREMENT_DISCIPLINE's distinction, applied to the gate
+    # itself. Reporting it as a failure is what taught people to reach for
+    # `git push --no-verify`, which switches off all 50-odd OTHER checks to get
+    # past one that was never going to run. This escape switches off exactly
+    # the one, names it, and leaves every other check blocking.
+    if [ "$ALLOW_UNRUNNABLE" = "1" ]; then
+        warn "$1 COULD NOT RUN on this interpreter — allowed by AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE=1"
+        warn "  reason: $2"
+        warn "  this push is NOT verified by $1 locally; CI runs it on the supported interpreter"
+        return 0
+    fi
+    printf "${RED}[pre-push COULD NOT RUN]${CLR} %s cannot execute here — this push is NOT verified.\n" "$1" >&2
+    printf "${RED}[pre-push COULD NOT RUN]${CLR}   reason: %s\n" "$2" >&2
+    printf "${RED}[pre-push COULD NOT RUN]${CLR} Run it on the supported interpreter, or re-push with\n" >&2
+    printf "${RED}[pre-push COULD NOT RUN]${CLR} AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE=1 to accept an unverified push.\n" >&2
+    printf "${RED}[pre-push COULD NOT RUN]${CLR} Do NOT use --no-verify for this: it also skips the checks that DO work.\n" >&2
+    EXIT_CODE=1
+}
 fail()  { printf "${RED}[pre-push FAIL]${CLR} %s\n" "$*" >&2; }
 ok()    { printf "${GRN}[pre-push OK]${CLR} %s\n" "$*" >&2; }
 
 EXIT_CODE=0
+
+# ---------------------------------------------------------------------------
+# Open-PR cap (#17006): refuse a NEW-branch push once open PRs in this repo
+# -- excluding forks and bot authors -- are at or above the cap. A push to a
+# branch that already exists on the remote (an already-open PR) is never
+# blocked here: finishing open work must always stay possible.
+#
+# AUTOBOT_OPEN_PR_CAP is the only knob (default 40) -- deliberately no bypass
+# flag or env override that skips the check. This is a hook-only, bash-read
+# var: it is not in autobot_shared/env_registry.py / ENV_VARS.md because that
+# registry's pre-commit check (pipeline-scripts/check_env_var_registry.py)
+# only AST-scans .py files for os.getenv("AUTOBOT_..."); the precedent for a
+# bash-only AUTOBOT_* var living in a hook's own header comment instead is
+# AUTOBOT_PREPUSH_ALLOW_TIMEOUT, above.
+#
+# Fails CLOSED (docs/developer/MEASUREMENT_DISCIPLINE.md): if gh is missing,
+# unauthenticated, the query fails, or it times out, the push is refused with
+# a message saying the count could not be determined -- that is NOT the same
+# as "under the cap". One API call: the filtered count and the oldest 10 open
+# PRs both come from a single `gh pr list --jq` invocation, time-boxed to
+# OPEN_PR_CAP_TIMEOUT like the other checks in this file (TEST_TIMEOUT /
+# TYPE_CHECK_TIMEOUT, #15985) -- EXCEPT that a timeout here is never covered
+# by AUTOBOT_PREPUSH_ALLOW_TIMEOUT: that var is this file's escape hatch for
+# an unverified push, and the cap has none (#17008 review) -- a timed-out
+# count is still an undetermined count, not a pass.
+#
+# Bot detection: `is_bot` is what actually excludes GitHub Apps in practice.
+# Measured against this repo's own dependabot history (#17008 review): gh's
+# GraphQL `author.login` for a bot reports the App-slug form `app/dependabot`,
+# never the REST-style `dependabot[bot]`, so the login-suffix test below is a
+# defensive fallback for a shape not observed in this API, not the mechanism
+# that actually does the excluding.
+# ---------------------------------------------------------------------------
+OPEN_PR_CAP="${AUTOBOT_OPEN_PR_CAP:-40}"
+OPEN_PR_CAP_TIMEOUT=10
+
+check_open_pr_cap() {
+  if ! command -v gh >/dev/null 2>&1; then
+    fail "open-PR cap: could not determine the open PR count (gh CLI not found)."
+    fail "  This is NOT 'under the cap'. Install/configure gh, or push to an existing PR branch instead."
+    return 1
+  fi
+
+  local out gh_exit
+  out=$(timeout "$OPEN_PR_CAP_TIMEOUT" gh pr list --state open --limit 1000 \
+    --json number,title,createdAt,author,isCrossRepository \
+    --jq '
+      ( [ .[] | select(.isCrossRepository == false)
+               | select((.author.is_bot // false) == false)
+               | select((.author.login // "") | test("\\[bot\\]$") | not) ] ) as $counted
+      | ($counted | length | tostring),
+      ( $counted | sort_by(.createdAt) | .[0:10][] | (.number|tostring) + "\t" + .title )
+    ' 2>&1)
+  gh_exit=$?
+
+  if [ "$gh_exit" = "124" ]; then
+    fail "open-PR cap: could not determine the open PR count (gh query timed out after ${OPEN_PR_CAP_TIMEOUT}s). This is NOT 'under the cap'."
+    fail "  No override for this -- AUTOBOT_PREPUSH_ALLOW_TIMEOUT does not apply to the open-PR cap. Retry, or push to an existing PR branch instead."
+    return 1
+  fi
+
+  if [ "$gh_exit" != "0" ] || [ -z "$out" ]; then
+    fail "open-PR cap: could not determine the open PR count (gh query failed). This is NOT 'under the cap'."
+    printf '%s\n' "$out" | head -5 >&2
+    fail "  Check 'gh auth status', then re-push. Pushes to existing PR branches are never blocked."
+    return 1
+  fi
+
+  local count
+  count=$(printf '%s\n' "$out" | head -1)
+  case "$count" in
+    ''|*[!0-9]*)
+      fail "open-PR cap: could not determine the open PR count (unexpected gh output). This is NOT 'under the cap'."
+      printf '%s\n' "$out" | head -5 >&2
+      return 1
+      ;;
+  esac
+
+  if [ "$count" -ge "$OPEN_PR_CAP" ]; then
+    fail "open-PR cap: $count open PR(s) >= cap of $OPEN_PR_CAP -- new-branch pushes are refused until open work is finished."
+    fail "  Merge, close, or finish open PRs first. Pushes to EXISTING PR branches still work (this gate only blocks a NEW branch)."
+    fail "  Oldest open PRs to act on:"
+    printf '%s\n' "$out" | tail -n +2 | sed 's/^/    #/' >&2
+    return 1
+  fi
+
+  ok "open-PR cap: $count/$OPEN_PR_CAP open PRs -- below cap"
+  return 0
+}
 
 # ---------------------------------------------------------------------------
 # Read git's stdin: <local-ref> <local-sha> <remote-ref> <remote-sha>
@@ -42,6 +174,21 @@ ZERO=0000000000000000000000000000000000000000
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$ZERO" ] && continue  # deletion
   log "checking $local_ref → $remote_ref"
+
+  # ------------------------------------------------------------------------
+  # Open-PR cap (#17006): only for a BRANCH ref that does not yet exist on
+  # the remote -- a brand-new branch. remote_sha is all-zero for exactly that
+  # case in git's pre-push stdin protocol, but that alone is not sufficient:
+  # a brand-new TAG (`git push origin v1.2.3`) has a zero remote_sha too, and
+  # a tag is never a PR head (#17008 review). refs/heads/* is what narrows it
+  # to an actual branch.
+  # ------------------------------------------------------------------------
+  if [ "$remote_sha" = "$ZERO" ] && [[ "$local_ref" == refs/heads/* ]]; then
+    if ! check_open_pr_cap; then
+      EXIT_CODE=1
+      continue
+    fi
+  fi
 
   # ------------------------------------------------------------------------
   # Phase 6 (#5143): pre-push duplicate check for issue branches
@@ -59,11 +206,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         warn "  $ gh issue view $issue_num --comments | head -50"
       fi
 
-      # Has Dev_new_gui already merged a commit citing this issue?
-      git fetch origin Dev_new_gui --quiet 2>/dev/null || true
-      if git log origin/Dev_new_gui --oneline -50 2>/dev/null | grep -qE "#${issue_num}\\b"; then
-        warn "origin/Dev_new_gui already has a commit citing #$issue_num:"
-        git log origin/Dev_new_gui --oneline -50 2>/dev/null \
+      # Has main already merged a commit citing this issue?
+      git fetch origin main --quiet 2>/dev/null || true
+      if git log origin/main --oneline -50 2>/dev/null | grep -qE "#${issue_num}\\b"; then
+        warn "origin/main already has a commit citing #$issue_num:"
+        git log origin/main --oneline -50 2>/dev/null \
           | grep -E "#${issue_num}\\b" \
           | head -3 \
           | sed 's/^/  /' >&2
@@ -75,25 +222,103 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   # ------------------------------------------------------------------------
+  # Phase 7 (#16859): PR body must satisfy the template-sections and
+  # same-scope-batching gates before CI runs, not after.
+  #
+  # `gh pr create --body-file` never loads .github/PULL_REQUEST_TEMPLATE.md,
+  # so an author writing a body in a file learns the required headings from a
+  # red check ~63 checks in, not before the push. This runs the two gates
+  # locally against the PR body itself, the same functions CI calls
+  # (scripts/validate_pr_body.py), so a body that passes here passes there.
+  #
+  # Only covers a branch that ALREADY has an open PR: a body that does not
+  # exist yet (before the first `gh pr create`) cannot be read by a git hook,
+  # and pretending otherwise would be worse than saying so.
+  #
+  # Three states, and they must not collapse into two (#16866 review):
+  # `gh` absent, `gh` present but the call failed (not signed in, offline,
+  # rate-limited, an API error), and `gh` present with a confirmed "this
+  # branch has no PR". The middle state is NOT the same as the third — both
+  # end with an empty `pr_number`, but only the third is a true claim that
+  # nothing needs checking. Collapsing them told an author "no open PR yet"
+  # when `gh` had in fact not run, which is the exact defect class this PR
+  # argues against: a skip that reads as "nothing to check". `gh pr view`
+  # exits non-zero for BOTH the real "no PR" case and every failure case, so
+  # the two are told apart by matching the one message `gh` prints for a
+  # genuine no-PR branch, not by exit code alone.
+  # ------------------------------------------------------------------------
+  if ! command -v gh >/dev/null 2>&1; then
+    log "gh CLI not installed — PR body NOT checked (#16859); before pushing, validate it yourself:"
+    log "  python3 scripts/validate_pr_body.py --file <path>"
+  else
+    gh_view_output=$(gh pr view "$branch_name" --json number --jq '.number' 2>&1)
+    gh_view_exit=$?
+    if [ "$gh_view_exit" = "0" ]; then
+      pr_number="$gh_view_output"
+      log "PR #$pr_number exists for $branch_name — checking its body (#16859)"
+      body_check_output=$(python3 "$REPO_ROOT/scripts/validate_pr_body.py" --pr "$branch_name" 2>&1)
+      body_check_exit=$?
+      if [ "$body_check_exit" != "0" ]; then
+        fail "PR body fails the template-sections and/or batching gate (#16859):"
+        echo "$body_check_output" | sed 's/^/  /' >&2
+        EXIT_CODE=1
+      else
+        ok "PR body satisfies both gates"
+      fi
+    elif echo "$gh_view_output" | grep -qi "no pull requests found"; then
+      # #16859: stated rather than silent. A hook cannot see a body that has
+      # no PR yet, so this is the limit of what pre-push can cover -- not a
+      # skip that looks identical to "nothing to check".
+      log "no open PR yet for $branch_name — this hook cannot check a body before 'gh pr create' (#16859)"
+      log "  before 'gh pr create --body-file <path>', validate it yourself:"
+      log "  python3 scripts/validate_pr_body.py --file <path>"
+    else
+      # gh ran and failed for a reason OTHER than "no PR" -- not signed in,
+      # offline, rate-limited, an API error. Must not read as "no open PR":
+      # the branch may have a PR with a broken body, and the true answer is
+      # this check did not run, not that it found nothing wrong.
+      warn "gh pr view failed (not the 'no PR' case) — PR body NOT checked (#16859):"
+      echo "$gh_view_output" | sed 's/^/  /' >&2
+    fi
+  fi
+
+  # ------------------------------------------------------------------------
   # Phase 0c (#5142): verification mandate (type-check + test-run)
   # ------------------------------------------------------------------------
-  # Find files changed in the commits we're pushing. For first push of a
-  # branch, the remote sha is 0000...; in that case diff against the merge
-  # base with origin/Dev_new_gui.
-  if [ "$remote_sha" = "$ZERO" ]; then
-    base=$(git merge-base "$local_sha" origin/Dev_new_gui 2>/dev/null \
-        || git merge-base "$local_sha" main 2>/dev/null \
-        || echo "")
-    if [ -z "$base" ]; then
-      warn "Cannot determine merge base — skipping Phase 0c verification"
-      continue
-    fi
+  # Find files changed in the commits we're pushing. Always prefer the merge
+  # base with origin/main (or release): this is the PR's own diff regardless
+  # of whether the remote already has a prior push. A raw ${remote_sha}..
+  # ${local_sha} two-dot range -- correct only for a first push, where
+  # remote_sha is 0000... -- silently included every file that changed on
+  # origin/main between the branch's last push and now once used after a
+  # `git rebase origin/main` + force-push, inflating the verified changeset
+  # with unrelated files (#16637).
+  base=$(git merge-base "$local_sha" origin/main 2>/dev/null \
+      || git merge-base "$local_sha" release 2>/dev/null \
+      || echo "")
+  if [ -n "$base" ]; then
     diff_range="${base}..${local_sha}"
+  elif [ "$remote_sha" = "$ZERO" ]; then
+    warn "Cannot determine merge base — skipping Phase 0c verification"
+    continue
   else
+    # Last-resort fallback, only when no merge base could be found at all
+    # (e.g. a shallow clone): the old two-dot range beats skipping Phase 0c
+    # outright on an ordinary push.
     diff_range="${remote_sha}..${local_sha}"
   fi
 
   changed=$(git diff --name-only "$diff_range" 2>/dev/null || echo "")
+
+  # Scale the budget with the changeset (#15985). A fixed 120s made the gate's
+  # coverage inversely proportional to the risk of the push: small changes finished
+  # and large ones timed out, so the pushes most worth verifying went unverified.
+  changed_count=$(printf '%s\n' "$changed" | grep -c . || true)
+  TEST_TIMEOUT=$(( TEST_TIMEOUT + (changed_count * 4) ))
+  [ "$TEST_TIMEOUT" -gt 600 ] && TEST_TIMEOUT=600
+  TYPE_CHECK_TIMEOUT=$(( TYPE_CHECK_TIMEOUT + (changed_count * 3) ))
+  [ "$TYPE_CHECK_TIMEOUT" -gt 450 ] && TYPE_CHECK_TIMEOUT=450
+  log "changeset ${changed_count} file(s) -> pytest/vitest budget ${TEST_TIMEOUT}s, vue-tsc ${TYPE_CHECK_TIMEOUT}s"
   if [ -z "$changed" ]; then
     log "no changed files in range — skipping Phase 0c"
     continue
@@ -112,7 +337,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       tsc_exit=${tsc_exit:-0}
 
       if [ "$tsc_exit" = "124" ]; then
-        warn "vue-tsc timed out after ${TYPE_CHECK_TIMEOUT}s — skipping (run manually)"
+        did_not_run "vue-tsc" "${TYPE_CHECK_TIMEOUT}"
       elif [ "$tsc_exit" != "0" ]; then
         # Distinguish errors in changed files (block) vs pre-existing (warn)
         changed_ts_files=$(echo "$changed" | grep -E '\.(ts|vue)$' \
@@ -137,14 +362,18 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       warn "node_modules missing — skipping vue-tsc (run 'npm install')"
     fi
 
-    # Targeted test runs for changed test files + sibling __tests__/
+    # Targeted test runs for changed test files + sibling __tests__/.
+    # vitest below runs with cwd already inside autobot-frontend/, so every
+    # path here must be relative to that dir, not the repo root $changed uses.
     test_files=$(echo "$changed" \
       | grep -E '\.test\.ts$' \
+      | sed 's|^autobot-frontend/||' \
       | head -10)
     # Also test corresponding __tests__/ for any composable changes
     composable_tests=$(echo "$changed" \
       | grep -E 'composables/.*\.ts$' \
       | grep -v '\.test\.' \
+      | sed 's|^autobot-frontend/||' \
       | sed -E 's|(composables)/(.+)\.ts$|\1/__tests__/\2.test.ts|' \
       | xargs -I{} sh -c '[ -f "$REPO_ROOT/autobot-frontend/{}" ] && echo "{}"' \
       2>/dev/null || true)
@@ -162,7 +391,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       vitest_exit=${vitest_exit:-0}
 
       if [ "$vitest_exit" = "124" ]; then
-        warn "vitest timed out after ${TEST_TIMEOUT}s — skipping"
+        did_not_run "vitest" "${TEST_TIMEOUT}"
       elif [ "$vitest_exit" != "0" ]; then
         fail "vitest failures (#5142):"
         echo "$vitest_output" | tail -25 >&2
@@ -174,33 +403,89 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   # ----- Backend (Python) -------------------------------------------------
-  py_changed=$(echo "$changed" | grep -E '\.py$' | grep -v '_test\.py$' || true)
-  py_tests=$(echo "$changed" | grep -E '_test\.py$' || true)
-  if [ -n "$py_changed" ] || [ -n "$py_tests" ]; then
-    # Co-located: foo.py is tested by foo_test.py in the same dir
-    sibling_tests=""
-    while IFS= read -r f; do
-      [ -z "$f" ] && continue
-      sibling="${f%.py}_test.py"
-      [ -f "$REPO_ROOT/$sibling" ] && sibling_tests+="$sibling"$'\n'
-    done <<< "$py_changed"
-    all_py_tests=$(printf "%s\n%s" "$py_tests" "$sibling_tests" \
-      | sort -u | grep -v '^$' || true)
+  # #16711: tools/lint/prepush_selection.py chooses the tests and says why. It
+  # picks changed tests under every pytest.ini python_files pattern (test_*.py
+  # was missed before) and the co-located foo_test.py of a changed foo.py, and
+  # drops tests that no longer exist (#15751) or that pytest.ini ignores
+  # (#16019). A failed selection blocks the push: an empty list would read as
+  # "nothing to verify".
+  sel_err=$(mktemp)
+  selection=$(printf '%s\n' "$changed" | (cd "$REPO_ROOT" && python3 -m tools.lint.prepush_selection) 2>"$sel_err")
+  selection_exit=$?
+  if [ "$selection_exit" != "0" ]; then
+    fail "pytest selection failed (#16715) -- this push is NOT verified:"
+    tail -15 "$sel_err" >&2
+    EXIT_CODE=1
+    selection=""
+  fi
+  rm -f "$sel_err"
+  all_py_tests=$(printf '%s\n' "$selection" | cut -f1 | grep -v '^$' || true)
+  if [ -n "$all_py_tests" ]; then
+    # The selection can outgrow the changeset, so the budget follows it too (#15985).
+    selected_count=$(printf '%s\n' "$all_py_tests" | grep -c . || true)
+    TEST_TIMEOUT=$(( TEST_TIMEOUT + (selected_count * 2) ))
+    [ "$TEST_TIMEOUT" -gt 600 ] && TEST_TIMEOUT=600
+
+    # #16069: autobot-slm-backend must be a SEPARATE pytest invocation.
+    # pytest.ini says so in as many words: the two backends define top-level
+    # packages with identical names (api, services, user_management,
+    # middleware, migrations), so whichever collects first binds those dotted
+    # names in sys.modules for the rest of the session. CI already obeys this
+    # -- two invocations, one for `autobot-backend autobot_shared
+    # autobot-tts-worker repo_tests` and one for `autobot-slm-backend` alone.
+    # This hook did not, so a changeset touching both trees was tested in a
+    # shape CI never runs and pytest.ini forbids.
+    #
+    # What that cost: slm-backend's conftest installs its stubs at import, so
+    # in a combined session `sqlalchemy`, `models` and `models.database` stay
+    # MagicMocks while repo_tests collects afterwards. The leak guard caught it
+    # and blocked the push -- correctly, and for a condition the changeset had
+    # not introduced. The conftest is unchanged from base; the invocation was
+    # the defect. Splitting here is not a workaround for that guard: it stops
+    # producing the state the guard exists to report.
+    slm_py_tests=$(echo "$all_py_tests" | grep -E '^autobot-slm-backend/' || true)
+    other_py_tests=$(echo "$all_py_tests" | grep -vE '^autobot-slm-backend/' || true)
 
     if [ -n "$all_py_tests" ] && command -v pytest >/dev/null 2>&1; then
-      log "running pytest on:"
-      echo "$all_py_tests" | sed 's/^/    /' >&2
-      pytest_output=$(
-        timeout "$TEST_TIMEOUT" python3 -m pytest -xvs $all_py_tests 2>&1
-      ) || pytest_exit=$?
-      pytest_exit=${pytest_exit:-0}
+      log "running pytest on (why each was selected, #16711):"
+      printf '%s\n' "$selection" | awk -F'\t' 'NF { printf "    %s  (%s)\n", $1, $2 }' >&2
+      [ -n "$slm_py_tests" ] && [ -n "$other_py_tests" ] && \
+        log "  (two invocations: autobot-slm-backend separately, per pytest.ini #13084)"
 
-      if [ "$pytest_exit" = "124" ]; then
-        warn "pytest timed out after ${TEST_TIMEOUT}s — skipping"
-      elif [ "$pytest_exit" != "0" ]; then
-        fail "pytest failures (#5142):"
-        echo "$pytest_output" | tail -25 >&2
+      pytest_failed=0
+      pytest_timed_out=0
+      pytest_unrunnable=""
+      for group in "$other_py_tests" "$slm_py_tests"; do
+        [ -z "$group" ] && continue
+        group_exit=0
+        group_output=$(
+          timeout "$TEST_TIMEOUT" python3 -m pytest -xvs $group 2>&1
+        ) || group_exit=$?
+        if [ "$group_exit" = "124" ]; then
+          pytest_timed_out=1
+        elif [ "$group_exit" != "0" ]; then
+          # The interpreter floor is not a test failure. llc/scheduler/base.py
+          # refuses to import below Python 3.11 (asyncio.Task.cancelling), and
+          # any conftest that reaches it takes the whole group down at COLLECT
+          # time -- before a single assertion runs. Matching the requirement
+          # string that module exports, not "ImportError": a real broken import
+          # in the changeset must still block.
+          if printf '%s' "$group_output" | grep -q 'requires asyncio.Task.cancelling()'; then
+            pytest_unrunnable="the interpreter floor: $(python3 -V 2>&1) is below the 3.11+ that llc/scheduler/base.py requires (platform floor and CI are 3.14)"
+          else
+            pytest_failed=1
+            fail "pytest failures (#5142):"
+            echo "$group_output" | tail -25 >&2
+          fi
+        fi
+      done
+
+      if [ "$pytest_failed" != "0" ]; then
         EXIT_CODE=1
+      elif [ "$pytest_timed_out" != "0" ]; then
+        did_not_run "pytest" "${TEST_TIMEOUT}"
+      elif [ -n "$pytest_unrunnable" ]; then
+        could_not_run "pytest" "$pytest_unrunnable"
       else
         ok "pytest: all relevant tests pass"
       fi

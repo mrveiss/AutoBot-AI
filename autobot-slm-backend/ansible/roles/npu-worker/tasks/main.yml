@@ -135,9 +135,10 @@
 
 # #11374: Install the target interpreter BEFORE any venv work.
 # `ensure_venv_version` removes a wrong-version venv and the `-m venv` step
-# recreates it — both fail if the interpreter is absent. The SAME python314
-# role installs it via the parametrized version var, reusing the deadsnakes
-# apt logic (no duplication). Idempotent + fail-loud.
+# recreates it — both fail if the interpreter is absent. The SAME
+# python_interpreter role (#13843, was python314) installs it via the
+# parametrized version var, reusing the deadsnakes apt logic (no
+# duplication). Idempotent + fail-loud.
 #
 # #13747: was pinned to 3.11 because OpenVINO shipped no 3.14 wheels (#10877).
 # That is no longer true — openvino 2026.3.0, torch 2.13.0 and numpy 2.5.1 all
@@ -153,15 +154,14 @@
 # it detects the existing 3.11 venv as wrong-version and removes it, so the
 # 3.11-built OpenVINO binaries in site-packages are never carried into a 3.14
 # venv (which would fail at import, not at deploy).
-- name: NPU worker | Install target Python interpreter (python3.14)
+- name: NPU worker | Install target Python interpreter
   ansible.builtin.include_role:
-    name: python314
-  vars:
-    python_interpreter_version: "3.14"
+    name: python_interpreter
+    public: true  # #16750: role defaults (python_interpreter_binary) must reach the pip tasks below
 
 - name: NPU worker | Enforce venv target Python version (env-drift fix)
   ansible.builtin.include_role:
-    name: python314
+    name: python_interpreter
     tasks_from: ensure_venv_version
   vars:
     venv_path: "{{ npu_install_dir }}/venv"
@@ -184,67 +184,69 @@
   ansible.builtin.pip:
     name: pip
     virtualenv: "{{ npu_install_dir }}/venv"
+    # #16641: without this, `virtualenv:` alone makes the pip module shell out
+    # to the standalone `virtualenv` executable to (re)create the venv, and
+    # that binary is not installed on these hosts -- only the stdlib's `venv`
+    # module is. The venv above is already created explicitly, but that does
+    # not make this safe to leave off: a host where it was removed or never
+    # created hits this path for real, which is exactly the failure browser
+    # and tts-worker hit on 2026-09-13/14.
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     state: latest
   become_user: "{{ npu_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 120  # Issue #2835: prevent indefinite hang on network issues
 
-- name: Check if OpenVINO is already installed
-  ansible.builtin.command:
-    cmd: "{{ npu_install_dir }}/venv/bin/pip show openvino"
-  register: _openvino_check
-  changed_when: false
-  # (#2872) Intentional: pip show exits rc=1 when package is not installed;
-  # the result gates conditional OpenVINO installation below.
-  failed_when: false
-  become_user: "{{ npu_user }}"
-
-- name: Install FastAPI and web server dependencies
-  ansible.builtin.pip:
-    name:
-      - fastapi>=0.100.0
-      - uvicorn[standard]>=0.20.0
-    virtualenv: "{{ npu_install_dir }}/venv"
-    state: present
-  become_user: "{{ npu_user }}"
-  environment:
-    PIP_DEFAULT_TIMEOUT: "120"
-  timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
-
-# #14447: the deprecated meta-package is gone and the floor matches the SSOT.
+# #15671: ONE pip invocation, reading the worker's own manifest.
 #
-# It was frozen at 2024.6.0 and no release of it is compatible with openvino
-# 2026.x, so pip backtracked through every version of it down to 2022.3.2, each
-# pinning numpy lower, until it reached numpy==1.25.2 -- which has no cp314
-# wheel. Building that sdist under Python 3.14 died with "Cannot import
-# 'setuptools.build_meta'", an error naming the build backend and saying
-# nothing about the package that caused it.
+# This role used to fill the venv from two inline `name:` lists while
+# `playbooks/deploy-native-services.yml` filled the SAME venv
+# (/opt/autobot/autobot-npu-worker/venv, #13746) from
+# `autobot-npu-worker/requirements.txt`, so what a node ended up with depended
+# on which entry point had run. The role installed five packages the manifest
+# had never heard of -- fastapi, uvicorn, pillow, transformers and optimum --
+# and openvino three different ways between the two files. Only the manifest
+# path applied `constraints/shared.txt`, so the ABI pins #10524 exists to hold
+# were absent on this one. All of it is now declared in the manifest and
+# installed from there, the shape roles/backend and roles/ai-stack already use.
 #
-# The loose `>=2024.0` floor is what let the resolver walk backwards at all;
-# autobot-npu-worker/requirements.txt has said `>=2026.3.0` the whole time.
-# The shared constraints are applied here too, so numpy cannot be dragged below
-# its pinned floor by any future dependency.
-- name: Install OpenVINO and dependencies
+# The manifest is read from the checkout rather than from the deployed worker
+# tree because its `-e ../autobot_shared` and `-c ../constraints/shared.txt`
+# resolve relative to the file, and only the full checkout has both siblings.
+# `code_source_dir` is the same override-first, SSOT-derived fallback the `-c`
+# below already used (#15601) -- one path for the manifest and the constraints,
+# not two.
+#
+# The `pip show openvino` gate that used to guard the second list is gone with
+# it: it skipped the WHOLE list once openvino was present, so a host that had
+# openvino never had numpy, pillow, transformers or optimum updated again. Its
+# `npu_install_openvino` toggle went the same way -- nothing in the tree ever
+# set it false, the manifest declares openvino unconditionally, and the
+# playbook path never honoured it.
+- name: "NPU Worker | Install worker dependencies from its manifest"
   ansible.builtin.pip:
-    name:
-      - openvino>=2026.3.0
-      - numpy
-      - pillow
-      - transformers
-      - optimum[openvino]
+    requirements: >-
+      {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-npu-worker/requirements.txt
     virtualenv: "{{ npu_install_dir }}/venv"
+    # #16641: see the "Upgrade pip in venv" task above -- same reason.
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
+    # #15733: the manifest opens with `-e ../autobot_shared`, which pip
+    # resolves against the CWD, not the file it is written in. Without
+    # `chdir` this ran from the remote user's home, `../autobot_shared`
+    # resolved beside it, and the whole install was refused -- the failure
+    # on 2026-09-13/14. `code_source_dir` (the checkout) is where the
+    # manifest is read FROM, so chdir there rather than to the deployed
+    # worker tree.
+    chdir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-npu-worker"
     state: present
     extra_args: >-
       --timeout 120
-      -c {{ code_source_dir | default('/opt/autobot/code_source') }}/constraints/shared.txt
+      -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
   become_user: "{{ npu_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
-  when:
-    - npu_install_openvino | default(true)
-    - _openvino_check.rc != 0
 
 # #13460: these service files are defined once, in code_only.yml, so the
 # builtin updater can deliver them without re-running provisioning. Copying

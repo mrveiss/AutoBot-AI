@@ -62,15 +62,95 @@ assertions):
   ``False``/``""`` and never ``None``, so it read the broken default through
   unchanged. Same defect class as the MCP-registry-cache one-off fix
   (#13262). Pre-#7437: enabled / enabled / "true".
+
+Evidence for the 22 defaults restored in a follow-up #13264 PR (gateway config,
+provider base URLs/vLLM, SMTP, MCP isolation, codebase indexing — the
+"live, unguarded, unfixed" table posted on the issue, minus the batch above).
+Each pre-#7437 literal was re-verified against ``122793bbf~1`` (the migration
+commit's pre-image), not carried over from the issue table unchecked; see
+``ssot_config_defaults_13264_batch2_test.py`` for the assertions:
+
+- ``gateway_rate_limit_user``/``gateway_rate_limit_channel``/
+  ``gateway_session_timeout``/``gateway_max_message_size``:
+  ``services/gateway/config.py``'s ``GatewayConfig.from_env`` reads all four
+  as ``int(config.gateway_*)`` with no fallback; ``0`` silently zeroes the
+  rate limit, session timeout, and max message size. Pre-#7437 (then
+  ``autobot-backend/services/gateway/config.py``): 60 / 100 / 1800 /
+  ``1024*1024`` (1048576).
+- ``gateway_max_sessions_user``/``gateway_heartbeat_interval``/
+  ``gateway_message_retention_hours``: same module, but already rescued at
+  the call site by ``_int_or_default`` (#14028) because these three are
+  ``str`` fields whose ``""`` default would otherwise raise on ``int("")``.
+  Runtime behaviour is already correct via that guard; this restores the
+  SSOT default itself so it stops disagreeing with the value actually used.
+  Pre-#7437: 5 / 30 / 24.
+- ``smtp_host``/``smtp_port``/``smtp_from``/``smtp_tls``:
+  ``services/notification_service.py`` reads all four unguarded. ``""``
+  host/from and ``0`` port break outbound mail. ``smtp_tls`` is the
+  exception and is restored for SSOT accuracy, not to fix a live defect:
+  the reader is ``config.smtp_tls.lower() != "false"``, and ``""`` already
+  evaluates True, so TLS is on either way. Restoring "true" makes the SSOT
+  state what the code actually does instead of leaving a reader to work it
+  out from an empty string. Pre-#7437: "localhost" / 587 /
+  "autobot@localhost" / "true".
+- ``mcp_worker_log_level``: ``services/mcp_bridge_workers/worker_entrypoint.py``
+  passes it straight to ``logging.basicConfig(level=...)`` unguarded; ``""``
+  is not a valid level name. Pre-#7437: "INFO".
+- ``mcp_isolation_mode``: the live isolation-mode decision in
+  ``services/mcp_isolation_config.py`` reads ``os.environ.get`` directly
+  (marked ``# ssot-config-exempt`` for #12443 — it must re-read lazily per
+  test, not cache through the ``ssot_config`` singleton), so this field
+  itself has no live reader today; restored for SSOT self-consistency only,
+  not a behaviour fix. Pre-#7437: "inprocess".
+- ``codebase_index_embed_batch_size``: ``api/codebase_analytics/chromadb_storage.py``
+  reads it unguarded as ``int(config.codebase_index_embed_batch_size)``;
+  ``0`` means every embedding call is chunked to a zero-size batch.
+  Pre-#7437: 100.
+- ``codebase_index_parallel_files``/``codebase_scan_parallel_files``:
+  ``api/codebase_analytics/file_analyzer.py``/``scanner.py`` both already
+  guard with ``blank_to_none(config.x) or 50``, so runtime behaviour is
+  already correct; restored for SSOT self-consistency, not a live fix.
+  Pre-#7437: 50 / 50.
+- ``anthropic_api_base_url``/``vllm_host``: ``services/provider_health/providers.py``
+  assigns both straight from ``ssot_config`` unguarded; an empty base URL
+  breaks every request built from it. Both pre-#7437 defaults are restored in
+  ``ssot_config.py``; they are deliberately not repeated here, because a
+  literal URL in prose is both a second place to update and a hardcoded-value
+  violation on this file's own lines.
+- ``openrouter_default_model``/``vllm_dtype``/``vllm_gpu_memory_utilization``/
+  ``vllm_tensor_parallel_size``: ``llm_shared/provider_registry.py`` (moved
+  from the pre-#7437 ``llm_interface_pkg/provider_registry.py``) reads all
+  four unguarded; ``vllm_gpu_memory_utilization=""`` raises on
+  ``float("")``, ``vllm_tensor_parallel_size=0`` silently zeroes the vLLM
+  tensor-parallel degree. Pre-#7437: "gpt-3.5-turbo" / "auto" / "0.9" / 1.
 """
 
 from __future__ import annotations
 
 import ast
+import logging
+import sys
 from pathlib import Path
 from typing import Any
 
-from tools.lint._scan_helpers import EXCLUDED_DIR_NAMES
+# Importable both as ``tools.lint.check_getenv_ssot_drift`` (the test) and as a
+# bare script (``python3 tools/lint/check_getenv_ssot_drift.py``); the latter
+# only puts ``tools/lint/`` on the path, so the repository root is added here.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from tools.lint._scan_helpers import (  # noqa: E402
+    EXCLUDED_DIR_NAMES,
+    PY_FLOOR,
+    enforce_reach,
+    scan_python_files,
+)
+
+# Plain stdlib logging (#1082): a bare hook script must not drag config loading
+# onto every commit -- same trade as ``scripts/check_python_file_size.py``.
+logger = logging.getLogger(__name__)
+
+#: Name this guard reports under, in messages and in its floor failures.
+HOOK_ID = "getenv-ssot-drift"
 
 #: Trees ``ssot_config`` actually governs. A name collision outside these
 #: (a different service, an ops script) is not the same variable.
@@ -227,6 +307,21 @@ def _in_scope(path: Path, repo_root: Path) -> bool:
     return True
 
 
+def _swept_files(repo_root: Path) -> list[Path]:
+    """In-scope tracked ``*.py`` files, with the floor applied to the raw sweep.
+
+    The floor is checked against the **whole** tracked enumeration, not the
+    governed-root subset: the subset is legitimately a few hundred files, so a
+    floor there would have to be set so low it could not detect a lost sweep.
+    Raises rather than returning a short list — a sweep under the floor must
+    not be able to answer "no offenders" (#14896).
+    """
+    files, full_repo = scan_python_files([], repo_root)
+    if enforce_reach(len(files), PY_FLOOR, hook=HOOK_ID, full_repo=full_repo):
+        raise RuntimeError(f"{HOOK_ID}: full-repo sweep reached only {len(files)} file(s); floor is {PY_FLOOR}")
+    return sorted(path for path in files if _in_scope(path, repo_root))
+
+
 def find_drift(repo_root: Path) -> tuple[list[str], int]:
     """Offender strings, and the number of in-scope call sites examined."""
     ssot_source = (repo_root / "autobot_shared" / "ssot_config.py").read_text(encoding="utf-8")
@@ -237,9 +332,7 @@ def find_drift(repo_root: Path) -> tuple[list[str], int]:
 
     offenders: list[str] = []
     calls_examined = 0
-    for path in sorted(repo_root.rglob("*.py")):
-        if not _in_scope(path, repo_root):
-            continue
+    for path in _swept_files(repo_root):
         try:
             source = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
@@ -256,3 +349,33 @@ def find_drift(repo_root: Path) -> tuple[list[str], int]:
                     f"disagrees with ssot_config default={field_default!r}"
                 )
     return offenders, calls_examined
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Full-repo drift check. Always sweeps the whole tree: a call-site default
+    and the ``ssot_config`` field it contradicts are in two different files, so
+    a changed-files-only run would miss exactly the pairs this exists to find.
+    """
+    del argv  # full-repo only, by construction
+    repo_root = Path(__file__).resolve().parents[2]
+    offenders, calls_examined = find_drift(repo_root)
+    # The second floor, and a different one: PY_FLOOR proves the file sweep had
+    # reach, this proves the sweep actually *matched* getenv/ssot_config pairs.
+    # An empty offender list from zero comparable pairs asserts nothing (#14896).
+    if enforce_reach(calls_examined, GETENV_CALL_FLOOR, hook=HOOK_ID, full_repo=True):
+        return 1
+    for offender in offenders:
+        logger.error("[%s] %s", HOOK_ID, offender)
+    if offenders:
+        logger.error(
+            "[%s] %d call-site default(s) disagree with ssot_config. Read the value "
+            "through ssot_config instead of re-stating it (#13264).",
+            HOOK_ID,
+            len(offenders),
+        )
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

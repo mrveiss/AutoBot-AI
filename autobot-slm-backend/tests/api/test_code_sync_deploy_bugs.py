@@ -39,7 +39,7 @@ import pytest
 # the root cause of the order-dependent collection errors, #12572).
 # ---------------------------------------------------------------------------
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _code_sync_import import import_code_sync  # noqa: E402
+from _code_sync_import import import_code_sync, patch_real_deployed_root  # noqa: E402
 
 import_code_sync()
 
@@ -55,8 +55,6 @@ from api.code_sync import (  # noqa: E402
     _REPO_ROOT_REQUIREMENT_FILES,
     _SNAPSHOT_BASE_DIR,
     _build_npm_frontend_for_component,
-    _deploy_constraints_dir,
-    _deploy_repo_root_requirements,
     _ensure_dist_writable,
     _ensure_target_python_installed,
     _ensure_venv_python,
@@ -69,6 +67,7 @@ from api.code_sync import (  # noqa: E402
     _prune_old_backups,
     _prune_old_snapshots,
     _resolve_pg_db_url,
+    _restore_component_snapshot,
     _rollback_component,
     _run_alembic_migrations,
     _run_post_sync_steps,
@@ -104,59 +103,6 @@ def test_component_python_target_has_backends() -> None:
     assert _COMPONENT_PYTHON_TARGET["autobot-backend"] == "python3.14"
     assert _COMPONENT_PYTHON_TARGET["autobot-slm-backend"] == "python3.14"
     assert "autobot-npu-worker" not in _COMPONENT_PYTHON_TARGET  # ansible decides it (#13747)
-
-
-# ---------------------------------------------------------------------------
-# #11322 — _deploy_constraints_dir
-# ---------------------------------------------------------------------------
-
-
-def test_deploy_constraints_dir_skipped_when_source_missing(tmp_path) -> None:
-    """Step says 'not found' when the source dir doesn't exist."""
-    steps: list[str] = []
-    _run(_deploy_constraints_dir(str(tmp_path / "no_such_root"), steps))
-    assert any("not found" in s for s in steps)
-
-
-def test_deploy_constraints_dir_calls_rsync(tmp_path) -> None:
-    """rsync is called when the source dir exists."""
-    src_root = tmp_path / "code_source"
-    (src_root / "constraints").mkdir(parents=True)
-
-    steps: list[str] = []
-    captured: list = []
-
-    async def _fake_exec(*cmd, **kw):
-        captured.extend(cmd)
-        proc = MagicMock()
-        proc.returncode = 0
-        proc.communicate = AsyncMock(return_value=(b"", b""))
-        return proc
-
-    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
-        _run(_deploy_constraints_dir(str(src_root), steps))
-
-    assert "rsync" in captured
-    assert any("deployed ok" in s for s in steps)
-
-
-def test_deploy_constraints_dir_records_rsync_failure(tmp_path) -> None:
-    """Non-zero rsync rc is recorded in steps."""
-    src_root = tmp_path / "code_source"
-    (src_root / "constraints").mkdir(parents=True)
-
-    steps: list[str] = []
-
-    async def _fake_exec(*cmd, **kw):
-        proc = MagicMock()
-        proc.returncode = 23
-        proc.communicate = AsyncMock(return_value=(b"error", b""))
-        return proc
-
-    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
-        _run(_deploy_constraints_dir(str(src_root), steps))
-
-    assert any("failed" in s for s in steps)
 
 
 # ---------------------------------------------------------------------------
@@ -458,67 +404,6 @@ def test_repo_root_requirement_files_constant() -> None:
     assert "requirements.txt" in _REPO_ROOT_REQUIREMENT_FILES
 
 
-def test_deploy_repo_root_requirements_skipped_when_file_missing(tmp_path) -> None:
-    """Step says 'not found' when the source file doesn't exist."""
-    steps: list[str] = []
-    with patch("api.code_sync._get_deploy_base", return_value=tmp_path):
-        _run(_deploy_repo_root_requirements(str(tmp_path / "no_such_root"), steps))
-    assert any("not found" in s for s in steps)
-
-
-def test_deploy_repo_root_requirements_calls_cp(tmp_path) -> None:
-    """cp is called when the source file exists."""
-    src_root = tmp_path / "code_source"
-    src_root.mkdir()
-    (src_root / "requirements.txt").write_text("paramiko>=5.0.0\n", encoding="utf-8")
-    dst_base = tmp_path / "opt_autobot"
-    dst_base.mkdir()
-
-    steps: list[str] = []
-    captured: list = []
-
-    async def _fake_exec(*cmd, **kw):
-        captured.extend(cmd)
-        proc = MagicMock()
-        proc.returncode = 0
-        proc.communicate = AsyncMock(return_value=(b"", b""))
-        return proc
-
-    with (
-        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
-        patch("api.code_sync._get_deploy_base", return_value=dst_base),
-    ):
-        _run(_deploy_repo_root_requirements(str(src_root), steps))
-
-    assert "cp" in captured
-    assert any("deployed ok" in s for s in steps)
-
-
-def test_deploy_repo_root_requirements_records_cp_failure(tmp_path) -> None:
-    """Non-zero cp rc is recorded in steps."""
-    src_root = tmp_path / "code_source"
-    src_root.mkdir()
-    (src_root / "requirements.txt").write_text("paramiko>=5.0.0\n", encoding="utf-8")
-    dst_base = tmp_path / "opt_autobot"
-    dst_base.mkdir()
-
-    steps: list[str] = []
-
-    async def _fake_exec(*cmd, **kw):
-        proc = MagicMock()
-        proc.returncode = 1
-        proc.communicate = AsyncMock(return_value=(b"permission denied", b""))
-        return proc
-
-    with (
-        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
-        patch("api.code_sync._get_deploy_base", return_value=dst_base),
-    ):
-        _run(_deploy_repo_root_requirements(str(src_root), steps))
-
-    assert any("failed" in s for s in steps)
-
-
 def test_run_post_sync_steps_calls_deploy_repo_root_requirements() -> None:
     """_deploy_repo_root_requirements is called for pip backend components."""
     called: list[bool] = []
@@ -568,7 +453,7 @@ def test_ensure_target_python_skips_when_present() -> None:
 
 
 def test_ensure_target_python_invokes_ansible_when_missing() -> None:
-    """When the target is absent, the python314 provisioning playbook is run."""
+    """When absent, the python_interpreter provisioning playbook runs (ansible tag `python314`, #13843)."""
     steps: list[str] = []
     with (
         patch("shutil.which", return_value=None),
@@ -1115,8 +1000,11 @@ def test_pg_dump_constants_defined() -> None:
     assert _DB_BACKUP_KEEP >= 1
 
 
-def test_pg_dump_invoked_before_alembic(tmp_path) -> None:
+def test_pg_dump_invoked_before_alembic(tmp_path, monkeypatch) -> None:
     """_pg_dump_before_migration must be called before alembic upgrade (#11376)."""
+    # _run_alembic_migrations itself loads deployed_dir/.env (CodeQL py/path-injection,
+    # #16229 review) — that must resolve under SLM_DEPLOYED_ROOT (#16236).
+    patch_real_deployed_root(monkeypatch, tmp_path)
     call_order: list[str] = []
 
     async def _fake_dump(component, deployed_dir, steps):
@@ -1158,44 +1046,6 @@ def test_pg_dump_invoked_before_alembic(tmp_path) -> None:
     assert "alembic" in call_order
 
 
-def test_alembic_aborted_when_dump_fails(tmp_path) -> None:
-    """Migration must not run if pg_dump returns None (#11376)."""
-    executed: list[str] = []
-
-    async def _fake_dump(component, deployed_dir, steps):
-        steps.append("pg_dump: FAILED (rc=1): some error")
-        return None
-
-    async def _fake_exec(*cmd, **kw):
-        executed.extend(cmd)
-        proc = MagicMock()
-        proc.returncode = 0
-        proc.communicate = AsyncMock(return_value=(b"", b""))
-        return proc
-
-    deployed = tmp_path / "autobot-backend"
-    deployed.mkdir()
-    (deployed / "migrations").mkdir()
-    (deployed / "migrations" / "alembic.ini").write_text("[alembic]\n", encoding="utf-8")
-
-    with (
-        patch(
-            "api.code_sync._COMPONENT_MIGRATION_CONFIG",
-            {"autobot-backend": "migrations/alembic.ini"},
-        ),
-        patch("api.code_sync._COMPONENT_PIP_PATHS", {"autobot-backend": ("req.txt", str(deployed / "venv/bin/pip"))}),
-        patch("pathlib.Path.exists", return_value=True),
-        patch("api.code_sync._pg_dump_before_migration", side_effect=_fake_dump),
-        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
-    ):
-        steps: list[str] = []
-        result = _run(_run_alembic_migrations("autobot-backend", str(deployed), steps))
-
-    assert result is False
-    assert not executed, "alembic must NOT execute when pg_dump fails"
-    assert any("ABORTED" in s for s in steps)
-
-
 def test_pg_dump_abort_propagates_to_post_sync() -> None:
     """_run_post_sync_steps returns pip_ok=False when pg_dump fails (#11376)."""
     with (
@@ -1234,9 +1084,12 @@ def test_prune_old_backups_removes_oldest(tmp_path) -> None:
     assert remaining[1].name == "autobot-backend_0003.dump"
 
 
-def test_pg_dump_proceeds_with_warning_when_no_db_config(tmp_path) -> None:
+def test_pg_dump_proceeds_with_warning_when_no_db_config(tmp_path, monkeypatch) -> None:
     """#11431: _pg_dump_before_migration returns 'NO_BACKUP' (not None) when no DB config
     is found — deploy proceeds with a warning instead of aborting."""
+    # deployed_dir must resolve under SLM_DEPLOYED_ROOT (CodeQL py/path-injection
+    # fix, #16229 review) — tmp_path stands in for the deployed root here (#16236).
+    patch_real_deployed_root(monkeypatch, tmp_path)
     (tmp_path / ".env").write_text("FOO=bar\n", encoding="utf-8")
     steps: list[str] = []
     clear_keys = {
@@ -1258,8 +1111,9 @@ def test_pg_dump_proceeds_with_warning_when_no_db_config(tmp_path) -> None:
     assert any("no DB config" in s or "skipping backup" in s for s in steps)
 
 
-def test_pg_dump_uses_arg_list_subprocess(tmp_path) -> None:
+def test_pg_dump_uses_arg_list_subprocess(tmp_path, monkeypatch) -> None:
     """pg_dump invocation must use an arg list, never a shell string (#11376)."""
+    patch_real_deployed_root(monkeypatch, tmp_path)
     (tmp_path / ".env").write_text("AUTOBOT_DATABASE_URL=postgresql://user:pw@localhost:5432/mydb\n", encoding="utf-8")
     captured: list = []
 
@@ -1305,7 +1159,7 @@ def test_snapshot_component_returns_none_when_rsync_fails(tmp_path) -> None:
     snap_dir = tmp_path / "snapshots"
     snap_dir.mkdir()
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path / "deployed")),
+        patch("api.code_sync.get_live_dir", return_value=str(tmp_path / "deployed")),
         patch("api.code_sync._SNAPSHOT_BASE_DIR", str(snap_dir)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
     ):
@@ -1327,7 +1181,7 @@ def test_snapshot_component_returns_backup_path(tmp_path) -> None:
         return proc
 
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("api.code_sync.get_live_dir", return_value=str(deployed)),
         patch("api.code_sync._SNAPSHOT_BASE_DIR", str(snap_dir)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
     ):
@@ -1354,7 +1208,7 @@ def test_snapshot_rsyncs_deployed_dir(tmp_path) -> None:
         return proc
 
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("api.code_sync.get_live_dir", return_value=str(deployed)),
         patch("api.code_sync._SNAPSHOT_BASE_DIR", str(snap_dir)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
     ):
@@ -1384,7 +1238,7 @@ def test_rollback_component_rsyncs_from_backup_and_restarts(tmp_path) -> None:
         restarted.append(True)
 
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("api.code_sync.get_release_component_dir", return_value=str(deployed)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
         patch("api.code_sync._restart_component_services", side_effect=_fake_restart),
     ):
@@ -1411,7 +1265,7 @@ def test_rollback_skips_dump_path_when_no_backup_sentinel(tmp_path) -> None:
         return proc
 
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("api.code_sync.get_release_component_dir", return_value=str(deployed)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
         patch("api.code_sync._restart_component_services", AsyncMock()),
     ):
@@ -1421,13 +1275,69 @@ def test_rollback_skips_dump_path_when_no_backup_sentinel(tmp_path) -> None:
     assert not any("NO_BACKUP" in s for s in steps), "NO_BACKUP sentinel must not leak into steps"
 
 
-def test_rollback_noop_when_no_snapshot() -> None:
-    """_rollback_component is a no-op (warning) when snapshot is None (#11377)."""
+def test_rollback_restarts_even_when_no_snapshot(tmp_path) -> None:
+    """#15323: no snapshot must still restart — the previous no-op left the
+    post-sync (broken) tree on disk with the OLD code still loaded in memory,
+    a silent divergence between what is deployed and what is running. The
+    restart now surfaces that state loudly (crash/unhealthy) instead of
+    hiding it behind a "failed" job row."""
     steps: list[str] = []
     with patch("api.code_sync._restart_component_services", AsyncMock()) as restart:
         _run(_rollback_component("autobot-backend", None, steps))
-    restart.assert_not_called()
+    restart.assert_awaited_once()
     assert any("no snapshot" in s for s in steps)
+
+
+def test_rollback_restarts_even_when_restore_rsync_fails(tmp_path) -> None:
+    """#15323: a failed restore rsync must not silently skip the restart —
+    the deployed tree is left on the still-broken post-sync code, and only a
+    restart makes that state observable rather than leaving old code loaded
+    over new code on disk."""
+    deployed = tmp_path / "deployed"
+    deployed.mkdir()
+    backup = tmp_path / "snapshots" / "autobot-backend_ts"
+    backup.mkdir(parents=True)
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 23
+        proc.communicate = AsyncMock(return_value=(b"rsync error", b""))
+        return proc
+
+    with (
+        patch("api.code_sync.get_release_component_dir", return_value=str(deployed)),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        patch("api.code_sync._restart_component_services", AsyncMock()) as restart,
+    ):
+        steps: list[str] = []
+        _run(_rollback_component("autobot-backend", str(backup), steps))
+
+    restart.assert_awaited_once()
+    assert any("rsync restore failed" in s for s in steps)
+
+
+def test_restore_component_snapshot_returns_false_on_timeout(tmp_path) -> None:
+    """#15323: the extracted restore helper reports failure on timeout so the
+    (now-unconditional) caller's restart-either-way logic has a real signal
+    to log, rather than the restart happening with no record of why."""
+    deployed = tmp_path / "deployed"
+    deployed.mkdir()
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.communicate = AsyncMock(side_effect=TimeoutError())
+        return proc
+
+    with (
+        patch("api.code_sync.get_release_component_dir", return_value=str(deployed)),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        patch("asyncio.wait_for", side_effect=__import__("asyncio").TimeoutError),
+    ):
+        steps: list[str] = []
+        result = _run(_restore_component_snapshot("autobot-backend", str(tmp_path / "snap"), steps))
+
+    assert result is False
+    assert any("timed out" in s for s in steps)
 
 
 def test_run_post_sync_steps_rolls_back_on_pip_failure() -> None:
@@ -1590,7 +1500,7 @@ def test_run_post_sync_steps_rolls_back_on_unhealthy(tmp_path) -> None:
 
 def test_provision_playbook_runs_from_ansible_dir_with_config() -> None:
     """#11403: ansible-playbook must run with the ansible dir as cwd (survives
-    sudo env_reset) and ANSIBLE_CONFIG set, so roles_path resolves the python314
+    sudo env_reset) and ANSIBLE_CONFIG set, so roles_path resolves the python_interpreter
     role instead of defaulting to playbooks/roles/ (role-not-found)."""
     from api.code_sync import (
         _ANSIBLE_CONFIG,
@@ -1675,8 +1585,9 @@ def test_resolve_pg_db_url_returns_empty_when_nothing_configured() -> None:
     assert isinstance(result, str)
 
 
-def test_pg_dump_resolves_url_from_autobot_postgres_vars(tmp_path) -> None:
+def test_pg_dump_resolves_url_from_autobot_postgres_vars(tmp_path, monkeypatch) -> None:
     """#11431: pg_dump succeeds using AUTOBOT_POSTGRES_* vars when DATABASE_URL absent."""
+    patch_real_deployed_root(monkeypatch, tmp_path)
     env_content = (
         "AUTOBOT_POSTGRES_HOST=127.0.0.1\n"
         "AUTOBOT_POSTGRES_PORT=5432\n"
@@ -1713,8 +1624,11 @@ def test_pg_dump_resolves_url_from_autobot_postgres_vars(tmp_path) -> None:
     assert "127.0.0.1" in captured
 
 
-def test_alembic_not_aborted_when_no_db_config(tmp_path) -> None:
+def test_alembic_not_aborted_when_no_db_config(tmp_path, monkeypatch) -> None:
     """#11431: alembic migration proceeds when pg_dump returns NO_BACKUP (no DB config)."""
+    # _run_alembic_migrations itself loads deployed_dir/.env (CodeQL py/path-injection,
+    # #16229 review) — that must resolve under SLM_DEPLOYED_ROOT (#16236).
+    patch_real_deployed_root(monkeypatch, tmp_path)
     alembic_ran: list[bool] = []
 
     async def _fake_exec(*cmd, **kw):

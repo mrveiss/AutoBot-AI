@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.async_compat import fire_and_forget, run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_24_HOURS
@@ -404,8 +404,8 @@ def _mark_task_completed(
     indexing_tasks[task_id]["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
     # Fire-and-forget cache invalidation; safe in any running-loop context
     try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_invalidate_quality_cache())
+        asyncio.get_running_loop()
+        fire_and_forget(_invalidate_quality_cache(), name="quality-cache-invalidate")
     except RuntimeError:
         # No running loop (called from a sync context); run a one-shot
         run_or_schedule(_invalidate_quality_cache())

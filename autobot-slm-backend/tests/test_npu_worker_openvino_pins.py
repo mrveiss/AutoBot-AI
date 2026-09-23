@@ -2,13 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""No site that installs OpenVINO via pip may contradict the SSOT (#14447, #14452, #14453).
+"""No site that installs OpenVINO via pip may contradict the SSOT (#14447, #14452, #14453, #15408).
 
-Seven sites in the repo pin or install `openvino` independently of
-`autobot-npu-worker/requirements.txt` (the SSOT), and this guard reaches all seven:
+Eight sites in the repo pin or install `openvino` and this guard reaches all eight:
 
-1. The `npu-worker` ansible role's inline package list (#14447).
-2. `deploy-native-services.yml`'s inline package list (#14452).
+1. The `npu-worker` ansible role's pip task (#14447) -- #15671 replaced its inline package
+   list with a `requirements:` install of site 8, so the packages it installs are read from
+   that manifest and the constraints from the task's own `extra_args`.
+2. `deploy-native-services.yml`'s pip task (#14452) -- same shape, same manifest, since
+   #15671 removed the `openvino[pytorch,tensorflow]` task that used to follow it. openvino
+   publishes no extras at all, so those two names were a no-op pip warned about; they were
+   `openvino-dev`'s, carried over when #14452 dropped that meta-package.
 3. `autobot-infrastructure/.../docker/requirements-npu.txt`, tracked by dependabot (#14453).
 4. `agent_config/tasks/openvino.yml`'s inline `pip:` task -- live via
    `deploy-agent-config.yml` against `slm_nodes`, `install_openvino: true` by default.
@@ -20,15 +24,20 @@ Seven sites in the repo pin or install `openvino` independently of
    the moment something does read it.
 6. `autobot-npu-worker/resources/windows-npu-worker/requirements.txt` -- a live build
    path per its `BUILDING.md`.
-7. `autobot-backend/code_analysis/` -- a standalone tool with its own `setup.py`
+7. `autobot-npu-worker/requirements.txt` -- the native worker's own manifest, which #15671
+   made the single source both ansible paths install from. It declares `openvino` bare and
+   carries its own `-c ../constraints/shared.txt`, so it is read here as a requirements-file
+   site like sites 3 and 6.
+8. `autobot-backend/code_analysis/` -- a standalone tool with its own `setup.py`
    (documented as such in `pyproject.toml`'s mypy exclusion, GH#7105), not part of the
    ansible-orchestrated fleet deploy. Its `src/` modules are imported live by the running
    backend via `PYTHONPATH` (`api/anti_pattern.py`, `code_intelligence/*`, etc.), but that
    import path never touches `setup.py`. `setup.py`'s `extras_require["npu"]` and
    `install.sh`'s `--npu` pip line are still real, documented, human/CI-runnable install
    paths in their own right -- this guard reads both. `README.md`'s matching instruction
-   was fixed the same way but is prose, not a parseable spec, so it is outside this guard
-   (the same treatment given the other docs fixed in #14452/#14453/#14476).
+   is prose rather than a parseable spec, and was once excluded for that reason; it drifted
+   while unguarded (#15415) and is now covered by the documentation scan at the end of this
+   file, along with every other live document that pins openvino.
 
 Most of these drifted the same way: `openvino-dev` -- a deprecated meta-package frozen
 at 2024.6.0 with no release compatible with openvino 2026.x -- installed alongside a
@@ -39,12 +48,20 @@ backend and nothing about which requirement caused it. Site 7 never paired with
 `openvino-dev`, so it does not reproduce that exact crash, but it did contradict the
 SSOT floor -- the invariant this guard exists to hold everywhere `openvino` is pinned.
 
-The floor is read out of the SSOT rather than repeated here. A test that hardcoded
-`2026.3.0` would go stale in exactly the way each site did. Every site factory reads
-its source file with an uncaught `Path.read_text()` -- a renamed or moved file raises
-`FileNotFoundError` and errors the test rather than silently guarding nothing.
-`setup.py` is parsed with `ast.parse` (never executed) rather than a text regex, so a
-reformatted-but-equivalent file still resolves correctly.
+#15408: parity used to be asserted after the fact -- every one of the seven restated the
+floor as a literal, so a dependabot bump of *one* left the other six wrong until someone
+hand-edited them. `constraints/shared.txt` is now the single literal (matching the numpy
+line already there, #10524): sites 1-4 and 6 declare a bare `openvino` and apply it via
+`-c constraints/shared.txt` -- pip resolves the constraint, no literal to restate. Site 5
+is dormant with no pip mechanism to attach a `-c` to, so it stays bare with no floor at
+all (nothing to drift). Site 7's `setup.py` half stays a literal -- it is parsed with
+`ast.parse` (never executed) rather than executed, so it cannot itself read a file at
+build time the way `install.sh`'s shell line can -- so it is still checked against the
+SSOT rather than deriving it; `install.sh`'s own pip line derives via the same bare + `-c`
+pattern as the ansible sites. The floor is read out of `constraints/shared.txt` rather than
+hardcoded here. Every site factory reads its source file with an uncaught
+`Path.read_text()` -- a renamed or moved file raises `FileNotFoundError` and errors the
+test rather than silently guarding nothing.
 """
 
 from __future__ import annotations
@@ -67,12 +84,21 @@ _AGENT_CONFIG_TASKS = (
 )
 _AIML_GROUP_VARS = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "inventory" / "group_vars" / "aiml.yml"
 _WINDOWS_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "resources" / "windows-npu-worker" / "requirements.txt"
+# #15671: the manifest both ansible paths now install, and the only place this
+# worker's openvino spec is written.
+_NATIVE_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "requirements.txt"
+# Derived, not restated: a rename of the manifest moves this expectation with it.
+# Both ansible sites state a deploy-time path (`/opt/autobot/src/...` on the play,
+# `{{ code_source_dir | ... }}/...` in the role), and both END with this.
+_NATIVE_REQUIREMENTS_REPO_PATH = _NATIVE_REQUIREMENTS.relative_to(_REPO_ROOT).as_posix()
 _CODE_ANALYSIS_SETUP = _REPO_ROOT / "autobot-backend" / "code_analysis" / "setup.py"
 _CODE_ANALYSIS_INSTALL_SH = _REPO_ROOT / "autobot-backend" / "code_analysis" / "install.sh"
-_SSOT_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "requirements.txt"
+# #15408: the SSOT moved from autobot-npu-worker/requirements.txt (a literal restated in
+# six other places) to constraints/shared.txt (already the SSOT for numpy, #10524).
+_SSOT_CONSTRAINTS = _REPO_ROOT / "constraints" / "shared.txt"
 
-_ROLE_TASK_NAME = "Install OpenVINO and dependencies"
-_PLAYBOOK_TASK_NAME = "Install OpenVINO runtime for NPU Worker"
+_ROLE_TASK_NAME = "NPU Worker | Install worker dependencies from its manifest"
+_PLAYBOOK_TASK_NAME = "Install NPU Worker dependencies from its manifest"
 _AGENT_CONFIG_TASK_NAME = "Set up OpenVINO environment in venv"
 
 
@@ -111,10 +137,42 @@ def _extra_args_of(task: dict) -> str:
     return " ".join(str(task.get("extra_args", "")).split())
 
 
+def _packages_installed_by(task: dict, label: str) -> list:
+    """The manifest's packages, once the task is proved to install THAT manifest.
+
+    Without this the two ansible factories verified only a task NAME and then read
+    `_NATIVE_REQUIREMENTS` regardless: a task switched to an inline `name:` list or
+    to a different requirements file would still be scored against this manifest,
+    so the guard could report a compliant openvino floor while ansible installed
+    something else. That is the #15671 defect one level down -- two paths into one
+    venv with nothing comparing what they install -- so it is asserted per site
+    rather than assumed once.
+
+    Matched on the tail, because the deploy-time prefixes legitimately differ: the
+    play states `/opt/autobot/src/...` and the role a `code_source_dir` template.
+    """
+    installed = " ".join(str(task.get("requirements", "")).split())
+    assert installed.endswith(_NATIVE_REQUIREMENTS_REPO_PATH), (
+        f"{label} installs {installed!r}, not {_NATIVE_REQUIREMENTS_REPO_PATH} — this guard "
+        "would otherwise check the manifest's openvino spec while ansible installs another "
+        "file, or no file at all (#15671)"
+    )
+    return _parse_requirements_file(_NATIVE_REQUIREMENTS)
+
+
 def _role_site() -> _Site:
+    """#15671: the role installs a manifest, so its packages ARE that manifest's.
+
+    Reading the task is what proves the site exists -- an uncaught lookup on the
+    task name fails loudly if the pip task is renamed or removed, which a guard
+    reading only the manifest would miss entirely -- and
+    `_packages_installed_by` then proves it installs THIS manifest rather than
+    some other one.
+    """
     tasks = yaml.safe_load(_ROLE_TASKS.read_text(encoding="utf-8"))
     task = _pip_task_from_task_list(tasks, _ROLE_TASK_NAME, "ansible.builtin.pip")
-    return _Site(label=f"npu-worker role ({_ROLE_TASKS.name})", packages=_normalize_names(task["name"]))
+    label = f"npu-worker role ({_ROLE_TASKS.name}, installing {_NATIVE_REQUIREMENTS.name})"
+    return _Site(label=label, packages=_packages_installed_by(task, label))
 
 
 def _playbook_site() -> _Site:
@@ -129,7 +187,8 @@ def _playbook_site() -> _Site:
     assert (
         task is not None
     ), f"no task named {_PLAYBOOK_TASK_NAME!r} in any play — this guard is pinned to the wrong name"
-    return _Site(label=f"deploy-native-services.yml ({_PLAYBOOK.name})", packages=_normalize_names(task["name"]))
+    label = f"deploy-native-services.yml ({_PLAYBOOK.name}, installing {_NATIVE_REQUIREMENTS.name})"
+    return _Site(label=label, packages=_packages_installed_by(task, label))
 
 
 def _agent_config_site() -> _Site:
@@ -153,6 +212,13 @@ def _docker_requirements_site() -> _Site:
     return _Site(
         label=f"requirements-npu.txt ({_DOCKER_REQUIREMENTS.name})",
         packages=_parse_requirements_file(_DOCKER_REQUIREMENTS),
+    )
+
+
+def _native_requirements_site() -> _Site:
+    return _Site(
+        label=f"autobot-npu-worker manifest ({_NATIVE_REQUIREMENTS.name})",
+        packages=_parse_requirements_file(_NATIVE_REQUIREMENTS),
     )
 
 
@@ -227,6 +293,7 @@ _SITES: dict = {
     "role": _role_site,
     "playbook": _playbook_site,
     "requirements-npu.txt": _docker_requirements_site,
+    "autobot-npu-worker manifest": _native_requirements_site,
     "agent_config": _agent_config_site,
     "aiml (dormant)": _aiml_site,
     "windows-npu-worker": _windows_requirements_site,
@@ -253,6 +320,7 @@ _PIP_TASK_SITES: dict = {
 }
 _REQUIREMENTS_FILE_SITES: dict = {
     "requirements-npu.txt": _DOCKER_REQUIREMENTS,
+    "autobot-npu-worker manifest": _NATIVE_REQUIREMENTS,
     "windows-npu-worker": _WINDOWS_REQUIREMENTS,
 }
 
@@ -287,12 +355,12 @@ def _extra_args_for(site_name: str) -> str:
 
 
 def _ssot_openvino_floor() -> str:
-    """The `openvino>=X` floor declared by the worker's own requirements.txt."""
-    for line in _SSOT_REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+    """The `openvino>=X` floor declared by constraints/shared.txt (#15408, #10524)."""
+    for line in _SSOT_CONSTRAINTS.read_text(encoding="utf-8").splitlines():
         match = re.match(r"^\s*openvino\s*>=\s*([0-9][0-9.]*)", line)
         if match:
             return match.group(1)
-    raise AssertionError("no `openvino>=` floor in the SSOT requirements — this guard is pinned to the wrong file")
+    raise AssertionError("no `openvino>=` floor in the SSOT constraints file — this guard is pinned to the wrong file")
 
 
 def test_the_sources_this_guard_reads_are_present():
@@ -323,12 +391,18 @@ def test_the_deprecated_meta_package_is_not_installed(site_name: str):
 
 @pytest.mark.parametrize("site_name", list(_SITES))
 def test_the_floor_is_not_below_the_ssot(site_name: str):
-    """A lower (or absent) floor lets the resolver walk backwards into pre-cp314 releases.
+    """A lower (or absent, unconstrained) floor lets the resolver walk backwards into
+    pre-cp314 releases.
 
     This is what made the openvino-dev conflict fatal rather than merely
-    unsatisfiable: with a floor below the SSOT's (or no floor at all, as in the
-    agent_config and code_analysis/install.sh sites before their fix) there was
-    an older openvino to retreat to.
+    unsatisfiable: with a floor below the SSOT's there was an older openvino to
+    retreat to. #15408 changed most sites from an inline `>=` literal to a bare
+    `openvino` that derives its floor from `-c constraints/shared.txt` -- a bare
+    spec is compliant only if the site actually applies that constraint (proven
+    here, not just delegated to `test_the_shared_constraints_are_applied`, so a
+    site that goes bare *without* wiring up `-c` still fails this test too).
+    `aiml (dormant)` has no pip mechanism to attach a `-c` to at all (see
+    `_CONSTRAINTS_EXEMPT`) and is exempt from that half of the check.
     """
     site = _SITES[site_name]()
     specs = [name for name in site.packages if _bare_name(name) == "openvino"]
@@ -337,9 +411,16 @@ def test_the_floor_is_not_below_the_ssot(site_name: str):
     ssot_floor = _ssot_openvino_floor()
     for spec in specs:
         match = re.search(r">=\s*([0-9][0-9.]*)", spec)
-        assert match, f"{site.label}: {spec!r} has no lower bound, so pip may resolve any older release"
+        if match is None:
+            if site_name in _CONSTRAINTS_EXEMPT:
+                continue
+            assert "constraints/shared.txt" in _extra_args_for(site_name), (
+                f"{site.label}: {spec!r} has no lower bound and does not apply "
+                "constraints/shared.txt, so pip may resolve any older release (#15408)"
+            )
+            continue
         assert _version_tuple(match.group(1)) >= _version_tuple(ssot_floor), (
-            f"{site.label} pins openvino>={match.group(1)} while {_SSOT_REQUIREMENTS.name} "
+            f"{site.label} pins openvino>={match.group(1)} while {_SSOT_CONSTRAINTS.name} "
             f"declares >={ssot_floor} — this site has drifted below the SSOT (#14447, #14452, #14453)"
         )
 
@@ -362,3 +443,69 @@ def test_the_shared_constraints_are_applied(site_name: str):
     assert (
         "-c" in extra_args
     ), f"{site.label}: constraints/shared.txt is referenced but not passed as a `-c` constraints file"
+
+
+# --- Documentation sites (#15415) -------------------------------------------------
+#
+# The seven sites above are parseable specs. Prose was originally left outside this
+# guard for that reason, but a version pin is mechanically checkable whatever
+# surrounds it, and the exclusion had a cost: when #15406 raised the floor to
+# 2026.3.1, four documents kept publishing 2026.3.0 — including a `pip install`
+# command a reader runs, directly under a comment asserting the floor matched the
+# SSOT. Docs drift silently precisely because nothing reads them.
+#
+# Two document trees state past floors on purpose and must keep their original
+# values: `docs/audit/` records dated measurements ("Re-measured against PyPI on
+# 2026-08-25 ... the repo's floor is now openvino>=2026.3.0") and `docs/archives/`
+# stores superseded plans. Rewriting either would falsify a record rather than fix a
+# drift. The exclusion is by tree, not by filename, so a new dated audit is covered
+# without editing this guard.
+
+_HISTORICAL_DOC_TREES = ("docs/audit/", "docs/archives/")
+
+# One per live document that pins openvino today. A floor, not a census: it exists so
+# that a glob which silently stops matching fails loudly instead of guarding nothing.
+_MIN_LIVE_DOC_PINS = 4
+
+_DOC_PIN_RE = re.compile(r"openvino\s*>=\s*([0-9][0-9.]*)")
+
+
+def _live_doc_pins() -> list[tuple[str, int, str]]:
+    """Every `openvino>=` pin in Markdown outside the historical trees."""
+    found: list[tuple[str, int, str]] = []
+    for path in sorted(_REPO_ROOT.rglob("*.md")):
+        relative = path.relative_to(_REPO_ROOT).as_posix()
+        if relative.startswith(_HISTORICAL_DOC_TREES) or "node_modules/" in relative:
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            match = _DOC_PIN_RE.search(line)
+            if match:
+                found.append((relative, number, match.group(1)))
+    return found
+
+
+def test_the_documentation_scan_reaches_the_known_pins():
+    """A glob that matches nothing would make the drift check below vacuous."""
+    pins = _live_doc_pins()
+
+    assert len(pins) >= _MIN_LIVE_DOC_PINS, (
+        f"only {len(pins)} live documentation pin(s) found, expected at least "
+        f"{_MIN_LIVE_DOC_PINS} — this scan has stopped reaching the docs it guards"
+    )
+
+
+def test_no_document_publishes_a_floor_below_the_ssot():
+    """A stale install instruction sends a reader to a version the repo rejects.
+
+    Reported as a whole rather than one failure at a time: the floor moves in one
+    commit and every document that missed it is the same defect, so a first-failure
+    abort would hide the rest of the set behind a re-run.
+    """
+    ssot_floor = _ssot_openvino_floor()
+
+    drifted = [(path, number, pin) for path, number, pin in _live_doc_pins() if pin != ssot_floor]
+
+    assert not drifted, "documentation contradicts the SSOT openvino floor (#15415):\n" + "\n".join(
+        f"  {path}:{number} says >={pin}, {_SSOT_CONSTRAINTS.name} declares >={ssot_floor}"
+        for path, number, pin in drifted
+    )

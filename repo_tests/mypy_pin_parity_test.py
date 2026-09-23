@@ -23,12 +23,12 @@ the gate must be handed the same ones.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 CODE_QUALITY = REPO_ROOT / ".github" / "workflows" / "code-quality.yml"
 PRE_COMMIT = REPO_ROOT / ".pre-commit-config.yaml"
 

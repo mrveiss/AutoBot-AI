@@ -65,7 +65,7 @@ EXEMPT_PATHS=(
     "autobot-backend/services/claim_verifier.py"
     "autobot-backend/services/execution/base_backend.py"
     "autobot-backend/services/gateway/types.py"
-    "autobot-backend/services/grounded_agent.py"
+    "autobot-backend/services/grounded_agent_models.py"
     "autobot-backend/services/knowledge_grounding_models.py"
     "autobot-backend/services/slm/deployment_bridge.py"
     "autobot-backend/skills/base_skill.py"

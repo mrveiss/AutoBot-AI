@@ -26,6 +26,7 @@ from models.schemas import (
     SecretResponse,
     SecretUpdate,
 )
+from models.schemas_secrets import DependentRolesResponse
 from services.ansible_secrets import _SECRET_TO_DEPENDENT_ROLES
 from services.auth import require_permission
 from services.database import get_db
@@ -114,17 +115,17 @@ async def create_secret(
     return response
 
 
-@router.get("/dependent-roles")
+@router.get("/dependent-roles", response_model=DependentRolesResponse)
 async def get_dependent_roles_mapping(
     _: Annotated[dict, Depends(require_permission(Permission.SECURITY_MANAGE))],
-) -> dict:
+) -> DependentRolesResponse:
     """Return the secret-key -> dependent-role mapping for apply-secrets (#11719).
 
     Single source of truth is _SECRET_TO_DEPENDENT_ROLES in
     services/ansible_secrets.py; the frontend uses this to decide whether to
     show the "Apply to services" action for a given secret key.
     """
-    return {"mapping": _SECRET_TO_DEPENDENT_ROLES}
+    return DependentRolesResponse(mapping=_SECRET_TO_DEPENDENT_ROLES)
 
 
 @router.get("/{key}", response_model=SecretResponse)

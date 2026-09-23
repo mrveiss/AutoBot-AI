@@ -11,6 +11,7 @@ Bridges ConnectorConfig ↔ SecretsService so that sensitive auth fields
 
 import asyncio
 import contextlib
+import functools
 import hashlib
 import json
 import os
@@ -18,6 +19,7 @@ import time
 import uuid
 from datetime import timedelta
 
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -33,8 +35,7 @@ logger = get_logger(__name__)
 # legacy id via the ``imported_from_sqlite`` marker) and fall back to SQLite. WRITE: every
 # write also best-effort mirrors into the vault store (SQLite stays canonical). The two are
 # independent so dual-write can be enabled first to populate the vault store, then read.
-VAULT_READ_ENV = "AUTOBOT_SECRETS_UNIFIED_READ"
-VAULT_WRITE_ENV = "AUTOBOT_SECRETS_UNIFIED_WRITE"
+VAULT_READ_ENV, VAULT_WRITE_ENV = "AUTOBOT_SECRETS_UNIFIED_READ", "AUTOBOT_SECRETS_UNIFIED_WRITE"
 
 
 def _vault_read_enabled() -> bool:
@@ -157,11 +158,27 @@ def _configured_lock_ttl_ms() -> int:
     return configured
 
 
-_REFRESH_LOCK_TTL_MS = _configured_lock_ttl_ms()
-# A loser must outwait the lease, or it gives up on a refresh still in progress.
-_REFRESH_WAIT_S = max(float(os.getenv("AUTOBOT_OAUTH_REFRESH_WAIT_S", "0")), (_REFRESH_LOCK_TTL_MS / 1000.0) + 5.0)
-# Guarded against 0 from the environment, which would busy-loop the executor.
-_REFRESH_POLL_S = max(float(os.getenv("AUTOBOT_OAUTH_REFRESH_POLL_S", "0.2")), 0.05)
+# #17138: computed on first real use, not at module import -- _token_timeout_s()
+# (via _configured_lock_ttl_ms()) imports knowledge.connectors.oauth_flow, which
+# imports aiohttp at its own module level. A module-level constant would have
+# paid for that on every import of this file, including a caller (api.secrets)
+# that never performs an OAuth refresh at all. lru_cache keeps the "compute once"
+# property these were written for; only WHEN that first computation happens moves.
+@functools.lru_cache(maxsize=1)
+def _refresh_lock_ttl_ms() -> int:
+    return _configured_lock_ttl_ms()
+
+
+@functools.lru_cache(maxsize=1)
+def _refresh_wait_s() -> float:
+    """A loser must outwait the lease, or it gives up on a refresh still in progress."""
+    return env_float_clamped("AUTOBOT_OAUTH_REFRESH_WAIT_S", 0.0, min_v=(_refresh_lock_ttl_ms() / 1000.0) + 5.0)
+
+
+@functools.lru_cache(maxsize=1)
+def _refresh_poll_s() -> float:
+    """Guarded against 0 from the environment, which would busy-loop the executor."""
+    return env_float_clamped("AUTOBOT_OAUTH_REFRESH_POLL_S", 0.2, min_v=0.05)
 
 
 async def _release_quietly(lease: LeaderLease) -> None:
@@ -218,6 +235,11 @@ class ConnectorCredentialStore:
                 secret_type=secret_type,
                 value=value,
                 scope="user",
+                # secret_type alone doesn't determine auth_cls uniquely --
+                # BearerAuth and ApiKeyAuth share "connector_api_key" -- so
+                # rotate() needs the exact class name to validate against
+                # the right schema (#16428 security review).
+                metadata={"auth_type": auth_cls.__name__},
                 created_by=owner_id,
             ),
         )
@@ -266,7 +288,13 @@ class ConnectorCredentialStore:
         new_credentials: dict,
         owner_id: str,
     ) -> None:
-        """Replace the stored secret value with new_credentials in-place."""
+        """Replace the stored secret value with new_credentials in-place.
+
+        Raises ValueError when the merged bundle doesn't satisfy the auth
+        type's schema -- store()'s validation on create() must hold on
+        rotation too, or a partial/malformed update persists silently until
+        the connector next tries to authenticate with it (#16428 review).
+        """
         existing = await asyncio.get_running_loop().run_in_executor(
             None,
             # accessed_by drives the access audit (#13628): rotation decrypts the
@@ -279,6 +307,17 @@ class ConnectorCredentialStore:
 
         current_creds = json.loads(existing["value"])
         current_creds.update(new_credentials)
+
+        auth_type_name = (existing.get("metadata") or {}).get("auth_type")
+        if auth_type_name:
+            from autobot_shared.auth import resolve_auth_type, validate_config_against_schema
+
+            auth_cls = resolve_auth_type(auth_type_name)
+            if auth_cls is not None:
+                errors = validate_config_against_schema(auth_cls, current_creds)
+                if errors:
+                    raise ValueError("; ".join(errors))
+
         new_value = json.dumps(current_creds, ensure_ascii=False)
 
         await asyncio.get_running_loop().run_in_executor(
@@ -407,8 +446,8 @@ class ConnectorCredentialStore:
         appears, then fails loudly rather than falling through to an
         unsynchronized refresh, which would reintroduce the bug.
         """
-        deadline = time.monotonic() + _REFRESH_WAIT_S
-        delay = _REFRESH_POLL_S
+        deadline = time.monotonic() + _refresh_wait_s()
+        delay = _refresh_poll_s()
         while time.monotonic() < deadline:
             await asyncio.sleep(delay)
             # Back off: a waiter polling every 200ms drives a sqlite
@@ -426,7 +465,7 @@ class ConnectorCredentialStore:
             takeover = LeaderLease(
                 key=_refresh_lock_key(secret_id),
                 database=_REFRESH_DB,
-                ttl_ms=_REFRESH_LOCK_TTL_MS,
+                ttl_ms=_refresh_lock_ttl_ms(),
                 worker_id=uuid.uuid4().hex,
                 label="OAuth refresh",
             )
@@ -436,7 +475,7 @@ class ConnectorCredentialStore:
                 finally:
                     await _release_quietly(takeover)
         raise TimeoutError(
-            f"Timed out after {_REFRESH_WAIT_S}s waiting for a concurrent OAuth refresh of {secret_id!r}. "
+            f"Timed out after {_refresh_wait_s()}s waiting for a concurrent OAuth refresh of {secret_id!r}. "
             "Refusing to refresh unsynchronized — a second refresh can invalidate the rotated token."
         )
 
@@ -470,7 +509,7 @@ class ConnectorCredentialStore:
         lease = LeaderLease(
             key=_refresh_lock_key(secret_id),
             database=_REFRESH_DB,
-            ttl_ms=_REFRESH_LOCK_TTL_MS,
+            ttl_ms=_refresh_lock_ttl_ms(),
             # A unique id per lease, NOT the default hostname-pid. Two refreshes in
             # one process would otherwise share an identity, and ``release()``'s
             # "only delete if it is still mine" guard would happily delete the other

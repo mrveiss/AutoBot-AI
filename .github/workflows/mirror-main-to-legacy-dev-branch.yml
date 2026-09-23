@@ -1,0 +1,36 @@
+# TEMPORARY (#16461). Fast-forwards the legacy `Dev_new_gui` branch to every push
+# on `main`, so the live production updater -- which still fetches `Dev_new_gui`
+# until it is switched over -- keeps receiving code during the branch-rename
+# rollout. Remove this workflow, and the `Dev_new_gui` branch it mirrors, once
+# production is confirmed tracking `main` (#16461).
+#
+# Fast-forward ONLY: no `--force`. `main` and `Dev_new_gui` are the same branch
+# under two names during this window, so every push to `main` is already an
+# ancestor-preserving advance and the mirror push must never rewrite history.
+
+name: Mirror main to legacy Dev_new_gui branch
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Fast-forward Dev_new_gui to this push
+        run: |
+          git push origin HEAD:refs/heads/Dev_new_gui

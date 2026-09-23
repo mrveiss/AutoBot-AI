@@ -9,26 +9,56 @@ Loads, validates, and caches role manifests from
 autobot-infrastructure/autobot-<role>/manifest.yml.
 Single source of truth reader for deployment, health, conflict, and
 policy decisions.
+
+Environment:
+    ``SLM_MANIFEST_CACHE_TTL`` -- seconds a parsed manifest is served from
+    cache, default 300. ``0`` or negative disables caching, which is the
+    dev-mode bypass for editing a manifest on the SLM host (#16026).
+    Read through ``autobot_shared.env_utils.env_int``, as the other SLM knobs
+    are. Documented here rather than in ``autobot_shared/env_registry.py``:
+    that registry holds ``AUTOBOT_*`` names and carries no ``SLM_*`` entry.
+
+    ``SLM_INFRA_BASE_DIR`` -- overrides where ``autobot-infrastructure/`` is
+    read from, default ``$AUTOBOT_BASE_DIR/autobot-infrastructure``. Kept
+    separate from ``AUTOBOT_BASE_DIR`` (#16025) because ``role_registry.py``
+    reads that same variable for the unrelated deploy *target* directory
+    (``/opt/autobot`` in production); a test or dev host pointing manifests at
+    the repo's own ``autobot-infrastructure/`` must not also redirect every
+    role's deploy target.
 """
 
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Dict, List, Tuple
 
 import yaml
 
+from autobot_shared.env_utils import env_int
 from models.manifest import RoleManifest, UpdatePolicy
 
 logger = logging.getLogger(__name__)
 
 # Base dir where autobot-infrastructure/ lives on the SLM server
 _AUTOBOT_BASE = Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
-_INFRA_BASE = _AUTOBOT_BASE / "autobot-infrastructure"
+# #16025: independent override -- see the module docstring for why this is
+# not just AUTOBOT_BASE_DIR / "autobot-infrastructure".
+_INFRA_BASE_OVERRIDE = os.environ.get("SLM_INFRA_BASE_DIR")
+_INFRA_BASE = Path(_INFRA_BASE_OVERRIDE) if _INFRA_BASE_OVERRIDE else (_AUTOBOT_BASE / "autobot-infrastructure")
 
-# Cache TTL in seconds (5 minutes)
-_CACHE_TTL = 300
+# Cache TTL in seconds, env-backed rather than a bare literal (#16026): a
+# manifest is an operator-edited file, so the staleness window has to be tunable
+# on the host that edits it. `<= 0` disables caching, which is the dev-mode
+# bypass.
+#
+# `env_int` rather than a local reader: it already treats a blank value as
+# absent (#12782 -- a template rendering an undefined var exports `NAME=`, which
+# defeats every `os.environ.get(name, default)` fallback) and already warns and
+# falls back on a non-integer instead of raising at import. services/reconciler.py
+# and api/code_sync.py in this same service already read their knobs this way.
+_CACHE_TTL = env_int("SLM_MANIFEST_CACHE_TTL", 300)
 
 
 class ManifestLoader:
@@ -42,14 +72,59 @@ class ManifestLoader:
         self._infra_base = infra_base
         self._cache: Dict[str, Tuple[RoleManifest, float]] = {}
 
-    def _manifest_path(self, role_name: str) -> Path:
-        """Return the expected manifest.yml path for a role."""
-        return self._infra_base / role_name / "manifest.yml"
+    #: A role directory name. Ansible role names are lowercase with underscores
+    #: or hyphens; nothing legitimate contains a separator, a dot or whitespace.
+    #: `fullmatch`, not `match`: with `match` the trailing `$` also matches
+    #: before a final newline, so "backend\n" was accepted (#17300 review).
+    _ROLE_NAME_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+
+    def _manifest_path(self, role_name: str) -> Path | None:
+        """The manifest.yml path for *role_name*, or None if it is not a real role.
+
+        #17300: `role_name` arrives from a `role` query parameter and a
+        `role_name` POST body field, and was joined as its own path segment with
+        no validation -- `role_name="../../../../etc"` walked out of the infra
+        base before `path.exists()` and `path.open()`.
+
+        The path is built from a DIRECTORY LISTING, not from the argument: the
+        argument only ever selects an entry that already exists under the infra
+        base. That is what makes traversal impossible rather than merely
+        difficult -- there is no string concatenation for an attacker to steer,
+        so the property holds without anyone having to reason about what the
+        allowlist excludes. The allowlist and the containment check remain as
+        two cheaper filters in front of it.
+
+        Returns None rather than raising, which is the caller's existing
+        "no manifest for this role" path and the honest answer for a name that
+        cannot be a role.
+        """
+        if not self._ROLE_NAME_RE.fullmatch(role_name or ""):
+            logger.warning("Rejected manifest lookup for a non-role name: %r (#17300)", role_name)
+            return None
+
+        base = self._infra_base.resolve()
+        try:
+            entries = {entry.name: entry for entry in base.iterdir() if entry.is_dir()}
+        except OSError as exc:
+            logger.warning("Cannot list the infra base %s: %s", base, exc)
+            return None
+
+        entry = entries.get(role_name)
+        if entry is None:
+            return None
+
+        candidate = (entry / "manifest.yml").resolve()
+        # A role directory that is a symlink out of the base resolves outside it;
+        # the listing alone would not catch that.
+        if not candidate.is_relative_to(base):
+            logger.warning("Rejected manifest path outside the infra base: %r (#17300)", role_name)
+            return None
+        return candidate
 
     def _load_from_disk(self, role_name: str) -> RoleManifest | None:
         """Load and parse manifest.yml for role_name."""
         path = self._manifest_path(role_name)
-        if not path.exists():
+        if path is None or not path.exists():
             logger.debug("Manifest not found for role %s at %s", role_name, path)
             return None
         try:
@@ -63,25 +138,40 @@ class ManifestLoader:
     def load(self, role_name: str, *, force_reload: bool = False) -> RoleManifest | None:
         """Return the RoleManifest for role_name, using cache if fresh."""
         cached = self._cache.get(role_name)
-        if cached and not force_reload:
+        if cached and not force_reload and _CACHE_TTL > 0:
             manifest, loaded_at = cached
             if time.monotonic() - loaded_at < _CACHE_TTL:
                 return manifest
 
         manifest = self._load_from_disk(role_name)
-        if manifest is not None:
+        if manifest is None:
+            # A failed read must not leave the previous entry behind (#16204). A
+            # forced reload that fails returns None to its caller; if the old entry
+            # survived, every later plain load() inside the TTL would serve the
+            # pre-reload manifest -- the one caller that asked for fresh data told
+            # the truth, every later caller told the old answer. An expired entry
+            # whose reload fails is dropped for the same reason: it is never served,
+            # so keeping it only leaves the cache asserting what the disk no longer says.
+            self._cache.pop(role_name, None)
+        else:
             self._cache[role_name] = (manifest, time.monotonic())
         return manifest
 
-    def load_all(self) -> Dict[str, RoleManifest]:
-        """Load manifests for all roles found under infra_base."""
+    def load_all(self, *, force_reload: bool = False) -> Dict[str, RoleManifest]:
+        """Load manifests for all roles found under infra_base.
+
+        ``force_reload`` is threaded through to :meth:`load` because
+        ``services/reconciler.py`` reads the whole set through this method and
+        had no way to reach the per-role bypass (#16026) -- an override that a
+        caller cannot get at is not an override.
+        """
         result: Dict[str, RoleManifest] = {}
         if not self._infra_base.exists():
             logger.warning("Infrastructure base dir not found: %s", self._infra_base)
             return result
         for child in sorted(self._infra_base.iterdir()):
             if child.is_dir() and child.name.startswith("autobot-"):
-                manifest = self.load(child.name)
+                manifest = self.load(child.name, force_reload=force_reload)
                 if manifest:
                     result[child.name] = manifest
         return result

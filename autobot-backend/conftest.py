@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from autobot_shared.ssot_config import config
+from testkit.auth_middleware_stub import install_auth_middleware_stub
 
 # Ensure autobot-backend and autobot_shared are importable
 project_root = Path(__file__).parent.parent
@@ -35,80 +36,12 @@ sys.path.insert(0, str(shared_root))
 sys.path.insert(0, str(backend_root))
 
 
-def _make_pkg_stub(name: str) -> types.ModuleType:
-    """Create a minimal package stub that Python's import machinery accepts.
-
-    A bare MagicMock() cannot serve as a package because the importer
-    requires ``__path__`` to be set for submodule resolution (e.g. when the
-    code does ``from sqlalchemy.dialects.postgresql import ARRAY``).  We
-    create a real ModuleType with ``__path__ = []`` so the dotted import chain
-    succeeds while leaving every attribute access as a MagicMock via
-    ``__getattr__``.
-    """
-    mod = types.ModuleType(name)
-    mod.__path__ = []  # marks this as a package to the import system
-    mod.__package__ = name
-    mock_attr = MagicMock()
-
-    def _getattr(attr: str) -> MagicMock:  # noqa: ANN001
-        return mock_attr
-
-    mod.__getattr__ = _getattr  # type: ignore[attr-defined]
-    mod.pytest_plugins = []  # prevent MagicMock __getattr__ leaking into pytest plugin scan
-    # Prevent _get_first_non_fixture_func from picking up MagicMock as setup/teardown hooks
-    mod.setUpModule = None  # type: ignore[attr-defined]
-    mod.setup_module = None  # type: ignore[attr-defined]
-    mod.tearDownModule = None  # type: ignore[attr-defined]
-    mod.teardown_module = None  # type: ignore[attr-defined]
-    sys.modules[name] = mod
-    return mod
-
-
-def _real_load_and_bind(name: str, path: Path) -> None:
-    """Real-load module *name* from *path*, overwriting any stub, and ALWAYS
-    bind it as an attribute on its parent package module (#11661 — merged
-    ``_load_real_mod`` + ``_real_load_service``).
-
-    The parent bind is load-bearing (#11532/#11618): ``unittest.mock.patch``
-    resolves ``"pkg.mod.NAME"`` via ``getattr(sys.modules["pkg"], "mod")``.
-    When ``pkg`` is a MagicMock package stub, its catch-all ``__getattr__``
-    returns a mock singleton, so without the setattr patch() silently patches
-    the wrong object while the real module's globals stay untouched (inert
-    patch).  Falls back to a package stub if the real file can't be loaded in
-    this environment.
-    """
-    import importlib.util as _rlb_ilu
-
-    # #12839: never re-execute a module that is ALREADY real-loaded from this
-    # same file. Re-executing builds a second set of class objects and swaps
-    # them into sys.modules, while every module that imported the first set
-    # keeps referencing it — so `isinstance(x, Cls)` fails against an object
-    # whose repr says it IS a Cls. That is what broke test_claim_classifier:
-    # services.claim_classifier imported .knowledge_grounding_models at
-    # collection, then _real_load_light_services re-executed the same file.
-    # Re-execution is only needed to replace a *stub*, so an already-real module
-    # is left alone and only the parent bind below is (re)applied.
-    _existing = sys.modules.get(name)
-    if _existing is not None and getattr(_existing, "__file__", None) == str(path):
-        parent, _, child = name.rpartition(".")
-        if parent and parent in sys.modules:
-            setattr(sys.modules[parent], child, _existing)
-        return
-
-    spec = _rlb_ilu.spec_from_file_location(name, str(path))
-    if not spec or not spec.loader:
-        return
-    mod = _rlb_ilu.module_from_spec(spec)
-    sys.modules[name] = mod
-    try:
-        spec.loader.exec_module(mod)
-    except Exception:
-        sys.modules[name] = _make_pkg_stub(name)
-        return
-    parent, _, child = name.rpartition(".")
-    if parent and parent in sys.modules:
-        setattr(sys.modules[parent], child, mod)
-
+# #16483: both moved to testkit/module_stubs.py — reusable, not conftest-specific
+# (78 call sites across this file alone), and it keeps this file under the
+# file-size ratchet without a raised ceiling every time a new module needs
+# real-loading before its dependent imports it.
+from testkit.module_stubs import make_pkg_stub as _make_pkg_stub
+from testkit.module_stubs import real_load_and_bind as _real_load_and_bind
 
 # Stub chromadb before it is imported. chromadb hangs at import time on
 # machines without a local Chroma server (it fires gRPC keep-alive probes via
@@ -646,6 +579,11 @@ if "llm_shared" not in sys.modules:
     # so base_provider (and then provider_registry) load real.
     _real_load_and_bind("llm_shared.cross_worker_rate_limiter", _llm_root / "cross_worker_rate_limiter.py")
     _real_load_and_bind("llm_shared.observability", _llm_root / "observability" / "__init__.py")
+    # #15026: quota headroom store — rate_limit_backoff imports it at module
+    # level (`from .quota_headroom import get_quota_headroom_store`) to persist
+    # what it already parses; light dep (autobot_shared.env_utils/
+    # logging_manager/singleton_factory only), load real before rate_limit_backoff.
+    _real_load_and_bind("llm_shared.quota_headroom", _llm_root / "quota_headroom.py")
     _real_load_and_bind("llm_shared.rate_limit_backoff", _llm_root / "rate_limit_backoff.py")
     # #11541: pre-request cumulative token budget gate — base_provider imports it
     # at module level (`from .token_budget import get_token_budget_gate`); light
@@ -731,14 +669,20 @@ if "llm_shared" not in sys.modules:
     # and autobot_shared.redis_client (real module); the llm_shared stub's empty
     # __path__ otherwise breaks every provider-source import and its colocated
     # services/pricing_refresh_test.py. Dependency order: sources → redis_store
-    # → per-provider sources → package __init__.
-    _real_load_and_bind("llm_shared.pricing.sources", _llm_root / "pricing" / "sources.py")
-    _real_load_and_bind("llm_shared.pricing.redis_store", _llm_root / "pricing" / "redis_store.py")
-    _real_load_and_bind("llm_shared.pricing.anthropic_source", _llm_root / "pricing" / "anthropic_source.py")
-    _real_load_and_bind("llm_shared.pricing.openai_source", _llm_root / "pricing" / "openai_source.py")
-    _real_load_and_bind("llm_shared.pricing.google_source", _llm_root / "pricing" / "google_source.py")
-    _real_load_and_bind("llm_shared.pricing.deepseek_source", _llm_root / "pricing" / "deepseek_source.py")
-    _real_load_and_bind("llm_shared.pricing.vertexai_source", _llm_root / "pricing" / "vertexai_source.py")
+    # → live sources + cross-check (#16229) → per-provider sources → package __init__.
+    _pricing_subs = (
+        "sources",
+        "redis_store",
+        "live_sources",
+        "crosscheck",
+        "anthropic_source",
+        "openai_source",
+        "google_source",
+        "deepseek_source",
+        "vertexai_source",
+    )
+    for _pricing_sub in _pricing_subs:
+        _real_load_and_bind(f"llm_shared.pricing.{_pricing_sub}", _llm_root / "pricing" / f"{_pricing_sub}.py")
     _real_load_and_bind("llm_shared.pricing", _llm_root / "pricing" / "__init__.py")
     # The submodule real-loads above ran before "llm_shared.pricing" existed in
     # sys.modules, so _real_load_and_bind's own parent-bind was a no-op for them
@@ -748,15 +692,7 @@ if "llm_shared" not in sys.modules:
     # via getattr(llm_shared.pricing, "redis_store") instead of raising
     # AttributeError.
     _pricing_pkg = sys.modules["llm_shared.pricing"]
-    for _pricing_sub in (
-        "sources",
-        "redis_store",
-        "anthropic_source",
-        "openai_source",
-        "google_source",
-        "deepseek_source",
-        "vertexai_source",
-    ):
+    for _pricing_sub in _pricing_subs:
         setattr(_pricing_pkg, _pricing_sub, sys.modules[f"llm_shared.pricing.{_pricing_sub}"])
 
     # llm_shared.cache — provide symbols consumed by services.llm_service
@@ -799,114 +735,13 @@ if "llm_shared" not in sys.modules:
     # provider_registry, …) held classes from the first copy while later test
     # imports got the second, breaking isinstance checks.  Nothing depends on
     # reload semantics — the re-load ran once, immediately after the first
-    # load, inside the same conftest pass.  Only semantic_cache still loads
-    # here (its first and only load), through the canonical helper.
+    # load, inside the same conftest pass.
 
-    # Load llm_shared.semantic_cache (Issue #8168) — pure Python + numpy,
-    # no heavy deps at import time.  On load failure _real_load_and_bind
-    # installs a pkg stub whose __getattr__ yields a MagicMock, so the
-    # SemanticLLMCache re-export below stays mock-backed as before.
-    _real_load_and_bind("llm_shared.semantic_cache", _llm_root / "semantic_cache.py")
-    _sc_mod = sys.modules.get("llm_shared.semantic_cache")
-    if _sc_mod is not None and hasattr(_sc_mod, "SemanticLLMCache"):
-        _llm_stub.SemanticLLMCache = _sc_mod.SemanticLLMCache  # type: ignore[attr-defined]
-
-# auth_middleware stub — the real module pulls in the full config/Redis chain
-# at import time (config.manager, error_catalog, etc.) which fails in the dev
-# venv.  Every name exported here must be a real callable with a real
-# signature, because routers capture them in ``Depends(...)`` at import time.
-if "auth_middleware" not in sys.modules:
-    from fastapi import Request as _FastAPIRequest
-
-    _auth_stub = types.ModuleType("auth_middleware")
-    _auth_stub.__path__ = []  # type: ignore[attr-defined]
-    _auth_stub.__package__ = "auth_middleware"
-
-    # get_current_user must be a real callable, not a bare MagicMock (#13253).
-    # ``inspect.signature(MagicMock())`` is ``(*args, **kwargs)``; FastAPI's
-    # get_dependant() does not skip VAR_POSITIONAL/VAR_KEYWORD parameters, so
-    # both become REQUIRED query parameters. Every request to any router that
-    # declares ``Depends(get_current_user)`` then fails validation with
-    # ``422 {'loc': ['query', 'args'], 'msg': 'Field required'}`` before the
-    # handler ever runs — same failure mode as #10472 below.
-    # The ``request`` parameter is annotated ``Request`` so FastAPI injects it
-    # instead of treating it as a request field, and defaults to None so
-    # direct ``get_current_user()`` call sites keep working.
-    def _get_current_user_stub(request: _FastAPIRequest = None) -> dict:  # type: ignore[assignment] # noqa: E301
-        return {
-            "username": "test-user",
-            "user_id": "test-user",
-            "role": "admin",
-            "auth_method": "stub",
-        }
-
-    _auth_stub.get_current_user = _get_current_user_stub  # type: ignore[attr-defined]
-
-    # check_admin_permission must be a proper no-arg callable so FastAPI can
-    # inspect its signature at route-registration time without producing spurious
-    # (*args, **kwargs) query parameters (#10472).
-    def _check_admin_permission_stub():  # noqa: E301
-        return True
-
-    _auth_stub.check_admin_permission = _check_admin_permission_stub  # type: ignore[attr-defined]
-
-    # require_device_jwt is a dependency FACTORY (GH#9493/#11736) invoked at
-    # module import time — it must return a no-arg callable so FastAPI can
-    # inspect the signature at route registration without producing spurious
-    # (*args, **kwargs) query parameters (same rationale as above, #10472).
-    def _require_device_jwt_stub(min_scope: str = "read"):  # noqa: E301
-        def _device_jwt_dep():
-            return {
-                "username": "device:stub-device",
-                "user_id": "stub-user",
-                "role": "device",
-                "device_id": "00000000-0000-0000-0000-000000000000",
-                "scope": min_scope,
-                "auth_method": "device_jwt",
-            }
-
-        return _device_jwt_dep
-
-    _auth_stub.require_device_jwt = _require_device_jwt_stub  # type: ignore[attr-defined]
-
-    # get_auth_middleware must yield a middleware whose get_user_from_request()
-    # returns a REAL dict -- #13253's rule applied to this module's sibling
-    # accessor, which it missed (#14944).
-    #
-    # Without this, the catch-all below hands out a bare MagicMock, so
-    # ``get_auth_middleware().get_user_from_request(request)`` auto-vivifies a
-    # mock "user", and ``user.get("role")`` auto-vivifies another. Nothing
-    # errored, because everything downstream stringified it: the old
-    # ``is_admin_role`` computed ``str(<MagicMock ...>).lower()``, matched
-    # nothing, and returned False. Twelve tests across three shards asserted
-    # non-admin behaviour and passed for that reason rather than on the auth
-    # logic they name. Typing ``role_value`` strictly (#14944) turned that
-    # silent wrong answer into a TypeError, which is how the gap surfaced.
-    #
-    # Only get_user_from_request is pinned. The middleware carries a dozen other
-    # attributes (create_jwt_token, security_layer, enable_auth, ...) that tests
-    # legitimately auto-mock, so the object stays a MagicMock and only the value
-    # whose *shape* is load-bearing is made real -- a fresh dict per call, so a
-    # test mutating it cannot leak into the next.
-    _auth_middleware_stub_instance = MagicMock()
-    _auth_middleware_stub_instance.get_user_from_request.side_effect = (
-        lambda *_args, **_kwargs: _get_current_user_stub()
-    )
-
-    def _get_auth_middleware_stub():  # noqa: E301
-        return _auth_middleware_stub_instance
-
-    _auth_stub.get_auth_middleware = _get_auth_middleware_stub  # type: ignore[attr-defined]
-
-    # NOTE: this catch-all is why the gap above was silent -- a name nobody
-    # stubbed becomes a MagicMock that answers every call rather than an
-    # AttributeError that names the missing stub. It is deliberately left in
-    # place here: `authenticate_websocket`, `verify_internal_api_key` and
-    # `AuthenticationMiddleware` still reach it, and several tests configure
-    # them as mocks, so removing it belongs in its own change with its own CI
-    # run rather than riding along inside an auth fix (#14982).
-    _auth_stub.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
-    sys.modules["auth_middleware"] = _auth_stub
+# auth_middleware stub -- moved to testkit/auth_middleware_stub.py (#14982,
+# #13257) so removing the module's auto-vivifying __getattr__ catch-all did
+# not grow this file past its grandfathered line-count ceiling. See that
+# module's docstring for the stub's contract and rationale.
+install_auth_middleware_stub()
 
 # autobot_shared.redis_management stubs — the real package tries to open
 # sockets at import time; tests must not do that.

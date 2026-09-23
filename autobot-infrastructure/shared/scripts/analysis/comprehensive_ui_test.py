@@ -485,7 +485,8 @@ class ComprehensiveUITester:
         self.results.performance_metrics[page_result["page"]] = performance_metrics
 
         print(
-            f"    📈 Performance captured: LCP {performance_metrics['largest_contentful_paint']}s, CLS {performance_metrics['cumulative_layout_shift']}"
+            f"    📈 Performance captured: LCP {performance_metrics['largest_contentful_paint']}s, "
+            f"CLS {performance_metrics['cumulative_layout_shift']}"
         )
 
     async def _generate_report(self):

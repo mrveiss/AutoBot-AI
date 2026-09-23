@@ -16,8 +16,8 @@ import os
 import sys
 import time
 import uuid
-from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field
+from collections import deque
+from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List
 
@@ -26,9 +26,11 @@ from autobot_shared.logging_manager import get_logger
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+from autobot_shared.env_utils import env_int  # noqa: E402
 from autobot_shared.error_boundaries import error_boundary  # noqa: E402
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import RetryConfig, TimingConstants  # noqa: E402
+from protocols.message_origin import stamp  # noqa: E402
 
 
 def _parse_message_type(msg_type: Any) -> "MessageType":
@@ -55,12 +57,20 @@ def _parse_priority(priority: Any) -> "MessagePriority":
     return MessagePriority.NORMAL
 
 
-from autobot_shared.async_compat import run_or_schedule
-
-# noqa: E402
-from autobot_shared.redis_client import get_redis_client  # noqa: E402
+from autobot_shared.async_compat import fire_and_forget, run_or_schedule  # noqa: E402
+from protocols.agent_channels import (  # noqa: E402,F401 -- #16986: channels and delivery by recipient live there
+    INBOX_MAX_LENGTH,
+    CommunicationChannel,
+    DirectCommunicationChannel,
+    RedisCommunicationChannel,
+)
+from protocols.agent_kind import AgentKind  # noqa: E402
 
 logger = get_logger(__name__)
+
+#: Most inbound messages one agent handles at once (#16986). The rest wait in a backlog
+#: of up to ``INBOX_MAX_LENGTH``, in arrival order; beyond that the newest is dropped.
+MAX_INFLIGHT_HANDLERS = env_int("AUTOBOT_AGENT_COMM_MAX_INFLIGHT_HANDLERS", 32)
 
 
 class MessageType(Enum):
@@ -110,6 +120,14 @@ class AgentIdentity:
     supported_patterns: List[CommunicationPattern] = field(default_factory=list)
     health_status: str = "healthy"
     last_heartbeat: float = field(default_factory=time.time)
+    # #16947: additive shared-identity fields (design on #16946) -- every existing caller is unaffected.
+    kind: AgentKind = AgentKind.AI_STACK
+    name: str | None = None
+    tenant_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.name is None:
+            self.name = self.agent_id
 
 
 @dataclass
@@ -127,6 +145,9 @@ class MessageHeader:
     expires_at: float | None = None
     retry_count: int = 0
     max_retries: int = RetryConfig.DEFAULT_RETRIES
+    # #16950: whose request this is, across relays -- see protocols/message_origin.py.
+    originator: str | None = None
+    chain: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -177,163 +198,6 @@ class StandardMessage:
         return cls.from_dict(json.loads(json_str))
 
 
-class CommunicationChannel(ABC):
-    """Abstract base class for communication channels"""
-
-    def __init__(self, channel_id: str):
-        """Initialize communication channel with ID and inactive state."""
-        self.channel_id = channel_id
-        self.is_active = False
-
-    @abstractmethod
-    async def send(self, message: StandardMessage) -> bool:
-        """Send a message through the channel"""
-
-    @abstractmethod
-    async def receive(self, timeout: float | None = None) -> StandardMessage | None:
-        """Receive a message from the channel"""
-
-    @abstractmethod
-    async def close(self):
-        """Close the communication channel"""
-
-
-class RedisCommunicationChannel(CommunicationChannel):
-    """Redis-based communication channel implementation"""
-
-    def __init__(self, channel_id: str):
-        """Initialize Redis channel with client connection and message queue."""
-        super().__init__(channel_id)
-        self.redis_client = get_redis_client()
-        self.channel_key = f"autobot:agent_comm:{channel_id}"
-        self.message_queue = asyncio.Queue()
-        self.listener_task = None
-
-    async def start(self):
-        """Start the communication channel"""
-        self.is_active = True
-        self.listener_task = asyncio.create_task(self._listen_for_messages())
-        logger.info("Redis communication channel %s started", self.channel_id)
-
-    async def _listen_for_messages(self):
-        """Background task to listen for incoming messages"""
-        while self.is_active:
-            try:
-                # Use Redis BLPOP for blocking message retrieval (sync call in thread)
-                result = await asyncio.to_thread(self.redis_client.blpop, self.channel_key, 1)
-                if result:
-                    _, message_json = result
-                    if isinstance(message_json, bytes):
-                        message_data = message_json.decode()
-                    else:
-                        message_data = str(message_json)
-                    message = StandardMessage.from_json(message_data)
-                    await self.message_queue.put(message)
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error("Error listening for messages: %s", e)
-                await asyncio.sleep(TimingConstants.STANDARD_DELAY)
-
-    async def send(self, message: StandardMessage) -> bool:
-        """Send a message through Redis"""
-        try:
-            message_json = message.to_json()
-            await asyncio.to_thread(self.redis_client.rpush, self.channel_key, message_json)
-
-            # Set TTL for automatic cleanup
-            if message.header.expires_at:
-                ttl = int(message.header.expires_at - time.time())
-                if ttl > 0:
-                    await asyncio.to_thread(self.redis_client.expire, self.channel_key, ttl)
-
-            logger.debug(
-                "Message sent to channel %s: %s",
-                self.channel_id,
-                message.header.message_id,
-            )
-            return True
-
-        except Exception as e:
-            logger.error("Failed to send message: %s", e)
-            return False
-
-    async def receive(self, timeout: float | None = None) -> StandardMessage | None:
-        """Receive a message from the channel"""
-        try:
-            if timeout:
-                message = await asyncio.wait_for(self.message_queue.get(), timeout=timeout)
-            else:
-                message = await self.message_queue.get()
-            return message
-        except asyncio.TimeoutError:
-            return None
-        except Exception as e:
-            logger.error("Error receiving message: %s", e)
-            return None
-
-    async def close(self):
-        """Close the Redis communication channel"""
-        self.is_active = False
-        if self.listener_task:
-            self.listener_task.cancel()
-            try:
-                await self.listener_task
-            except asyncio.CancelledError:
-                logger.debug("Listener task cancelled for channel %s", self.channel_id)
-        logger.info("Redis communication channel %s closed", self.channel_id)
-
-
-class DirectCommunicationChannel(CommunicationChannel):
-    """Direct in-memory communication channel for same-process agents"""
-
-    def __init__(self, channel_id: str):
-        """Initialize direct in-memory channel with message queue."""
-        super().__init__(channel_id)
-        self.message_queue = asyncio.Queue()
-        self.is_active = True
-
-    async def send(self, message: StandardMessage) -> bool:
-        """Send a message directly to the queue"""
-        try:
-            if not self.is_active:
-                return False
-            await self.message_queue.put(message)
-            logger.debug(
-                "Message sent directly to %s: %s",
-                self.channel_id,
-                message.header.message_id,
-            )
-            return True
-        except Exception as e:
-            logger.error("Failed to send direct message: %s", e)
-            return False
-
-    async def receive(self, timeout: float | None = None) -> StandardMessage | None:
-        """Receive a message from the direct queue"""
-        try:
-            if timeout:
-                message = await asyncio.wait_for(self.message_queue.get(), timeout=timeout)
-            else:
-                message = await self.message_queue.get()
-            return message
-        except asyncio.TimeoutError:
-            return None
-        except Exception as e:
-            logger.error("Error receiving direct message: %s", e)
-            return None
-
-    async def close(self):
-        """Close the direct communication channel"""
-        self.is_active = False
-        # Clear remaining messages
-        while not self.message_queue.empty():
-            try:
-                self.message_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-
-
 class AgentCommunicationProtocol:
     """Main protocol handler for standardized agent communication"""
 
@@ -346,6 +210,9 @@ class AgentCommunicationProtocol:
         self.is_active = False
         self.heartbeat_task = None
         self.message_processor_task = None
+        self._handling: set = set()  # in-flight inbound messages, one task each (#16986)
+        self._backlog: deque = deque()  # inbound messages waiting for a handler slot
+        self._dropped = 0  # messages dropped in the current overload, logged once when it starts and ends
 
     async def start(self):
         """Start the communication protocol"""
@@ -368,6 +235,10 @@ class AgentCommunicationProtocol:
             self.heartbeat_task.cancel()
         if self.message_processor_task:
             self.message_processor_task.cancel()
+        self._backlog.clear()
+        for task in list(self._handling):
+            task.cancel()
+        await asyncio.gather(*self._handling, return_exceptions=True)
 
         # Close all channels
         for channel in self.channels.values():
@@ -384,7 +255,8 @@ class AgentCommunicationProtocol:
         )
 
     def add_channel(self, channel_id: str, channel: CommunicationChannel):
-        """Add a communication channel"""
+        """Add a communication channel, as this agent's inbound destination on it (#16986)"""
+        channel.bind(self.agent_identity.agent_id)
         self.channels[channel_id] = channel
         logger.info("Added communication channel: %s", channel_id)
 
@@ -392,7 +264,7 @@ class AgentCommunicationProtocol:
         """Remove a communication channel"""
         if channel_id in self.channels:
             channel = self.channels.pop(channel_id)
-            asyncio.create_task(channel.close())
+            fire_and_forget(channel.close(), name="channel-close")
             logger.info("Removed communication channel: %s", channel_id)
 
     def register_message_handler(
@@ -409,27 +281,24 @@ class AgentCommunicationProtocol:
     async def send_message(self, message: StandardMessage, channel_id: str | None = None) -> bool:
         """Send a message through a specific or default channel"""
 
-        # Set sender information
+        # Set sender information; the originator is set once and survives relays (#16950)
         message.header.sender = self.agent_identity
+        stamp(message.header, self.agent_identity.agent_id)
 
-        # Select channel
-        if channel_id:
-            if channel_id not in self.channels:
-                logger.error("Channel %s not found", channel_id)
-                return False
-            channel = self.channels[channel_id]
-        else:
-            # Use first available channel
-            if not self.channels:
-                logger.error("No communication channels available")
-                return False
-            channel = next(iter(self.channels.values()))
+        # The named channel, or else the first that can reach the recipient (#16986)
+        if channel_id and channel_id not in self.channels:
+            logger.error("Channel %s not found", channel_id)
+            return False
+        candidates = [self.channels[channel_id]] if channel_id else list(self.channels.values())
 
-        # Send message with error boundary
         @error_boundary(component="agent_communication", function="send_message")
         async def _send():
-            """Send message through channel with error boundary."""
-            return await channel.send(message)
+            """Send message through the candidate channels with error boundary."""
+            for channel in candidates:
+                if await channel.send(message):
+                    return True
+            logger.error("No channel reached recipient %r", message.header.recipient)
+            return False
 
         return await _send()
 
@@ -494,21 +363,71 @@ class AgentCommunicationProtocol:
         """Broadcast a message to all channels"""
 
         message.header.message_type = MessageType.BROADCAST
+        recipients = set()
+        for channel in self.channels.values():
+            recipients |= await channel.recipients()
+        recipients.discard(self.agent_identity.agent_id)  # #16986: never to the sender itself
+
         sent_count = 0
-
-        for channel_id, channel in self.channels.items():
-            try:
-                if await channel.send(message):
-                    sent_count += 1
-            except Exception as e:
-                logger.error("Failed to broadcast to channel %s: %s", channel_id, e)
-
-        logger.info(
-            "Broadcasted message to %s/%s channels",
-            sent_count,
-            len(self.channels),
-        )
+        for recipient in sorted(recipients):
+            copy = replace(message, header=replace(message.header, recipient=recipient))
+            if await self.send_message(copy):
+                sent_count += 1
+        logger.info("Broadcasted message to %s/%s recipients", sent_count, len(recipients))
         return sent_count
+
+    async def _dispatch(self, message: StandardMessage, channel_id: str) -> None:
+        """Handle *message* in its own task, at most ``MAX_INFLIGHT_HANDLERS`` at once (#16986).
+
+        Awaited inline, a handler that sends its own request (B forwarding A's to C)
+        blocked the loop that must hand it C's reply. So this never makes the loop wait.
+        A reply resolves its request at once, without a slot. Anything else starts a
+        handler if a slot is free, or joins a bounded backlog, or past that is dropped;
+        a dropped request is answered with an error at once rather than left to time out.
+        Waiting for a slot in the loop would bring the deadlock back: the replies the
+        busy handlers need would queue behind the message waiting for their slot.
+        """
+        if not self._addressed_here(message) or self._resolve_reply(message):
+            return
+        if len(self._handling) < MAX_INFLIGHT_HANDLERS:
+            self._start(message, channel_id)
+        elif len(self._backlog) < INBOX_MAX_LENGTH:
+            if not self._backlog:
+                logger.warning(
+                    "Agent %s is handling %d messages; queueing more",
+                    self.agent_identity.agent_id,
+                    MAX_INFLIGHT_HANDLERS,
+                )
+            self._backlog.append((message, channel_id))
+        else:
+            await self._drop(message, channel_id)
+
+    async def _drop(self, message: StandardMessage, channel_id: str) -> None:
+        """Shed *message*: one warning per overload, and an immediate error to a waiting requester."""
+        if not self._dropped:
+            logger.warning(
+                "Agent %s is overloaded (%d handling, %d queued); dropping until it drains",
+                self.agent_identity.agent_id,
+                len(self._handling),
+                len(self._backlog),
+            )
+        self._dropped += 1
+        if message.header.message_type == MessageType.REQUEST:
+            await self.send_response(self._error_reply(message, "Agent overloaded", "Overloaded"), message, channel_id)
+
+    def _start(self, message: StandardMessage, channel_id: str) -> None:
+        task = asyncio.create_task(self._handle_message(message, channel_id))
+        self._handling.add(task)
+        task.add_done_callback(self._finished)
+
+    def _finished(self, task: asyncio.Task) -> None:
+        """A handler ended: free its slot for the oldest waiting message."""
+        self._handling.discard(task)
+        if self._backlog and self.is_active:
+            self._start(*self._backlog.popleft())
+        if self._dropped and not self._backlog:
+            logger.warning("Agent %s drained; %d messages were dropped", self.agent_identity.agent_id, self._dropped)
+            self._dropped = 0
 
     async def _process_incoming_messages(self):
         """Background task to process incoming messages from all channels"""
@@ -519,7 +438,7 @@ class AgentCommunicationProtocol:
                     try:
                         message = await channel.receive(timeout=TimingConstants.MICRO_DELAY)
                         if message:
-                            await self._handle_message(message, channel_id)
+                            await self._dispatch(message, channel_id)
                     except Exception as e:
                         logger.error(f"Error processing message from channel {channel_id}: {e}")
 
@@ -535,78 +454,69 @@ class AgentCommunicationProtocol:
 
     async def _handle_message(self, message: StandardMessage, channel_id: str):
         """Handle an incoming message"""
-
-        logger.debug(
-            "Received %s message: %s",
-            message.header.message_type.value,
-            message.header.message_id,
-        )
-
+        logger.debug("Received %s message: %s", message.header.message_type.value, message.header.message_id)
+        if not self._addressed_here(message) or self._resolve_reply(message):
+            return
         try:
-            # Check if this is a response to a pending request
-            if (
-                message.header.message_type == MessageType.RESPONSE
-                and message.header.correlation_id in self.pending_requests
-            ):
-                future = self.pending_requests[message.header.correlation_id]
-                if not future.done():
-                    future.set_result(message)
-                return
-
-            # Handle message with registered handlers
-            handlers = self.message_handlers.get(message.header.message_type, [])
-
-            for handler in handlers:
-                try:
-                    response = await handler(message)
-
-                    # Send response if handler returned one
-                    if response and message.header.message_type == MessageType.REQUEST:
-                        await self.send_response(response, message, channel_id)
-
-                except Exception as e:
-                    logger.error("Error in message handler: %s", e)
-
-                    # Send error response for requests
-                    if message.header.message_type == MessageType.REQUEST:
-                        error_response = StandardMessage(
-                            header=MessageHeader(
-                                message_type=MessageType.ERROR,
-                                correlation_id=message.header.correlation_id,
-                            ),
-                            payload=MessagePayload(
-                                content={
-                                    "error": "Message handling failed",
-                                    "error_type": type(e).__name__,
-                                }
-                            ),
-                        )
-                        await self.send_response(error_response, message, channel_id)
-
+            await self._run_handlers(message, channel_id)
         except Exception as e:
             logger.error("Error handling message %s: %s", message.header.message_id, e)
 
+    def _addressed_here(self, message: StandardMessage) -> bool:
+        """False, with a log line naming both ids, for a message addressed to another agent (#16986)."""
+        recipient, own = message.header.recipient, self.agent_identity.agent_id
+        if recipient and recipient != own:
+            logger.warning(
+                "Dropped message %s addressed to %r, received by %r", message.header.message_id, recipient, own
+            )
+            return False
+        return True
+
+    def _resolve_reply(self, message: StandardMessage) -> bool:
+        """Hand a reply to the request waiting for it. True if *message* was that reply."""
+        if message.header.message_type != MessageType.RESPONSE:
+            return False
+        future = self.pending_requests.get(message.header.correlation_id)
+        if future is None:
+            return False
+        if not future.done():
+            future.set_result(message)
+        return True
+
+    async def _run_handlers(self, message: StandardMessage, channel_id: str) -> None:
+        """Run every handler registered for the message's type; answer a request with each result or error."""
+        is_request = message.header.message_type == MessageType.REQUEST
+        for handler in self.message_handlers.get(message.header.message_type, []):
+            try:
+                response = await handler(message)
+                if response and is_request:
+                    await self.send_response(response, message, channel_id)
+            except Exception as e:
+                logger.error("Error in message handler: %s", e)
+                if is_request:
+                    error = self._error_reply(message, "Message handling failed", type(e).__name__)
+                    await self.send_response(error, message, channel_id)
+
+    @staticmethod
+    def _error_reply(message: StandardMessage, error: str, error_type: str) -> StandardMessage:
+        """An error answer to *message*, correlated so its requester stops waiting."""
+        return StandardMessage(
+            header=MessageHeader(message_type=MessageType.ERROR, correlation_id=message.header.correlation_id),
+            payload=MessagePayload(content={"error": error, "error_type": error_type}),
+        )
+
     async def _heartbeat_loop(self):
-        """Send periodic heartbeat messages"""
+        """Keep this agent reachable: refresh its registration on every channel (#16986).
+
+        This used to broadcast a HEARTBEAT that no handler consumed; it looped back to
+        the sender. Now that a broadcast reaches every agent, it would be all-to-all
+        traffic for nobody. Liveness is what routing needs, so the heartbeat renews it.
+        """
         while self.is_active:
             try:
-                # Update heartbeat timestamp
                 self.agent_identity.last_heartbeat = time.time()
-
-                # Create heartbeat message
-                heartbeat = StandardMessage(
-                    header=MessageHeader(message_type=MessageType.HEARTBEAT),
-                    payload=MessagePayload(
-                        content={
-                            "agent_id": self.agent_identity.agent_id,
-                            "health_status": self.agent_identity.health_status,
-                            "timestamp": time.time(),
-                        }
-                    ),
-                )
-
-                # Broadcast heartbeat
-                await self.broadcast(heartbeat)
+                for channel in self.channels.values():
+                    await channel.refresh()
 
                 # Wait before next heartbeat (Issue #376 - use named constants)
                 await asyncio.sleep(TimingConstants.SHORT_TIMEOUT)
@@ -641,22 +551,12 @@ class AgentCommunicationManager:
         # Create protocol
         protocol = AgentCommunicationProtocol(agent_identity)
 
-        # Create and add channels
-        for config in channel_configs:
-            channel_type = config.get("type", "direct")
-            channel_id = config.get("id", f"{agent_identity.agent_id}_{channel_type}")
-
-            if channel_type in self.channel_factory:
-                channel_class = self.channel_factory[channel_type]
-                channel = channel_class(channel_id)
-
-                # Start Redis channels
-                if isinstance(channel, RedisCommunicationChannel):
-                    await channel.start()
-
-                protocol.add_channel(channel_id, channel)
-            else:
-                logger.error("Unknown channel type: %s", channel_type)
+        try:
+            await self._open_channels(protocol, channel_configs)
+        except Exception:
+            for channel in protocol.channels.values():  # #16986: a refused channel leaves nothing bound
+                await channel.close()
+            raise
 
         # Start the protocol
         await protocol.start()
@@ -666,6 +566,19 @@ class AgentCommunicationManager:
 
         logger.info(f"Registered agent communication protocol: " f"{agent_identity.agent_id}")
         return protocol
+
+    async def _open_channels(self, protocol: AgentCommunicationProtocol, channel_configs: List[Dict[str, Any]]) -> None:
+        """Create, bind and start each configured channel. Raises if one refuses its owner."""
+        for config in channel_configs:
+            channel_type = config.get("type", "direct")
+            channel_id = config.get("id", f"{protocol.agent_identity.agent_id}_{channel_type}")
+            if channel_type not in self.channel_factory:
+                logger.error("Unknown channel type: %s", channel_type)
+                continue
+            channel = self.channel_factory[channel_type](channel_id)
+            protocol.add_channel(channel_id, channel)  # bound first: a Redis channel reads its owner's inbox
+            if isinstance(channel, RedisCommunicationChannel):
+                await channel.start()
 
     async def unregister_agent(self, agent_id: str):
         """Unregister an agent's communication protocol"""
@@ -706,13 +619,11 @@ async def send_agent_request(
         logger.error("Sender agent %s not registered", sender_id)
         return None
 
-    # Create request message
     request = StandardMessage(
         header=MessageHeader(message_type=MessageType.REQUEST, recipient=recipient_id),
         payload=MessagePayload(content=request_data),
     )
 
-    # Send request and wait for response
     response = await sender_protocol.send_request(request, timeout=timeout)
 
     if response and response.header.message_type != MessageType.ERROR:
@@ -735,7 +646,6 @@ async def broadcast_to_all_agents(sender_id: str, message_data: Any) -> int:
         logger.error("Sender agent %s not registered", sender_id)
         return 0
 
-    # Create broadcast message
     broadcast_msg = StandardMessage(
         header=MessageHeader(message_type=MessageType.BROADCAST),
         payload=MessagePayload(content=message_data),
@@ -756,19 +666,16 @@ if __name__ == "__main__":
 
         manager = get_communication_manager()
 
-        # Create test agents
         agent1_identity = AgentIdentity(agent_id="test_agent_1", agent_type="test", capabilities=["test", "demo"])
 
         agent2_identity = AgentIdentity(agent_id="test_agent_2", agent_type="test", capabilities=["test", "demo"])
 
-        # Register agents with direct communication
         await manager.register_agent(agent1_identity, [{"type": "direct"}])
         protocol2 = await manager.register_agent(agent2_identity, [{"type": "direct"}])
 
-        # Set up message handlers
         async def handle_request(message: StandardMessage) -> StandardMessage:
             """Handle incoming request and return response message."""
-            logger.info("Agent 2 received request: {message.payload.content}")
+            logger.info(f"Agent 2 received request: {message.payload.content}")
 
             return StandardMessage(
                 header=MessageHeader(message_type=MessageType.RESPONSE),
@@ -790,7 +697,6 @@ if __name__ == "__main__":
 
         logger.info("Broadcast sent to %s channels", broadcast_count)
 
-        # Cleanup
         await manager.shutdown_all()
         logger.info("✅ Communication protocol test completed!")
 

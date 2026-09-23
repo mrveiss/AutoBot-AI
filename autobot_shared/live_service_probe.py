@@ -25,10 +25,11 @@ A ``TypeError`` from a malformed argument still raises.
 
 from __future__ import annotations
 
-import os
 import socket
 import sys
 from urllib.parse import urlsplit
+
+from autobot_shared.env_utils import env_float
 
 __all__ = [
     "DEFAULT_PROBE_TIMEOUT_SECONDS",
@@ -46,7 +47,7 @@ REDIS_CLIENT_MODULE = "autobot_shared.redis_client"
 # fleet run may need longer than a loopback run, and no caller should hardcode
 # its own budget. Kept short — this runs before every guarded test, and a
 # refused loopback connect returns in well under a millisecond.
-DEFAULT_PROBE_TIMEOUT_SECONDS = float(os.getenv("AUTOBOT_LIVE_PROBE_TIMEOUT_SECONDS", "1.0"))
+DEFAULT_PROBE_TIMEOUT_SECONDS = env_float("AUTOBOT_LIVE_PROBE_TIMEOUT_SECONDS", 1.0)
 
 _DEFAULT_PORTS = {"http": 80, "https": 443, "redis": 6379, "rediss": 6379, "ws": 80, "wss": 443}
 

@@ -11,12 +11,12 @@ Routes queries by complexity:
   MULTI_HOP  -> same as COMPLEX
 """
 
-import asyncio
 import json
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Coroutine, Protocol
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -419,7 +419,7 @@ class NeuralMeshRetriever:
             "final_ranked_ids": [self._chunk_id(r) for r in results[:5]],
             "timestamp": str(time.time()),
         }
-        asyncio.create_task(self._run_learner(event))
+        fire_and_forget(self._run_learner(event), name="mesh-edge-learner")
 
     async def _run_learner(self, event: dict) -> None:
         """Await EdgeLearner.on_retrieval and swallow exceptions. Issue #2058."""

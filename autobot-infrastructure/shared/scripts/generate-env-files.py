@@ -92,16 +92,32 @@ def generate_main_env(config):
         f"AUTOBOT_REDIS_DB_TESTING={config['redis']['databases']['testing']}",
         "",
         "# Service URLs (Computed)",
-        f"AUTOBOT_BACKEND_URL=http://{config['infrastructure']['hosts']['backend']}:{config['infrastructure']['ports']['backend']}",
-        f"AUTOBOT_FRONTEND_URL=http://{config['infrastructure']['hosts']['frontend']}:{config['infrastructure']['ports']['frontend']}",
-        f"AUTOBOT_REDIS_URL=redis://{config['infrastructure']['hosts']['redis']}:{config['infrastructure']['ports']['redis']}",
-        f"AUTOBOT_OLLAMA_URL=http://{config['infrastructure']['hosts']['ollama']}:{config['infrastructure']['ports']['ollama']}",
-        f"AUTOBOT_AI_STACK_URL=http://{config['infrastructure']['hosts']['ai_stack']}:{config['infrastructure']['ports']['ai_stack']}",
-        f"AUTOBOT_NPU_WORKER_URL=http://{config['infrastructure']['hosts']['npu_worker']}:{config['infrastructure']['ports']['npu_worker']}",
-        f"AUTOBOT_BROWSER_SERVICE_URL=http://{config['infrastructure']['hosts']['browser_service']}:{config['infrastructure']['ports']['browser_service']}",
+        f"AUTOBOT_BACKEND_URL=http://"
+        f"{config['infrastructure']['hosts']['backend']}:"
+        f"{config['infrastructure']['ports']['backend']}",
+        f"AUTOBOT_FRONTEND_URL=http://"
+        f"{config['infrastructure']['hosts']['frontend']}:"
+        f"{config['infrastructure']['ports']['frontend']}",
+        f"AUTOBOT_REDIS_URL=redis://"
+        f"{config['infrastructure']['hosts']['redis']}:"
+        f"{config['infrastructure']['ports']['redis']}",
+        f"AUTOBOT_OLLAMA_URL=http://"
+        f"{config['infrastructure']['hosts']['ollama']}:"
+        f"{config['infrastructure']['ports']['ollama']}",
+        f"AUTOBOT_AI_STACK_URL=http://"
+        f"{config['infrastructure']['hosts']['ai_stack']}:"
+        f"{config['infrastructure']['ports']['ai_stack']}",
+        f"AUTOBOT_NPU_WORKER_URL=http://"
+        f"{config['infrastructure']['hosts']['npu_worker']}:"
+        f"{config['infrastructure']['ports']['npu_worker']}",
+        f"AUTOBOT_BROWSER_SERVICE_URL=http://"
+        f"{config['infrastructure']['hosts']['browser_service']}:"
+        f"{config['infrastructure']['ports']['browser_service']}",
         "",
         "# WebSocket Configuration",
-        f"AUTOBOT_WS_URL=ws://{config['infrastructure']['hosts']['backend']}:{config['infrastructure']['ports']['backend']}/ws",
+        f"AUTOBOT_WS_URL=ws://"
+        f"{config['infrastructure']['hosts']['backend']}:"
+        f"{config['infrastructure']['ports']['backend']}/ws",
         "",
         "# Performance and Limits",
         f"AUTOBOT_API_TIMEOUT={config['timeouts']['http']['standard']}000",  # Convert to milliseconds
@@ -248,16 +264,32 @@ def generate_native_vm_env(config):
         f"AUTOBOT_REDIS_DB_TESTING={config['redis']['databases']['testing']}",
         "",
         "# Service URLs (Distributed)",
-        f"AUTOBOT_BACKEND_URL=http://{config['infrastructure']['hosts']['backend']}:{config['infrastructure']['ports']['backend']}",
-        f"AUTOBOT_FRONTEND_URL=http://{config['infrastructure']['hosts']['frontend']}:{config['infrastructure']['ports']['frontend']}",
-        f"AUTOBOT_REDIS_URL=redis://{config['infrastructure']['hosts']['redis']}:{config['infrastructure']['ports']['redis']}",
-        f"AUTOBOT_OLLAMA_URL=http://{config['infrastructure']['hosts']['ollama']}:{config['infrastructure']['ports']['ollama']}",
-        f"AUTOBOT_AI_STACK_URL=http://{config['infrastructure']['hosts']['ai_stack']}:{config['infrastructure']['ports']['ai_stack']}",
-        f"AUTOBOT_NPU_WORKER_URL=http://{config['infrastructure']['hosts']['npu_worker']}:{config['infrastructure']['ports']['npu_worker']}",
-        f"AUTOBOT_BROWSER_SERVICE_URL=http://{config['infrastructure']['hosts']['browser_service']}:{config['infrastructure']['ports']['browser_service']}",
+        f"AUTOBOT_BACKEND_URL=http://"
+        f"{config['infrastructure']['hosts']['backend']}:"
+        f"{config['infrastructure']['ports']['backend']}",
+        f"AUTOBOT_FRONTEND_URL=http://"
+        f"{config['infrastructure']['hosts']['frontend']}:"
+        f"{config['infrastructure']['ports']['frontend']}",
+        f"AUTOBOT_REDIS_URL=redis://"
+        f"{config['infrastructure']['hosts']['redis']}:"
+        f"{config['infrastructure']['ports']['redis']}",
+        f"AUTOBOT_OLLAMA_URL=http://"
+        f"{config['infrastructure']['hosts']['ollama']}:"
+        f"{config['infrastructure']['ports']['ollama']}",
+        f"AUTOBOT_AI_STACK_URL=http://"
+        f"{config['infrastructure']['hosts']['ai_stack']}:"
+        f"{config['infrastructure']['ports']['ai_stack']}",
+        f"AUTOBOT_NPU_WORKER_URL=http://"
+        f"{config['infrastructure']['hosts']['npu_worker']}:"
+        f"{config['infrastructure']['ports']['npu_worker']}",
+        f"AUTOBOT_BROWSER_SERVICE_URL=http://"
+        f"{config['infrastructure']['hosts']['browser_service']}:"
+        f"{config['infrastructure']['ports']['browser_service']}",
         "",
         "# WebSocket Configuration",
-        f"AUTOBOT_WS_URL=ws://{config['infrastructure']['hosts']['backend']}:{config['infrastructure']['ports']['backend']}/ws",
+        f"AUTOBOT_WS_URL=ws://"
+        f"{config['infrastructure']['hosts']['backend']}:"
+        f"{config['infrastructure']['ports']['backend']}/ws",
         "",
         "# Deployment Configuration",
         "AUTOBOT_DEPLOYMENT_MODE=distributed",
@@ -294,8 +326,12 @@ def generate_frontend_env(config):
         "",
         "# API Configuration - Use proxy in development",
         "# Direct URLs for production deployment",
-        f"VITE_API_BASE_URL=http://{config['infrastructure']['hosts']['backend']}:{config['infrastructure']['ports']['backend']}",
-        f"VITE_WS_BASE_URL=ws://{config['infrastructure']['hosts']['backend']}:{config['infrastructure']['ports']['backend']}/ws",
+        f"VITE_API_BASE_URL=http://"
+        f"{config['infrastructure']['hosts']['backend']}:"
+        f"{config['infrastructure']['ports']['backend']}",
+        f"VITE_WS_BASE_URL=ws://"
+        f"{config['infrastructure']['hosts']['backend']}:"
+        f"{config['infrastructure']['ports']['backend']}/ws",
         f"VITE_API_TIMEOUT={config['timeouts']['http']['standard']}000",
         "",
         "# Service Host Configuration",
@@ -310,14 +346,26 @@ def generate_frontend_env(config):
         "VITE_WS_PROTOCOL=ws",
         "",
         "# External Service URLs",
-        f"VITE_PLAYWRIGHT_VNC_URL=http://{config['infrastructure']['hosts']['browser_service']}:{config['infrastructure']['ports']['vnc']}/vnc.html",
-        f"VITE_PLAYWRIGHT_API_URL=http://{config['infrastructure']['hosts']['browser_service']}:{config['infrastructure']['ports']['browser_service']}",
-        f"VITE_OLLAMA_URL=http://{config['infrastructure']['hosts']['ollama']}:{config['infrastructure']['ports']['ollama']}",
+        f"VITE_PLAYWRIGHT_VNC_URL=http://"
+        f"{config['infrastructure']['hosts']['browser_service']}:"
+        f"{config['infrastructure']['ports']['vnc']}/vnc.html",
+        f"VITE_PLAYWRIGHT_API_URL=http://"
+        f"{config['infrastructure']['hosts']['browser_service']}:"
+        f"{config['infrastructure']['ports']['browser_service']}",
+        f"VITE_OLLAMA_URL=http://"
+        f"{config['infrastructure']['hosts']['ollama']}:"
+        f"{config['infrastructure']['ports']['ollama']}",
         "",
         "# Redis Configuration (for frontend services)",
-        f"VITE_REDIS_URL=redis://{config['infrastructure']['hosts']['redis']}:{config['infrastructure']['ports']['redis']}",
-        f"VITE_AI_STACK_URL=http://{config['infrastructure']['hosts']['ai_stack']}:{config['infrastructure']['ports']['ai_stack']}",
-        f"VITE_NPU_WORKER_URL=http://{config['infrastructure']['hosts']['npu_worker']}:{config['infrastructure']['ports']['npu_worker']}",
+        f"VITE_REDIS_URL=redis://"
+        f"{config['infrastructure']['hosts']['redis']}:"
+        f"{config['infrastructure']['ports']['redis']}",
+        f"VITE_AI_STACK_URL=http://"
+        f"{config['infrastructure']['hosts']['ai_stack']}:"
+        f"{config['infrastructure']['ports']['ai_stack']}",
+        f"VITE_NPU_WORKER_URL=http://"
+        f"{config['infrastructure']['hosts']['npu_worker']}:"
+        f"{config['infrastructure']['ports']['npu_worker']}",
         "",
         "# Upload and Pagination Configuration",
         "VITE_UPLOAD_TIMEOUT=300000",
@@ -380,13 +428,27 @@ def generate_network_env(config):
         "DOCKER_GATEWAY=",
         "",
         "# Service URL Construction",
-        f"BACKEND_URL=http://{config['infrastructure']['hosts']['backend']}:{config['infrastructure']['ports']['backend']}",
-        f"FRONTEND_URL=http://{config['infrastructure']['hosts']['frontend']}:{config['infrastructure']['ports']['frontend']}",
-        f"REDIS_URL=redis://{config['infrastructure']['hosts']['redis']}:{config['infrastructure']['ports']['redis']}",
-        f"OLLAMA_URL=http://{config['infrastructure']['hosts']['ollama']}:{config['infrastructure']['ports']['ollama']}",
-        f"AI_STACK_URL=http://{config['infrastructure']['hosts']['ai_stack']}:{config['infrastructure']['ports']['ai_stack']}",
-        f"NPU_WORKER_URL=http://{config['infrastructure']['hosts']['npu_worker']}:{config['infrastructure']['ports']['npu_worker']}",
-        f"BROWSER_SERVICE_URL=http://{config['infrastructure']['hosts']['browser_service']}:{config['infrastructure']['ports']['browser_service']}",
+        f"BACKEND_URL=http://"
+        f"{config['infrastructure']['hosts']['backend']}:"
+        f"{config['infrastructure']['ports']['backend']}",
+        f"FRONTEND_URL=http://"
+        f"{config['infrastructure']['hosts']['frontend']}:"
+        f"{config['infrastructure']['ports']['frontend']}",
+        f"REDIS_URL=redis://"
+        f"{config['infrastructure']['hosts']['redis']}:"
+        f"{config['infrastructure']['ports']['redis']}",
+        f"OLLAMA_URL=http://"
+        f"{config['infrastructure']['hosts']['ollama']}:"
+        f"{config['infrastructure']['ports']['ollama']}",
+        f"AI_STACK_URL=http://"
+        f"{config['infrastructure']['hosts']['ai_stack']}:"
+        f"{config['infrastructure']['ports']['ai_stack']}",
+        f"NPU_WORKER_URL=http://"
+        f"{config['infrastructure']['hosts']['npu_worker']}:"
+        f"{config['infrastructure']['ports']['npu_worker']}",
+        f"BROWSER_SERVICE_URL=http://"
+        f"{config['infrastructure']['hosts']['browser_service']}:"
+        f"{config['infrastructure']['ports']['browser_service']}",
         "",
         "# Legacy Compatibility",
         f"REDIS_HOST_IP={config['infrastructure']['hosts']['redis']}",

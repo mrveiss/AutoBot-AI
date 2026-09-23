@@ -6,8 +6,8 @@ redis>=8.1.0
 # Data Processing and ML
 -c ../../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
-scikit-learn>=1.9.0
-pandas>=3.0.5
+scikit-learn>=1.9.1
+pandas>=3.0.6
 
 # Vector Database for Embeddings
 chromadb>=1.5.9

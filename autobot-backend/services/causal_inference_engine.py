@@ -33,6 +33,7 @@ from typing import List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.status_enums import Severity as CausalSeverity
 from context_aware_decision.counterfactual_reasoner import CounterfactualReasoner
 from knowledge.temporal_search import TemporalSearchService
 from services.confounder_control_analyzer import ConfounderControlAnalyzer
@@ -44,13 +45,9 @@ from services.root_cause_analyzer import (
 
 logger = get_logger(__name__)
 
-
-class CausalSeverity(str, Enum):
-    """Error severity levels."""
-
-    CRITICAL = "critical"  # Immediate action required
-    DEGRADED = "degraded"  # System partially impacted
-    WARNING = "warning"  # Informational
+# #14988: CausalSeverity's member set (CRITICAL, DEGRADED, WARNING) is a
+# subset of canonical Severity; every use here reads .value or compares by
+# identity, so it is an alias rather than its own (str, Enum) fork.
 
 
 class RecommendationType(str, Enum):

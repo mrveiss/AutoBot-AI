@@ -235,7 +235,11 @@ async def test_org_chart_forest_shape_and_budget(app, client, session_factory): 
     app.state.tenant["is_platform_admin"] = False  # matching org_id → allowed
 
     manager_id = await _seed_org_node(
-        session_factory, company_id, name="Manager", role=OrgRole.MANAGER.value, title="VP Eng"
+        session_factory,
+        company_id,
+        name="Manager",
+        role=OrgRole.MANAGER.value,
+        title="VP Eng",
     )
     report_id = await _seed_org_node(session_factory, company_id, name="Report", reports_to=manager_id)
 
@@ -297,7 +301,12 @@ async def test_org_chart_status_mapping(app, client, session_factory):  # noqa: 
 
     status_by_id = {n["id"]: n["status"] for n in nodes}
     # All four are roots (no reports_to).
-    assert set(status_by_id) == {timeout_agent, completed_agent, running_agent, no_run_agent}
+    assert set(status_by_id) == {
+        timeout_agent,
+        completed_agent,
+        running_agent,
+        no_run_agent,
+    }
 
     assert status_by_id[timeout_agent] == "error", "timeout must map to error, not idle"
     assert status_by_id[completed_agent] == "idle"
@@ -360,13 +369,20 @@ async def test_org_chart_pause_survives_reload(app, client, session_factory):  #
 
     from llc.services.controls_service import ControlsService
 
-    with patch("llc.services.controls_service.get_async_redis_client", return_value=_mock_redis()):
+    with patch(
+        "llc.services.controls_service.get_async_redis_client",
+        return_value=_mock_redis(),
+    ):
         async with session_factory() as session:
             # .hex, not str(): SQLite stores UUIDs as 32-char hex (#10032 pattern,
             # see test_agent_id_keyspace.py); ControlsService's raw SQL WHERE
             # would not match the dashed form under the SQLite test engine.
             await ControlsService(activity_log=_mock_activity_log()).pause_agent(
-                session, company_id.hex, agent_id, actor_user_id=str(_FIXED_USER_ID), reason="test pause"
+                session,
+                company_id.hex,
+                agent_id,
+                actor_user_id=str(_FIXED_USER_ID),
+                reason="test pause",
             )
             await session.commit()
 
@@ -392,11 +408,18 @@ async def test_org_chart_terminate_survives_reload(app, client, session_factory)
 
     from llc.services.controls_service import ControlsService
 
-    with patch("llc.services.controls_service.get_async_redis_client", return_value=_mock_redis()):
+    with patch(
+        "llc.services.controls_service.get_async_redis_client",
+        return_value=_mock_redis(),
+    ):
         async with session_factory() as session:
             # .hex — see the pause test above for why.
             await ControlsService(activity_log=_mock_activity_log()).terminate_agent(
-                session, company_id.hex, agent_id, actor_user_id=str(_FIXED_USER_ID), reason="test terminate"
+                session,
+                company_id.hex,
+                agent_id,
+                actor_user_id=str(_FIXED_USER_ID),
+                reason="test terminate",
             )
             await session.commit()
 
@@ -424,7 +447,10 @@ async def test_org_chart_resume_falls_back_to_heartbeat(app, client, session_fac
     from llc.services.controls_service import ControlsService
 
     svc = ControlsService(activity_log=_mock_activity_log())
-    with patch("llc.services.controls_service.get_async_redis_client", return_value=_mock_redis()):
+    with patch(
+        "llc.services.controls_service.get_async_redis_client",
+        return_value=_mock_redis(),
+    ):
         async with session_factory() as session:
             await svc.pause_agent(session, company_id.hex, agent_id, actor_user_id=str(_FIXED_USER_ID))
             await session.commit()

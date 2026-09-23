@@ -58,9 +58,13 @@ def test_create_table_calls_are_all_literal():
     stamp below it and crash the subsequent upgrade with DuplicateTable.
     create_table is therefore strictly literal-only.
 
-    add_column may use helpers (e.g. 011's _add_timestamp_columns), but then
-    the revision must still be observable through other artifacts — otherwise
-    the bracket widens silently.
+    add_column may use helpers (e.g. 011's _add_timestamp_columns) for the
+    COLUMN name, but its TABLE name (first positional arg) must still be a
+    literal for the ladder to see it at all -- a `_TABLE` module constant
+    there is invisible to it (#17125), even though the same constant is fine
+    in has_column/has_table/drop_column guard calls elsewhere in the same
+    revision. Short of that, the revision must still be observable through
+    other artifacts — otherwise the bracket widens silently.
     """
     script = _script_directory()
     artifacts = extract_artifacts(script)
@@ -76,7 +80,12 @@ def test_create_table_calls_are_all_literal():
             assert observable, (
                 f"{path.name}: add_column calls the ladder cannot extract AND "
                 "no other artifact makes this revision observable — use "
-                "literal names or add a structural marker"
+                "literal names or add a structural marker. The extractor "
+                "requires op.add_column's FIRST argument to be a string "
+                'literal (ast.Constant): a `_TABLE = "..."` module constant '
+                "passed there is invisible to it, even though the same "
+                "`_TABLE` is fine in has_column/has_table/drop_column guard "
+                "calls, which this test does not check (#17125)"
             )
 
 
@@ -126,10 +135,33 @@ def test_observability_coverage():
         # guard: upgrade() returns early when the index already exists, so the
         # adoption re-run this allowlist permits is a genuine no-op rather than
         # a "relation already exists" failure.
+        "20260906_089",  # llc_agent_budgets (company_id, agent_id) unique (#15812)
+        # — swaps one unique constraint for another and creates no table and no
+        # column, so extract_artifacts cannot observe it, for the same structural
+        # reason as 20260821_081 above. Extended consciously: upgrade() inspects
+        # for the composite constraint and returns early when it is already
+        # present, so the adoption re-run this permits is a genuine no-op and not
+        # a "constraint already exists" failure.
+        "20260907_090",  # CEO scope repair (#15892) — data-only: one UPDATE and
+        # one DELETE, no DDL at all, so it leaves no schema fingerprint for
+        # extract_artifacts to observe. Joining the data-only category already
+        # held by 20260526_045, 20260815_075 and 20260623_062 rather than opening
+        # a new one; demanding a structural marker here would mean inventing DDL
+        # purely to be observable, which is worse than the exemption.
+        #
+        # Extended consciously, and idempotent by construction rather than by
+        # inspection: the DELETE removes exactly the llc_company_ceos rows the
+        # UPDATE joins through, so on any re-run the UPDATE's join matches
+        # nothing and the DELETE matches nothing. Both statements are also
+        # scoped to rows still in the shape the backfill created, so a row edited
+        # since is untouched on the first run and every later one.
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "
-        "add a structural marker or consciously extend the allowlist"
+        "add a structural marker or consciously extend the allowlist. If "
+        "this revision's add_column calls pass the table name as a `_TABLE` "
+        "variable rather than the literal string, that is almost always the "
+        "cause (#17125) — see test_create_table_calls_are_all_literal"
     )
 
 

@@ -16,13 +16,13 @@ Related Issue: #1145
 """
 
 import logging
-import os
 from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 
+from autobot_shared import node_proxy
 from config import settings
 from services.auth import get_current_user
 
@@ -30,17 +30,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/personality", tags=["personality-proxy"])
 
-# Main backend base URL. Reuse the identity-authority base (#10197) so the proxy
-# works co-located (loopback:8001) and distributed with no extra config (#10263);
-# an explicit AUTOBOT_BACKEND_URL still overrides if set.
-AUTOBOT_BACKEND_URL = os.getenv("AUTOBOT_BACKEND_URL", "") or settings.authority_base_url  # noqa: ssot-fallback
-AUTOBOT_INTERNAL_API_KEY = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
+# Main backend base URL and internal key, both resolved by the shared node client
+# (#14886) so a fourth proxy inherits the same precedence instead of restating it.
+# AUTOBOT_BACKEND_URL wins; otherwise the identity-authority base (#10197) keeps
+# the proxy working co-located and distributed with no extra config (#10263).
+AUTOBOT_BACKEND_URL = node_proxy.resolve_node_url(settings.authority_base_url)
+AUTOBOT_INTERNAL_API_KEY = node_proxy.internal_api_key()
 
 _MUTATION_METHODS = {"POST", "PUT", "DELETE", "PATCH"}
-_TIMEOUT = 15.0
-# TLS verification for proxy calls to the main backend.
-# Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test with self-signed certs (#2852).
-_VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
 
 
 async def _proxy_to_main_backend(request: Request, path: str) -> Response:
@@ -56,28 +53,21 @@ async def _proxy_to_main_backend(request: Request, path: str) -> Response:
     content_type = request.headers.get("Content-Type", "application/json")
     target_url = f"{AUTOBOT_BACKEND_URL}/api/personality/{path}"
 
+    # httpx.HTTPError, not ConnectError: a read error or a protocol failure used
+    # to escape this proxy as an unhandled 500. The catch-all and its mapping
+    # come from the shared client, so all three proxies answer alike (#14886).
     try:
-        async with httpx.AsyncClient(verify=_VERIFY_TLS, timeout=_TIMEOUT) as client:
+        async with node_proxy.node_client() as client:
             response = await client.request(
                 method=request.method,
                 url=target_url,
                 content=body,
-                headers={
-                    "Content-Type": content_type,
-                    "X-Internal-API-Key": AUTOBOT_INTERNAL_API_KEY,
-                },
+                headers=node_proxy.internal_headers(content_type),
             )
-    except httpx.ConnectError:
-        logger.error("Cannot reach main backend at %s", AUTOBOT_BACKEND_URL)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Main backend unreachable",
-        )
-    except httpx.TimeoutException:
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Main backend timeout",
-        )
+    except httpx.HTTPError as exc:
+        failure = node_proxy.classify_transport_error(exc)
+        logger.error("Cannot reach main backend at %s (%s)", AUTOBOT_BACKEND_URL, failure.reason)
+        raise HTTPException(status_code=failure.status_code, detail=failure.detail)
 
     return Response(
         content=response.content,

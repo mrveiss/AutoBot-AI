@@ -7,10 +7,10 @@ name: Hardened Smoke Test
 on:
   push:
     branches:
-      - Dev_new_gui
+      - main
   pull_request:
     branches:
-      - Dev_new_gui
+      - main
     # #13388: SAFE — this workflow publishes `hardened-smoke-test`, which is NOT
     # one of the ten required contexts (the required `smoke-test` comes from
     # docker-smoke-test.yml, which is deliberately left unfiltered).
@@ -55,7 +55,7 @@ jobs:
           min-free-gb: '15'  # Increased from 10GB due to MVA-2869
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e  # v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
 
       - name: Cache Docker layers
         uses: actions/cache@v6
@@ -340,7 +340,7 @@ jobs:
 
       - name: Upload failure logs
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: hardened-docker-compose-logs
           path: failure-logs.txt

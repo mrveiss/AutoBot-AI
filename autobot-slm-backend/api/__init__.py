@@ -15,6 +15,7 @@ from .autobot_teams import router as autobot_teams_router
 from .autobot_users import router as autobot_users_router
 from .blue_green import router as blue_green_router
 from .browser import router as browser_router
+from .capability_profile import router as capability_profile_router
 from .code_sync import router as code_sync_router
 from .config import node_config_router
 from .config import router as config_router
@@ -23,6 +24,7 @@ from .discovery import router as discovery_router
 from .errors import router as errors_router
 from .events import router as events_router
 from .external_agents import router as external_agents_router
+from .gpu import router as gpu_router
 from .health import router as health_router
 from .infrastructure import router as infrastructure_router
 from .llm_config import router as llm_config_router
@@ -50,6 +52,21 @@ from .tls import node_tls_router, tls_router
 from .updates import router as updates_router
 from .vnc import node_vnc_router, vnc_router
 from .websocket import router as websocket_router
+
+# #16281: a node's GPU state belongs to the monitoring surface, so it is served as
+# /api/monitoring/gpu/nodes. Its guard is NOT inherited from monitoring_router,
+# which declares no dependencies of its own: it is the include-level
+# `dependencies=_SM` (require_service_management) main.py attaches when it
+# includes monitoring_router, plus the route's own get_current_user. A route
+# mounted here gets exactly that and nothing more. Mounted here because
+# api/monitoring.py and main.py are both at their file-size ceilings.
+monitoring_router.include_router(gpu_router)
+
+# #15495: a node's capability profile belongs on the node resource itself, so
+# it is served as /api/nodes/{node_id}/capability-profile, inheriting
+# nodes_router's own include-level auth from main.py. Mounted here rather
+# than added to api/nodes.py because that file is at its file-size ceiling.
+nodes_router.include_router(capability_profile_router)
 
 __all__ = [
     "agents_router",

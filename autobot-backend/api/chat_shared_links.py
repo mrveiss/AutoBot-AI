@@ -20,7 +20,6 @@ Config:
   AUTOBOT_SHARED_LINK_ACCESS_RPH     — max password attempts per hour per IP (default: 100)
 """
 
-import os
 import secrets
 import uuid
 from datetime import timedelta
@@ -39,8 +38,9 @@ from api.schemas_chat import (
     SharedMessageItem,
 )
 from api.user_management.dependencies import get_db_session
-from auth_middleware import get_current_user
+from auth_middleware import get_auth_middleware, get_current_user
 from auth_rbac import require_role
+from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.proxy_utils import get_client_ip
@@ -58,7 +58,7 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["chat-shared-links"])
 
 _DEFAULT_TTL_ENV = "AUTOBOT_SHARED_LINK_DEFAULT_TTL"
-_DEFAULT_TTL_SECONDS: int = int(os.environ.get(_DEFAULT_TTL_ENV, "0"))
+_DEFAULT_TTL_SECONDS: int = env_int(_DEFAULT_TTL_ENV, 0)
 if _DEFAULT_TTL_SECONDS > 0:
     logger.info("Shared link default TTL: %ds (from %s)", _DEFAULT_TTL_SECONDS, _DEFAULT_TTL_ENV)
 else:
@@ -66,8 +66,8 @@ else:
 
 # Rate limiter for the unauthenticated /access endpoint — brute-force guard (GH#9127).
 # Keyed per client IP, sliding-window via Redis.
-_ACCESS_RPM: int = int(os.environ.get("AUTOBOT_SHARED_LINK_ACCESS_RPM", "10"))
-_ACCESS_RPH: int = int(os.environ.get("AUTOBOT_SHARED_LINK_ACCESS_RPH", "100"))
+_ACCESS_RPM: int = env_int("AUTOBOT_SHARED_LINK_ACCESS_RPM", 10)
+_ACCESS_RPH: int = env_int("AUTOBOT_SHARED_LINK_ACCESS_RPH", 100)
 _access_limiter = RateLimiter(
     scope_prefix="shared_link_access",
     default_tier="anonymous",
@@ -138,6 +138,7 @@ async def create_shared_link(
         created_by=user_id,
         is_active=True,
         created_at=now_utc(),
+        require_login=body.require_login,
     )
     db.add(link)
     await db.commit()
@@ -152,6 +153,9 @@ async def create_shared_link(
             has_password=link.has_password,
             expires_at=link.expires_at,
             created_at=link.created_at,
+            require_login=link.require_login,
+            view_count=link.view_count,
+            last_accessed_at=link.last_accessed_at,
         ).model_dump(mode="json"),
         message="Shared link created",
     ).model_dump(mode="json")
@@ -243,6 +247,9 @@ async def list_shared_links(
             has_password=lnk.has_password,
             expires_at=lnk.expires_at,
             created_at=lnk.created_at,
+            require_login=lnk.require_login,
+            view_count=lnk.view_count,
+            last_accessed_at=lnk.last_accessed_at,
         ).model_dump(mode="json")
         for lnk in links
         if not lnk.is_expired
@@ -288,6 +295,9 @@ async def list_all_shared_links_admin(
             has_password=lnk.has_password,
             expires_at=lnk.expires_at,
             created_at=lnk.created_at,
+            require_login=lnk.require_login,
+            view_count=lnk.view_count,
+            last_accessed_at=lnk.last_accessed_at,
         ).model_dump(mode="json")
         for lnk in links
         if not lnk.is_expired
@@ -322,6 +332,25 @@ async def _resolve_link(token: str, db: AsyncSession) -> ChatSharedLink:
     return link
 
 
+def _enforce_require_login(link: ChatSharedLink, request: Request) -> None:
+    """Reject an unauthenticated visitor on a login-required link (#16861)."""
+    if not link.require_login:
+        return
+    if get_auth_middleware().get_user_from_request(request):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Sign in required to view this shared link",
+    )
+
+
+async def _record_access(link: ChatSharedLink, db: AsyncSession) -> None:
+    """Bump view_count/last_accessed_at for a successful content access (#16861)."""
+    link.view_count += 1
+    link.last_accessed_at = now_utc()
+    await db.commit()
+
+
 @router.get(
     "/chat/shared/{token}",
     response_model=Dict[str, Any],
@@ -339,6 +368,7 @@ async def get_shared_session(
 ) -> Dict[str, Any]:
     """Return shared conversation content.  Password-protected links return metadata only (GH#8996)."""
     link = await _resolve_link(token, db)
+    _enforce_require_login(link, request)
 
     if link.has_password:
         return create_success_response(
@@ -351,6 +381,7 @@ async def get_shared_session(
             message="Password required",
         ).model_dump(mode="json")
 
+    await _record_access(link, db)
     return await _load_session_data(link, request)
 
 
@@ -382,6 +413,7 @@ async def access_shared_session(
         )
 
     link = await _resolve_link(token, db)
+    _enforce_require_login(link, request)
 
     if link.has_password:
         if not body.password:
@@ -389,6 +421,7 @@ async def access_shared_session(
         if not UserService.verify_password(body.password, link.password_hash):  # type: ignore[arg-type]
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect password")
 
+    await _record_access(link, db)
     return await _load_session_data(link, request)
 
 

@@ -70,13 +70,24 @@
 
 - name: "Frontend | Sync frontend code from code_source"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-frontend/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-frontend/"
     dest: "{{ frontend_install_dir }}/autobot-frontend/"
     rsync_opts:
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=__pycache__"
       - "--exclude=.git"
+  tags: ['frontend', 'deploy']
+
+# #16310: the synchronize task above never deletes -- files removed from
+# source would otherwise pile up on this host forever.
+- name: "Frontend | Delete files removed from source (#16310)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/sync_deletions.yml
+  vars:
+    sync_deletions_label: "Frontend"
+    sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-frontend"
+    sync_deletions_target_dir: "{{ frontend_install_dir }}/autobot-frontend"
+    sync_deletions_owner: "{{ frontend_user }}"
   tags: ['frontend', 'deploy']
 
 - name: "Frontend | Fix frontend directory ownership after sync"
@@ -101,7 +112,7 @@
 # must be synced separately — mirrors the slm_manager role (MVA-893 / #10750 C2c).
 - name: "Frontend | Sync autobot-plugins (shared @autobot/vnc,terminal) from code_source (#12112)"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-plugins/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-plugins/"
     dest: "{{ frontend_install_dir }}/autobot-plugins/"
     rsync_opts:
       - "--exclude=node_modules"
@@ -118,13 +129,14 @@
       - "--exclude=logs"
       - "--exclude=/config/"
       - "--exclude=/.deployed_commit"
+      - "--exclude=/.autobot_sync_deletions_commit"
       - "--exclude=/ansible/enroll.yml"
     delete: true
   tags: ['frontend', 'deploy']
 
 - name: "Frontend | Sync libs (shared @autobot/ui kit) from code_source (#12112)"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/libs/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/libs/"
     dest: "{{ frontend_install_dir }}/libs/"
     rsync_opts:
       - "--exclude=node_modules"
@@ -141,47 +153,43 @@
       - "--exclude=logs"
       - "--exclude=/config/"
       - "--exclude=/.deployed_commit"
+      - "--exclude=/.autobot_sync_deletions_commit"
       - "--exclude=/ansible/enroll.yml"
     delete: true
   tags: ['frontend', 'deploy']
 
-- name: "Frontend | Ensure TLS cert directory exists"
-  file:
-    path: "{{ frontend_tls_cert_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-  become: true
+- name: "Frontend | Ensure the shared node TLS keypair exists (#16020)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
   tags: ['frontend', 'tls']
 
-- name: "Frontend | Check existing TLS certificate"
-  stat:
-    path: "{{ frontend_tls_cert }}"
-  register: _tls_cert
-  tags: ['frontend', 'tls']
-
-- name: "Frontend | Generate self-signed TLS certificate"
-  command: >
-    openssl req -x509 -nodes
-    -newkey rsa:2048
-    -days 365
-    -keyout {{ frontend_tls_key }}
-    -out {{ frontend_tls_cert }}
-    -subj "/CN={{ ansible_host | default('127.0.0.1') }}/O=AutoBot/C=US"
-  become: true
-  when: not _tls_cert.stat.exists
+# #16020: the shared task has no restart handler of its own -- it also
+# serves backend, Redis and PostgreSQL, none of which restart the same way.
+# Reuses the shared task's own registered vars (the exact condition it used
+# to decide whether to (re)generate) rather than re-deriving the check, so
+# nginx keeps restarting on a cert rotation as it did before consolidation.
+- name: "Frontend | Flag a cert rotation for the restart handler"
+  ansible.builtin.set_fact:
+    _frontend_cert_rotated: "{{ not autobot_node_cert_stat.stat.exists or (autobot_node_cert_valid.rc | default(1)) != 0 }}"
+  changed_when: _frontend_cert_rotated
   notify: restart nginx
   tags: ['frontend', 'tls']
 
+# #16566: this used to set the key world-readable (0644 root:root) -- any
+# local user or process could read the node's TLS PRIVATE key. Two real
+# consumers need it, not one: nginx's master process (root, reads it via
+# ssl_certificate_key in nginx-frontend.conf.j2) and the autobot-frontend
+# systemd service itself (runs as frontend_user/frontend_group, not root --
+# autobot-frontend.service.j2's dev-mode `--https --key` flag), so 0600
+# root:root (nginx-only) would break the frontend service's own HTTPS
+# startup. 0640 with frontend_group as the one named group that needs it
+# covers both without the previous blanket world-readable exposure.
 - name: "Frontend | Set TLS key permissions"
   file:
     path: "{{ frontend_tls_key }}"
     owner: root
-    group: root
-    mode: '0644'
+    group: "{{ frontend_group }}"
+    mode: '0640'
   become: true
-  when: not _tls_cert.stat.exists
   tags: ['frontend', 'tls']
 
 - name: "Frontend | Check if package.json exists"
@@ -245,12 +253,19 @@
   when: package_json_path.stat.exists
   tags: ['frontend', 'build', 'config']
 
-- name: "Frontend | Build production frontend"
-  command: npx vite build
-  args:
-    chdir: "{{ frontend_install_dir }}/autobot-frontend"
-  become: true
-  become_user: "{{ frontend_user }}"
+# #15603: staged build-then-swap, the same mechanism build_publish_slm_frontend.yml
+# already gives the SLM frontend (#15557, #15610) — a build that fails no
+# longer empties the served directory and leaves nginx answering 403 for
+# every path. frontend_dist_dir (defaults/main.yml) now names the `current`
+# symlink this publishes, not a directory vite refills in place.
+- name: "Frontend | Build and publish production frontend, staged (#15603)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/build_publish_slm_frontend.yml
+  vars:
+    slm_frontend_publish_label: "Frontend"
+    slm_frontend_publish_dir: "{{ frontend_install_dir }}/autobot-frontend"
+    slm_frontend_publish_user: "{{ frontend_user }}"
+    slm_frontend_publish_build_script: "build"
+    slm_frontend_publish_build_env: {}
   when: package_json_path.stat.exists
   tags: ['frontend', 'build']
 
@@ -281,18 +296,13 @@
 # builtin updater can deliver them without re-running provisioning. Copying
 # them into the playbook instead is the inline-vs-role duplication that made
 # this role undeliverable in the first place (#12959).
+# #16979: code_only.yml now also enables the site it renders (link + verify)
+# -- moved out of this file for the same reason as roles/slm_manager: the
+# self-update path includes ONLY code_only.yml, never this file, so an enable
+# step here ran on a full provision but never on self-update. Do not re-add
+# it here; see code_only.yml's own header comment.
 - name: "Frontend | Deploy nginx config"
   ansible.builtin.include_tasks: code_only.yml
-  tags: ['frontend', 'nginx']
-
-- name: "Frontend | Enable nginx site"
-  file:
-    src: /etc/nginx/sites-available/autobot-frontend
-    dest: /etc/nginx/sites-enabled/autobot-frontend
-    state: link
-  become: true
-  notify: restart nginx
-  when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['frontend', 'nginx']
 
 - name: "Frontend | Disable standalone nginx when co-located with SLM (#2829)"

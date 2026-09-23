@@ -286,7 +286,7 @@ def test_get_local_slm_node_id_returns_none_when_node_not_found():
 def _setup_dir_mocks(component="autobot-slm-backend"):
     return (
         patch.object(_CS, "get_default_source_dir", return_value=f"/opt/autobot/code_source/{component}"),
-        patch.object(_CS, "get_default_deployed_dir", return_value=f"/opt/autobot/{component}"),
+        patch.object(_CS, "get_release_component_dir", return_value=f"/opt/autobot/{component}"),
     )
 
 
@@ -367,7 +367,7 @@ def test_component_resolve_job_advances_after_restart():
 
     with (
         patch.object(_CS, "get_default_source_dir", return_value="/src/autobot-slm-backend"),
-        patch.object(_CS, "get_default_deployed_dir", return_value="/opt/autobot/autobot-slm-backend"),
+        patch.object(_CS, "get_release_component_dir", return_value="/opt/autobot/autobot-slm-backend"),
         patch.object(_CS, "_rsync_component_local", AsyncMock(return_value=(True, ""))),
         patch.object(
             _CS,
@@ -392,7 +392,7 @@ def test_component_resolve_job_rsync_failure_does_not_advance():
 
     with (
         patch.object(_CS, "get_default_source_dir", return_value="/src/autobot-slm-backend"),
-        patch.object(_CS, "get_default_deployed_dir", return_value="/opt/autobot/autobot-slm-backend"),
+        patch.object(_CS, "get_release_component_dir", return_value="/opt/autobot/autobot-slm-backend"),
         patch.object(_CS, "_rsync_component_local", AsyncMock(return_value=(False, "rsync boom"))),
         patch.object(_CS, "_advance_node_version_if_fully_synced", advance_mock),
         patch.object(_CS, "_running_tasks", {}),

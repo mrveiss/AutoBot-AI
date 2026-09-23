@@ -18,6 +18,7 @@ from typing import Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.scoping import Principal, ResourceDescriptor, ScopeLevel, is_visible
+from knowledge.utils import decode_id_list
 
 logger = get_logger(__name__)
 
@@ -163,10 +164,7 @@ class KnowledgeOwnership:
         access_level: str,
         is_authenticated: bool,
     ) -> bool | None:
-        """Helper for check_access. Ref: #1088.
-
-        Returns True if access_level alone grants access, None otherwise.
-        """
+        """Helper for check_access (#1088): True if access_level alone grants access, else None."""
         # GENERAL knowledge: Public, no auth required
         if access_level == AccessLevel.GENERAL:
             return True
@@ -223,11 +221,11 @@ class KnowledgeOwnership:
         user_org_id: str | None = None,
         user_group_ids: List[str] | None = None,
         is_authenticated: bool = True,
+        is_admin: bool = False,
     ) -> bool:
         """Check if user has access to a fact.
 
-        Issue #679: Extended with hierarchical access control.
-        Issue #685: Added access_level support for knowledge types.
+        Issues #679 (hierarchy), #685 (access levels), #16662 (admin input, list metadata).
 
         Args:
             fact_id: Fact ID to check
@@ -236,19 +234,21 @@ class KnowledgeOwnership:
             user_org_id: User's organization ID
             user_group_ids: List of group/team IDs user belongs to
             is_authenticated: Whether user is authenticated
+            is_admin: Explicit admin read; only explicit read APIs pass it (#16662)
 
         Returns:
             True if user has access, False otherwise
         """
+        if is_admin:  # #16662: never passed by chat grounding
+            return True
         user_group_ids = user_group_ids or []
 
-        # Extract ownership metadata
         owner_id = fact_metadata.get("owner_id")
         visibility = fact_metadata.get("visibility", VisibilityLevel.PRIVATE)
         access_level = fact_metadata.get("access_level", AccessLevel.USER)
-        shared_with = fact_metadata.get("shared_with", [])
+        shared_with = decode_id_list(fact_metadata.get("shared_with"))
         fact_org_id = fact_metadata.get("organization_id")
-        fact_group_ids = fact_metadata.get("group_ids", [])
+        fact_group_ids = decode_id_list(fact_metadata.get("group_ids"))
 
         # Issue #685: Access level-based checks
         level_grant = self._check_access_level_grants(access_level, is_authenticated)
@@ -321,8 +321,8 @@ class KnowledgeOwnership:
         if fact_metadata is None:
             fact_metadata = {}
 
-        shared_with = set(fact_metadata.get("shared_with", []))
-        fact_group_ids = set(fact_metadata.get("group_ids", []))
+        shared_with = set(decode_id_list(fact_metadata.get("shared_with")))  # #16662: may be comma-joined
+        fact_group_ids = set(decode_id_list(fact_metadata.get("group_ids")))
 
         new_users = await self._share_with_users(fact_id, user_ids, shared_with)
         new_groups = await self._share_with_groups(fact_id, group_ids, fact_group_ids)
@@ -402,8 +402,8 @@ class KnowledgeOwnership:
         if fact_metadata is None:
             fact_metadata = {}
 
-        shared_with = set(fact_metadata.get("shared_with", []))
-        fact_group_ids = set(fact_metadata.get("group_ids", []))
+        shared_with = set(decode_id_list(fact_metadata.get("shared_with")))  # #16662: may be comma-joined
+        fact_group_ids = set(decode_id_list(fact_metadata.get("group_ids")))
 
         removed_users = await self._unshare_from_users(fact_id, user_ids, shared_with)
         removed_groups = await self._unshare_from_groups(fact_id, group_ids, fact_group_ids)
@@ -718,9 +718,9 @@ class KnowledgeOwnership:
         """
         owner_id = fact_metadata.get("owner_id")
         source_type = fact_metadata.get("source_type")
-        shared_with = fact_metadata.get("shared_with", [])
+        shared_with = decode_id_list(fact_metadata.get("shared_with"))  # #16662: may be comma-joined
         organization_id = fact_metadata.get("organization_id")
-        group_ids = fact_metadata.get("group_ids", [])
+        group_ids = decode_id_list(fact_metadata.get("group_ids"))
         visibility = fact_metadata.get("visibility")
 
         # Remove from owner's index

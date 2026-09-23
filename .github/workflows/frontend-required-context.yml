@@ -52,7 +52,7 @@ on:
     # publishes the context. Required contexts are evaluated against a pull
     # request head, which for same-repo branches is only ever written by
     # `pull_request` runs.
-    branches: [main, develop, 'Dev_*']
+    branches: [release, main, develop]
 
 permissions:
   contents: read
@@ -99,5 +99,5 @@ jobs:
           echo "No frontend paths changed in this pull request."
           echo "The frontend Unit & Integration suite does not apply, so the"
           echo "required 'Unit & Integration Tests' context is reported green"
-          echo "from ubuntu-latest, independently of the self-hosted runner."
+          echo "from ubuntu-latest, independently of any other job."
           echo "Path set: .github/filters/frontend-paths.yml (#10527, #13405)."

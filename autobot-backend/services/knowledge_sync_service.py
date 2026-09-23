@@ -21,10 +21,11 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse
 
 from advanced_rag_optimizer import get_rag_optimizer
+from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_llm_logger
 from constants.threshold_constants import TimingConstants
 from knowledge_sync_incremental import IncrementalKnowledgeSync
@@ -411,7 +412,7 @@ async def get_sync_service() -> KnowledgeSyncService:
 
 
 # FastAPI router for REST API endpoints
-router = APIRouter(prefix="/knowledge/sync", tags=["knowledge-sync"])
+router = APIRouter(prefix="/knowledge/sync", tags=["knowledge-sync"], dependencies=[Depends(check_admin_permission)])
 
 
 @router.post("/manual")

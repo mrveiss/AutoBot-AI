@@ -28,6 +28,7 @@ Each entry is a tuple `(relative file path from repo root, class name)`. File pa
 | `autobot_shared/workflow/types.py` | `WorkflowPlan` | `interface WorkflowPlan` |
 | `autobot-backend/services/workflow_automation/models.py` | `WorkflowStepStatus` | string-union `WorkflowStepStatus` |
 | `autobot_shared/status_enums.py` | `Severity` | string-union `Severity` + alias `RiskLevel` |
+| `autobot_shared/auth/permissions.py` | `Role` | string-union `Role` (#14937) |
 
 `WorkflowStepStatus` and `RiskLevel` are the most recent additions — added by PR [#7269](https://github.com/mrveiss/AutoBot-AI/pull/7269) (closing #7226) so the canonical enum consolidations (#6973 `TaskStatus`, #6689 `Severity`/`RiskLevel`) are end-to-end: one Python definition, one generated TS union, no hand-written copy on either side.
 

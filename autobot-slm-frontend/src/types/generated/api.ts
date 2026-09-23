@@ -149,7 +149,13 @@ export interface paths {
         };
         /**
          * Get Api Scopes
-         * @description Get available API key scopes (no authentication required).
+         * @description Get the catalogue of available API key scopes. Unauthenticated by design (#16040 AC7).
+         *
+         *     The owner ruled on 2026-09-11 to keep this route open. It returns only the
+         *     static scope names and their descriptions (``API_KEY_SCOPES``): no keys,
+         *     no users, no tenant data. The key-creation form needs that catalogue before
+         *     it can offer a choice. ``middleware/security_headers.py`` allowlists this
+         *     path for the same reason.
          */
         get: operations["get_api_scopes_api_api_keys_scopes_get"];
         put?: never;
@@ -247,6 +253,43 @@ export interface paths {
          * @description Get current user information.
          */
         get: operations["get_current_user_info_api_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/proxy-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Check
+         * @description nginx auth_request target for the /autobot-api/ internal-key gate (#16374).
+         *
+         *     A side-effect-free membership check, deliberately separate from ``/me``:
+         *     ``/me`` answers "is this a live SLM session?", which any backend login
+         *     token satisfies by design (epic #10193) -- every read-only or non-admin
+         *     user therefore passed the old gate too, and nginx then attached the
+         *     trusted internal key that ``autobot-backend/auth_middleware.py`` treats
+         *     as full admin. This answers "does this session hold the role the key
+         *     actually confers?": 204 for a session whose role grants
+         *     ``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it
+         *     -- including SUPERADMIN, which holds no granular permissions (#13854)
+         *     and is refused here as on every other permission-gated SLM admin route
+         *     -- and an unknown role resolves to USER, so it also fails closed. 401
+         *     covers a missing Authorization header (the upstream ``HTTPBearer``'s
+         *     ``auto_error=True`` raises it before this dependency runs) or an
+         *     invalid/expired token (``get_current_user`` raises it). Returns no body
+         *     either way -- an ``auth_request`` subrequest's body is discarded, only
+         *     the status code is read.
+         */
+        get: operations["proxy_check_api_auth_proxy_check_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1014,6 +1057,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/code-sync/drift/full": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Full Tree Drift
+         * @description Every file under every deployed component, checked in one run (#16310).
+         *
+         *     An empty or unreadable component tree is reported through ``errors``, not
+         *     silently folded into a clean result -- a run that could not look must
+         *     never read the same as a run that looked and found nothing.
+         */
+        get: operations["get_full_tree_drift_api_code_sync_drift_full_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/code-sync/drift/resolve": {
         parameters: {
             query?: never;
@@ -1455,6 +1522,10 @@ export interface paths {
          *     then runs update-all-nodes.yml against it as a fire-and-forget task
          *     (the service restarts mid-run, so the caller should poll health).
          *     Returns immediately with a queued message.
+         *
+         *     Requires an authenticated user -- unchanged by #15728. The credential-free
+         *     on-host trigger is a completely separate listener
+         *     (``services/local_admin_socket.py``); it does not touch this dependency.
          */
         post: operations["self_update_api_code_sync_self_update_post"];
         delete?: never;
@@ -2808,6 +2879,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/monitoring/gpu/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Gpu Nodes
+         * @description Every node's GPU state: not reported, none present, or its devices.
+         */
+        get: operations["list_gpu_nodes_api_monitoring_gpu_nodes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/monitoring/health": {
         parameters: {
             query?: never;
@@ -3092,6 +3183,26 @@ export interface paths {
          *     automatic remediation to try again if issues recur.
          */
         post: operations["acknowledge_remediation_api_nodes__node_id__acknowledge_remediation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/nodes/{node_id}/capability-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Node Capability Profile
+         * @description A node's hardware capability profile -- all-unknown fields if it has never reported one.
+         */
+        get: operations["get_node_capability_profile_api_nodes__node_id__capability_profile_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7018,7 +7129,7 @@ export interface components {
         APIScopesResponse: {
             /** Scopes */
             scopes: {
-                [key: string]: unknown;
+                [key: string]: string;
             };
         } & {
             [key: string]: unknown;
@@ -7036,6 +7147,22 @@ export interface components {
             resource_id?: string | null;
             /** Success */
             success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ActiveProviderResponse
+         * @description One entry of the login page's active-provider list.
+         */
+        ActiveProviderResponse: {
+            /** Id */
+            id: string;
+            /** Is Social */
+            is_social: boolean;
+            /** Name */
+            name: string;
+            /** Provider Type */
+            provider_type: string;
         } & {
             [key: string]: unknown;
         };
@@ -8160,6 +8287,13 @@ export interface components {
              * @default 0
              */
             outdated_nodes: number;
+            /**
+             * Process Divergence
+             * @default {}
+             */
+            process_divergence: {
+                [key: string]: string;
+            };
             /** Self Update Detail */
             self_update_detail?: string | null;
             /**
@@ -8240,6 +8374,31 @@ export interface components {
             node_id: string;
             /** Percentage */
             percentage: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ComponentDriftModel
+         * @description One component's full-tree drift result.
+         */
+        ComponentDriftModel: {
+            /** Compared */
+            compared: number;
+            /** Component */
+            component: string;
+            /** Drifted */
+            drifted: components["schemas"]["FileVerdictModel"][];
+            /** Error */
+            error?: string | null;
+            /** Exclusions */
+            exclusions: {
+                [key: string]: number;
+            };
+            /**
+             * Skipped
+             * @default false
+             */
+            skipped: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -8427,6 +8586,18 @@ export interface components {
             reason: string;
             /** Role Name */
             role_name: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DependentRolesResponse
+         * @description Secret key to dependent-role mapping used by the apply-secrets action.
+         */
+        DependentRolesResponse: {
+            /** Mapping */
+            mapping: {
+                [key: string]: string[];
+            };
         } & {
             [key: string]: unknown;
         };
@@ -8808,6 +8979,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * FileVerdictModel
+         * @description One deployed-relative path and the verdict it earned.
+         */
+        FileVerdictModel: {
+            /** Detail */
+            detail?: string | null;
+            /** Path */
+            path: string;
+            /** Verdict */
+            verdict: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * FleetHealthResponse
          * @description Fleet health status response.
          */
@@ -9011,6 +9196,90 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * FullTreeDriftReport
+         * @description Every component, every file, one verdict each (#16310).
+         */
+        FullTreeDriftReport: {
+            /** Checked At */
+            checked_at: string;
+            /** Components */
+            components: components["schemas"]["ComponentDriftModel"][];
+            /** Errors */
+            errors: string[];
+            /** Exclusions */
+            exclusions: {
+                [key: string]: number;
+            };
+            /** Total Compared */
+            total_compared: number;
+            /** Total Drift */
+            total_drift: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GPUDevice
+         * @description One GPU. Metrics are null when the vendor tool could not read them.
+         */
+        GPUDevice: {
+            device_type: components["schemas"]["NPUDeviceType"];
+            /** Index */
+            index?: number | null;
+            /** Memory Total Mb */
+            memory_total_mb?: number | null;
+            /** Memory Used Mb */
+            memory_used_mb?: number | null;
+            /** Monitored */
+            monitored: boolean;
+            /** Name */
+            name?: string | null;
+            /** Power Watts */
+            power_watts?: number | null;
+            /** Temperature Celsius */
+            temperature_celsius?: number | null;
+            /** Utilization Percent */
+            utilization_percent?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GPUNodeListResponse
+         * @description Every node's GPU state.
+         */
+        GPUNodeListResponse: {
+            /** Nodes */
+            nodes: components["schemas"]["GPUNodeStatus"][];
+            /** Total */
+            total: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GPUNodeStatus
+         * @description A node's GPU state from its latest heartbeat.
+         */
+        GPUNodeStatus: {
+            /** Devices */
+            devices?: components["schemas"]["GPUDevice"][];
+            /** Hostname */
+            hostname: string;
+            /** Last Heartbeat */
+            last_heartbeat?: string | null;
+            /** Node Id */
+            node_id: string;
+            /** Node Status */
+            node_status: string;
+            state: components["schemas"]["GPUReportState"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GPUReportState
+         * @description What a node's latest heartbeat said about its GPUs.
+         * @enum {string}
+         */
+        GPUReportState: "not_reported" | "none" | "present";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -9025,6 +9294,11 @@ export interface components {
         HealthResponse: {
             /** Database */
             database: string;
+            /**
+             * Frontend
+             * @default unknown
+             */
+            frontend: string;
             /** Nodes Online */
             nodes_online: number;
             /** Nodes Total */
@@ -9407,6 +9681,18 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * MFAVerifySetupResponse
+         * @description Outcome of enabling MFA from the initial TOTP code.
+         */
+        MFAVerifySetupResponse: {
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * MaintenanceWindowCreate
          * @description Maintenance window creation request.
          */
@@ -9654,6 +9940,12 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * NPUDeviceType
+         * @description NPU device type enumeration.
+         * @enum {string}
+         */
+        NPUDeviceType: "intel-npu" | "nvidia-gpu" | "amd-gpu" | "unknown";
+        /**
          * NPUFleetMetricsResponse
          * @description Aggregate NPU fleet performance metrics.
          */
@@ -9898,6 +10190,30 @@ export interface components {
             actions: components["schemas"]["PostSyncAction"][];
             /** Node Id */
             node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * NodeCapabilityProfileResponse
+         * @description One node's hardware capability profile. Unset fields mean "not yet reported".
+         */
+        NodeCapabilityProfileResponse: {
+            /** Free Disk Model Dir Mb */
+            free_disk_model_dir_mb?: number | null;
+            /** Gpu Model */
+            gpu_model?: string | null;
+            /** Gpu Present */
+            gpu_present?: boolean | null;
+            /** Node Id */
+            node_id: string;
+            /** Npu Present */
+            npu_present?: boolean | null;
+            /** Total Ram Mb */
+            total_ram_mb?: number | null;
+            /** Total Vram Mb */
+            total_vram_mb?: number | null;
+            /** Updated At */
+            updated_at?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -11152,7 +11468,7 @@ export interface components {
              */
             sync_type: string;
             /** Systemd Service */
-            systemd_service?: string | null;
+            systemd_service?: string[] | null;
             /** Target Path */
             target_path: string;
         } & {
@@ -11296,7 +11612,7 @@ export interface components {
             /** Sync Type */
             sync_type?: string | null;
             /** Systemd Service */
-            systemd_service?: string | null;
+            systemd_service?: string[] | null;
             /** Target Path */
             target_path?: string | null;
         } & {
@@ -13875,7 +14191,7 @@ export interface components {
             /** Sync Type */
             sync_type?: string | null;
             /** Systemd Service */
-            systemd_service?: string | null;
+            systemd_service?: string[] | null;
             /** Target Path */
             target_path: string;
         } & {
@@ -14594,6 +14910,24 @@ export interface operations {
             };
         };
     };
+    proxy_check_api_auth_proxy_check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     refresh_token_api_auth_refresh_post: {
         parameters: {
             query?: never;
@@ -14665,9 +14999,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TokenResponse"];
                 };
             };
             /** @description Validation Error */
@@ -14696,9 +15028,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["ActiveProviderResponse"][];
                 };
             };
         };
@@ -15893,6 +16223,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileDriftReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_full_tree_drift_api_code_sync_drift_full_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FullTreeDriftReport"];
                 };
             };
             /** @description Validation Error */
@@ -18625,9 +18986,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TokenResponse"];
                 };
             };
             /** @description Validation Error */
@@ -18660,9 +19019,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MFAVerifySetupResponse"];
                 };
             };
             /** @description Validation Error */
@@ -18828,6 +19185,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_gpu_nodes_api_monitoring_gpu_nodes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GPUNodeListResponse"];
                 };
             };
         };
@@ -19352,6 +19729,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_node_capability_profile_api_nodes__node_id__capability_profile_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeCapabilityProfileResponse"];
                 };
             };
             /** @description Validation Error */
@@ -22733,9 +23143,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DependentRolesResponse"];
                 };
             };
         };

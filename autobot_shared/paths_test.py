@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for canonical project-root resolution (#13149)."""
 
 from __future__ import annotations

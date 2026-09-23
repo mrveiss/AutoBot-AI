@@ -5,6 +5,8 @@
 **Estimated Time**: 4-6 hours (gradual rollout)
 **Risk Level**: LOW (gradual approach with quick rollback)
 
+> **Historical record:** this document reflects the 6-machine install in place at the time. AutoBot's architecture is role-based and count-agnostic; the counts below describe that one install.
+
 ---
 
 ## Prerequisites Status - All Met ✅

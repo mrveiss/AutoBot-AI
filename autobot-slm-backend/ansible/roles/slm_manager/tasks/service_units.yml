@@ -24,6 +24,107 @@
 # "Destination /etc/systemd/system not writable", which aborted the play before
 # the SLM restart and left the whole self-update wedged. Writing a systemd unit
 # needs root whoever asks for it, so the requirement belongs here.
+
+# #15728: the credential-free local self-update admin socket -- both this
+# role's main.yml and Play 1 of update-all-nodes.yml reach it through this
+# same included file, same reasoning as #14624 above: a second copy is what
+# drifts. Three things, strictly in order, all gated on the one enable flag:
+# 1) the tmpfiles.d config, and an immediate `--create` so the runtime
+#    directory exists NOW rather than only after the next reboot;
+# 2) the .socket unit, which binds ListenStream= inside that directory with
+#    its own SocketMode=/SocketUser=/SocketGroup= -- the actual access
+#    control -- before anything below depends on it;
+# 3) the backend service below, whose Sockets= line (see
+#    autobot-slm-backend.service.j2) inherits the fd this socket unit holds
+#    open.
+- name: "SLM | Deploy local self-update socket runtime-directory tmpfiles config (#15728)"
+  ansible.builtin.template:
+    src: autobot-slm-self-update-tmpfiles.conf.j2
+    dest: /etc/tmpfiles.d/autobot-slm-self-update.conf
+    mode: "0644"
+  become: true
+  when: slm_self_update_socket_enabled | bool
+  register: _slm_self_update_tmpfiles
+  tags: ['slm', 'backend', 'systemd']
+
+- name: "SLM | Create local self-update socket runtime directory now (#15728)"
+  ansible.builtin.command:
+    cmd: systemd-tmpfiles --create /etc/tmpfiles.d/autobot-slm-self-update.conf
+  become: true
+  when: slm_self_update_socket_enabled | bool and _slm_self_update_tmpfiles.changed
+  changed_when: true
+  tags: ['slm', 'backend', 'systemd']
+
+- name: "SLM | Deploy local self-update admin socket unit (#15728)"
+  ansible.builtin.template:
+    src: autobot-slm-self-update.socket.j2
+    dest: /etc/systemd/system/{{ slm_self_update_socket_service }}.socket
+    mode: "0644"
+  become: true
+  when: slm_self_update_socket_enabled | bool
+  notify:
+    - reload systemd
+    # #15823: deliberately does NOT notify "restart slm self-update socket".
+    # Handlers flush after the backend has been started, and systemd refuses to
+    # restart a socket whose Service= is running — so that handler could only
+    # ever fire in the one state where it is guaranteed to fail. The ordered
+    # restart in main.yml applies template changes instead, inside the window
+    # where the backend is down.
+    - restart slm backend
+  tags: ['slm', 'backend', 'systemd']
+
+# #15823: enabled, deliberately NOT started here.
+#
+# systemd refuses to start a socket whose ``Service=`` is already running --
+# "Socket service autobot-slm-backend.service already active, refusing" -- and
+# this file runs at main.yml:673, long before the backend is (re)started at
+# :1023. On any node that was already serving, the backend is still up from
+# before the deploy, so ``state: started`` here fails every time.
+#
+# It failed in the worst position: ``update-all-nodes.yml`` aborts AFTER the
+# code archives have landed, leaving a node carrying new code with the
+# activation half incomplete. That is why this is not merely noisy.
+#
+# Starting it belongs where the backend is stopped and started, so the socket
+# is bound first and the service inherits the fd through its ``Sockets=`` line.
+# See "Start the self-update socket before the backend" in main.yml.
+- name: "SLM | Enable local self-update admin socket unit (#15728, #15823)"
+  ansible.builtin.systemd:
+    name: "{{ slm_self_update_socket_service }}.socket"
+    enabled: true
+    daemon_reload: true
+  become: true
+  when: slm_self_update_socket_enabled | bool
+  tags: ['slm', 'backend', 'systemd']
+
+- name: "SLM | Tear down local self-update admin socket when disabled (#15728)"
+  when: not (slm_self_update_socket_enabled | bool)
+  become: true
+  tags: ['slm', 'backend', 'systemd']
+  block:
+    # Turning the flag off must actually remove the socket, not merely stop
+    # managing it. A host provisioned with it enabled would otherwise keep an
+    # ENABLED .socket unit and its unit file, so the credential-free trigger
+    # stays live on a host whose configuration says it is off -- the most
+    # dangerous shape of drift for this particular feature.
+    - name: "SLM | Stop and disable the self-update socket unit"
+      ansible.builtin.systemd:
+        name: "{{ slm_self_update_socket_service }}.socket"
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: "SLM | Remove the self-update socket unit and tmpfiles config"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/etc/systemd/system/{{ slm_self_update_socket_service }}.socket"
+        - "/etc/tmpfiles.d/{{ slm_self_update_socket_service }}.conf"
+      notify:
+        - reload systemd
+        - restart slm backend
+
 - name: "SLM | Deploy backend systemd service"
   ansible.builtin.template:
     src: autobot-slm-backend.service.j2
@@ -41,4 +142,24 @@
     enabled: true
     daemon_reload: true
   become: true
+  tags: ['slm', 'backend', 'systemd']
+
+# #15823: bind the socket here rather than in main.yml, because this file is
+# what BOTH entry points run — the full role through main.yml, and
+# playbooks/update-all-nodes.yml Play 1 through `tasks_from: service_units.yml`,
+# which never runs main.yml. Placed in main.yml the fix would miss the update
+# path, which is the path the defect was reported on.
+- name: "SLM | Bind the local self-update admin socket (#15823)"
+  ansible.builtin.include_tasks: bind_self_update_socket.yml
+  # NO `become` here. Ansible rejects it outright on a TaskInclude —
+  # "'become' is not a valid attribute for a TaskInclude" — which aborted the
+  # whole self-update play at parse time and broke code-sync on the live host.
+  #
+  # It was added for #14693, whose guard demanded `become` on every task in this
+  # file -- includes among them, which Ansible forbids. Ansible wins:
+  # `tests/test_service_units_self_sufficient_14693.py` now exempts includes and
+  # reads the included FILE instead, so the requirement is enforced where it is
+  # legal rather than dropped. `bind_self_update_socket.yml:32` sets
+  # `become: true` on the block, so the privileged work is still privileged.
+  when: slm_self_update_socket_enabled | bool
   tags: ['slm', 'backend', 'systemd']

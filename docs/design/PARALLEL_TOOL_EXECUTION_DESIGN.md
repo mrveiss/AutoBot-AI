@@ -765,6 +765,6 @@ async def test_dependent_calls_sequential():
 
 ## 12. References
 
-- Cursor Agent Prompt: `docs/external_apps/.../Cursor Prompts/Agent Prompt.txt`
+- Cursor Agent Prompt: Cursor Prompts/Agent Prompt.txt (archived outside the repository, #15223)
 - Current tool registry: `src/tools/tool_registry.py`
 - asyncio.gather documentation: https://docs.python.org/3/library/asyncio-task.html

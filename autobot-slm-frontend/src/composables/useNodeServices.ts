@@ -136,7 +136,11 @@ export function useNodeServices(nodeId: MaybeRef<string>) {
       return response.logs || ''
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch logs'
-      return ''
+      // #15620: a failure must not resolve to the same value an empty journal
+      // does. Callers render a falsy result as "No logs available", so
+      // returning '' here turned a 504 -- a fetch cut short by its own ceiling
+      // -- into "this node logged nothing". Rethrow, as the siblings above do.
+      throw err
     }
   }
 

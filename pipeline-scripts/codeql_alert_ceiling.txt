@@ -1,0 +1,45 @@
+# The maximum number of OPEN CodeQL alerts this repository may carry.
+#
+# WHY THIS FILE EXISTS (#15333, #17300).
+#
+# CodeQL was already finding the defects. On 2026-09-23 a triage of the open
+# alerts found, among 102 verified false positives, an arbitrary file write
+# reachable by any authenticated user — and CodeQL had flagged all three of its
+# lines. The alerts had simply accumulated. Nothing required anyone to look.
+#
+# Detection was never the gap. Adjudication was. So this is not another
+# scanner: it is a ceiling on how many findings may sit unadjudicated, and it
+# only ever comes down.
+#
+# WHAT "ADJUDICATED" MEANS. Every alert must end in one of two states, both of
+# which reduce the open count:
+#   * FIXED   — the code changed.
+#   * DISMISSED with a written reason — "false positive" with the evidence that
+#     makes it one, "won't fix" for an accepted risk that is then on record, or
+#     "used in tests".
+# A dismissal with no reasoning is not adjudication. The reason is the artifact;
+# the state change is just its receipt.
+#
+# HOW TO CHANGE THIS NUMBER.
+#   Down: always allowed, and expected. Lower it in the same change that fixes
+#         or dismisses the alerts.
+#   Up:   only with an issue number and a sentence saying why the finding cannot
+#         be adjudicated now. Raising it silently defeats the file.
+#
+# 9 -> 2 on 2026-09-23: #17301 merged and CodeQL's rescan of main closed the
+# seven alerts it fixed. Lowered in the same breath, because the gate refuses a
+# ceiling that sits above the real count -- it had to, or the seven just
+# adjudicated would be re-licensed for the next thing that trips.
+#
+# 2 -> 0 on 2026-09-23: the last two were adjudicated and CodeQL's rescan of
+# main confirmed it. Measured, not assumed -- `state=open` returned 0 while
+# `state=dismissed` returned 393 in the same breath, so the zero is a count and
+# not a query that failed. At 0 the gate changes character: any new finding is
+# now a red check on the PR that introduces it, which is the point.
+#
+# This is a ceiling on a COUNT, which is a blunt instrument: it cannot tell a
+# newly-introduced high-severity finding from an old low-severity one that a
+# rule update re-triggered. It is deliberately blunt. A count that may not grow
+# forces the question to be asked at the moment a finding appears, which is the
+# only thing that was missing.
+0

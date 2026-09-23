@@ -23,9 +23,11 @@
  * - /tls-certificates - TLS Certificates
  */
 
-import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteLocationRaw, type RouteRecordRaw } from 'vue-router'
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
+import { meetsMinRole, ROLE_RANK } from '@/constants/roles'
+import type { Role } from '@/types/_generated/workflow'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
 import { isChunkLoadError } from '@/utils/chunkLoadError'
 import { createLogger } from '@/utils/debugUtils'
@@ -220,7 +222,7 @@ export const routes: RouteRecordRaw[] = [
         // Issue #1256: Observable Research Panel — live browser collaboration
         path: 'research',
         name: 'knowledge-research',
-        component: () => import('@/components/knowledge/KnowledgeResearchPanel.vue'),
+        component: () => import('@/components/knowledge/KnowledgeResearchTabs.vue'),
         meta: {
           title: 'Research',
           parent: 'knowledge'
@@ -244,37 +246,35 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/components/knowledge/ChromaDBExplorer.vue'),
         meta: {
           title: 'Vector Store',
-          parent: 'knowledge'
+          parent: 'knowledge',
+          // #16666: raw collection access bypasses fact visibility, so the backend is admin-only
+          admin: true
         }
       },
       {
+        // #16897: connectors moved into the Manage surface as a tab. The path is
+        // kept as a redirect rather than deleted — the same treatment
+        // /knowledge/watch-folders got — so existing links and bookmarks survive.
         path: 'connectors',
-        name: 'knowledge-connectors',
-        component: () => import('@/components/knowledge/connectors/ConnectorManager.vue'),
-        meta: {
-          title: 'Source Connectors',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/manage?tab=connectors'
       },
       {
         // Issue #3850: web research settings UI
+        // #16900: folded into the Research surface as a tab. Kept as a
+        // redirect rather than deleted — the same treatment
+        // /knowledge/watch-folders and /knowledge/connectors got — so
+        // existing links and bookmarks survive.
         path: 'web-research-settings',
-        name: 'knowledge-web-research-settings',
-        component: () => import('@/components/knowledge/WebResearchSettings.vue'),
-        meta: {
-          title: 'Web Research Settings',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/research?tab=settings'
       },
       {
         // MVA-344: 4-tab web research panel (Fetch Page / Crawl Site / Find Pages / Get Data)
+        // #16900: folded into the Research surface as a tab. Kept as a
+        // redirect rather than deleted — the same treatment
+        // /knowledge/watch-folders and /knowledge/connectors got — so
+        // existing links and bookmarks survive.
         path: 'web-research',
-        name: 'knowledge-web-research',
-        component: () => import('@/components/knowledge/WebResearchPanel.vue'),
-        meta: {
-          title: 'Web Research',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/research?tab=webTools'
       },
       {
         path: 'manpages',
@@ -366,13 +366,10 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // Watch Folders moved under Manage as a tab (owner request, 2026-09-14):
+        // it belongs beside Upload/Manage, not as a standalone top-level page.
         path: 'watch-folders',
-        name: 'knowledge-watch-folders',
-        component: () => import('@/views/knowledge/WatchFoldersView.vue'),
-        meta: {
-          title: 'Watch Folders',
-          parent: 'knowledge'
-        }
+        redirect: '/knowledge/manage?tab=watchFolders'
       }
     ]
   },
@@ -860,6 +857,49 @@ export const routes: RouteRecordRaw[] = [
       admin: true,
     },
   },
+  // Issue #16825: live model-pricing refresh status + manual override —
+  // the GH#6480/#16228/#16231 backend had no reachable GUI.
+  {
+    path: '/admin/pricing',
+    name: 'admin-pricing',
+    component: () => import('@/views/AdminPricingView.vue'),
+    meta: {
+      title: 'Model Pricing',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
+    },
+  },
+  // Issue #16825: external MCP server admin CRUD — the #11542 backend had no
+  // reachable GUI.
+  {
+    path: '/admin/mcp-servers',
+    name: 'admin-mcp-servers',
+    component: () => import('@/views/AdminMcpServersView.vue'),
+    meta: {
+      title: 'MCP Servers',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
+    },
+  },
+  // Issue #16825: fine-grained permission scopes -- no backend or frontend
+  // exists for this one yet (unlike MCP admin/pricing above, which already
+  // ship). This route is a "coming in a later release" panel, not a stub of
+  // a working feature -- no form, no table, no API call. hideInNav + an
+  // adminMenuItems entry, same pattern as the two routes above (#16933's
+  // nav-items-coverage.test.ts enforces this pairing for every /admin/* route).
+  {
+    path: '/admin/permission-scopes',
+    name: 'admin-permission-scopes',
+    component: () => import('@/views/AdminPermissionScopesView.vue'),
+    meta: {
+      title: 'Permission Scopes',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
+    },
+  },
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
@@ -1020,6 +1060,20 @@ export const routes: RouteRecordRaw[] = [
           admin: true,
           hideInNav: true
         }
+      },
+      // Issue #16429: SecretAuditLog.vue wired in — GET /api/audit/logs is
+      // admin-only (api/audit.py), matching the llm-keys tab's gate above.
+      {
+        path: 'audit-log',
+        name: 'secrets-audit-log',
+        component: () => import('@/views/secrets/AuditLogView.vue'),
+        meta: {
+          title: 'Secret Audit Log',
+          description: 'Audit trail of secret access, creation, and deletion',
+          requiresAuth: true,
+          admin: true,
+          hideInNav: true
+        }
       }
     ]
   },
@@ -1166,7 +1220,8 @@ export const routes: RouteRecordRaw[] = [
         path: 'automation',
         name: 'llc-company-automation',
         component: WorkflowBuilderView,
-        meta: { title: 'Workflow Automation', requiresAuth: true, hideInNav: true },
+        // #16901: no longer hidden — it has a Company OS sidebar entry now.
+        meta: { title: 'Workflow Automation', requiresAuth: true },
         children: [
           {
             // Named so vue-router does not warn about an unnamed empty-path
@@ -1324,6 +1379,31 @@ router.onError((error) => {
   }
 })
 
+/**
+ * Resolve whether `to`'s declared minimum role (#16244) blocks `userRole` --
+ * returns the redirect target if so, `null` if the route is allowed. Nested
+ * routes may each set `meta.minRole`; the strictest (highest-ranked) one
+ * among matched records applies. A pure function, kept separate from the
+ * navigation guard below so it's testable without mocking the router or
+ * user store.
+ */
+export function resolveMinRoleRedirect(
+  to: RouteLocationNormalized,
+  userRole: string | null | undefined
+): RouteLocationRaw | null {
+  const requiredMinRole = to.matched
+    .map(record => record.meta.minRole)
+    .filter((role): role is Role => role != null)
+    .reduce<Role | undefined>(
+      (strictest, role) => (strictest === undefined || ROLE_RANK[role] > ROLE_RANK[strictest] ? role : strictest),
+      undefined
+    )
+  if (requiredMinRole && !meetsMinRole(userRole, requiredMinRole)) {
+    return { path: '/home' }
+  }
+  return null
+}
+
 // Global navigation guards with enhanced error handling
 // Issue #2676: Migrated from next() callback to return-value pattern (vue-router v5)
 router.beforeEach(async (to, from) => {
@@ -1383,6 +1463,18 @@ router.beforeEach(async (to, from) => {
     if (requiresAdmin && userStore.isAuthenticated && !userStore.isAdmin) {
       logger.debug('Admin route blocked for non-admin user, redirecting to home')
       return { path: '/home' }
+    }
+
+    // Block routes below their declared minimum role (#16244). UI routing
+    // only, same as the admin check above -- the backend's own permission
+    // gates remain the actual authority; this never grants access the
+    // backend would refuse.
+    if (userStore.isAuthenticated) {
+      const minRoleRedirect = resolveMinRoleRedirect(to, userStore.currentUser?.role)
+      if (minRoleRedirect) {
+        logger.debug('Route blocked by minRole, redirecting to home')
+        return minRoleRedirect
+      }
     }
 
     // If user is authenticated and trying to access login page, redirect to home

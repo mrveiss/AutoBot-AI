@@ -13,7 +13,7 @@ import appConfig from '@/config/AppConfig.js'
 import apiClient from '@/utils/ApiClient'
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
-import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
+import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
 
 const logger = createLogger('TerminalService')
@@ -119,6 +119,8 @@ interface WsMessage {
   prefix?: string
   common_prefix?: string
   commands?: string[]
+  /** #14995: RiskLevel on the wire — LOW/MEDIUM/HIGH/CRITICAL, never a raw CommandRisk. */
+  risk_level?: string
   matches?: string[]
   query?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -354,22 +356,24 @@ class TerminalService {
     this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTING)
     this.callbacks.set(sessionId, callbacks)
 
-    // #14960: the backend now authenticates the handshake -- attach the JWT
-    // via the shared helper (#6700) rather than connecting unauthenticated.
-    const wsUrl = buildAuthenticatedWsUrl(`${this.baseUrl}/${sessionId}`)
-    if (wsUrl === null) {
+    // #14960/#16457: the backend now authenticates the handshake -- attach
+    // the JWT via the Sec-WebSocket-Protocol subprotocol rather than the
+    // URL, where it would land in access logs and browser history.
+    const wsUrl = `${this.baseUrl}/${sessionId}`
+    const subprotocols = buildAuthenticatedWsSubprotocols()
+    if (subprotocols === null) {
       logger.warn(`No auth token available, deferring terminal connect for session ${sessionId}`)
       this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
       this.triggerCallback(sessionId, 'onError', 'Not authenticated')
       throw new Error('No auth token available for terminal WebSocket')
     }
-    logger.debug(`Connecting to WebSocket: ${this.baseUrl}/${sessionId}`)
+    logger.debug(`Connecting to WebSocket: ${wsUrl}`)
 
     this._validateWsUrl(wsUrl)
 
     return new Promise<void>((resolve, reject) => {
       try {
-        const ws = new WebSocket(wsUrl)
+        const ws = new WebSocket(wsUrl, subprotocols)
         this.connections.set(sessionId, ws)
         const timeout = this._createConnectionTimeout(sessionId, ws, reject)
         this._attachWsHandlers(sessionId, ws, callbacks, resolve, reject, timeout)
@@ -382,9 +386,10 @@ class TerminalService {
   /** Throw if the URL is not a valid WebSocket URL. */
   private _validateWsUrl(wsUrl: string): void {
     if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
-      // #14989: wsUrl carries the auth token (buildAuthenticatedWsUrl) --
-      // this message reaches logger.error('Failed to connect...', err) via
-      // _handleConnectCatchError, so it must not embed the raw value.
+      // #14989/#16457: wsUrl no longer carries the auth token (it travels as
+      // a subprotocol now) -- redacted defensively anyway, since the base
+      // URL still comes from appConfig and this message reaches
+      // logger.error('Failed to connect...', err) via _handleConnectCatchError.
       throw new Error(`Invalid WebSocket URL: ${redactUrlForLogging(wsUrl)}`)
     }
   }
@@ -494,10 +499,11 @@ class TerminalService {
     reject: (reason: Error) => void,
   ): void {
     const err = error instanceof Error ? error : new Error(String(error))
-    // #14989: _validateWsUrl closes the wrong-scheme case, but not every
-    // WHATWG URL parse failure (unusual host, percent-encoding) -- a
-    // native new WebSocket() SyntaxError can still embed the raw
-    // token-bearing URL in .message, so redact defensively here too.
+    // #14989/#16457: _validateWsUrl closes the wrong-scheme case, but not
+    // every WHATWG URL parse failure (unusual host, percent-encoding) -- a
+    // native new WebSocket() SyntaxError can still embed the raw URL in
+    // .message. The URL no longer carries the token, but redact
+    // defensively anyway rather than assume nothing else in it is sensitive.
     logger.error(`Failed to connect to terminal session ${sessionId}:`, redactErrorForLogging(err))
     this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
     this.triggerCallback(sessionId, 'onError', err.message)
@@ -591,6 +597,9 @@ class TerminalService {
       case 'history_search':
         this._handleHistorySearch(sessionId, message)
         break
+      case 'security_warning':
+        this._handleSecurityWarning(sessionId, message)
+        break
       default:
         logger.warn(`Unknown message type: ${message.type}`, message)
     }
@@ -620,6 +629,31 @@ class TerminalService {
   private _handleErrorMessage(sessionId: string, msg: WsMessage): void {
     this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
     this.triggerCallback(sessionId, 'onError', msg.error || msg.content || '')
+  }
+
+  /**
+   * Surface a blocked command to the user (#14995).
+   *
+   * The backend sends this when it refuses to run a command. It was reaching
+   * the browser and being discarded: there was no case for it, so it fell to
+   * `default:` and was logged as an unknown type. The user saw their command
+   * do nothing, with no reason given.
+   *
+   * The decision this issue asked for is *handle*, not remove. Dropping a
+   * security refusal is the worse of the two options — the block still
+   * happens, and the only thing removal changes is whether the person who
+   * typed the command finds out why.
+   *
+   * Severity follows the wire value, which is now `RiskLevel` rather than a
+   * raw `CommandRisk`: a blocked destructive command arrives as CRITICAL and
+   * renders through `line-error`, never neutral output the eye skips.
+   */
+  private _handleSecurityWarning(sessionId: string, msg: WsMessage): void {
+    const critical = msg.risk_level === 'CRITICAL' || msg.risk_level === 'HIGH'
+    this.triggerCallback(sessionId, 'onOutput', {
+      content: msg.content || '',
+      stream: critical ? 'error' : 'warning',
+    })
   }
 
   /** Handle process exit notification. */

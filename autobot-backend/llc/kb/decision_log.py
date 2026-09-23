@@ -38,13 +38,13 @@ def _decisions_collection(company_id: uuid.UUID | str) -> str:
 
 def _compose_document(approval: Any) -> str:
     """Build a human-readable decision document for KB indexing."""
-    payload_summary = json.dumps(approval.payload or {}, ensure_ascii=False)
+    payload_summary = json.dumps(approval.context or {}, ensure_ascii=False)
     decided_at = approval.decided_at.isoformat() if approval.decided_at else "unknown"
-    decision_note = (approval.payload or {}).get("decision_note", "")
+    decision_note = (approval.context or {}).get("decision_note", "")
     lines = [
-        f"Type: {approval.type}",
+        f"Type: {approval.approval_type}",
         f"Decision: {approval.status}",
-        f"Requested by: {approval.requested_by_agent_id}",
+        f"Requested by: {approval.requested_by_agent}",
         f"Decided at: {decided_at}",
     ]
     if decision_note:
@@ -65,13 +65,13 @@ class DecisionLogWriter:
         """Index a resolved approval into the company decisions KB.
 
         Args:
-            approval: LLCApproval ORM instance with status APPROVED or REJECTED.
+            approval: Approval ORM instance (#17043) with status APPROVED or REJECTED.
 
         Raises:
             ValueError: If approval is still pending.
             RuntimeError: If KB write fails.
         """
-        from ..models.enums import ApprovalStatus
+        from models.approval import ApprovalStatus
 
         if approval.status == ApprovalStatus.PENDING.value:
             raise ValueError(f"Approval {approval.id} is still pending; cannot log undecided approval")
@@ -82,7 +82,7 @@ class DecisionLogWriter:
         doc_id = f"decision:{approval.id}"
 
         metadata: Dict[str, Any] = {
-            "approval_type": approval.type,
+            "approval_type": approval.approval_type,
             "decision": approval.status,
             "decided_at": approval.decided_at.isoformat() if approval.decided_at else "",
             "company_id": company_id,
@@ -112,7 +112,7 @@ class DecisionLogWriter:
                 "Decision indexed: approval_id=%s company=%s type=%s decision=%s",
                 approval.id,
                 company_id,
-                approval.type,
+                approval.approval_type,
                 approval.status,
             )
         except Exception as exc:

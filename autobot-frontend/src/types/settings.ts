@@ -83,22 +83,6 @@ export interface BackendSettings {
   agents?: Record<string, unknown>;
 }
 
-// Health Status Interface (updated to match BackendSettings component expectations)
-export interface HealthStatus {
-  status?: string;
-  message?: string;
-  basic_health?: Record<string, unknown>;
-  detailed_available?: boolean;
-  backend?: {
-    llm_provider?: {
-      status?: string;
-      message?: string;
-    };
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-}
-
 // Cache Activity Item Interface (updated to include required properties)
 export interface CacheActivityItem {
   id: string;

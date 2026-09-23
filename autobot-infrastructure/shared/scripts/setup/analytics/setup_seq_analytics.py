@@ -266,19 +266,31 @@ class SeqAnalyticsSetup:
         critical_alerts = [
             {
                 "title": "AutoBot Critical Errors",
-                "expression": "@l = 'Error' and Application = 'AutoBot' and (@mt like '%Exception%' or @mt like '%Failed%' or @mt like '%Critical%')",
+                "expression": (
+                    "@l = 'Error' and Application = 'AutoBot' and "
+                    "(@mt like '%Exception%' or @mt like '%Failed%' or @mt like '%Critical%')"
+                ),
             },
             {
                 "title": "AutoBot WebSocket Disconnections",
-                "expression": "Source like 'GlobalWebSocketService' and @l in ['Error', 'Warning'] and @mt like '%disconnect%'",
+                "expression": (
+                    "Source like 'GlobalWebSocketService' and @l in ['Error', 'Warning'] "
+                    "and @mt like '%disconnect%'"
+                ),
             },
             {
                 "title": "AutoBot Backend Service Down",
-                "expression": "Source like 'Backend*' and @l = 'Error' and (@mt like '%startup%' or @mt like '%failed%')",
+                "expression": (
+                    "Source like 'Backend*' and @l = 'Error' "
+                    "and (@mt like '%startup%' or @mt like '%failed%')"
+                ),
             },
             {
                 "title": "AutoBot Container Issues",
-                "expression": "LogType = 'DockerContainer' and @l = 'Error' and (@mt like '%container%' or @mt like '%docker%')",
+                "expression": (
+                    "LogType = 'DockerContainer' and @l = 'Error' "
+                    "and (@mt like '%container%' or @mt like '%docker%')"
+                ),
             },
         ]
 

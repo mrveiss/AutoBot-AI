@@ -42,6 +42,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_float
+from autobot_shared.feature_flags import is_feature_enabled
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
@@ -58,6 +59,7 @@ from ..exceptions import (
 )
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
+from ..org_role_authority import apply_org_role_bound
 from ..services.api_key import ApiKeyService
 from ..services.budget import BudgetService
 from ..services.controls_service import ControlsService
@@ -213,7 +215,7 @@ class HeartbeatScheduler:
             result = await session.execute(text("""
                     SELECT aon.agent_id, aon.name, aon.heartbeat_cron,
                            aon.adapter_type, aon.adapter_config, aon.context_mode,
-                           aon.company_id
+                           aon.company_id, aon.org_role
                     FROM agent_org_nodes aon
                     WHERE aon.heartbeat_enabled = true
                       AND aon.heartbeat_cron IS NOT NULL
@@ -845,13 +847,13 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
     ephemeral, run-scoped LLC API key so the woken agent can authenticate its
     LLC API calls; the key is revoked when the run finishes.
     """
+    if is_feature_enabled("org_role_bound"):
+        # #16950/#16974: bounded by its org role, or refused with the reason. Off by
+        # default (owner decision #16974) until copilot_local/copilot_subscription can
+        # actually enforce a bound -- see org_role_authority.py's module docstring.
+        agent = apply_org_role_bound(agent)
     adapter_type = agent.get("adapter_type") or "autobot_agent"
-    logger.debug(
-        "Dispatching adapter=%s for agent=%s context_keys=%s",
-        adapter_type,
-        agent["agent_id"],
-        sorted(context.keys()),
-    )
+    logger.debug("Dispatching adapter=%s agent=%s context_keys=%s", adapter_type, agent["agent_id"], sorted(context))
 
     if adapter_type == "autobot_agent":
         await _dispatch_autobot_agent(agent, context)
@@ -893,7 +895,8 @@ async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]
     # and triggers exponential-backoff recovery.  _run_adapter is already a
     # background task, so blocking here does not stall the poll loop.
     adapter = AutoBotAgentAdapter(agent_config=adapter_config)
-    await adapter.run_blocking(dict(context, agent_id=agent["agent_id"]))
+    scoped = dict(context, agent_id=agent["agent_id"], company_id=str(agent.get("company_id") or ""))
+    await adapter.run_blocking(scoped)
 
 
 async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], context: Dict[str, Any]) -> Optional[str]:
@@ -918,7 +921,7 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     company_id = str(agent.get("company_id") or "")
 
     key_record = None
-    enriched = dict(context, agent_id=agent_id, api_base=AGENT_API_BASE_URL)
+    enriched = dict(context, agent_id=agent_id, company_id=company_id, api_base=AGENT_API_BASE_URL)
     if company_id:
         key_record, raw_key = await _issue_run_key(agent_id, company_id)
         if raw_key:
@@ -947,7 +950,7 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
         raise
     finally:
         if key_record is not None:
-            await _revoke_run_key(agent_id, key_record.id)
+            await _revoke_run_key(agent_id, key_record.id, str(agent_config.get("company_id") or "") or None)
 
     # GH#9773: RATE_LIMITED is scheduler-internal — translate to ProviderRateLimited
     # so the GH#8204 backoff path applies uniformly for registry adapters.
@@ -989,12 +992,9 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
     try:
         factory = get_async_session_factory()
         async with factory() as session:
+            company = str(agent.get("company_id") or "")
             await BudgetService().ingest_cost_event(
-                session,
-                agent_id,
-                int(result.tokens_in or 0),
-                int(result.tokens_out or 0),
-                model,
+                session, agent_id, company, int(result.tokens_in or 0), int(result.tokens_out or 0), model
             )
             await session.commit()
     except BudgetExhausted:
@@ -1033,12 +1033,12 @@ async def _issue_run_key(agent_id: str, company_id: str) -> tuple[Any, Optional[
         return None, None
 
 
-async def _revoke_run_key(agent_id: str, key_id: uuid.UUID) -> None:
-    """Revoke an ephemeral run-scoped key (best-effort)."""
+async def _revoke_run_key(agent_id: str, key_id: uuid.UUID, company_id: Optional[str] = None) -> None:
+    """Revoke an ephemeral run-scoped key, company-scoped (#13771, #15930)."""
     factory = get_async_session_factory()
     try:
         async with factory() as session:
-            await ApiKeyService().revoke_key(session, agent_id=agent_id, key_id=key_id)
+            await ApiKeyService().revoke_key(session, agent_id=agent_id, key_id=key_id, company_id=company_id)
     except Exception:
         logger.exception("Failed to revoke ephemeral heartbeat key %s for agent %s", key_id, agent_id)
 

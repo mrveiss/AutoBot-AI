@@ -36,12 +36,30 @@ slm_backend_port: 8000
 slm_manager_redis_host: "{{ redis_host | default('127.0.0.1') }}"
 
 # ==========================================================
+# Local self-update admin socket (#15728)
+# ==========================================================
+# Credential-free on-host trigger for POST /code-sync/self-update: a systemd
+# .socket unit owns creation of this Unix domain socket -- and its
+# permissions -- BEFORE autobot-slm-backend.service ever starts, then hands
+# the backend the already-open fd via sd_listen_fds(). Filesystem
+# permissions on the socket are the access control; nothing here is a
+# credential. Set slm_self_update_socket_enabled: false to omit both the
+# socket unit and the backend unit's Sockets= wiring entirely.
+slm_self_update_socket_enabled: true
+slm_self_update_socket_service: autobot-slm-self-update
+slm_self_update_socket_path: /run/autobot/slm-self-update.sock
+# Owner/group read-write, nothing for "other": root always bypasses DAC, and
+# an operator who is a member of slm_group gets access without ever typing a
+# password or a token.
+slm_self_update_socket_mode: "0660"
+
+# ==========================================================
 # TLS Configuration
 # ==========================================================
 slm_tls_cert: "{{ slm_certs_dir }}/server-cert.pem"
 slm_tls_key: "{{ slm_certs_dir }}/server-key.pem"
-slm_tls_days: 365
-slm_tls_subject: "/C=US/ST=State/L=City/O=AutoBot/CN={{ ansible_host }}"
+# slm_tls_days / slm_tls_subject retired (#16020): generation is now the
+# shared _shared/tasks/ensure_node_tls_cert.yml, which owns those values.
 
 # ==========================================================
 # Nginx Configuration
@@ -61,7 +79,12 @@ slm_nginx_config: autobot-slm
 # flag is true.
 # ==========================================================
 slm_colocated_frontend: false
-frontend_dist_dir: "{{ slm_base_dir }}/autobot-frontend/dist"
+# #15603: `current`, the atomically-flipped symlink the staged publish task
+# creates — see roles/frontend/defaults/main.yml's matching definition for
+# the full reasoning. Both must move together; they resolve to the same path
+# by default (frontend_install_dir and slm_base_dir both default to
+# /opt/autobot) but are independently declared.
+frontend_dist_dir: "{{ slm_base_dir }}/autobot-frontend/current"
 frontend_backend_host: 127.0.0.1
 frontend_backend_port: 8001
 frontend_backend_protocol: http
@@ -153,6 +176,13 @@ grafana_health_check_delay: 5          # Seconds between retries
 # and the backend env template. Empty here means "generate one" -- set it in
 # group_vars/vault only to pin a specific value, never commit a real one.
 chromadb_auth_token: ""
+
+# #16627 (P1b of #13568): the Redis credential, written into slm-secrets.env and read
+# back by every consumer. Empty password means "generate one"; set it in
+# group_vars/vault only to pin a value, never commit a real one. The username is
+# the ACL user the password is sent as -- `default` while the server stays nopass.
+slm_redis_password: ""
+slm_redis_username: default
 
 # #13307: where the SLM writes backups. Must match config.py's `backup_dir`
 # default (and SLM_BACKUP_DIR if that is set) — the service creates the path at

@@ -27,9 +27,9 @@ from sqlalchemy import func, select, text
 
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from autobot_shared.redis_client import get_async_redis_client
+from models.approval import Approval
 from user_management.database import get_async_session_factory
 
-from ..models.approval import LLCApproval
 from ..models.budget import LLCAgentBudget
 from ..models.enums import ApprovalStatus
 
@@ -73,7 +73,10 @@ async def probe_llc(request: Request | None = None) -> ComponentHealth:
         return ComponentHealth(
             name=_PROBE_NAME,
             status="down",
-            detail=f"probe error: {type(exc).__name__}: {exc}",
+            # #14126: type only. `/api/system/health` is public, so an
+            # exception message here is reachable unauthenticated; the full
+            # message is logged instead. Matches every other probe.
+            detail=f"probe error: {type(exc).__name__}",
             latency_ms=round(latency_ms, 1),
         )
 
@@ -287,15 +290,16 @@ async def _budget_counts() -> tuple[int, int]:
 
 
 async def _pending_approvals_critical() -> int:
-    """Count PENDING approvals that have been open for more than 5 minutes."""
+    """Count PENDING company-scoped (LLC board) approvals open for more than 5 minutes (#17043)."""
     cutoff = datetime.now(tz=timezone.utc) - timedelta(minutes=_APPROVAL_CRITICAL_MINUTES)
     try:
         factory = get_async_session_factory()
         async with factory() as session:
             result = await session.execute(
                 select(func.count()).where(
-                    LLCApproval.status == ApprovalStatus.PENDING.value,
-                    LLCApproval.created_at <= cutoff,
+                    Approval.company_id.is_not(None),
+                    Approval.status == ApprovalStatus.PENDING.value,
+                    Approval.created_at <= cutoff,
                 )
             )
             return int(result.scalar_one_or_none() or 0)

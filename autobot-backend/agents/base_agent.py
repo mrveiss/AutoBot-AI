@@ -8,13 +8,11 @@ Provides unified interface for agents running locally or in containers
 """
 
 import asyncio
-import json
+import contextlib
 import threading
 import uuid
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -34,87 +32,25 @@ from protocols.agent_communication import (
 
 logger = get_logger(__name__)
 
+from agents.base_agent_types import (  # noqa: F401
+    AVAILABLE_AGENT_STATUSES,
+    AgentHealth,
+    AgentRequest,
+    AgentResponse,
+    DeploymentMode,
+    create_agent_request,
+    deserialize_agent_request,
+    deserialize_agent_response,
+    serialize_agent_request,
+    serialize_agent_response,
+)
 
-class DeploymentMode(Enum):
-    """Agent deployment modes"""
-
-    LOCAL = "local"
-    CONTAINER = "container"
-    REMOTE = "remote"
-
-
-# Performance optimization: O(1) lookup for available agent statuses (Issue #326)
-AVAILABLE_AGENT_STATUSES = {AgentStatus.HEALTHY, AgentStatus.DEGRADED}
-
-
-@dataclass
-class AgentRequest:
-    """Standardized agent request format"""
-
-    request_id: str
-    agent_type: str
-    action: str
-    payload: Dict[str, Any]
-    context: Dict[str, Any] | None = None
-    priority: str = "normal"  # low, normal, high, urgent
-    timeout: float = 30.0
-    metadata: Dict[str, Any] | None = None
-
-
-@dataclass
-class AgentResponse:
-    """Standardized agent response format"""
-
-    request_id: str
-    agent_type: str
-    status: str  # success, error, partial
-    result: Any
-    error: str | None = None
-    execution_time: float = 0.0
-    metadata: Dict[str, Any] | None = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            "request_id": self.request_id,
-            "agent_type": self.agent_type,
-            "status": self.status,
-            "result": self.result,
-            "error": self.error,
-            "execution_time": self.execution_time,
-            "metadata": self.metadata or {},
-        }
-
-
-@dataclass
-class AgentHealth:
-    """Agent health information"""
-
-    agent_type: str
-    status: AgentStatus
-    deployment_mode: DeploymentMode
-    last_heartbeat: datetime
-    response_time_ms: float
-    success_rate: float
-    error_count: int
-    resource_usage: Dict[str, Any]
-    capabilities: List[str]
-    details: Dict[str, Any] | None = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            "agent_type": self.agent_type,
-            "status": self.status.value,
-            "deployment_mode": self.deployment_mode.value,
-            "last_heartbeat": self.last_heartbeat.isoformat(),
-            "response_time_ms": self.response_time_ms,
-            "success_rate": self.success_rate,
-            "error_count": self.error_count,
-            "resource_usage": self.resource_usage,
-            "capabilities": self.capabilities,
-            "details": self.details or {},
-        }
+# The exchanged data types live in `base_agent_types` (#15950): this module was
+# at its size ceiling, and they were the part of it that never referenced
+# `BaseAgent`. Re-exported here so the existing import sites keep working.
+from agents.declared_scope_check import malformed_scope_response
+from agents.scope_enforcement import hold_scopes, refused_response
+from protocols.message_origin import acting_for, origin_of
 
 
 class BaseAgent(ABC):
@@ -256,6 +192,22 @@ class BaseAgent(ABC):
             logger.warning("Could not get resource usage: %s", e)
             return {"error": "Resource usage unavailable"}
 
+    def declared_scopes(self, request: AgentRequest) -> List[str]:
+        """The work scopes this run will touch, as `<kind>:<path>` strings.
+
+        Default is empty, and that is deliberate: an agent that declares nothing
+        keeps today's behaviour exactly, so adding enforcement cannot break an
+        agent nobody has revisited. Agents that write -- files, knowledge base
+        entries, device state -- override this, and #15950's guard test is what
+        stops a new writing agent quietly keeping the default.
+
+        Scopes are declared per REQUEST rather than per agent because the same
+        agent touches different paths on different runs; a class-level
+        declaration would have to name the union of everything it might ever
+        touch, which is a lock on the whole tree.
+        """
+        return []
+
     async def execute_with_tracking(self, request: AgentRequest) -> AgentResponse:
         """
         Wrapper that adds performance tracking to request processing.
@@ -273,7 +225,7 @@ class BaseAgent(ABC):
 
         # Record invocation start in Redis analytics
         try:
-            from services.agent_analytics import TaskStatus, get_agent_analytics
+            from services.agent_analytics import get_agent_analytics
 
             analytics = get_agent_analytics()
             await analytics.track_task_start(
@@ -290,6 +242,23 @@ class BaseAgent(ABC):
             logger.debug("Analytics track_task_start failed: %s", analytics_err)
             analytics = None
 
+        scopes = self.declared_scopes(request)
+        malformed = malformed_scope_response(request, scopes, agent_type=self.agent_type)
+        if malformed is not None:  # #16209: a named refusal, not a ScopeError out of hold_scopes
+            with self._stats_lock:
+                self.error_count += 1
+            return malformed
+        async with hold_scopes(
+            scopes, agent_id=self.agent_type, task_id=task_id, intent=request.action or "process_request"
+        ) as held:
+            if not held.granted:
+                with self._stats_lock:
+                    self.error_count += 1
+                return refused_response(request, held.conflict, agent_type=self.agent_type)
+            return await self._tracked_process(request, task_id, start_time, analytics)
+
+    async def _tracked_process(self, request, task_id, start_time, analytics) -> AgentResponse:
+        """The original tracked execution, unchanged, now inside the claim."""
         try:
             response = await self.process_request(request)
 
@@ -322,6 +291,8 @@ class BaseAgent(ABC):
             # Record completion in Redis analytics
             if analytics is not None:
                 try:
+                    from services.agent_analytics import TaskStatus
+
                     outcome = TaskStatus.COMPLETED if response.status == "success" else TaskStatus.FAILED
                     tokens = response.metadata.get("token_usage") if response.metadata else None
                     await analytics.track_task_complete(
@@ -450,8 +421,10 @@ class BaseAgent(ABC):
     async def _handle_communication_request(self, message: StandardMessage) -> StandardMessage | None:
         """Handle incoming communication requests"""
         try:
-            # Convert communication message to AgentRequest
+            # Convert communication message to AgentRequest. #16950: keep whose request it
+            # is -- the sender was dropped here, so a peer's request read as this agent's own.
             request_data = message.payload.content
+            origin = origin_of(message.header)
             agent_request = AgentRequest(
                 request_id=message.header.message_id,
                 agent_type=self.agent_type,
@@ -459,10 +432,16 @@ class BaseAgent(ABC):
                 payload=request_data.get("payload", {}),
                 context=request_data.get("context", {}),
                 priority=request_data.get("priority", "normal"),
+                originator=origin.originator if origin else None,
+                chain=list(origin.chain) if origin else [],
             )
 
-            # Process the request
-            response = await self.process_request(agent_request)
+            # Process the request; anything it sends continues the originator's chain
+            # (#16950), and it runs through the same tracking and work-claim path as every
+            # other caller (#16986), now that a peer's request can actually arrive here.
+            # Both sides of this merge are wanted: the context wraps the tracked call.
+            with acting_for(origin) if origin else contextlib.nullcontext():
+                response = await self.execute_with_tracking(agent_request)
 
             # Convert AgentResponse back to communication message
             response_message = StandardMessage(
@@ -611,65 +590,3 @@ class ContainerAgent(BaseAgent):
             return health.status in AVAILABLE_AGENT_STATUSES
         except Exception:
             return False
-
-
-# Utility functions for agent management
-
-
-def create_agent_request(
-    agent_type: str,
-    action: str,
-    payload: Dict[str, Any],
-    context: Dict[str, Any] | None = None,
-    priority: str = "normal",
-    timeout: float = 30.0,
-) -> AgentRequest:
-    """Helper function to create standardized agent requests"""
-    import uuid
-
-    return AgentRequest(
-        request_id=str(uuid.uuid4()),
-        agent_type=agent_type,
-        action=action,
-        payload=payload,
-        context=context or {},
-        priority=priority,
-        timeout=timeout,
-        metadata={
-            "created_at": datetime.now(tz=timezone.utc).isoformat(),
-            "source": "autobot_orchestrator",
-        },
-    )
-
-
-def serialize_agent_request(request: AgentRequest) -> str:
-    """Serialize agent request for transmission"""
-    return json.dumps(
-        {
-            "request_id": request.request_id,
-            "agent_type": request.agent_type,
-            "action": request.action,
-            "payload": request.payload,
-            "context": request.context,
-            "priority": request.priority,
-            "timeout": request.timeout,
-            "metadata": request.metadata,
-        }
-    )
-
-
-def deserialize_agent_request(data: str) -> AgentRequest:
-    """Deserialize agent request from transmission"""
-    parsed = json.loads(data)
-    return AgentRequest(**parsed)
-
-
-def serialize_agent_response(response: AgentResponse) -> str:
-    """Serialize agent response for transmission"""
-    return json.dumps(response.to_dict())
-
-
-def deserialize_agent_response(data: str) -> AgentResponse:
-    """Deserialize agent response from transmission"""
-    parsed = json.loads(data)
-    return AgentResponse(**parsed)

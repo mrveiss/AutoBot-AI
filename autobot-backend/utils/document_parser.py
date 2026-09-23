@@ -13,6 +13,8 @@ from typing import Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from media.document.extraction import extract_docx, extract_pdf
+from media.document.provenance import render_text_and_tables
+from media.document.zip_formats import SUFFIX_BY_FORMAT, sniff_zip_format
 
 logger = get_logger(__name__)
 
@@ -59,19 +61,34 @@ class DocumentParser:
         if not exists:
             raise FileNotFoundError(f"Document not found: {file_path}")
 
-        extension = file_path.suffix.lower()
+        candidates = await asyncio.to_thread(self._candidate_extensions, file_path)
 
-        if extension not in self.supported_formats:
+        if not candidates:
             raise ValueError(
-                f"Unsupported document format: {extension}. " f"Supported: {', '.join(self.supported_formats.keys())}"
+                f"Unsupported document format: {file_path.suffix.lower()}. "
+                f"Supported: {', '.join(self.supported_formats.keys())}"
             )
 
         # Run extraction in thread pool to avoid blocking
         text, metadata = await asyncio.get_running_loop().run_in_executor(
-            None, self._extract_text_sync, file_path, extension
+            None, self._extract_text_sync, file_path, candidates
         )
 
         return text, metadata
+
+    def _candidate_extensions(self, file_path: Path) -> list[str]:
+        """Supported extensions to try, the content-verified one first (#16773).
+
+        A renamed file used to be misrouted or rejected outright, because its name was
+        the only input. When the archive's own members disagree with the name, the
+        verified format leads and the name is still tried after it -- a mismatch alone
+        never fails an extraction, mirroring how pdf/docx already behave.
+        """
+        extension = file_path.suffix.lower()
+        verified = SUFFIX_BY_FORMAT.get(sniff_zip_format(file_path) or "")
+        if verified and verified != extension:
+            logger.info("%s: content says %s, name says %s — trying content first", file_path.name, verified, extension)
+        return [c for c in dict.fromkeys([verified, extension]) if c in self.supported_formats]
 
     def _get_parser_for_extension(self, extension: str):
         """Get parser function for extension (Issue #315 - dispatch table)."""
@@ -97,58 +114,69 @@ class DocumentParser:
 
         return None
 
-    def _extract_text_sync(self, file_path: Path, extension: str) -> Tuple[str, Dict[str, any]]:
-        """Synchronous text extraction (Issue #315 - refactored to dispatch table)."""
+    def _extract_text_sync(self, file_path: Path, candidates: list[str]) -> Tuple[str, Dict[str, any]]:
+        """Synchronous text extraction (Issue #315 - refactored to dispatch table).
+
+        #16773: *candidates* is the content-verified format first, then the file's own
+        extension. Each is tried in turn, so a mislabeled document parses with the right
+        parser instead of failing on the wrong one.
+        """
         metadata = {
             "file_name": file_path.name,
             "file_size": file_path.stat().st_size,
-            "format": extension,
+            "format": candidates[0] if candidates else file_path.suffix.lower(),
         }
 
-        try:
-            parser = self._get_parser_for_extension(extension)
-            if parser is None:
-                raise ValueError(f"No parser implemented for {extension}")
+        last_error: Exception | None = None
+        for extension in candidates:
+            try:
+                parser = self._get_parser_for_extension(extension)
+                if parser is None:
+                    raise ValueError(f"No parser implemented for {extension}")
 
-            text = parser(file_path, metadata)
-            metadata["extraction_success"] = True
-            metadata["text_length"] = len(text)
+                text = parser(file_path, metadata)
+                metadata["format"] = extension
+                metadata["extraction_success"] = True
+                metadata["text_length"] = len(text)
 
-            return text, metadata
+                return text, metadata
 
-        except Exception as e:
-            logger.error("Failed to parse %s: %s", file_path, e, exc_info=True)
-            metadata["extraction_success"] = False
-            metadata["extraction_error"] = str(e)
-            return "", metadata
+            except Exception as e:
+                last_error = e
+                logger.warning("Parsing %s as %s failed: %s", file_path, extension, e)
+
+        logger.error("Failed to parse %s, tried %s: %s", file_path, candidates, last_error, exc_info=True)
+        metadata["extraction_success"] = False
+        metadata["extraction_error"] = str(last_error)
+        return "", metadata
 
     def _parse_pdf(self, file_path: Path, metadata: Dict) -> str:
         """Extract text from PDF via the canonical extractor (#13893).
 
         Used to carry its own pypdf loop with a ``--- Page N ---`` marker; now
         shares the one implementation and the one ``## Page N`` convention.
+        Tables fold into the same string via the shared renderer (#14970) —
+        used to be dropped outright here, unlike the DOCX path below.
         """
         extracted = extract_pdf(file_path.read_bytes())
         metadata["page_count"] = extracted.page_count
-        return extracted.text
+        metadata["table_count"] = len(extracted.tables)
+        return render_text_and_tables(extracted)
 
     def _parse_docx(self, file_path: Path, metadata: Dict) -> str:
-        """Extract text and tables from DOCX via the canonical extractor (#13893)."""
-        extracted = extract_docx(file_path.read_bytes())
+        """Extract text and tables from DOCX via the canonical extractor (#13893).
 
+        Used to join tables with its own local logic; now shares the renderer
+        every table-bearing consumer uses (#14970), so identical tables produce
+        identical text regardless of which caller found them.
+        """
+        extracted = extract_docx(file_path.read_bytes())
         paragraphs = [line for line in extracted.text.split("\n") if line.strip()]
-        table_text = []
-        for table in extracted.tables:
-            for row in table:
-                row_text = " | ".join(row)
-                if row_text.strip():
-                    table_text.append(row_text)
 
         metadata["paragraph_count"] = len(paragraphs)
         metadata["table_count"] = len(extracted.tables)
 
-        all_text = paragraphs + (["--- Tables ---"] if table_text else []) + table_text
-        return "\n".join(all_text)
+        return render_text_and_tables(extracted)
 
     def _parse_xlsx(self, file_path: Path, metadata: Dict) -> str:
         """Extract text from Excel using openpyxl"""
@@ -297,3 +325,21 @@ class DocumentParser:
 
 # Singleton instance
 document_parser = DocumentParser()
+
+
+def parse_document_text(file_path: Path) -> Tuple[str, Dict[str, any]]:
+    """Parse *file_path* synchronously, for a caller already off the event loop (#16775).
+
+    :meth:`DocumentParser.extract_text` is the async entry point and hands the work to a
+    thread. The KB upload route is already inside ``asyncio.to_thread``, so it needs the
+    same dispatch without a second thread hop or a nested loop -- and without a second
+    copy of the parser table, which is how the two routes drifted apart before (#14333).
+
+    Raises:
+        ValueError: no supported format, by content or by name.
+    """
+    parser = DocumentParser()
+    candidates = parser._candidate_extensions(file_path)
+    if not candidates:
+        raise ValueError(f"Unsupported document format: {file_path.suffix.lower()}")
+    return parser._extract_text_sync(file_path, candidates)

@@ -22,6 +22,11 @@ from typing import Any, Dict, List
 from autobot_shared.env_utils import env_flag, env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from security.unicode_normalization import (
+    find_suspicious_invisible,
+    matching_variants,
+    strip_suspicious_invisible,
+)
 
 logger = get_logger(__name__)
 
@@ -84,7 +89,7 @@ INJECTION_PATTERNS = (
     r"ignore\s+previous\s+instructions",
     r"ignore\s+above",
     r"disregard\s+previous",
-    r"forget\s+previous",
+    r"forget\s+(all\s+)?previous",
     r"forget\s+all",
     r"forget\s+your\s+system\s+prompt",
     r"new\s+instructions",
@@ -122,7 +127,7 @@ INJECTION_PATTERNS = (
     r"--force",
 )
 
-# Dangerous command patterns (regex patterns)
+# Dangerous command patterns. #14042: 0 of 17 shared with the canonical set; consolidation tracked in #15459.
 DANGEROUS_PATTERNS = (
     # File system destruction
     r"rm\s+-r",
@@ -157,35 +162,6 @@ CONTEXT_POISON_PATTERNS = (
     r"do\s+the\s+same",
     r"run\s+that\s+again",
 )
-
-# Issue #4345: Invisible Unicode character detection for prompt injection
-# Dangerous invisible Unicode ranges that can hide malicious instructions
-INVISIBLE_UNICODE_RANGES = {
-    # Zero-width characters (U+200B-U+200D)
-    "\u200b": "Zero-width space",
-    "\u200c": "Zero-width non-joiner",
-    "\u200d": "Zero-width joiner",
-    "\u200e": "Left-to-right mark",
-    "\u200f": "Right-to-left mark",
-    # Soft hyphen (U+00AD)
-    "\u00ad": "Soft hyphen",
-    # Byte order mark (U+FEFF)
-    "\ufeff": "Byte order mark",
-    # Other invisible or problematic characters
-    "\u061c": "Arabic letter mark",
-    "\u180e": "Mongolian vowel separator",
-    "\u2061": "Function application (invisible operator)",
-    "\u2062": "Invisible times (multiplication)",
-    "\u2063": "Invisible separator",
-    "\u2064": "Invisible plus",
-    "\u2069": "Right-to-left isolation terminator",
-    "\u206a": "Inhibit symmetric swapping",
-    "\u206b": "Activate symmetric swapping",
-    "\u206c": "Inhibit Arabic form shaping",
-    "\u206d": "Activate Arabic form shaping",
-    "\u206e": "National digit shapes",
-    "\u206f": "Nominal digit shapes",
-}
 
 
 class InjectionRisk(Enum):
@@ -255,9 +231,6 @@ class PromptInjectionDetector:
         self.injection_patterns = list(INJECTION_PATTERNS)
         self.dangerous_patterns = list(DANGEROUS_PATTERNS)
         self.context_poison_patterns = list(CONTEXT_POISON_PATTERNS)
-
-        # Issue #4345: Invisible Unicode characters for detection
-        self.invisible_unicode_chars = set(INVISIBLE_UNICODE_RANGES.keys())
 
         logger.info("PromptInjectionDetector initialized (strict_mode=%s)", strict_mode)
 
@@ -420,14 +393,20 @@ class PromptInjectionDetector:
             metadata["invisible_unicode"] = invisible_chars
             logger.warning("🚨 Invisible Unicode detected in context: %s", invisible_chars)
 
-        # Run all pattern checks and merge with existing risk level
-        pattern_risk = self._run_all_pattern_checks(text, context, detected_patterns, metadata)
-        max_risk = self._update_risk(max_risk, pattern_risk)
+        # #16354: match what a model reads, not the raw text. An invisible character
+        # defeated every pattern, and the caller then got the stripped copy -- a
+        # well-formed injection that was never blocked. Each variant is checked
+        # because inside a word it must vanish and between words it must be a space.
+        for variant in matching_variants(text):
+            max_risk = self._update_risk(
+                max_risk, self._run_all_pattern_checks(variant, context, detected_patterns, metadata)
+            )
+        detected_patterns[:] = list(dict.fromkeys(detected_patterns))  # one finding per pattern
 
         # Sanitize and determine blocking
         sanitized_text = self.sanitize_input(text)
         # Issue #4345: Also strip invisible Unicode from sanitized output
-        sanitized_text = self._strip_invisible_unicode(sanitized_text)
+        sanitized_text = self.strip_invisible_unicode(sanitized_text)
         metadata["sanitized_length"] = len(sanitized_text)
         blocked = max_risk in {InjectionRisk.HIGH, InjectionRisk.CRITICAL}
 
@@ -578,44 +557,21 @@ class PromptInjectionDetector:
         return True
 
     def _detect_invisible_unicode(self, text: str) -> tuple[bool, List[str]]:
+        """Suspicious invisible characters in *text* (#4345, #16354).
+
+        Excludes the format characters the shipped locales and emoji spell with --
+        see ``security.unicode_normalization.LOCALE_FORMAT_CHARS``.
         """
-        Detect invisible Unicode characters that could hide malicious instructions.
+        found = find_suspicious_invisible(text)
+        return bool(found), found
 
-        Issue #4345: Detects zero-width characters, soft hyphens, and other
-        invisible Unicode that could be used to obfuscate prompt injection attempts.
+    def strip_invisible_unicode(self, text: str) -> str:
+        """*text* without suspicious invisible characters (#4345, #16354).
 
-        Args:
-            text: Text to check for invisible Unicode
-
-        Returns:
-            Tuple of (found, list_of_found_chars)
+        Keeps ZWNJ, ZWJ and direction marks: removing them corrupted Persian and
+        Urdu spelling and broke emoji sequences in the text handed back to callers.
         """
-        found_chars = []
-
-        for char in text:
-            if char in self.invisible_unicode_chars:
-                char_name = INVISIBLE_UNICODE_RANGES.get(char, "Unknown invisible character")
-                found_chars.append(f"{char_name} (U+{ord(char):04X})")
-
-        return len(found_chars) > 0, found_chars
-
-    def _strip_invisible_unicode(self, text: str) -> str:
-        """
-        Remove invisible Unicode characters from text.
-
-        Issue #4345: Removes zero-width spaces and other invisible characters
-        that could hide prompt injection attempts.
-
-        Args:
-            text: Text to sanitize
-
-        Returns:
-            Text with invisible Unicode characters removed
-        """
-        sanitized = text
-        for char in self.invisible_unicode_chars:
-            sanitized = sanitized.replace(char, "")
-        return sanitized
+        return strip_suspicious_invisible(text)
 
     # Issue #380: Class-level constant for risk ordering to avoid dict recreation
     _RISK_ORDER = {
@@ -728,9 +684,9 @@ if __name__ == "__main__":
         )
 
         logger.info("%s | Risk: %-8s | Blocked: %s", status, result.risk_level.value, result.blocked)
-        logger.info("Input: {test_input}")
+        logger.info(f"Input: {test_input}")
         if result.detected_patterns:
-            logger.info("Patterns: {result.detected_patterns}")
+            logger.info(f"Patterns: {result.detected_patterns}")
 
     # Test context validation
     logger.info("=== Context Poisoning Detection Test ===\n")
@@ -744,4 +700,4 @@ if __name__ == "__main__":
     ]
 
     is_safe = detector.validate_conversation_context(poisoned_context)
-    logger.info("Context validation: {'✅ SAFE' if is_safe else '🚨 POISONED'}")
+    logger.info(f"Context validation: {'✅ SAFE' if is_safe else '🚨 POISONED'}")

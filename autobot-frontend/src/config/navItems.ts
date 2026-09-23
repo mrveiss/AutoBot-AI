@@ -128,4 +128,14 @@ export const adminMenuItems: NavItem[] = [
   { to: '/admin/provider-fallback', labelKey: 'nav.providerFallback', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4', iconViewBox: '0 0 24 24', iconStroke: true },
   // Issue #12162 (#12102/#11506 T1 Stage 1): Advanced Control — takeover approval queue
   { to: '/admin/advanced-control', labelKey: 'nav.advancedControl', icon: 'M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11', iconStroke: true },
+  // Issue #16825, #16933: live model pricing admin panel -- shipped with
+  // hideInNav: true but no adminMenuItems entry, so it was unreachable
+  // except by typing the URL directly.
+  { to: '/admin/pricing', labelKey: 'nav.adminPricing', icon: 'M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z', iconViewBox: '0 0 24 24', iconStroke: true },
+  // Issue #16825, #16933: external MCP server admin panel -- same gap as
+  // the pricing panel above, same fix.
+  { to: '/admin/mcp-servers', labelKey: 'nav.adminMcpServers', icon: 'M21.75 17.25v-.228a4.5 4.5 0 00-.12-1.03l-2.268-9.64a3.375 3.375 0 00-3.285-2.602H7.923a3.375 3.375 0 00-3.285 2.602l-2.268 9.64a4.5 4.5 0 00-.12 1.03v.228m19.5 0a3 3 0 01-3 3H5.25a3 3 0 01-3-3m19.5 0a3 3 0 00-3-3H5.25a3 3 0 00-3 3', iconViewBox: '0 0 24 24', iconStroke: true },
+  // Issue #16825: permission scopes -- a "coming in a later release" panel, not a working
+  // feature yet, unlike the two entries above.
+  { to: '/admin/permission-scopes', labelKey: 'nav.adminPermissionScopes', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', iconViewBox: '0 0 24 24', iconStroke: true },
 ];

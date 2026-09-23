@@ -13,6 +13,7 @@ never with a real ``git`` subprocess. Nothing here shells out to git.
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -283,6 +284,38 @@ def test_the_operational_remediation_tool_is_the_documented_allowlist_entry() ->
     assert ALLOWLIST == frozenset({"scripts/test_first_remediation.py"})
 
 
+def test_every_allowlist_entry_carries_an_issue_reference() -> None:
+    """#15490: a bare reason is not an exemption — the reference must be there.
+
+    Read from the source TEXT, not from the constant: the reasons live in
+    comments, which is precisely where an exemption's justification decays with
+    nothing watching. The constant cannot see its own comments.
+    """
+    import check_git_write_env_scrubbed as guard  # local, as the floor test does
+
+    source = Path(guard.__file__).read_text(encoding="utf-8")
+    opening = "ALLOWLIST: frozenset[str] = frozenset("
+    assert opening in source, "the allowlist was renamed; re-point this test rather than deleting it"
+    block = source.split(opening, 1)[1].split("\n)", 1)[0]
+    assert block.strip(), "the allowlist block read as empty — this test would pass vacuously"
+    for entry in ALLOWLIST:
+        marker = f'"{entry}"'
+        assert marker in block, f"{entry} is in ALLOWLIST but not in the block this test reads"
+        preamble = block.split(marker, 1)[0]
+        comment = "\n".join(line for line in preamble.splitlines() if line.lstrip().startswith("#"))
+        assert re.search(r"#\d{3,}", comment), (
+            f"{entry} is exempted with a reason but no issue reference (#15490). "
+            "An entry whose justification names no issue cannot be re-examined."
+        )
+
+
+def test_the_issue_reference_check_rejects_a_bare_reason() -> None:
+    """The control: without it, the test above passes against any regex at all."""
+    bare = "        # A perfectly good prose reason with no issue number.\n"
+    assert not re.search(r"#\d{3,}", bare)
+    assert re.search(r"#\d{3,}", bare.replace("number.", "number (#15490)."))
+
+
 def test_main_exits_nonzero_on_a_violation(tmp_path: Path) -> None:
     assert main([str(_write(tmp_path, _HELPER_UNSCRUBBED))]) == 1
 
@@ -306,11 +339,17 @@ def test_the_reach_floor_is_met_by_the_real_tree() -> None:
     assert reached >= TEST_FILE_FLOOR, f"only reached {reached} test files, floor is {TEST_FILE_FLOOR}"
 
 
-def test_scan_repo_reaches_nothing_under_an_empty_tree(tmp_path: Path) -> None:
-    """The floor check's precondition: an empty tree reaches zero files."""
-    reached, findings = scan_repo(tmp_path)
-    assert reached == 0
-    assert findings == []
+def test_scan_repo_refuses_a_tree_git_cannot_enumerate(tmp_path: Path) -> None:
+    """The floor check's precondition, restated after #14896.
+
+    The walk used to be ``rglob``, so a directory that was not a repository
+    reached zero files and the floor caught it one frame later. It is now a
+    ``git ls-files`` enumeration, and a failed enumeration raises here instead
+    of travelling on as an empty list -- an earlier, louder version of the same
+    refusal, not a weaker one. Both are nonzero exits; only the frame moved.
+    """
+    with pytest.raises(RuntimeError, match="git ls-files"):
+        scan_repo(tmp_path)
 
 
 def test_a_walk_below_the_floor_fails_main_loudly(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -328,6 +367,9 @@ def test_a_walk_below_the_floor_fails_main_loudly(monkeypatch: pytest.MonkeyPatc
         (["git", "-C", "/r", "init", "-q"], True),
         (["git", "ls-files", "*.py"], False),
         (["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "x"], True),
+        # #15490's seventh verb. `clone` writes an entire repository, so an
+        # inherited GIT_DIR is the same hazard as `init` at a larger scale.
+        (["git", "clone", "-q", "--depth", "1", "file:///src", "/dest"], True),
         (["bash", "-c", "git commit"], False),
     ],
 )

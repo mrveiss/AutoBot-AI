@@ -36,8 +36,12 @@
 
   vars:
     github_repo: "https://github.com/mrveiss/AutoBot-AI.git"
-    git_repo_root: "/opt/autobot/code_source"
-    deploy_ref: "Dev_new_gui"
+    # #15705: the code_source checkout root, derived rather than restated.
+    # This is an alias for `code_source_dir` -- same directory, and the
+    # messages below already call it code_source -- so an explicit
+    # `code_source_dir` override steers it too.
+    git_repo_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
+    deploy_ref: "main"
 
   tasks:
     - name: "[PRE-FLIGHT] Verify code_source exists"
@@ -112,6 +116,24 @@
         force: true
       ignore_errors: true
       register: github_sync
+      tags: [always]
+
+    # #16310: skipped, not swallowed, when GitHub is unreachable (same
+    # `github_sync is not failed` gate the offline-tolerance design already
+    # uses below) -- an unshallow attempt would fail for the identical
+    # reason and add nothing. When GitHub WAS reachable, this must fail
+    # loudly: the checkout on disk predates the shallow-clone guard and is
+    # shallow today regardless of `update: true`/`force: true` above (a
+    # plain fetch never deepens an already-shallow repo), and every
+    # component's bootstrap plan needs full history.
+    - name: "[PRE-FLIGHT] Ensure code_source has full history, not a shallow clone (#16310)"
+      ansible.builtin.command:
+        cmd: >-
+          /opt/autobot/autobot-slm-backend/venv/bin/python3
+          {{ git_repo_root }}/autobot-slm-backend/scripts/sync_deletion_planner.py
+          ensure-full-history --repo-root {{ git_repo_root }}
+      changed_when: false
+      when: github_sync is not failed
       tags: [always]
 
     - name: "[PRE-FLIGHT] Warn if GitHub sync skipped"
@@ -202,7 +224,7 @@
       tags: [always]
 
 # -------------------------------------------------------------------
-# Phase 0: Shared Dependencies (nginx, python314, nodejs)
+# Phase 0: Shared Dependencies (nginx, python_interpreter, nodejs)
 # Resolved from ROLE_DEPENDENCIES map via node_dependencies host var.
 # -------------------------------------------------------------------
 - name: "Provision Phase 0: Shared Dependencies"
@@ -227,13 +249,17 @@
       when: "'nginx' in (node_dependencies | default([]))"
       tags: ['deps', 'nginx']
 
-    - name: "Deps | Install Python 3.14"
+    # #13843: python_interpreter was renamed from python314. node_dependencies
+    # is computed FRESH every provisioning run from role_registry.ROLE_DEPENDENCIES
+    # (setup_wizard._compute_node_dependencies), never persisted, so checking only
+    # the new name here is safe -- unlike pending_dep_removals below.
+    - name: "Deps | Install Python interpreter"
       ansible.builtin.include_role:
-        name: python314
+        name: python_interpreter
         apply:
-          tags: ['deps', 'python314']
-      when: "'python314' in (node_dependencies | default([]))"
-      tags: ['deps', 'python314']
+          tags: ['deps', 'python_interpreter']
+      when: "'python_interpreter' in (node_dependencies | default([]))"
+      tags: ['deps', 'python_interpreter']
 
     - name: "Deps | Install Node.js"
       ansible.builtin.include_role:
@@ -252,7 +278,13 @@
       when: "'nginx' in (pending_dep_removals | default([]))"
       tags: ['deps', 'removal']
 
-    - name: "Deps | Remove Python 3.14 if marked for removal"
+    # #13843: pending_dep_removals comes from node.extra_data (api/nodes.py),
+    # which IS persisted -- an admin could have marked "python314" for removal
+    # before this rename shipped. Checked against both spellings so a stored
+    # pre-rename value is not silently ignored; the freshly-computed
+    # node_dependencies check above does not need this because it is never
+    # persisted.
+    - name: "Deps | Remove Python interpreter if marked for removal"
       ansible.builtin.apt:
         name:
           - python3.14
@@ -260,7 +292,9 @@
           - python3.14-dev
         state: absent
         purge: true
-      when: "'python314' in (pending_dep_removals | default([]))"
+      when: >-
+        'python_interpreter' in (pending_dep_removals | default([]))
+        or 'python314' in (pending_dep_removals | default([]))
       tags: ['deps', 'removal']
 
     - name: "Deps | Remove Node.js if marked for removal"
@@ -449,8 +483,20 @@
       tags: ['frontend', 'slm-nginx', 'provision']
 
     - name: "SLM | Stat user frontend package.json for co-location detection"
+      # #16970: this bare `hosts: all` play never loads roles/frontend's own
+      # `frontend_dist_dir` default, so the fallback used a hardcoded absolute
+      # path -- flagged by the SSOT hardcoded-value detector once #16970's own
+      # change to this file surfaced it. `autobot.base_dir` (group_vars/all.yml,
+      # the SSOT for /opt/autobot, nested under the `autobot:` key -- a bare
+      # `base_dir` is undefined and `default()` evaluates its argument eagerly,
+      # so that raised on every run where `frontend_dist_dir` is unset, the
+      # normal case) replaces the literal; the resolved path is unchanged.
+      # (vehicle merge: combined with #16970's own later move of this default
+      # from .../dist to .../current -- the staged-swap symlink roles/frontend
+      # itself defaults frontend_dist_dir to -- so the merged literal matches
+      # that role default with autobot.base_dir substituted for the SSOT.)
       ansible.builtin.stat:
-        path: "{{ frontend_dist_dir | default('/opt/autobot/autobot-frontend/dist') | dirname }}/package.json"
+        path: "{{ frontend_dist_dir | default(autobot.base_dir + '/autobot-frontend/current') | dirname }}/package.json"
       register: _post_frontend_colocated_check
       when: _slm_nginx_config_stat.stat.exists
       tags: ['frontend', 'slm-nginx', 'provision']
@@ -491,6 +537,73 @@
       register: _slm_nginx_rerendered
       tags: ['frontend', 'slm-nginx', 'provision']
 
+    # #16979: this phase can run on a host whose SLM nginx site was
+    # provisioned long before -- deploy-slm-manager.yml, a separate playbook
+    # run -- and the render above only touches sites-available. If that
+    # host's sites-enabled entry is a stale non-symlink file (the same #1122
+    # class of drift roles/slm_manager/tasks/nginx_site.yml now also guards
+    # against), nginx would keep serving it and this re-render would be
+    # silently inert, same failure mode as the original bug. Same fix here:
+    # detect, back up outside sites-enabled/ (nginx loads everything in that
+    # directory), link, and verify -- in this file, next to the render.
+    - name: "SLM | Stat sites-enabled file to detect non-symlink (#16979)"
+      ansible.builtin.stat:
+        path: "/etc/nginx/sites-enabled/{{ slm_nginx_config | default('autobot-slm') }}"
+      register: _slm_colocated_sites_enabled_stat
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Back up non-symlink sites-enabled file before replacing it (#16979)"
+      ansible.builtin.command:
+        cmd: >-
+          mv /etc/nginx/sites-enabled/{{ slm_nginx_config | default('autobot-slm') }}
+          /etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}.enabled-backup.{{
+          _slm_colocated_sites_enabled_stat.stat.mtime | int }}
+      when:
+        - _is_slm_frontend_colocated | bool
+        - _slm_colocated_sites_enabled_stat.stat.exists
+        # order-independent (#16979 review): default(false) instead of relying
+        # on the list's short-circuit order.
+        - not (_slm_colocated_sites_enabled_stat.stat.islnk | default(false))
+      changed_when: true
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Enable nginx site (symlink to sites-available) (#16979)"
+      ansible.builtin.file:
+        src: "/etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}"
+        dest: "/etc/nginx/sites-enabled/{{ slm_nginx_config | default('autobot-slm') }}"
+        state: link
+      register: _slm_colocated_sites_enabled_linked
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Stat sites-enabled after linking (#16979)"
+      ansible.builtin.stat:
+        path: "/etc/nginx/sites-enabled/{{ slm_nginx_config | default('autobot-slm') }}"
+      register: _slm_colocated_sites_enabled_check
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    # AC3 (#16979): fail loudly rather than let nginx quietly serve the
+    # wrong file.
+    - name: "SLM | Assert sites-enabled resolves to the rendered site (#16979)"
+      ansible.builtin.assert:
+        that:
+          - _slm_colocated_sites_enabled_check.stat.exists
+          - _slm_colocated_sites_enabled_check.stat.islnk
+          - >-
+            _slm_colocated_sites_enabled_check.stat.lnk_source ==
+            '/etc/nginx/sites-available/' ~ (slm_nginx_config | default('autobot-slm'))
+        fail_msg: >-
+          /etc/nginx/sites-enabled/{{ slm_nginx_config | default('autobot-slm') }} is not a symlink
+          resolving to /etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }} --
+          nginx is not serving the rendered SLM site config (#16979).
+        success_msg: >-
+          sites-enabled/{{ slm_nginx_config | default('autobot-slm') }} resolves to the rendered
+          site config.
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
     # Re-build the SLM frontend so VITE_API_URL='/slm' is baked in (#3268, #3426).
     # Without this, the SLM login page calls /api/auth/login which nginx routes
     # to the user backend (port 8001) → 502 in co-located mode.
@@ -509,15 +622,31 @@
       when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
-    - name: "SLM | Rebuild SLM frontend with co-located API prefix (#3268)"
-      ansible.builtin.command:
-        cmd: npm run build
-        chdir: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
-      become_user: "{{ slm_user | default('autobot') }}"
-      environment:
-        VITE_API_URL: "/slm"
+    # #15557: this used to run a plain `npm run build` straight into the served
+    # dist/. Two defects in one task — `build:slm` is the canonical script (a
+    # plain build bakes the wrong API base, #9563/#9710/#10435), and vite empties
+    # the outDir first, so a failed build left nginx answering 403 for every
+    # /slm/ path with nothing failing the play. Both are fixed once, in
+    # roles/_shared/tasks/build_publish_slm_frontend.yml.
+    - name: "SLM | Rebuild and publish SLM frontend with co-located API prefix (#3268, #15557)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
+      vars:
+        slm_frontend_publish_label: "SLM"
+        slm_frontend_publish_dir: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
+        slm_frontend_publish_user: "{{ slm_user | default('autobot') }}"
       when: _is_slm_frontend_colocated | bool
-      changed_when: true
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    # #15557: fleet provisioning rebuilt the SLM tree and recorded nothing about
+    # which deployment produced it. This phase runs on the SLM manager host,
+    # which carries code_source, so the shared task resolves the commit there.
+    - name: "SLM | Record the deployed commit marker (#15557)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/record_slm_deployed_commit.yml
+      vars:
+        deployed_commit_label: "SLM"
+        deployed_commit_dir: "{{ slm_backend_dir | default(autobot.base_dir ~ '/autobot-slm-backend') }}"
+        deployed_commit_owner: "{{ slm_user | default('autobot') }}"
+      when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
     # #9933: In co-located mode the SLM nginx config (autobot-slm) owns the
@@ -540,6 +669,7 @@
       when: >-
         (_slm_nginx_rerendered is defined and _slm_nginx_rerendered is changed)
         or (_frontend_site_disabled is defined and _frontend_site_disabled is changed)
+        or (_slm_colocated_sites_enabled_linked is defined and _slm_colocated_sites_enabled_linked is changed)
       changed_when: false
       tags: ['frontend', 'slm-nginx', 'provision']
 
@@ -550,6 +680,7 @@
       when: >-
         (_slm_nginx_rerendered is defined and _slm_nginx_rerendered is changed)
         or (_frontend_site_disabled is defined and _frontend_site_disabled is changed)
+        or (_slm_colocated_sites_enabled_linked is defined and _slm_colocated_sites_enabled_linked is changed)
       tags: ['frontend', 'slm-nginx', 'provision']
 
 # -------------------------------------------------------------------

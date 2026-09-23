@@ -380,17 +380,11 @@ class TestTokenTracker:
         assert summary["total_calls"] == 0
         assert summary["total_tokens"] == 0
 
-    def test_cost_calculation_gpt4(self, tracker):
-        """Test cost calculation for GPT-4."""
-        usage = tracker.track_usage("gpt-4", 1000, 500)
-        # GPT-4: $0.03/1K prompt, $0.06/1K completion
-        expected = (1000 / 1000) * 0.03 + (500 / 1000) * 0.06
-        assert abs(usage.estimated_cost_usd - expected) < 0.001
-
-    def test_cost_calculation_ollama(self, tracker):
-        """Test cost calculation for Ollama (free)."""
-        usage = tracker.track_usage("ollama", 1000, 500)
-        assert usage.estimated_cost_usd == 0.0
+    # `test_cost_calculation_gpt4` / `test_cost_calculation_ollama` moved to
+    # `llm_pattern_analysis/calculators_test.py` (#16230). They now need an
+    # injected pricing snapshot, and this file is grandfathered at its size
+    # ceiling (#5060) -- a graft that cannot grow belongs beside the code it
+    # tests, not wedged into a file that may not carry it.
 
 
 # =============================================================================

@@ -20,17 +20,8 @@ import io
 
 import pytest
 
-from media.document.extraction import (
-    PAGE_SEPARATOR,
-    PageSpan,
-    PageText,
-    chunk_page_map,
-    extract_pdf,
-    page_for_offset,
-    pages_for_span,
-    render_pages,
-    render_plain,
-)
+from media.document.extraction import PAGE_SEPARATOR, PageSpan, PageText, extract_pdf, render_pages, render_plain
+from media.document.provenance import chunk_page_map, page_for_offset, pages_for_span
 
 
 def _pdf(pages: list) -> bytes:

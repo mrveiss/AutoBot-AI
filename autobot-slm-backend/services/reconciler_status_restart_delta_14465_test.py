@@ -274,7 +274,7 @@ def test_the_churn_window_floor_is_derived_from_the_shared_discovery_ttl_not_a_b
 def test_a_fresh_increase_arms_the_churn_window():
     """Discriminates directly against the deleted `n_restarts > 3` branch AND
     against a bare pulse: `n_restarts: 1` (up from a stored 0) would never
-    have tripped `n_restarts > 3` on `origin/Dev_new_gui`, and the real
+    have tripped `n_restarts > 3` on `origin/main`, and the real
     `_restart_churn_active` -- not a hand-fed boolean -- is what must detect
     the rise.
     """
@@ -364,6 +364,16 @@ class _ServiceRow:
         self.extra_data = extra_data or {}
 
 
+class _NoOpNestedTransaction:
+    """Stand-in for `session.begin_nested()` (#17070): never suppresses an exception."""
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
 class _SeededServiceHeartbeatSession:
     """Drives `update_node_heartbeat` with ONE pre-seeded existing `Service` row.
 
@@ -378,6 +388,9 @@ class _SeededServiceHeartbeatSession:
         self._node = node
         self._seeded_service = seeded_service
         self._reads = 0
+
+    def begin_nested(self):
+        return _NoOpNestedTransaction()
 
     async def execute(self, _query):
         self._reads += 1

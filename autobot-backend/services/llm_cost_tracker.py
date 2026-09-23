@@ -20,11 +20,12 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
-from typing import Any, Dict, List
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Any, Dict, List
 
+from autobot_shared.local_models import is_local_model
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.status_enums import LLMProvider  # noqa: F401 (re-exported, #12661)
 from autobot_shared.time_utils import now_utc, utc_timestamp
@@ -37,7 +38,6 @@ from constants.model_constants import (
     GOOGLE_GEMINI15_PRO,
     GOOGLE_GEMINI20_FLASH,
     GOOGLE_GEMINI25_PRO,
-    MODEL_PRICING_PER_1M_TOKENS,
     OPENAI_GPT4_TURBO,
     OPENAI_GPT4O,
     OPENAI_GPT35_TURBO,
@@ -49,16 +49,12 @@ from constants.model_constants import (
     OPENAI_O4_MINI,
 )
 from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
+from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_snapshot
+
+if TYPE_CHECKING:
+    from llm_shared.pricing.sources import ModelPricing
 
 logger = get_logger(__name__)
-
-# Pricing was last verified on this date. A WARNING is emitted at import time
-# if this is older than PRICING_STALENESS_DAYS days. (#1961)
-# GH#6480: This hardcoded version is a fallback. The actual refresh timestamp
-# is populated by the pricing_refresh_daily Celery Beat task into Redis.
-PRICING_VERSION: str = "2026-03-22"
-PRICING_STALENESS_DAYS: int = 90
-
 
 # LLMProvider: single canonical source of truth (#12661). This module used
 # to define its own ``str, Enum`` fork that disagreed with
@@ -69,81 +65,13 @@ PRICING_STALENESS_DAYS: int = 90
 # no behavioural change; every ``.value`` string it defined is preserved on
 # the canonical enum.
 
-# Model pricing per 1M tokens (USD) - single source of truth in
-# constants/model_constants.py (#3528). Update PRICING_VERSION above when
-# prices change.
-MODEL_PRICING: Dict[str, Dict[str, float]] = MODEL_PRICING_PER_1M_TOKENS
-
-
-def _get_last_refresh_from_redis() -> str | None:
-    """
-    Fetch the latest refresh timestamp from Redis refresh_status (GH#6480).
-
-    The pricing_refresh_daily task stores {provider: {last_refresh_at, ...}} in Redis.
-    This function returns the most recent last_refresh_at across all providers.
-    Returns None if Redis is unavailable or no refresh status exists.
-    """
-    try:
-        redis = get_redis_client(database="analytics")
-        if redis is None:
-            return None
-
-        raw = redis.get("model_pricing:refresh_status")
-        if raw is None:
-            return None
-
-        status = json.loads(raw)
-        refresh_dates = [
-            info.get("last_refresh_at")
-            for info in status.values()
-            if isinstance(info, dict) and info.get("last_refresh_at")
-        ]
-
-        if refresh_dates:
-            # Extract just the date part (YYYY-MM-DD) from the ISO timestamp
-            latest = max(refresh_dates)
-            return latest.split("T")[0] if latest else None
-        return None
-    except Exception as exc:
-        logger.debug("Failed to fetch pricing refresh status from Redis: %s", exc)
-        return None
-
-
-def _check_pricing_staleness() -> None:
-    """
-    Emit a WARNING if pricing is older than PRICING_STALENESS_DAYS.
-
-    Checks Redis first for the actual last refresh timestamp from the
-    pricing_refresh_daily task (GH#6480). Falls back to hardcoded PRICING_VERSION
-    if Redis is unavailable. Called once at module import time. Issue #1961.
-    """
-    last_refresh_date = _get_last_refresh_from_redis()
-
-    # Use Redis refresh date if available; otherwise fall back to hardcoded version
-    version_to_check = last_refresh_date if last_refresh_date else PRICING_VERSION
-
-    try:
-        version_date = date.fromisoformat(version_to_check)
-    except ValueError:
-        logger.warning(
-            "Pricing version %r is not a valid ISO date; cannot check staleness.",
-            version_to_check,
-        )
-        return
-
-    age_days = (date.today() - version_date).days
-    if age_days > PRICING_STALENESS_DAYS:
-        logger.warning(
-            "LLM pricing table is %d days old (last verified %s, threshold %d days). "
-            "Review the pricing_refresh_daily Celery Beat task or update PRICING_VERSION. "
-            "Issue #1961.",
-            age_days,
-            version_to_check,
-            PRICING_STALENESS_DAYS,
-        )
-
-
-_check_pricing_staleness()
+# #16230: pricing now comes from the live catalogue via
+# ``llm_shared.pricing.sync_cache`` (a mirror of ``PricingRedisStore``,
+# #16229), not a hardcoded table -- so the import-time
+# ``PRICING_VERSION``/``_check_pricing_staleness`` machinery this module used
+# to carry is gone with the table it existed to date-check. Staleness is now
+# ``sync_cache.MAX_SNAPSHOT_AGE_S``, enforced per-read on the live snapshot
+# rather than once at import time against a hand-maintained date string.
 
 
 @dataclass
@@ -296,21 +224,24 @@ class LLMCostTracker(AsyncRedisClientMixin):
         ("deepseek-r1", DEEPSEEK_R1_API),
     ]
 
-    def _estimate_pricing_by_pattern(self, model_lower: str) -> Dict[str, float] | None:
+    def _estimate_pricing_by_pattern(
+        self, model_lower: str, snapshot: Dict[str, "ModelPricing"]
+    ) -> "ModelPricing | None":
         """
-        Return pricing estimate for an unknown model using name-pattern heuristics.
+        Return a `ModelPricing` estimate for an unknown model using name-pattern heuristics.
 
-        Iterates _FALLBACK_PATTERNS in order and returns the pricing for the
-        first pattern that matches as a substring. Returns None if no pattern
-        matches (caller should treat the model as local/free). Issue #1961.
+        Iterates _FALLBACK_PATTERNS in order and returns the live-cache entry
+        for the first pattern's reference model that matches as a substring.
+        Returns None if no pattern matches, or its reference model is not (yet)
+        in *snapshot* (caller should treat the model as local/free). Issue #1961.
         """
         for pattern, reference_model in self._FALLBACK_PATTERNS:
             if pattern in model_lower:
-                pricing = MODEL_PRICING.get(reference_model)
+                pricing = snapshot.get(reference_model.lower())
                 if pricing:
                     logger.warning(
                         "Unknown model %r matched fallback pattern %r; "
-                        "using %r pricing as estimate. Verify in MODEL_PRICING. (#1961)",
+                        "using %r pricing as estimate. (#1961, #16230)",
                         model_lower,
                         pattern,
                         reference_model,
@@ -322,9 +253,9 @@ class LLMCostTracker(AsyncRedisClientMixin):
         """
         Calculate cost for a given model and token counts.
 
-        For models not in MODEL_PRICING, a pattern-based heuristic is applied
-        before falling back to $0.00 for unrecognised (presumed local) models.
-        Issue #1961 added the heuristic fallback.
+        For models the live pricing cache (#16230) does not have, a
+        pattern-based heuristic is applied before falling back to $0.00 for
+        unrecognised models. Issue #1961 added the heuristic fallback.
 
         Args:
             model: Model name (e.g., "claude-3-5-sonnet-20241022")
@@ -334,37 +265,56 @@ class LLMCostTracker(AsyncRedisClientMixin):
         Returns:
             Cost in USD
         """
-        # Normalize model name (handle variations)
         model_lower = model.lower()
 
+        if is_local_model(model_lower):
+            # #16316: free by construction, checked before the cache is
+            # consulted at all -- a local model was never in the live
+            # catalogue and that absence must not read as "unknown".
+            return 0.0
+
+        try:
+            snapshot = get_cached_snapshot()
+        except PricingCacheCold:
+            # This is an analytics/reporting figure, not a budget-enforcement
+            # one (unlike llc/services/budget.py, which raises UnpricedModel
+            # for the same condition) -- a cold or stale cache degrades to the
+            # same $0.00-with-warning path as "no match found" below, rather
+            # than refusing.
+            logger.warning(
+                "calculate_cost: pricing cache unavailable for model=%r; cost recorded as $0.00",
+                model,
+            )
+            return 0.0
+
         # 1. Exact match — fastest and most precise path
-        pricing = MODEL_PRICING.get(model_lower)
+        pricing = snapshot.get(model_lower)
 
         # 2. Prefix match (longest key first) — handles versioned suffixes such as
         #    "gpt-4o-2024-11-20" matching "gpt-4o", while preventing "o3" from
         #    incorrectly matching "o3-mini". Fixes bidirectional substring bug (#2030).
         if pricing is None:
-            for model_key in sorted(MODEL_PRICING, key=len, reverse=True):
-                if model_lower.startswith(model_key.lower()):
-                    pricing = MODEL_PRICING[model_key]
+            for model_key in sorted(snapshot, key=len, reverse=True):
+                if model_lower.startswith(model_key):
+                    pricing = snapshot[model_key]
                     break
 
         if pricing is None:
             # Pattern-based heuristic for unknown cloud models (#1961)
-            pricing = self._estimate_pricing_by_pattern(model_lower)
+            pricing = self._estimate_pricing_by_pattern(model_lower, snapshot)
 
         if pricing is None:
             logger.warning(
-                "Unknown model %r has no pricing entry and matched no fallback pattern; "
-                "cost recorded as $0.00. Add to MODEL_PRICING in llm_cost_tracker.py "
-                "if this is a paid API model. (#1961)",
+                "Unknown model %r has no live catalogue price and matched no fallback pattern; "
+                "cost recorded as $0.00. Set an operator override via "
+                "PricingRedisStore.set_override if this is a paid API model. (#1961, #16230)",
                 model,
             )
             return 0.0
 
         # Calculate cost (pricing is per 1M tokens)
-        input_cost = (input_tokens / 1_000_000) * pricing["input"]
-        output_cost = (output_tokens / 1_000_000) * pricing["output"]
+        input_cost = (input_tokens / 1_000_000) * pricing.input_per_1m
+        output_cost = (output_tokens / 1_000_000) * pricing.output_per_1m
 
         return round(input_cost + output_cost, 6)
 
@@ -557,11 +507,11 @@ class LLMCostTracker(AsyncRedisClientMixin):
             from llm_shared.pricing.redis_store import PricingRedisStore
 
             store = PricingRedisStore()
-            # Try known providers in order; first hit wins.
-            for provider in ("anthropic", "openai", "google", "deepseek"):
-                cached = await store.get(provider, model_lower)
-                if cached is not None:
-                    return cached.as_legacy_dict()
+            # #16229: an operator's override first, then the live price indexed by bare model
+            # name whatever the provider key (a fixed provider list missed LiteLLM's "gemini").
+            cached = await store.resolve(model_lower)
+            if cached is not None:
+                return cached.as_legacy_dict()
         except Exception as exc:
             logger.debug("_redis_pricing_lookup failed for %r: %s", model_lower, exc)
         return None

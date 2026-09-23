@@ -55,11 +55,14 @@ const router = createRouter({
       },
     },
     {
-      // Issue #4762: Wire ServicesView as direct route (was redirect to /orchestration/per-node)
+      // Issue #4762 wired ServicesView as a direct route (was a redirect to
+      // /orchestration/per-node). Issue #15224 reverses that: every
+      // ServicesView capability (live WebSocket status, progress-tracked
+      // restart-all, Redis service panel) now lives in the Orchestration
+      // per-node tab, so this is a redirect again — not a 404 for anyone
+      // with the old URL bookmarked.
       path: '/services',
-      name: 'services',
-      component: () => import('@/views/ServicesView.vue'),
-      meta: { title: 'Services' }
+      redirect: '/orchestration/per-node',
     },
     {
       // GH#8996 / #10488 Workstream A: Shared chat links — migrated from the
@@ -81,21 +84,27 @@ const router = createRouter({
       },
     },
     {
+      // Issue #15225: /backups/replications is a static path so vue-router
+      // ranks it above the dynamic /backups/:tab? below, redirecting before
+      // BackupsView (which no longer has a replications tab) would match.
+      path: '/backups/replications',
+      redirect: '/orchestration/replication',
+    },
+    {
+      // Issue #15225: the replications tab is gone, so BackupsView no
+      // longer branches on a :tab param — :tab? is kept only so an old
+      // bookmarked /backups/backups link still resolves instead of 404ing.
       path: '/backups/:tab?',
       name: 'backups',
       component: () => import('@/views/BackupsView.vue'),
       meta: { title: 'Backups' },
-      beforeEnter: (to) => {
-        if (!to.params.tab) {
-          return { name: 'backups', params: { tab: 'backups' }, replace: true }
-        }
-      },
     },
     {
+      // Issue #15225: replication consolidated into the Orchestration
+      // 'replication' tab — every ReplicationView.vue capability (list,
+      // create, start, stop, verify-sync, promote) is mounted there.
       path: '/replications',
-      name: 'replications',
-      component: () => import('@/views/ReplicationView.vue'),
-      meta: { title: 'Replication' }
+      redirect: '/orchestration/replication',
     },
     {
       path: '/maintenance',
@@ -285,6 +294,15 @@ const router = createRouter({
           name: 'settings-admin-sso',
           component: () => import('@/views/settings/admin/SSOSettings.vue'),
           meta: { title: 'SSO / OIDC', parent: 'settings', admin: true }
+        },
+        {
+          // Issue #17040: Data hygiene -- orphan-storage preview (proposes
+          // cleanup via POST /approval-gates, never deletes directly),
+          // orphan-resource repair, and the audit trail both leave.
+          path: 'admin/data-hygiene',
+          name: 'settings-admin-data-hygiene',
+          component: () => import('@/views/settings/admin/DataHygieneView.vue'),
+          meta: { title: 'Data Hygiene', parent: 'settings', admin: true }
         },
         {
           // Issue #11129 P2: Company OS project disposal policy (SLM operator panel)

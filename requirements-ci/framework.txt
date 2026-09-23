@@ -3,8 +3,8 @@
 fastapi==0.141.1
 starlette==1.6.0
 python-multipart==0.0.32
-uvicorn==0.52.4
-pydantic[email]==2.13.4
+uvicorn==0.53.0
+pydantic[email]==2.13.5
 websockets==15.0.1
 # #14551: same shape as PyJWT[crypto]/bcrypt in requirements-ci/security.txt —
 # autobot_shared/ssot_config.py does an unconditional `from pydantic_settings
@@ -14,3 +14,13 @@ websockets==15.0.1
 # config`); without this, importing it — and therefore nearly anything that
 # reads config — fails collection outright.
 pydantic-settings>=2.15.0
+# #16394: declared in autobot-slm-backend/requirements.txt
+# (jinja2>=3.1.2,<4.0.0). autobot-slm-backend/tests/test_cleanup_wrong_node_15822.py:29
+# does an unconditional `import jinja2` and calls `jinja2.Environment(...)` for
+# real at line 229 — no importorskip, no stub — so requirements_ci_drift_test.py
+# correctly flags it as a genuine omission, not a false positive from SLM
+# getting its own venv: that venv installs autobot-slm-backend/requirements.txt
+# directly, but this file (requirements-ci.txt's mirror) is what the backend
+# venv installs, and this check compares production against it regardless of
+# which venv a given production file happens to feed.
+jinja2>=3.1.2,<4.0.0

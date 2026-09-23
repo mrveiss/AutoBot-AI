@@ -31,6 +31,24 @@
     group: root
   tags: ['ai', 'config']
 
+# #16627 (P1b of #13568): the AI stack's Redis client (autobot_shared, via
+# REDIS_* in this env file) authenticates as `default` with the SLM-generated
+# password while the server stays nopass. Adopted only when no password is set,
+# and always with the username -- a password alone is refused by nopass.
+- name: "AI Stack | Read the SLM-generated Redis credential (#16627)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/read_redis_password.yml
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Adopt the SLM-generated Redis credential when none is set (#16627)"
+  ansible.builtin.set_fact:
+    ai_redis_password: "{{ _redis_password_read }}"
+    ai_redis_username: "{{ ai_redis_username | default('', true) or _redis_username_read }}"
+  when:
+    - (_redis_password_read | default('') | trim) | length > 0
+    - (ai_redis_password | default('') | trim) | length == 0
+  no_log: true
+  tags: ['ai', 'config']
+
 - name: "AI Stack | Deploy /etc/autobot/autobot-ai-stack.env"
   ansible.builtin.template:
     src: ai-stack.env.j2
@@ -127,6 +145,10 @@
   ansible.builtin.pip:
     name: pip
     virtualenv: "{{ ai_install_dir }}/venv"
+    # #16641: without this, pip falls back to shelling out to the standalone
+    # `virtualenv` executable, absent from these hosts. Matches the
+    # interpreter the "Create Python virtual environment" task above targets.
+    virtualenv_command: "python3.14 -m venv"
     state: latest
   become_user: "{{ ai_user }}"
   environment:
@@ -144,7 +166,7 @@
 # exists to unbreak.
 - name: "AI Stack | Deploy requirements-ai.txt before installing from it (#14809)"
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt"
     dest: "{{ ai_install_dir }}/requirements-ai.txt"
     owner: "{{ ai_user }}"
     group: "{{ ai_group }}"
@@ -166,22 +188,48 @@
 # than with a second sed here: the backend role and services/role_registry.py
 # already share that script for exactly this, and it says so in its own header
 # (#11117). It was never wired in here, which is the whole bug.
-- name: Create filtered AI-stack requirements file (#14272)
+# #17242: generated ON THE CONTROLLER. `code_source` is the git checkout and
+# nothing syncs it to a remote node, so running this script out of it on an
+# ai_stack host exits 127 -- the same defect #17242 hit in the backend role, in
+# a role that never runs on the manager at all. The source manifest is read from
+# the same controller path the deploy task above uses.
+- name: "AI Stack | Unique id for this run's controller temp files (#17242)"
+  ansible.builtin.set_fact:
+    _req_run_id: "{{ 999999999 | random }}"
+  # Set once per host per run, so the generate step and the copy that reads
+  # its output agree. inventory_hostname alone was not enough: two runs for
+  # the SAME host share a controller file, and the later generation can
+  # replace it before the earlier copy reads it.
+
+- name: Create filtered AI-stack requirements (on the controller, #14272, #17242)
   ansible.builtin.shell:
     cmd: >-
-      bash {{ code_source_dir | default('/opt/autobot/code_source') }}/scripts/build-filtered-requirements.sh
-      {{ ai_install_dir }}/requirements-ai.txt
-      {{ code_source_dir | default('/opt/autobot/code_source') }}
-      > {{ ai_install_dir }}/requirements-ai-filtered.txt
-  become_user: "{{ ai_user }}"
-  changed_when: true
+      bash {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/scripts/build-filtered-requirements.sh
+      {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/{{ ai_stack_requirements_rel }}
+      {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}
+      > /tmp/filtered-requirements-ai.{{ inventory_hostname }}.{{ _req_run_id }}.txt
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  when: _ai_requirements_file.stat.exists
+  tags: ['ai', 'deploy']
+
+- name: Write filtered AI-stack requirements to the target (#17242)
+  ansible.builtin.copy:
+    src: "/tmp/filtered-requirements-ai.{{ inventory_hostname }}.{{ _req_run_id }}.txt"
+    dest: "{{ ai_install_dir }}/filtered-requirements-ai.txt"
+    owner: "{{ ai_user }}"
+    mode: "0644"
+  become: true
   when: _ai_requirements_file.stat.exists
   tags: ['ai', 'deploy']
 
 - name: Install AI Python packages from requirements-ai.txt
   ansible.builtin.pip:
-    requirements: "{{ ai_install_dir }}/requirements-ai-filtered.txt"
+    requirements: "{{ ai_install_dir }}/filtered-requirements-ai.txt"
     virtualenv: "{{ ai_install_dir }}/venv"
+    # #16641: see "Upgrade pip in venv" above.
+    virtualenv_command: "python3.14 -m venv"
     state: present
     extra_args: "--timeout 300"
   become_user: "{{ ai_user }}"
@@ -191,37 +239,18 @@
   timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when: _ai_requirements_file.stat.exists
 
-- name: Install AI Python packages (fallback list)
-  ansible.builtin.pip:
-    name:
-      - chromadb>=0.4.0
-      - langchain>=0.1.0
-      - langchain-community
-      - transformers>=4.30.0
-      - sentence-transformers
-      - torch>=2.0.0
-      - numpy
-      - pandas
-      - pillow
-      - openai
-      - anthropic
-      - fastapi>=0.115.0
-      - "uvicorn[standard]>=0.35.0"
-      - httpx
-      - pydantic>=2.0.0
-      - python-dotenv
-      - redis>=5.0.0
-      - sqlalchemy>=2.0.0
-      - aiosqlite
-    virtualenv: "{{ ai_install_dir }}/venv"
-    state: present
-    extra_args: "--timeout 300"
-  become_user: "{{ ai_user }}"
-  environment:
-    PIP_DEFAULT_TIMEOUT: "300"
-    HOME: "{{ ai_data_dir }}"
-  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
-  when: not _ai_requirements_file.stat.exists
+# #15684: this used to be a fallback `name:` list for when
+# requirements-ai.txt was absent, restating the manifest's packages by hand
+# (and drifting out of sync with it -- #15623 had to raise two of its floors
+# by reading, because the union comparison that predated #15629 could not
+# see they had fallen behind). That state was never reachable: "AI Stack |
+# Deploy requirements-ai.txt before installing from it (#14809)" above is
+# unconditional, so by the time `_ai_requirements_file` is checked the file
+# always exists -- a host with none is not a state this role can actually
+# reach, let alone one worth a second, hand-kept package list for. Removed
+# rather than kept as a decision-with-a-reason (#15684's other option),
+# because a branch nothing can ever take is not a source of truth to keep
+# describing.
 
 - name: Deploy AI stack environment file
   ansible.builtin.template:
@@ -256,7 +285,17 @@
 
 - name: Create src/ symlinks to backend modules (co-located deployment)
   ansible.builtin.file:
-    src: "{{ backend_install_dir }}/{{ item }}"
+    # #15560/1 (same family as #13539/B4): was "{{ backend_install_dir }}/{{ item }}",
+    # which renders absolute. A link whose target does not depend on where the
+    # link itself lives cannot survive the tree moving -- it re-anchors to the
+    # live root under any deploy-root relocation, which is exactly the property
+    # #13539's release scheme depends on. The link lives at
+    # `{{ ai_install_dir }}/src/`, and ai_install_dir and backend_install_dir are
+    # always siblings under the same deploy root, so `../../<backend dir name>`
+    # resolves identically today and stays correct under a relocation. The
+    # basename is taken FROM backend_install_dir rather than spelled out, so an
+    # install that renames the backend component directory still resolves.
+    src: "../../{{ backend_install_dir | basename }}/{{ item }}"
     dest: "{{ ai_install_dir }}/src/{{ item }}"
     state: link
     owner: "{{ ai_user }}"
@@ -267,7 +306,9 @@
     - autobot_shared
   tags: ['ai', 'deploy']
 
-# #12513: see roles/redis/tasks/chromadb.yml — same read, same reason. Whichever
+# #12513: see roles/redis/tasks/code_only.yml — same read, same reason. (#13535
+# moved that read out of roles/redis/tasks/chromadb.yml, which this used to
+# name and which now carries no auth tasks at all.) Whichever
 # of the two roles owns chroma on this topology must land the same credential the
 # backend sends, so both defer to the SLM-generated value.
 # #13460: these service files are defined once, in code_only.yml, so the

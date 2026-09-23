@@ -39,15 +39,15 @@ from pathlib import Path
 import httpx
 import pytest
 from autobot_sdk import AutoBot
+from repo_tests._paths import repo_root
 
 from api.schemas_analytics_collector import AnalyticsPerformanceMetricsResponse, AnalyticsUsageStatisticsResponse
 from api.schemas_chat import (
     SessionCreateData,
     SessionDeleteData,
-    SessionListData,
-    SessionMessagesData,
     SessionUpdateData,
 )
+from api.schemas_chat_rows import SessionListData, SessionMessagesData
 from api.schemas_common import DataResponse
 from knowledge.schemas.entries import KnowledgeEntriesResponse
 from knowledge.schemas.entries import KnowledgeEntry as BackendKnowledgeEntry
@@ -55,7 +55,7 @@ from knowledge.schemas.ingestion import AddTextResponse
 from knowledge.schemas.operations import KnowledgeStatsResponse
 from knowledge.schemas.search import KnowledgeSearchResponse
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
 _BASE = "http://backend.test:9999"
 

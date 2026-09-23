@@ -15,7 +15,7 @@ This script:
 5. Creates Redis indices (org_sessions, session_context)
 
 Usage:
-    cd autobot-user-backend
+    cd autobot-backend
     python ../scripts/backfill_session_org_context.py [--dry-run]
 """
 
@@ -173,7 +173,7 @@ if __name__ == "__main__":
         logger.info("Running in DRY RUN mode")
 
     # Add backend to path
-    backend_dir = os.path.join(os.path.dirname(__file__), "..", "autobot-user-backend")
+    backend_dir = os.path.join(os.path.dirname(__file__), "..", "autobot-backend")
     sys.path.insert(0, os.path.abspath(backend_dir))
 
     asyncio.run(backfill_sessions(dry_run=dry_run))

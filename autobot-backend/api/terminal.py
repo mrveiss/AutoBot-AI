@@ -158,9 +158,11 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import CommandRisk
+from autobot_shared.websocket_subprotocol import accept_websocket
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from security.session_ownership import build_owner_metadata
+from services.agent_terminal.utils import command_assessment_payload
 from services.simple_pty import simple_pty_manager
 
 # Import terminal secrets service for SSH key integration (Issue #211)
@@ -561,14 +563,8 @@ async def execute_single_command(
     # Log command execution attempt
     logger.info(f"Single command execution: {request.command} (risk: {risk_level.value})")
 
-    # For now, return the assessment (actual execution would need subprocess)
-    return {
-        "command": request.command,
-        "risk_level": risk_level.value,
-        "status": "assessed",
-        "message": f"Command assessed as {risk_level.value} risk",
-        "requires_confirmation": risk_level != CommandRisk.SAFE,
-    }
+    # #14992: the log line above keeps the raw member deliberately.
+    return command_assessment_payload(request.command, risk_level)
 
 
 @admin_router.post("/sessions/{session_id}/input", response_model=TerminalInputResponse)
@@ -829,8 +825,7 @@ async def terminal_websocket(websocket: WebSocket, session_id: str):
     Primary WebSocket endpoint for consolidated terminal access.
 
     Replaces both /ws/simple and /ws/secure endpoints.
-    Issue #1088: Extracted _init_terminal_handler and _run_terminal_message_loop
-    helpers to reduce to <=65 lines.
+    Issue #1088: Extracted _init_terminal_handler and _run_terminal_message_loop helpers to reduce to <=65 lines.
     Issue #14960/#14961/#14964: authenticates (capability-scoping a paired-device
     credential) and validates ownership before accept() -- see enforce_ws_terminal_auth.
     """
@@ -846,7 +841,7 @@ async def terminal_websocket(websocket: WebSocket, session_id: str):
         await websocket.close(code=1008, reason="Unknown or unauthorized terminal session")
         return
 
-    await websocket.accept()
+    await accept_websocket(websocket)
 
     try:
         terminal = await _init_terminal_handler(websocket, session_id, config)
@@ -879,8 +874,8 @@ async def ssh_terminal_websocket(
     """
     DEPRECATED: SSH terminal connections to infrastructure hosts.
 
-    Issue #729/#620: infra SSH now lives in slm-server; backward-compat
-    stub -- use slm-admin -> Tools -> Terminal, or /api/terminal/ssh/{host_id}.
+    Issue #729/#620: infra SSH left the backend. #15236: this named
+    /api/terminal/ssh/{host_id} on the SLM; it was never built -- see #15230.
 
     Issue #14991: any caller who knew or guessed a host_id reached the inert
     SSH stub with zero authentication. Fixed with two gates before accept():
@@ -915,7 +910,7 @@ async def ssh_terminal_websocket(
         await websocket.close(code=1008, reason="Unknown host_id")
         return
 
-    await websocket.accept()
+    await accept_websocket(websocket)
     session_id = f"ssh-{host_id}-{uuid.uuid4().hex[:8]}"
 
     try:
@@ -970,13 +965,13 @@ async def terminal_info(
         "endpoints": {
             "sessions": "/api/terminal/sessions",
             "websocket": "/api/terminal/ws/{session_id}",
-            # Issue #729: SSH to infrastructure hosts moved to slm-server
-            "websocket_ssh": "/api/terminal/ws/ssh/{host_id} (deprecated - use SLM)",
+            # #729 removed backend SSH; #15236: "use SLM" named a route the SLM never built.
+            "websocket_ssh": "/api/terminal/ws/ssh/{host_id} (inert stub -- no SSH backend, see #15230)",
         },
         "security_levels": [level.value for level in SecurityLevel],
-        # Issue #729: Layer separation notice
-        "notice": "SSH connections to infrastructure hosts have been moved to slm-server. "
-        "Use slm-admin or the SLM API for infrastructure terminal access.",
+        # #729 layer separation. #15236: the old wording promised an SLM route that does not exist.
+        "notice": "SSH to infrastructure hosts was removed from the backend by #729 and no replacement "
+        "was built on the SLM. Infrastructure terminal access is unavailable; #15230 tracks who owns it.",
     }
 
 

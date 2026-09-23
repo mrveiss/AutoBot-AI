@@ -46,17 +46,20 @@ on:
     # LIVE as of #13791. GitHub only dispatches `schedule` from the DEFAULT
     # branch, so for the first 100 runs of this workflow — 73 `pull_request`,
     # 27 `push`, zero `schedule` — the cron did nothing: the file existed only
-    # on Dev_new_gui. It is now also on `main`, which is what makes the sweep
-    # periodic rather than incidental.
+    # on main. #13791 added it to `release` (then the default branch) too,
+    # which made the sweep periodic rather than incidental. #16461 later made
+    # `main` itself the default, so this duplication is no longer load-bearing
+    # for the schedule, though the two copies still must stay byte-identical
+    # (see below).
     #
-    # This file exists on both `main` and `Dev_new_gui` and the two copies must
+    # This file exists on both `release` and `main` and the two copies must
     # stay byte-identical — a direction-specific note here makes them permanently
     # conflict on every release sync. The push and
     # pull_request hooks below are still not redundant: they catch a PR head
     # parking within seconds rather than up to 15 minutes later.
     - cron: '*/15 * * * *'
   push:
-    branches: [Dev_new_gui]
+    branches: [main]
   workflow_dispatch:
   pull_request:
     # A PR head moving is the moment its CI either dispatches or parks, so the
@@ -79,8 +82,8 @@ concurrency:
   #
   # The group is scoped to WHAT IS BEING SWEPT, not to the workflow (#13384).
   # A repo-global group looks like it honours `cancel-in-progress: false`, but
-  # GitHub keeps at most one in-progress AND one pending run per group: the
-  # third arrival cancels the pending one. With a `pull_request` trigger on
+  # by default (`queue: single`) GitHub keeps one in-progress AND one pending run
+  # per group: the third arrival cancels the pending one. With a `pull_request` trigger on
   # every synchronize and a busy queue, the watchdog's own sweeps therefore
   # cancelled each other and nothing was published. Observed 2026-08-03 (two
   # cancelled one second apart, ~120 runs left parked for a human) and again
@@ -164,10 +167,12 @@ jobs:
           set -uo pipefail
           # The exit code is the point, so it is captured rather than piped away:
           # `... | tee` would report tee's status and this step could never fail.
+          # `|| rc=$?` rather than a bare capture on the next line: this step runs
+          # under bash -e, which would abort on exit 2 before rc is captured (#16237).
           REPORT="$RUNNER_TEMP/ci-red-cause.txt"
+          rc=0
           python3 pipeline-scripts/ci_red_cause.py --sha "$HEAD_SHA" --exit-zero \
-            >"$REPORT" 2>&1
-          rc=$?
+            >"$REPORT" 2>&1 || rc=$?
           {
             echo "### Red-check causes for \`$HEAD_SHA\`"
             echo ''
@@ -185,7 +190,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          WATCHDOG_BASE_BRANCH: Dev_new_gui
+          WATCHDOG_BASE_BRANCH: main
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
@@ -202,12 +207,13 @@ jobs:
           # branch. When the PR DOES touch them, the sweep drops to --dry-run,
           # so unreviewed watchdog code never reaches `approve` or `statuses`
           # while holding write permission. The listing failing is treated as
-          # self-modification — fail closed, never open.
+          # self-modification — fail closed, never open. The pattern names every
+          # module the sweep imports, not only its entry script.
           SELF_MODIFYING=yes
           if CHANGED=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" \
                 --paginate --jq '.[].filename'); then
             case "$CHANGED" in
-              *ci_dispatch_watchdog*|*ci-dispatch-watchdog*) SELF_MODIFYING=yes ;;
+              *ci_dispatch_watchdog*|*ci_dispatch_labels*|*release_sync_pull*|*ci-dispatch-watchdog*|*ci_dispatch_retry*) SELF_MODIFYING=yes ;;
               *) SELF_MODIFYING=no ;;
             esac
           else
@@ -226,3 +232,41 @@ jobs:
             WATCHDOG_ONLY_PR="$PR_NUMBER" \
               python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch
           fi
+
+      # #15139: the classifier above NAMES the cause but re-queues nothing, so a
+      # run that never obtained a runner keeps a red tile that reads exactly like
+      # a test failure. This step acts on that classification.
+      #
+      # This step never runs on `pull_request` (see the `if:` below), so
+      # `github.event.pull_request.head.sha` never resolves for it — a single
+      # `--sha` had nothing left to fall back to but `github.sha`, the BASE
+      # branch tip, never the red PR head this exists to repair. It sweeps
+      # every open PR against the base branch instead, the same pattern the
+      # "Sweep open PRs" step above already uses.
+      #
+      # AFTER the self-modification guard, deliberately. The classifier can run
+      # ahead of it because it only ever issues GETs; this step writes, so a pull
+      # request's own copy of it must not execute while the job holds
+      # `actions: write`. The guard's case pattern covers ci_dispatch_retry too.
+      #
+      # Admission-controlled, because an eager retry re-queues into the very
+      # condition that produced the failure: it refuses to spend when the REST
+      # budget is low OR unreadable, when in-progress runs are at the ceiling,
+      # and the per-sweep re-run budget is spent across every open PR, not reset
+      # per PR — after one retry per run, a second non-dispatch is a capacity
+      # signal and must stay visible rather than be retried away.
+      #
+      # continue-on-error and an unconditional exit 0 inside the script: a
+      # watchdog that reddens the sweep it rides on has made the pipeline noisier,
+      # which is the problem #15139 is about.
+      - name: Re-dispatch infrastructure-caused reds (#15139)
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          WATCHDOG_BASE_BRANCH: main
+        run: |
+          set -uo pipefail
+          python3 pipeline-scripts/ci_dispatch_retry.py \
+            | tee -a "$GITHUB_STEP_SUMMARY"

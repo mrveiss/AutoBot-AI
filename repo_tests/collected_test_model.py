@@ -73,9 +73,12 @@ from __future__ import annotations
 
 import ast
 import configparser
+import os
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+REPO_ROOT = repo_root()
 PYTEST_INI = REPO_ROOT / "pytest.ini"
 
 SKIP = {
@@ -130,14 +133,31 @@ def parse_module(path: Path) -> ast.Module:
 
 
 def test_modules() -> list[Path]:
-    """Every file pytest's own ``python_files`` globs would consider."""
+    """Every file pytest's own ``python_files`` globs would consider.
+
+    Walked with ``os.walk``, pruning ``SKIP`` directories from ``dirnames``
+    in place, rather than ``REPO_ROOT.rglob("*.py")`` filtered by ``SKIP``
+    afterward (#16601). ``rglob`` has no pruning hook: it descends into every
+    directory unconditionally and only ``SKIP``s the files it finds there, so
+    the walk still pays the full traversal cost of whatever sits under a
+    denylisted directory before discarding the result. This is a denylist
+    WALK, per this function's own docstring -- pruning during descent is what
+    that word means; filtering after the fact is a different, slower thing
+    wearing the same name. Measured cause of a shard-10 hang: ``rglob``
+    frozen inside ``glob.py``'s ``scandir`` for 40+ minutes with zero
+    progress across two ten-minute faulthandler dumps, naming this call.
+    """
     patterns = pytest_option("python_files")
-    return sorted(
-        path
-        for path in REPO_ROOT.rglob("*.py")
-        if not SKIP.intersection(path.relative_to(REPO_ROOT).parts)
-        and any(path.match(pattern) for pattern in patterns)
-    )
+    modules: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
+        dirnames[:] = [d for d in dirnames if d not in SKIP]
+        for filename in filenames:
+            if not filename.endswith(".py"):
+                continue
+            path = Path(dirpath, filename)
+            if any(path.match(pattern) for pattern in patterns):
+                modules.append(path)
+    return sorted(modules)
 
 
 def prefixes() -> tuple[tuple[str, ...], tuple[str, ...]]:

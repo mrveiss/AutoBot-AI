@@ -11,6 +11,8 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
+from daily_health_check import HEALTH_REPORT_PATH
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -53,7 +55,7 @@ def file_issue(title, body):
 
 def main():
     # Read the health check report
-    report_file = Path("/tmp/autobot-health-check.md")
+    report_file = HEALTH_REPORT_PATH
     if not report_file.exists():
         logger.error("Health check report not found")
         return 1

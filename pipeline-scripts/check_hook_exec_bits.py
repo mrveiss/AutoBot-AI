@@ -83,12 +83,14 @@ _REQUIRED_MODE = "100755"
 # its violations and flips its exec bit. Adding a new entry is not a way to make
 # this guard quiet -- a *new* hook with a missing exec bit is a plain failure.
 _KNOWN_DORMANT_ISSUE = "#14181"
-_KNOWN_DORMANT = frozenset(
-    {
-        "tools/lint/check_no_blocking_io_in_async.py",
-        "tools/lint/check_no_local_schemas.py",
-    }
-)
+# #15750 removed the last live entry: check_no_local_schemas.py had lost its
+# exec bit on main itself, and flipping it back takes the entry off this
+# list in the same change, exactly as the rule above requires.
+# check_no_blocking_io_in_async.py was fixed earlier (executable on base) and
+# its entry was never removed -- a stale record this guard could not detect,
+# because the staleness test asks whether a baselined path is still some hook's
+# entry, not whether it is still a violation. Tracked as #15762.
+_KNOWN_DORMANT: frozenset[str] = frozenset()
 
 
 def _repo_root() -> Path:
@@ -188,13 +190,41 @@ def _split_findings(modes: dict[str, str], root: Path | None = None) -> tuple[li
     return blocking, known
 
 
+def stale_fixed_dormant_entries(modes: dict[str, str]) -> set[str]:
+    """`_KNOWN_DORMANT` entries whose exec bit is already `_REQUIRED_MODE` (#15762).
+
+    The shrink-side check `test_the_dormant_baseline_has_no_stale_entries`
+    (in the test file) does not perform: that test asks whether a baselined
+    path is still SOME hook's entry, not whether it is still non-executable.
+    An entry whose fix landed but whose path was never removed from
+    `_KNOWN_DORMANT` passes that test forever, overstating the backlog with
+    no signal that it did.
+
+    A path absent from *modes* (renamed, no longer tracked) is not reported
+    here -- that is the staleness test's question, not this one's.
+    """
+    return {name for name in _KNOWN_DORMANT if modes.get(name) == _REQUIRED_MODE}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("filenames", nargs="*", help="ignored; the whole config is always checked")
     parser.parse_args(argv)
 
     root = _repo_root()
-    blocking, known = _split_findings(_tracked_modes(root), root)
+    modes = _tracked_modes(root)
+    blocking, known = _split_findings(modes, root)
+
+    stale_fix = stale_fixed_dormant_entries(modes)
+    if stale_fix:
+        print(  # noqa: print
+            f"check-hook-exec-bits: {len(stale_fix)} _KNOWN_DORMANT entr(ies) already fixed "
+            f"but not removed (#15762):"
+        )
+        for name in sorted(stale_fix):
+            print(f"  STALE  {name} is tracked {_REQUIRED_MODE} -- remove from _KNOWN_DORMANT")  # noqa: print
+        print()  # noqa: print
+        return 1
 
     if known:
         # Printed on every run, pass or fail. A backlog nobody is reminded of is

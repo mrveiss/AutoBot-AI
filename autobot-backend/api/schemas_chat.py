@@ -20,32 +20,6 @@ from constants.threshold_constants import CategoryDefaults
 from type_defs.common import Metadata
 
 
-class SessionMessagesData(BaseModel):
-    """data payload for GET /chat/sessions/{session_id}."""
-
-    messages: List[Any]
-    session_id: str
-    total_count: int
-    page: int
-    per_page: int
-
-
-class SessionListData(BaseModel):
-    """data payload for GET /chat/sessions (all scope variants).
-
-    The ``scope``, ``org_id``, and ``team_id`` fields are only present when
-    the request uses scope=org or scope=team query params.
-    ``intentional_empty`` is set when the authenticated user has zero sessions.
-    """
-
-    sessions: List[Any]
-    count: int
-    scope: str | None = None
-    org_id: str | None = None
-    team_id: str | None = None
-    intentional_empty: bool | None = None
-
-
 class SessionCreateData(BaseModel):
     """data payload for POST /chat/sessions."""
 
@@ -429,6 +403,7 @@ class SharedLinkCreateRequest(BaseModel):
 
     password: str | None = Field(None, min_length=1, max_length=128, description="Optional access password")
     expires_in_seconds: int | None = Field(None, ge=60, description="Link TTL in seconds; omit for no expiry")
+    require_login: bool = Field(False, description="Restrict access to authenticated users only (#16861)")
 
 
 class SharedLinkData(BaseModel):
@@ -439,6 +414,9 @@ class SharedLinkData(BaseModel):
     has_password: bool
     expires_at: datetime | None
     created_at: datetime
+    require_login: bool
+    view_count: int
+    last_accessed_at: datetime | None
 
 
 class SharedLinkAdminItem(BaseModel):
@@ -451,6 +429,9 @@ class SharedLinkAdminItem(BaseModel):
     has_password: bool
     expires_at: datetime | None
     created_at: datetime
+    require_login: bool
+    view_count: int
+    last_accessed_at: datetime | None
 
 
 class SharedLinkAccessRequest(BaseModel):

@@ -1,0 +1,296 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The ONE way provisioning builds and publishes the SLM frontend (#15557).
+#
+# vite empties its outDir before writing, so a build that fails leaves the
+# directory it targeted with nothing in it. nginx serves the SLM bundle with
+# `try_files $uri $uri/ /slm/index.html` and autoindex off, so a missing
+# index.html answers 403 for EVERY path under /slm/ — a build failure becomes a
+# total outage of the dashboard, including the maintenance and code-sync screens
+# an operator would use to recover (#15430, #15462).
+#
+# So a build goes into a directory nothing is serving and is published only
+# after it is proven to carry a real entry point; a failed or partial build
+# leaves the previously working bundle serving and fails the play loudly.
+#
+# #15557: this logic existed four times — `playbooks/update-all-nodes.yml` had
+# it, and `roles/slm_manager/tasks/main.yml`, `playbooks/update-node.yml` and
+# `playbooks/provision-fleet-roles.yml` each built straight into the served
+# `dist/` with no gate at all. Three copies were still the pre-#15430 shape
+# because a fix applied to one copy is not applied to the others. It lives here
+# now, and each entry point delegates.
+#
+# Sweep result (#15557 AC 6) — every SLM-frontend build site in the tree:
+#   playbooks/update-all-nodes.yml ............ delegates here
+#   roles/slm_manager/tasks/main.yml .......... delegates here
+#   playbooks/update-node.yml ................. delegates here
+#   playbooks/provision-fleet-roles.yml ....... delegates here
+#   services/slm_frontend_build.py ............ same mechanism, Python side
+#                                               (the code-sync self-update path;
+#                                               it cannot include an Ansible task
+#                                               file, see the seam note below)
+# The user-frontend (`autobot-frontend`) build sites carry the same unstaged
+# shape and are tracked separately — they are a different component with a
+# different nginx site, and are NOT silently in scope here.
+#
+# The seam: an Ansible task file, not a call into
+# `autobot-slm-backend/services/slm_frontend_build.py`. The Python module runs
+# inside the SLM backend's own venv on the SLM host and resolves its paths from
+# SLM_DEPLOYED_ROOT; three of the four callers here are plays that run against
+# an arbitrary target node, before (or without) that backend being able to
+# serve a request at all — `update-node.yml` in particular deploys to a node
+# that has no SLM backend. A task file is the only seam all four can reach.
+# The two halves publish the SAME layout, and the layout is the contract
+# between them: change one and the other must move with it.
+#
+# ---------------------------------------------------------------------------
+# #15610 — publishing is ONE rename(2), never a pair of directory renames
+# ---------------------------------------------------------------------------
+# The publish step used to be two sequential `mv`s: `dist` -> `dist.previous`,
+# then `dist.staging` -> `dist`. Between them the served directory did not
+# exist, so a request landing in that window got a 403 — not the previous
+# bundle and not the new one. Two Ansible tasks means the window is a module
+# round trip wide, not a syscall wide, and #15557 had just widened it from one
+# entry point to four.
+#
+# A directory rename pair cannot be made atomic. A symlink flip can, because
+# `rename(2)` over a symlink is a single syscall with no observable
+# intermediate state. So the layout is now:
+#
+#   dist-<build-id>/     one directory per build; immutable once published
+#   current -> dist-<id> THE served path. Only ever created, or replaced by a
+#                        single rename(2). It never resolves to nothing.
+#   previous -> dist-<older-id>   the bundle `current` replaced — the rollback
+#                        target that `dist.previous` used to be.
+#
+# The flip idiom is `ln -s <target> .current.next && mv -T .current.next
+# current`. `ln -sfn current` on its own is NOT this: GNU ln unlinks the old
+# name and then creates the new one, which is the very window being removed.
+# `mv -T` is `rename(2)` on the symlink itself.
+#
+# nginx resolves `root`/`alias` per request and follows symlinks (no
+# `open_file_cache` and no `disable_symlinks` anywhere in this tree), so a flip
+# is visible to the next request with no reload. The served path in
+# roles/slm_manager/templates/autobot-slm.conf.j2 is `current`, and it changed
+# in the same commit as this file.
+#
+# Rollback, by hand, is the same single syscall:
+#   cd <publish dir> && ln -s "$(readlink previous)" .current.next \
+#     && mv -T .current.next current
+#
+# Retention: the newest `slm_frontend_release_keep` build directories survive a
+# publish (inventory/group_vars/all.yml — the fleet-wide SSOT for it), and the
+# targets of `current` and `previous` are never pruned regardless of where they
+# fall in that order. Build ids sort lexicographically by time, so "newest" is
+# read off the names and does not depend on filesystem timestamps. Without a
+# bound the disk grows by one bundle per deploy forever.
+#
+# A node that has not published under this layout yet still has a real `dist/`
+# directory from before #15610. It is left exactly where it is and `current` is
+# pointed at it before anything else runs, so the served path resolves from the
+# first moment the new nginx config can be read — including when the build that
+# follows fails. It becomes `previous` on the first publish and is retained as
+# the rollback target for the deploy that migrated the node.
+#
+# Contract:
+#   slm_frontend_publish_label        (str) Display label for task names, e.g. "SLM".
+#   slm_frontend_publish_dir          (str) Absolute path of the frontend's own
+#                                            package directory (the one holding
+#                                            package.json and the served `current`).
+#   slm_frontend_publish_user         (str) Service account that owns that tree;
+#                                            the build and the flip both run as
+#                                            it, so the published bundle is
+#                                            never root-owned.
+#   slm_frontend_publish_build_script (str, optional) npm script to run.
+#                                            Default 'build:slm' — unchanged
+#                                            behaviour for every existing SLM
+#                                            caller. #15603 passes 'build' for
+#                                            the user frontend, which has no
+#                                            dedicated production script.
+#   slm_frontend_publish_build_env    (dict, optional) Environment for the
+#                                            build command. Default
+#                                            {VITE_API_URL: "/slm"} — unchanged
+#                                            for SLM. #15603 passes {} for the
+#                                            user frontend, which bakes its
+#                                            backend URL from a deployed
+#                                            .env.production file instead.
+# Also read: slm_frontend_release_keep (inventory/group_vars/all.yml).
+#
+# #15603: the two build_script/build_env variables generalize this file to the
+# user frontend (autobot-frontend) as well as SLM's own. The file keeps its
+# name and its slm_frontend_* variable prefix rather than being renamed —
+# every existing SLM call site already passes slm_frontend_publish_label/dir/
+# user, and renaming would touch four working call sites for no behavioural
+# gain. A sibling file duplicating the build-id/seed/verify/flip/prune
+# machinery (roughly 150 lines) for one npm-script-name difference was
+# rejected for the reason #15557's own header gives for the original
+# four-copy problem: a fix applied to one copy is not applied to the others.
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: allocate a build id (#15610)"
+  ansible.builtin.command:
+    cmd: date -u +%Y%m%dT%H%M%S%3NZ
+  register: _slm_frontend_build_id
+  changed_when: false
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+# Runs BEFORE the build on purpose. On a node migrating from the pre-#15610
+# layout the served path must resolve even if the build below then fails —
+# "the previous bundle keeps serving" is the #15557 invariant, and a 403 while
+# `current` waited for a successful build would be the #15462 outage again.
+- name: "{{ slm_frontend_publish_label }} | Frontend: make `current` resolve before publishing (#15610)"
+  ansible.builtin.shell:
+    executable: /bin/bash
+    cmd: |
+      set -eu
+      cd "{{ slm_frontend_publish_dir }}"
+      if [ ! -e current ] && [ ! -L current ] && [ -d dist ]; then
+          ln -s dist current
+          echo SEEDED
+      fi
+  become: true
+  become_user: "{{ slm_frontend_publish_user }}"
+  register: _slm_frontend_current_seed
+  changed_when: "'SEEDED' in _slm_frontend_current_seed.stdout"
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: build into its own directory (#15557, #15610)"
+  ansible.builtin.command:
+    # build:slm = "VITE_API_URL=/slm vite build" — the SLM UI is always served
+    # under `location /slm/` and vite.config sets base /slm/, so a plain
+    # `npm run build` bakes in the wrong API base and the dashboard calls the
+    # user backend's endpoints instead (#9563, #9710, #10435). #15603: the
+    # user frontend has no such dedicated script and passes 'build' — its
+    # backend URL is baked from a deployed .env.production instead, at the
+    # call site, before this task runs.
+    #
+    # The outDir is this build's own directory, never the served path: vite
+    # empties the outDir before writing, so building into what nginx serves is
+    # the defect itself (#15430).
+    cmd: >-
+      npm run {{ slm_frontend_publish_build_script | default('build:slm') }} --
+      --outDir dist-{{ _slm_frontend_build_id.stdout }} --emptyOutDir
+    chdir: "{{ slm_frontend_publish_dir }}"
+  become: true
+  become_user: "{{ slm_frontend_publish_user }}"
+  environment: "{{ slm_frontend_publish_build_env | default({'VITE_API_URL': '/slm'}) }}"
+  register: _slm_frontend_staged_build
+  # Held so the next task can report the build's own stderr. Diagnosing the
+  # #15430 outage needed the filesystem, because the unit exited 2 with no npm
+  # output anywhere in the journal.
+  failed_when: false
+  changed_when: _slm_frontend_staged_build.rc == 0
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: fail loudly if the build failed (#15557)"
+  ansible.builtin.fail:
+    msg: |
+      SLM frontend build failed in {{ slm_frontend_publish_dir }}
+      (rc={{ _slm_frontend_staged_build.rc | default('?') }}).
+      The previous bundle is still being served — `current` was not touched.
+      stderr:
+      {{ _slm_frontend_staged_build.stderr | default('(no stderr captured)') }}
+      stdout:
+      {{ _slm_frontend_staged_build.stdout | default('(no stdout captured)') }}
+  when: _slm_frontend_staged_build.rc | default(1) != 0
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: verify the build produced an entrypoint (#15557)"
+  ansible.builtin.stat:
+    path: "{{ slm_frontend_publish_dir }}/dist-{{ _slm_frontend_build_id.stdout }}/index.html"
+  register: _slm_frontend_staged_index
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: refuse to publish a bundle with no index.html (#15557)"
+  ansible.builtin.fail:
+    msg: >-
+      SLM frontend build in {{ slm_frontend_publish_dir }} reported success but
+      produced no usable index.html in
+      dist-{{ _slm_frontend_build_id.stdout }} — publishing it would make every
+      /slm/ path answer 403. The previous bundle is still being served.
+  # Size as well as existence: a zero-byte index.html satisfies nginx's
+  # try_files and then serves a blank page, which no health check notices.
+  when: >-
+    not _slm_frontend_staged_index.stat.exists
+    or (_slm_frontend_staged_index.stat.size | default(0) | int) == 0
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+# Read before the flip, because after it `current` names the new bundle. This
+# is what `previous` is pointed at — the rollback target `dist.previous` used
+# to be. `follow: false` so the symlink itself is stat'ed, not its target.
+- name: "{{ slm_frontend_publish_label }} | Frontend: read the bundle being replaced (#15610)"
+  ansible.builtin.stat:
+    path: "{{ slm_frontend_publish_dir }}/current"
+    follow: false
+  register: _slm_frontend_current_before
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+# THE publish. One rename(2) over a symlink: `current` goes straight from the
+# old bundle to the new one, and there is no instant at which it resolves to
+# nothing. Two directory renames cannot do this, which is #15610.
+- name: "{{ slm_frontend_publish_label }} | Frontend: publish by flipping `current` (#15610)"
+  ansible.builtin.shell:
+    executable: /bin/bash
+    cmd: |
+      set -eu
+      cd "{{ slm_frontend_publish_dir }}"
+      ln -sfn "dist-{{ _slm_frontend_build_id.stdout }}" .current.next
+      mv -T .current.next current
+  become: true
+  become_user: "{{ slm_frontend_publish_user }}"
+  changed_when: true
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: keep the replaced bundle as `previous` (#15610)"
+  ansible.builtin.shell:
+    executable: /bin/bash
+    cmd: |
+      set -eu
+      cd "{{ slm_frontend_publish_dir }}"
+      ln -sfn "{{ _slm_frontend_current_before.stat.lnk_target }}" .previous.next
+      mv -T .previous.next previous
+  become: true
+  become_user: "{{ slm_frontend_publish_user }}"
+  changed_when: true
+  # Nothing to preserve on a node publishing for the first time with no legacy
+  # dist/ either — there is no bundle being replaced.
+  when:
+    - _slm_frontend_current_before.stat.islnk | default(false)
+    - (_slm_frontend_current_before.stat.lnk_target | default('')) | length > 0
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+# Bounded, or the disk grows by one bundle per deploy forever. Build ids are
+# UTC timestamps, so a reverse lexicographic sort of the names IS newest-first
+# and does not depend on mtimes that a restore or an rsync can rewrite. The
+# targets of `current` and `previous` are excluded explicitly rather than
+# trusted to fall inside the kept window — a rollback moves `current` to an
+# older bundle, and pruning the bundle being served is the outage this file
+# exists to prevent.
+- name: "{{ slm_frontend_publish_label }} | Frontend: prune old bundles, keeping {{ slm_frontend_release_keep }} (#15610)"
+  ansible.builtin.shell:
+    executable: /bin/bash
+    cmd: |
+      # No `pipefail`: the pipeline below cannot fail meaningfully (find reads
+      # the directory the build just wrote), while `rm` failing still aborts
+      # under `set -e`. A cleanup hiccup must not fail a deploy that has
+      # already published.
+      set -eu
+      cd "{{ slm_frontend_publish_dir }}"
+      keep_current=$(readlink current || true)
+      keep_previous=$(readlink previous || true)
+      find . -maxdepth 1 -type d -name 'dist-*' -printf '%f\n' \
+        | LC_ALL=C sort -r \
+        | tail -n +{{ (slm_frontend_release_keep | int) + 1 }} \
+        | while IFS= read -r bundle; do
+              if [ "$bundle" != "$keep_current" ] && [ "$bundle" != "$keep_previous" ]; then
+                  rm -rf -- "$bundle"
+                  echo "PRUNED $bundle"
+              fi
+          done
+  become: true
+  become_user: "{{ slm_frontend_publish_user }}"
+  register: _slm_frontend_prune
+  changed_when: "'PRUNED' in _slm_frontend_prune.stdout"
+  tags: ['slm', 'frontend', 'slm-frontend']

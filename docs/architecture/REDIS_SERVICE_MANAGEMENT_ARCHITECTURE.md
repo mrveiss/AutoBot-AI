@@ -1,6 +1,6 @@
 # Redis Service Management Architecture
 
-> **Freshness:** superseded (partially) — 2026-08-30. `RedisServiceManager` shipped (`autobot-backend/services/redis_service_manager.py`, used in 6 files) but `ServiceManagementRouter` was never built — no route exposes the manager. Tracked in #15198.
+> **Freshness:** superseded (partially) — 2026-09-11. `RedisServiceManager` shipped (`autobot-backend/services/redis_service_manager.py`) and `api/redis_service.py` exposes it at `/api/redis-service` (registered in `initialization/router_registry/feature_routers.py`); the `ServiceManagementRouter` designed here was never built (#15198). The user-GUI client in section 5 (`RedisServiceControl.vue`, `useServiceManagement`, `RedisServiceAPI`) was removed by #16245: nothing mounted it, and its `/service-monitor/services/*` calls had no handler. The Redis service UI is the SLM's `RedisServicePanel`.
 
 
 **Document Version:** 1.0
@@ -12,7 +12,7 @@
 
 ## Executive Summary
 
-This document defines the architecture for Redis service management features in AutoBot's distributed VM infrastructure. The design enables frontend UI controls and backend auto-detection/auto-start capabilities for the Redis service running on VM3 (<database-ip>), while maintaining security, auditability, and alignment with AutoBot's "No Temporary Fixes" policy.
+This document defines the architecture for Redis service management features in AutoBot's distributed, role-based infrastructure. The design enables frontend UI controls and backend auto-detection/auto-start capabilities for the Redis service running on the database role's host (<database-ip>), while maintaining security, auditability, and alignment with AutoBot's "No Temporary Fixes" policy.
 
 ---
 
@@ -36,7 +36,7 @@ This document defines the architecture for Redis service management features in 
 ### 1.1 Current State
 
 **Infrastructure:**
-- Redis service runs on VM3 (<database-ip>:6379)
+- Redis service runs on the database role's host (<database-ip>:6379)
 - SSH key-based authentication configured (~/.ssh/autobot_key)
 - Existing SSHManager handles remote command execution
 - ConsolidatedHealthService aggregates component health
@@ -73,7 +73,7 @@ This document defines the architecture for Redis service management features in 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         Frontend (VM1: <frontend-ip>)               │
+│                         Frontend (<frontend-ip>)                    │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │  RedisServiceControl.vue                                      │  │
 │  │  - Service status display                                     │  │
@@ -125,14 +125,14 @@ This document defines the architecture for Redis service management features in 
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    Redis VM (VM3: <database-ip>)                    │
+│                    Database Role (<database-ip>)                    │
 │  ┌───────────────────────────────────────────────────────────────┐  │
-│  │  systemd (redis-server.service)                               │  │
+│  │  systemd (redis-stack-server.service)                         │  │
 │  │  ┌─────────────────────────────────────────────────────────┐  │  │
-│  │  │  sudo systemctl start redis-server                      │  │  │
-│  │  │  sudo systemctl stop redis-server                       │  │  │
-│  │  │  sudo systemctl restart redis-server                    │  │  │
-│  │  │  sudo systemctl status redis-server                     │  │  │
+│  │  │  sudo systemctl start redis-stack-server                │  │  │
+│  │  │  sudo systemctl stop redis-stack-server                 │  │  │
+│  │  │  sudo systemctl restart redis-stack-server              │  │  │
+│  │  │  sudo systemctl status redis-stack-server               │  │  │
 │  │  └─────────────────────────────────────────────────────────┘  │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 │                                                                       │
@@ -159,7 +159,7 @@ This document defines the architecture for Redis service management features in 
 User clicks "Restart" → Frontend POST /api/services/redis/restart
                      → Backend validates user permissions
                      → RedisServiceManager executes operation
-                     → SSHManager sends "systemctl restart redis-server"
+                     → SSHManager sends "systemctl restart redis-stack-server"
                      → systemd restarts Redis process
                      → Health check confirms service healthy
                      → Status update via WebSocket → Frontend updates UI
@@ -376,7 +376,7 @@ async def detect_redis_failure() -> HealthCheckResult:
     # Layer 2: Systemd service status
     result = await ssh_manager.execute_command(
         host="redis",
-        command="systemctl is-active redis-server",
+        command="systemctl is-active redis-stack-server",
         timeout=5
     )
     if result.stdout.strip() != "active":
@@ -424,12 +424,12 @@ async def detect_redis_failure() -> HealthCheckResult:
 
 2. **Standard Recovery (Level 2):**
    - Scenario: Redis service stopped
-   - Action: systemctl start redis-server
+   - Action: systemctl start redis-stack-server
    - Duration: ~15 seconds
 
 3. **Hard Recovery (Level 3):**
    - Scenario: Redis service failed to start
-   - Action: systemctl restart redis-server
+   - Action: systemctl restart redis-stack-server
    - Duration: ~30 seconds
 
 4. **Critical Recovery (Level 4):**
@@ -541,7 +541,7 @@ async def auto_recover(self) -> RecoveryResult:
 
 #### POST /api/services/redis/start
 
-**Description:** Start Redis service on VM3
+**Description:** Start Redis service on the database role's host
 
 **Authentication:** Required (Bearer token)
 
@@ -600,7 +600,7 @@ async def auto_recover(self) -> RecoveryResult:
 
 #### POST /api/services/redis/stop
 
-**Description:** Stop Redis service on VM3
+**Description:** Stop Redis service on the database role's host
 
 **Authentication:** Required (Bearer token)
 
@@ -640,7 +640,7 @@ async def auto_recover(self) -> RecoveryResult:
 
 #### POST /api/services/redis/restart
 
-**Description:** Restart Redis service on VM3
+**Description:** Restart Redis service on the database role's host
 
 **Authentication:** Required (Bearer token)
 
@@ -882,7 +882,7 @@ async def auto_recover(self) -> RecoveryResult:
     }
   ],
   "total_lines": 50,
-  "service": "redis-server",
+  "service": "redis-stack-server",
   "vm": "<database-ip>"
 }
 ```
@@ -1596,12 +1596,12 @@ async def stop_redis_service(
 
 ```python
 ALLOWED_REDIS_COMMANDS = {
-    "start": "sudo systemctl start redis-server",
-    "stop": "sudo systemctl stop redis-server",
-    "restart": "sudo systemctl restart redis-server",
-    "status": "systemctl status redis-server",
-    "is-active": "systemctl is-active redis-server",
-    "logs": "journalctl -u redis-server -n {lines}",
+    "start": "sudo systemctl start redis-stack-server",
+    "stop": "sudo systemctl stop redis-stack-server",
+    "restart": "sudo systemctl restart redis-stack-server",
+    "status": "systemctl status redis-stack-server",
+    "is-active": "systemctl is-active redis-stack-server",
+    "logs": "journalctl -u redis-stack-server -n {lines}",
 }
 
 def validate_service_command(operation: str) -> str:
@@ -1620,16 +1620,16 @@ def validate_service_command(operation: str) -> str:
 - Dedicated service account (`autobot`)
 - Limited sudo permissions via /etc/sudoers.d/
 
-**sudoers Configuration (VM3):**
+**sudoers Configuration (database role's host):**
 
 ```bash
 # /etc/sudoers.d/autobot-redis
 # Allow autobot user to manage Redis service
-autobot ALL=(ALL) NOPASSWD: /bin/systemctl start redis-server
-autobot ALL=(ALL) NOPASSWD: /bin/systemctl stop redis-server
-autobot ALL=(ALL) NOPASSWD: /bin/systemctl restart redis-server
-autobot ALL=(ALL) NOPASSWD: /bin/systemctl status redis-server
-autobot ALL=(ALL) NOPASSWD: /bin/journalctl -u redis-server *
+autobot ALL=(ALL) NOPASSWD: /bin/systemctl start redis-stack-server
+autobot ALL=(ALL) NOPASSWD: /bin/systemctl stop redis-stack-server
+autobot ALL=(ALL) NOPASSWD: /bin/systemctl restart redis-stack-server
+autobot ALL=(ALL) NOPASSWD: /bin/systemctl status redis-stack-server
+autobot ALL=(ALL) NOPASSWD: /bin/journalctl -u redis-stack-server *
 ```
 
 ### 6.4 Audit Logging
@@ -2430,8 +2430,8 @@ async def load_test_status_endpoint(duration_seconds: int = 60):
 redis_service_management:
   # Service Configuration
   service:
-    name: "redis-server"
-    systemd_unit: "redis-server.service"
+    name: "redis-stack-server"
+    systemd_unit: "redis-stack-server.service"
     host: "redis"  # Reference to SSH host config
     ip: "<database-ip>"
     port: 6379
@@ -2451,7 +2451,7 @@ redis_service_management:
 
       systemd:
         enabled: true
-        command: "systemctl is-active redis-server"
+        command: "systemctl is-active redis-stack-server"
         expected_output: "active"
 
       performance:
@@ -2474,17 +2474,17 @@ redis_service_management:
     strategies:
       soft:
         enabled: true
-        command: "sudo systemctl reload redis-server"
+        command: "sudo systemctl reload redis-stack-server"
         timeout_seconds: 10
 
       standard:
         enabled: true
-        command: "sudo systemctl start redis-server"
+        command: "sudo systemctl start redis-stack-server"
         timeout_seconds: 30
 
       hard:
         enabled: true
-        command: "sudo systemctl restart redis-server"
+        command: "sudo systemctl restart redis-stack-server"
         timeout_seconds: 45
 
     notifications:
@@ -2513,12 +2513,12 @@ redis_service_management:
       - reload
 
     commands:
-      start: "sudo systemctl start redis-server"
-      stop: "sudo systemctl stop redis-server"
-      restart: "sudo systemctl restart redis-server"
-      status: "systemctl status redis-server"
-      reload: "sudo systemctl reload redis-server"
-      logs: "journalctl -u redis-server -n {lines} --no-pager"
+      start: "sudo systemctl start redis-stack-server"
+      stop: "sudo systemctl stop redis-stack-server"
+      restart: "sudo systemctl restart redis-stack-server"
+      status: "systemctl status redis-stack-server"
+      reload: "sudo systemctl reload redis-stack-server"
+      logs: "journalctl -u redis-stack-server -n {lines} --no-pager"
 
   # Permissions (RBAC)
   permissions:
@@ -2741,7 +2741,7 @@ redis_service_management:
   - [ ] Restart backend service
 
 - [ ] Deploy frontend changes
-  - [ ] Sync frontend to VM1
+  - [ ] Sync frontend to the frontend role's host
   - [ ] Restart frontend service
 
 - [ ] Configure Redis VM

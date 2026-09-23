@@ -12,7 +12,8 @@ This script verifies:
 """
 
 import sys
-from pathlib import Path
+
+from repo_tests._paths import repo_root
 
 # Add the repo root and autobot-backend to path.
 # Path(__file__).parent is repo_tests/ itself, not the repo root -- the prior
@@ -21,7 +22,7 @@ from pathlib import Path
 # lives at the repo root and `llm_shared` only under autobot-backend/, so a
 # standalone `python repo_tests/trivial_config_test.py` run (pytest already
 # gets both from pytest.ini's `pythonpath`) needs both corrected anchors.
-repo_root = Path(__file__).resolve().parent.parent
+repo_root = repo_root()
 backend_path = repo_root / "autobot-backend"
 sys.path.insert(0, str(repo_root))
 sys.path.insert(0, str(backend_path))

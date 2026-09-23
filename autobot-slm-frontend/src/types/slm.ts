@@ -86,10 +86,14 @@ export interface NodeHealth {
   services: ServiceHealth[]
 }
 
+/**
+ * One service in a node's health report (#15401). `GET /nodes/{id}/health`
+ * returns `{ name, status }` per service, and `status` is the agent's systemd
+ * run-state -- not a health verdict -- so it is `ServiceStatus`, not `HealthStatus`.
+ */
 export interface ServiceHealth {
   name: string
-  status: HealthStatus
-  details: Record<string, unknown>
+  status: ServiceStatus
 }
 
 export interface A2ASkill {
@@ -457,7 +461,20 @@ export interface FleetUpdateSummary {
 // Service Types (Issue #728)
 // =============================================================================
 
-export type ServiceStatus = 'running' | 'stopped' | 'failed' | 'unknown'
+/**
+ * A service's run-state, as the SLM agent maps systemd states
+ * (`_map_status_from_states` in `slm/agent/health_collector.py`). Until #15401
+ * this union carried four of the eight values the agent sends.
+ */
+export type ServiceStatus =
+  | 'running'
+  | 'starting'
+  | 'stopping'
+  | 'stopped'
+  | 'completed'
+  | 'failed'
+  | 'crash-loop'
+  | 'unknown'
 
 export type ServiceCategory = 'autobot' | 'system'
 
@@ -613,7 +630,9 @@ export type RolePurgeRequest = Partial<
 // NPU Worker Types (Issue #255 - NPU Fleet Integration)
 // =============================================================================
 
-export type NPUDeviceType = 'intel-npu' | 'nvidia-gpu' | 'amd-gpu' | 'unknown'
+// #15226: generated from the SLM schema (models/npu_schemas.py) -- the one
+// vocabulary the schema, the API and this UI share, not a hand-kept copy.
+export type NPUDeviceType = components['schemas']['NPUDeviceType']
 
 export type NPULoadBalancingStrategy = 'round-robin' | 'least-loaded' | 'model-affinity'
 
@@ -630,6 +649,12 @@ export type NPULoadBalancingStrategy = 'round-robin' | 'least-loaded' | 'model-a
  * the set of values that get a friendly label.
  */
 export type NPUCapabilities = components['schemas']['NPUCapabilities']
+
+// Each node's GPUs, from its agent's heartbeat (#16280, #16281, #15226).
+export type GPUReportState = components['schemas']['GPUReportState']
+export type GPUDevice = components['schemas']['GPUDevice']
+export type GPUNodeStatus = components['schemas']['GPUNodeStatus']
+export type GPUNodeListResponse = components['schemas']['GPUNodeListResponse']
 
 export interface NPUNodeStatus {
   node_id: string

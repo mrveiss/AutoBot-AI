@@ -25,6 +25,7 @@ from api.schemas_workflows import (
     TaskApprovalLinkResponse,
 )
 from api.user_management.dependencies import get_db_session
+from api.user_management.human_decider import classify_author_type, require_interactive_human
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -196,7 +197,8 @@ async def approve(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Approve a pending approval gate (#1402)."""
+    """Approve a pending approval gate (#1402); only a person may (#17042)."""
+    require_interactive_human(current_user, "approval gate approve")
     svc = ApprovalGateService(session)
     username = current_user.get("username", "unknown")
     try:
@@ -204,6 +206,7 @@ async def approve(
             approval_id,
             username,
             body.comment,
+            author_type=classify_author_type(current_user),
         )
     except ValueError:
         raise HTTPException(
@@ -228,7 +231,8 @@ async def reject(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Reject a pending approval gate (#1402)."""
+    """Reject a pending approval gate (#1402); only a person may (#17042)."""
+    require_interactive_human(current_user, "approval gate reject")
     svc = ApprovalGateService(session)
     username = current_user.get("username", "unknown")
     try:
@@ -236,6 +240,7 @@ async def reject(
             approval_id,
             username,
             body.comment,
+            author_type=classify_author_type(current_user),
         )
     except ValueError:
         raise HTTPException(
@@ -260,7 +265,8 @@ async def request_revision(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Request revision on a pending approval gate (#1402)."""
+    """Request revision on a pending approval gate (#1402); only a person may (#17042)."""
+    require_interactive_human(current_user, "approval gate request_revision")
     svc = ApprovalGateService(session)
     username = current_user.get("username", "unknown")
     try:
@@ -268,6 +274,7 @@ async def request_revision(
             approval_id,
             username,
             body.comment,
+            author_type=classify_author_type(current_user),
         )
     except ValueError:
         raise HTTPException(
@@ -327,12 +334,18 @@ async def add_comment(
     """Add a comment to an approval gate (#1402)."""
     svc = ApprovalGateService(session)
     username = current_user.get("username", "unknown")
+    if body.author_type is not None:
+        logger.warning(
+            "Ignoring client-supplied author_type=%s for approval %s; recording the verified caller's (#17056)",
+            body.author_type.value,
+            approval_id,
+        )
     try:
         comment = await svc.add_comment(
             approval_id,
             username,
             body.body,
-            body.author_type.value,
+            author_type=classify_author_type(current_user),
         )
     except ValueError:
         raise HTTPException(
@@ -404,7 +417,13 @@ async def unlink_task(
 ):
     """Unlink a task from an approval gate (#1402)."""
     svc = ApprovalGateService(session)
-    removed = await svc.unlink_task(approval_id, task_id)
+    try:
+        removed = await svc.unlink_task(approval_id, task_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Internal server error",
+        )
     if not removed:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

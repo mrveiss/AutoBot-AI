@@ -29,9 +29,17 @@ If not provided upfront, collect:
 | `testing` | Missing or broken tests |
 | `documentation` | Docs gap |
 
-### Area (pick one or more)
-`backend` · `frontend` · `devops` · `database` · `mcp` · `rag` · `deployment`
-`monitoring` · `configuration` · `error-handling` · `optimization`
+### Area — coarse (pick one or more)
+`backend` · `frontend` · `testing` · `infrastructure` · `docs` · `ci` · `security`
+`database` · `deployment` · `configuration` · `monitoring` · `mcp` · `rag` · `agents`
+`memory` · `analytics` · `ai-ml` · `error-handling` · `optimization`
+
+### Area — cluster (pick exactly one)
+Every issue also carries its `area: <cluster>` label from the backlog dependency waves —
+32 clusters, coloured by wave, listed with `gh label list --search "area: "`. The cluster
+says *which body of work* the issue belongs to; the coarse label says which part of the
+stack it touches. An issue that fits no existing cluster gets the coarse label only, and
+says so in the report.
 
 ### Priority (pick one)
 | Label | When |
@@ -67,7 +75,37 @@ EOF
   --label "<type>,<area>,<priority>"
 ```
 
-## Step 4 — Report and ask
+## Step 4 — Link relationships (native, not prose)
+
+A checklist item and a `Depends on: #N` line are prose — GitHub's hierarchy and dependency
+graphs cannot see them. Record the real edges immediately after creating the issue.
+`sub_issue_id` / `issue_id` take the issue's `id`, never its number.
+
+```bash
+REPO=mrveiss/AutoBot-AI
+
+# Attach to its umbrella
+gh api -X POST repos/$REPO/issues/$UMBRELLA/sub_issues \
+  -F sub_issue_id=$(gh api repos/$REPO/issues/$NEW -q .id)
+
+# One edge per blocker, recorded on the BLOCKED issue
+gh api -X POST repos/$REPO/issues/$NEW/dependencies/blocked_by \
+  -F issue_id=$(gh api repos/$REPO/issues/$BLOCKER -q .id)
+
+# Read back
+gh api repos/$REPO/issues/$UMBRELLA/sub_issues         -q '.[].number'
+gh api repos/$REPO/issues/$NEW/dependencies/blocked_by -q '.[].number'
+```
+
+- One parent per child — re-parenting is `DELETE .../sub_issue -F sub_issue_id=…` then POST.
+- Backfilling from an existing checklist: a row owns **at most one** issue. Refs in parentheses,
+  or after `blocked by` / `depends on` / `unblocks` / `sub-tree` / `PR`, are commentary — linking
+  them re-parents another umbrella's child, and one-parent-per-child then blocks the real parent.
+- A duplicate POST returns 422; that means already-linked, not a failure.
+- Hierarchy and dependency are separate graphs — never encode one as the other.
+- Issue *types* are an org-only GitHub feature and 404 here; labels stay the taxonomy.
+
+## Step 5 — Report and ask
 
 ```bash
 gh issue view <new-number>   # Confirm creation
@@ -77,6 +115,7 @@ Then report:
 ```
 Created #<number>: <title>
 Labels: <type> · <area> · <priority>
+Parent: #<umbrella> (native sub-issue) · Blocked by: #<n>, #<n>
 Should I: a) Fix now  b) Finish current issue first  c) Leave for later
 ```
 

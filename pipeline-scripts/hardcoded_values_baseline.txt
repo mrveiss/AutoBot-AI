@@ -17,8 +17,10 @@
 # THIS FILE ONLY EVER SHRINKS BY DEFAULT. A finding not listed here fails the
 # build. The count is part of the key, so a SECOND occurrence of an
 # already-known value in an already-known file is a new finding, not a free
-# pass. `--audit-baseline` reports entries that no longer match anything, so a
-# fixed violation cannot leave a stranded exemption behind.
+# pass. `--audit-baseline` reports entries that claim more findings than the
+# scan finds -- delete one that matches nothing, LOWER one that still matches
+# fewer times (#16334) -- so a fixed violation cannot leave a stranded
+# exemption behind.
 #
 # THE ONE WAY AN ENTRY MAY BE ADDED (#14919). Both halves are required, and the
 # first one cannot be bought:
@@ -75,7 +77,6 @@
 3|other|autobot-backend/agents/llm_failsafe_agent.py|"system"
 2|other|autobot-backend/agents/llm_failsafe_agent.py|"user"
 1|other|autobot-backend/agents/npu_code_search_agent.py|10
-1|other|autobot-backend/agents/overseer/step_executor_agent.py|60
 5|other|autobot-backend/agents/rag_agent.py|"system"
 3|other|autobot-backend/agents/rag_agent.py|"user"
 1|other|autobot-backend/agents/system_command_agent.py|"system"
@@ -115,7 +116,6 @@
 1|other|autobot-backend/api/analytics_quality.py|50
 1|other|autobot-backend/api/anthropic_compat.py|"assistant"
 2|other|autobot-backend/api/anthropic_compat.py|"system"
-2|other|autobot-backend/api/auth.py|"user"
 1|other|autobot-backend/api/batch_jobs.py|30
 10|other|autobot-backend/api/chat.py|"assistant"
 1|other|autobot-backend/api/chat.py|"user"
@@ -202,8 +202,6 @@
 1|other|autobot-backend/canvas/vega_validation.py|https://vega.github.io/schema/vega-lite/v5.json
 2|other|autobot-backend/chat_workflow/llm_handler.py|"assistant"
 2|other|autobot-backend/chat_workflow/llm_handler.py|"user"
-1|other|autobot-backend/chat_workflow/llm_handler.py|http://0.0.0.0:11434
-1|ssot|autobot-backend/chat_workflow/llm_handler.py|:11434
 1|other|autobot-backend/chat_workflow/manager.py|"assistant"
 3|other|autobot-backend/chat_workflow/manager.py|"user"
 1|other|autobot-backend/chat_workflow/tool_handler.py|5
@@ -385,7 +383,6 @@
 1|other|autobot-backend/llm_shared/structured_ops.py|"user"
 1|other|autobot-backend/llm_shared/tiered_routing/complexity_router.py|"system"
 1|other|autobot-backend/llm_shared/tiered_routing/complexity_scorer.py|"user"
-1|other|autobot-backend/mcp/autobot_server.py|10
 1|other|autobot-backend/media/document/extraction.py|offset=0
 1|other|autobot-backend/media/link/pipeline.py|https://r.jina.ai/
 1|other|autobot-backend/memory/compat.py|100
@@ -517,7 +514,6 @@
 1|other|autobot-backend/services/research/synthesizer.py|"user"
 1|other|autobot-backend/services/skill_management/skill_extractor.py|"user"
 1|other|autobot-backend/services/slm_client.py|30
-2|other|autobot-backend/services/slm_client.py|http://autobot-slm:8000
 1|other|autobot-backend/services/task_decomposition_service.py|300
 1|other|autobot-backend/services/telegram_bot_service.py|https://api.telegram.org/bot{bot_token}
 1|other|autobot-backend/services/telegram_bot_service.py|https://api.telegram.org/file/bot{self.bot_token}/{file_path}
@@ -640,7 +636,6 @@
 1|other|autobot-frontend/src/composables/knowledge/useKnowledgeBrowser.ts|offset=0
 2|other|autobot-frontend/src/composables/knowledge/useKnowledgeCategories.ts|100
 1|other|autobot-frontend/src/composables/useAIDocument.ts|50
-1|other|autobot-frontend/src/composables/useApi.ts|10
 1|other|autobot-frontend/src/composables/useCodeIntelligence.ts|50
 1|other|autobot-frontend/src/composables/useCollaborationInvites.ts|offset=0
 3|other|autobot-frontend/src/composables/useKnowledgeCollaboration.ts|100
@@ -728,7 +723,6 @@
 1|other|autobot-infrastructure/shared/config/deployment/distributed.yml|http://monitoring.autobot.prod:9090
 1|other|autobot-infrastructure/shared/config/distributed.yaml|30
 1|other|autobot-infrastructure/shared/config/logging/loki/grafana-datasources.yml|http://loki:3100
-1|other|autobot-infrastructure/shared/config/logging/promtail/promtail-config.yml|/home/autobot
 1|other|autobot-infrastructure/shared/config/npu_workers.example.yaml|300
 1|other|autobot-infrastructure/shared/config/npu_workers.example.yaml|60
 10|ssot|autobot-infrastructure/shared/config/prometheus/alertmanager.yml|:8001
@@ -753,7 +747,6 @@
 1|other|autobot-infrastructure/shared/mcp/servers/prometheus-mcp/server.py|30
 1|other|autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/embedded.py|10
 1|other|autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/server.py|10
-1|other|autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts|'user'
 1|other|autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/real-time-ingestion.ts|'assistant'
 1|other|autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/test-ingestion.ts|'assistant'
 1|other|autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/test-ingestion.ts|'user'
@@ -1161,10 +1154,7 @@
 1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|"/opt/autobot/autobot-frontend/package.json
 1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|"/opt/autobot/venv
 1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|https://github.com
-1|other|autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml|"/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml|https://github.com/mrveiss/AutoBot-AI.git
-1|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|"/opt/autobot/code_source
-1|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|'/opt/autobot/autobot-frontend/dist
 2|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|'/opt/autobot/autobot-slm-frontend
 1|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|https://github.com/mrveiss/AutoBot-AI.git
 3|other|autobot-slm-backend/ansible/playbooks/recover_host.yml|/home/autobot
@@ -1176,7 +1166,6 @@
 2|other|autobot-slm-backend/ansible/playbooks/rotate-ssh-keys.yml|/home/autobot
 2|other|autobot-slm-backend/ansible/playbooks/setup-rbac.yml|"/opt/autobot
 1|other|autobot-slm-backend/ansible/playbooks/setup-vm-names-and-lvm.yml|300
-1|other|autobot-slm-backend/ansible/playbooks/sync-code-source.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|"/opt/autobot
 1|other|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|"/opt/autobot/autobot-backend/{{ item }}
 1|ssot|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|:8001
@@ -1184,10 +1173,8 @@
 1|other|autobot-slm-backend/ansible/playbooks/system-update.yml|30
 7|other|autobot-slm-backend/ansible/playbooks/system-update.yml|300
 2|other|autobot-slm-backend/ansible/playbooks/system-update.yml|60
-1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|"/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|"/opt/autobot/{{ item }}
 3|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|"/tmp/autobot-deploy
-2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|'/opt/autobot/code_source
 2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|30
 2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|60
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|chown --no-dereference -R autobot:autobot
@@ -1212,7 +1199,6 @@
 1|other|autobot-slm-backend/ansible/roles/agent_config/defaults/main.yml|"/var/lib/autobot/models
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/nodejs.yml|https://deb.nodesource.com/setup_{{
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/ollama.yml|https://ollama.ai/install.sh
-1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/openvino.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/openvino.yml|300
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/openvino.yml|https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/openvino.yml|https://apt.repos.intel.com/openvino/{{
@@ -1224,9 +1210,7 @@
 7|ssot|autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml|mistral:7b-instruct
 1|ssot|autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml|phi3:mini
 4|ssot|autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml|qwen3.5:9b
-2|other|autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml|120
-1|other|autobot-slm-backend/ansible/roles/autobot_shared/tasks/main.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|https://github.com/mrveiss/AutoBot-AI.git
 1|ssot|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|:11434
 1|ssot|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|qwen3.5:9b
@@ -1236,7 +1220,6 @@
 1|other|autobot-slm-backend/ansible/roles/backend/tasks/main.yml|https://downloads.claude.ai/claude-code/apt/stable
 1|other|autobot-slm-backend/ansible/roles/backend/tasks/main.yml|https://downloads.claude.ai/keys/claude-code.asc
 1|other|autobot-slm-backend/ansible/roles/browser/defaults/main.yml|30
-1|other|autobot-slm-backend/ansible/roles/browser/tasks/main.yml|'/opt/autobot/code_source
 3|other|autobot-slm-backend/ansible/roles/browser/tasks/main.yml|/home/autobot
 1|other|autobot-slm-backend/ansible/roles/browser/tasks/main.yml|300
 1|other|autobot-slm-backend/ansible/roles/browser/tasks/main.yml|chown autobot:autobot
@@ -1263,7 +1246,6 @@
 1|other|autobot-slm-backend/ansible/roles/docker/tasks/main.yml|https://download.docker.com/linux/centos/docker-ce.repo
 1|other|autobot-slm-backend/ansible/roles/docker/tasks/main.yml|https://download.docker.com/linux/{{
 1|other|autobot-slm-backend/ansible/roles/frontend/defaults/main.yml|https://github.com/mrveiss/AutoBot-AI.git
-3|other|autobot-slm-backend/ansible/roles/frontend/tasks/main.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/frontend/vars/main.yml|/home/autobot
 1|ssot|autobot-slm-backend/ansible/roles/llm/defaults/main.yml|gemma2:2b
 1|ssot|autobot-slm-backend/ansible/roles/llm/defaults/main.yml|gemma3:4b
@@ -1271,16 +1253,12 @@
 1|ssot|autobot-slm-backend/ansible/roles/llm/defaults/main.yml|qwen3.5:9b
 1|other|autobot-slm-backend/ansible/roles/llm/tasks/main.yml|https://ollama.ai/install.sh
 1|other|autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml|"/opt/autobot
-1|other|autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml|"/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/grafana.yml|https://apt.grafana.com
 2|other|autobot-slm-backend/ansible/roles/monitoring/tasks/grafana.yml|https://apt.grafana.com/gpg.key
-1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/health_check_cron.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/node_exporter.yml|https://github.com/prometheus/node_exporter/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/prometheus.yml|https://github.com/prometheus/prometheus/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/nodejs/tasks/main.yml|https://deb.nodesource.com/setup_{{
-1|other|autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml|120
-1|other|autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml|300
 1|other|autobot-slm-backend/ansible/roles/postgresql/tasks/install.yml|https://apt.postgresql.org/pub/repos/apt
 1|other|autobot-slm-backend/ansible/roles/postgresql/tasks/install.yml|https://www.postgresql.org/media/keys/ACCC4CF8.asc
 1|other|autobot-slm-backend/ansible/roles/redis-replication/defaults/main.yml|60
@@ -1295,7 +1273,6 @@
 1|other|autobot-slm-backend/ansible/roles/slm_agent/tasks/node_exporter.yml|https://github.com/prometheus/node_exporter/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/grafana.yml|https://apt.grafana.com
 1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/grafana.yml|https://apt.grafana.com/gpg.key
-6|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml|120
 2|other|autobot-slm-backend/ansible/roles/time_sync/tasks/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/time_sync/vars/main.yml|120
@@ -1318,14 +1295,13 @@
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-frontend
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-slm-backend/requirements.txt
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-slm-backend/venv/bin/pip
-2|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-slm-frontend
-1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/{_CONSTRAINTS_SOURCE_SUBDIR}/
+1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-slm-frontend
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/{component}/
 1|other|autobot-slm-backend/api/code_sync.py|'/opt/autobot/{component}
 1|other|autobot-slm-backend/api/code_sync.py|100
 6|other|autobot-slm-backend/api/code_sync.py|120
-3|other|autobot-slm-backend/api/code_sync.py|30
-4|other|autobot-slm-backend/api/code_sync.py|300
+1|other|autobot-slm-backend/api/code_sync.py|30
+1|other|autobot-slm-backend/api/code_sync.py|300
 2|other|autobot-slm-backend/api/code_sync.py|60
 1|ssot|autobot-slm-backend/api/code_sync.py|:8001
 1|other|autobot-slm-backend/api/errors.py|50
@@ -1337,7 +1313,6 @@
 1|other|autobot-slm-backend/api/roles.py|120
 1|other|autobot-slm-backend/api/scim.py|offset=0
 1|other|autobot-slm-backend/api/secrets.py|https://huggingface.co/settings/tokens
-2|other|autobot-slm-backend/api/services.py|30
 1|ssot|autobot-slm-backend/api/slm_users.py|:5432
 1|other|autobot-slm-backend/api/tls.py|300
 1|other|autobot-slm-backend/api/updates.py|100
@@ -1350,7 +1325,6 @@
 1|other|autobot-slm-backend/migrations/utils.py|"postgresql://"
 1|ssot|autobot-slm-backend/models/manifest.py|:8443
 1|other|autobot-slm-backend/monitoring/performance_benchmark.py|"/tmp/autobot_disk_benchmark.tmp
-1|other|autobot-slm-backend/monitoring/performance_dashboard.py|https://cdn.plot.ly/plotly-latest.min.js
 1|other|autobot-slm-backend/scripts/autobot-admin.py|"/opt/autobot/autobot-slm-backend/.env
 1|ssot|autobot-slm-backend/scripts/verify_endpoints.py|:8080
 1|other|autobot-slm-backend/services/agent_seeder.py|30

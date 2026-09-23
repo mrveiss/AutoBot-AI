@@ -19,18 +19,30 @@ Page text is kept **structured** rather than pre-joined. Callers that need a fla
 string call :func:`render_pages`; callers that need per-page provenance read
 ``pages`` directly. That split is what lets page numbers reach retrieval as
 metadata instead of as marker text baked into the embedding (#13894).
+
+Page-offset lookups (``page_for_offset``/``pages_for_span``/``chunk_page_map``)
+and table rendering (``render_tables``/``render_text_and_tables``) live in
+:mod:`media.document.provenance` (#14970) — split out once folding tables into
+ingest text pushed this module over ``MAX_LINES``. ``PageSpan`` and
+``render_plain`` stayed here rather than moving with them, since
+``api/knowledge.py`` imports ``render_plain`` directly and this way that file
+needs no import-path change. Nothing in this module calls into
+``provenance.py``, so the split carries no circular import.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import io
-import re
+import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from media.document.zip_formats import SUFFIX_BY_FORMAT, sniff_zip_format
 
 logger = get_logger(__name__)
 
@@ -43,18 +55,15 @@ _ZIP_MAGIC = b"PK"
 _DOCX_MARKER = b"word/"
 _DOCX_SNIFF_BYTES = 2000
 
-# #13884: fraction of pages that must carry text before an extraction counts as
-# usable. Default 0.5 — a document where most pages are unreadable is a scan,
-# whatever the remaining pages contain. Override when a corpus is legitimately
+# #13884: fraction of pages that must carry text before an extraction counts as usable. Default 0.5 — a document where
+# most pages are unreadable is a scan, whatever the remaining pages contain. Override when a corpus is legitimately
 # mixed (title pages, plates, appendices of figures).
 DEFAULT_MIN_TEXT_PAGE_RATIO = 0.5
 
-# #13884 finding 1: the ratio above counts a page as readable when it carries a
-# single character, which a scanner/DMS/Bates page-number stamp satisfies on
-# every page. Measured against synthesized fixtures (reportlab + PIL): a
-# "Page N of 10" stamp averages ~13 characters/page, a Bates+"CONFIDENTIAL"
-# stamp ~25; a genuine single-field born-digital page (an invoice with five
-# short lines) averages ~109, and ordinary dense prose ~3900. 50 sits between
+# #13884 finding 1: the ratio above counts a page as readable when it carries a single character, which a
+# scanner/DMS/Bates page-number stamp satisfies on every page. Measured against synthesized fixtures (reportlab +
+# PIL): a "Page N of 10" stamp averages ~13 characters/page, a Bates+"CONFIDENTIAL" stamp ~25; a genuine single-field
+# born-digital page (an invoice with five short lines) averages ~109, and ordinary dense prose ~3900. 50 sits between
 # the stamp cluster and the real-content cluster with margin on both sides.
 DEFAULT_MIN_CHARS_PER_PAGE = 50.0
 
@@ -270,13 +279,48 @@ def render_pages(pages: Sequence[PageText], marker: str = PAGE_MARKER_TEMPLATE) 
     return "\n\n".join(parts)
 
 
+PAGE_SEPARATOR = "\n\n"
+
+
+def render_plain(pages: Sequence[PageText], separator: str = PAGE_SEPARATOR) -> Tuple[str, Tuple[PageSpan, ...]]:
+    """Join pages with **no** markers, returning the text and where each page sits.
+
+    The marker-carrying :func:`render_pages` is the wrong input for an embedding:
+    ``## Page 7`` is structure, not meaning, and it competes with the document's
+    own words for similarity. This is the same text with the provenance moved out
+    of the string and into character spans a caller stores as metadata (#13894).
+
+    Empty pages are skipped, exactly as :func:`render_pages` skips them, so the
+    two renderings stay page-for-page comparable.
+    """
+    parts: List[str] = []
+    spans: List[PageSpan] = []
+    offset = 0
+    for page in pages:
+        if not page.text.strip():
+            continue
+        if parts:
+            offset += len(separator)
+        spans.append(PageSpan(number=page.number, start=offset, end=offset + len(page.text)))
+        parts.append(page.text)
+        offset += len(page.text)
+    return separator.join(parts), tuple(spans)
+
+
 def detect_format(raw: bytes, mime_type: str = "") -> str:
     """Detect document format from magic bytes, falling back to MIME type."""
     mime = (mime_type or "").lower()
     if raw[:4] == _PDF_MAGIC:
         return "pdf"
-    if raw[:2] == _ZIP_MAGIC and _DOCX_MARKER in raw[:_DOCX_SNIFF_BYTES]:
-        return "docx"
+    if raw[:2] == _ZIP_MAGIC:
+        # #16773: all seven office/ODF formats carry the same PK prefix, so the prefix
+        # cannot tell them apart -- the archive's own members can. The marker sniff below
+        # still covers a truncated upload, whose central directory has not arrived yet.
+        verified = sniff_zip_format(raw)
+        if verified:
+            return verified
+        if _DOCX_MARKER in raw[:_DOCX_SNIFF_BYTES]:
+            return "docx"
     if "pdf" in mime:
         return "pdf"
     if "docx" in mime or "officedocument.wordprocessingml" in mime:
@@ -473,6 +517,67 @@ def extract_plain_text(raw: bytes) -> ExtractedDocument:
     return ExtractedDocument(format="text", text=text)
 
 
+#: ZIP-based formats this module has no reader of its own for. ``docx`` is
+#: excluded because :func:`extract_docx` above already handles it.
+OFFICE_FORMATS = frozenset(SUFFIX_BY_FORMAT) - {"docx"}
+
+# : The third-party module each office format's parser imports. Checked before : delegating so a missing library stays
+# a DEPENDENCY error: the shared sync : parser catches every exception per candidate and reports one "extraction :
+# failed" string, which would otherwise report a deployment gap as a bad : document -- the exact conflation the
+# pipeline's two error paths exist to : prevent (#13895, and the comment on DocumentDependencyError above).
+_OFFICE_PARSER_MODULE = {
+    "xlsx": "openpyxl",
+    "pptx": "pptx",
+    "odt": "odf",
+    "ods": "odf",
+    "odp": "odf",
+    "odg": "odf",
+}
+
+
+def extract_office(raw: bytes, detected: str) -> ExtractedDocument:
+    """Extract a spreadsheet, presentation or OpenDocument file (#16784).
+
+    These formats used to fall through to :func:`extract_plain_text`, which
+    decoded their ZIP bytes as if they were text. The result was binary noise
+    presented as document text, flowing onward into the knowledge base and into
+    prompts through retrieval. Silent garbage is worse than a refusal: nothing
+    downstream could tell a bad document from one this path could not read.
+
+    ``utils.document_parser`` already owns working parsers for all six, so this
+    delegates rather than forking a second implementation. It raises on failure
+    instead of returning empty text, so the caller's existing error handling
+    names the format rather than reporting success with nothing in it.
+    """
+    # Local import, deliberately: utils.document_parser imports FROM this
+    # module, so a module-level import here is a cycle. Deferred to call time,
+    # when both modules are fully loaded.
+    from utils.document_parser import parse_document_text
+
+    module = _OFFICE_PARSER_MODULE[detected]
+    if importlib.util.find_spec(module) is None:
+        raise DocumentDependencyError(f"{module} is required to extract {detected} documents")
+
+    with tempfile.NamedTemporaryFile(suffix=SUFFIX_BY_FORMAT[detected], delete=False) as handle:
+        handle.write(raw)
+        path = Path(handle.name)
+    try:
+        text, metadata = parse_document_text(path)
+    except ValueError as exc:
+        raise DocumentExtractionError(f"cannot extract {detected}: {exc}") from exc
+    finally:
+        path.unlink(missing_ok=True)
+
+    if not metadata.get("extraction_success"):
+        reason = metadata.get("extraction_error", "no parser succeeded")
+        raise DocumentExtractionError(f"cannot extract {detected}: {reason}")
+
+    # tables_attempted stays False on purpose (#13895): these parsers fold sheet and table content into the text
+    # rather than populating `tables`, so claiming tables were attempted would make an empty `tables` mean "none
+    # found" when it means "not collected separately".
+    return ExtractedDocument(format=detected, text=text)
+
+
 def extract_document(raw: bytes, mime_type: str = "") -> ExtractedDocument:
     """Detect the format and extract, dispatching to the format-specific reader."""
     detected = detect_format(raw, mime_type)
@@ -480,94 +585,6 @@ def extract_document(raw: bytes, mime_type: str = "") -> ExtractedDocument:
         return extract_pdf(raw)
     if detected == "docx":
         return extract_docx(raw)
+    if detected in OFFICE_FORMATS:
+        return extract_office(raw, detected)
     return extract_plain_text(raw)
-
-
-def strip_page_markers(text: str, marker: str = PAGE_MARKER_TEMPLATE) -> str:
-    """Remove canonical page markers from rendered text.
-
-    Consumers that want prose without structural markers — an embedding input,
-    for instance — use this rather than re-extracting with a different renderer.
-    """
-    pattern = re.escape(marker).replace(r"\{number\}", r"\d+")
-    return re.sub(rf"^{pattern}\n?", "", text, flags=re.MULTILINE)
-
-
-PAGE_SEPARATOR = "\n\n"
-
-
-def render_plain(pages: Sequence[PageText], separator: str = PAGE_SEPARATOR) -> Tuple[str, Tuple[PageSpan, ...]]:
-    """Join pages with **no** markers, returning the text and where each page sits.
-
-    The marker-carrying :func:`render_pages` is the wrong input for an embedding:
-    ``## Page 7`` is structure, not meaning, and it competes with the document's
-    own words for similarity. This is the same text with the provenance moved out
-    of the string and into character spans a caller stores as metadata (#13894).
-
-    Empty pages are skipped, exactly as :func:`render_pages` skips them, so the
-    two renderings stay page-for-page comparable.
-    """
-    parts: List[str] = []
-    spans: List[PageSpan] = []
-    offset = 0
-    for page in pages:
-        if not page.text.strip():
-            continue
-        if parts:
-            offset += len(separator)
-        spans.append(PageSpan(number=page.number, start=offset, end=offset + len(page.text)))
-        parts.append(page.text)
-        offset += len(page.text)
-    return separator.join(parts), tuple(spans)
-
-
-def page_for_offset(spans: Sequence[PageSpan], offset: int) -> int | None:
-    """Return the page number containing *offset*, or ``None`` if outside them all.
-
-    An offset landing in the separator between two pages belongs to neither; the
-    caller decides what that means rather than being handed a silent guess.
-    """
-    for span in spans:
-        if span.start <= offset < span.end:
-            return span.number
-    return None
-
-
-def pages_for_span(spans: Sequence[PageSpan], start: int, end: int) -> Tuple[int, ...]:
-    """Return every page number a ``[start, end)`` range touches.
-
-    A chunk that straddles a page break genuinely comes from two pages. Reporting
-    only the first would silently mis-cite half its content, so this returns the
-    range and lets the caller record it.
-    """
-    if end <= start:
-        return ()
-    return tuple(span.number for span in spans if span.start < end and start < span.end)
-
-
-def chunk_page_map(spans: Sequence[PageSpan], chunks: Sequence[str], text: str) -> Tuple[Tuple[int, ...], ...]:
-    """Map each chunk of *text* to the page numbers it came from.
-
-    Chunkers return strings, not offsets, so the offsets are recovered by
-    scanning forward through *text*. Searching forward from the previous chunk's
-    end — rather than with :meth:`str.find` from zero — keeps repeated boilerplate
-    (headers, footers, recurring table scaffolding) from collapsing every
-    occurrence onto the first page it appeared on.
-    """
-    result: List[Tuple[int, ...]] = []
-    cursor = 0
-    for chunk in chunks:
-        if not chunk:
-            result.append(())
-            continue
-        start = text.find(chunk, cursor)
-        if start < 0:
-            # The chunker transformed the text (trimmed, normalized whitespace),
-            # so offsets cannot be recovered for this chunk. Report nothing
-            # rather than a wrong page.
-            result.append(())
-            continue
-        end = start + len(chunk)
-        result.append(pages_for_span(spans, start, end))
-        cursor = end
-    return tuple(result)

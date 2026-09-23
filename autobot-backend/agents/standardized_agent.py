@@ -26,6 +26,8 @@ from prompt_manager import get_language_instruction, resolve_language
 
 from .base_agent import AgentRequest, AgentResponse, BaseAgent, DeploymentMode
 
+logger = get_logger(__name__)
+
 
 @dataclass
 class ActionHandler:
@@ -399,6 +401,11 @@ class StandardizedAgent(BaseAgent):
         as a Markdown list for LLM injection.  The cache refresh is attempted
         but failures fall through to whatever stale data is available, so a
         transient registry outage never blocks a chat response (#2631).
+
+        Admin-configured external MCP servers (#11542) are merged into the
+        dispatcher's own cache (services/mcp_dispatch.py's
+        _merge_external_tools) and so already appear here via
+        get_tool_definitions() — no separate listing needed.
 
         Args:
             role: Caller RBAC role — passed to filter admin-only tools (#2629).

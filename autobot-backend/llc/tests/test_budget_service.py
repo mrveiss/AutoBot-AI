@@ -9,8 +9,25 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llc.exceptions import BudgetExhausted
+from llc.exceptions import BudgetExhausted, UnpricedModel
 from llc.services.budget import BudgetService
+
+
+@pytest.fixture(autouse=True)
+def _seed_pricing_cache():
+    """`ingest_cost_event` prices against the live catalogue now (#16230); left cold
+    it raises `UnpricedModel` instead of accumulating, which is correct behaviour
+    and a broken test.
+
+    3.00/15.00 is the price the canonical table carries for this model
+    (`autobot_shared/model_pricing.py`), so no assertion below changes value.
+    Only this one model is seeded, so a test that needs an *unpriced* model
+    still gets one.
+    """
+    from llc.tests._pricing_seed import seeded_pricing_cache
+
+    with seeded_pricing_cache("claude-sonnet-4-6", 3.00, 15.00):
+        yield
 
 
 def _make_row(spent: float, limit: float, threshold: float = 0.8) -> MagicMock:
@@ -39,8 +56,8 @@ async def test_ingest_accumulates_cost() -> None:
     svc = BudgetService()
     with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
         mock_redis.return_value = None
-        await svc.ingest_cost_event(session, "agent-001", 100, 50, "claude-sonnet-4-6")
-        await svc.ingest_cost_event(session, "agent-001", 100, 50, "claude-sonnet-4-6")
+        await svc.ingest_cost_event(session, "agent-001", "company-1", 100, 50, "claude-sonnet-4-6")
+        await svc.ingest_cost_event(session, "agent-001", "company-1", 100, 50, "claude-sonnet-4-6")
 
     # session.execute called twice per ingest (UPDATE + SELECT) = 4 total
     assert session.execute.call_count == 4
@@ -54,7 +71,7 @@ async def test_hard_stop_raises_budget_exhausted() -> None:
     svc = BudgetService()
     with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock):
         with pytest.raises(BudgetExhausted) as exc_info:
-            await svc.ingest_cost_event(session, "agent-001", 1000, 500, "claude-sonnet-4-6")
+            await svc.ingest_cost_event(session, "agent-001", "company-1", 1000, 500, "claude-sonnet-4-6")
 
     assert exc_info.value.agent_id == "agent-001"
     assert exc_info.value.spent > exc_info.value.limit
@@ -75,7 +92,7 @@ async def test_alert_emitted_at_threshold() -> None:
         new_callable=AsyncMock,
         return_value=mock_redis_client,
     ):
-        await svc.ingest_cost_event(session, "agent-001", 0, 0, "claude-sonnet-4-6")
+        await svc.ingest_cost_event(session, "agent-001", "company-1", 0, 0, "claude-sonnet-4-6")
 
     mock_redis_client.publish.assert_called_once()
     call_args = mock_redis_client.publish.call_args
@@ -97,7 +114,7 @@ async def test_alert_not_emitted_below_threshold() -> None:
         new_callable=AsyncMock,
         return_value=mock_redis_client,
     ):
-        await svc.ingest_cost_event(session, "agent-001", 0, 0, "claude-sonnet-4-6")
+        await svc.ingest_cost_event(session, "agent-001", "company-1", 0, 0, "claude-sonnet-4-6")
 
     mock_redis_client.publish.assert_not_called()
 
@@ -108,7 +125,7 @@ async def test_check_budget_over_limit() -> None:
     session = _make_session(row)
 
     svc = BudgetService()
-    remaining, is_over, alert = await svc.check_budget(session, "agent-001")
+    remaining, is_over, alert = await svc.check_budget(session, "agent-001", "company-1")
 
     assert remaining == Decimal("10.0") - Decimal("12.0")
     assert remaining < Decimal("0")
@@ -117,15 +134,31 @@ async def test_check_budget_over_limit() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unknown_model_zero_cost() -> None:
+async def test_unknown_model_refuses_rather_than_costing_zero() -> None:
+    """#15860: this test previously asserted the defect as intended behaviour.
+
+    It required an unpriced model to cost `Decimal("0")` and the UPDATE to run
+    anyway. That is exactly what made dollar budgets silently inapplicable to
+    the provider default once it fell out of the pricing table -- a cost of 0
+    and a cost that could not be computed are the same number, and only one of
+    them is a fact.
+
+    Inverted rather than deleted: the case still matters, and what it should
+    assert is that the event is refused. Free models are unaffected because the
+    table prices them at zero explicitly, so absence means unpriced, not free.
+    """
     row = _make_row(spent=0.0, limit=10.0)
     session = _make_session(row)
 
     svc = BudgetService()
     with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
         mock_redis.return_value = None
-        cost = await svc.ingest_cost_event(session, "agent-001", 1000, 500, "unknown-model-xyz")
+        with pytest.raises(UnpricedModel):
+            await svc.ingest_cost_event(session, "agent-001", "company-1", 1000, 500, "unknown-model-xyz")
 
-    assert cost == Decimal("0")
-    # UPDATE was still called (with cost=0)
-    assert session.execute.call_count >= 1
+    # The version this replaced asserted `session.execute.call_count >= 1` -- that
+    # the UPDATE ran with cost=0. Inverting the test dropped that assertion rather
+    # than inverting it, so nothing checked the write. It passes today because the
+    # raise precedes the UPDATE; the regression it guards is the refusal moving
+    # after a partial write, which is exactly when it would matter.
+    assert session.execute.call_count == 0, "an unpriced event still reached the database"

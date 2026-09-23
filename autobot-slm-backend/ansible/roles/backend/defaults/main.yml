@@ -9,12 +9,12 @@ backend_user: autobot
 backend_group: autobot
 backend_install_dir: /opt/autobot/autobot-backend
 # Canonical git checkout on the box (#3649), matching the autobot_shared and
-# monitoring role defaults. Every code_source_dir reference in this role's
+# monitoring role defaults, and derived from `autobot.base_dir` since #15632. Every code_source_dir reference in this role's
 # tasks/main.yml used to repeat the default(...) fallback with this literal inline
 # instead of relying on a role default -- nine occurrences of the same literal,
 # which is exactly what pipeline-scripts/hardcoded_values_baseline.txt exists
 # to catch (#15162). Defined here once, tasks reference the bare variable.
-code_source_dir: /opt/autobot/code_source
+code_source_dir: "{{ autobot.base_dir }}/code_source"
 backend_code_dir: "{{ backend_install_dir }}"  # Actual code location (can be overridden by playbook)
 backend_shared_standalone_dir: /opt/autobot/autobot_shared  # Standalone PYTHONPATH copy used by workers (#3649)
 backend_log_dir: /var/log/autobot
@@ -87,6 +87,8 @@ celery_max_tasks_per_child: 1000  # Restart worker after N tasks (prevents memor
 backend_redis_host: "{{ redis_host | default('127.0.0.1') }}"
 backend_redis_port: 6379
 backend_redis_password: ""
+# #16626: ACL username sent with backend_redis_password; "" renders `default` (#16668)
+backend_redis_username: ""
 
 # User management mode (Issue #2953)
 # AutoBot always runs full, Postgres-backed user management (#10636).
@@ -136,7 +138,10 @@ backend_browser_host: ""    # Set to browser VM IP in fleet deployments; empty =
 backend_browser_port: 9001  # Port 9001 is canonical; 3000 was Grafana's port (#5608)
 
 # AI Stack connection (co-located: use 127.0.0.1; WSL2: may need 10.255.255.254)
-backend_ai_stack_host: "127.0.0.1"
+# The shipped default, named once so the WSL2 override below can ask "is this still
+# the default?" without restating the address (#17244).
+backend_ai_stack_host_shipped_default: "127.0.0.1"
+backend_ai_stack_host: "{{ backend_ai_stack_host_shipped_default }}"
 backend_ai_stack_port: 8080
 
 # ChromaDB connection (co-located: ai-stack node; fleet deployment: ai-stack node IP)
@@ -181,3 +186,11 @@ backend_audit_log_file: /opt/autobot/logs/audit.log
 #   backend_has_gpu: "auto" runs nvidia-smi at deploy time; "true"/"false" override.
 backend_vllm_enabled: false
 backend_has_gpu: "auto"
+
+# WSL2 routing (#3503, #17244). Defined here rather than inline in tasks so a
+# non-default WSL2 network can be overridden from inventory, and so the two
+# addresses are named rather than appearing as bare literals in an expression.
+# `..._loopback_host` is used when the AI stack is co-located on this node;
+# `..._gateway_host` reaches the Windows side when it is not.
+backend_wsl2_loopback_host: "127.0.0.1"
+backend_wsl2_gateway_host: "10.255.255.254"

@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import Role, SyncType
+from services.role_manifest_shape import default_roles_for
 
 _BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
 _SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", "/opt/autobot/autobot-slm-agent")
@@ -38,14 +39,14 @@ _SLM_ROLES = [
         "auto_restart": True,
         "health_check_port": 8000,
         "health_check_path": "/api/health",
+        # #16889: routed through build-filtered-requirements.sh -- same
+        # rationale as the backend role's post_sync_cmd above; a bare
+        # `pip install -r` can't resolve this file's constraints include.
         "post_sync_cmd": (
-            # #14275: venv/bin, not bare. The unit runs
-            # `{{ slm_backend_dir }}/venv/bin/uvicorn`, so a bare `pip`/`alembic`
-            # targets system Python — new code against unchanged dependencies,
-            # and a migration run by a different interpreter than the service.
-            f"cd {_BASE_DIR}/autobot-slm-backend && "
-            "venv/bin/pip install -r requirements.txt && "
-            "venv/bin/alembic upgrade head"
+            f"cd {_BASE_DIR}/autobot-slm-backend && "  # #14275: venv/bin, not bare (see backend role above)
+            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh requirements.txt "
+            f"{_BASE_DIR}/code_source > /tmp/requirements-filtered-slm-backend.txt && "
+            "venv/bin/pip install -r /tmp/requirements-filtered-slm-backend.txt && venv/bin/alembic upgrade head"
         ),
         "required": True,
         "degraded_without": [],
@@ -286,8 +287,8 @@ _AI_STACK_ROLES = [
         "target_path": "",
         "systemd_service": "autobot-chromadb",
         "auto_restart": True,
-        "health_check_port": 8000,
-        "health_check_path": "/api/v1/heartbeat",
+        "health_check_port": 8100,  # #16025: was 8000/v1 -- ssot_config (#3094) + ai-stack ansible use 8100/v2
+        "health_check_path": "/api/v2/heartbeat",
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "setup-ai-stack.yml",
@@ -366,8 +367,8 @@ _OPTIONAL_ROLES = [
         "target_path": f"{_BASE_DIR}/autobot-browser-worker",
         "systemd_service": "autobot-playwright",
         "auto_restart": True,
-        "health_check_port": 3000,
-        "health_check_path": "/status",
+        "health_check_port": 9001,  # #16025: was 3000/status -- browser ansible role defaults declare 9001 (#4662)
+        "health_check_path": "/health",
         "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-browser-worker && npm install"),
         "required": False,
         "degraded_without": ["Browser automation tasks — features degrade gracefully"],
@@ -475,10 +476,9 @@ _INFRA_ROLES = [
     },
 ]
 
-DEFAULT_ROLES = (
+DEFAULT_ROLES: List[Dict] = default_roles_for(  # #16025: manifest-augmented, see role_manifest_shape.py
     _SLM_ROLES + _BACKEND_ROLES + _FRONTEND_ROLES + _DATABASE_ROLES + _AI_STACK_ROLES + _OPTIONAL_ROLES + _INFRA_ROLES
 )
-
 # ---------------------------------------------------------------------------
 # Role → Ansible inventory group mapping  (#1346)
 #
@@ -532,10 +532,10 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
 
 # Static dependency map: role -> infrastructure packages required.
 # Used by setup_wizard.py to compute node_dependencies for provisioning Phase 0.
-# Dependencies are Ansible role names: nginx, python314, nodejs, postgresql.
+# Dependencies are Ansible role names: nginx, python_interpreter (#13843, was python314), nodejs, postgresql.
 ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # SLM roles
-    "slm-backend": ["python314", "nginx"],
+    "slm-backend": ["python_interpreter", "nginx"],
     "slm-frontend": ["nodejs", "nginx"],
     # #14460: NOT just postgresql. inventory_builder._ROLE_TO_GROUPS puts
     # slm-database in {redis, database} -- the same groups `role_redis_active`
@@ -543,7 +543,7 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # unconditional `python3.14 -m venv`. The SLM roles are separable (see the
     # section header above), so a node can carry slm-database without
     # slm-backend, which is the only other declarer of the interpreter here.
-    "slm-database": ["postgresql", "python314"],
+    "slm-database": ["postgresql", "python_interpreter"],
     "slm-monitoring": [],
     # Service roles
     #
@@ -554,14 +554,14 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # roles must therefore declare both, exactly as "backend" does. Declaring
     # less does not skip the work; it just means Phase 0 never installs what
     # Phase 4a is about to require.
-    "backend": ["python314", "nginx"],
-    "celery": ["python314", "nginx"],
-    "scheduler": ["python314", "nginx"],
+    "backend": ["python_interpreter", "nginx"],
+    "celery": ["python_interpreter", "nginx"],
+    "scheduler": ["python_interpreter", "nginx"],
     "frontend": ["nodejs", "nginx"],
     # #14446: the redis role unconditionally `import_tasks: chromadb.yml`,
     # which runs `python3.14 -m venv`. A redis-only node needs the interpreter
     # even though nothing about "redis" suggests it.
-    "redis": ["python314"],
+    "redis": ["python_interpreter"],
     # #14460: NOT just postgresql. A postgres node joins the `database` group,
     # and `role_redis_active` gates on that group -- so Phase 3 applies the
     # *redis* ansible role, whose main.yml unconditionally
@@ -569,25 +569,25 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # interpreter is imposed by the shared group, not by postgres itself.
     # #14446's guard could not see this: its group path looked up "databases",
     # a name no fact mentions, so it found nothing to require.
-    "postgres": ["postgresql", "python314"],
-    "ai-stack": ["python314"],
-    "chromadb": ["python314"],
+    "postgres": ["postgresql", "python_interpreter"],
+    "ai-stack": ["python_interpreter"],
+    "chromadb": ["python_interpreter"],
     "browser-service": ["nodejs"],
-    "npu-worker": ["python314"],
-    "tts-worker": ["python314"],
+    "npu-worker": ["python_interpreter"],
+    "tts-worker": ["python_interpreter"],
     # #14460: NOT empty. The `autobot-llm-` prefix key in
     # inventory_builder._ROLE_TO_GROUPS lands both roles in {ai_stack, aiml,
     # ai, llm_nodes}; `role_ai_stack_active` gates on ai_stack/aiml, so
     # provision-fleet-roles.yml applies the ai-stack ansible role, which
     # creates a python3.14 venv. Same shape as slm-database above: the
     # requirement comes from the group, not from the role's own name.
-    "autobot-llm-cpu": ["python314"],
-    "autobot-llm-gpu": ["python314"],
+    "autobot-llm-cpu": ["python_interpreter"],
+    "autobot-llm-gpu": ["python_interpreter"],
     # #14446: NOT empty. See the note on the service roles above -- vnc maps
     # into the backend group, so the backend ansible role runs on a vnc-only
     # node. Provisioning failed at the venv with "No such file or directory:
     # b'python3.14'", an error naming the venv rather than the dependency.
-    "vnc": ["python314", "nginx"],
+    "vnc": ["python_interpreter", "nginx"],
     "slm-agent": [],
 }
 
@@ -607,7 +607,7 @@ async def seed_default_roles(db: AsyncSession) -> int:
     """
     created = 0
     updated = 0
-    for role_data in DEFAULT_ROLES:
+    for role_data in ({k: v for k, v in r.items() if k in Role.__table__.columns} for r in DEFAULT_ROLES):  # #16025
         result = await db.execute(select(Role).where(Role.name == role_data["name"]))
         role = result.scalar_one_or_none()
         if role is None:
@@ -699,7 +699,7 @@ async def get_role_owners(db: AsyncSession) -> Dict[str, str]:
 async def get_role_definitions() -> List[Dict]:
     """Get lightweight role definitions for agents.
 
-    Includes roles with either a target_path or a systemd_service so
+    Includes roles with either a target_path or a systemd_service (a ``List[str]``, #16025 AC4) so
     service-only roles (redis, chromadb, postgresql) are also detected.
     """
     return [

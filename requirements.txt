@@ -21,7 +21,7 @@ asyncssh>=2.24.0
 # comment, so it spent two months telling readers to revert a cap that had
 # become correct. Recorded here so the next reader does not have to guess.
 #
-# FLOOR >=7.36.0. Walked up by Dependabot (#14951); it carries forward the
+# FLOOR >=7.36.1. Walked up by Dependabot (#14951, then #15972); it carries forward the
 # JSON recursion-depth bypass fix that first set a floor at 5.29.6 (#3933).
 # TensorFlow is not a project dependency — the historical <6.0.0 cap it
 # justified caused pip conflicts and was removed in #3971.
@@ -29,7 +29,7 @@ asyncssh>=2.24.0
 # autobot-backend/requirements.txt `-r`-includes this file and ALSO declares
 # protobuf. pip resolves the intersection, so the two lines must stay
 # identical; tools/lint/check_requirements_pin_parity.py enforces that.
-protobuf>=7.36.0,<8.0.0
+protobuf>=7.36.2,<8.0.0
 
 # vLLM (GPU inference) is an OPTIONAL extra — NOT a default dependency (#10251).
 # It pulls the full CUDA toolkit (cuda-toolkit, nvidia-*, flashinfer, CUDA torch),
@@ -40,14 +40,14 @@ protobuf>=7.36.0,<8.0.0
 
 # Document parsing libraries for knowledge base
 # Supports PDF, Word, Excel, PowerPoint, OpenDocument formats
-pypdf>=6.16.1             # PDF parsing - SECURITY UPDATE (improved permission checks)
+pypdf>=6.19.0             # PDF parsing - SECURITY UPDATE (improved permission checks)
 python-docx>=1.2.0        # Microsoft Word (.docx)
 openpyxl>=3.1.5           # Microsoft Excel (.xlsx)
 python-pptx>=1.0.2        # Microsoft PowerPoint (.pptx)
 odfpy>=1.4.1              # OpenDocument formats (.odt, .ods, .odp, .odg)
 
 # OpenTelemetry - Distributed Tracing (Issue #57, #697)
-# Provides request tracing across the 5-VM AutoBot infrastructure
+# Provides request tracing across AutoBot's distributed, role-based infrastructure
 opentelemetry-api==1.44.0
 opentelemetry-sdk==1.44.0
 opentelemetry-exporter-otlp==1.44.0
@@ -61,10 +61,11 @@ opentelemetry-instrumentation-redis>=0.65b0
 opentelemetry-instrumentation-aiohttp-client>=0.65b0
 
 # FAISS - Vector Similarity Search (Issue #387, #856)
-# Provides efficient vector similarity search operations
-# Using CPU version for Python 3.14 compatibility (GPU version requires conda)
-# For GPU acceleration: conda install -c conda-forge faiss-gpu (Python 3.14)
-faiss-cpu>=1.15.0
+# Provides efficient vector similarity search operations. This is the
+# default CPU build, installed in every image. GPU build via
+# requirements-gpu-faiss.txt (#15163), which the ansible backend role
+# installs on every host with a GPU present, automatically.
+faiss-cpu>=1.15.1
 aiosqlite>=0.22.1
 
 # Security - XML parsing protection (Issue #67)

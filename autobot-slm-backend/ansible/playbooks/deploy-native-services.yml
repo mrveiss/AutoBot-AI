@@ -9,6 +9,15 @@
   become: true
   gather_facts: true
 
+  # #15687: the deployed source root was written as a literal at twenty sites
+  # across these plays. Ansible vars are per-play, so it is stated once here and
+  # aliased into every other play -- YAML resolves the anchor, and
+  # `scripts/check_ansible_file_references.py` resolves it too, so the twenty
+  # references stay inside that guard's population rather than silently leaving
+  # it (which is how #13744 would become undetectable again).
+  vars: &deploy_paths
+    deployed_src_root: /opt/autobot/src
+
   tasks:
     - name: Install common packages
       apt:
@@ -54,6 +63,7 @@
 - name: Deploy Redis Stack Natively
   hosts: database
   become: true
+  vars: *deploy_paths
 
   tasks:
     - name: Install Redis Stack from repository
@@ -81,7 +91,11 @@
           # Redis Stack Configuration
           port 6379
           bind 0.0.0.0
-          requirepass {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}
+          {# #16627: with AUTOBOT_REDIS_USERNAME set -- the SLM's own environment since
+             P1b -- the env password is a CLIENT credential for a nopass server, and
+             falling back to it would turn enforcement on (P2, #16628). Without a
+             username the legacy env-driven requirepass is kept. #}
+          {% if autobot_redis_password | default('') or (lookup('env', 'AUTOBOT_REDIS_PASSWORD') and not lookup('env', 'AUTOBOT_REDIS_USERNAME')) %}requirepass {{ autobot_redis_password | default('') or lookup('env', 'AUTOBOT_REDIS_PASSWORD') }}{% endif %}
 
           # Persistence
           appendonly yes
@@ -170,7 +184,8 @@
         - '8002'  # RedisInsight
 
     - name: Test Redis connectivity
-      shell: redis-cli -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }} ping
+      # #16678: the username always travels with the password -- a nopass server refuses AUTH <pw> alone
+      shell: redis-cli --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) | quote }} ping
       register: redis_test
 
     - name: Display Redis status
@@ -182,6 +197,7 @@
 - name: Deploy Frontend Natively
   hosts: frontend
   become: true
+  vars: *deploy_paths
 
   tasks:
     - name: Install Node.js 20
@@ -205,33 +221,38 @@
     - name: Copy frontend source files from deployment directory
       copy:
         src: "{{ lookup('env', 'SOURCE_DIR') | default('/tmp/autobot-deployment') }}/autobot-vue/"
-        dest: /opt/autobot/src/autobot-vue/
+        dest: "{{ deployed_src_root }}/autobot-vue/"
 
     - name: Set ownership of source code
       file:
-        path: /opt/autobot/src
+        path: "{{ deployed_src_root }}"
         owner: autobot-service
         group: autobot-service
         recurse: true
 
     - name: Install frontend dependencies
       shell: |
-        cd /opt/autobot/src/autobot-vue
+        cd {{ deployed_src_root }}/autobot-vue
         npm install
       become_user: autobot-service
 
-    - name: Build frontend for production
-      shell: |
-        cd /opt/autobot/src/autobot-vue
-        npm run build
-      become_user: autobot-service
-      environment:
-        VITE_BACKEND_HOST: "{{ backend_host }}"
-        VITE_BACKEND_PORT: "{{ backend_port }}"
-        VITE_REDIS_HOST: "{{ redis_host }}"
-        VITE_AI_STACK_HOST: "{{ ai_stack_host }}"
-        VITE_BROWSER_HOST: "{{ browser_host }}"
-        VITE_NPU_WORKER_HOST: "{{ npu_worker_host }}"
+    # #15603: staged build-then-swap (#15557, #15610's mechanism) — a failed
+    # build here used to empty the served dist/ while `nginx -t`/restart
+    # below carried on regardless.
+    - name: Build and publish frontend for production, staged (#15603)
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
+      vars:
+        slm_frontend_publish_label: "Native deploy (frontend)"
+        slm_frontend_publish_dir: "{{ deployed_src_root }}/autobot-vue"
+        slm_frontend_publish_user: autobot-service
+        slm_frontend_publish_build_script: "build"
+        slm_frontend_publish_build_env:
+          VITE_BACKEND_HOST: "{{ backend_host }}"
+          VITE_BACKEND_PORT: "{{ backend_port }}"
+          VITE_REDIS_HOST: "{{ redis_host }}"
+          VITE_AI_STACK_HOST: "{{ ai_stack_host }}"
+          VITE_BROWSER_HOST: "{{ browser_host }}"
+          VITE_NPU_WORKER_HOST: "{{ npu_worker_host }}"
 
     - name: Configure Nginx for frontend
       copy:
@@ -241,7 +262,10 @@
               listen [::]:80 default_server;
 
               server_name autobot-frontend;
-              root /opt/autobot/src/autobot-vue/dist;
+              # #15603: `current`, the atomically-flipped symlink the staged
+              # publish above creates — not `dist`, which vite would empty
+              # and refill in place on every rebuild.
+              root {{ deployed_src_root }}/autobot-vue/current;
               index index.html;
 
               # Frontend static files
@@ -318,6 +342,7 @@
   become: true
 
   vars:
+    <<: *deploy_paths
     # Matches roles/npu-worker's npu_install_dir (#13746) so the role-based and
     # playbook-based NPU paths build the same venv rather than two.
     npu_venv: /opt/autobot/autobot-npu-worker/venv
@@ -355,7 +380,7 @@
     - name: Copy AutoBot source code for NPU Worker
       synchronize:
         src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
-        dest: /opt/autobot/src/
+        dest: "{{ deployed_src_root }}/"
         delete: false
         recursive: true
         owner: false
@@ -364,7 +389,7 @@
 
     - name: Set ownership of source code for NPU Worker
       file:
-        path: /opt/autobot/src
+        path: "{{ deployed_src_root }}"
         owner: autobot-service
         group: autobot-service
         recurse: true
@@ -383,7 +408,7 @@
     # OpenVINO binaries are never carried into a 3.14 venv.
     - name: Enforce the target interpreter on any existing NPU venv
       ansible.builtin.include_role:
-        name: python314
+        name: python_interpreter
         tasks_from: ensure_venv_version
       vars:
         venv_path: "{{ npu_venv }}"
@@ -403,36 +428,50 @@
     # the whole web stack this play installs separately. The file's relative
     # `-e ../autobot_shared` and `-c ../constraints/shared.txt` resolve because
     # the task above syncs the full source tree to /opt/autobot/src/.
-    - name: Install Python dependencies for NPU Worker
+    #
+    # #15671: `-c` is stated here as well as inside the manifest. The file's own
+    # `-c ../constraints/shared.txt` resolves to the same path from
+    # /opt/autobot/src, but it was the ONLY thing applying the shared pins on
+    # this play, and roles/npu-worker states the constraints at the task. One
+    # shape on both paths, so a reader of either sees the pins being applied.
+    # #15733: the manifest opens with `-e ../autobot_shared`, which pip
+    # resolves against the CWD, not the file it is written in. Without
+    # `chdir` this ran from the remote user's home rather than
+    # `{{ deployed_src_root }}/autobot-npu-worker`, and the install was
+    # refused -- the same failure shape roles/npu-worker/tasks/main.yml hit.
+    #
+    # #16641: `virtualenv_python:` alone only applies when
+    # `virtualenv_command:` names the standalone `virtualenv` tool -- it is
+    # silently ignored for `-m venv`, and without either, pip falls back to
+    # shelling out to `virtualenv` itself, absent from these hosts.
+    # `virtualenv_command:` below matches the interpreter the "Create Python
+    # virtual environment for NPU Worker" task above already targets.
+    - name: Install NPU Worker dependencies from its manifest
       pip:
-        requirements: /opt/autobot/src/autobot-npu-worker/requirements.txt
+        requirements: "{{ deployed_src_root }}/autobot-npu-worker/requirements.txt"
         virtualenv: "{{ npu_venv }}"
-        virtualenv_python: python3.14
+        virtualenv_command: "python3.14 -m venv"
+        chdir: "{{ deployed_src_root }}/autobot-npu-worker"
+        extra_args: "--timeout 120 -c {{ deployed_src_root }}/constraints/shared.txt"
       become_user: autobot-service
       environment:
         PIP_DEFAULT_TIMEOUT: "120"
       timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
 
-    # #14452: the same defect as #14447/#14449 -- openvino-dev is a deprecated
-    # meta-package frozen at 2024.6.0 with no release compatible with openvino
-    # 2026.x, so pip backtracks through every version of it until it reaches a
-    # numpy with no cp314 wheel and the sdist build dies on
-    # setuptools.build_meta. autobot-npu-worker/requirements.txt (the SSOT
-    # installed by the task above) pins openvino>=2026.3.0 with no
-    # openvino-dev; this task now matches it and applies the shared
-    # constraints so no future dependency can drag numpy below its pinned
-    # floor. The constraints path is relative to /opt/autobot/src, the
-    # destination the task above already syncs the full source tree to.
-    - name: Install OpenVINO runtime for NPU Worker
-      pip:
-        name:
-          - openvino[pytorch,tensorflow]>=2026.3.0
-        virtualenv: "{{ npu_venv }}"
-        extra_args: "-c /opt/autobot/src/constraints/shared.txt"
-      become_user: autobot-service
-      environment:
-        PIP_DEFAULT_TIMEOUT: "120"
-      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
+    # #15671: the "Install OpenVINO runtime for NPU Worker" task that used to
+    # sit here is gone. It re-installed openvino as
+    # `openvino[pytorch,tensorflow]` immediately after the manifest install
+    # above, which is why the same venv held a different openvino depending on
+    # whether this play or roles/npu-worker had run last.
+    #
+    # openvino declares no extras at all -- its metadata carries `numpy` and
+    # `openvino-telemetry` and nothing conditional -- so pip warned and ignored
+    # those two names on every run. They were `openvino-dev`'s extras, carried
+    # over when #14452 dropped that deprecated meta-package (#14447/#14449/
+    # #14453 record the same backtrack in the role). The manifest above states
+    # `openvino` bare against constraints/shared.txt, which is the whole of
+    # what the removed task achieved, so the extras question is now settled in
+    # exactly one place.
 
     - name: Create NPU Worker configuration
       template:
@@ -477,9 +516,9 @@
           Type=exec
           User=autobot-service
           Group=autobot-service
-          WorkingDirectory=/opt/autobot/src
+          WorkingDirectory={{ deployed_src_root }}
           Environment="PATH={{ npu_venv }}/bin:$PATH"
-          Environment="PYTHONPATH=/opt/autobot/src"
+          Environment="PYTHONPATH={{ deployed_src_root }}"
           Environment="OPENVINO_LOG_LEVEL=ERROR"
           Environment="NPU_LOG_LEVEL=INFO"
           ExecStart={{ npu_venv }}/bin/python -m src.npu_worker.main
@@ -518,6 +557,7 @@
 - name: Deploy AI Services Natively
   hosts: aiml
   become: true
+  vars: *deploy_paths
 
   tasks:
     - name: Install Python dependencies for AI services
@@ -537,7 +577,7 @@
     - name: Copy AutoBot source code
       synchronize:
         src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
-        dest: /opt/autobot/src/
+        dest: "{{ deployed_src_root }}/"
         delete: false
         recursive: true
         owner: false
@@ -546,7 +586,7 @@
 
     - name: Set ownership of source code
       file:
-        path: /opt/autobot/src
+        path: "{{ deployed_src_root }}"
         owner: autobot-service
         group: autobot-service
         recurse: true
@@ -557,7 +597,7 @@
     # this rebuilds it, and `creates:` makes the matching case a no-op.
     - name: Enforce the target interpreter on any existing venv
       ansible.builtin.include_role:
-        name: python314
+        name: python_interpreter
         tasks_from: ensure_venv_version
       vars:
         venv_path: /opt/autobot/venv
@@ -652,13 +692,14 @@
           [Service]
           Type=simple
           User=autobot-service
-          WorkingDirectory=/opt/autobot/src
+          WorkingDirectory={{ deployed_src_root }}
           ExecStart=/opt/autobot/venv/bin/python -m docker.ai-stack.ai_server
           Environment="AI_SERVER_HOST=0.0.0.0"
           Environment="AI_SERVER_PORT=8080"
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+          Environment="REDIS_USERNAME={{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') if autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) else '' }}"
           Environment="OLLAMA_HOST=http://localhost:11434"
           Restart=always
           RestartSec=3
@@ -677,13 +718,14 @@
           [Service]
           Type=simple
           User=autobot-service
-          WorkingDirectory=/opt/autobot/src
+          WorkingDirectory={{ deployed_src_root }}
           ExecStart=/opt/autobot/venv/bin/python -m docker.npu-worker.npu_worker
           Environment="NPU_SERVER_HOST=0.0.0.0"
           Environment="NPU_SERVER_PORT=8081"
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+          Environment="REDIS_USERNAME={{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') if autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) else '' }}"
           Environment="DEVICE=CPU"
           Restart=always
           RestartSec=3
@@ -717,6 +759,7 @@
 - name: Deploy Browser Service Natively
   hosts: browser
   become: true
+  vars: *deploy_paths
 
   tasks:
     - name: Install desktop environment and browsers
@@ -742,7 +785,7 @@
     - name: Copy AutoBot source code
       synchronize:
         src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
-        dest: /opt/autobot/src/
+        dest: "{{ deployed_src_root }}/"
         delete: false
         recursive: true
         owner: false
@@ -751,7 +794,7 @@
 
     - name: Set ownership of source code
       file:
-        path: /opt/autobot/src
+        path: "{{ deployed_src_root }}"
         owner: autobot-service
         group: autobot-service
         recurse: true
@@ -766,7 +809,7 @@
           [Service]
           Type=simple
           User=autobot-service
-          WorkingDirectory=/opt/autobot/src
+          WorkingDirectory={{ deployed_src_root }}
           ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 &
           ExecStart=/usr/bin/node playwright-server.js
           Environment="DISPLAY=:99"
@@ -774,6 +817,7 @@
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+          Environment="REDIS_USERNAME={{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') if autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) else '' }}"
           Restart=always
           RestartSec=3
 
@@ -821,6 +865,7 @@
 - name: Validate All Services
   hosts: all
   become: true
+  vars: *deploy_paths
 
   tasks:
     - name: Check systemd services status

@@ -14,6 +14,9 @@ FROM python:${PYTHON_VERSION}-slim-bookworm AS deps
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
+# apt retries, and an index failure is fatal at `apt-get update` (#16291)
+COPY docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
+
 # Install build deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl \
@@ -26,9 +29,16 @@ COPY autobot_shared/ /app/autobot_shared/
 RUN python3 -m pip install --no-cache-dir /app/autobot_shared
 
 # Install SLM dependencies
+#
+# #16394: requirements.txt now carries `-c ../constraints/shared.txt`, whose
+# relative path is invalid in this flattened image layout — same shape as
+# docker/backend/Dockerfile's own `-c` line, so it is stripped below and
+# re-applied by an explicit `-c` flag against a copy placed at the path that
+# relative reference used to resolve to from the repo root.
+COPY constraints/shared.txt /app/constraints/shared.txt
 COPY autobot-slm-backend/requirements.txt /tmp/requirements.txt
-RUN grep -v -E "(autobot_shared|^-r )" /tmp/requirements.txt > /app/requirements-filtered.txt || true \
-    && python3 -m pip install --no-cache-dir -r /app/requirements-filtered.txt
+RUN grep -v -E "(autobot_shared|^-r |^-c )" /tmp/requirements.txt > /app/requirements-filtered.txt || true \
+    && python3 -m pip install --no-cache-dir -c /app/constraints/shared.txt -r /app/requirements-filtered.txt
 
 
 # ---- Production stage ----
@@ -37,6 +47,9 @@ FROM python:${PYTHON_VERSION}-slim-bookworm AS production
 ARG PYTHON_VERSION=3.14
 
 ENV DEBIAN_FRONTEND=noninteractive
+
+# apt retries, and an index failure is fatal at `apt-get update` (#16291)
+COPY docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
 
 # Install runtime deps (ansible for node provisioning)
 RUN apt-get update && apt-get install -y --no-install-recommends \

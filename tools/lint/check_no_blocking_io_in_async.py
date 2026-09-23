@@ -63,11 +63,11 @@ from __future__ import annotations
 import ast
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import iter_python_files  # noqa: E402
+from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
 
 HOOK_ID = "no-blocking-io-in-async"
 
@@ -204,7 +204,11 @@ def check_file(path: Path) -> List[_Violation]:
 
 def main(argv: List[str]) -> int:
     repo_root = Path(__file__).resolve().parents[2]
-    files = list(iter_python_files(argv, repo_root))
+    files, full_repo = scan_python_files(argv, repo_root)
+    # Vacuity floor (#14896): full-repo mode only -- pre-commit legitimately
+    # hands this hook an argv with no Python in it.
+    if enforce_reach(len(files), PY_FLOOR, hook=HOOK_ID, full_repo=full_repo):
+        return 1
     # Restrict to backend roots — frontend tooling sometimes ships .py snippets
     # in test fixtures that aren't part of the backend async surface.
     backend_roots = ("autobot-backend", "autobot_shared", "autobot-slm-backend")
@@ -220,13 +224,13 @@ def main(argv: List[str]) -> int:
     print(
         f"\n[{HOOK_ID}] Found {len(all_violations)} blocking-I/O call(s) inside `async def` " "bodies (#7444):\n",
         file=sys.stderr,
-    )
+    )  # noqa: print -- CLI diagnostic output on stderr, same as every other tools/lint/ checker
     for v in all_violations:
-        print(v.format(), file=sys.stderr)
+        print(v.format(), file=sys.stderr)  # noqa: print
     print(
         f"\nIf the call genuinely runs in a thread (rare), append " f"`# {NOQA_TOKEN}` to that line.\n",
         file=sys.stderr,
-    )
+    )  # noqa: print
     return 1
 
 

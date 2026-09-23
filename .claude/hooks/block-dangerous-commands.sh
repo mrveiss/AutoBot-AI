@@ -10,6 +10,9 @@
 # Issue: #3021
 
 if ! command -v jq >/dev/null 2>&1; then
+  # Before `deny()` exists, so this repeats its stderr write rather than calling
+  # it. With no jq, every command is blocked and this is the only explanation.
+  printf '%s\n' "jq is required for command protection hooks but is not installed." >&2
   echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"jq is required for command protection hooks but is not installed."}}'
   exit 2
 fi
@@ -33,6 +36,12 @@ if [[ "$COMMAND" =~ git[[:space:]]+commit ]]; then
 fi
 
 deny() {
+  # STDERR, because this exits 2 (#15956). The harness parses the JSON below
+  # from stdout only on exit 0 and takes an exit-2 reason from stderr, so
+  # without this line a blocked command is reported with no explanation at all.
+  # Found by the channel guard in repo_tests/hook_decision_exit_codes_15956_test.py,
+  # which was written for two other hooks and caught this one on its first run.
+  printf '%s\n' "$1" >&2
   echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"$1\"}}"
   exit 2
 }
@@ -43,15 +52,17 @@ deny() {
 
 if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+push'; then
 
-  # Block push to main, master, or Dev_new_gui directly
-  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push.*(origin[[:space:]]+|:)(main|master|Dev_new_gui)\b'; then
-    deny "Blocked: cannot push directly to main/master/Dev_new_gui. Use a feature branch and create a PR."
+  # Block push to release, master, or main directly
+  # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
+  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push.*(origin[[:space:]]+|:)(release|master|main|Dev_new_gui)\b'; then
+    deny "Blocked: cannot push directly to release/master/main/Dev_new_gui. Use a feature branch and create a PR."
   fi
 
   # Block bare git push when on protected branches
+  # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
   if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push[[:space:]]*($|[;&|])'; then
     CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
-    if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "Dev_new_gui" ]; then
+    if [ "$CURRENT_BRANCH" = "release" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "Dev_new_gui" ]; then
       deny "Blocked: you are on $CURRENT_BRANCH. Use a feature branch and create a PR."
     fi
   fi
@@ -70,17 +81,11 @@ if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+commit.*--no-verify'; the
   deny "Blocked: --no-verify bypasses pre-commit hooks. Fix the underlying hook failure instead."
 fi
 
-# ──────────────────────────────────────────────
-# Destructive git operations
-# ──────────────────────────────────────────────
-
-if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+reset[[:space:]]+--hard'; then
-  deny "Blocked: git reset --hard discards uncommitted changes permanently. Use git stash or git reset --soft instead."
-fi
-
-if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+clean[[:space:]]+-[a-zA-Z]*f'; then
-  deny "Blocked: git clean -f permanently deletes untracked files. Review with git clean -n first, then run manually if intended."
-fi
+# Destructive git operations are judged further down, from the parser's
+# records rather than from a grep over the command text (#15835). A grep could
+# not tell a command from a mention of one, so a heredoc WRITING a file about
+# these patterns was refused — three times in one session: a memory file, an
+# issue body, and a commit message explaining the fix.
 
 # ──────────────────────────────────────────────
 # Worktree isolation — branch-switch guards (#4113, #6512, #10126, #15296)
@@ -103,29 +108,132 @@ fi
 # The following git forms are SAFE and explicitly allowed even on the main tree:
 #   - new-branch creation (-b/-B/-c/--create/--orphan): forks a fresh branch,
 #     does not move HEAD onto a shared one
-#   - file restore: `git checkout -- <path>`, `git checkout .`
+#   - file restore FROM THE INDEX: `git checkout -- <path>`, `git checkout .`,
+#     `git restore <path>` — bounded by what you staged
 #   - detached / toggle switches: `git switch -`, `git switch --detach`
-#   - SHA / tag / Dev_new_gui checkouts
+#   - SHA / tag / main checkouts that move HEAD and nothing else
+#
+# What that list used to say, and why it was wrong (#15835): it read "file
+# restore: `git checkout -- <path>`" next to "SHA / tag / main
+# checkouts", and `git checkout origin/main -- .` matches BOTH entries.
+# It was allowed by design, and it destroyed 147 lines of uncommitted work in
+# this repository. Two different operations share that syntax:
+#
+#   `git checkout -- <path>`        content comes from the INDEX — bounded
+#   `git checkout <ref> -- <path>`  content comes from ANOTHER COMMIT — an
+#   `git restore --source=<ref> …`  overwrite, with no copy of what it replaced
+#
+# Adding a ref changes the operation while leaving the syntax matching the safe
+# pattern. So the rule is one condition, not two: a path-scoped checkout or
+# restore naming a source other than the index is a destructive overwrite, and
+# it is refused when — and only when — the tree it targets holds uncommitted
+# work. A clean tree has nothing to lose, and a guard that refuses harmless
+# commands is a guard people switch off.
 # ──────────────────────────────────────────────
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GIT_INVOCATION_PARSER="$HOOK_DIR/git_invocation_parse.py"
+COMMAND_POSITION_SCANNER="$HOOK_DIR/command_position_scan.py"
+
+# ──────────────────────────────────────────────
+# Does the command INVOKE this, or merely name it? (#14144)
+# ──────────────────────────────────────────────
+#
+# The git guards answer that with a tokenizer (#15296). The guards further down
+# did not: they grep the whole command string, so a command whose ARGUMENTS
+# merely contain a trigger word is denied even though nothing is invoked. That
+# is not hypothetical -- a read-only loop searching a file FOR these very
+# triggers is refused by them, and `repo_tests/git_invocation_parse_test.py`
+# already spells its own prose in pieces to work around it.
+#
+# `invokes` narrows a denial ONLY on a confident positive parse. Every other
+# outcome -- no python3, a parser error, an unparseable command, or a command
+# position naming something unknowable like `eval` or `$CMD` -- returns true, so
+# the caller keeps exactly the verdict it has today. The guard can therefore
+# only ever become more precise, never more permissive, than before this change.
+CMD_INVOCATIONS=""
+CMD_INVOCATIONS_STATE="unscanned"
+UNIT_SEPARATOR=$(printf '\037')
+
+scan_invocations() {
+  case "$CMD_INVOCATIONS_STATE" in
+    usable) return 0 ;;
+    unusable) return 1 ;;
+  esac
+  CMD_INVOCATIONS_STATE="unusable"
+  command -v python3 >/dev/null 2>&1 || return 1
+  CMD_INVOCATIONS=$(python3 "$COMMAND_POSITION_SCANNER" "$COMMAND" 2>/dev/null) || return 1
+  # A command position the scanner could not name means there may be an
+  # invocation it never reported. Reporting nothing reads as "nothing dangerous
+  # here", which is the one answer that must never come from not looking.
+  if printf '%s\n' "$CMD_INVOCATIONS" | grep -q "^?$UNIT_SEPARATOR"; then
+    return 1
+  fi
+  CMD_INVOCATIONS_STATE="usable"
+  return 0
+}
+
+# invokes <command-name ERE> [<args ERE>] — true when the command really runs it.
+invokes() {
+  scan_invocations || return 0
+  printf '%s\n' "$CMD_INVOCATIONS" | grep -qE "^($1)$UNIT_SEPARATOR${2:-}"
+}
 
 # Ask git about a path with the inherited git environment scrubbed: a stray
 # GIT_DIR or GIT_WORK_TREE would make rev-parse answer about a different
 # repository than the command targets, and mis-identifying the repository is
 # the one error this guard cannot afford. Same scrub as
 # scripts/install-git-hooks.sh.
-git_query() {
+git_scrubbed() {
   local dir="$1" gitdir="$2"
   shift 2
   local -a opts=()
   [ -n "$dir" ] && opts+=(-C "$dir")
   [ -n "$gitdir" ] && opts+=(--git-dir "$gitdir")
   (
-    unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
-    git "${opts[@]}" rev-parse "$@" 2>/dev/null
+    unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+    git "${opts[@]}" "$@" 2>/dev/null
   )
+}
+
+git_query() {
+  local dir="$1" gitdir="$2"
+  shift 2
+  git_scrubbed "$dir" "$gitdir" rev-parse "$@"
+}
+
+# True when the tree an invocation targets holds uncommitted work — the only
+# state in which an overwrite can destroy anything (#15835).
+worktree_is_dirty() {
+  local dir="$1" gitdir="$2"
+  # A directory only the shell could resolve: assume there is work to lose,
+  # the same conservative reading targets_this_main_tree already applies.
+  [ "$dir" = "?" ] && return 0
+  [ -n "$(git_scrubbed "$dir" "$gitdir" status --porcelain)" ]
+}
+
+# The recovery form, which must stay available: undoing an overwrite means
+# pulling the content back from where this very branch was PUSHED, so only a
+# remote-qualified source is that recovery. The bare branch name is not: while
+# it is checked out it resolves to the same commit as HEAD, so a source naming
+# it is the very overwrite this rule exists to stop, wearing a second spelling
+# (PR #15849 review). The HEAD spelling was already refused; both are now.
+source_is_own_branch() {
+  local dir="$1" gitdir="$2" source="$3" branch remote
+  branch=$(git_scrubbed "$dir" "$gitdir" rev-parse --abbrev-ref HEAD)
+  [ -n "$branch" ] && [ "$branch" != "HEAD" ] || return 1
+  remote="${source%%/*}"
+  [ "$source" = "$remote/$branch" ] || return 1
+  git_scrubbed "$dir" "$gitdir" remote | grep -qxF "$remote"
+}
+
+# release/master/main, local or through origin.
+# Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
+is_protected_ref() {
+  case "${1#origin/}" in
+    release | master | main | Dev_new_gui) return 0 ;;
+  esac
+  return 1
 }
 
 # The repository this guard speaks for is the one the hook file itself lives in.
@@ -165,7 +273,7 @@ targets_this_main_tree() {
 # Broader than strictly necessary, on purpose: this only decides whether the
 # already-safe parser runs, never whether a command is denied, so widening it
 # costs a python3 start on more commands, not a new false denial.
-if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch ||
+if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch -e restore -e reset -e clean ||
   { printf '%s' "$COMMAND" | grep -qF git && printf '%s' "$COMMAND" | grep -qE '[$`]'; }; then
   if ! command -v python3 >/dev/null 2>&1; then
     deny "Blocked: the branch-switch guard needs python3 to tell a real invocation from the same words quoted inside an argument (#15296), and python3 is not installed. Install python3 rather than removing the guard."
@@ -185,38 +293,83 @@ if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch ||
   # 0x1f, not tab: tab is IFS whitespace, so `read` collapses a run of them
   # and every leading empty field vanishes -- the branch name would land in
   # WT_DIR and the guard would go looking for a directory by that name (#15296).
-  while IFS=$'\x1f' read -r WT_DIR WT_GIT_DIR SWITCH_FLAGS BRANCH_ARG; do
-    [ -n "$WT_DIR$WT_GIT_DIR$SWITCH_FLAGS$BRANCH_ARG" ] || continue
-    targets_this_main_tree "$WT_DIR" "$WT_GIT_DIR" || continue
+  while IFS=$'\x1f' read -r WT_DIR WT_GIT_DIR SUBCOMMAND INVOCATION_FLAGS REF_ARG; do
+    [ -n "$WT_DIR$WT_GIT_DIR$SUBCOMMAND$INVOCATION_FLAGS$REF_ARG" ] || continue
 
-    # A subcommand position the parser could not read as a literal --
-    # `SUB=switch; git $SUB main` and the like (#15303). Denied rather than
-    # skipped: an invocation this guard cannot classify is treated the same
-    # way an unresolved directory already is (targets_this_main_tree above),
-    # not as "nothing to judge".
-    case ",$SWITCH_FLAGS," in
-      *,ambiguous,*)
-        deny "Blocked: this git invocation's checkout/switch subcommand arrives through a variable or command substitution the guard cannot evaluate (#15303), e.g. \`SUB=switch; git \$SUB main\`. Rewrite the command with a literal 'checkout' or 'switch' so it can be judged, or use a worktree: git worktree add .worktrees/<name> <branch>"
+    # ── Destructive operations ────────────────────────────────────────────
+    # Judged in whatever tree they name. Losing uncommitted work is not a
+    # property of WHICH tree it happens in, so unlike the worktree-isolation
+    # rules below these are not gated on the main tree of this repository —
+    # the 147 lines #15835 was filed for were lost inside a linked worktree,
+    # which the isolation rules deliberately do not police.
+    case ",$INVOCATION_FLAGS," in
+      *,hard,*)
+        deny "Blocked: git reset --hard discards uncommitted changes permanently. Use git stash or git reset --soft instead."
+        ;;
+      *,force,*)
+        deny "Blocked: git clean -f permanently deletes untracked files. Review with git clean -n first, then run manually if intended."
         ;;
     esac
 
+    # A reset onto a protected ref moves HEAD and can drop commits a parallel
+    # session has not pushed yet (#6512).
+    if [ "$SUBCOMMAND" = "reset" ] && is_protected_ref "$REF_ARG"; then
+      deny "Blocked: resetting onto a protected ref moves HEAD and can lose unpushed commits in parallel sessions (#6512). Use 'git fetch && git merge --ff-only' or create a fresh branch with 'git checkout -b NEW origin/main'."
+    fi
+
+    # A path-scoped checkout or restore that names a source other than the
+    # index (see the allow-list note above): an overwrite, not a restore.
+    case ",$INVOCATION_FLAGS," in
+      *,overwrite,*)
+        if worktree_is_dirty "$WT_DIR" "$WT_GIT_DIR" &&
+          ! source_is_own_branch "$WT_DIR" "$WT_GIT_DIR" "$REF_ARG"; then
+          deny "Blocked: '$SUBCOMMAND' from '$REF_ARG' would overwrite this working tree with another commit's content, and the tree holds uncommitted work (#15835). This is an overwrite, not a file restore — what it replaces has no copy. Commit or stash the work first. Recovering from an overwrite is still allowed: git restore --source=<remote>/<this branch> -- <path>"
+        fi
+        # Rewrites files; never moves HEAD. None of the isolation rules apply.
+        continue
+        ;;
+    esac
+
+    # A subcommand position the parser could not read as a literal --
+    # `SUB=switch; git $SUB main` and the like (#15303). Judged HERE, ahead of
+    # the isolation gate below, because an unreadable subcommand could be any
+    # of them: the destructive rules above apply in every tree, so gating this
+    # one on the main tree let `git -C <a linked worktree> $SUB --hard` through
+    # with nothing checked at all (PR #15849 review). Denied rather than
+    # skipped, on the same reasoning as an unresolved directory (UNKNOWN_DIR):
+    # an invocation this guard cannot classify is not "nothing to judge".
+    case ",$INVOCATION_FLAGS," in
+      *,ambiguous,*)
+        deny "Blocked: this git invocation's subcommand arrives through a variable or command substitution the guard cannot evaluate (#15303), e.g. \`SUB=switch; git \$SUB main\`. Rewrite the command with a literal subcommand so it can be judged, or use a worktree: git worktree add .worktrees/<name> <branch>"
+        ;;
+    esac
+
+    # ── Worktree isolation ────────────────────────────────────────────────
+    # Only a branch move can trample a parallel session's HEAD, and only on
+    # the main working tree of this repository.
+    case "$SUBCOMMAND" in
+      checkout | switch | "") ;;
+      *) continue ;;
+    esac
+    targets_this_main_tree "$WT_DIR" "$WT_GIT_DIR" || continue
+
     # Forking a new branch, or restoring files, never moves HEAD onto a shared
     # branch. Allowed on the main tree, exactly as before.
-    case ",$SWITCH_FLAGS," in *,new,* | *,restore,*) continue ;; esac
+    case ",$INVOCATION_FLAGS," in *,new,* | *,restore,*) continue ;; esac
 
-    if [ "$BRANCH_ARG" = "main" ] || [ "$BRANCH_ARG" = "master" ]; then
-      deny "Blocked: never check out main/master locally (#4113, #6512). Main is read-only; commits flow Dev_new_gui → main via release cycle. If you need to inspect main, use git log origin/main or create a worktree: git worktree add .worktrees/inspect-main main"
+    if [ "$REF_ARG" = "release" ] || [ "$REF_ARG" = "master" ]; then
+      deny "Blocked: never check out release/master locally (#4113, #6512). Release is read-only; commits flow main → release via release cycle. If you need to inspect release, use git log origin/release or create a worktree: git worktree add .worktrees/inspect-release release"
     fi
 
     # Deny only when a concrete branch-name arg is present and is not one of the
     # safe targets (base branch, file restore, detached HEAD, SHA, tag, path).
-    if [ -n "$BRANCH_ARG" ] &&
-      [ "$BRANCH_ARG" != "Dev_new_gui" ] &&
-      [ "$BRANCH_ARG" != "." ] &&
-      [ "$BRANCH_ARG" != "HEAD" ] &&
-      ! [[ "$BRANCH_ARG" =~ ^[0-9a-f]{7,40}$ ]] &&
-      ! [[ "$BRANCH_ARG" =~ ^v[0-9]+\.[0-9]+ ]] &&
-      ! [[ "$BRANCH_ARG" =~ ^/ ]]; then
+    if [ -n "$REF_ARG" ] &&
+      [ "$REF_ARG" != "main" ] &&
+      [ "$REF_ARG" != "." ] &&
+      [ "$REF_ARG" != "HEAD" ] &&
+      ! [[ "$REF_ARG" =~ ^[0-9a-f]{7,40}$ ]] &&
+      ! [[ "$REF_ARG" =~ ^v[0-9]+\.[0-9]+ ]] &&
+      ! [[ "$REF_ARG" =~ ^/ ]]; then
       deny "Blocked: switching branches on the main working tree tramples HEAD for parallel sessions (#6512). Use a worktree instead: git worktree add .worktrees/<name> <branch> && cd .worktrees/<name>. Then do your work and remove with: git worktree remove .worktrees/<name>"
     fi
   done <<<"$BRANCH_INVOCATIONS"
@@ -244,22 +397,15 @@ if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+c
   fi
 fi
 
-# Block bare `git reset <ref>` on Dev_new_gui — parallel sessions doing
-# `git reset origin/Dev_new_gui` from a feature branch silently move HEAD
-# and lose committed work that wasn't pushed yet (#6512).
-if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+reset[[:space:]]+(--mixed[[:space:]]+|--soft[[:space:]]+)?(origin/)?(main|master|Dev_new_gui)([[:space:]]|$)'; then
-  deny "Blocked: git reset onto a protected ref moves HEAD and can lose unpushed commits in parallel sessions (#6512). Use 'git fetch && git merge --ff-only' or create a fresh branch with 'git checkout -b NEW origin/Dev_new_gui'."
-fi
-
 # ──────────────────────────────────────────────
 # Destructive filesystem operations
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r[a-zA-Z]*f[[:space:]]+(\/|~|\$HOME|\.\.\/\.\.)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r[a-zA-Z]*f[[:space:]]+(\/|~|\$HOME|\.\.\/\.\.)' && invokes 'rm'; then
   deny "Blocked: recursive force-delete on root/home/parent paths. Specify a safe target directory."
 fi
 
-if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r.*[[:space:]]+(\/[[:space:]]|\/\*|\/$|~\/?\*?[[:space:]]|~\/?\*?$)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r.*[[:space:]]+(\/[[:space:]]|\/\*|\/$|~\/?\*?[[:space:]]|~\/?\*?$)' && invokes 'rm'; then
   deny "Blocked: recursive delete targeting root or home directory."
 fi
 
@@ -283,17 +429,30 @@ fi
 # Dangerous system commands
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND_TO_CHECK" | grep -qE 'chmod[[:space:]]+777'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'chmod[[:space:]]+777' && invokes 'chmod' '.*777'; then
   deny "Blocked: chmod 777 gives everyone read/write/execute. Use more restrictive permissions (e.g., 755 or 644)."
 fi
 
-if echo "$COMMAND_TO_CHECK" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(bash|sh|zsh|sudo)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(bash|sh|zsh|sudo)' && invokes 'curl|wget'; then
   deny "Blocked: piping downloaded content directly to a shell is dangerous. Download first, inspect, then execute."
 fi
 
 # Redirect guard targets raw block devices only — matching all of /dev/ would
 # false-positive on the ubiquitous stderr/stdout null-discard idiom (#11593).
-if echo "$COMMAND_TO_CHECK" | grep -qE '(mkfs|dd[[:space:]]+if=|>[[:space:]]*/dev/(sd|hd|nvme|vd|xvd|mmcblk|loop|dm-|md))'; then
+# Split in two (#14144). The PROGRAM half is invocation-gated: a command that
+# merely names one of these tools -- a grep for it, a comment about it, this
+# very file -- is not running it.
+if echo "$COMMAND_TO_CHECK" | grep -qE '(mkfs|dd[[:space:]]+if=)' && invokes 'dd|mkfs[.a-zA-Z0-9]*'; then
+  deny "Blocked: destructive disk operation detected. This can cause irreversible data loss."
+fi
+
+# The REDIRECT half stays unconditional, and that is deliberate rather than an
+# oversight: a redirection is not a command position, so the scanner skips it
+# and `invokes` has nothing to say about a write to a block device. Gating this
+# half would disable it silently -- the failure mode this whole change exists
+# to remove. It keeps today's behaviour, false positives on quoted prose and
+# all, until something can tell a redirection target from a mention of one.
+if echo "$COMMAND_TO_CHECK" | grep -qE '>[[:space:]]*/dev/(sd|hd|nvme|vd|xvd|mmcblk|loop|dm-|md)'; then
   deny "Blocked: destructive disk operation detected. This can cause irreversible data loss."
 fi
 
@@ -301,12 +460,49 @@ fi
 # Accidental package publishing
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND_TO_CHECK" | grep -qE '(npm|yarn|pnpm|bun)[[:space:]]+publish'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE '(npm|yarn|pnpm|bun)[[:space:]]+publish' && invokes 'npm|yarn|pnpm|bun' '(.*[[:space:]])?publish([[:space:]]|$)'; then
   deny "Blocked: publishing npm packages should be done manually or via CI, not through Claude Code."
 fi
 
-if echo "$COMMAND_TO_CHECK" | grep -qE 'twine[[:space:]]+upload'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'twine[[:space:]]+upload' && invokes 'twine' '(.*[[:space:]])?upload([[:space:]]|$)'; then
   deny "Blocked: publishing Python packages should be done manually or via CI, not through Claude Code."
+fi
+
+# ──────────────────────────────────────────────
+# Untrusted-repo clone safety (#16488)
+#
+# The research/adopt skills read other people's repositories, and a clone
+# brings an untrusted `.git` onto the machine with it -- hooks, `core.fsmonitor`,
+# `core.sshCommand`, filter drivers, and recursive submodules can all execute
+# during or after a plain `git clone`. `scripts/research/safe_clone.py` is the
+# one path that neutralises all of that (shallow, hooks/fsmonitor/file-protocol
+# disabled, `.git` deleted, agent-instruction files renamed `*.untrusted`)
+# before anything reads the tree.
+#
+# The helper's own subprocess call never appears as a literal `git clone` in a
+# Bash command -- it runs a fixed argv directly, from a `python3` invocation --
+# so it never reaches this rule at all and needs no explicit exemption. Adding
+# one (e.g. "allow if the command merely MENTIONS the helper's path") would be
+# a bypass: an unsafe `git clone` sitting next to unrelated text that names the
+# helper would then slip through. Every literal `git ... clone` is judged the
+# same way, whether or not the helper is mentioned anywhere else on the line.
+# ──────────────────────────────────────────────
+
+if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git([[:space:]]+[^;&|]*)?[[:space:]]+clone([[:space:]]|$)'; then
+
+  CLONE_DENY_MSG="Blocked: git clone must go through scripts/research/safe_clone.py (python3 scripts/research/safe_clone.py <url> --id <id>), or carry every one of its safe flags itself: --depth 1 --no-tags --single-branch; the config values core.hooksPath=/dev/null, core.fsmonitor=false, protocol.file.allow=never and protocol.ext.allow=never, each passed with -c; and never --recurse-submodules (#16488)."
+
+  if echo "$COMMAND_TO_CHECK" | grep -qE '\-\-recurse-submodules'; then
+    deny "$CLONE_DENY_MSG"
+  fi
+
+  for required_flag in '\-\-depth[[:space:]]+1' '\-\-no-tags' '\-\-single-branch' \
+    'core\.hooksPath=/dev/null' 'core\.fsmonitor=false' \
+    'protocol\.file\.allow=never' 'protocol\.ext\.allow=never'; do
+    if ! echo "$COMMAND_TO_CHECK" | grep -qE "$required_flag"; then
+      deny "$CLONE_DENY_MSG"
+    fi
+  done
 fi
 
 exit 0

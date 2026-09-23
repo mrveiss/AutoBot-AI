@@ -23,13 +23,14 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+# Import initialization modules
+from autobot_shared.fastapi_validation_handlers import register_validation_error_handlers
+
 # Issue #697: OpenTelemetry distributed tracing
 from autobot_shared.tracing import init_tracing, instrument_fastapi
 from constants.network_constants import (  # noqa: F401 - used in docstring example
     NetworkConstants,
 )
-
-# Import initialization modules
 from initialization import (
     configure_middleware,
     create_lifespan_manager,
@@ -37,6 +38,7 @@ from initialization import (
     load_optional_routers,
     register_root_endpoints,
 )
+from initialization.integrity_handlers import register_integrity_handlers
 
 # Store logger for app usage
 logger = get_logger(__name__)
@@ -49,6 +51,15 @@ def _register_exception_handlers(app: FastAPI) -> None:
     Issue #1733: CodeQL py/stack-trace-exposure — catch unhandled exceptions
     and return generic error responses instead of leaking internal details.
     """
+
+    # Registered first so the catch-all below stays the last resort: an
+    # integrity violation has a specific, actionable answer and must not be
+    # flattened into a 500 (#15775).
+    register_integrity_handlers(app)
+    # A 422's default body echoes the submitted payload verbatim -- the
+    # concrete case is a secret disclosed through a failed request model
+    # validator (#16428 security review).
+    register_validation_error_handlers(app)
 
     @app.exception_handler(Exception)
     async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

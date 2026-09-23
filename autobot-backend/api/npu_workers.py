@@ -709,6 +709,7 @@ def _generate_repair_bootstrap_config() -> dict:
         "redis": {
             "host": ssot_config.vm.redis,
             "port": ssot_config.port.redis,
+            "username": ssot_config.redis.username,  # #16627: ACL user sent with the password
             "password": ssot_config.redis.password,
             "db": DATABASE_MAPPING["main"],
             "socket_timeout": 5,
@@ -887,7 +888,7 @@ async def _check_worker_health(client: httpx.AsyncClient, worker_url: str) -> Wo
         return info
 
     except httpx.RequestError:
-        raise_invalid_input("worker_url", "Cannot reach worker at {worker_url}")
+        raise_invalid_input("worker_url", f"Cannot reach worker at {worker_url}")
 
 
 def _generate_worker_id(health_info: WorkerHealthInfo) -> str:
@@ -914,6 +915,7 @@ def _build_pairing_config() -> Tuple[Dict, str]:
         "redis": {
             "host": ssot_config.vm.redis,
             "port": ssot_config.port.redis,
+            "username": ssot_config.redis.username,  # #16627: ACL user sent with the password
             "password": ssot_config.redis.password,
             "db": DATABASE_MAPPING["main"],
         },
@@ -1195,20 +1197,17 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
 
 def _build_worker_redis_config(ssot_config) -> dict:
     """
-    Build Redis configuration for NPU worker bootstrap.
-
-    Issue #665: Extracted from worker_bootstrap to reduce function length.
+    Build the credential-free Redis config for the unauthenticated bootstrap (#665, #16657).
 
     Args:
         ssot_config: SSOT configuration object
 
     Returns:
-        Redis configuration dict for workers
+        Host, port and db only -- credentials go through the admin pair/repair push
     """
     return {
         "host": ssot_config.vm.redis,
         "port": ssot_config.port.redis,
-        "password": ssot_config.redis.password,
         "db": DATABASE_MAPPING["main"],
         "socket_timeout": 5,
         "max_connections": 10,
@@ -1334,7 +1333,7 @@ async def worker_bootstrap(request: dict):
 
     Returns:
         Configuration for the worker including:
-            - redis: Redis connection details (host, port, password, db)
+            - redis: Redis connection details (host, port, db; no credential, #16657)
             - backend: Backend connection details
             - models: Model configuration
             - logging: Logging configuration

@@ -14,7 +14,6 @@ import os
 import tarfile
 import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -23,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from api._code_source_paths import _confined_repo_path, _similar_path_parent
 from autobot_shared.time_utils import utc_timestamp
 from models.database import (
     CodeSource,
@@ -188,7 +188,7 @@ async def _find_similar_paths(node: Node, target_path: str) -> str | None:
 
     if _is_local_node(node):
         try:
-            parent = Path(parent_dir)
+            parent = _similar_path_parent(parent_dir)  # #17300: confined before listing
             if parent.is_dir():
                 for entry in parent.iterdir():
                     if entry.name.lower() == basename.lower() and entry.name != basename:
@@ -238,12 +238,12 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
         HTTPException: If path doesn't exist or validation fails
     """
     if _is_local_node(node):
-        if Path(repo_path).is_dir():
+        if _confined_repo_path(repo_path).is_dir():
             return
+        # #17300: returning the suggestion handed any authenticated user (get_current_user only) a real filename.
         similar_path = await _find_similar_paths(node, repo_path)
+        logger.info("Repo path %r not found (sibling seen: %r, not disclosed)", repo_path, similar_path)
         error_detail = f"Repository path does not exist on source node: {repo_path}"
-        if similar_path:
-            error_detail += f". Did you mean: {similar_path}?"
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail)
 
     ssh_cmd = [
@@ -263,12 +263,11 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
 
         if proc.returncode != 0 or stdout.decode().strip() != "exists":
+            # #17300: same disclosure as the local branch above -- a real filename
+            # from any directory on the REMOTE node this time. Log, don't tell.
             similar_path = await _find_similar_paths(node, repo_path)
-
+            logger.info("Repo path %r not found on node (sibling seen: %r, not disclosed)", repo_path, similar_path)
             error_detail = f"Repository path does not exist on source node: {repo_path}"
-            if similar_path:
-                error_detail += f". Did you mean: {similar_path}?"
-
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail)
 
     except asyncio.TimeoutError:

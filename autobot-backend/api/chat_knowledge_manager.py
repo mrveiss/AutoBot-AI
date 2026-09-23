@@ -34,12 +34,14 @@ from typing import Dict, List
 
 from fastapi import HTTPException, Request
 
+from api.chat_knowledge_prompt import build_summary_prompt
 from api.schemas_knowledge import FileAssociationType, KnowledgeDecision
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 from constants.threshold_constants import CategoryDefaults
+from knowledge.ownership_index import drop_ownership_unless_admin
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
@@ -325,7 +327,8 @@ class ChatKnowledgeManager:
                 # Issue #547: Include source_session_id for orphan cleanup
                 # Issue #688: Include ownership metadata for chat-derived facts
                 metadata = {
-                    **item.get("metadata", {}),
+                    # #16663: the stored item is caller-sent and this path has no caller role
+                    **drop_ownership_unless_admin(item.get("metadata", {}), None),
                     "source": f"chat_{chat_id}",
                     "source_session_id": chat_id,  # Issue #547: Track source session
                     "original_id": knowledge_id,
@@ -419,15 +422,9 @@ class ChatKnowledgeManager:
         if not include_system_messages:
             messages = [m for m in messages if m.get("role") != CategoryDefaults.ROLE_SYSTEM]
 
-        summary_prompt = """
-        Summarize this conversation into a comprehensive knowledge base entry.
-        Include key topics, solutions, code examples, and important information.
-
-        Conversation:
-        {json.dumps(messages, indent=2)}
-
-        Format the summary with clear sections and bullet points.
-        """
+        # #15700: framed as data. A refused transcript raises TranscriptRefused (a 422),
+        # so no entry is written.
+        summary_prompt = build_summary_prompt(messages)
 
         summary_response = await self.llm_interface.chat(
             messages=[{"role": CategoryDefaults.ROLE_USER, "content": summary_prompt}]

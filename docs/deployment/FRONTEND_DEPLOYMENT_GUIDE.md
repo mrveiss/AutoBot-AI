@@ -50,7 +50,7 @@ AutoBot uses a **pull-based deployment system** managed through the SLM (Service
 2. **Select Source Node**: Choose "01-Backend" or whichever node has git access
    - Typically the Main server (<backend-ip>) or development machine
 3. **Repository Path**: `/opt/autobot` (or `/opt/autobot` if different)
-4. **Branch**: `Dev_new_gui` (or `main` for production)
+4. **Branch**: `main` (or `release` for production)
 5. **Click "Save"**
 
 The Code Source card will now show:
@@ -58,7 +58,7 @@ The Code Source card will now show:
 ┌─────────────────────────────────────────────────────────────┐
 │ Code Source                                    [Edit Button] │
 │ 01-Backend (Main)                                            │
-│ /opt/autobot (Dev_new_gui)                    │
+│ /opt/autobot (main)                          │
 │ Last commit: 745e45ee                                        │
 │                                          [Remove Button]     │
 └─────────────────────────────────────────────────────────────┘
@@ -280,7 +280,7 @@ SLM_SSH_KEY=/home/autobot/.ssh/autobot_key
 
 **Before Each Deployment:**
 - [ ] Code committed to git (`git commit`)
-- [ ] Committed to correct branch (`Dev_new_gui` or `main`)
+- [ ] Committed to correct branch (`main` or `release`)
 - [ ] Code pushed to remote (`git push`) if using remote git
 - [ ] Post-commit hook executed successfully (check SLM logs)
 - [ ] Frontend build succeeds locally (`npm run build` in `autobot-frontend/`)

@@ -257,8 +257,7 @@ export function useCommandApproval() {
       const result = await apiClient.post<ApprovalResponse>(
         `${getApiBase()}/agent-terminal/sessions/${terminal_session_id}/approve`,
         {
-          approved,
-          user_id: currentUserId.value,
+          approved, // the approver is the signed-in caller, recorded server-side (#17052)
           comment: comment || null,
           auto_approve_future: autoApproveFuture.value, // Send auto-approve preference
           remember_for_project: rememberForProject.value, // Permission v2
@@ -432,12 +431,11 @@ export function useCommandApproval() {
    */
   const approveCommandForDialog = async (
     terminalSessionId: string,
-    approved: boolean,
-    userId = 'web_user'
+    approved: boolean
   ): Promise<ApprovalResponse> => {
     const result = await apiClient.post<ApprovalResponse>(
       `${getApiBase()}/agent-terminal/sessions/${terminalSessionId}/approve`,
-      { approved, user_id: userId }
+      { approved }
     )
     return result
   }

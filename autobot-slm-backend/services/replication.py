@@ -21,8 +21,10 @@ from typing import Dict, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.ssot_config import config as ssot_config
 from config import settings
-from models.database import BackupServiceType, Node, Replication, ReplicationStatus
+from models.database import Node, Replication, ReplicationStatus
+from services.redis_cli_auth import RedisCliAuth, redis_cli_auth
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,7 @@ class ReplicationService:
     ) -> "Replication" | None:
         """Log the replication attempt and load the DB record.
 
-        Helper for setup_replication. Ref: #1088.
+        Helper for run_replication_steps. Ref: #1088.
         """
         logger.info(
             "Setting up replication %s: %s -> %s",
@@ -53,43 +55,35 @@ class ReplicationService:
         )
         return await self._get_replication_record(db, replication_id)
 
-    async def setup_replication(
+    async def run_replication_steps(
         self,
         db: AsyncSession,
         replication_id: str,
         source_node: Node,
         target_node: Node,
-        service_type: BackupServiceType = BackupServiceType.REDIS,
     ) -> Tuple[bool, str]:
-        """Set up replication from source to target using Ansible.
+        """Run the replication steps against a session the CALLER owns.
+
+        #15549: the session lifecycle belongs to ``services/replication_jobs.py``,
+        which opens one for the background job and loads both nodes through it.
+        This method only composes the steps; it is never handed a request-scoped
+        session, which FastAPI closes as soon as the response is sent.
 
         Args:
-            db: Database session
+            db: Database session owned by the caller
             replication_id: Replication ID to track
-            source_node: Primary/master node
-            target_node: Replica node
-            service_type: Service to replicate (currently only REDIS supported)
+            source_node: Primary/master node loaded through *db*
+            target_node: Replica node loaded through *db*
 
         Returns:
             Tuple of (success, message)
         """
-        # #13578: identity against the member. The string comparison this
-        # replaces only worked because ``BackupServiceType`` subclasses ``str``;
-        # it would have silently passed a plain "redis" from any caller and
-        # silently failed on any other spelling.
-        if service_type is not BackupServiceType.REDIS:
-            return False, f"Unsupported service type: {service_type.value}"
-
         replication = await self._log_and_load_replication(db, replication_id, source_node, target_node)
         if not replication:
             return False, "Replication record not found"
 
         try:
-            redis_password = await self._get_redis_password(
-                source_node.ip_address,
-                source_node.ssh_user or "autobot",
-                source_node.ssh_port or 22,
-            )
+            redis_password = await self._get_redis_password()
 
             # Configure and verify replication
             result = await self._configure_and_verify_replication(
@@ -118,7 +112,7 @@ class ReplicationService:
     async def _get_replication_record(self, db: AsyncSession, replication_id: str) -> Replication | None:
         """Fetch replication record and update to syncing status.
 
-        Helper for setup_replication (Issue #665).
+        Helper for run_replication_steps (Issue #665).
 
         Args:
             db: Database session
@@ -140,7 +134,7 @@ class ReplicationService:
     async def _mark_replication_failed(self, db: AsyncSession, replication: Replication, error_message: str) -> None:
         """Set replication to failed status with error message.
 
-        Helper for setup_replication (Issue #665).
+        Helper for run_replication_steps (Issue #665).
 
         Args:
             db: Database session
@@ -161,7 +155,7 @@ class ReplicationService:
     ) -> Tuple[bool, str] | None:
         """Configure Ansible replication and verify sync.
 
-        Helper for setup_replication (Issue #665).
+        Helper for run_replication_steps (Issue #665).
 
         Args:
             db: Database session
@@ -209,7 +203,7 @@ class ReplicationService:
     ) -> None:
         """Update replication to active status and start monitoring.
 
-        Helper for setup_replication (Issue #665).
+        Helper for run_replication_steps (Issue #665).
 
         Args:
             db: Database session
@@ -368,17 +362,7 @@ class ReplicationService:
         if not target_node:
             return None
 
-        # Get Redis password
-        source_result = await db.execute(select(Node).where(Node.node_id == replication.source_node_id))
-        source_node = source_result.scalar_one_or_none()
-
-        redis_password = ""  # nosec B105  # empty initial value; real password fetched via _get_redis_password() below
-        if source_node:
-            redis_password = await self._get_redis_password(
-                source_node.ip_address,
-                source_node.ssh_user or "autobot",
-                source_node.ssh_port or 22,
-            )
+        redis_password = await self._get_redis_password()
 
         try:
             repl_info = await self._get_replication_info(
@@ -492,34 +476,13 @@ class ReplicationService:
     # Private Methods
     # =========================================================================
 
-    async def _get_redis_password(self, host: str, ssh_user: str, ssh_port: int) -> str:
-        """Get Redis password from config file."""
-        cmd = [
-            "/usr/bin/ssh",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=10",
-            "-o",
-            "BatchMode=yes",
-            "-p",
-            str(ssh_port),
-            f"{ssh_user}@{host}",
-            "grep -E '^requirepass' /etc/redis/redis.conf 2>/dev/null | awk '{print $2}'",
-        ]
+    async def _get_redis_password(self) -> str:
+        """The Redis password from its canonical source: the SLM-generated secret, via SSOT.
 
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=15)
-            if process.returncode == 0:
-                return stdout.decode().strip()
-        except Exception:
-            logger.debug("Suppressed exception in try block", exc_info=True)
-        return ""
+        #16625: this used to grep /etc/redis/redis.conf on the source node over SSH, a
+        file roles/redis never renders, so it found nothing on role-provisioned nodes.
+        """
+        return ssot_config.redis.password or ""
 
     async def _run_ansible_replication(
         self,
@@ -552,7 +515,7 @@ class ReplicationService:
 
         # Write temporary playbook (contains no secrets)
         playbook_path = self.ansible_dir / "temp_replication.yml"
-        playbook_path.write_text(playbook_content, encoding="utf-8")
+        await asyncio.to_thread(playbook_path.write_text, playbook_content, encoding="utf-8")
 
         try:
             cmd = [
@@ -613,7 +576,7 @@ class ReplicationService:
 """
 
         playbook_path = self.ansible_dir / "temp_promotion.yml"
-        playbook_path.write_text(playbook_content, encoding="utf-8")
+        await asyncio.to_thread(playbook_path.write_text, playbook_content, encoding="utf-8")
 
         try:
             cmd = [
@@ -682,35 +645,14 @@ class ReplicationService:
         ssh_port: int,
         redis_password: str,
     ) -> Dict:
-        """Get replication info from Redis."""
-        auth_prefix = ""
-        if redis_password:
-            auth_prefix = f"REDISCLI_AUTH='{redis_password}'"
-
-        cmd = [
-            "/usr/bin/ssh",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=10",
-            "-p",
-            str(ssh_port),
-            f"{ssh_user}@{host}",
-            f"{auth_prefix} redis-cli INFO replication",
-        ]
+        """Get replication info from Redis, authenticated as the canonical user (#16627)."""
+        auth = redis_cli_auth(redis_password)
+        cmd = self._build_redis_ssh_cmd(host, ssh_user, ssh_port, auth.remote("INFO replication"))
 
         try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=15)
-
-            if process.returncode != 0:
+            output = await self._redis_cli_over_ssh(cmd, auth)
+            if output is None:
                 return {}
-
-            output = stdout.decode()
             info = {}
 
             for line in output.split("\n"):
@@ -733,22 +675,22 @@ class ReplicationService:
             logger.error("Failed to get replication info: %s", e)
             return {}
 
-    def _build_keyspace_ssh_cmd(
+    def _build_redis_ssh_cmd(
         self,
         host: str,
         ssh_user: str,
         ssh_port: int,
-        auth_prefix: str,
+        remote_command: str,
     ) -> list:
-        """Build SSH command list for keyspace/dbsize/memory queries.
+        """Build the SSH command list that runs *remote_command* on a Redis node.
 
-        Helper for _get_keyspace_info. Ref: #1088.
+        Helper for _get_replication_info and _get_keyspace_info. Ref: #1088.
 
         Args:
             host: Redis host IP
             ssh_user: SSH username
             ssh_port: SSH port number
-            auth_prefix: REDISCLI_AUTH env var prefix (may be empty)
+            remote_command: the redis-cli invocations, from RedisCliAuth.remote
 
         Returns:
             List of command arguments for asyncio.create_subprocess_exec
@@ -762,12 +704,19 @@ class ReplicationService:
             "-p",
             str(ssh_port),
             f"{ssh_user}@{host}",
-            (
-                f"{auth_prefix} redis-cli INFO keyspace && "
-                f"{auth_prefix} redis-cli DBSIZE && "
-                f"{auth_prefix} redis-cli INFO memory"
-            ),
+            remote_command,
         ]
+
+    async def _redis_cli_over_ssh(self, cmd: list, auth: RedisCliAuth) -> str | None:
+        """Run one redis-cli SSH command, its password on stdin; stdout, or None on failure (#16627)."""
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE if auth.stdin else None,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(process.communicate(input=auth.stdin), timeout=15)
+        return stdout.decode() if process.returncode == 0 else None
 
     def _parse_keyspace_output(self, output: str) -> Dict:
         """Parse combined keyspace/dbsize/memory output into an info dict.
@@ -819,25 +768,14 @@ class ReplicationService:
         ssh_port: int,
         redis_password: str,
     ) -> Dict:
-        """Get keyspace info from Redis."""
-        auth_prefix = ""
-        if redis_password:
-            auth_prefix = f"REDISCLI_AUTH='{redis_password}'"
-
-        cmd = self._build_keyspace_ssh_cmd(host, ssh_user, ssh_port, auth_prefix)
+        """Get keyspace info from Redis, authenticated as the canonical user (#16627)."""
+        auth = redis_cli_auth(redis_password)
+        remote = auth.remote("INFO keyspace", "DBSIZE", "INFO memory")
+        cmd = self._build_redis_ssh_cmd(host, ssh_user, ssh_port, remote)
 
         try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=15)
-
-            if process.returncode != 0:
-                return {}
-
-            return self._parse_keyspace_output(stdout.decode())
+            output = await self._redis_cli_over_ssh(cmd, auth)
+            return {} if output is None else self._parse_keyspace_output(output)
 
         except Exception as e:
             logger.error("Failed to get keyspace info: %s", e)

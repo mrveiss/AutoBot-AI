@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _ORCHESTRATOR = _REPO_ROOT / "autobot-slm-backend" / "services" / "sync_orchestrator.py"
 _REGISTRY = _REPO_ROOT / "autobot-slm-backend" / "services" / "role_registry.py"
@@ -129,6 +131,7 @@ def test_no_exclude_blocks_a_directory_that_is_source_for_some_role():
                     capture_output=True,
                     text=True,
                     check=False,
+                    env=scrubbed_git_env(),
                 )
                 if listing.returncode == 0 and listing.stdout.strip():
                     clashes.append(f"{entry.get('name')}: {relative}/ is tracked source but excluded")
@@ -246,6 +249,26 @@ def test_the_rewrite_rule_is_not_vacuous():
     ]
 
     assert len(using) >= 4, f"only {using} route through the rewrite"
+
+
+def test_every_rewrite_output_path_is_unique():
+    """Two roles writing the same /tmp path race when code_sync runs their sync
+    jobs as concurrent tasks (#16889 review): whichever `pip install -r` reads
+    that file second gets the other role's filtered dependencies -- a silent
+    wrong-deps install, not a visible failure. #16889 originally reused the
+    `backend` role's own `/tmp/requirements-filtered-slm.txt` for `slm-backend`
+    by copying the pattern without checking the other entries already using it."""
+    roles_by_path: dict[str, set[str]] = {}
+    for entry in _registry_entries():
+        command = entry.get("post_sync_cmd") or ""
+        # A role's own path legitimately appears twice in its own command (the
+        # `>` redirect and the `-r` install) -- a set per path, not a list,
+        # so a role never collides with itself.
+        for path in set(re.findall(r"/tmp/requirements-filtered-[\w.-]+\.txt", command)):
+            roles_by_path.setdefault(path, set()).add(entry.get("name"))
+
+    collisions = {path: sorted(roles) for path, roles in roles_by_path.items() if len(roles) > 1}
+    assert collisions == {}, f"shared /tmp path across roles, a concurrent-sync race: {collisions}"
 
 
 # ---------------------------------------------------------------------------
