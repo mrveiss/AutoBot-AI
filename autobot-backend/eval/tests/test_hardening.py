@@ -61,7 +61,7 @@ def test_load_golden_set_skips_oversized_files(tmp_path, monkeypatch):
 def test_hanging_replay_recorded_as_failure(monkeypatch):
     monkeypatch.setattr("eval.runner._REPLAY_TIMEOUT_S", 0.05)
     evaluator = ResponseQualityEvaluator()
-    evaluator._call_llm = AsyncMock(return_value="SCORE: 0.9\nCRITIQUE: None\nHINT: None")
+    evaluator._call_llm = AsyncMock(return_value=json.dumps({"score": 0.9, "critique": "", "hint": ""}))
     replayer = TrajectoryReplayer(evaluator=evaluator)
 
     async def _hanging_candidate(golden):

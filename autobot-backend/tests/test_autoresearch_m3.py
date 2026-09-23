@@ -31,10 +31,14 @@ class TestM3Integration:
         # For mutation: return variants
         mutation_response = MagicMock()
         mutation_response.content = json.dumps(["variant A", "variant B"])
+        mutation_response.error = None
 
-        # For judge: return rating
+        # For judge: the typed-decision reply the scorer reads now (#17307).
+        # `error = None` matters: the seam treats a truthy `.error` as a failed
+        # call, and a bare MagicMock's attribute is truthy.
         judge_response = MagicMock()
-        judge_response.content = '{"rating": 7, "reasoning": "Good"}'
+        judge_response.content = json.dumps({"rating": {"answer": 7, "probability": 0.8}})
+        judge_response.error = None
 
         # For synthesis: return insights
         synthesis_response = MagicMock()
@@ -48,6 +52,7 @@ class TestM3Integration:
                 }
             ]
         )
+        synthesis_response.error = None
 
         # Cycle through responses
         llm.chat.side_effect = [

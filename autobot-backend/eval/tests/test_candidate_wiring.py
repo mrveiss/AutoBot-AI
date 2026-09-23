@@ -47,7 +47,7 @@ def _golden(tid: str = "t1") -> GoldenTrajectory:
 
 def _scorer(score: float) -> ResponseQualityEvaluator:
     evaluator = ResponseQualityEvaluator()
-    evaluator._call_llm = AsyncMock(return_value=f"SCORE: {score}\nCRITIQUE: None\nHINT: None")
+    evaluator._call_llm = AsyncMock(return_value=json.dumps({"score": score, "critique": "", "hint": ""}))
     return evaluator
 
 

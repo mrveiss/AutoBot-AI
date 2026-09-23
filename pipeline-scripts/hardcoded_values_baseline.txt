@@ -380,7 +380,6 @@
 2|other|autobot-backend/llm_shared/providers/vertexai.py|"user"
 1|other|autobot-backend/llm_shared/providers/vertexai.py|https://www.googleapis.com/auth/cloud-platform
 1|other|autobot-backend/llm_shared/providers/vllm.py|"assistant"
-1|other|autobot-backend/llm_shared/structured_ops.py|"user"
 1|other|autobot-backend/llm_shared/tiered_routing/complexity_router.py|"system"
 1|other|autobot-backend/llm_shared/tiered_routing/complexity_scorer.py|"user"
 1|other|autobot-backend/media/document/extraction.py|offset=0
@@ -463,12 +462,8 @@
 1|other|autobot-backend/services/autoresearch/routes.py|10
 1|other|autobot-backend/services/autoresearch/routes.py|100
 2|other|autobot-backend/services/autoresearch/routes.py|50
-1|other|autobot-backend/services/autoresearch/scorers.py|"system"
-1|other|autobot-backend/services/autoresearch/scorers.py|"user"
 1|other|autobot-backend/services/autoresearch/store.py|50
 1|other|autobot-backend/services/captcha_human_loop.py|120
-1|other|autobot-backend/services/claim_verifier.py|"system"
-1|other|autobot-backend/services/claim_verifier.py|"user"
 2|other|autobot-backend/services/command_extraction_service.py|30
 1|other|autobot-backend/services/command_extraction_service.py|50
 1|other|autobot-backend/services/config_revision_service.py|50
