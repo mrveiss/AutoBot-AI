@@ -306,6 +306,12 @@ REACH = declare(
     # rebased tree rather than assumed: the mid-window pin absorbs this branch,
     # so the 6543 this branch carried before the rebase is superseded, not
     # lowered -- 6736 is the stricter of the two.
+    #
+    # Held at 6736 for #17307/#17308 too (+14 counted files over main ->
+    # population 6952, slack 216 of 401, and 215 below `completed()`'s 6951).
+    # Re-measured on this rebased tree, not inherited: the mid-window pin
+    # absorbs the largest branch in tonight's queue, which is the property
+    # `population - growth` never had.
     floor=6736,
     growth=400,
     skips=1,
