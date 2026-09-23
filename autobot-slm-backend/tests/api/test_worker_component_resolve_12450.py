@@ -29,12 +29,7 @@ sys.path.insert(0, str(_BACKEND_ROOT))
 # Same import shims as test_status_stale_components_11820.py: stub the
 # conflicting multipart package and swap benign dicts in for MagicMock schema
 # names so api.code_sync imports under the conftest stub regime.
-if "multipart" in sys.modules and not hasattr(sys.modules["multipart"], "multipart"):
-    sys.modules.pop("multipart", None)
-_mp_stub = types.ModuleType("multipart")
-_mp_stub.multipart = types.ModuleType("multipart.multipart")  # type: ignore[attr-defined]
-sys.modules.setdefault("multipart", _mp_stub)
-sys.modules.setdefault("multipart.multipart", _mp_stub.multipart)  # type: ignore[attr-defined]
+_MULTIPART_KEYS = ("multipart", "multipart.multipart")
 
 _code_sync_src = (_BACKEND_ROOT / "api" / "code_sync.py").read_text(encoding="utf-8")
 _SCHEMA_NAMES = tuple(
@@ -49,6 +44,34 @@ _schemas_stub = sys.modules.get("models.schemas")
 if isinstance(_schemas_stub, MagicMock):
     for _name in _SCHEMA_NAMES:
         setattr(_schemas_stub, _name, dict)
+
+
+def _load_code_sync():
+    """Import ``api.code_sync`` behind the multipart stub, then take it back out.
+
+    The stubs used to be installed at module import and never removed, so they
+    outlived this file and were the first thing the next test file to import
+    saw -- a sys.modules leak the guard reports against whichever file happens
+    to run next, not against the one that caused it. They are only needed while
+    ``api.code_sync`` is being imported; afterwards the module object is cached
+    and the keys are dead weight. Installed and removed in one try/finally, and
+    whatever was there before is put back.
+    """
+    saved = {key: sys.modules[key] for key in _MULTIPART_KEYS if key in sys.modules}
+    if "multipart" in sys.modules and not hasattr(sys.modules["multipart"], "multipart"):
+        sys.modules.pop("multipart", None)
+    stub = types.ModuleType("multipart")
+    stub.multipart = types.ModuleType("multipart.multipart")  # type: ignore[attr-defined]
+    sys.modules.setdefault("multipart", stub)
+    sys.modules.setdefault("multipart.multipart", stub.multipart)  # type: ignore[attr-defined]
+    try:
+        import api.code_sync as cs
+
+        return cs
+    finally:
+        for key in _MULTIPART_KEYS:
+            sys.modules.pop(key, None)
+        sys.modules.update(saved)
 
 
 _WORKERS = (
@@ -131,7 +154,7 @@ def test_plugins_stays_visibility_only():
 def test_every_worker_has_an_explicit_restart_target():
     """A worker with no mapping would rsync and restart NOTHING — the exact
     silent half-update #12574 refused to ship."""
-    import api.code_sync as cs
+    cs = _load_code_sync()
 
     for worker in _WORKERS:
         assert cs._COMPONENT_SERVICES.get(worker), f"{worker} has no restart target"
@@ -145,7 +168,7 @@ def test_restart_targets_that_do_not_match_the_component_name():
     Deriving "autobot-slm-agent" / "autobot-browser-worker" would restart units
     that do not exist, leaving the worker running pre-sync code.
     """
-    import api.code_sync as cs
+    cs = _load_code_sync()
 
     assert cs._COMPONENT_SERVICES["autobot-slm-agent"] == ["autobot-agent"]
     assert cs._COMPONENT_SERVICES["autobot-browser-worker"][0] == "autobot-playwright"
@@ -159,7 +182,7 @@ def test_ai_stack_restarts_both_units_in_ansible_order():
     defines `restart chromadb` before `restart ai-stack`, and ansible runs
     handlers in definition order, so chromadb comes up first.
     """
-    import api.code_sync as cs
+    cs = _load_code_sync()
 
     assert cs._COMPONENT_SERVICES["autobot-ai-stack"] == [
         "autobot-chromadb",
@@ -175,7 +198,7 @@ def test_ai_stack_restarts_both_units_in_ansible_order():
 def test_only_ai_stack_installs_deps_and_from_requirements_ai_txt():
     """ai-stack's ansible role installs requirements-ai.txt — NOT the
     conventional requirements.txt — into its own venv."""
-    import api.code_sync as cs
+    cs = _load_code_sync()
 
     assert set(cs._WORKER_COMPONENT_PIP) == {"autobot-ai-stack"}
     req_path, pip_bin = cs._WORKER_COMPONENT_PIP["autobot-ai-stack"]
@@ -191,7 +214,7 @@ def test_ansible_managed_workers_have_no_pip_step():
     autobot-npu-worker/requirements.txt but ansible never installs it, so
     running it could pull a different OpenVINO build than the role pinned.
     """
-    import api.code_sync as cs
+    cs = _load_code_sync()
 
     for worker in ("autobot-npu-worker", "autobot-browser-worker", "autobot-slm-agent"):
         assert worker not in cs._WORKER_COMPONENT_PIP
@@ -201,7 +224,7 @@ def test_ansible_managed_workers_have_no_pip_step():
 def test_deps_changed_watches_the_ai_stack_requirements_filename():
     """Without this the deps_changed signal reports an ai-stack dep bump as a
     code-only change."""
-    import api.code_sync as cs
+    cs = _load_code_sync()
 
     assert "requirements-ai.txt" in cs._DEPS_FILES
 
@@ -216,7 +239,7 @@ def test_workers_are_not_treated_as_backends():
     venv RECREATION, alembic and autobot_shared symlink restore. None apply to a
     worker, and venv recreation would wipe the venv chroma runs from (MVA-79).
     """
-    import api.code_sync as cs
+    cs = _load_code_sync()
 
     for worker in _WORKERS:
         assert worker in cs._WORKER_COMPONENTS
@@ -232,7 +255,7 @@ def test_worker_branch_is_evaluated_before_the_shared_library_branch():
     """
     import inspect
 
-    import api.code_sync as cs
+    cs = _load_code_sync()
 
     src = inspect.getsource(cs._run_post_sync_steps)
     assert src.index("_WORKER_COMPONENTS") < src.index("elif component in _COMPONENT_SERVICES")
@@ -249,7 +272,7 @@ def test_missing_venv_skips_for_workers_but_still_fails_for_backends():
     import asyncio
     from unittest.mock import AsyncMock, patch
 
-    import api.code_sync as cs
+    cs = _load_code_sync()
 
     missing_pip = "/nonexistent/venv/bin/pip"
 
