@@ -320,6 +320,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/orphan-storage/deletion-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Orphan Storage Deletion
+         * @description Propose deleting one orphan-storage candidate -- a request, not a deletion.
+         *
+         *     Creates a PENDING approval whose context names the registered action and
+         *     the candidate. Nothing is deleted here and nothing can be: the only caller
+         *     of ``delete_candidate`` is the post-approval executor, which runs after a
+         *     human approves (#17038). Whether the candidate is still an orphan, and
+         *     still past its grace period, is re-checked THEN rather than now, so a
+         *     record that reappears between proposal and approval is refused instead of
+         *     deleted.
+         *
+         *     An unregistered provider is refused here rather than accepted and failed
+         *     after approval -- a reviewer should never be asked to decide on a proposal
+         *     that could not execute.
+         */
+        post: operations["propose_orphan_storage_deletion_api_admin_orphan_storage_deletion_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/retention-policies": {
         parameters: {
             query?: never;
@@ -86475,6 +86507,43 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * OrphanStorageDeletionRequest
+         * @description Propose deleting one candidate. Names the candidate, never a host path.
+         */
+        OrphanStorageDeletionRequest: {
+            /** Provider */
+            provider: string;
+            /** Candidate Id */
+            candidate_id: string;
+            /** Reason */
+            reason?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrphanStorageDeletionRequestResponse
+         * @description The PENDING approval a proposal created -- nothing was deleted (#17315).
+         *
+         *     ``status`` is the approval's own status, so a caller reading this response
+         *     can never mistake "queued for a human" for "done": the deletion happens
+         *     only if someone approves it, and only then does the registered executor
+         *     run.
+         */
+        OrphanStorageDeletionRequestResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+            /** Provider */
+            provider: string;
+            /** Candidate Id */
+            candidate_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * OrphanStorageListResponse
          * @description Every candidate across every registered detector, plus totals.
          *
@@ -104918,6 +104987,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrphanStorageListResponse"];
+                };
+            };
+        };
+    };
+    propose_orphan_storage_deletion_api_admin_orphan_storage_deletion_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrphanStorageDeletionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrphanStorageDeletionRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
