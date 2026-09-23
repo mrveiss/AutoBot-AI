@@ -15,12 +15,17 @@ PEM blocks, basic-auth URLs, "password is X" phrasing -- is caught too. Every
 caller of this module's ``redact_dict``/``redact_string`` gets the wider
 coverage for free, including ``llc/services/replay_service.py``'s read-time
 redaction, which previously had no content scanner at all in that path.
+
+
+Boundary: this module is one of seven that own a secret detector — see
+``docs/developer/REDACTION_BOUNDARY.md`` for which redactor owns which shape of
+the problem, and add a new detector there rather than starting an eighth (#16688).
 """
 
 import re
 from typing import Any, Dict
 
-from autobot_shared.secret_redaction import redact_content
+from autobot_shared.secret_redaction import CREDENTIAL_SUFFIXES, redact_content
 
 # Patterns for common API key formats
 API_KEY_PATTERNS = [
@@ -33,16 +38,24 @@ API_KEY_PATTERNS = [
 # Keys in dicts that should be redacted. Entries MUST be in the normalized
 # form redact_dict compares against (lowercase, "_" and "-" stripped) —
 # un-normalized entries like "api_key" can never match a normalized key (#11762).
-SENSITIVE_KEYS = {
-    "apikey",
-    "token",
-    "bearer",
-    "password",
-    "secret",
-    "credential",
-    "auth",
-    "authorization",
-}
+#
+# #16688: the credential nouns are no longer hand-copied. They come from
+# ``secret_redaction.CREDENTIAL_SUFFIXES``, the shared-tier vocabulary this
+# module already delegates free-text scanning to, so a noun added there (the
+# census names it the owner of "is this name a credential") reaches this
+# module's dict/log redaction without anyone remembering to type it twice.
+#
+# The extras below are a UNION, not a replacement, and that is load-bearing.
+# CREDENTIAL_SUFFIXES is a *field-name suffix* vocabulary and carries no
+# authorization terms; dropping to it alone would stop redacting
+# ``Authorization``, ``auth_header`` and ``x_auth`` in logs — a silent
+# under-redaction, which is exactly the failure mode a redaction merge has to
+# refuse. Every entry here must therefore only ever widen the set.
+# Already covered by CREDENTIAL_SUFFIXES and deliberately not repeated:
+# apikey (via "key"), token, password, secret, credential.
+_AUTHORIZATION_KEYS = frozenset({"bearer", "auth", "authorization"})
+
+SENSITIVE_KEYS = frozenset(CREDENTIAL_SUFFIXES) | _AUTHORIZATION_KEYS
 
 
 def redact_api_key(value: str) -> str:
