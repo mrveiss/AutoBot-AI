@@ -54,6 +54,10 @@ on:
       # satisfies branch protection.
       - 'docs/**'
       - 'scripts/lib/**'
+      # #15473: this workflow RUNS lint-conventions.sh, and a change confined to
+      # the linter did not trigger it -- the required-context shim then reported
+      # the job green on a linter nothing had executed.
+      - 'scripts/lint-conventions.sh'
       - '.github/workflows/code-quality.yml'
       # #15608: the shared filter file and the complement shim publishing the
       # same required context. Editing either must run the REAL gate, not the
