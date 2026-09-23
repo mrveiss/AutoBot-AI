@@ -170,3 +170,54 @@ def test_the_expansion_attributes_routes_to_the_registered_router() -> None:
     assert not (set(main) & set(realtime)), "the two routers in api.voice must not share a route"
     assert ("POST", "/realtime/tools/call") in realtime
     assert ("POST", "/realtime/tools/call") not in main
+
+
+#: Modules whose routes this guard CANNOT see, counted rather than ignored.
+#: The expansion reads `@router.<verb>` decorators on the registered object. A
+#: module that composes with `router.include_router(other)` mounts routes this
+#: never visits, so the pair count below is a floor, not a total.
+#:
+#: Sixteen non-test modules, measured. An earlier count of 77 was this same
+#: grep including `*_test.py`, which is why the pin is computed and asserted
+#: rather than written down from a shell one-liner.
+#:
+#: A better guard already exists and is not mine: commit f4e2d6badb on the
+#: abandoned branch `issue-16908-duplicate-routes` rebuilt it on REAL router
+#: objects -- calling load_core_routers()/load_optional_routers() and walking
+#: effective_routes(), which resolves nested include_router() properly. It was
+#: removed from that branch by a later commit ("split guard out of #16918 per
+#: review") and never landed. It cannot be verified on this machine: importing
+#: real routers pulls llc.scheduler.base, which requires Python 3.11+ and this
+#: interpreter is 3.10 (CI runs 3.14). Adopting it is #17325.
+#:
+#: Until then the blind spot is PINNED, so it cannot quietly grow: if a module
+#: starts composing with include_router, this fails and the next person learns
+#: the guard got blinder rather than discovering it years later.
+COMPOSING_MODULES_PIN = 16
+
+
+def _modules_using_include_router() -> list[str]:
+    api = ROOT / "autobot-backend" / "api"
+    hits = []
+    for path in sorted(api.glob("*.py")):
+        if "test" in path.name:
+            continue
+        if "include_router" in path.read_text(encoding="utf-8", errors="replace"):
+            hits.append(path.name)
+    return hits
+
+
+def test_the_blind_spot_is_pinned_not_ignored() -> None:
+    """This guard under-counts, and by how much must be visible.
+
+    A count a guard cannot actually establish is the defect this repository
+    governs. Reporting "1518 pairs, 1 duplicate" while structurally unable to
+    see include_router-composed routes would be exactly that, so the size of
+    what it cannot see is pinned here instead.
+    """
+    composing = _modules_using_include_router()
+    assert len(composing) == COMPOSING_MODULES_PIN, (
+        f"{len(composing)} api modules compose with include_router, pin says {COMPOSING_MODULES_PIN}. "
+        "This guard cannot see routes mounted that way, so the blind spot changed size. "
+        "Update the pin deliberately, or adopt the real-router enumeration (#17325)."
+    )
