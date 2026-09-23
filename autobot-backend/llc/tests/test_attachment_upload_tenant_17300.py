@@ -25,7 +25,24 @@ from __future__ import annotations
 import uuid
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from llc.tests.test_work_items_idor import _make_idor_app
+
+
+@pytest.fixture(autouse=True)
+def _stop_patches():
+    """Undo every patch `_make_idor_app` starts, for each test in THIS module.
+
+    `test_work_items_idor.py` has an identical autouse fixture, but a fixture is
+    module-scoped: importing its app builder starts its patches and does NOT
+    bring its teardown along. Without this, `AttachmentService.upload` stayed an
+    AsyncMock for the rest of the session and `test_attachments.py::
+    test_upload_too_large` stopped raising — caught by the pre-push gate, and the
+    same leak #13674/#13678 already fixed once inside the other module.
+    """
+    yield
+    patch.stopall()
 
 
 def _recording_upload():
