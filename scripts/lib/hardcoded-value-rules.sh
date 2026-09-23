@@ -256,11 +256,12 @@ _HV_EXT_RE="\.(${HV_SCAN_EXTENSIONS})$"
 # there rather than guessed at.
 HV_SCAN_DIRS=(
     "autobot-backend"
-    "autobot-frontend/src"
+    "autobot-frontend"
     "autobot_shared"
     "autobot-slm-backend"
-    "autobot-slm-frontend/src"
+    "autobot-slm-frontend"
     "autobot-infrastructure"
+    "scripts"
 )
 
 # 0 when *$1* lies inside one of HV_SCAN_DIRS.
@@ -285,7 +286,15 @@ hv_file_in_scope() {
 }
 
 # ── shared line predicates ───────────────────────────────────────────────────
-_HV_COMMENT_RE='^[[:space:]]*(#|//|\*)'
+# #17329: `/*` as well. The pattern already means "this line is a comment" --
+# `#`, `//` and a continuation `*` were listed and the block OPENER was not, so
+# a one-line `/* ... */` doc comment was scanned as code. Only the safe half of
+# that refinement: adding `process.env` to _HV_CONFIG_RE below was measured and
+# REJECTED, because `process.env.X || 'http://<ip>:5173'` reads config AND
+# hardcodes a fallback, and exempting the line hides the fallback -- the defect
+# #14198's port-fallback hook exists for. Ten tracked findings, two of them
+# internal IPs, would have gone invisible.
+_HV_COMMENT_RE='^[[:space:]]*(#|//|/\*|\*)'
 # A line already going through config / an env var. Detector 1 also honoured an
 # explicit `noqa` marker; both are union members.
 _HV_CONFIG_RE='(config\.|CONFIG\[|getenv|os\.environ|ssot_config|AUTOBOT_[A-Z_]+|NetworkConstants)'
@@ -627,6 +636,12 @@ hv_scan_tree() {
     local -a includes=() args=()
     IFS='|' read -r -a includes <<< "$HV_SCAN_EXTENSIONS"
     for ext in "${includes[@]}"; do args+=("--include=*.${ext}"); done
+    # #17329: the scan roots now include each frontend's project root, which
+    # contains node_modules. _HV_EXCLUDE_RE already drops those paths from the
+    # FINDINGS, but the walk would still read every matching file inside a
+    # ~790MB tree on the way. Pruning the directory is the same decision made
+    # one step earlier.
+    for skip in node_modules .venv venv dist build __pycache__; do args+=("--exclude-dir=${skip}"); done
     [ -d "$root" ] || return 0
     while IFS= read -r raw; do
         [ -n "$raw" ] || continue

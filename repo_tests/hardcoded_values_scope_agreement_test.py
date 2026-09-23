@@ -99,14 +99,16 @@ def test_the_hook_applies_the_same_directory_scope():
         ("autobot-slm-frontend/src/App.vue", True),
         ("autobot_shared/redis_client.py", True),
         ("autobot-infrastructure/deploy.sh", True),
-        # Project-root configs sit outside */src. Out of scope for BOTH sides now
-        # -- the status quo of the scan, applied consistently. Widening it is
-        # #17329 option 2, to be measured before it is chosen.
-        ("autobot-frontend/vitest.config.ts", False),
-        ("autobot-frontend/vite.config.ts", False),
-        ("autobot-slm-frontend/vitest.config.ts", False),
+        # #17329 option 2, now measured and taken: each frontend's project
+        # root and scripts/ are scanned, so the configs that could previously
+        # be neither committed nor baselined are in scope for BOTH sides.
+        ("autobot-frontend/vitest.config.ts", True),
+        ("autobot-frontend/vite.config.ts", True),
+        ("autobot-slm-frontend/vitest.config.ts", True),
+        ("scripts/whatever.sh", True),
+        # A repo-root file still belongs to no scanned tree.
         ("vite.config.ts", False),
-        ("scripts/whatever.sh", False),
+        ("docs/whatever.md", False),
     ],
 )
 def test_the_predicate_agrees_with_the_declared_directories(path: str, expected_in_scope: bool):
@@ -117,16 +119,24 @@ def test_the_predicate_agrees_with_the_declared_directories(path: str, expected_
     )
 
 
-def test_the_scan_still_resolves_the_same_directories_it_always_did():
-    """Moving the list must not quietly change what gets scanned."""
+def test_the_scan_resolves_exactly_the_declared_directories():
+    """The set is asserted so it can only change deliberately.
+
+    #17329 widened it once, on purpose: `autobot-frontend/src` became
+    `autobot-frontend` (and the same for the SLM app), and `scripts/` was
+    added, because a file in those trees could be neither committed through
+    the hook nor absorbed by the baseline. Every finding that widening
+    surfaced is fixed or carries a reviewed baseline entry in the same change.
+    """
     result = _bash(f'source "{RULES}"; printf "%s\\n" "${{HV_SCAN_DIRS[@]}}"')
     assert result.returncode == 0, result.stderr
     dirs = [line for line in result.stdout.splitlines() if line]
     assert dirs == [
         "autobot-backend",
-        "autobot-frontend/src",
+        "autobot-frontend",
         "autobot_shared",
         "autobot-slm-backend",
-        "autobot-slm-frontend/src",
+        "autobot-slm-frontend",
         "autobot-infrastructure",
+        "scripts",
     ], f"the scanned directory set changed: {dirs}"

@@ -1402,3 +1402,65 @@
 1|other|autobot_shared/security/path_validator.py|"/opt/autobot/data
 1|other|autobot_shared/user_management/organization_service.py|50
 1|other|autobot_shared/user_management/team_service.py|50
+
+# ---------------------------------------------------------------------------
+# #17329: surfaced by widening HV_SCAN_DIRS to each frontend's project root and
+# scripts/. These were never clean -- they were never LOOKED at, because the
+# repo-wide scan walked */src while the pre-commit hook scanned whatever was
+# staged, so a file in this gap could be neither committed nor baselined.
+#
+# Of the 34 findings the widening surfaced: 3 stopped being findings when the
+# comment pattern was corrected to cover `/*`, 2 remote-path literals were
+# FIXED in this change, and the 29 below are recorded with a reason each.
+# ---------------------------------------------------------------------------
+
+# reviewed: #17329 playwright action timeout in ms (`timeout: 120 * 1000`) -- a test-harness budget, not deployment config
+1|other|autobot-frontend/playwright.config.ts|120
+
+# reviewed: #17329 visual-regression timeout literal, same class as the playwright budget above
+1|other|autobot-frontend/playwright.visual.config.ts|30
+
+# reviewed: #17329 the literal is CORRECT and must NOT be derived: :200 tests whether a resolved ANSIBLE VALUE starts with it and :204 strips it to recover a repo path, so it describes what this repo's ansible files say. Sourcing it from AUTOBOT_BASE_DIR would make every real deployed path fail that startswith() wherever the var is set, and the checker would report clean while checking nothing
+1|other|scripts/check_ansible_file_references.py|"/opt/autobot/src/
+
+# reviewed: #17329 public forge URL with the repo interpolated from config -- the host is github.com by definition, not a deployment address
+1|other|scripts/compile_changelog.py|https://github.com/{GITHUB_REPO}/issues/{f[
+
+# reviewed: #17329 as above, the pull-request form
+1|other|scripts/compile_changelog.py|https://github.com/{GITHUB_REPO}/pull/{f[
+
+# reviewed: #17329 subprocess timeout in seconds in a standalone health-check script -- not a cache TTL, not deployment config
+1|other|scripts/daily_health_check.py|30
+
+# reviewed: #17329 subprocess and request timeouts in seconds, same class as daily_health_check.py
+2|other|scripts/post_health_check.py|30
+
+# reviewed: #17329 the upstream wheel index this script installs from, pinned deliberately so CI parity resolves the same index every run
+1|other|scripts/setup-ci-parity-env.sh|https://download.pytorch.org/whl/cpu
+
+# reviewed: #17329 vite dev-server port in cypress's baseUrl -- a harness default the runner overrides, never read by shipped code
+1|ssot|autobot-frontend/cypress.config.ts|:5173
+
+# reviewed: #17329 vite dev-server port in `process.env.VITE_BASE_URL || ...` fallback position. Kept as a finding rather than exempted by rule: the fallback is live whenever the env var is unset, which is the defect #14198's port-fallback hook exists for
+1|ssot|autobot-frontend/playwright.config.ts|:5173
+
+# reviewed: #17329 backend port in the same fallback position, same reasoning
+1|ssot|autobot-frontend/playwright.config.ts|:8001
+
+# reviewed: #17329 developer dev-server launcher -- the port is what the script exists to start
+3|ssot|autobot-frontend/start-frontend-dev.sh|:5173
+
+# reviewed: #17329 e2e harness target, overridden by env in CI
+3|ssot|autobot-frontend/tests/e2e/config.ts|:5173
+
+# reviewed: #17329 e2e harness backend target, overridden by env in CI
+4|ssot|autobot-frontend/tests/e2e/config.ts|:8001
+
+# reviewed: #17329 vitest setup stubs a backend origin for jsdom -- never reaches a network
+4|ssot|autobot-frontend/tests/setup.ts|:8001
+
+# reviewed: #17329 the jsdom origin for the test environment, coupled to src/test/vitest-setup.ts and src/services/__tests__/api.integration.test.ts which pin the same origin and document the coupling -- relocating it is a four-file change and its own issue, not a rider
+1|ssot|autobot-frontend/vitest.config.ts|:3000
+
+# reviewed: #17329 default backend port for the audit's own OpenAPI dump. This file also carries a `main` over the function-length gate while sitting at its size ceiling, so it cannot currently be edited at all
+2|ssot|scripts/audit_api_wiring.py|:8001
