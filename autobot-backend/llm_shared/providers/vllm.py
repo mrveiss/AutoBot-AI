@@ -29,6 +29,29 @@ from .chat_template_loader import DEFAULT_TEMPLATE, render_chat_template
 logger = get_logger(__name__)
 
 
+def guided_decoding_kwargs(guided_json: Dict[str, Any] | None) -> Dict[str, Any]:
+    """Return the ``SamplingParams`` kwargs that enforce *guided_json* (#17305).
+
+    Empty when there is no schema, and empty *with a warning* when the
+    installed vLLM exposes no ``GuidedDecodingParams`` -- an engine too old
+    for guided decoding must degrade to unconstrained output loudly, not
+    silently, because the caller was told the reply would be schema-shaped.
+    The import is local for the same reason the ``vllm`` import above is
+    guarded: this module is imported in environments without vLLM at all.
+    """
+    if not guided_json:
+        return {}
+    try:
+        from vllm.sampling_params import GuidedDecodingParams
+    except ImportError:
+        logger.warning(
+            "vLLM guided decoding unavailable (no GuidedDecodingParams in the installed "
+            "vllm) -- structured_output cannot be enforced for this request (#17305)"
+        )
+        return {}
+    return {"guided_decoding": GuidedDecodingParams(json=guided_json)}
+
+
 class VLLMProvider:
     """
     vLLM provider for serving HuggingFace models with high performance.
@@ -142,6 +165,7 @@ class VLLMProvider:
             frequency_penalty=kwargs.get("frequency_penalty", 0.0),
             presence_penalty=kwargs.get("presence_penalty", 0.0),
             stop=kwargs.get("stop", None),
+            **guided_decoding_kwargs(kwargs.get("guided_json")),
         )
 
     async def get_model_info(self) -> Dict[str, Any]:

@@ -173,6 +173,10 @@ class LLMRequest:
     tools: List["ToolDefinition"] | None = None
     tool_choice: str | None = None  # "auto" | "none" | specific tool name
     lightweight_mode: bool = False  # Skip tools/RAG/memory for trivial queries
+    # #17305: the JSON Schema `structured_output` asks the provider to enforce.
+    # None keeps the bare-JSON behaviour (`json_object` where a provider has
+    # it); a schema here is propagated by every provider that accepts one.
+    json_schema: Dict[str, Any] | None = None
 
 
 __all__ = [

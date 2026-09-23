@@ -25,6 +25,7 @@ from typing import Any, AsyncIterator, Dict, List, Sequence
 
 from autobot_shared.logging_manager import get_logger
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
+from llm_shared.structured_output import StructuredOutputMode, response_format_for_mode
 
 from ..base_provider import BaseProvider
 from .cache_utils import sorted_for_cache
@@ -57,6 +58,12 @@ class OpenAICompatibleProvider(BaseProvider):
     forward_penalty_params: bool = False
     #: Error message raised when no API key can be resolved.
     missing_key_error: str = "API key not configured. Provide api_key in provider settings."
+    #: #17305: the dialect carries ``response_format``, so every provider in
+    #: this family honours ``structured_output`` at least as ``json_object``.
+    #: A subclass raises this to ``JSON_SCHEMA`` only where that provider
+    #: genuinely enforces a supplied schema -- the base stays at the mode the
+    #: dialect guarantees rather than claiming one it cannot keep.
+    structured_output_mode: StructuredOutputMode = StructuredOutputMode.JSON_OBJECT
 
     def __init__(self, settings: Dict[str, Any] | None = None) -> None:
         super().__init__(settings)
@@ -142,12 +149,27 @@ class OpenAICompatibleProvider(BaseProvider):
             for key in ("presence_penalty", "frequency_penalty"):
                 if key in api_kwargs:
                     params[key] = api_kwargs[key]
+        # #17305: structured_output used to die here -- the flag reached the
+        # payload builder and nothing read it. `response_format` is set before
+        # `_extra_params` so a provider-specific override still wins.
+        response_format = self._response_format(request)
+        if response_format:
+            params["response_format"] = response_format
         extra = self._extra_params(request)
         if extra:
             params.update(extra)
         if self.sort_params_for_cache:
             params = sorted_for_cache(params)
         return params
+
+    def _response_format(self, request: LLMRequest) -> Dict[str, Any] | None:
+        """Return the ``response_format`` payload for *request*, or None (#17305).
+
+        Clamped to this provider's declared mode, so a subclass speaking
+        only bare JSON never receives a ``json_schema`` payload it would
+        reject (``note_structured_output`` records what was applied).
+        """
+        return response_format_for_mode(request, self.structured_output_mode)
 
     @staticmethod
     def _tools_payload(request: LLMRequest) -> List[Dict[str, Any]]:

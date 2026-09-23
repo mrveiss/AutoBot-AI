@@ -33,6 +33,7 @@ from constants.model_constants import (
     OPENAI_GPT35_TURBO,
 )
 from llm_shared.models import LLMRequest
+from llm_shared.structured_output import StructuredOutputMode
 from llm_shared.types import ProviderType
 from services.provider_key_vault import resolve_provider_key
 
@@ -62,6 +63,9 @@ class OpenAIProvider(OpenAICompatibleProvider):
     default_model = OPENAI_GPT4O_MINI
     fallback_models = tuple(_OPENAI_MODELS)
     sort_params_for_cache = True  # #7368: byte-exact payloads keep prompt caching warm
+    # #17305: OpenAI implements `response_format: {"type": "json_schema", ...}`,
+    # so a schema on the request is enforced by the API rather than prompted for.
+    structured_output_mode = StructuredOutputMode.JSON_SCHEMA
     missing_key_error = "OpenAI API key not configured. Set OPENAI_API_KEY or provide api_key in provider settings."
 
     def _resolve_api_key(self) -> str | None:
