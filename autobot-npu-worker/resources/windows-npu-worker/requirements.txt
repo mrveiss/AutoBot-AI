@@ -8,7 +8,7 @@ uvicorn[standard]>=0.53.0
 pydantic>=2.5.0
 
 # Async HTTP Client
-aiohttp  # GH#8323 + #17304: 13 CVEs; 3.14.3 is the patched floor, matching every sibling manifest
+aiohttp>=3.14.3  # GH#8323 + #17304: 3.14.3 is the patched floor every sibling manifest already uses
 
 # Redis Client
 redis>=8.1.0
@@ -44,7 +44,7 @@ openvino  # version from constraints/shared.txt
 # The three `from_pretrained` calls in app/npu_worker.py (AutoTokenizer x2, AutoModel)
 # pass only `trust_remote_code`, which 5.16.1 still accepts (verified against PyPI
 # metadata, no execution) -- the same read-only method #15054 used.
-transformers
+transformers==5.16.1
 tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above
                           # that is unsatisfiable. Matches the ai-stack and npu-worker-docker
                           # siblings now that #15298 aligned this file's transformers pin with

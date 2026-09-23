@@ -1,13 +1,11 @@
 # Core AutoBot Local Dependencies (minimal for orchestrator)
--c ../../constraints/shared.txt  # single source of truth for shared versions (#10524, #17304)
-
 fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=0.52.1 (#15661)
 uvicorn[standard]>=0.53.0
 python-dotenv>=1.1.0
 redis>=8.1.0
 psutil>=5.9.0
 requests>=2.33.0  # GH#8326: CVE-2026-25645
-aiohttp  # GH#8323 + #17304: zip bomb, request smuggling; 3.14.3 is the patched floor
+aiohttp>=3.14.3   # GH#8323 + #17304: 3.14.3 is the patched floor every sibling manifest already uses
 pyyaml>=6.0.0
 structlog>=26.1.0
 

@@ -1,8 +1,6 @@
 # Databases, caches, and ORMs
--c ../constraints/shared.txt  # versions live there, not here (#10524, #17304)
-
 redis>=8.1.0,<9.0
-chromadb
+chromadb==1.5.9
 sqlalchemy==2.0.54
 aiosqlite==0.22.1
 alembic==1.20.0  # migration-gate static tests import migrations.baseline (#10001)

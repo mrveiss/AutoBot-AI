@@ -1,5 +1,3 @@
--c constraints/shared.txt  # single source of truth for shared versions (#10524, #17304)
-
 paramiko>=5.0.0
 
 # Retry logic for resilient operations
@@ -42,7 +40,7 @@ protobuf>=7.36.2,<8.0.0
 
 # Document parsing libraries for knowledge base
 # Supports PDF, Word, Excel, PowerPoint, OpenDocument formats
-pypdf  # PDF parsing - SECURITY UPDATE (improved permission checks)
+pypdf>=6.19.0             # PDF parsing - SECURITY UPDATE (improved permission checks)
 python-docx>=1.2.0        # Microsoft Word (.docx)
 openpyxl>=3.1.5           # Microsoft Excel (.xlsx)
 python-pptx>=1.0.2        # Microsoft PowerPoint (.pptx)
