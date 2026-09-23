@@ -66,6 +66,22 @@ class ScheduledJob:
 
 REGISTRY: list[ScheduledJob] = [
     ScheduledJob(
+        name="PricingCacheScheduler",
+        interval_seconds="env:AUTOBOT_PRICING_LOCAL_CACHE_REFRESH_INTERVAL_S",
+        owner_file="llm_shared/pricing/sync_cache_scheduler.py",
+        runtime="asyncio_per_worker",
+        description=(
+            "Mirrors PricingRedisStore into this process's memory so the two hot pricing "
+            "paths -- calculate_cost and _blended_cost, both plain defs that cannot await "
+            "Redis -- can read a price synchronously (#16230). Default 300 s. Independent "
+            "of AUTOBOT_PRICING_REFRESH_INTERVAL_HOURS, which is how often Redis itself is "
+            "refreshed FROM the live catalogues. If this stops ticking the mirror ages past "
+            "AUTOBOT_PRICING_LOCAL_CACHE_MAX_AGE_S and every reader is refused rather than "
+            "served a stale price."
+        ),
+        startup_marker="start_pricing_cache_scheduler",
+    ),
+    ScheduledJob(
         name="WorkflowScheduler",
         interval_seconds=10,
         owner_file="workflow_scheduler.py",

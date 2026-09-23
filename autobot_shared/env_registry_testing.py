@@ -41,3 +41,36 @@ register_env_var(
         range=(0.1, 60.0),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE",
+        type=bool,
+        default=False,
+        description=(
+            "Set to 1 to let `git push` proceed when the pre-push pytest gate COULD NOT RUN on the "
+            "local interpreter -- llc/scheduler/base.py refuses to import below Python 3.11, which "
+            "takes whole pytest groups down at collect time on a sub-floor machine (the platform "
+            "floor and CI are 3.14). Distinct from AUTOBOT_PREPUSH_ALLOW_TIMEOUT, which covers a "
+            "check that started and ran out of time. Neither is a substitute for --no-verify: both "
+            "switch off exactly the one check that could not produce a verdict and leave every "
+            "other hook blocking (#16230)."
+        ),
+        component="tooling",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PREPUSH_ALLOW_TIMEOUT",
+        type=bool,
+        default=False,
+        description=(
+            "Set to 1 to let `git push` proceed when a pre-push check DID NOT RUN because it timed "
+            "out. Predates the registry requirement and was never registered, which is how the "
+            "same omission reached AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE above -- registered here "
+            "alongside it rather than left as the next reviewer's finding (#7081, #16230)."
+        ),
+        component="testing",
+    )
+)

@@ -16,26 +16,28 @@ class BudgetExhausted(Exception):
 
 
 class UnpricedModel(Exception):
-    """Raised when a cost event names a model with no entry in the pricing table.
+    """Raised when a cost event names a model the live pricing catalogue cannot price (#16230).
 
     An unpriced model used to resolve to a cost of zero, logged and returned as
     a `Decimal("0")` the caller could not distinguish from a genuinely free
     call. That made dollar budgets silently inapplicable to any model nobody
     had priced -- including, for a time, the provider default (#15860).
 
-    Refusing is safe because the table already distinguishes free from unknown:
-    every local model carries an explicit ``{"input": 0, "output": 0}`` entry.
-    A model absent from the table is therefore not free, it is unpriced, and the
-    two are different facts.
+    Refusing is safe because free and unknown are still distinguished, just not
+    by a table entry any more: ``autobot_shared.local_models.is_local_model``
+    is checked before this can be raised at all (#16316), so a model reaching
+    here is neither locally hosted nor found in the live LiteLLM/OpenRouter
+    catalogue -- genuinely unpriced, not free.
     """
 
     def __init__(self, model: str, agent_id: str) -> None:
         self.model = model
         self.agent_id = agent_id
         super().__init__(
-            f"Model {model!r} has no entry in MODEL_PRICING_PER_1M_TOKENS, so the cost of this "
-            f"event for agent {agent_id} cannot be computed. Add it to the table (a free model "
-            f"needs an explicit zero entry) rather than letting it accrue nothing."
+            f"Model {model!r} has no live catalogue price and is not a recognised local model, "
+            f"so the cost of this event for agent {agent_id} cannot be computed. Set an operator "
+            f"override (PricingRedisStore.set_override) or add it to autobot_shared.local_models."
+            f"LOCAL_MODEL_NAMES if it is free by construction, rather than letting it accrue nothing."
         )
 
 

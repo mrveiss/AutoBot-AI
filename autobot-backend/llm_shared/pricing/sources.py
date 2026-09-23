@@ -113,7 +113,6 @@ class BaselinePricingSource(PricingSource):
     _BASELINE: list[tuple] = []
 
     async def fetch(self) -> dict[str, ModelPricing]:
-        now = self._now()
         result: dict[str, ModelPricing] = {}
         for entry in self._BASELINE:
             model_id, inp, out = entry[0], entry[1], entry[2]
@@ -124,7 +123,23 @@ class BaselinePricingSource(PricingSource):
                 input_per_1m=inp,
                 output_per_1m=out,
                 cache_read_per_1m=cache_read,
-                updated_at=now,
+                # #16230/#16233: NOT `self._now()`. These are literals in a
+                # source file; stamping them with the moment they were read
+                # made a price frozen years ago report as fetched seconds ago,
+                # and `/cost/pricing` published that as the catalogue's real
+                # freshness. `None` is what `ModelPricing` already means by
+                # "the source does not state this" -- unknown, never today.
+                # A per-file as-of date would be better than `None`, but none
+                # of the five files records when its literals were last
+                # verified, and inventing one would put the same wrong answer
+                # back in a more credible shape.
+                updated_at=None,
+                # Provenance travels with the price, so a consumer never has to
+                # infer where it came from: nothing else writes "baseline", and
+                # "stale" says this price was never cross-checked against a
+                # second live catalogue because there was not one to check.
+                source="baseline",
+                crosscheck="stale",
             )
         logger.debug("%s.fetch returned %d models", type(self).__name__, len(result))
         return result

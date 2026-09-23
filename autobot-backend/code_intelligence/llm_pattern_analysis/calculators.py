@@ -15,13 +15,78 @@ Extracted from llm_pattern_analyzer.py as part of Issue #381 refactoring.
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.llm_pattern_analysis.data_models import (
     CostEstimate,
     TokenUsage,
     UsagePattern,
 )
 from code_intelligence.llm_pattern_analysis.types import UsagePatternType
-from constants.model_constants import MODEL_PRICING_PER_1K_TOKENS, OPENAI_GPT35_TURBO
+from constants.model_constants import OPENAI_GPT35_TURBO
+from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_snapshot
+
+logger = get_logger(__name__)
+
+#: The two entries that are **not** models, and so cannot come from a catalogue
+#: of models (#16230). `TokenTracker._calculate_cost` reads `"default"` when a
+#: model name matches nothing; dropping it would make every unknown model free,
+#: which is the silent-$0 failure #15860 was filed over. `"ollama"` is the
+#: locally-served family, free by construction — the same rule
+#: `autobot_shared.local_models.is_local_model` applies on the billing path.
+#:
+#: These are estimation constants for a projection surface, not prices charged
+#: by anyone, and they are named here rather than hidden in a table so a reader
+#: can see that the catalogue supplies every real price and these two supply
+#: neither.
+_NON_MODEL_RATES_PER_1K: Dict[str, Dict[str, float]] = {
+    "ollama": {"prompt": 0.0, "completion": 0.0},
+    "default": {"prompt": 0.001, "completion": 0.002},
+}
+
+
+def live_pricing_per_1k() -> Dict[str, Dict[str, float]]:
+    """The live catalogue as per-1K ``{"prompt", "completion"}`` rates.
+
+    Read per call, never bound at class-definition time (#16230). The old
+    `MODEL_PRICING_PER_1K_TOKENS` was a module-level comprehension captured
+    into `TokenTracker.DEFAULT_COSTS` and `CostCalculator.MODEL_PRICING` when
+    this module was first imported, so a price that changed in Redis an hour
+    later could never reach either of them — the process would have to restart
+    to cost anything correctly.
+
+    The catalogue is per 1M tokens; both consumers here divide by 1000 and read
+    ``prompt``/``completion``. That conversion and that rename happen here, once
+    and visibly, rather than at each of the four call sites.
+
+    A cold or stale cache degrades to the non-model rates alone and says so.
+    This is a projection surface, not a billing one, so it estimates rather than
+    refusing — but an estimate computed off a catalogue that is not there is a
+    different thing from one computed off a catalogue that is, and the log line
+    is what tells them apart.
+    """
+    try:
+        snapshot = get_cached_snapshot()
+    except PricingCacheCold as exc:
+        logger.warning(
+            "llm_pattern_analysis: pricing cache unavailable (%s); cost projections fall back to "
+            "the default estimate rate for every model (#16230)",
+            exc,
+        )
+        return dict(_NON_MODEL_RATES_PER_1K)
+
+    per_1k = {
+        model_id: {
+            "prompt": price.input_per_1m / 1000,
+            "completion": price.output_per_1m / 1000,
+        }
+        for model_id, price in snapshot.items()
+    }
+    # Non-model entries last: a catalogue must never be able to shadow the
+    # "default" fallback, or an unknown model would be priced as whatever
+    # vendor happened to publish a model literally called "default".
+    per_1k.update(_NON_MODEL_RATES_PER_1K)
+    return per_1k
+
 
 # =============================================================================
 # Token Tracker
@@ -36,9 +101,10 @@ class TokenTracker:
     to identify optimization opportunities.
     """
 
-    # Token cost estimates per 1K tokens — single source of truth in
-    # constants/model_constants.MODEL_PRICING_PER_1K_TOKENS (#3528).
-    DEFAULT_COSTS = MODEL_PRICING_PER_1K_TOKENS
+    # #16230: `DEFAULT_COSTS = MODEL_PRICING_PER_1K_TOKENS` used to live here,
+    # bound once at import. Nothing outside this module ever read it, so it is
+    # gone rather than re-exposed as a property — the rates are read per call
+    # from `live_pricing_per_1k()` at the one place that uses them.
 
     def __init__(self):
         """Initialize the token tracker."""
@@ -99,9 +165,12 @@ class TokenTracker:
     ) -> float:
         """Calculate cost for token usage."""
         model_lower = model.lower()
-        costs = self.DEFAULT_COSTS.get("default")
+        # One read: the live view is rebuilt per call, so scanning a second
+        # copy could match against a catalogue that had changed underneath.
+        rates = live_pricing_per_1k()
+        costs = rates["default"]
 
-        for model_key, model_costs in self.DEFAULT_COSTS.items():
+        for model_key, model_costs in rates.items():
             if model_key in model_lower:
                 costs = model_costs
                 break
@@ -149,9 +218,10 @@ class CostCalculator:
     Provides cost projections and optimization potential analysis.
     """
 
-    # Model pricing per 1K tokens — single source of truth in
-    # constants/model_constants.MODEL_PRICING_PER_1K_TOKENS (#3528).
-    MODEL_PRICING = MODEL_PRICING_PER_1K_TOKENS
+    # #16230: `MODEL_PRICING = MODEL_PRICING_PER_1K_TOKENS` used to live here,
+    # bound at class-definition time. Read per call from `live_pricing_per_1k()`
+    # at its one call site instead; nothing outside this module read the
+    # attribute, so nothing needs it to still exist.
 
     @classmethod
     def _estimate_avg_tokens(cls, model_pats: List[UsagePattern]) -> tuple:
@@ -246,7 +316,14 @@ class CostCalculator:
             model_patterns[model].append(pattern)
 
         for model, model_pats in model_patterns.items():
-            pricing = cls.MODEL_PRICING.get(model, cls.MODEL_PRICING.get(OPENAI_GPT35_TURBO))
+            # One read per model, not two: `cls.MODEL_PRICING.get(...)` twice
+            # used to hit the same frozen dict, but each call now rebuilds the
+            # snapshot view, and the fallback must come from the same catalogue
+            # the lookup missed in. The final `["default"]` is what keeps a cold
+            # cache from returning None here and crashing the projection — the
+            # old code could not reach that state because its table was a literal.
+            catalogue = live_pricing_per_1k()
+            pricing = catalogue.get(model) or catalogue.get(OPENAI_GPT35_TURBO) or catalogue["default"]
             daily_calls = len(model_pats) * daily_call_multiplier
             avg_prompt, avg_completion = cls._estimate_avg_tokens(model_pats)
 

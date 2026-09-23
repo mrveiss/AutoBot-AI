@@ -13,6 +13,23 @@ from llc.exceptions import BudgetExhausted, UnpricedModel
 from llc.services.budget import BudgetService
 
 
+@pytest.fixture(autouse=True)
+def _seed_pricing_cache():
+    """`ingest_cost_event` prices against the live catalogue now (#16230); left cold
+    it raises `UnpricedModel` instead of accumulating, which is correct behaviour
+    and a broken test.
+
+    3.00/15.00 is the price the canonical table carries for this model
+    (`autobot_shared/model_pricing.py`), so no assertion below changes value.
+    Only this one model is seeded, so a test that needs an *unpriced* model
+    still gets one.
+    """
+    from llc.tests._pricing_seed import seeded_pricing_cache
+
+    with seeded_pricing_cache("claude-sonnet-4-6", 3.00, 15.00):
+        yield
+
+
 def _make_row(spent: float, limit: float, threshold: float = 0.8) -> MagicMock:
     row = MagicMock()
     row.agent_id = "agent-001"

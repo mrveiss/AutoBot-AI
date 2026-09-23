@@ -596,8 +596,12 @@ repos:
       - id: debug-statements  # Check for debugger imports
       - id: name-tests-test  # Ensure test files are named correctly
         args: [--pytest-test-first]
-        # Exclude colocated tests (*_test.py convention) and special test files
-        exclude: (_test\.py$|^(tests/|autobot-infrastructure/.*/tests/|autobot-.*/tests/).*(results/|benchmarks/|fixtures/|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py|benchmark_base\.py|api_benchmarks\.py|rag_benchmarks\.py|mocks\.py|system_assessment_report\.py|_code_sync_import\.py))
+        # Exclude colocated tests (*_test.py convention) and special test files.
+        # `_*.py` under a tests dir is a shared helper, not a test: pytest does not
+        # collect it under any python_files pattern, so the naming rule has nothing
+        # to enforce there. Was an enumeration that listed `_code_sync_import.py` and
+        # silently did not cover `_e2e_harness.py`/`_pricing_seed.py` beside it (#16230).
+        exclude: (_test\.py$|^(tests/|autobot-infrastructure/.*/tests/|autobot-.*/tests/).*(results/|benchmarks/|fixtures/|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py|benchmark_base\.py|api_benchmarks\.py|rag_benchmarks\.py|mocks\.py|system_assessment_report\.py|(?<![A-Za-z0-9])_[a-z0-9_]+\.py$))
 
   # Security checks with bandit
   - repo: https://github.com/PyCQA/bandit

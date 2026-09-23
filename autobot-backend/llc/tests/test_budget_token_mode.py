@@ -65,6 +65,25 @@ async def session(session_factory) -> AsyncIterator[AsyncSession]:  # noqa: ANN0
             raise
 
 
+_COST_MODEL = "claude-haiku-4-5-20251001"
+
+
+@pytest.fixture(autouse=True)
+def _seed_pricing_cache():
+    """Every test here ingests a cost event, and cost now needs a live price (#16230).
+
+    Before the pricing migration the model was in a static table, so these tests
+    needed no setup and got a real cost. `ingest_cost_event` now raises
+    `UnpricedModel` on a cold cache -- correct behaviour, and it took all six
+    tests in this module down. 0.8/4.0 is the price the old table carried for
+    this model, so every dollar assertion below is unchanged.
+    """
+    from llc.tests._pricing_seed import seeded_pricing_cache
+
+    with seeded_pricing_cache(_COST_MODEL, 0.8, 4.0):
+        yield
+
+
 @pytest.fixture
 def budget_service() -> BudgetService:
     return BudgetService()
@@ -114,7 +133,7 @@ async def test_token_mode_budget_enforcement(session: AsyncSession, budget_servi
         mock_redis.return_value = None
         # 300 in + 200 out = 500 total — under 1000 limit
         cost = await budget_service.ingest_cost_event(
-            session, agent_id, company_id, tokens_in=300, tokens_out=200, model="claude-haiku-4-5-20251001"
+            session, agent_id, company_id, tokens_in=300, tokens_out=200, model=_COST_MODEL
         )
 
     # Cost is calculated for analytics even in token mode
@@ -129,7 +148,7 @@ async def test_token_mode_budget_enforcement(session: AsyncSession, budget_servi
         mock_redis.return_value = None
         # 200 in + 150 out = 350 → total 850 (85%) — alert should fire
         await budget_service.ingest_cost_event(
-            session, agent_id, company_id, tokens_in=200, tokens_out=150, model="claude-haiku-4-5-20251001"
+            session, agent_id, company_id, tokens_in=200, tokens_out=150, model=_COST_MODEL
         )
 
     remaining, is_over, alert = await budget_service.check_budget(session, agent_id, company_id)
@@ -142,7 +161,7 @@ async def test_token_mode_budget_enforcement(session: AsyncSession, budget_servi
         with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
             mock_redis.return_value = None
             await budget_service.ingest_cost_event(
-                session, agent_id, company_id, tokens_in=200, tokens_out=150, model="claude-haiku-4-5-20251001"
+                session, agent_id, company_id, tokens_in=200, tokens_out=150, model=_COST_MODEL
             )
 
 
@@ -156,8 +175,8 @@ async def test_token_ingest_accumulation(session: AsyncSession, budget_service: 
 
     with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
         mock_redis.return_value = None
-        await budget_service.ingest_cost_event(session, agent_id, company_id, 100, 50, "claude-haiku-4-5-20251001")
-        await budget_service.ingest_cost_event(session, agent_id, company_id, 200, 100, "claude-haiku-4-5-20251001")
+        await budget_service.ingest_cost_event(session, agent_id, company_id, 100, 50, _COST_MODEL)
+        await budget_service.ingest_cost_event(session, agent_id, company_id, 200, 100, _COST_MODEL)
 
     remaining, _, _ = await budget_service.check_budget(session, agent_id, company_id)
     # 150 + 300 = 450 tokens spent; remaining = 5000 - 450
@@ -181,9 +200,7 @@ async def test_dollar_mode_budget_enforcement(session: AsyncSession, budget_serv
 
     with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
         mock_redis.return_value = None
-        cost = await budget_service.ingest_cost_event(
-            session, agent_id, company_id, 1_000_000, 200_000, "claude-haiku-4-5-20251001"
-        )
+        cost = await budget_service.ingest_cost_event(session, agent_id, company_id, 1_000_000, 200_000, _COST_MODEL)
 
     assert cost == Decimal("1.60")
     remaining, is_over, alert = await budget_service.check_budget(session, agent_id, company_id)
@@ -195,9 +212,7 @@ async def test_dollar_mode_budget_enforcement(session: AsyncSession, budget_serv
         with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
             mock_redis.return_value = None
             # 1M in + 500k out = $0.80 + $2.00 = $2.80 → total $4.40 > $2.00 limit
-            await budget_service.ingest_cost_event(
-                session, agent_id, company_id, 1_000_000, 500_000, "claude-haiku-4-5-20251001"
-            )
+            await budget_service.ingest_cost_event(session, agent_id, company_id, 1_000_000, 500_000, _COST_MODEL)
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +230,7 @@ async def test_both_modes_track_tokens(session: AsyncSession, budget_service: Bu
 
     with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
         mock_redis.return_value = None
-        await budget_service.ingest_cost_event(session, agent_id, company_id, 1000, 500, "claude-haiku-4-5-20251001")
+        await budget_service.ingest_cost_event(session, agent_id, company_id, 1000, 500, _COST_MODEL)
 
     result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
     row = result.scalar_one()
@@ -233,9 +248,7 @@ async def test_token_mode_shadow_cost_usd(session: AsyncSession, budget_service:
 
     with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
         mock_redis.return_value = None
-        cost = await budget_service.ingest_cost_event(
-            session, agent_id, company_id, 1000, 500, "claude-haiku-4-5-20251001"
-        )
+        cost = await budget_service.ingest_cost_event(session, agent_id, company_id, 1000, 500, _COST_MODEL)
 
     # USD shadow cost must be positive
     assert cost > Decimal("0"), "Shadow cost must be calculated and returned in token mode"
@@ -269,7 +282,7 @@ async def test_mode_switch(session_factory, budget_service: BudgetService) -> No
     async with session_factory() as s:
         with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
             mock_redis.return_value = None
-            await budget_service.ingest_cost_event(s, agent_id, company_id, 1000, 500, "claude-haiku-4-5-20251001")
+            await budget_service.ingest_cost_event(s, agent_id, company_id, 1000, 500, _COST_MODEL)
         await s.commit()
 
     # Phase 3: switch to token mode

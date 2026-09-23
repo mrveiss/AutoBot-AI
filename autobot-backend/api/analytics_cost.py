@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 
+from api.analytics_cost_pricing import build_pricing_payload
 from api.schemas_analytics import (
     AgentBudgetRequest,
     AgentBudgetSetResponse,
@@ -34,16 +35,16 @@ from api.schemas_analytics import (
     CostForecastResponse,
     CostSummaryResponse,
     CostTrendResponse,
-    ModelPricingResponse,
     SessionCostResponse,
     SingleAgentCostResponse,
     UsageRecentResponse,
 )
+from api.schemas_analytics_pricing import ModelPricingResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
-from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
+from services.llm_cost_tracker import get_cost_tracker
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/cost", tags=["analytics", "cost"])
@@ -300,41 +301,9 @@ async def get_model_pricing(
     Returns pricing per 1M tokens for all supported models.
 
     Issue #744: Requires admin authentication.
+    Issue #16230: sourced from the live pricing cache, not a hardcoded table.
     """
-    pricing_list = []
-
-    for model, prices in MODEL_PRICING.items():
-        # Cache model.lower() to avoid repeated computation (Issue #323)
-        model_lower = model.lower()
-        # Determine provider from model name
-        if "claude" in model_lower:
-            provider = "anthropic"
-        elif "gpt" in model_lower or model.startswith("o1"):
-            provider = "openai"
-        elif "gemini" in model_lower:
-            provider = "google"
-        else:
-            provider = "local"
-
-        pricing_list.append(
-            {
-                "model": model,
-                "provider": provider,
-                "input_price_per_1m": prices["input"],
-                "output_price_per_1m": prices["output"],
-                "is_free": prices["input"] == 0 and prices["output"] == 0,
-            }
-        )
-
-    # Sort by provider then by price
-    pricing_list.sort(key=lambda x: (x["provider"], -x["input_price_per_1m"]))
-
-    return {
-        "pricing_date": "2025-01-01",
-        "currency": "USD",
-        "models": pricing_list,
-        "total_models": len(pricing_list),
-    }
+    return build_pricing_payload()
 
 
 @router.get("/estimate", response_model=CostEstimateResponse)

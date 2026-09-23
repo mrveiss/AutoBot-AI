@@ -22,6 +22,7 @@ import os
 import pkgutil
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -49,6 +50,42 @@ def _scrubbed_env() -> dict[str, str]:
 IMPORT_FAILURES: dict[str, str] = {}
 
 
+def _declaring_modules_outside_repo_tests() -> list[str]:
+    """Import paths of modules that call `declare(...)` and do not live here.
+
+    Discovered with `git grep`, not enumerated: an enumeration is exactly what
+    this file distrusts everywhere else, and a declaration added under a new
+    path tomorrow must be swept without anyone remembering to edit a list.
+
+    Why this is needed (#17144, #17298): `declare(...)` registers into a shared
+    REGISTRY as an *import side effect*, and the loop below imports only modules
+    under `repo_tests/`. A declaration living elsewhere reached the registry
+    only when some other test in the same pytest session happened to import its
+    module first -- true in CI's whole-suite run, false under
+    `pytest repo_tests/`, where the parametrisation dropped from 36 floors to 35
+    and reported a clean pass over the smaller set. Not a weaker check: a check
+    of a DIFFERENT set, reported identically. It produced a real wrong answer
+    today -- a floor re-pinned against a local run that had never examined it.
+    """
+    out = subprocess.run(
+        ["git", "grep", "-lE", r"(^|\s)declare\(", "--", "*.py"],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_scrubbed_env(),
+    )
+    modules = []
+    for rel in out.stdout.splitlines():
+        if not rel:
+            continue
+        path = Path(rel)
+        if path.parts[0] == "repo_tests":
+            continue
+        modules.append(".".join(path.with_suffix("").parts))
+    return sorted(modules)
+
+
 def _import_every_guard() -> None:
     """Import every guard module so its `declare(...)` runs.
 
@@ -64,12 +101,52 @@ def _import_every_guard() -> None:
         except Exception as exc:  # noqa: BLE001 - recorded, never discarded
             IMPORT_FAILURES[module.name] = f"{type(exc).__name__}: {exc}"
 
+    # Declarations that live outside this package (#17144, #17298). Same
+    # recording discipline: one that cannot be imported is NAMED in
+    # IMPORT_FAILURES rather than quietly missing from the sweep.
+    for dotted in _declaring_modules_outside_repo_tests():
+        if dotted in sys.modules:
+            continue
+        try:
+            importlib.import_module(dotted)
+        except Exception as exc:  # noqa: BLE001 - recorded, never discarded
+            IMPORT_FAILURES[dotted] = f"{type(exc).__name__}: {exc}"
+
 
 _import_every_guard()
 
 
 def _declarations() -> list[Reach]:
     return sorted(REGISTRY.values(), key=lambda r: r.name)
+
+
+def test_declarations_outside_this_package_are_swept() -> None:
+    """A `repo_tests/`-only run must check the same floors CI checks (#17144).
+
+    The floor tests below are parametrised over `REGISTRY`, which `declare(...)`
+    fills as an import side effect. Before #17298 the sweep imported only
+    modules under `repo_tests/`, so a declaration living elsewhere entered the
+    registry only when another test in the same session had already imported its
+    module: 36 floors in CI's whole-suite run, 35 under `pytest repo_tests/`,
+    and the smaller set reported exactly like the full one.
+
+    This asserts the discovery half rather than a count, because a count would
+    have to be edited every time a declaration is added and would then be
+    satisfied by editing it. What must hold is that each module found outside
+    this package actually contributed: discovered, imported, and present.
+    """
+    outside = _declaring_modules_outside_repo_tests()
+
+    assert outside, (
+        "no declaring module found outside repo_tests/ — either they all moved in here (fine, "
+        "delete this test and say so) or the git-grep discovery has stopped matching, in which "
+        "case the sweep is silently back to checking a subset"
+    )
+    assert not [
+        m for m in outside if m in IMPORT_FAILURES
+    ], "declaring module(s) found but not importable, so their floors are not being checked:\n  " + "\n  ".join(
+        f"{m}: {IMPORT_FAILURES[m]}" for m in outside if m in IMPORT_FAILURES
+    )
 
 
 def test_the_registry_was_actually_populated() -> None:

@@ -119,10 +119,26 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 #: files. This branch adds api/knowledge_code_indexing.py, the module split out of
 #: knowledge_population.py so its size ceiling did not have to rise -- which puts
 #: the population one past the 300 allowance. Floor = population - growth.
+#: Re-pinned 2950 -> 2955 (#16230): measured 3255. Two independent readings, not
+#: one -- CI reported 3255 and `git ls-files -- 'autobot-backend/*.py' | grep -v
+#: _test.py$ | wc -l` on the merged tree returns 3255 -- because this floor was
+#: nearly re-pinned on a local run that silently did not check it at all. Floor =
+#: population - growth. This branch's own contribution is three non-test backend
+#: files (api/analytics_cost_pricing.py, api/schemas_analytics_pricing.py,
+#: llm_shared/pricing/sync_cache_scheduler.py) plus llc/tests/_pricing_seed.py,
+#: which counts because the discover excludes `_test.py` and nothing else.
+#:
+#: Worth knowing before trusting a local run of this floor: `declare(...)` here
+#: registers into the shared REGISTRY that `repo_tests/reach_declarations_test.py`
+#: parametrises over, but that file's `_import_every_guard` only imports modules
+#: under `repo_tests/`. This declaration therefore reaches the sweep only when
+#: something else in the same pytest session has already imported THIS module --
+#: true in CI's whole-suite run, false when `repo_tests/` is run alone, where the
+#: sweep silently drops from 36 parameters to 35 and reports a clean pass.
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    floor=2950,
+    floor=2955,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )

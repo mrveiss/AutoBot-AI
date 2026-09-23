@@ -72,7 +72,7 @@ class WorkItemPriority(str, Enum):
 class BudgetMode(str, Enum):
     """Budget tracking mode for LLC agents (GH#8997).
 
-    DOLLARS: track spend in USD (default, uses MODEL_PRICING_PER_1M_TOKENS)
+    DOLLARS: track spend in USD (default, priced via llm_shared.pricing.sync_cache, #16230)
     TOKENS: track spend in token counts (for subscription/free-tier users)
     """
 

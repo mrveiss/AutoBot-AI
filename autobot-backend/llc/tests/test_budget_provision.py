@@ -37,6 +37,20 @@ _COST_MODEL = "claude-haiku-4-5-20251001"
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _seed_pricing_cache():
+    """The provision test posts a real cost event, and cost needs a live price (#16230).
+
+    0.8/4.0 is the price the canonical table carries for `_COST_MODEL`, so the
+    assertion below is unchanged. Cold, the route answers 400 with
+    `UnpricedModel` and the test reads it as a provisioning failure.
+    """
+    from llc.tests._pricing_seed import seeded_pricing_cache
+
+    with seeded_pricing_cache(_COST_MODEL, 0.8, 4.0):
+        yield
+
+
 @pytest_asyncio.fixture
 async def engine():  # noqa: ANN201
     eng = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)

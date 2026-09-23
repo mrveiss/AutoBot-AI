@@ -28,6 +28,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Query
 from redis.exceptions import RedisError
 
+from api.analytics_cost_pricing import estimate_pattern_cost
 from api.schemas_agent import (
     LLMPatternsAnalyzeResponse,
     LLMPatternsCacheOpportunitiesResponse,
@@ -76,9 +77,6 @@ SIMPLE_PROMPT_CATEGORIES = {
     PromptCategory.SUMMARIZATION,
 }
 
-
-# Model costs per 1M tokens (USD) — SSOT is autobot_shared.model_pricing (#3528, #15912).
-from autobot_shared.model_pricing import MODEL_COSTS_PER_1M_TOKENS as MODEL_COSTS  # noqa: E402,F401
 
 # Pattern detection rules for prompt categorization
 PROMPT_PATTERNS = {
@@ -231,24 +229,8 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
         return PromptCategory.UNKNOWN
 
     def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
-        """Calculate cost for a request"""
-        # Find matching model pricing
-        model_lower = model.lower()
-        pricing = None
-
-        for model_name, costs in MODEL_COSTS.items():
-            if model_name in model_lower or model_lower in model_name:
-                pricing = costs
-                break
-
-        if not pricing:
-            # Default to medium pricing
-            pricing = {"input": 1.0, "output": 5.0}
-
-        input_cost = (input_tokens / 1_000_000) * pricing["input"]
-        output_cost = (output_tokens / 1_000_000) * pricing["output"]
-
-        return round(input_cost + output_cost, 6)
+        """Estimate a request's cost from the live catalogue (#16230)."""
+        return estimate_pattern_cost(model, input_tokens, output_tokens)
 
     def _get_prompt_preview(self, prompt: str, max_length: int = 100) -> str:
         """Get a preview of the prompt"""

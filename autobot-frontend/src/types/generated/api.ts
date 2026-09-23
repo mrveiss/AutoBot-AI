@@ -19305,6 +19305,7 @@ export interface paths {
          *     Returns pricing per 1M tokens for all supported models.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #16230: sourced from the live pricing cache, not a hardcoded table.
          */
         get: operations["get_model_pricing_api_analytics_cost_pricing_get"];
         put?: never;
@@ -26383,6 +26384,7 @@ export interface paths {
          *     Returns pricing per 1M tokens for all supported models.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #16230: sourced from the live pricing cache, not a hardcoded table.
          */
         get: operations["get_model_pricing_api_analytics_cost_cost_pricing_get"];
         put?: never;
@@ -84464,7 +84466,11 @@ export interface components {
          */
         ModelPricingResponse: {
             /** Pricing Date */
-            pricing_date: string;
+            pricing_date?: string | null;
+            /** Pricing Date Unknown Reason */
+            pricing_date_unknown_reason?: string | null;
+            /** Sources */
+            sources?: string[];
             /** Currency */
             currency: string;
             /** Models */

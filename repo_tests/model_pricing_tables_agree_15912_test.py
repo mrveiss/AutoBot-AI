@@ -74,8 +74,19 @@ _KEY_PAIRS = (("input", "output"), ("prompt", "completion"))
 #:
 #: The remaining six are the canonical table and five provider baselines in
 #: ``llm_shared/pricing/``, which cannot be derived -- they exist to be a fetch
-#: fallback and carry provider-specific fields.
-_MIN_TABLES = 6
+#: fallback and carry provider-specific fields. #16230 made that fallback real:
+#: ``pricing_refresh._write_baseline_fallback`` now reaches for them when both
+#: live catalogues return nothing and the store is empty, so they are wired, not
+#: dead, and they stay.
+#:
+#: Seven since #16230. The seventh is ``calculators.py::_NON_MODEL_RATES_PER_1K``
+#: -- ``ollama`` and ``default``, which are not models and so appear in no other
+#: table and can disagree with nothing. It is counted rather than exempted
+#: because the sweep recognises tables by *shape* on purpose: a name-based
+#: exemption is the mechanism this file exists to distrust, and the honest cost
+#: of shape-matching is that it sometimes finds a table that turns out to be
+#: uninteresting.
+_MIN_TABLES = 7
 
 #: Floor for models compared across more than one table: 25, pinned at the count
 #: found. Discovery can find every table and still compare nothing if key

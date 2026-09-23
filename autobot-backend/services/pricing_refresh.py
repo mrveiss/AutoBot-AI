@@ -50,6 +50,99 @@ def _build_sources():
     return LiteLLMPricingSource(), OpenRouterPricingSource()
 
 
+def _build_baseline_sources():
+    """The five per-provider hardcoded baselines, the last resort only (#16230).
+
+    These are the price literals #16230 exists to remove from the read path,
+    and they stay out of it: nothing here is consulted while either live
+    catalogue answers. They are wired in for exactly one state, described at
+    `_write_baseline_fallback`.
+    """
+    from llm_shared.pricing.anthropic_source import AnthropicPricingSource
+    from llm_shared.pricing.deepseek_source import DeepSeekPricingSource
+    from llm_shared.pricing.google_source import GooglePricingSource
+    from llm_shared.pricing.openai_source import OpenAIPricingSource
+    from llm_shared.pricing.vertexai_source import VertexAIPricingSource
+
+    return (
+        AnthropicPricingSource(),
+        OpenAIPricingSource(),
+        GooglePricingSource(),
+        DeepSeekPricingSource(),
+        VertexAIPricingSource(),
+    )
+
+
+async def _write_baseline_fallback(store, summary: dict) -> dict:
+    """Seed the store from the hardcoded baselines, and only on an empty store.
+
+    Reached only when **both** live catalogues returned nothing. Two rules make
+    this safe to have at all:
+
+    1. **Never over live data.** If the store already holds prices -- yesterday's
+       LiteLLM run, an operator override -- they are left alone. Prices fetched
+       from a real catalogue at some point beat literals frozen in a source file,
+       however recently the outage started. A baseline write that clobbered them
+       would turn one failed refresh into permanently worse pricing.
+    2. **Never silently.** Every price is stamped `source="baseline"`,
+       `crosscheck="stale"`, `updated_at=None`, so nothing downstream can mistake
+       one for a live price, and the summary says `baseline_fallback` outright.
+
+    Without this, a first boot with both vendor APIs unreachable leaves the
+    store empty, `sync_cache` cold, and `budget.py` raising ``UnpricedModel``
+    for every model -- every LLC agent run blocked until a vendor comes back.
+    A stale price that is labelled stale is a better answer than no answer.
+    """
+    # count_price_keys, NOT get_all_by_model (#16230 review): the latter raises on
+    # an unparseable record, and raising HERE aborts before either branch runs --
+    # so one poison record would disable both the TTL renewal and the baseline
+    # seed during exactly the outage they were written for. This only needs to
+    # know whether the store holds anything, which needs no parsing.
+    existing = await store.count_price_keys()
+    if existing:
+        # Keeping them is not the same as leaving them alone. Prices carry a TTL
+        # of the refresh cadence plus one hour, so writing nothing here lets them
+        # expire about an hour later and the store empties itself -- the exact
+        # outcome this branch exists to prevent (#16230 review). EXPIRE only:
+        # values and provenance are untouched, so nothing here can make a stale
+        # price look newly fetched.
+        renewed = await store.renew_price_ttls()
+        logger.warning(
+            "pricing_refresh: both live catalogues failed; keeping the %d prices already in the "
+            "store rather than overwriting them with hardcoded baselines, and re-arming the TTL on "
+            "%d key(s) so they survive the outage rather than expiring through it (#16230)",
+            existing,
+            renewed,
+        )
+        summary["baseline_fallback"] = {
+            "used": False,
+            "reason": "store already populated",
+            "ttls_renewed": renewed,
+        }
+        return summary
+
+    merged: dict = {}
+    for source in _build_baseline_sources():
+        for model_id, pricing in (await source.fetch()).items():
+            merged[f"{pricing.source}:{model_id}"] = pricing
+
+    if not merged:
+        summary["baseline_fallback"] = {"used": False, "reason": "baselines are empty"}
+        return summary
+
+    logger.warning(
+        "pricing_refresh: both live catalogues failed and the store is empty; seeding %d prices "
+        "from the hardcoded baselines. These are frozen literals with no fetch date -- they are "
+        "labelled source=baseline/crosscheck=stale and must be replaced by the next successful "
+        "refresh (#16230)",
+        len(merged),
+    )
+    summary["written"] = await store.set_many(merged)
+    summary["indexed"] = await store.set_model_index(merged)
+    summary["baseline_fallback"] = {"used": True, "model_count": len(merged)}
+    return summary
+
+
 def _run_async(coro):
     """Run an async coroutine from a sync Celery task."""
     loop = asyncio.new_event_loop()
@@ -121,7 +214,14 @@ async def refresh_all() -> dict:
     summary: dict = {"sources": {}}
     primary = await _fetch(primary_source, store, summary)
     secondary = await _fetch(secondary_source, store, summary)
+    if not primary and not secondary:
+        # Nothing live answered at all. This is the only path to the baselines.
+        return await _write_baseline_fallback(store, summary)
     if not primary:
+        # The cross-check catalogue alone is not a catalogue: OpenRouter is
+        # here to disagree with LiteLLM, not to stand in for it. Unchanged --
+        # and deliberately still ahead of the baselines, which would otherwise
+        # be reachable while a real catalogue was answering.
         return summary
     report, verdicts, secondary_only = cross_check(primary, secondary, CROSSCHECK_TOLERANCE_PERCENT)
     merged = _merge(primary, secondary, verdicts, secondary_only)

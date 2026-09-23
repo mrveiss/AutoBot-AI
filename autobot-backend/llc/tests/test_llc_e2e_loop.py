@@ -66,7 +66,7 @@ from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.tests import _e2e_harness as harness
 from models.agent_org import AgentOrgNode, OrgRole
 
-# A model present in MODEL_PRICING_PER_1M_TOKENS so the cost is non-zero.
+# Priced via the `_seed_pricing_cache` fixture below (#16230) so the cost is non-zero.
 _COST_MODEL = "claude-haiku-4-5-20251001"
 
 
@@ -185,6 +185,20 @@ def _stub_kb_collections():
         patch(f"{target}.ensure_collection", new=AsyncMock(return_value="stub:collection")),
         patch(f"{target}.archive_collection", new=AsyncMock(return_value="stub:archived")),
     ):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _seed_pricing_cache():
+    """Warm `sync_cache` with a price for `_COST_MODEL` (#16230).
+
+    0.8/4.0 is the claude-haiku-4-5-20251001 price the old static table carried,
+    kept so the loop's cost assertion below (0.28) is unchanged. The mechanism is
+    shared with the other LLC cost tests -- see `_pricing_seed`.
+    """
+    from llc.tests._pricing_seed import seeded_pricing_cache
+
+    with seeded_pricing_cache(_COST_MODEL, 0.8, 4.0):
         yield
 
 

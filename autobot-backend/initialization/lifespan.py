@@ -36,6 +36,7 @@ from initialization import lifespan_shutdown as shutdown_steps
 from initialization.neural_mesh_wiring import wire_neural_mesh_components
 from initialization.startup_error_file import persist_startup_error
 from knowledge_factory import get_or_create_knowledge_base
+from llm_shared.pricing.sync_cache_scheduler import start_pricing_cache_scheduler
 from security_layer import SecurityLayer
 from services.slm_client import init_slm_client, shutdown_slm_client
 from type_defs.common import Metadata
@@ -2009,16 +2010,10 @@ async def _init_content_reach_registry(app: FastAPI) -> None:
 
 
 async def initialize_background_services(app: FastAPI):
-    """
-    Phase 2: Initialize background services (NON-BLOCKING).
+    """Phase 2: initialize background services (NON-BLOCKING, #281).
 
-    Issue #281: Refactored from 162 lines to use extracted helper methods.
-
-    These services can fail gracefully without preventing app startup.
-    Initialization happens in background while app serves requests.
-
-    Args:
-        app: FastAPI application instance
+    These can fail gracefully without preventing app startup; initialization
+    happens in the background while the app serves requests.
     """
     try:
         await update_app_state_multi(
@@ -2075,7 +2070,7 @@ async def initialize_background_services(app: FastAPI):
         await _start_community_clustering_loop(app)
         await _start_llc_notification_router(app)
         await _init_content_reach_registry(app)
-
+        await start_pricing_cache_scheduler(app)  # #16230, wrapper lives beside the scheduler
         await update_app_state_multi(
             initialization_status="ready",
             initialization_message="All services initialized",
