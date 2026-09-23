@@ -8,6 +8,8 @@
 # NOTE: llama-index upgraded to 0.14.x (#2669) — the --no-deps workaround
 # for llama-index-readers-file<0.6 constraint is no longer needed.
 
+-c constraints/shared.txt  # single source of truth for shared versions (#10524, #17304)
+
 -r requirements-ci/framework.txt
 -r requirements-ci/networking.txt
 -r requirements-ci/storage.txt

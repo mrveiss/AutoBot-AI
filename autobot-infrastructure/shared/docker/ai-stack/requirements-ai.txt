@@ -12,11 +12,11 @@ llama-index-embeddings-ollama>=0.10.0,<1.0.0
 llama-index-llms-ollama>=0.11.0,<1.0.0
 
 # Vector Database
-chromadb>=1.5.9,<2.0.0           # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
+chromadb  # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 sentence-transformers>=6.1.0
 
 # Model and Tokenization
-transformers>=5.17.0
+transformers
 tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
                           # unsatisfiable. #10416 (a grouped dependency bump) raised it back to
                           # >=0.23.1 two days after #10332 fixed it, keeping this comment, and the
@@ -37,7 +37,7 @@ torchaudio>=2.11.0
 # #15551: not directly imported -- kept because llama-index-core (declared at the
 # top of this file) requires `nltk>=3.9.3` transitively, so removing this floor
 # would unpin it rather than uninstall it.
-nltk>=3.10.3
+nltk
 # spacy: NOT a dependency of the AI stack (#14279). Nothing under
 # autobot-infrastructure/shared/docker/ai-stack/ imports it — the only importer
 # in the repo is autobot-backend/knowledge/pipeline/cognifiers/entity_extractor.py,
@@ -54,7 +54,7 @@ nltk>=3.10.3
 # HTTP and API
 fastapi>=0.141.1
 uvicorn[standard]>=0.53.0
-aiohttp>=3.14.3
+aiohttp
 httpx>=0.28.1
 httpcore>=1.0.9
 requests>=2.34.2
@@ -94,7 +94,7 @@ accelerate>=1.15.0
 
 # Document Processing
 python-docx>=1.2.0
-pypdf>=6.19.0
+pypdf
 
 # Development and Testing
 pytest>=9.1.1

@@ -61,7 +61,7 @@ httpx>=0.28.1  # health checks, general async HTTP calls
 # import it (lazily, at call time) — a fresh install was already broken the
 # first time any of those code paths ran; this was just never surfaced
 # until CI started building the app to verify generated types (#13118).
-aiohttp>=3.14.3  # SECURITY UPDATE — matches autobot-backend/requirements.txt pin
+aiohttp  # SECURITY UPDATE — matches autobot-backend/requirements.txt pin
 
 # System metrics
 psutil>=7.2.2
@@ -81,6 +81,6 @@ pysaml2>=7.5.5  # SAML 2.0 Service Provider
 pyotp>=2.10.0  # TOTP generation and verification
 
 # Security: explicit pins to override vulnerable transitive versions
-cryptography>=50.0.1  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
+cryptography  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
 # Note: pyopenssl version resolved by pysaml2's dependencies (constraints conflict with >=26.0.0)
 # cryptography>=50.0.1 provides primary security coverage
