@@ -12,19 +12,11 @@ this one holds the rest -- chat, sessions, workspaces, memory, notifications,
 auth, tooling, and knowledge indexing. #15151 later added three ``network``
 vars found the same way, from a different reader shape (see below).
 
-These were read through a bare ``int(os.environ.get(...))`` /
-``float(os.environ.get(...))`` cast until #15710 converted each to
-``autobot_shared.env_utils``'s ``env_int``/``env_float`` -- crash-safe, but
-still unregistered, because ``check_env_var_registry.py`` derives its reader
-set from ``os.getenv`` and the ``env_utils`` helper names, and had never
-seen ``os.environ.get`` either. Converting made them visible to that
-checker for the first time; this module is what answers it.
+Same #15710 provenance as ``env_registry_agent_runtime``, which states it:
+read through a bare ``os.environ.get`` cast the registry checker could not
+see, converted to ``env_utils`` and registered here.
 
-Importing this module registers every variable below into
-``autobot_shared.env_registry.REGISTRY`` as a side effect, exactly like the
-``register_env_var(...)`` calls in ``env_registry.py`` itself. It is imported
-from there, after ``EnvVarSpec``/``register_env_var``/``REGISTRY`` are
-defined, so nothing ever observes a partially-populated registry.
+Registration contract (import side effect, ordering): see ``env_registry`` (#16415).
 
 Closes GH#7081.
 """

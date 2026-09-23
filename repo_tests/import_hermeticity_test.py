@@ -151,7 +151,11 @@ REACH = declare(
     # llm_shared/pricing/sync_cache_scheduler.py, autobot_shared/env_registry_pricing.py)
     # against 60 of allowance that main had already spent 61 of, so the branch did
     # not cause the red on its own.
-    floor=601,
+    # Re-pinned 601 -> 602: measured 662 non-test modules under api/ and
+    # autobot_shared/ across both backends. This branch adds exactly one
+    # (autobot_shared/security/path_http.py, the shared path->HTTP translation
+    # for #13579); the remaining growth is main's.
+    floor=602,
     what="non-test modules under api/ and autobot_shared/, both backends",
     growth=60,
 )

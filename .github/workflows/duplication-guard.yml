@@ -100,7 +100,15 @@ jobs:
       # trees" step). Re-measured with the mirror excluded on run 34632034006
       # (base affea4b38, workflow/test/doc-only change): 2,945 duplicated lines,
       # 129 clones, 258,231 lines scanned in 754 files.
-      SLM_MAX_DUP_LINES: '2945'
+      # 2945 -> 2831 (#16415): the env_registry siblings' shared docstring prose is
+      # now stated once and referenced. Measured locally with this workflow's exact
+      # flags and jscpd 5.0.6; the same run measured origin/main at 2918, i.e. the
+      # 2945 pin had been carrying 27 lines of slack since it was set on 2026-09-11
+      # against base d5a0c6dcb. That slack is #16324's exact shape -- the gate exits
+      # 0 when the count is UNDER its pin, so a fall in duplication is never noticed
+      # and a later PR can spend it. Both figures are recorded so the next person
+      # can tell a real reduction from reclaimed slack.
+      SLM_MAX_DUP_LINES: '2831'
       JSCPD_VERSION: '5.0.6'
     steps:
       - uses: actions/checkout@v7

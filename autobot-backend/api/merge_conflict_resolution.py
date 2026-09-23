@@ -37,7 +37,8 @@ from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
+from autobot_shared.security.path_http import require_contained_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS
 from autobot_shared.time_utils import utc_timestamp
 from code_intelligence.merge_conflict_resolver import (
     ConflictBlock,
@@ -153,11 +154,9 @@ def _assert_safe_path(user_path: str) -> Path:
 
     Issue #2848.
     """
-    try:
-        return validate_path(user_path, must_exist=False, allowed_roots=PROJECT_ALLOWED_ROOTS)
-    except ValueError as exc:
-        logger.warning("Path traversal attempt blocked: %s — %s", user_path, exc)
-        raise HTTPException(status_code=400, detail="Invalid or disallowed path")
+    # #13579: the warning log moved into the shared helper, which logs the
+    # offending value and returns none of it.
+    return require_contained_path(user_path, must_exist=False, allowed_roots=PROJECT_ALLOWED_ROOTS)
 
 
 async def _validate_conflict_file(file_path: str) -> Path:

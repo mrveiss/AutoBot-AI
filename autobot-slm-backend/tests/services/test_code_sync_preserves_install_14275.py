@@ -156,8 +156,39 @@ def test_a_missing_source_path_fails_rather_than_reporting_success():
 # ---------------------------------------------------------------------------
 
 
+def _registry_helpers(tree: ast.Module) -> dict:
+    """Module-level helpers, executable, so a built command can be evaluated.
+
+    #17166 moved the `build-filtered-requirements.sh` invocation out of five
+    literal `post_sync_cmd` strings into one `_filtered_pip_install` helper. The
+    commands are byte-for-byte what they were -- proven by extracting all ten
+    values before and after -- but this guard read the AST for string literals,
+    so it saw a call expression, found the rewrite in nothing, and reported the
+    rule as vacuous.
+
+    That is rule 7's shape exactly: on an extraction PR, grep the BEHAVIOUR, not
+    the symbol. The behaviour is the command a role runs, so the helper is
+    executed and the command it produces is what gets checked. That is strictly
+    stronger than matching a literal -- it would now catch a helper that builds
+    the wrong command, which the literal match never could.
+    """
+    ns: dict = {"_BASE_DIR": "<BASE>", "_SLM_AGENT_DIR": "<AGENTDIR>"}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            name = node.targets[0].id
+            if name not in ns:
+                try:
+                    ns[name] = ast.literal_eval(node.value)
+                except Exception:
+                    pass
+        elif isinstance(node, ast.FunctionDef):
+            exec(compile(ast.Module(body=[node], type_ignores=[]), "<registry-helper>", "exec"), ns)  # nosec B102
+    return ns
+
+
 def _registry_entries() -> list[dict]:
     tree = ast.parse(_REGISTRY.read_text(encoding="utf-8"))
+    helpers = _registry_helpers(tree)
     entries = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Dict):
@@ -172,6 +203,15 @@ def _registry_entries() -> list[dict]:
                     entry[key.value] = value.value
                 elif isinstance(value, ast.List):
                     entry[key.value] = [e.value for e in value.elts if isinstance(e, ast.Constant)]
+                elif isinstance(value, ast.Call):
+                    # A command built by a helper: evaluate it, so the check runs
+                    # against the string the role will actually execute.
+                    try:
+                        entry[key.value] = eval(  # nosec B307
+                            compile(ast.Expression(value), "<registry-call>", "eval"), dict(helpers)
+                        )
+                    except Exception:
+                        entry[key.value] = ast.unparse(value)
                 else:
                     entry[key.value] = ast.unparse(value)
             entries.append(entry)

@@ -96,30 +96,30 @@ sequenceDiagram
 **Endpoint Categories**:
 
 #### Desktop Streaming Endpoints
-- `POST /api/control/streaming/create` - Create streaming session
-- `DELETE /api/control/streaming/{session_id}` - Terminate session
-- `GET /api/control/streaming/sessions` - List active sessions
-- `GET /api/control/streaming/capabilities` - Get system capabilities
+- `POST /api/advanced-control/streaming/create` - Create streaming session
+- `DELETE /api/advanced-control/streaming/{session_id}` - Terminate session
+- `GET /api/advanced-control/streaming/sessions` - List active sessions
+- `GET /api/advanced-control/streaming/capabilities` - Get system capabilities
 
 #### Takeover Management Endpoints
-- `POST /api/control/takeover/request` - Request takeover
-- `POST /api/control/takeover/{request_id}/approve` - Approve request
-- `POST /api/control/takeover/sessions/{session_id}/action` - Execute action
-- `POST /api/control/takeover/sessions/{session_id}/pause` - Pause session
-- `POST /api/control/takeover/sessions/{session_id}/resume` - Resume session
-- `POST /api/control/takeover/sessions/{session_id}/complete` - Complete session
-- `GET /api/control/takeover/pending` - List pending requests
-- `GET /api/control/takeover/active` - List active sessions
-- `GET /api/control/takeover/status` - System status
+- `POST /api/advanced-control/takeover/request` - Request takeover
+- `POST /api/advanced-control/takeover/{request_id}/approve` - Approve request
+- `POST /api/advanced-control/takeover/sessions/{session_id}/action` - Execute action
+- `POST /api/advanced-control/takeover/sessions/{session_id}/pause` - Pause session
+- `POST /api/advanced-control/takeover/sessions/{session_id}/resume` - Resume session
+- `POST /api/advanced-control/takeover/sessions/{session_id}/complete` - Complete session
+- `GET /api/advanced-control/takeover/pending` - List pending requests
+- `GET /api/advanced-control/takeover/active` - List active sessions
+- `GET /api/advanced-control/takeover/status` - System status
 
 #### System Monitoring Endpoints
-- `GET /api/control/system/status` - Comprehensive system status
-- `POST /api/control/system/emergency-stop` - Emergency stop all operations
-- `GET /api/control/system/health` - Quick health check
+- `GET /api/advanced-control/system/status` - Comprehensive system status
+- `POST /api/advanced-control/system/emergency-stop` - Emergency stop all operations
+- `GET /api/advanced-control/system/health` - Quick health check
 
 #### WebSocket Endpoints
-- `WS /api/control/ws/monitoring` - Real-time system monitoring
-- `WS /api/control/ws/desktop/{session_id}` - Desktop streaming control
+- `WS /api/advanced-control/ws/monitoring` - Real-time system monitoring
+- `WS /api/advanced-control/ws/desktop/{session_id}` - Desktop streaming control
 
 ### 4. Real-time WebSocket Integration
 
@@ -301,7 +301,7 @@ advanced_control:
 # Create streaming session
 import requests
 
-response = requests.post("http://localhost:8001/api/control/streaming/create", json={
+response = requests.post("http://localhost:8001/api/advanced-control/streaming/create", json={
     "user_id": "admin",
     "resolution": "1280x720",
     "depth": 24
@@ -319,7 +319,7 @@ print(f"Web URL: {session_data['web_url']}")
 
 ```python
 # Request takeover
-response = requests.post("http://localhost:8001/api/control/takeover/request", json={
+response = requests.post("http://localhost:8001/api/advanced-control/takeover/request", json={
     "trigger": "MANUAL_REQUEST",
     "reason": "Need to review system configuration",
     "requesting_agent": "system_admin",
@@ -330,20 +330,20 @@ response = requests.post("http://localhost:8001/api/control/takeover/request", j
 request_id = response.json()["request_id"]
 
 # Approve takeover
-response = requests.post(f"http://localhost:8001/api/control/takeover/{request_id}/approve", json={
+response = requests.post(f"http://localhost:8001/api/advanced-control/takeover/{request_id}/approve", json={
     "human_operator": "admin_user"
 })
 
 session_id = response.json()["session_id"]
 
 # Execute action during takeover
-requests.post(f"http://localhost:8001/api/control/takeover/sessions/{session_id}/action", json={
+requests.post(f"http://localhost:8001/api/advanced-control/takeover/sessions/{session_id}/action", json={
     "action_type": "system_command",
     "action_data": {"command": "ps aux"}
 })
 
 # Complete session
-requests.post(f"http://localhost:8001/api/control/takeover/sessions/{session_id}/complete", json={
+requests.post(f"http://localhost:8001/api/advanced-control/takeover/sessions/{session_id}/complete", json={
     "resolution": "Configuration reviewed and updated",
     "handback_notes": "System is ready for autonomous operation"
 })
@@ -353,7 +353,7 @@ requests.post(f"http://localhost:8001/api/control/takeover/sessions/{session_id}
 
 ```javascript
 // Real-time system monitoring
-const ws = new WebSocket('ws://localhost:8001/api/control/ws/monitoring');
+const ws = new WebSocket('ws://localhost:8001/api/advanced-control/ws/monitoring');
 
 ws.onmessage = function(event) {
     const data = JSON.parse(event.data);
@@ -433,16 +433,16 @@ safe_commands = {
 
 ```bash
 # System health
-curl http://localhost:8001/api/control/system/health
+curl http://localhost:8001/api/advanced-control/system/health
 
 # Streaming capabilities
-curl http://localhost:8001/api/control/streaming/capabilities
+curl http://localhost:8001/api/advanced-control/streaming/capabilities
 
 # Takeover status
-curl http://localhost:8001/api/control/takeover/status
+curl http://localhost:8001/api/advanced-control/takeover/status
 
 # Comprehensive status
-curl http://localhost:8001/api/control/system/status
+curl http://localhost:8001/api/advanced-control/system/status
 ```
 
 ### Logging and Metrics
@@ -511,7 +511,7 @@ sleep 10
 python test_phase8_control.py
 
 # Manual API testing
-curl -X POST http://localhost:8001/api/control/streaming/create \
+curl -X POST http://localhost:8001/api/advanced-control/streaming/create \
   -H "Content-Type: application/json" \
   -d '{"user_id": "test", "resolution": "800x600"}'
 ```
@@ -528,7 +528,7 @@ async def create_multiple_sessions(count=10):
         tasks = []
         for i in range(count):
             task = session.post(
-                "http://localhost:8001/api/control/streaming/create",
+                "http://localhost:8001/api/advanced-control/streaming/create",
                 json={"user_id": f"user_{i}", "resolution": "640x480"}
             )
             tasks.append(task)
@@ -579,13 +579,13 @@ redis-cli ping
 **WebSocket Connection Problems**:
 ```bash
 # Test WebSocket endpoint
-wscat -c ws://localhost:8001/api/control/ws/monitoring
+wscat -c ws://localhost:8001/api/advanced-control/ws/monitoring
 
 # Check CORS configuration
 curl -H "Origin: http://localhost:5173" \
      -H "Access-Control-Request-Method: GET" \
      -H "Access-Control-Request-Headers: X-Requested-With" \
-     -X OPTIONS http://localhost:8001/api/control/system/health
+     -X OPTIONS http://localhost:8001/api/advanced-control/system/health
 ```
 
 ### Performance Issues

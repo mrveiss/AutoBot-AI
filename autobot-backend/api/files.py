@@ -40,11 +40,11 @@ from api.schemas_system import (
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.path_http import require_contained_relative_path
 from autobot_shared.security.path_validator import (
     SANDBOX_INVALID_PATH_CHARACTERS,
     SandboxPathError,
     resolve_within_sandbox,
-    validate_relative_path,
 )
 from constants.error_constants import (
     ERR_DIRECTORY_NOT_FOUND,
@@ -693,10 +693,10 @@ async def upload_file(
     # Not `target_dir / file.filename`: pathlib's join is hostile here, and an
     # ABSOLUTE filename discards target_dir outright. Resolve via realpath so
     # containment holds for symlinks too (#13394).
-    try:
-        target_file = validate_relative_path(file.filename, target_dir)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid filename")
+    # #13579: the detail was "Invalid filename"; it is now the shared "Invalid
+    # path". One string for every refusal is the point -- a per-endpoint wording
+    # is how six call sites came to disagree on the status code too.
+    target_file = require_contained_relative_path(file.filename, target_dir)
 
     # Write file (Issue #281: uses helper)
     await _write_upload_file(target_file, content, overwrite)
@@ -1273,15 +1273,12 @@ def _validate_admin_path(path: str) -> Path:
     Restricts access to pre-approved base directories (Issue #984).
     Uses shared path validator (#1721).
     """
-    from autobot_shared.security.path_validator import validate_path
+    # #13579: was 403 "Path outside allowed directories" -- which both
+    # disagreed with the other call sites and told the caller exactly which
+    # boundary they had hit.
+    from autobot_shared.security.path_http import require_contained_path
 
-    try:
-        return validate_path(path, allowed_roots=list(_ADMIN_ALLOWED_DIRS))
-    except ValueError:
-        raise HTTPException(
-            status_code=403,
-            detail="Path outside allowed directories",
-        )
+    return require_contained_path(path, allowed_roots=list(_ADMIN_ALLOWED_DIRS))
 
 
 def _entry_to_file_item(entry: Path) -> dict:
