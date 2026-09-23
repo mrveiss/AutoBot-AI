@@ -142,9 +142,15 @@ class AttachmentService:
             raise StorageBackendNotImplemented(f"Backend '{_STORAGE_BACKEND}' not implemented")
 
         attachment_id = str(uuid.uuid4())
-        # _storage_path validates before returning, so nothing reaches the
-        # filesystem until every id has been proven to be a UUID (#17300). The
-        # order is the fix: this used to write first and cast afterwards.
+        # EVERY id is parsed before anything reaches the filesystem (#17300).
+        # _storage_path covers the three that form the path; these two do not,
+        # and were still cast below -- after the write. A malformed one raised
+        # there and left an orphaned file behind, repeatably, which is a disk
+        # filler. The same order-of-operations defect as the original, in the
+        # same function, for the parameters that happened not to be path
+        # segments.
+        uploaded_by_agent_uuid = uuid.UUID(uploaded_by_agent_id) if uploaded_by_agent_id else None
+        uploaded_by_user_uuid = uuid.UUID(uploaded_by_user_id) if uploaded_by_user_id else None
         dest = _storage_path(company_id, work_item_id, attachment_id, filename)
         _write_local(content, dest)
 
@@ -154,8 +160,8 @@ class AttachmentService:
             id=uuid.UUID(attachment_id),
             company_id=uuid.UUID(company_id),
             work_item_id=uuid.UUID(work_item_id),
-            uploaded_by_agent_id=uuid.UUID(uploaded_by_agent_id) if uploaded_by_agent_id else None,
-            uploaded_by_user_id=uuid.UUID(uploaded_by_user_id) if uploaded_by_user_id else None,
+            uploaded_by_agent_id=uploaded_by_agent_uuid,
+            uploaded_by_user_id=uploaded_by_user_uuid,
             filename=filename,
             content_type=content_type,
             size_bytes=len(content),

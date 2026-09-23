@@ -18,7 +18,9 @@ outside the root is ever addressable.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -93,3 +95,59 @@ def test_a_very_long_extension_is_bounded():
 
     assert len(dest.suffix) <= 16
     assert dest.is_relative_to(_resolve_storage_root().resolve())
+
+
+# --- nothing is written when ANY id is malformed (#17300 review) ------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["uploaded_by_agent_id", "uploaded_by_user_id"])
+async def test_a_malformed_uploader_id_leaves_no_file_behind(tmp_path, field):
+    """The orphaned-file DoS: these two ids are not path segments, so
+    `_storage_path` does not see them, and they used to be cast AFTER the write.
+    A malformed one then raised with the file already on disk — repeatably.
+
+    Asserts on the DIRECTORY, not on the exception: that a ValueError is raised
+    was already true before the fix. What changed is that nothing was written.
+    """
+    from llc.services import attachment_service as svc_mod
+
+    svc = svc_mod.AttachmentService()
+    kwargs = {
+        "company_id": _COMPANY,
+        "work_item_id": _WORK_ITEM,
+        "filename": "notes.txt",
+        "content_type": "text/plain",
+        "content": b"data",
+        field: "not-a-uuid",
+    }
+
+    with patch.object(svc_mod, "_LOCAL_STORAGE_PATH", tmp_path):
+        with pytest.raises(ValueError):
+            await svc.upload(AsyncMock(), **kwargs)
+
+    assert list(tmp_path.rglob("*")) == [], "a file was written before the id was validated"
+
+
+@pytest.mark.asyncio
+async def test_a_well_formed_upload_still_writes(tmp_path):
+    """The contrast. Without it, a change that refused every upload would pass."""
+    from llc.services import attachment_service as svc_mod
+
+    svc = svc_mod.AttachmentService()
+    with patch.object(svc_mod, "_LOCAL_STORAGE_PATH", tmp_path):
+        await svc.upload(
+            AsyncMock(),
+            company_id=_COMPANY,
+            work_item_id=_WORK_ITEM,
+            filename="notes.txt",
+            content_type="text/plain",
+            content=b"data",
+            uploaded_by_user_id=str(uuid.uuid4()),
+        )
+
+    written = [p for p in tmp_path.rglob("*") if p.is_file()]
+    assert len(written) == 1
+    # to_thread: #7444's guard covers test files too, and a bare read_bytes in an
+    # async test trips it.
+    assert await asyncio.to_thread(written[0].read_bytes) == b"data"
