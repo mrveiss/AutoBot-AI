@@ -55,14 +55,13 @@ and why only a census found them.
 from __future__ import annotations
 
 import ast
-import subprocess
 from collections import defaultdict
 from typing import Dict, FrozenSet, List, Set, Tuple
 
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
 
@@ -118,15 +117,15 @@ _MIN_SOURCE_FILES = 3000
 
 
 def _tracked_python() -> List[str]:
-    completed = subprocess.run(
-        ["git", "ls-files", "-z", "*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    )
-    return [n for n in completed.stdout.split("\0") if n and not n.startswith(".worktrees/")]
+    """Tracked ``.py`` paths, through the one canonical enumeration (#15926).
+
+    Not a direct ``git ls-files``: ``one_git_enumeration_15926_test`` counts
+    those across ``repo_tests/`` and its floor only ever shrinks, so a new guard
+    that shells out for itself is a regression even when it works. ``exclude``
+    becomes a git ``:(exclude)`` pathspec, so git does the matching rather than
+    a second matcher in Python disagreeing with the first (#15510).
+    """
+    return tracked_paths(REPO_ROOT, "*.py", exclude=(".worktrees",))
 
 
 def is_test_path(rel: str) -> bool:
