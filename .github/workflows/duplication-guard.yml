@@ -86,7 +86,14 @@ jobs:
       # was 1.05%, about 16,590 lines of headroom. It was set on 2026-06-10 and
       # never tightened as duplication fell, so pinning the count at its
       # measurement is a deliberate tightening.
-      MAX_DUP_LINES: '11723'
+      # 11723 -> 11707 (#17317): 16 lines of slack, re-measured on the merged tree
+      # rather than taken from a report. The SLM pin is deliberately NOT changed in
+      # the same breath: a figure of 2918 was reported for it from a run that
+      # predated #17314, and #17314 had already lowered that pin to 2831. Applying
+      # the reported number would have RAISED a ratchet, which is the one direction
+      # it must never move. Measured here instead: the SLM scope is 2831 against a
+      # 2831 pin, exact, so it stays.
+      MAX_DUP_LINES: '11707'
       # #13044: the three trees this guard used to skip get their OWN pin rather
       # than being folded into the one above. When first scanned they carried
       # 2.4x the duplication ratio of the gated trees, and averaging would hide
