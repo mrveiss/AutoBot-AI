@@ -264,15 +264,6 @@ else
       case "$author$email" in
         *'[bot]'*) continue ;;
       esac
-      # #15473: subjects already on main that cannot be amended. A squash merge
-      # takes its subject from the PR title, and nothing validated that until
-      # validate_pr_body.check_title -- so this one landed malformed and then
-      # failed the range check for every PR afterwards, including a release
-      # promotion carrying 682 commits. Recorded by SHA rather than by widening
-      # the pattern: `+` is not a scope separator this repository uses (one
-      # occurrence in 600 commits, and it is this one), so widening would be
-      # lowering the rule to fit a mistake. Shrink-only -- an entry leaves when
-      # history is rewritten, which for main means never.
       # Subjects already on main that cannot be amended (#15473). A squash merge
       # takes its subject from the PR TITLE, and nothing validated that until
       # validate_pr_body.check_title -- so this one landed malformed and then
