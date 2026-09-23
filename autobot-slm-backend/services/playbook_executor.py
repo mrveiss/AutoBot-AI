@@ -966,7 +966,7 @@ class PlaybookExecutor:
             # asyncio's default StreamReader limit is 64 KiB. One ansible
             # `fatal:` line carries the whole task result as JSON, and for a
             # `pip install` task that embeds pip's entire stderr -- routinely
-            # past 64 KiB. See _iter_pipe_lines.
+            # past 64 KiB. See iter_pipe_lines in services/playbook_output_stream.py.
             limit=PIPE_LINE_LIMIT,
             # #14524: own process group, so a timeout can kill the WHOLE tree
             # (ansible-playbook's forked workers/ssh children too), not just

@@ -23,7 +23,7 @@ That is the failure mode this repository's measurement rule exists to forbid: a
 reader that cannot read must say so, not substitute its own error for the
 evidence it was carrying.
 
-These tests drive the REAL `_iter_pipe_lines` against a REAL StreamReader with a
+These tests drive the REAL `iter_pipe_lines` against a REAL StreamReader with a
 small limit. A mocked stream cannot reproduce this: the bug lives in what the
 stdlib raises when the buffer is exceeded, so the buffer has to be exceeded.
 """
@@ -160,3 +160,46 @@ def test_the_subprocess_is_spawned_with_that_limit() -> None:
     spawn = src[src.index("asyncio.create_subprocess_exec(") :]
     spawn = spawn[: spawn.index(")\n")]
     assert "limit=PIPE_LINE_LIMIT" in spawn, "create_subprocess_exec does not pass the raised limit"
+
+
+# ---------------------------------------------------------------------------
+# The SECOND call site (#17317 review). api/infrastructure.py runs the same
+# pip-heavy provisioning playbooks from POST /api/execute, and had the same
+# unguarded `readline` against a default-limit pipe. Its failure mode was the
+# worse of the two: the bare ValueError was swallowed by `_run_playbook`'s
+# broad `except Exception`, so the operator was told "Internal server error"
+# rather than shown the pip failure.
+#
+# Both halves are asserted, because either one alone leaves the bug live: a
+# raised limit the spawn never passes, or a shared reader the spawn starves at
+# 64 KiB.
+# ---------------------------------------------------------------------------
+
+
+def _infrastructure_source() -> str:
+    return (_SLM_ROOT / "api" / "infrastructure.py").read_text(encoding="utf-8")
+
+
+def test_the_execute_endpoint_spawn_also_carries_the_limit() -> None:
+    """The endpoint's own subprocess must not stay at asyncio's 64 KiB default."""
+    src = _infrastructure_source()
+    spawn = src[src.index("asyncio.create_subprocess_exec(") :]
+    spawn = spawn[: spawn.index(")\n")]
+    assert "limit=PIPE_LINE_LIMIT" in spawn, (
+        "api/infrastructure.py spawns ansible without the raised limit, so its " "reader still meets a 64 KiB pipe"
+    )
+
+
+def test_the_execute_endpoint_reads_through_the_shared_iterator() -> None:
+    """No second hand-rolled reader: the defect was one call site's private loop.
+
+    Asserted on the BEHAVIOUR (`readline` on the process pipe), not on the
+    helper's name -- renaming `_stream_process_output` must not silently retire
+    this check.
+    """
+    src = _infrastructure_source()
+    assert "iter_pipe_lines" in src, "api/infrastructure.py does not use the shared reader"
+    assert "process.stdout.readline()" not in src, (
+        "api/infrastructure.py still reads the pipe with readline(), which CLEARS "
+        "the buffer on overrun and destroys the line that explains the failure"
+    )

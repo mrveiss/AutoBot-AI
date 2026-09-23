@@ -24,6 +24,7 @@ from typing_extensions import Annotated
 from autobot_shared.async_compat import fire_and_forget
 from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
+from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/infrastructure", tags=["infrastructure"])
@@ -616,13 +617,11 @@ def _get_ansible_environment():
 async def _stream_process_output(process, execution):
     """Stream subprocess output to execution log.
 
-    Helper for _run_playbook (Issue #665).
+    Helper for _run_playbook (Issue #665). Reads through the shared
+    ``iter_pipe_lines``: ``readline`` destroys the oversized ``fatal:`` line
+    this endpoint's own playbooks produce (#17317).
     """
-    while True:
-        line = await process.stdout.readline()
-        if not line:
-            break
-        decoded = line.decode().rstrip()
+    async for decoded in iter_pipe_lines(process):
         execution.output.append(decoded)
 
 
@@ -699,6 +698,7 @@ async def _run_playbook(
             stderr=asyncio.subprocess.STDOUT,
             env=_get_ansible_environment(),
             cwd=str(_ansible_dir()),
+            limit=PIPE_LINE_LIMIT,  # 64 KiB default truncates `fatal:` (#17317)
         )
 
         await _stream_process_output(process, execution)
