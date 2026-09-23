@@ -119,3 +119,22 @@ def test_an_empty_or_truncated_durations_file_is_refused() -> None:
     script = _land_script()
     assert '[ -s "$f" ]' in script, "no emptiness check before committing"
     assert "fewer than 100 timings" in script, "no check that the run actually measured the suite"
+
+
+def test_the_landing_script_is_valid_shell() -> None:
+    """The check whose absence let a broken heredoc reach CI.
+
+    Everything else here inspects the workflow as data -- YAML parses, the job
+    is wired, the body renders. None of that runs the shell, so a heredoc whose
+    terminator is indented one level too deep, and a duplicate `fi`, both passed
+    every assertion in this file while `bash -n` reported "here-document
+    delimited by end-of-file". The step would have died at runtime on the
+    schedule path, which is the one path that matters: the durations PR would
+    never have opened, and the failure would have looked like the silence this
+    whole issue is about.
+
+    Found by a peer session reviewing the branch, not by these tests.
+    """
+    script = _land_script()
+    proc = subprocess.run(["bash", "-n"], input=script, text=True, capture_output=True)
+    assert proc.returncode == 0, f"the landing script is not valid shell:\n{proc.stderr}"
