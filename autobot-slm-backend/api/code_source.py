@@ -240,10 +240,10 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
     if _is_local_node(node):
         if Path(repo_path).is_dir():
             return
+        # #17300: returning the suggestion handed any authenticated user (get_current_user only) a real filename.
         similar_path = await _find_similar_paths(node, repo_path)
+        logger.info("Repo path %r not found (sibling seen: %r, not disclosed)", repo_path, similar_path)
         error_detail = f"Repository path does not exist on source node: {repo_path}"
-        if similar_path:
-            error_detail += f". Did you mean: {similar_path}?"
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail)
 
     ssh_cmd = [
@@ -263,12 +263,11 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
 
         if proc.returncode != 0 or stdout.decode().strip() != "exists":
+            # #17300: same disclosure as the local branch above -- a real filename
+            # from any directory on the REMOTE node this time. Log, don't tell.
             similar_path = await _find_similar_paths(node, repo_path)
-
+            logger.info("Repo path %r not found on node (sibling seen: %r, not disclosed)", repo_path, similar_path)
             error_detail = f"Repository path does not exist on source node: {repo_path}"
-            if similar_path:
-                error_detail += f". Did you mean: {similar_path}?"
-
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail)
 
     except asyncio.TimeoutError:

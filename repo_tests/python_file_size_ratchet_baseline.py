@@ -252,7 +252,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/knowledge/tags.py": 834,
     "autobot-backend/knowledge_sync_incremental.py": 884,
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
-    "autobot-backend/llc/api/companies.py": 1732,
+    "autobot-backend/llc/api/companies.py": 1731,
     "autobot-backend/llc/api/roles.py": 741,
     "autobot-backend/llc/api/sprints.py": 1223,
     "autobot-backend/llc/api/work_items.py": 1416,
@@ -442,7 +442,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 675,
-    "autobot-slm-backend/api/code_source.py": 720,
+    "autobot-slm-backend/api/code_source.py": 719,
     "autobot-slm-backend/api/code_sync.py": 6025,  # #16640: moved to api/_colocated_role_procedures.py
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
