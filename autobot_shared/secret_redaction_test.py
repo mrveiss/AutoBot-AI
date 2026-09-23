@@ -39,17 +39,17 @@ _JWT_SHAPED = ".".join(
     ]
 )
 
-# #16688: a JWT whose PAYLOAD does not begin ``eyJ``. The header always does
-# (``alg`` is mandatory, so it is never the empty object), but a payload of
-# ``{}`` encodes to ``e30`` and a serializer emitting ``{ "`` gives ``eyAi``.
-# This scanner required ``eyJ`` on both segments and so was strictly narrower
-# than ``a2a/pii_pipeline.py``, which anchors the header alone -- the token
-# below was blocked on the A2A path and passed through here, in the module
+# #16688: a JWT whose PAYLOAD does not begin ``eyJ``. A payload only starts
+# ``eyJ`` when its JSON begins exactly ``{"``; a serializer that emits a space
+# after the brace (``{ "sub": ...``) base64url-encodes to ``eyAi`` instead.
+# The token below is well-formed and was matched by ``a2a/pii_pipeline.py``
+# while this scanner missed it -- and this is the module
 # ``llm_shared.credential_redaction`` delegates its log redaction to.
+# Payload decodes to: { "sub": "1234567890", "name": "A" }
 _JWT_NON_EYJ_PAYLOAD = ".".join(
     [
-        "eyJhbGciOiJIUzI1NiJ9",
-        "e30",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+        "eyAic3ViIjogIjEyMzQ1Njc4OTAiLCAibmFtZSI6ICJBIiB9",  # pragma: allowlist secret
         "dGhpc2lzYXNpZ25hdHVyZQ",
     ]
 )

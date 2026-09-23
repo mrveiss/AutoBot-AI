@@ -250,12 +250,13 @@ _PEM_BLOCK_RE = re.compile(
 # #16688: requiring ``eyJ`` on the payload too -- which this pattern did until
 # the redaction census -- makes this scanner strictly narrower than the one in
 # ``a2a/pii_pipeline.py`` (``jwt_re``), which anchors the header alone. A
-# payload that is not an object opening with a quoted key does not start
-# ``eyJ``: ``{}`` encodes to ``e30``, and a serializer emitting ``{ "`` gives
-# ``eyAi``. Such a token was redacted on the A2A path and passed through
-# untouched here -- and this is the module ``llm_shared.credential_redaction``
-# delegates to, so the miss landed in logs. Widened to match; deliberately a
-# superset, never a narrowing (see docs/developer/REDACTION_BOUNDARY.md).
+# payload only starts ``eyJ`` when its JSON begins exactly ``{"``. A serializer
+# emitting a space after the brace (``{ "sub": ...``) encodes to ``eyAi``, and
+# one padding before it gives ``IHsi``. Both are well-formed tokens that were
+# redacted on the A2A path and passed through untouched here -- and this is the
+# module ``llm_shared.credential_redaction`` delegates to, so the miss landed in
+# logs. Widened to match; deliberately a superset, never a narrowing
+# (see docs/developer/REDACTION_BOUNDARY.md).
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")
 
 # Provider-specific prefixes with a fixed, well-documented shape — the same
