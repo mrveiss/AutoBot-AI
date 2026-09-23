@@ -77,6 +77,8 @@ concurrency:
 
 permissions:
   contents: read
+  # #15333: the open-alert ceiling below reads code-scanning alerts.
+  security-events: read
 
 jobs:
   changes:
@@ -741,6 +743,21 @@ jobs:
         # filter covers all of them, so the next guard input added without a
         # matching filter entry fails loudly instead of silently going dark.
         python3 tools/lint/check_code_quality_guard_reach.py --audit
+
+    - name: The open CodeQL alert backlog may not grow (#15333, #17300)
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        # BLOCKING, and in this job rather than in codeql.yml on purpose: this is
+        # a REQUIRED check, and CodeQL itself is not. An alert therefore has to be
+        # adjudicated -- fixed, or dismissed with a written reason -- before a PR
+        # can merge, which is the step that was missing when 111 of them
+        # accumulated and an arbitrary file write hid among them (#17300).
+        #
+        # Fails closed on a missing token or an API error: "could not look" must
+        # never render as "found nothing".
+        ./pipeline-scripts/check_codeql_alert_ceiling.sh
 
     - name: Code quality summary
       if: always()
