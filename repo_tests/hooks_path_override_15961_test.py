@@ -270,7 +270,12 @@ REACH = declare(
     # 401 of allowance that main had already spent 397 of. Same shape as the
     # previous five and the reason #17142 exists: 400 is 5.8% of a ~6900-file
     # tree and this tree spends it in under a week.
-    floor=6536,
+    # Re-pinned 6536 -> 6538 (#17317): measured 6938 after #17314, #17321 and
+    # #17328 merged within the hour. SIXTEENTH re-pin. 6536 was measured before
+    # those three landed and did not survive them, which is the whole argument
+    # of #17142 in one data point: a floor re-pinned correctly at measurement
+    # time is stale by the next merge, because 400 is 5.8% of a ~6900-file tree.
+    floor=6538,
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
