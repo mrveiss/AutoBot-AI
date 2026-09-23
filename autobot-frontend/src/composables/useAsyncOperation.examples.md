@@ -266,7 +266,7 @@ const saveSettings = async () => {
     loading.value = true
     error.value = null
 
-    const response = await api.saveSettings(settings)
+    const response = await apiClient.saveSettings(settings)
 
     // Show success notification
     showNotification('Settings saved successfully', 'success')
@@ -287,6 +287,7 @@ const saveSettings = async () => {
 
 ```typescript
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import apiClient from '@/utils/ApiClient'
 
 const { loading, error, execute } = useAsyncOperation({
   onSuccess: async () => {
@@ -299,7 +300,7 @@ const { loading, error, execute } = useAsyncOperation({
   }
 })
 
-const saveSettings = () => execute(() => api.saveSettings(settings))
+const saveSettings = () => execute(() => apiClient.saveSettings(settings))
 ```
 
 **Lines of code**: 9 lines vs 17 lines

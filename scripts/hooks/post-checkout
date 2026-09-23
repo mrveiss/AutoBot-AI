@@ -12,6 +12,7 @@
 #      guard + formatter dispatch (Issue #16923) when that template exists
 #   5. Inject flock wrapper into pre-commit hook (Issue #1684)
 #   6. Self-sync: keep .git/hooks/post-checkout in sync (Issue #1692)
+#   7. Link node_modules into a linked worktree (Issue #16912)
 
 # Skip file checkouts (e.g. stash pop) — only run on branch checkouts (#1705)
 # $3 = 1 for branch checkout, 0 for file checkout
@@ -39,6 +40,49 @@ if [ -d "$BACKEND_DIR" ] && { [ ! -L "$BACKEND_SYMLINK" ] || [ ! -e "$BACKEND_SY
         ln -s . backend
         echo "✅ Backend symlink restored: $BACKEND_SYMLINK -> ."
     fi
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Link node_modules into a linked worktree (Issue #16912)
+# ---------------------------------------------------------------------------
+# A worktree has no node_modules of its own, and the main checkout's copy is
+# not an ancestor directory, so Node cannot resolve it: vitest and vue-tsc
+# could not run AT ALL for a frontend change made in a worktree, and pre-push
+# degraded to a warning and pushed anyway. Frontend PRs therefore arrived with
+# strictly less local evidence than backend ones -- a test that has never run
+# against the unfixed code is not yet a negative control.
+#
+# Installing here is not the fix: the repository prohibits installing into the
+# codebase, and a per-worktree install would also cost ~800MB each. Linking to
+# the main checkout's existing install gives every worktree the same store,
+# installs nothing, and needs no new tooling -- the same shape as the backend
+# symlink in section 1.
+#
+# Only in a LINKED worktree, only when the main checkout actually has the
+# directory, and never over something already present: a real install in this
+# tree always wins. A dangling link from an earlier run is replaced, not
+# reused, because a broken link resolves as "no node_modules" anyway.
+COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null)"
+case "$COMMON_DIR" in
+    "")  MAIN_ROOT="" ;;
+    /*)  MAIN_ROOT="$(cd "$COMMON_DIR/.." 2>/dev/null && pwd)" ;;
+    *)   MAIN_ROOT="$(cd "$GIT_ROOT/$COMMON_DIR/.." 2>/dev/null && pwd)" ;;
+esac
+
+if [ -n "$MAIN_ROOT" ] && [ "$MAIN_ROOT" != "$GIT_ROOT" ]; then
+    for _proj in autobot-frontend autobot-slm-frontend; do
+        _src="$MAIN_ROOT/$_proj/node_modules"
+        _dst="$GIT_ROOT/$_proj/node_modules"
+        [ -d "$GIT_ROOT/$_proj" ] || continue
+        [ -d "$_src" ] || continue
+        if [ -L "$_dst" ] && [ ! -e "$_dst" ]; then
+            rm -f "$_dst"
+        fi
+        if [ ! -e "$_dst" ]; then
+            ln -s "$_src" "$_dst" \
+                && echo "🔗 Linked $_proj/node_modules -> the main checkout's install (#16912)"
+        fi
+    done
 fi
 
 # ---------------------------------------------------------------------------

@@ -12,8 +12,10 @@ import { ref, onMounted } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { fetchInstalledThemes, type InstalledTheme } from '@/composables/useThemeRegistry'
 import { createLogger } from '@/utils/debugUtils'
+import { useUserStore } from '@/stores/useUserStore'
 
 const log = createLogger('ThemeManager')
+const userStore = useUserStore()
 const themes = ref<InstalledTheme[]>([])
 const busy = ref(false)
 const error = ref('')
@@ -60,16 +62,23 @@ onMounted(refresh)
 <template>
   <section class="theme-manager">
     <h1 class="text-2xl font-semibold mb-2">Themes</h1>
-    <p class="text-autobot-text-secondary mb-4">
-      Upload a theme package (.zip) to make it available to all users.
-    </p>
-    <input type="file" accept=".zip" :disabled="busy" @change="onUpload" />
+    <!-- #16494: POST /api/themes and DELETE /api/themes/{id} both depend on
+         check_admin_permission (autobot-backend/api/themes.py:28,34), while the
+         listing GETs are open -- so the list below stays visible to everyone
+         and only an admin is offered install/uninstall. -->
+    <template v-if="userStore.isAdmin">
+      <p class="text-autobot-text-secondary mb-4">
+        Upload a theme package (.zip) to make it available to all users.
+      </p>
+      <input type="file" accept=".zip" :disabled="busy" @change="onUpload" />
+    </template>
     <p v-if="error" class="error text-red-500 mt-2">{{ error }}</p>
     <ul class="mt-4 space-y-2">
       <li v-for="t in themes" :key="t.id" class="flex items-center gap-3">
         <strong>{{ t.name }}</strong>
         <small class="text-autobot-text-secondary">v{{ t.version }} — {{ t.author }}</small>
         <button
+          v-if="userStore.isAdmin"
           type="button"
           class="px-3 py-1 rounded-md bg-autobot-bg-tertiary hover:bg-autobot-bg-hover"
           :disabled="busy"

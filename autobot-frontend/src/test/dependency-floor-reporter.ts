@@ -30,9 +30,23 @@ import type { Reporter, SerializedError, TestModule, TestRunEndReason } from 'vi
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createLogger } from '@/utils/debugUtils'
 
-const logger = createLogger('DependencyFloorReporter')
+// #16912: NOT `createLogger` from '@/utils/debugUtils'. A vitest reporter is
+// loaded by the node runner, outside the browser module graph, and that import
+// re-exports from '@autobot/ui', whose index pulls in .vue single-file
+// components. Compiling an SFC in the reporter-loading context fails
+// ("Cannot read properties of null (reading 'parse')" from @vitejs/plugin-vue),
+// and a reporter that throws while loading takes the WHOLE run down before a
+// single test executes -- the banner meant to say "this run is not evidence"
+// instead meant there was no run at all. CI never saw it: vitest.config.ts only
+// registers this reporter when CI is unset, so it broke local runs exclusively,
+// which is the same blind spot #16912 is about.
+//
+// stderr directly, not console.* (banned repo-wide) and not a browser logger:
+// this file is node-side tooling, and the banner must land next to vitest's own
+// summary on the same stream.
+
+const warn = (line: string) => process.stderr.write(`[dependency-floor] ${line}\n`)
 
 const FRONTEND_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))))
 
@@ -101,17 +115,22 @@ class DependencyFloorReporter implements Reporter {
     const shortfalls = findShortfalls()
     if (shortfalls.length === 0) return
 
-    logger.warn(
+    warn(
       `${shortfalls.length} installed package(s) are below what package.json declares — ` +
         'a pass or fail here is not evidence about what CI (which runs `npm ci`) will do:',
     )
     for (const s of shortfalls.slice(0, 20)) {
-      logger.warn(`  ${s.name}: installed ${s.installed ?? '(not installed)'}, declared ${s.declared}`)
+      warn(`  ${s.name}: installed ${s.installed ?? '(not installed)'}, declared ${s.declared}`)
     }
     if (shortfalls.length > 20) {
-      logger.warn(`  ... and ${shortfalls.length - 20} more`)
+      warn(`  ... and ${shortfalls.length - 20} more`)
     }
   }
 }
 
-export default new DependencyFloorReporter()
+// #16912: the CLASS, not an instance. vitest's loadCustomReporterModule does
+// `new (module.default)()` on a reporter named by path, so a default-exported
+// instance threw "(intermediate value) is not a constructor" and took the whole
+// run down at startup -- the second way this file stopped local vitest from
+// running at all, and equally invisible to CI, which never loads it.
+export default DependencyFloorReporter

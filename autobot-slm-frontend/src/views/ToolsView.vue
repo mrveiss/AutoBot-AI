@@ -15,12 +15,13 @@
  * accessible labels on action buttons.
  */
 
-import { ref, computed, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import { slmApiClient } from '@/utils/ApiClient'
 import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
 import { useNodeServices } from '@/composables/useNodeServices'
+import { useFleetTools } from '@/composables/useFleetTools'
 
 const fleetStore = useFleetStore()
 const { t } = useI18n()
@@ -71,67 +72,50 @@ const tools = [
   },
 ]
 
-const activeTool = ref<string | null>(null)
-const loading = ref(false)
-const error = ref<string | null>(null)
-const result = ref<string | null>(null)
+// #16704: the shared implementation, not a second copy of it. This view is
+// the one FleetToolsTab was extracted FROM, and #16239's consolidation onto
+// useFleetTools lost this file to a merge-conflict reconciliation in #16702.
+// The composable's own names are kept where they match; the two this view
+// has always called something else are renamed here rather than in the
+// composable, so FleetToolsTab is untouched.
+const {
+  activeTool,
+  loading,
+  error,
+  result,
+  selectedNode,
+  selectedService,
+  redisCommand,
+  shellCommand: ansibleCommand,
+  logLines,
+  nodes,
+  selectedNodeDetails,
+  selectTool,
+  closeTool,
+  requireInput,
+  runTool,
+  runRedisCommand,
+  runShellCommand: runAnsibleCommand,
+} = useFleetTools()
 
-// Tool-specific state
-const selectedNode = ref<string>('')
-const selectedService = ref<string>('')
 // Shared with FleetToolsTab (#16256): one fetch path, one set of failure
 // semantics for the node's service journal, instead of a second direct call.
 const nodeServices = useNodeServices(selectedNode)
-const redisCommand = ref<string>('PING')
-const ansibleCommand = ref<string>('uptime')
-const logLines = ref<number>(100)
 
-// Available nodes for selection
-const nodes = computed(() => fleetStore.nodeList)
-
-// Selected node details
-const selectedNodeDetails = computed(() => {
-  if (!selectedNode.value) return null
-  return nodes.value.find(n => n.node_id === selectedNode.value) || null
-})
-
-function selectTool(toolId: string): void {
-  activeTool.value = toolId
-  error.value = null
-  result.value = null
-}
-
-function closeTool(): void {
-  activeTool.value = null
-  error.value = null
-  result.value = null
-}
+// What this view alone offers, built on the shared `runTool`/`requireInput`
+// primitives -- the network test, the health check and the service actions.
+// Each one keeps its own request and its own message keys; what they no
+// longer keep is a private copy of the loading/error/result lifecycle.
 
 async function runNetworkTest(): Promise<void> {
-  if (!selectedNode.value) {
-    error.value = t('toolsView.pleaseSelectANode')
-    return
-  }
-
-  loading.value = true
-  error.value = null
-  result.value = null
-
-  try {
+  if (!requireInput(!!selectedNode.value, 'toolsView.pleaseSelectANode')) return
+  await runTool(async () => {
     // `rawRequest` (not `post`) keeps the `err.detail` error body this panel
     // renders. The client contributes the base URL, the bearer, the 401
-    // handler, and — new here — a timeout.
-    //
-    // On the bearer: `authStore.getAuthHeaders()` returns `{}` when the store's
-    // `token` ref is null, and that ref is seeded from storage ONCE, at store
-    // construction (`stores/auth.ts:66`). A token that lands afterwards — a
-    // login in another tab, a refresh through a different store instance — is
-    // invisible to it, and the command was then dispatched to a fleet node with
-    // no credential at all. The client re-reads storage per request.
-    //
-    // On the timeout: every tool here opens an SSH session to a fleet node, so
-    // they take the long remote-exec budget rather than the client's 30s
-    // default, which would abort a command that completes fine today (#13140).
+    // handler, and the timeout: every tool here opens an SSH session to a
+    // fleet node, so they take the long remote-exec budget rather than the
+    // client's 30s default, which would abort a command that completes fine
+    // today (#13140).
     const response = await slmApiClient.rawRequest('/nodes/test-connection', {
       method: 'POST',
       timeout: REMOTE_EXEC_TIMEOUT_MS,
@@ -149,31 +133,19 @@ async function runNetworkTest(): Promise<void> {
     }
 
     const data = await response.json()
-    result.value = data.success
+    return data.success
       ? t('toolsView.connectionSuccessfulResult', {
           hostname: data.hostname || t('toolsView.unknown'),
           os: data.os_info || t('toolsView.unknown'),
           latency: data.latency_ms || 'N/A',
         })
       : t('toolsView.connectionFailed', { error: data.error || 'Unknown error' })
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : t('toolsView.testFailed')
-  } finally {
-    loading.value = false
-  }
+  }, 'toolsView.testFailed')
 }
 
 async function runHealthCheck(): Promise<void> {
-  if (!selectedNode.value) {
-    error.value = t('toolsView.pleaseSelectANode')
-    return
-  }
-
-  loading.value = true
-  error.value = null
-  result.value = null
-
-  try {
+  if (!requireInput(!!selectedNode.value, 'toolsView.pleaseSelectANode')) return
+  await runTool(async () => {
     const response = await slmApiClient.rawRequest(
       `/nodes/${selectedNode.value}/health`,
       { timeout: REMOTE_EXEC_TIMEOUT_MS }
@@ -184,7 +156,7 @@ async function runHealthCheck(): Promise<void> {
     }
 
     const data = await response.json()
-    result.value = t('toolsView.healthCheckResult', {
+    return t('toolsView.healthCheckResult', {
       status: data.status || t('toolsView.unknown'),
       cpu: data.cpu_percent?.toFixed(1) || 'N/A',
       memory: data.memory_percent?.toFixed(1) || 'N/A',
@@ -192,137 +164,44 @@ async function runHealthCheck(): Promise<void> {
       lastHeartbeat: data.last_heartbeat || 'N/A',
       services: (data.services || []).map((s: { name: string; status: string }) => `  - ${s.name}: ${s.status}`).join('\n') || `  ${t('toolsView.noServicesFound')}`,
     })
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : t('toolsView.healthCheckFailed')
-  } finally {
-    loading.value = false
-  }
+  }, 'toolsView.healthCheckFailed')
 }
 
+// A failed fetch rethrows (#15620), so runTool shows it instead of
+// "No logs available" -- the same shape FleetToolsTab already uses.
 async function getServiceLogs(): Promise<void> {
-  if (!selectedNode.value || !selectedService.value) {
-    error.value = t('toolsView.pleaseSelectANodeAndService')
-    return
-  }
-
-  loading.value = true
-  error.value = null
-  result.value = null
-
-  try {
-    const logs = await nodeServices.getLogs(selectedService.value, logLines.value)
-    result.value = logs || t('toolsView.noLogsAvailable')
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : t('toolsView.failedToFetchLogs')
-  } finally {
-    loading.value = false
-  }
+  if (!requireInput(!!selectedNode.value && !!selectedService.value, 'toolsView.pleaseSelectANodeAndService')) return
+  await runTool(
+    async () => (await nodeServices.getLogs(selectedService.value, logLines.value)) || t('toolsView.noLogsAvailable'),
+    'toolsView.failedToFetchLogs',
+  )
 }
 
 async function serviceAction(action: 'start' | 'stop' | 'restart'): Promise<void> {
-  if (!selectedNode.value || !selectedService.value) {
-    error.value = t('toolsView.pleaseSelectANodeAndService')
-    return
-  }
+  if (!requireInput(!!selectedNode.value && !!selectedService.value, 'toolsView.pleaseSelectANodeAndService')) return
+  await runTool(async () => {
+    try {
+      const response = await slmApiClient.rawRequest(
+        `/nodes/${selectedNode.value}/services/${selectedService.value}/${action}`,
+        { method: 'POST', timeout: REMOTE_EXEC_TIMEOUT_MS }
+      )
 
-  loading.value = true
-  error.value = null
-  result.value = null
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.detail || t('toolsView.failedTo', { action }))
+      }
 
-  try {
-    const response = await slmApiClient.rawRequest(
-      `/nodes/${selectedNode.value}/services/${selectedService.value}/${action}`,
-      { method: 'POST', timeout: REMOTE_EXEC_TIMEOUT_MS }
-    )
-
-    if (!response.ok) {
-      const err = await response.json()
-      throw new Error(err.detail || t('toolsView.failedTo', { action }))
+      const data = await response.json()
+      return data.success
+        ? t('toolsView.serviceActionSuccessful', { action, message: data.message || '' })
+        : t('toolsView.serviceActionFailed', { action, message: data.message || 'Unknown error' })
+    } catch (e) {
+      // This view's fallback message interpolates {action}; `runTool`'s
+      // fallback key cannot take a parameter. Normalising a non-Error throw
+      // here keeps the message identical to the pre-#16704 behaviour.
+      throw e instanceof Error ? e : new Error(t('toolsView.failedTo', { action }))
     }
-
-    const data = await response.json()
-    result.value = data.success
-      ? t('toolsView.serviceActionSuccessful', { action, message: data.message || '' })
-      : t('toolsView.serviceActionFailed', { action, message: data.message || 'Unknown error' })
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : t('toolsView.failedTo', { action })
-  } finally {
-    loading.value = false
-  }
-}
-
-async function runRedisCommand(): Promise<void> {
-  if (!redisCommand.value.trim()) {
-    error.value = t('toolsView.pleaseEnterARedis')
-    return
-  }
-
-  loading.value = true
-  error.value = null
-  result.value = null
-
-  try {
-    // Use the Redis node if available, otherwise use first available node
-    const redisNode = nodes.value.find(n => n.roles?.includes('redis'))
-    const targetNode = redisNode || (selectedNode.value ? selectedNodeDetails.value : null)
-
-    if (!targetNode) {
-      throw new Error(t('toolsView.runNoNodeSelected'))
-    }
-
-    // Execute via ansible ad-hoc
-    const response = await slmApiClient.rawRequest(`/nodes/${targetNode.node_id}/exec`, {
-      method: 'POST',
-      timeout: REMOTE_EXEC_TIMEOUT_MS,
-      body: { command: `redis-cli ${redisCommand.value}` },
-    })
-
-    if (!response.ok) {
-      const err = await response.json()
-      throw new Error(err.detail || t('toolsView.redisCommandFailed'))
-    }
-
-    const data = await response.json()
-    result.value = t('toolsView.redisResponse', { output: data.output || data.stdout || t('toolsView.noOutput') })
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : t('toolsView.redisCommandFailed')
-  } finally {
-    loading.value = false
-  }
-}
-
-async function runAnsibleCommand(): Promise<void> {
-  if (!selectedNode.value || !ansibleCommand.value.trim()) {
-    error.value = t('toolsView.pleaseSelectANodeAnd')
-    return
-  }
-
-  loading.value = true
-  error.value = null
-  result.value = null
-
-  try {
-    const response = await slmApiClient.rawRequest(`/nodes/${selectedNode.value}/exec`, {
-      method: 'POST',
-      timeout: REMOTE_EXEC_TIMEOUT_MS,
-      body: { command: ansibleCommand.value },
-    })
-
-    if (!response.ok) {
-      const err = await response.json()
-      throw new Error(err.detail || t('toolsView.commandExecutionFailed'))
-    }
-
-    const data = await response.json()
-    result.value = t('toolsView.commandOutputResult', {
-      output: data.output || data.stdout || t('toolsView.noOutput'),
-      stderr: data.stderr ? `Stderr:\n${data.stderr}` : '',
-    })
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : t('toolsView.commandExecutionFailed')
-  } finally {
-    loading.value = false
-  }
+  }, 'toolsView.failedTo')
 }
 
 // Load nodes on mount
