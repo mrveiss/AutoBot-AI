@@ -50,13 +50,12 @@ REDACTION_BOUNDARY.md.
 from __future__ import annotations
 
 import ast
-import subprocess
 from typing import List, Set
 
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
 
@@ -117,17 +116,19 @@ _SKIP_PREFIXES = (".worktrees/", "docs/", "repo_tests/")
 
 
 def _tracked_sources() -> List[str]:
-    """Repo-relative paths of every tracked, non-test production Python file."""
-    completed = subprocess.run(
-        ["git", "ls-files", "-z", "*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    )
+    """Repo-relative paths of every tracked, non-test production Python file.
+
+    Enumerated through the ONE canonical helper, not a private ``git ls-files``
+    (#15926). ``one_git_enumeration_15926_test`` counts direct invocations across
+    ``repo_tests/`` and its floor only ever shrinks, so a new guard that shells
+    out for itself is a regression even when it works -- and a census guard
+    forking the repo's enumeration, in a PR about forks, would be a poor joke.
+    The directory exclusions become git ``:(exclude)`` pathspecs so git does the
+    matching, rather than a second matcher in Python that can disagree with the
+    first (#15510).
+    """
     kept: List[str] = []
-    for name in completed.stdout.split("\0"):
+    for name in tracked_paths(REPO_ROOT, "*.py", exclude=tuple(p.rstrip("/") for p in _SKIP_PREFIXES)):
         # Relative, never absolute: an absolute prefix does not match inside a
         # worktree, which is where this suite actually runs.
         if not name or name.startswith(_SKIP_PREFIXES):
