@@ -18,7 +18,7 @@ from typing import Dict, Tuple
 from fastapi import HTTPException, Request, status
 
 from auth_revocation import reject_if_revoked_by_password_change
-from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_login_token
+from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_login_token, is_purpose_bound
 from autobot_shared.auth.jwt_core import (
     decode_jwt_multi,
     encode_jwt,
@@ -582,8 +582,8 @@ class AuthenticationMiddleware:
         # back through them here rather than reject a valid token. Only a
         # token with NO identity claim at all is treated as invalid.
         username = token_data.get("username") or token_data.get("sub") or token_data.get("user_id")
-        if not username:
-            logger.warning("JWT verified but carries no username/sub/user_id claim — rejecting")
+        if not username or is_purpose_bound(token_data):
+            logger.warning("JWT rejected: no identity claim, or minted for another purpose (#12135, #17049)")
             return None
 
         user = {
@@ -1071,7 +1071,7 @@ async def authenticate_websocket(websocket) -> dict | None:
             # NEW ephemeral RS256 keypair, so it can't verify tokens signed by the
             # singleton used at login → every WS handshake 403'd ("Disconnected").
             token_data = get_auth_middleware().verify_jwt_token(token)
-            if token_data:
+            if token_data and not is_purpose_bound(token_data):  # #17049
                 result = {
                     "username": token_data["username"],
                     "role": token_data["role"],
