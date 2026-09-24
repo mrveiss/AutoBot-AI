@@ -169,6 +169,14 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=1000]
       - id: check-merge-conflict
+        # (#17297) Without this flag the hook returns 0 unless the repo is
+        # mid-merge -- it checks for MERGE_MSG plus MERGE_HEAD/rebase-* and
+        # exits before reading a single line otherwise. A `git stash pop`
+        # conflict creates none of those, so the markers it leaves are
+        # invisible to it. That is how `<<<<<<< Updated upstream` reached main
+        # in docs/.obsidian/workspace.json and sat there while this hook
+        # reported "Passed" on every commit since.
+        args: [--assume-in-merge]
       - id: check-case-conflict
       - id: mixed-line-ending
         args: [--fix=lf]
