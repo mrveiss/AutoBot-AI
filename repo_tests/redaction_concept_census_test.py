@@ -50,12 +50,14 @@ REDACTION_BOUNDARY.md.
 from __future__ import annotations
 
 import ast
+from pathlib import Path
 from typing import List, Set
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
 
@@ -77,12 +79,6 @@ _CENSUS: Set[str] = {
     "autobot-backend/llc/services/portability.py",  # _SECRET_LIKE_KEYS, 13 nouns
     "autobot-backend/services/config_revision_service.py",  # _SECRET_SUBSTRINGS, 5 nouns
 }
-
-# A sweep that reads nothing reports clean over anything (MEASUREMENT_DISCIPLINE).
-# Measured at 3,000+ tracked production sources on origin/main; the floor is set
-# well below that so ordinary growth never trips it, but an empty or broken
-# `git ls-files` does.
-_MIN_SOURCE_FILES = 1500
 
 # Verbs that make a module a redactor rather than a module that merely mentions
 # one. Matched against top-level def/class names only.
@@ -115,7 +111,7 @@ _SECRET_NOUNS = (
 _SKIP_PREFIXES = (".worktrees/", "docs/", "repo_tests/")
 
 
-def _tracked_sources() -> List[str]:
+def _tracked_sources(root: Path = REPO_ROOT) -> List[str]:
     """Repo-relative paths of every tracked, non-test production Python file.
 
     Enumerated through the ONE canonical helper, not a private ``git ls-files``
@@ -127,8 +123,19 @@ def _tracked_sources() -> List[str]:
     matching, rather than a second matcher in Python that can disagree with the
     first (#15510).
     """
+    # `reach_declarations_test` drives every declaration against an EMPTY
+    # repository and demands ReachFloorError specifically, which is the only
+    # exception the floor itself raises. `tracked_paths` refuses an empty
+    # enumeration with EmptyEnumeration -- right for a guard that would
+    # otherwise pass on nothing, wrong here, because letting it escape means the
+    # declaration fails loudly while saying nothing about whether its floor
+    # binds. Returning empty puts the refusal back where the floor can make it.
+    try:
+        found = tracked_paths(root, "*.py", exclude=tuple(p.rstrip("/") for p in _SKIP_PREFIXES))
+    except EmptyEnumeration:
+        return []
     kept: List[str] = []
-    for name in tracked_paths(REPO_ROOT, "*.py", exclude=tuple(p.rstrip("/") for p in _SKIP_PREFIXES)):
+    for name in found:
         # Relative, never absolute: an absolute prefix does not match inside a
         # worktree, which is where this suite actually runs.
         if not name or name.startswith(_SKIP_PREFIXES):
@@ -251,16 +258,26 @@ def is_redaction_implementation(source: str) -> bool:
     return _defines_redaction_api(tree) and _declares_own_detector(tree)
 
 
+#: A sweep that reads nothing reports clean over anything. This started life as
+#: a hand-rolled `_MIN_SOURCE_FILES = 1500` and is migrated to `declare()` under
+#: #15928's rule: a reach-sized floor chosen by feel decays silently. It had --
+#: the population is 3,393, so 1500 sat 56% below the tree it claimed to bind,
+#: and would have passed over a sweep that lost more than half the codebase.
+#:
+#: Re-measured from scratch with a throwaway script rather than carried across,
+#: which is what #15928 requires: 3,393 tracked production .py files (excluding
+#: .worktrees/, docs/, repo_tests/, and test files) on this tree. growth=300 is
+#: the maintenance interval, matching the sibling declaration in
+#: prompt_injection_detector_strict_mode_test over a population of similar size.
+REACH = declare(
+    "redaction-concept-census",
+    discover=_tracked_sources,
+    floor=3093,
+    growth=300,
+    what="tracked production python files",
+)
+
 _SOURCES = _tracked_sources()
-
-
-def test_the_sweep_reached_the_tree() -> None:
-    """Runs first: an empty file list would pass every assertion below vacuously."""
-    assert len(_SOURCES) >= _MIN_SOURCE_FILES, (
-        f"only {len(_SOURCES)} tracked production Python files found, floor is "
-        f"{_MIN_SOURCE_FILES}. FIX THE SWEEP — a census that reads nothing "
-        "reports 'no new implementations' over anything."
-    )
 
 
 def test_every_censused_module_still_exists() -> None:
@@ -277,6 +294,7 @@ def test_no_new_redaction_implementation() -> None:
     """The count of modules deciding what a secret looks like may fall, never grow."""
     found: Set[str] = set()
     unreadable: List[str] = []
+    parsed = 0
     for rel in _SOURCES:
         path = REPO_ROOT / rel
         try:
@@ -287,8 +305,15 @@ def test_no_new_redaction_implementation() -> None:
         try:
             if is_redaction_implementation(source):
                 found.add(rel)
+            parsed += 1
         except SyntaxError as exc:  # pragma: no cover - defensive
             unreadable.append(f"{rel}: unparseable ({exc})")
+
+    # Candidates are not coverage: the declaration's floor bounds what was
+    # LISTED, this bounds what was actually parsed. Without it the census could
+    # enumerate 3,393 files, fail to parse 3,000 of them, and report the same
+    # clean as a tree with nothing to find.
+    REACH.completed(parsed)
 
     # A file the census could not read is NOT a file with nothing in it. Failing
     # here is the difference between "no new implementations" and "did not look"
