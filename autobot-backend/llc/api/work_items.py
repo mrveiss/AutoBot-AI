@@ -1315,9 +1315,9 @@ async def upload_attachment(
             uploaded_by_agent_id=uploaded_by_agent_id,
             uploaded_by_user_id=uploaded_by_user_id,
         )
-    except AttachmentTooLarge as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=413, detail="Internal server error")
+    except (AttachmentTooLarge, ValueError) as exc:  # #17302: ValueError was an uncaught 500
+        logger.warning("Attachment upload refused for %s: %s", work_item_id, exc)
+        raise HTTPException(413 if isinstance(exc, AttachmentTooLarge) else 400, "Attachment rejected")
     return _attachment_to_dict(row)
 
 

@@ -10,8 +10,21 @@ same root to decide whether a work product's `storage_path` is somewhere this
 service put it, and a second copy of the env var and its default is how the two
 drift apart.
 
-Read at call time, not at import, so a test or a deployment that sets
-`LLC_STORAGE_PATH` late still gets the root it asked for.
+This function reads the env var at call time, and `kb/artifact_ingestor.py`
+calls it that way -- which is why a test can set `LLC_STORAGE_PATH` with
+`monkeypatch.setenv` and have the ingestor honour it.
+
+`services/attachment_service.py` does NOT get that: it still binds
+`_LOCAL_STORAGE_PATH` once at import, exactly as it did before this module
+existed, and its tests patch that module attribute directly rather than the
+env var. So the freshness is a property of *this function*, not of every
+consumer -- stated explicitly because the first version of this docstring
+claimed it for "a test or a deployment" generally, which is true for one
+caller and false for the other.
+
+The two would only disagree if `LLC_STORAGE_PATH` changed after
+`attachment_service` was imported; nothing does that today, and the honest
+description is a latent inconsistency rather than a live bug.
 """
 
 from __future__ import annotations
