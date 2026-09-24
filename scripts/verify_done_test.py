@@ -130,7 +130,10 @@ def run(
         _install_git_shim(bindir, *git_shim)
     return subprocess.run(
         ["bash", str(SCRIPT), "--leftovers-only", *args],
-        cwd=repo, capture_output=True, text=True, env=env,
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env=env,
     )
 
 
@@ -164,7 +167,8 @@ class TestNeverDeletesUnlandedWork:
     def test_tip_subject_collision_does_not_mark_unlanded_work_landed(self, repo: Path) -> None:
         """Trigger (c): the tip's subject also existed in base, so the OR fired."""
         wt = add_worktree(
-            repo, "wt-collide",
+            repo,
+            "wt-collide",
             [
                 ("real1.txt", "fix(core): genuine unlanded work (#4)"),
                 ("real2.txt", "fix(core): more unlanded work (#5)"),
@@ -176,8 +180,7 @@ class TestNeverDeletesUnlandedWork:
         res = run(repo, "--base", "base", merged_pr="4303")
         assert VERDICT["unlanded"] in res.stdout, res.stdout
         assert "CANDIDATE" not in res.stdout, (
-            "three unlanded commits must never be reported landed because the "
-            f"tip subject collides\n{res.stdout}"
+            "three unlanded commits must never be reported landed because the " f"tip subject collides\n{res.stdout}"
         )
         assert wt.exists()
 
@@ -257,8 +260,7 @@ class TestNeverDeletesUnlandedWork:
         _git(wt, "commit", "-q", "-m", "merge base into wt-evil")
         res = run(repo, "--base", "base")
         assert "CANDIDATE" not in res.stdout, (
-            "merge-unique content is invisible to git cherry; a delete "
-            f"instruction here destroys it\n{res.stdout}"
+            "merge-unique content is invisible to git cherry; a delete " f"instruction here destroys it\n{res.stdout}"
         )
         # The safety property above holds for more than one reason, so pin the
         # specific behaviour: the merge must be RECOGNISED as unjudgeable
@@ -293,8 +295,7 @@ class TestNeverDeletesUnlandedWork:
         _git(wt, "merge", "-q", "--allow-unrelated-histories", "--no-edit", "vendor")
         res = run(repo, "--base", "base")
         assert "CANDIDATE" not in res.stdout, (
-            "the vendored root commit is unlanded; deleting this worktree "
-            f"destroys it\n{res.stdout}"
+            "the vendored root commit is unlanded; deleting this worktree " f"destroys it\n{res.stdout}"
         )
         # The safety property above also holds when the merged-PR signal is
         # simply absent, so pin the patch-id verdict itself: the root commit
@@ -382,8 +383,7 @@ class TestDeletePath:
         _git(repo, "commit", "-q", "-m", "revert: back out two (#51)")
         res = run(repo, "--base", "base", merged_pr="4250")
         assert "CANDIDATE" not in res.stdout, (
-            "two.txt was reverted out of base; this worktree is its only copy\n"
-            + res.stdout
+            "two.txt was reverted out of base; this worktree is its only copy\n" + res.stdout
         )
         assert (wt / "two.txt").exists()
 
@@ -419,8 +419,7 @@ class TestDeletePath:
         _git(repo, "commit", "-q", "-am", "style: retab (#41)")
         res = run(repo, "--base", "base", merged_pr="4245")
         assert "CANDIDATE" not in res.stdout, (
-            "base holds a tab, the branch holds 4 spaces — the fix is NOT in base\n"
-            + res.stdout
+            "base holds a tab, the branch holds 4 spaces — the fix is NOT in base\n" + res.stdout
         )
 
     def test_reverted_work_is_not_still_landed(self, repo: Path) -> None:
@@ -453,7 +452,7 @@ class TestDeletePath:
         _git(repo, "worktree", "add", "-q", str(wt), "-b", "issue-7", "base")
         _commit(wt, "landed.txt", "landed\n", "fix(a): landed (#7)")
         sha = _git(wt, "rev-parse", "HEAD").stdout.strip()
-        _git(repo, "tag", "issue-7", sha)          # tag shadows the branch name
+        _git(repo, "tag", "issue-7", sha)  # tag shadows the branch name
         _git(repo, "cherry-pick", "--no-commit", sha)
         _git(repo, "commit", "-q", "-m", "fix(a): landed (#7) (squashed)")
         _commit(wt, "unlanded.txt", "NOT landed\n", "fix(b): still open (#7)")
@@ -507,3 +506,21 @@ class TestReportsWhatGitCannotSee:
         for imperative in ("remove it", "rm -rf", "worktree remove"):
             assert imperative not in res.stdout, f"{imperative!r} in output:\n{res.stdout}"
         assert "operator decision" in res.stdout
+
+
+@pytest.mark.skipif(not SCRIPT.exists(), reason="verify-done.sh not present")
+def test_outside_a_work_tree_is_fatal_not_audited(tmp_path: Path) -> None:
+    """#17410: `cd "$(git_repo_root)" || exit 2` never fired outside a repo.
+
+    An empty substitution makes it `cd ""` -- a no-op success -- so the audit
+    ran against whatever directory it was started in.
+    """
+    res = subprocess.run(
+        ["bash", str(SCRIPT), "--leftovers-only"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "GIT_CEILING_DIRECTORIES": str(tmp_path.parent)},
+    )
+    assert res.returncode == 2, res.stdout + res.stderr
+    assert "not a git repo" in res.stderr
