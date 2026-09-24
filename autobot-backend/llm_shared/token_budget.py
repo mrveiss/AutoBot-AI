@@ -274,10 +274,27 @@ class TokenBudgetGate:
         return int(raw) if raw else 0
 
     async def _increment(self, scope: str, amount: int, ttl_seconds: int) -> None:
+        """Increment the spend counter and (re)set its expiry, atomically.
+
+        Two separate round-trips were a real failure mode, not a theoretical one
+        (review finding on #17380): when `INCRBY` CREATES the key and `EXPIRE`
+        then fails, the key is left with no expiry at all, and
+        `record_dev_loop_action` suppresses the error. The counter then never
+        resets, so once the stored spend passes the ceiling every later action
+        is refused until someone deletes the key by hand -- a budget that
+        silently becomes a permanent block.
+
+        Redis preserves an existing expiry across an increment, so only the
+        FIRST write is exposed; that is exactly the write that matters, because
+        it is the one that creates the key. MULTI/EXEC closes it: before EXEC
+        neither command has applied, after EXEC both have.
+        """
         redis = await self._get_redis()
         key = f"{_KEY_PREFIX}:{scope}"
-        await redis.incrby(key, amount)
-        await redis.expire(key, ttl_seconds)
+        async with redis.pipeline(transaction=True) as pipe:
+            pipe.incrby(key, amount)
+            pipe.expire(key, ttl_seconds)
+            await pipe.execute()
 
     async def _get_hourly_rate(self) -> int:
         redis = await self._get_redis()
@@ -285,10 +302,18 @@ class TokenBudgetGate:
         return int(raw) if raw else 0
 
     async def _increment_hourly_rate(self) -> None:
+        """Same atomicity as `_increment`, for the same reason.
+
+        The review named only the spend counter; this carries the identical
+        two-round-trip shape, and an hour bucket left without an expiry blocks
+        the rate gate for that bucket forever rather than for an hour.
+        """
         redis = await self._get_redis()
         key = f"{_KEY_PREFIX}:{_DEV_LOOP_SCOPE}:rate:{_current_hour_bucket()}"
-        await redis.incrby(key, 1)
-        await redis.expire(key, _HOUR_SECONDS)
+        async with redis.pipeline(transaction=True) as pipe:
+            pipe.incrby(key, 1)
+            pipe.expire(key, _HOUR_SECONDS)
+            await pipe.execute()
 
     async def _get_redis(self):
         from autobot_shared.redis_client import get_async_redis_client  # noqa: PLC0415

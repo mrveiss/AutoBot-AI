@@ -26,11 +26,58 @@ from llm_shared.base_provider import BaseProvider
 from llm_shared.models import LLMRequest, LLMResponse
 
 
+class _FakePipeline:
+    """MULTI/EXEC: buffers commands and applies them together on `execute()`.
+
+    Added because the code moved to a transaction and a double that lacks
+    `pipeline` does not fail loudly -- with an `AsyncMock` it silently swallows
+    every command and the spend counter simply stays at zero, which reads as a
+    broken gate rather than a test double missing a method (review finding on
+    #17380).
+
+    Each `execute()` appends its command list to `redis.transactions`, so a test
+    can assert the increment and the expiry went in ONE transaction rather than
+    merely that both happened.
+    """
+
+    def __init__(self, redis: "_FakeRedis") -> None:
+        self._redis = redis
+        self._queued: List[tuple] = []
+
+    async def __aenter__(self) -> "_FakePipeline":
+        return self
+
+    async def __aexit__(self, *exc_info) -> bool:
+        return False
+
+    def incrby(self, key: str, amount: int) -> "_FakePipeline":
+        self._queued.append(("incrby", key, amount))
+        return self
+
+    def expire(self, key: str, ttl: int) -> "_FakePipeline":
+        self._queued.append(("expire", key, ttl))
+        return self
+
+    async def execute(self) -> None:
+        self._redis.transactions.append(list(self._queued))
+        for command, key, argument in self._queued:
+            if command == "incrby":
+                await self._redis.incrby(key, argument)
+            else:
+                await self._redis.expire(key, argument)
+        self._queued.clear()
+
+
 class _FakeRedis:
-    """In-memory stand-in for the async Redis client (get/incrby/expire only)."""
+    """In-memory stand-in for the async Redis client (get/incrby/expire/pipeline)."""
 
     def __init__(self) -> None:
         self._store: Dict[str, int] = {}
+        #: One entry per `pipeline().execute()`, each the commands it carried.
+        self.transactions: List[List[tuple]] = []
+        #: Keys that ever received an expiry, so a test can tell a key with a
+        #: TTL from one left immortal.
+        self.expired: Dict[str, int] = {}
 
     async def get(self, key: str):
         value = self._store.get(key)
@@ -41,7 +88,12 @@ class _FakeRedis:
         return self._store[key]
 
     async def expire(self, key: str, ttl: int) -> None:
+        self.expired[key] = ttl
         return None
+
+    def pipeline(self, transaction: bool = False) -> _FakePipeline:
+        assert transaction, "the budget gate must use a TRANSACTIONAL pipeline"
+        return _FakePipeline(self)
 
 
 class _EchoProvider(BaseProvider):
@@ -76,7 +128,16 @@ def _request(session_id: str = "run-1", max_tokens: int | None = None) -> LLMReq
 
 @pytest.fixture(autouse=True)
 def _reset_budget(monkeypatch):
-    """Isolate each test: fresh fake Redis + explicit budget (no env leakage)."""
+    """A fresh fake Redis per test, yielded so a test can inspect it.
+
+    It does NOT patch the budget constants, despite what this docstring used to
+    claim ("explicit budget (no env leakage)"). It only replaces `_get_redis`.
+    Two tests below relied on that promise and asserted the dev-loop budgets
+    were disabled, which fails in a process where either environment variable is
+    set (review finding on #17380) -- the docstring was the reason the
+    assumption looked safe. Tests needing a disabled or a specific budget patch
+    the constant themselves.
+    """
     fake_redis = _FakeRedis()
     monkeypatch.setattr(token_budget.TokenBudgetGate, "_get_redis", AsyncMock(return_value=fake_redis))
     yield fake_redis
@@ -210,9 +271,15 @@ class TestDevLoopBudgetGate:
     """
 
     @pytest.mark.asyncio
-    async def test_disabled_by_default_is_a_noop(self):
-        assert token_budget.DEV_LOOP_TOKEN_BUDGET <= 0
-        assert token_budget.DEV_LOOP_RATE_PER_HOUR <= 0
+    async def test_disabled_by_default_is_a_noop(self, monkeypatch):
+        # Patched rather than asserted from the ambient environment (review
+        # finding on #17380): a test process with either dev-loop budget set to
+        # a positive value failed these assertions, and the failure said the
+        # gate was broken rather than that the environment was set. What the
+        # test is for is "disabled => no-op", so disabled is a premise to
+        # establish, not a condition to hope for.
+        monkeypatch.setattr(token_budget, "DEV_LOOP_TOKEN_BUDGET", 0)
+        monkeypatch.setattr(token_budget, "DEV_LOOP_RATE_PER_HOUR", 0)
         gate = token_budget.TokenBudgetGate()
         assert await gate.evaluate_dev_loop_action(1_000_000) is None
 
@@ -292,7 +359,11 @@ class TestDevLoopBudgetGate:
         assert status.rate_budget == 5
 
     @pytest.mark.asyncio
-    async def test_remaining_dev_loop_budget_reports_none_ceiling_when_unconfigured(self):
+    async def test_remaining_dev_loop_budget_reports_none_ceiling_when_unconfigured(self, monkeypatch):
+        # Same premise, made explicit -- this one assumed it without even
+        # asserting it.
+        monkeypatch.setattr(token_budget, "DEV_LOOP_TOKEN_BUDGET", 0)
+        monkeypatch.setattr(token_budget, "DEV_LOOP_RATE_PER_HOUR", 0)
         gate = token_budget.TokenBudgetGate()
         status = await gate.remaining_dev_loop_budget()
         assert status.spend_budget is None
@@ -393,3 +464,73 @@ class TestATtlNeverReachesRedisAsZero:
         from autobot_shared.env_utils import env_int_clamped
 
         assert env_int_clamped("AUTOBOT_TTL_CLAMP_PROBE", 86400, min_v=1) == 7200
+
+
+class TestTheCountersAndTheirExpiryAreAtomic:
+    """A counter must never be left without a TTL (#17380 review).
+
+    `INCRBY` then `EXPIRE` as two round-trips has a real window: when the
+    increment CREATES the key and the expiry then fails -- and
+    `record_dev_loop_action` suppresses that failure -- the key is immortal. The
+    counter never resets, so once the stored spend passes the ceiling every
+    later action is refused until someone deletes the key by hand. A budget that
+    silently becomes a permanent block is worse than one set too low, because
+    nothing reports it.
+
+    Redis preserves an existing expiry across an increment, so only the first
+    write is exposed -- which is precisely the write that creates the key.
+
+    These assert the TRANSACTION, not just the effect. "Both commands ran" is
+    satisfied by the two-round-trip version; only "both commands were in one
+    transaction" is not.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_spend_increment_and_its_expiry_go_in_one_transaction(self, _reset_budget, monkeypatch):
+        monkeypatch.setattr(token_budget, "DEV_LOOP_TOKEN_BUDGET", 1000)
+        gate = token_budget.TokenBudgetGate()
+
+        await gate.record_dev_loop_action(30)
+
+        spend = [t for t in _reset_budget.transactions if any(c[1].endswith(":dev_loop") for c in t)]
+        assert spend, f"no transaction touched the spend key; saw {_reset_budget.transactions}"
+        commands = [c[0] for c in spend[0]]
+        assert commands == [
+            "incrby",
+            "expire",
+        ], f"the spend counter's increment and expiry were not one transaction: {commands}"
+
+    @pytest.mark.asyncio
+    async def test_the_hourly_rate_counter_is_atomic_too(self, _reset_budget, monkeypatch):
+        """The review named only the spend counter; the rate counter had the
+        identical shape, and an hour bucket left immortal blocks that bucket
+        forever rather than for an hour."""
+        monkeypatch.setattr(token_budget, "DEV_LOOP_RATE_PER_HOUR", 5)
+        gate = token_budget.TokenBudgetGate()
+
+        await gate.record_dev_loop_action(1)
+
+        rate = [t for t in _reset_budget.transactions if any(":rate:" in c[1] for c in t)]
+        assert rate, f"no transaction touched an hour bucket; saw {_reset_budget.transactions}"
+        assert [c[0] for c in rate[0]] == ["incrby", "expire"]
+
+    @pytest.mark.asyncio
+    async def test_every_counter_written_also_got_an_expiry(self, _reset_budget, monkeypatch):
+        """The property underneath both: no key is left immortal.
+
+        Stated separately from the transaction shape because this is what the
+        defect actually was -- a key with no TTL -- and it would still be worth
+        asserting if the implementation moved to a Lua script instead.
+        """
+        monkeypatch.setattr(token_budget, "DEV_LOOP_TOKEN_BUDGET", 1000)
+        monkeypatch.setattr(token_budget, "DEV_LOOP_RATE_PER_HOUR", 5)
+        gate = token_budget.TokenBudgetGate()
+
+        await gate.record_dev_loop_action(30)
+
+        incremented = {c[1] for t in _reset_budget.transactions for c in t if c[0] == "incrby"}
+        assert incremented, "nothing was incremented, so this asserts nothing"
+        assert incremented <= set(
+            _reset_budget.expired
+        ), f"these counters were incremented with no expiry: {incremented - set(_reset_budget.expired)}"
+        assert all(ttl >= 1 for ttl in _reset_budget.expired.values()), _reset_budget.expired
