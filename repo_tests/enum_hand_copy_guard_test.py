@@ -202,7 +202,21 @@ def _scan() -> Tuple[Dict[str, Set[str]], Dict[Tuple[str, str], FrozenSet[str]],
 REACH = declare(
     "enum-hand-copy-census",
     discover=_tracked_python,
-    floor=5755,
+    # 5965, NOT 5755. The first version of this declaration pinned 5755 --
+    # population 6155 minus growth 400, i.e. THE MINIMUM OF THE WINDOW -- and it
+    # went red on the very next rebase, when main gained ten files and the
+    # population reached 6165. Slack 410 against an allowance of 400.
+    #
+    # That happened within the hour, on a declaration written by the same author
+    # who had just filed the argument on #17142 that a floor pinned at
+    # `population - growth` is not a floor but a snapshot, with zero tolerance
+    # by construction. Knowing the rule did not prevent it; reach_declarations_test
+    # did, which is the whole case for the mechanism.
+    #
+    # Re-measured on this tree rebased onto e8c7bf9b51: 6,165 tracked .py files
+    # excluding .worktrees/. Window [5765, 6165]; 5965 is mid-window and buys
+    # ~200 files of headroom instead of ten.
+    floor=5965,
     growth=400,
     what="tracked python files",
 )
