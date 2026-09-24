@@ -272,7 +272,22 @@ def is_redaction_implementation(source: str) -> bool:
 REACH = declare(
     "redaction-concept-census",
     discover=_tracked_sources,
-    floor=3093,
+    # 3247, NOT 3093. The first version of this declaration pinned 3093 --
+    # population 3393 minus growth 300, THE MINIMUM OF THE WINDOW -- and it went
+    # red on the next rebase when the population reached 3397. Slack 304 against
+    # an allowance of 300. Four files.
+    #
+    # Second instance of the same error by the same author in one session (the
+    # other is enum-hand-copy-census on the #14881 branch), both committed after
+    # filing the argument on #17142 that `population - growth` is not a floor
+    # but a snapshot with zero tolerance by construction. Knowing the rule did
+    # not prevent it; reach_declarations_test did, which is the case for the
+    # check being mechanical rather than a review item.
+    #
+    # Re-measured on this tree rebased onto e8c7bf9b51: 3,397 tracked production
+    # .py files. Window [3097, 3397]; 3247 is mid-window and buys ~150 files of
+    # headroom instead of four.
+    floor=3247,
     growth=300,
     what="tracked production python files",
 )
