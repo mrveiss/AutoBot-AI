@@ -13,6 +13,7 @@ import queue
 import signal
 import subprocess
 import threading
+import time
 
 from autobot_shared.fd_poll import poll_readable, seconds_to_poll_timeout_ms
 from autobot_shared.logging_manager import get_logger
@@ -39,6 +40,24 @@ _READ_POLL_TIMEOUT_MS = seconds_to_poll_timeout_ms(TimingConstants.POLL_INTERVAL
 #: after `running = False` the thread notices. `get_nowait()` made both zero --
 #: the loop re-entered immediately and every idle session burned a core.
 _WRITE_WAIT_TIMEOUT_S = TimingConstants.MICRO_DELAY
+
+#: How long to wait before retrying a write the PTY buffer had no room for
+#: (#17381). `master_fd` is non-blocking (`os.set_blocking(..., False)` in
+#: `_spawn`), so `os.write` raises `BlockingIOError` when the buffer is full.
+#: That means "not now", not "failed".
+_WRITE_RETRY_WAIT_S = TimingConstants.MICRO_DELAY
+
+#: How long `_write_all` tolerates making NO progress before giving up (#17381).
+#: Deliberately a stall budget rather than a total one: a 1 MiB paste needs many
+#: buffer-fills, so a cap on total elapsed time would truncate the large writes
+#: this method exists to deliver. The clock resets on every byte accepted.
+_WRITE_STALL_BUDGET_S = TimingConstants.MEDIUM_DELAY
+
+#: Grace period for the child to exit after SIGTERM before SIGKILL.
+#: A SEPARATE name from `_WRITE_WAIT_TIMEOUT_S` even though both currently
+#: resolve to the same SSOT value: they are unrelated timings, and one constant
+#: serving two purposes means tuning either one silently moves the other.
+_PROC_TERM_GRACE_S = TimingConstants.MICRO_DELAY
 
 
 def _read_pty_data(fd: int) -> tuple:
@@ -231,6 +250,57 @@ class SimplePTY:
         self.output_queue.put(("close", ""))
         logger.info("PTY read loop ended for session %s", self.session_id)
 
+    def _write_all(self, data: bytes) -> None:
+        """Write every byte of *data* to the PTY, honouring backpressure.
+
+        `master_fd` is NON-BLOCKING, so one `os.write` expresses two outcomes a
+        single call cannot: it may write FEWER bytes than handed to it, and it
+        may raise `BlockingIOError` meaning the buffer is full right now.
+
+        Neither is an error, and treating them as one loses user input silently
+        (#17381):
+
+        * discarding the short-write remainder truncates a large paste, at a
+          byte boundary that can split a multi-byte UTF-8 character;
+        * letting `BlockingIOError` reach the caller's broad `except` ends the
+          write thread for the life of the session. The read loop keeps
+          streaming output, so the terminal looks healthy while accepting no
+          input at all.
+
+        The bound is time SINCE LAST PROGRESS, not total elapsed. A total
+        budget looks equivalent and is not: a large paste to a slow reader takes
+        many buffer-fills to deliver, so a total bound truncates exactly the
+        write it was supposed to protect -- reintroducing this bug for big
+        inputs while passing every small-input test. The test with a 1 MiB
+        payload is what caught that; the first version of this method had it.
+
+        On exhaustion the `BlockingIOError` is re-raised deliberately: a child
+        that has not accepted a single byte in that long is wedged, and failing
+        loudly beats retrying forever.
+        """
+        view = memoryview(data)
+        deadline = time.monotonic() + _WRITE_STALL_BUDGET_S
+        while view:
+            fd = self.master_fd
+            if fd is None:
+                # cleanup() ran mid-write. Not an error worth raising past the
+                # loop's own stop conditions, which already say to finish.
+                logger.debug("PTY descriptor closed mid-write for session %s", self.session_id)
+                return
+            try:
+                written = os.write(fd, view)
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(_WRITE_RETRY_WAIT_S)
+                continue
+            if written:
+                # Progress resets the stall clock: the budget exists to detect a
+                # child that has stopped reading, not to cap how long a large
+                # write legitimately takes.
+                deadline = time.monotonic() + _WRITE_STALL_BUDGET_S
+            view = view[written:]
+
     def _write_loop(self) -> None:
         """Write queued input to the PTY, waiting between items (#17355).
 
@@ -257,12 +327,10 @@ class SimplePTY:
                     if text is None:  # Shutdown signal
                         break
 
-                    # Write to PTY
-                    data = text.encode("utf-8")
-
-                    # Check master_fd is still valid
-                    if self.master_fd is not None:
-                        os.write(self.master_fd, data)
+                    # _write_all, not os.write: the descriptor is non-blocking,
+                    # so a bare call can short-write or raise EAGAIN and both
+                    # lose input silently (#17381).
+                    self._write_all(text.encode("utf-8"))
 
                 except queue.Empty:
                     continue
@@ -401,11 +469,15 @@ class SimplePTY:
 
         # Close file descriptor
         if self.master_fd:
+            # Publish None FIRST, then close the fd we took (#17381). The old
+            # order closed it and set None afterwards, leaving a window where
+            # the write loop could read a descriptor that was already closed --
+            # and, after the number was reused, one belonging to something else.
+            fd, self.master_fd = self.master_fd, None
             try:
-                os.close(self.master_fd)
+                os.close(fd)
             except Exception as e:
                 logger.debug("Failed to close master fd: %s", e)
-            self.master_fd = None
 
         # Terminate process
         if self.process:
@@ -413,7 +485,7 @@ class SimplePTY:
                 self.process.terminate()
                 # Wait briefly for graceful shutdown; avoids blocking sleep on event loop
                 try:
-                    self.process.wait(timeout=TimingConstants.MICRO_DELAY)
+                    self.process.wait(timeout=_PROC_TERM_GRACE_S)
                 except Exception:
                     # Process didn't terminate within timeout — force kill
                     self.process.kill()
