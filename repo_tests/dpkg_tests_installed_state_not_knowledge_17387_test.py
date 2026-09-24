@@ -78,8 +78,16 @@ _KNOWLEDGE_IS_THE_RIGHT_QUESTION = {
 }
 
 
-def _scanned_files() -> List[pathlib.Path]:
-    root = repo_root()
+def _scanned_files(root: pathlib.Path) -> List[pathlib.Path]:
+    """Files under *root* -- the root given, never `repo_root()` (#17387 review).
+
+    The first version took no root and read `repo_root()` itself, so both
+    declarations below returned the same items for an empty directory as for
+    the repository. `reach_declarations_test` caught it: "a floor it clears
+    unconditionally measures nothing". The underscore on the unused `_root`
+    parameter was the tell -- the signature accepted a root to satisfy the
+    protocol and the body ignored it.
+    """
     out: List[pathlib.Path] = []
     for suffix in _SCANNED_SUFFIXES:
         out.extend(
@@ -90,15 +98,16 @@ def _scanned_files() -> List[pathlib.Path]:
     return sorted(out)
 
 
-def _code_lines_using_dpkg_list(_root: pathlib.Path | None = None) -> List[Tuple[str, int, str]]:
+def _code_lines_using_dpkg_list(root: pathlib.Path | None = None) -> List[Tuple[str, int, str]]:
     """Every non-comment line invoking `dpkg -l`, as (relative path, lineno, text).
 
     Comments are excluded by position, not by stripping: this guard's own
     docstring and the explanatory comments it required in four roles all contain
     the literal `dpkg -l`, and a naive scan flags its own documentation.
     """
+    base = root or repo_root()
     found: List[Tuple[str, int, str]] = []
-    for path in _scanned_files():
+    for path in _scanned_files(base):
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -116,7 +125,7 @@ def _code_lines_using_dpkg_list(_root: pathlib.Path | None = None) -> List[Tuple
             # the first thing it flagged.
             if line[match.end() : match.end() + 1] == "`":
                 continue
-            found.append((str(path.relative_to(repo_root())), number, line.strip()))
+            found.append((str(path.relative_to(base)), number, line.strip()))
     return found
 
 
@@ -133,15 +142,16 @@ def _walk_tasks(node: object) -> Iterator[dict]:
                 yield from _walk_tasks(node[key])
 
 
-def _dpkg_registrations(_root: pathlib.Path | None = None) -> List[Tuple[str, str]]:
+def _dpkg_registrations(root: pathlib.Path | None = None) -> List[Tuple[str, str]]:
     """(relative path, registered var) for each task whose command runs dpkg.
 
     Keyed on the command, never on the variable's name: `which ufw` registered as
     `ufw_installed` is gated on `.rc` correctly, and a name-based rule would call
     five sound gates defects.
     """
+    base = root or repo_root()
     found: List[Tuple[str, str]] = []
-    for path in _scanned_files():
+    for path in _scanned_files(base):
         if path.suffix not in (".yml", ".yaml") or "ansible" not in path.parts:
             continue
         try:
@@ -154,7 +164,7 @@ def _dpkg_registrations(_root: pathlib.Path | None = None) -> List[Tuple[str, st
                 continue
             rendered = " ".join(str(value) for value in task.values())
             if _DPKG_QUERY.search(rendered):
-                found.append((str(path.relative_to(repo_root())), variable))
+                found.append((str(path.relative_to(base)), variable))
     return found
 
 
