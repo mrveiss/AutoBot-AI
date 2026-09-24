@@ -13,8 +13,8 @@ know about. This file makes it explicit. The rule is one line:
 ## The census — eight modules, seven of them deciding
 
 Measured on `origin/main` at 31310392df by
-`repo_tests/redaction_concept_census_test.py`, run over all 3,392 tracked
-production sources. **The number is seven, not four.** `#16688` names four and
+`repo_tests/redaction_concept_census_test.py`, run over every tracked
+production source. **The number is seven, not four.** `#16688` names four and
 `#17312` measures the same four; the guard found three more that no issue had
 counted, plus one more that also declares itself canonical.
 

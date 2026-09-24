@@ -259,34 +259,33 @@ def is_redaction_implementation(source: str) -> bool:
 
 
 #: A sweep that reads nothing reports clean over anything. This started life as
-#: a hand-rolled `_MIN_SOURCE_FILES = 1500` and is migrated to `declare()` under
-#: #15928's rule: a reach-sized floor chosen by feel decays silently. It had --
-#: the population is 3,393, so 1500 sat 56% below the tree it claimed to bind,
-#: and would have passed over a sweep that lost more than half the codebase.
+#: a hand-rolled `_MIN_SOURCE_FILES` constant and is migrated to `declare()`
+#: under #15928's rule: a reach-sized floor chosen by feel decays silently. It
+#: had -- the felt number sat far below the tree it claimed to bind, and would
+#: have passed over a sweep that lost more than half the codebase. The figures
+#: are on #15928, measured.
 #:
-#: Re-measured from scratch with a throwaway script rather than carried across,
-#: which is what #15928 requires: 3,393 tracked production .py files (excluding
-#: .worktrees/, docs/, repo_tests/, and test files) on this tree. growth=300 is
-#: the maintenance interval, matching the sibling declaration in
-#: prompt_injection_detector_strict_mode_test over a population of similar size.
+#: The population was re-measured from scratch with a throwaway script rather
+#: than carried across, which is what #15928 requires. growth=300 matches the
+#: sibling declaration in prompt_injection_detector_strict_mode_test over a
+#: population of similar size.
 REACH = declare(
     "redaction-concept-census",
     discover=_tracked_sources,
-    # 3247, NOT 3093. The first version of this declaration pinned 3093 --
-    # population 3393 minus growth 300, THE MINIMUM OF THE WINDOW -- and it went
-    # red on the next rebase when the population reached 3397. Slack 304 against
-    # an allowance of 300. Four files.
+    # 3247, NOT the `population - growth` value. The first version of this
+    # declaration used that formula and went red on the next rebase after a
+    # handful of files landed -- which is what "zero tolerance by construction"
+    # means in practice. Second instance of that error by this author in one
+    # session; both are self-reported on #17142 with the figures.
     #
-    # Second instance of the same error by the same author in one session (the
-    # other is enum-hand-copy-census on the #14881 branch), both committed after
-    # filing the argument on #17142 that `population - growth` is not a floor
-    # but a snapshot with zero tolerance by construction. Knowing the rule did
-    # not prevent it; reach_declarations_test did, which is the case for the
-    # check being mechanical rather than a review item.
+    # 3247 is mid-window, buying room for ordinary growth instead of a handful
+    # of files.
     #
-    # Re-measured on this tree rebased onto e8c7bf9b51: 3,397 tracked production
-    # .py files. Window [3097, 3397]; 3247 is mid-window and buys ~150 files of
-    # headroom instead of four.
+    # NO MEASURED NUMBERS HERE, deliberately: an earlier version of this comment
+    # cited the population and the window and both were stale one rebase later.
+    # Prose citing a measurement survives the rebase that changes it -- the
+    # resolver owns the value and nothing owns the sentence. The arithmetic is
+    # in the commit message, which cannot drift from the tree it describes.
     floor=3247,
     growth=300,
     what="tracked production python files",
@@ -326,7 +325,7 @@ def test_no_new_redaction_implementation() -> None:
 
     # Candidates are not coverage: the declaration's floor bounds what was
     # LISTED, this bounds what was actually parsed. Without it the census could
-    # enumerate 3,393 files, fail to parse 3,000 of them, and report the same
+    # enumerate the whole tree, fail to parse most of it, and report the same
     # clean as a tree with nothing to find.
     REACH.completed(parsed)
 

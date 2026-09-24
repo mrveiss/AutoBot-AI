@@ -123,6 +123,18 @@ def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
 #: the slack `verify_floor` allows (5824-5450=374, within
 #: skips=300+growth=400=700). `skips`/`growth` themselves are unchanged --
 #: #16724 tracks re-measuring this floor from CI's own log post-merge.
+# #17331/#17332 branch: this branch had pinned 5700 and ADOPTED main's 5752 on
+# rebase, rather than re-deriving a competing number for one measurement.
+# Re-measured here to confirm 5752 actually holds with this branch's files:
+#   population = 6154, gap 402 against the 700 allowance      -- OK
+#   completed  = 5767, so the floor has 15 files of headroom  -- OK, and thin
+# 15 is the number to watch. This declaration's loop skips `repo_tests` outright
+# (see the `rel.parts[0] == "repo_tests"` continue below), so `completed` FALLS
+# as guards are added -- five sessions added some tonight -- while population
+# rises. The two bounds close from opposite directions and only the gap one is
+# ever measured. Not re-pinning it here: main's value holds, and one branch
+# unilaterally widening a floor another just set is how two correct numbers
+# become a conflict. Recorded on #17142 instead.
 REACH = declare(
     "audio-extension-allowlist",
     discover=_tracked_python_files,
