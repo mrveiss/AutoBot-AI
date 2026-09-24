@@ -354,6 +354,14 @@ _PIP_INVOCATION_PATTERNS = (
     "-m pip ",
 )
 
+#: ...and why the search runs on `_task_content`, not on the raw file. Widening
+#: the patterns made the matcher hit PROSE: `roles/backend/tasks/main.yml:348`
+#: describes its own deploy window as "apt/pip install, code sync, alembic
+#: migrations", 24k characters before the first real pip task, which failed that
+#: role for a sentence. Both offsets are therefore taken in the same
+#: comment-stripped round-trip -- the #16750 shape again, where a scan that
+#: reads comments makes the comment the defect.
+
 
 def _first_pip_invocation(rendered: str) -> tuple[int, str]:
     """Offset of the earliest pip invocation of any shape, and the pattern that found it.
@@ -391,7 +399,7 @@ def test_the_matcher_sees_a_command_shaped_pip_invocation():
 @pytest.mark.parametrize("role_tasks", sorted(mapping[0] for mapping in COMPONENT_ROLES.values()))
 def test_the_repair_precedes_the_first_pip_step(role_tasks):
     """After the pip step the deploy has already aborted, so order is the fix."""
-    rendered = (ANSIBLE_ROOT / role_tasks).read_text(encoding="utf-8")
+    rendered = _task_content(ANSIBLE_ROOT / role_tasks)
 
     include_at = rendered.index("_shared/tasks/clear_venv_husks.yml")
     first_pip_at, pattern = _first_pip_invocation(rendered)
