@@ -201,7 +201,7 @@ async def enforce_pre_action_verifier(
     if HARD_BLOCK:
         error = (
             f"Tool '{tool_name}' was hard-blocked by the adversarial verifier "
-            f"(prob={result.refutation_probability:.2f}): {result.rationale}"
+            f"({result.evidence_label()}): {result.rationale}"
         )
         logger.warning("[#14031] verifier hard-blocked tool '%s' — %s", tool_name, result.rationale[:120])
         execution_results.append({"tool": tool_name, "status": "error", "error": error, "verifier_hard_block": True})
@@ -211,9 +211,12 @@ async def enforce_pre_action_verifier(
             metadata={"tool": tool_name, "error": True, "verifier_hard_block": True},
         )
 
+    # #17306: `evidence_label` says `degradation=call_failed` rather than
+    # `prob=0.00` when the block came from the degraded-response policy — a
+    # fail-closed block is not a verifier reading of zero.
     msg = (
         f"Action '{tool_name}' requires approval before proceeding — the adversarial "
-        f"verifier flagged it (prob={result.refutation_probability:.2f}): {result.rationale}"
+        f"verifier flagged it ({result.evidence_label()}): {result.rationale}"
     )
     logger.warning("[#14031] verifier held tool '%s' pending approval — %s", tool_name, result.rationale[:120])
     execution_results.append(
@@ -223,6 +226,7 @@ async def enforce_pre_action_verifier(
             "reason": msg,
             "verifier_rationale": result.rationale,
             "verifier_refutation_probability": result.refutation_probability,
+            "verifier_degradation": result.degradation.value,
         }
     )
     return WorkflowMessage(

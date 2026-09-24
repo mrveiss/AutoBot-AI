@@ -37,6 +37,7 @@ from constants.model_constants import (
     MISTRAL_SMALL_LATEST,
 )
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
+from llm_shared.structured_output import StructuredOutputMode, response_format_for_mode
 from llm_shared.types import ProviderType
 from services.provider_key_vault import resolve_provider_key
 
@@ -69,6 +70,9 @@ class MistralProvider(BaseProvider):
     """
 
     provider_name = ProviderType.MISTRAL.value
+    #: #17305: the endpoint honours `response_format: {"type": "json_object"}`.
+    #: Schema mode is not claimed here -- see `_build_params`.
+    structured_output_mode = StructuredOutputMode.JSON_OBJECT
 
     def __init__(self, settings: Dict[str, Any] | None = None) -> None:
         super().__init__(settings)
@@ -119,6 +123,13 @@ class MistralProvider(BaseProvider):
             params["max_tokens"] = request.max_tokens
         if request.stop:
             params["stop"] = request.stop
+        # #17305: Mistral's chat endpoint takes the OpenAI `response_format`.
+        # Declared as json_object rather than json_schema: bare JSON mode is
+        # what this repo can assert for the pinned API, and a schema is
+        # dropped visibly (applied mode) instead of being sent on a guess.
+        response_format = response_format_for_mode(request, self.structured_output_mode)
+        if response_format:
+            params["response_format"] = response_format
         if not stream and request.tools:
             params["tools"] = [
                 {

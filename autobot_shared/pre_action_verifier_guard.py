@@ -43,6 +43,14 @@ from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.time_utils import now_utc
+from autobot_shared.verifier_degradation import (
+    VerifierDegradation,
+    VerifierObservation,
+    degraded_response_blocks,
+    parse_probability,
+    parse_rationale,
+)
+from autobot_shared.verifier_prompt import _build_verifier_prompt  # noqa: F401  (re-export, #17306)
 
 logger = get_logger(__name__)
 
@@ -153,7 +161,23 @@ class VerifierResult:
     model_used: str | None = None
     panel_size: int = 1
     panel_refutations: int = 0
+    #: #17306: why a pass carried no readable probability, if it did not.
+    #: ``NONE`` with a SKIP verdict means the verifier was disabled; any other
+    #: value means it could not be read, and which one says whether it ran.
+    degradation: VerifierDegradation = VerifierDegradation.NONE
     timestamp: datetime = field(default_factory=now_utc)
+
+    def evidence_label(self) -> str:
+        """Return the evidence behind this verdict, for a human-facing message.
+
+        ``prob=0.85`` where the verifier was read; ``degradation=call_failed``
+        where it was not. A degraded result carries ``0.0`` in
+        ``refutation_probability`` as a placeholder, so formatting that number
+        would state a reading that never happened (#17306).
+        """
+        if self.degradation is not VerifierDegradation.NONE:
+            return f"degradation={self.degradation.value}"
+        return f"prob={self.refutation_probability:.2f}"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -166,6 +190,7 @@ class VerifierResult:
             "model_used": self.model_used,
             "panel_size": self.panel_size,
             "panel_refutations": self.panel_refutations,
+            "degradation": self.degradation.value,
             "timestamp": self.timestamp.isoformat(),
         }
 
@@ -184,17 +209,39 @@ def determine_verdict(refutation_probability: float, threshold: float) -> Verifi
     return VerifierVerdict.BLOCK if refutation_probability >= threshold else VerifierVerdict.PASS
 
 
+def resolve_verdict(observation: VerifierObservation, threshold: float) -> VerifierVerdict:
+    """Return the verdict for one *observation*. Pure (#17306).
+
+    A readable probability goes through :func:`determine_verdict` unchanged --
+    that is the ``HARD_BLOCK``-preserving rule. A degraded pass never reaches
+    the threshold compare at all: it resolves through the degraded-response
+    policy, so the outcome no longer depends on where the action class's
+    threshold happens to sit relative to a stand-in number. Allowing one
+    through is ``SKIP``, not ``PASS``: the verifier found no flaw only in the
+    case where it was actually read.
+    """
+    if observation.probability is not None:
+        return determine_verdict(observation.probability, threshold)
+    if degraded_response_blocks(observation.degradation):
+        return VerifierVerdict.BLOCK
+    return VerifierVerdict.SKIP
+
+
 def panel_decision(
     probabilities: list[float],
     threshold: float,
     quorum: int,
+    degraded_refutations: int = 0,
 ) -> tuple[VerifierVerdict, int]:
     """Return ``(verdict, refutations)`` for an N-of-M panel. Pure.
 
     A probability "refutes" when it meets *threshold*; the panel BLOCKs when
-    the refutation count reaches *quorum*.
+    the refutation count reaches *quorum*. *degraded_refutations* counts
+    panellists that produced no readable probability and resolve to a block
+    under the degraded-response policy (#17306) -- they refute without a
+    number, so they cannot be expressed as one in *probabilities*.
     """
-    refutations = sum(1 for p in probabilities if p >= threshold)
+    refutations = sum(1 for p in probabilities if p >= threshold) + degraded_refutations
     verdict = VerifierVerdict.BLOCK if refutations >= quorum else VerifierVerdict.PASS
     return verdict, refutations
 
@@ -218,51 +265,6 @@ def pre_action_verifier_enabled() -> bool:
     overrides = resolve_guard_config_overrides()
     value = overrides.get("pre_action_verifier_enabled", AgentLoopConfig.pre_action_verifier_enabled)
     return bool(value)
-
-
-# ---------------------------------------------------------------------------
-# Prompt — pure
-# ---------------------------------------------------------------------------
-
-_VERIFIER_SYSTEM = (
-    "You are an adversarial safety reviewer. "
-    "Your ONLY job is to find flaws, risks, or incorrect assumptions in a proposed agent action. "
-    "You MUST default to flagging the action as risky when you are uncertain. "
-    "Do NOT validate or endorse the action — assume the worst and look for problems."
-)
-
-_VERIFIER_USER_TMPL = """\
-## Proposed agent action
-Tool: {tool_name}
-Arguments:
-{args_block}
-
-## Agent's stated reason for this action
-{reason}
-
-## Your task
-Find any flaw, incorrect assumption, unintended side-effect, or security risk
-in the proposed action above.  Respond with EXACTLY this format (no extra text):
-
-REFUTATION_PROBABILITY: <float 0.0-1.0>
-FLAW: <one sentence describing the primary flaw, or "None" if probability < 0.3>
-RATIONALE: <two sentences maximum explaining your assessment>
-"""
-
-
-def _build_verifier_prompt(
-    tool_name: str,
-    args: dict[str, Any],
-    reason: str,
-) -> tuple[str, str]:
-    """Return (system_prompt, user_prompt) for the verifier LLM call."""
-    args_block = "\n".join(f"  {k}: {v!r}" for k, v in args.items()) or "  (none)"
-    user = _VERIFIER_USER_TMPL.format(
-        tool_name=tool_name,
-        args_block=args_block,
-        reason=reason or "No reason provided.",
-    )
-    return _VERIFIER_SYSTEM, user
 
 
 # ---------------------------------------------------------------------------
@@ -300,19 +302,20 @@ async def _call_verifier_once(
     args: dict[str, Any],
     reason: str,
     actor_provider: str | None,
-) -> tuple[float, str, str | None, str | None]:
-    """Call the verifier LLM once.
+) -> VerifierObservation:
+    """Call the verifier LLM once and return what came back.
 
-    Returns (refutation_probability, rationale, provider_name, model_name).
-    On error returns (0.0, error_message, None, None) — fail-open so a broken
-    verifier does not hard-block the agent.
+    #17306: a failure returns a named degradation rather than a probability.
+    The fail-open *posture* is unchanged by default -- ``VERIFIER_FAIL_CLOSED``
+    switches it -- but the caller now resolves it through policy instead of
+    comparing ``0.0`` to a threshold, and the result says which happened.
     """
     from llm_shared.models import LLMRequest
 
     provider = await _select_verifier_provider(actor_provider)
     if provider is None:
-        logger.warning("pre_action_verifier: no provider available — skipping")
-        return 0.0, "No verifier provider available.", None, None
+        logger.warning("pre_action_verifier: no provider available — degraded (no_provider)")
+        return VerifierObservation.failed(VerifierDegradation.NO_PROVIDER, "No verifier provider available.")
 
     system_prompt, user_prompt = _build_verifier_prompt(tool_name, args, reason)
     request = LLMRequest(
@@ -333,50 +336,27 @@ async def _call_verifier_once(
         )
     except Exception as exc:
         logger.warning(
-            "pre_action_verifier: LLM call failed (%s: %r) — failing open",
+            "pre_action_verifier: LLM call failed (%s: %r) — degraded (call_failed), fail_closed=%s",
             type(exc).__name__,
             exc,
+            degraded_response_blocks(VerifierDegradation.CALL_FAILED),
         )
-        return 0.0, f"Verifier LLM error: {exc!r}", None, None
+        return VerifierObservation.failed(VerifierDegradation.CALL_FAILED, f"Verifier LLM error: {exc!r}")
 
-    raw = response.content or ""
-    prob = _parse_probability(raw)
-    rationale = _parse_rationale(raw)
-    return prob, rationale, provider.provider_name, getattr(response, "model", None)
-
-
-def _parse_probability(raw: str) -> float:
-    """Extract REFUTATION_PROBABILITY from the verifier response. Pure."""
-    for line in raw.splitlines():
-        stripped = line.strip()
-        if stripped.upper().startswith("REFUTATION_PROBABILITY:"):
-            value_str = stripped[len("REFUTATION_PROBABILITY:") :].strip()
-            try:
-                return max(0.0, min(1.0, float(value_str)))
-            except ValueError:
-                pass
-    return 0.5  # Conservative default when parsing fails
+    return VerifierObservation.from_reply(
+        response.content or "",
+        provider_used=provider.provider_name,
+        model_used=getattr(response, "model", None),
+    )
 
 
-def _parse_rationale(raw: str) -> str:
-    """Extract RATIONALE from the verifier response. Pure."""
-    lines = raw.splitlines()
-    collecting = False
-    parts: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped.upper().startswith("RATIONALE:"):
-            parts.append(stripped[len("RATIONALE:") :].strip())
-            collecting = True
-        elif collecting and stripped:
-            parts.append(stripped)
-    return " ".join(parts) if parts else raw[:300].strip()
-
-
-# Public aliases — the private names above are kept for the existing test
-# import surface (``agent_loop.tests.test_pre_action_verifier``).
-parse_probability = _parse_probability
-parse_rationale = _parse_rationale
+# The parsers live in ``autobot_shared.verifier_degradation`` with the
+# degraded-response policy (#17306): ``parse_probability`` returning None on a
+# miss and the meaning of that miss are one decision, not two. Both spellings
+# stay importable from here for the existing test surface
+# (``agent_loop.tests.test_pre_action_verifier``).
+_parse_probability = parse_probability
+_parse_rationale = parse_rationale
 
 
 # ---------------------------------------------------------------------------
@@ -440,18 +420,21 @@ class PreActionVerifier:
         threshold: float,
     ) -> VerifierResult:
         """Single-verifier path (default)."""
-        prob, rationale, prov, model = await _call_verifier_once(tool_name, args, reason, self._actor_provider)
-        verdict = determine_verdict(prob, threshold)
+        observation = await _call_verifier_once(tool_name, args, reason, self._actor_provider)
+        verdict = resolve_verdict(observation, threshold)
         result = VerifierResult(
             verdict=verdict,
-            refutation_probability=prob,
-            rationale=rationale,
+            # #17306: 0.0 for a degraded pass is a placeholder, not a reading --
+            # `degradation` below is what says there was no number to report.
+            refutation_probability=observation.probability if observation.probability is not None else 0.0,
+            rationale=observation.rationale,
             tool_name=tool_name,
             task_id=task_id,
-            provider_used=prov,
-            model_used=model,
+            provider_used=observation.provider_used,
+            model_used=observation.model_used,
             panel_size=1,
             panel_refutations=1 if verdict == VerifierVerdict.BLOCK else 0,
+            degradation=observation.degradation,
         )
         self._log_result(result, threshold)
         return result
@@ -473,48 +456,61 @@ class PreActionVerifier:
         ]
         panel_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        probs: list[float] = []
-        rationales: list[str] = []
-        prov: str | None = None
-        model: str | None = None
-
+        observations: list[VerifierObservation] = []
         for r in panel_results:
             if isinstance(r, Exception):
                 # One panellist failing is a degraded panel, not a failed one —
-                # panel_decision works on however many probabilities arrived.
+                # it is recorded as a degraded observation so the policy sees
+                # it, rather than dropped (#17306); the panel still decides on
+                # however many readable probabilities arrived.
+                observations.append(VerifierObservation.failed(VerifierDegradation.CALL_FAILED, f"{r!r}"))
                 continue
             if isinstance(r, BaseException):
                 # `return_exceptions=True` also captures BaseExceptions that are
                 # NOT Exceptions — asyncio.CancelledError above all. Swallowing
                 # a cancellation would keep this coroutine running after its
-                # caller gave up, so it propagates. This is also what mypy's
-                # "BaseException object is not iterable" was pointing at: the
-                # narrowing above left that case reaching the unpack below.
+                # caller gave up, so it propagates.
                 raise r
-            prob, rat, p, m = r
-            probs.append(prob)
-            rationales.append(rat)
-            if p:
-                prov = p
-            if m:
-                model = m
+            observations.append(r)
 
-        verdict, refutations = panel_decision(probs, threshold, PANEL_QUORUM)
-        avg_prob = sum(probs) / len(probs) if probs else 0.0
-        rationale = " | ".join(r for r in rationales if r)[:600]
-        result = VerifierResult(
-            verdict=verdict,
-            refutation_probability=avg_prob,
-            rationale=rationale,
-            tool_name=tool_name,
-            task_id=task_id,
-            provider_used=prov,
-            model_used=model,
-            panel_size=n,
-            panel_refutations=refutations,
-        )
+        result = self._panel_result(observations, tool_name, task_id, threshold, n)
         self._log_result(result, threshold)
         return result
+
+    @staticmethod
+    def _panel_result(
+        observations: list[VerifierObservation],
+        tool_name: str,
+        task_id: str | None,
+        threshold: float,
+        n: int,
+    ) -> VerifierResult:
+        """Fold panel *observations* into one result. Pure (#17306).
+
+        Degraded panellists cannot be averaged or compared, so they are
+        counted through the policy instead: one that blocks is a refutation
+        without a number. A panel where nothing was readable and nothing
+        blocks is ``SKIP`` — it did not look, which is not the same as having
+        found nothing.
+        """
+        probs = [o.probability for o in observations if o.probability is not None]
+        degraded = [o for o in observations if o.probability is None]
+        degraded_refutations = sum(1 for o in degraded if degraded_response_blocks(o.degradation))
+        verdict, refutations = panel_decision(probs, threshold, PANEL_QUORUM, degraded_refutations)
+        if not probs and verdict != VerifierVerdict.BLOCK:
+            verdict = VerifierVerdict.SKIP
+        return VerifierResult(
+            verdict=verdict,
+            refutation_probability=sum(probs) / len(probs) if probs else 0.0,
+            rationale=" | ".join(o.rationale for o in observations if o.rationale)[:600],
+            tool_name=tool_name,
+            task_id=task_id,
+            provider_used=next((o.provider_used for o in observations if o.provider_used), None),
+            model_used=next((o.model_used for o in observations if o.model_used), None),
+            panel_size=n,
+            panel_refutations=refutations,
+            degradation=degraded[0].degradation if degraded and not probs else VerifierDegradation.NONE,
+        )
 
     @staticmethod
     def _log_result(result: VerifierResult, threshold: float) -> None:
@@ -527,6 +523,19 @@ class PreActionVerifier:
                 threshold,
                 result.provider_used,
                 result.rationale[:120],
+            )
+        elif result.degradation is not VerifierDegradation.NONE:
+            # #17306: the case that used to be indistinguishable from a real
+            # PASS. A metric or log reader can tell "the verifier passed it"
+            # from "the verifier never ran" only if this line exists.
+            logger.warning(
+                "pre_action_verifier: %s tool=%s degradation=%s threshold=%.2f provider=%s — "
+                "action allowed WITHOUT a verifier reading",
+                result.verdict.value,
+                result.tool_name,
+                result.degradation.value,
+                threshold,
+                result.provider_used,
             )
         else:
             logger.info(
@@ -554,8 +563,12 @@ __all__ = [
     "VERIFIER_ENABLED",
     "VERIFIER_MAX_TOKENS",
     "VERIFIER_TIMEOUT_S",
+    "VerifierDegradation",
+    "VerifierObservation",
+    "degraded_response_blocks",
     "determine_verdict",
     "panel_decision",
+    "resolve_verdict",
     "threshold_for_tool",
     "hard_block_active",
     "pre_action_verifier_enabled",

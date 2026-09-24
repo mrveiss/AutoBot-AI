@@ -1677,16 +1677,16 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
                             tool_name: {
                                 "error": (
                                     f"Tool '{tool_name}' was hard-blocked by the adversarial "
-                                    f"verifier (prob={verifier_result.refutation_probability:.2f}): "
+                                    f"verifier ({verifier_result.evidence_label()}): "
                                     f"{verifier_result.rationale}"
                                 )
                             }
                         }
                     # Soft-block: escalate to human with verifier rationale attached
                     tool = dict(tool)
+                    # #17306: `degradation=...` where no probability was read.
                     tool["verifier_rationale"] = (
-                        f"[Verifier BLOCK prob={verifier_result.refutation_probability:.2f}] "
-                        f"{verifier_result.rationale}"
+                        f"[Verifier BLOCK {verifier_result.evidence_label()}] {verifier_result.rationale}"
                     )
 
             approval_id = str(uuid.uuid4())
@@ -1750,10 +1750,10 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
         if self._current_context is not None:
             self._current_context.metadata.setdefault("verifier_verdicts", []).append(payload)
         logger.debug(
-            "AgentLoop: verifier verdict recorded tool=%s verdict=%s prob=%.2f",
+            "AgentLoop: verifier verdict recorded tool=%s verdict=%s %s",
             result.tool_name,
             result.verdict.value,
-            result.refutation_probability,
+            result.evidence_label(),
         )
 
     async def _request_approval(

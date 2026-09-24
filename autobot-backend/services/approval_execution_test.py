@@ -31,6 +31,11 @@ class _FakeSession:
 @pytest.fixture(autouse=True)
 def _clean_registry(monkeypatch):
     monkeypatch.setattr(approval_execution, "_REGISTRY", {})
+    # #17315: and the proposer map alongside it. These tests register fake
+    # actions; left in the real dict they would reach
+    # approval_execution_proposer_test, which asserts every registered action
+    # names an importable production proposer.
+    monkeypatch.setattr(approval_execution, "_PROPOSERS", {})
 
 
 @pytest.fixture(autouse=True)
@@ -59,7 +64,9 @@ class TestRunPostApprovalActions:
         """#17141 AC2: an approved action naming no registered handler is a
         recorded deployment defect, not silence -- it means the module that
         would have registered it was never imported."""
-        approval_execution.register_post_approval_action("known", lambda a, s: None)
+        approval_execution.register_post_approval_action(
+            "known", lambda a, s: None, proposed_by="services.approval_execution_test"
+        )
         approval = _approval({"action": "unknown"})
         session = _FakeSession()
 
@@ -86,7 +93,9 @@ class TestRunPostApprovalActions:
         async def handler(approval, session):
             calls.append((approval, session))
 
-        approval_execution.register_post_approval_action("do-thing", handler)
+        approval_execution.register_post_approval_action(
+            "do-thing", handler, proposed_by="services.approval_execution_test"
+        )
         approval = _approval({"action": "do-thing"})
         sentinel_session = object()
 
@@ -102,7 +111,9 @@ class TestRunPostApprovalActions:
         async def handler(approval, session):
             raise RuntimeError("boom")
 
-        approval_execution.register_post_approval_action("do-thing", handler)
+        approval_execution.register_post_approval_action(
+            "do-thing", handler, proposed_by="services.approval_execution_test"
+        )
         approval = _approval({"action": "do-thing"})
         session = _FakeSession()
 
@@ -126,7 +137,9 @@ class TestRunPostApprovalActions:
         async def handler(approval, session):
             raise OSError(errno.EACCES, "Permission denied", "/opt/autobot/data/code-sources/abc123")
 
-        approval_execution.register_post_approval_action("do-thing", handler)
+        approval_execution.register_post_approval_action(
+            "do-thing", handler, proposed_by="services.approval_execution_test"
+        )
         approval = _approval({"action": "do-thing"})
         session = _FakeSession()
 
@@ -143,12 +156,16 @@ class TestRunPostApprovalActions:
 
     async def test_registering_the_same_action_twice_replaces_the_handler(self):
         calls = []
-        approval_execution.register_post_approval_action("do-thing", lambda a, s: calls.append("first"))
+        approval_execution.register_post_approval_action(
+            "do-thing", lambda a, s: calls.append("first"), proposed_by="services.approval_execution_test"
+        )
 
         async def second(approval, session):
             calls.append("second")
 
-        approval_execution.register_post_approval_action("do-thing", second)
+        approval_execution.register_post_approval_action(
+            "do-thing", second, proposed_by="services.approval_execution_test"
+        )
         await approval_execution.run_post_approval_actions(_approval({"action": "do-thing"}), session=None)
 
         assert calls == ["second"]
@@ -167,7 +184,9 @@ class TestRunPostApprovalActions:
         async def handler(approval, session):
             raise RuntimeError("boom")
 
-        approval_execution.register_post_approval_action("do-thing", handler)
+        approval_execution.register_post_approval_action(
+            "do-thing", handler, proposed_by="services.approval_execution_test"
+        )
 
         await approval_execution.run_post_approval_actions(_approval({"action": "do-thing"}), _BrokenSession())
         # No raise reaching here is the assertion.

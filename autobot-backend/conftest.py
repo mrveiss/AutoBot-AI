@@ -534,6 +534,10 @@ if "llm_shared" not in sys.modules:
 
     _real_load_and_bind("llm_shared.types", _llm_root / "types.py")
     _real_load_and_bind("llm_shared.models", _llm_root / "models.py")
+    # #17305: structured-output builders + the provider capability surface.
+    # Imported at module level by base_provider and every payload builder, and
+    # the stub's empty __path__ cannot resolve it -- else collection errors.
+    _real_load_and_bind("llm_shared.structured_output", _llm_root / "structured_output.py")
     # #12714: thread-safe lazy torch loader shared by 9 call sites (flash_attention,
     # ssm_kernels, kv_cache, layer_inference, ai_hardware_accelerator,
     # multimodal_processor + vision/voice, incremental_trainer). No deps beyond
@@ -601,25 +605,21 @@ if "llm_shared" not in sys.modules:
     # (stdlib + the llm_shared seams real-loaded above + jinja2).
     # Dependency order: cache_utils → openai_compatible → concrete providers.
     _real_load_and_bind("llm_shared.providers.cache_utils", _llm_root / "providers" / "cache_utils.py")
-    _real_load_and_bind(
-        "llm_shared.providers.openai_compatible",
-        _llm_root / "providers" / "openai_compatible.py",
-    )
+    _real_load_and_bind("llm_shared.providers.openai_compatible", _llm_root / "providers" / "openai_compatible.py")
+    # #17305: anthropic.py's request-shaping unit, real-loaded ahead of it
+    # for the same patch-resolution reason cache_utils is.
+    _real_load_and_bind("llm_shared.providers.anthropic_request", _llm_root / "providers" / "anthropic_request.py")
     _real_load_and_bind("llm_shared.providers.anthropic", _llm_root / "providers" / "anthropic.py")
     _real_load_and_bind("llm_shared.providers.groq", _llm_root / "providers" / "groq.py")
     _real_load_and_bind("llm_shared.providers.openai", _llm_root / "providers" / "openai.py")
     _real_load_and_bind("llm_shared.providers.custom_openai", _llm_root / "providers" / "custom_openai.py")
     _real_load_and_bind(
-        "llm_shared.providers.chat_template_loader",
-        _llm_root / "providers" / "chat_template_loader.py",
+        "llm_shared.providers.chat_template_loader", _llm_root / "providers" / "chat_template_loader.py"
     )
     # vllm.py guards its heavy `from vllm import ...` in try/except, and
     # ollama_provider only needs aiohttp + light autobot_shared seams.
     _real_load_and_bind("llm_shared.providers.vllm", _llm_root / "providers" / "vllm.py")
-    _real_load_and_bind(
-        "llm_shared.providers.ollama_provider",
-        _llm_root / "providers" / "ollama_provider.py",
-    )
+    _real_load_and_bind("llm_shared.providers.ollama_provider", _llm_root / "providers" / "ollama_provider.py")
     # #11837: providers.ollama (the canonical Ollama provider, #11517) imports
     # `from ..streaming import StreamingManager` at module level, but the
     # llm_shared stub's empty __path__ can't resolve streaming.py on disk, so

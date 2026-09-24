@@ -92,10 +92,22 @@ from constants.model_constants import (
     ANTHROPIC_CLAUDE_SONNET4_6,
 )
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
+from llm_shared.structured_output import StructuredOutputMode, apply_anthropic_output_config
 from llm_shared.types import ProviderType
 from services.provider_key_vault import resolve_provider_key
 
 from ..base_provider import BaseProvider
+
+# Re-exported: the request-shaping unit moved to anthropic_request.py when this
+# file hit its size ceiling (#17305). `_thinking_budget_to_effort` is unused here
+# and kept importable for tests/llm_interface_pkg/test_anthropic_sampling_kwargs.py.
+from .anthropic_request import (  # noqa: F401
+    _REMOVED_SAMPLING_KWARGS,
+    _apply_thinking_budget,
+    _build_api_kwargs,
+    _route_sampling_kwargs,
+    _thinking_budget_to_effort,
+)
 from .cache_utils import sorted_for_cache
 
 logger = get_logger(__name__)
@@ -109,74 +121,8 @@ _ANTHROPIC_MODELS = [
     ANTHROPIC_CLAUDE3_OPUS_DATED,
 ]
 
-# #15016: anthropic>=1.0 removed these three from messages.create()/.stream();
-# passing one as a keyword now raises TypeError. The API still honours them
-# via extra_body for every model above, so a genuinely-set value is routed
-# there instead of being dropped.
-_REMOVED_SAMPLING_KWARGS = ("temperature", "top_p", "top_k")
-
-# Models the SDK itself flags as deprecated for thinking.type="enabled" in
-# favour of "adaptive" (mirrors anthropic's own
-# MODELS_TO_WARN_WITH_THINKING_ENABLED, restricted to models this repo uses).
-_MODELS_REQUIRING_ADAPTIVE_THINKING = frozenset({ANTHROPIC_CLAUDE_OPUS4_6})
-
-# budget_tokens -> output_config.effort tiers for models that require adaptive
-# thinking; mirrors the low/medium/high buckets reasoning_effort.py already
-# maps reasoning_effort levels to, extended with xhigh/max for larger budgets.
-_THINKING_EFFORT_TIERS = (
-    (2000, "low"),
-    (5000, "medium"),
-    (10000, "high"),
-    (32000, "xhigh"),
-)
-
 # Regex that matches <think>…</think> blocks (case-insensitive, dotall).
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
-
-
-def _route_sampling_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
-    """Move a set temperature/top_p/top_k out of top-level kwargs, in place.
-
-    Returns *kwargs* for convenient chaining. Dropped outright (#15042) when
-    extended thinking is active -- current models reject a sampling kwarg
-    regardless of its value once thinking is enabled, so extra_body would
-    just move the 400 server-side. An explicit ``None`` is also dropped (no
-    genuine dependency to preserve); any other value is merged into
-    ``extra_body`` so the SDK still forwards it to the API.
-    """
-    thinking_active = "thinking" in kwargs
-    sampling = {}
-    for key in _REMOVED_SAMPLING_KWARGS:
-        value = kwargs.pop(key, None)
-        if value is not None and not thinking_active:
-            sampling[key] = value
-    if sampling:
-        kwargs.setdefault("extra_body", {}).update(sampling)
-    return kwargs
-
-
-def _thinking_budget_to_effort(budget_tokens: int) -> str:
-    """Map a legacy ``budget_tokens`` value to an adaptive-thinking effort tier."""
-    for ceiling, effort in _THINKING_EFFORT_TIERS:
-        if budget_tokens <= ceiling:
-            return effort
-    return "max"
-
-
-def _apply_thinking_budget(api_kwargs: Dict[str, Any], model: str, thinking_tokens: int) -> None:
-    """Expand a thinking-token budget into the SDK's ``thinking`` kwarg, in place.
-
-    Models in ``_MODELS_REQUIRING_ADAPTIVE_THINKING`` (#15016) get adaptive
-    thinking plus an ``output_config`` effort tier instead of ``budget_tokens``;
-    every other model keeps the fixed-budget form it still accepts.
-    """
-    if model in _MODELS_REQUIRING_ADAPTIVE_THINKING:
-        api_kwargs["thinking"] = {"type": "adaptive"}
-        api_kwargs["output_config"] = {"effort": _thinking_budget_to_effort(thinking_tokens)}
-    else:
-        api_kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_tokens}
-        api_kwargs.setdefault("betas", ["interleaved-thinking-2025-05-14"])
-    api_kwargs.setdefault("max_tokens", max(thinking_tokens + 1000, 8192))
 
 
 def _strip_think_blocks(text: str) -> str:
@@ -193,48 +139,6 @@ def _extract_think_tag_content(text: str) -> Optional[str]:
     inner_re = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
     parts = inner_re.findall(text)
     return "\n".join(p.strip() for p in parts if p.strip()) or None
-
-
-def _build_api_kwargs(
-    base: Dict[str, Any],
-    api_kwargs: Dict[str, Any],
-) -> tuple[Dict[str, Any], Dict[str, Any]]:
-    """
-    Merge caller-supplied *api_kwargs* into *base* request parameters.
-
-    Handles the three extended-thinking keys that need special treatment:
-
-    - ``thinking``      — forwarded directly to the SDK call.
-    - ``betas``         — converted to ``extra_headers["anthropic-beta"]`` as a
-                          comma-joined string; the SDK does not accept a ``betas``
-                          kwarg on ``messages.create()``.
-    - ``extra_headers`` — collected separately for the SDK ``extra_headers``
-                          keyword argument (not part of the messages payload).
-    - ``preserve_reasoning`` — consumed here; not forwarded to the SDK.
-
-    All remaining keys in *api_kwargs* (e.g. ``max_tokens``, ``temperature``)
-    are merged into *base*, overriding any previously set value.
-
-    Returns:
-        (merged_kwargs, extra_headers)
-    """
-    extra_headers: Dict[str, Any] = {}
-    preserved_keys = {"preserve_reasoning", "extra_headers", "betas"}
-
-    for key, value in api_kwargs.items():
-        if key in preserved_keys:
-            continue
-        base[key] = value
-
-    extra_headers = dict(api_kwargs.get("extra_headers") or {})
-
-    betas: List[str] = api_kwargs.get("betas") or []
-    if betas:
-        existing = extra_headers.get("anthropic-beta", "")
-        merged_betas = [b for b in existing.split(",") if b] + list(betas)
-        extra_headers["anthropic-beta"] = ",".join(merged_betas)
-
-    return base, extra_headers
 
 
 def _extract_text_content(response_content: list, preserve_reasoning: bool) -> str:
@@ -300,6 +204,10 @@ class AnthropicProvider(BaseProvider):
     """
 
     provider_name = ProviderType.ANTHROPIC.value
+    # #17305: `output_config.format` enforces a supplied JSON Schema; it has
+    # no schema-less variant, so a bare flag maps to nothing native here.
+    structured_output_mode = StructuredOutputMode.JSON_SCHEMA
+    structured_output_requires_schema = True
 
     def __init__(self, settings: Dict[str, Any] | None = None) -> None:
         super().__init__(settings)
@@ -389,6 +297,9 @@ class AnthropicProvider(BaseProvider):
         preserve_reasoning: bool = bool(api_kwargs.get("preserve_reasoning", False))
         kwargs, extra_headers = _build_api_kwargs(kwargs, api_kwargs)
         kwargs = _route_sampling_kwargs(kwargs)
+        # #17305: after the api_kwargs merge, so an `effort` tier already in
+        # `output_config` survives and the format is added beside it.
+        apply_anthropic_output_config(kwargs, request)
 
         return kwargs, extra_headers, preserve_reasoning
 

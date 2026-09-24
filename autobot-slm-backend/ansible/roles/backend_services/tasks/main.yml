@@ -50,6 +50,20 @@
 # itself, which these hosts do not have. `virtualenv_command:` below replaces
 # it with the stdlib's `venv` module, using the interpreter
 # python_interpreter (included above) already installed.
+# #17246: `code_source` is the controller's git checkout and no task syncs it
+# to a node, so this constraints path did not exist here -- the #17242 class,
+# caught by the widened detector rather than by another failed provision. The
+# file is staged onto the node first and read from there.
+- name: "Stage the manifests this node's pip step reads (#17246, #17331)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/stage_shared_manifests.yml
+  when: not (autobot_shared_manifests_staged | default(false))
+  # Tagged `always` for the reason update-all-nodes.yml gives at its own
+  # staging task: the staged file is a precondition of the pip step below,
+  # so a tag selection that runs the install but not the staging would
+  # constrain against a file that is not there. Enumerating the consumer
+  # tags would go stale; `always` cannot.
+  tags: [always]
+
 - name: Install Python dependencies
   pip:
     requirements: /opt/autobot/app/requirements.txt
@@ -57,7 +71,7 @@
     virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     # #15684: constraints/shared.txt applied here too, the same shape every
     # other pip site in this venv now uses.
-    extra_args: "-c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt"
+    extra_args: "-c {{ autobot.base_dir }}/constraints/shared.txt"
   become_user: autobot
   environment:
     PIP_DEFAULT_TIMEOUT: "120"

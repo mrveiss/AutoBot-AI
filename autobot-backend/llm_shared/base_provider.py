@@ -34,6 +34,7 @@ from .observability import registry as obs_registry
 from .provider_auth import ApiKeyAuth, ProviderAuthError, ProviderAuthStrategy, TokenExpiredError
 from .provider_degradation import DegradationCause, get_degradation_store
 from .rate_limit_backoff import extract_rate_limit_info, get_backoff_handler, raise_if_rate_limited
+from .structured_output import StructuredOutputMode, effective_mode, note_structured_output
 from .token_budget import get_token_budget_gate
 
 logger = get_logger(__name__)
@@ -79,6 +80,16 @@ class BaseProvider(ABC):
 
     #: Override in each subclass with the provider's string identifier.
     provider_name: str = ""
+
+    #: #17305: what this provider does with ``LLMRequest.structured_output``.
+    #: ``NONE`` is the honest default -- a provider that has not wired a
+    #: native schema/JSON mode declares that rather than dropping the flag
+    #: silently, which is what every hosted provider used to do.
+    structured_output_mode: StructuredOutputMode = StructuredOutputMode.NONE
+
+    #: #17305: True where the native mode REQUIRES a schema, so a request
+    #: without one has nothing to map onto (Anthropic's output_config.format).
+    structured_output_requires_schema: bool = False
 
     def __init__(
         self,
@@ -143,6 +154,10 @@ class BaseProvider(ABC):
         # it here guarantees notify_error (which only receives `request`, no
         # metadata) can always resolve the real provider.
         request.metadata["selected_provider"] = provider_key
+        # #17305: record the structured-output mode this provider actually
+        # applies (and warn when the flag is a no-op here) before the call,
+        # so the capability is on the request whatever the outcome.
+        note_structured_output(request, provider_key, self.applied_structured_output_mode(request))
         handler = get_backoff_handler()
 
         async def _attempt() -> LLMResponse:
@@ -185,6 +200,21 @@ class BaseProvider(ABC):
             # Backoff exhausted — return the last error response if we have one,
             # otherwise let the exception propagate to the registry for fallback.
             raise
+
+    def applied_structured_output_mode(self, request: LLMRequest) -> StructuredOutputMode:
+        """Return the structured-output mode this provider applies to *request* (#17305).
+
+        The default derives it from the declared capability: a schema-capable
+        provider falls back to bare JSON mode when the request carries no
+        schema. A provider whose native mode *requires* a schema (Anthropic)
+        overrides this -- reporting ``json_object`` there would claim a
+        constraint the payload does not carry.
+        """
+        return effective_mode(
+            request,
+            self.structured_output_mode,
+            requires_schema=self.structured_output_requires_schema,
+        )
 
     @staticmethod
     def _request_type_label(request: LLMRequest) -> str:
