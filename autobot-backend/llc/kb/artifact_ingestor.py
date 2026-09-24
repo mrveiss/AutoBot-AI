@@ -279,16 +279,28 @@ class ArtifactIngestor:
 
         if product.storage_path:
             if not _is_text_path(product.storage_path):
-                # The extension, not the path (#17302). `storage_path` is
-                # agent-supplied, and CLAUDE.md forbids internal filesystem
-                # paths in logs -- doubly so for one an attacker chooses. The
-                # extension is what the decision was made on, is bounded, and
-                # the product id below is the join key for anyone who needs the
-                # path from the row.
+                # The product id and nothing derived from the path (#17302).
+                # `storage_path` is agent-supplied, and CLAUDE.md forbids
+                # internal filesystem paths in logs -- doubly so for one an
+                # attacker chooses.
+                #
+                # An earlier version logged `splitext(path)[1][:16]`, reasoning
+                # that a 16-char extension is bounded. Two things were wrong
+                # with that. A bound is not a sanitiser: 16 characters of
+                # attacker-chosen text is still attacker-chosen text, including
+                # newlines and control characters that a log reader renders.
+                # And CodeQL was right to keep flagging it -- taint propagates
+                # through `splitext` and survives a slice, so the sink genuinely
+                # still received data derived from the untrusted string.
+                #
+                # An allowlist does not rescue it here: this branch runs
+                # precisely when the extension is NOT in `_TEXT_EXTENSIONS`, so
+                # "log it if allowlisted else a constant" logs the constant
+                # every time. The message already states the reason, and the
+                # product id is the join key to the row that holds the path.
                 logger.info(
-                    "ArtifactIngestor: skipping product %s -- extension %r is not indexable text",
+                    "ArtifactIngestor: skipping product %s -- storage_path is not an indexable text type",
                     product.id,
-                    os.path.splitext(product.storage_path)[1][:16],
                 )
                 return None
             contained = _contained_storage_path(product.storage_path, product.id)
