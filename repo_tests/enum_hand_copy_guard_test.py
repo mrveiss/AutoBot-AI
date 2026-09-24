@@ -56,12 +56,14 @@ from __future__ import annotations
 
 import ast
 from collections import defaultdict
+from pathlib import Path
 from typing import Dict, FrozenSet, List, Set, Tuple
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
 
@@ -110,13 +112,8 @@ _DECLARED_SCAFFOLDING: Dict[Tuple[str, str], str] = {
 #: what the two concepts are.
 _DISTINCT_CONCEPTS: Dict[Tuple[str, str], str] = {}
 
-#: A sweep that reads nothing reports clean over anything. Measured at 6,000+
-#: tracked .py files; the floor sits well below that so ordinary growth never
-#: trips it while a broken `git ls-files` does.
-_MIN_SOURCE_FILES = 3000
 
-
-def _tracked_python() -> List[str]:
+def _tracked_python(root: Path = REPO_ROOT) -> List[str]:
     """Tracked ``.py`` paths, through the one canonical enumeration (#15926).
 
     Not a direct ``git ls-files``: ``one_git_enumeration_15926_test`` counts
@@ -125,7 +122,14 @@ def _tracked_python() -> List[str]:
     becomes a git ``:(exclude)`` pathspec, so git does the matching rather than
     a second matcher in Python disagreeing with the first (#15510).
     """
-    return tracked_paths(REPO_ROOT, "*.py", exclude=(".worktrees",))
+    # Returns empty rather than letting EmptyEnumeration escape:
+    # reach_declarations_test drives every declaration against an empty
+    # repository and demands ReachFloorError specifically, which is the only
+    # exception the floor itself raises.
+    try:
+        return tracked_paths(root, "*.py", exclude=(".worktrees",))
+    except EmptyEnumeration:
+        return []
 
 
 def is_test_path(rel: str) -> bool:
@@ -162,12 +166,14 @@ def _scan() -> Tuple[Dict[str, Set[str]], Dict[Tuple[str, str], FrozenSet[str]],
     production: Dict[str, Set[str]] = defaultdict(set)
     tests: Dict[Tuple[str, str], FrozenSet[str]] = {}
     unreadable: List[str] = []
+    parsed = 0
     for rel in _SOURCES:
         try:
             found = enum_members((REPO_ROOT / rel).read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, SyntaxError) as exc:
             unreadable.append(f"{rel}: {exc}")
             continue
+        parsed += 1
         for name, members in found.items():
             if is_test_path(rel):
                 tests[(rel, name)] = members
@@ -175,17 +181,33 @@ def _scan() -> Tuple[Dict[str, Set[str]], Dict[Tuple[str, str], FrozenSet[str]],
                 # Union across every production definition of that name: a member
                 # is only "invented" when NO production enum of that name has it.
                 production[name].update(members)
+    # Candidates are not coverage: the declaration's floor bounds what was
+    # LISTED, this bounds what was actually parsed. Without it the sweep could
+    # enumerate 6,155 files, fail to parse 6,000 of them, and report the same
+    # clean as a tree with no hand-copied enums in it.
+    REACH.completed(parsed)
     return production, tests, unreadable
 
 
+#: A sweep that reads nothing reports clean over anything. This began as a
+#: hand-rolled `_MIN_SOURCE_FILES = 3000` and is migrated under #15928: a
+#: reach-sized floor chosen by feel decays silently, and this one already had.
+#: The real population is 6,155 tracked .py files, so 3000 sat 51% BELOW the
+#: tree it claimed to bind -- the guard would have passed over a sweep that lost
+#: half the codebase and still reported "no test enum invents a member".
+#:
+#: Re-measured from scratch with a throwaway script rather than carried across,
+#: which is what #15928 requires. growth=400 matches the sibling
+#: audio-extension-allowlist declaration over the same population.
+REACH = declare(
+    "enum-hand-copy-census",
+    discover=_tracked_python,
+    floor=5755,
+    growth=400,
+    what="tracked python files",
+)
+
 _SOURCES = _tracked_python()
-
-
-def test_the_sweep_reached_the_tree() -> None:
-    assert len(_SOURCES) >= _MIN_SOURCE_FILES, (
-        f"only {len(_SOURCES)} tracked .py files found, floor is {_MIN_SOURCE_FILES}. "
-        "FIX THE SWEEP — a guard that reads nothing reports clean over anything."
-    )
 
 
 def test_the_scan_could_read_every_file() -> None:
