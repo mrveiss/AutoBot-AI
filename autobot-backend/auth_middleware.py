@@ -583,7 +583,7 @@ class AuthenticationMiddleware:
         # token with NO identity claim at all is treated as invalid.
         username = token_data.get("username") or token_data.get("sub") or token_data.get("user_id")
         if not username or is_purpose_bound(token_data):
-            logger.warning("JWT rejected: no identity claim, or minted for another purpose (#12135, #17049)")
+            logger.warning("JWT rejected: %s", "no identity claim" if not username else "minted for another purpose")
             return None
 
         user = {

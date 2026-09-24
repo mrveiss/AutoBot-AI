@@ -150,3 +150,30 @@ def test_the_http_path_still_accepts_an_slm_login(monkeypatch: pytest.MonkeyPatc
     assert user is not None
     assert user["username"] == "alice"
     assert user["auth_method"] == "jwt"
+
+
+def test_the_refusal_names_which_predicate_fired(monkeypatch: pytest.MonkeyPatch, caplog) -> None:
+    """Two causes, two messages — the operator's question is precisely WHICH.
+
+    The gate merges "no identity claim" and "minted for another purpose" into
+    one condition, which is correct: both mean "not a login". But the log is the
+    only observable an operator has, and "why was my device JWT refused" and
+    "why is this token missing a subject" are different investigations. A merged
+    line sends the second one looking for a malformed token that is fine.
+    """
+    import logging
+
+    mw = _middleware()
+
+    monkeypatch.setattr(type(mw), "verify_jwt_token", lambda self, token: {"role": "user"}, raising=False)
+    with caplog.at_level(logging.WARNING):
+        assert mw._extract_user_from_jwt(_Req("t")) is None
+    assert "no identity claim" in caplog.text
+    assert "minted for another purpose" not in caplog.text
+
+    caplog.clear()
+    monkeypatch.setattr(type(mw), "verify_jwt_token", lambda self, token: _DEVICE_JWT, raising=False)
+    with caplog.at_level(logging.WARNING):
+        assert mw._extract_user_from_jwt(_Req("t")) is None
+    assert "minted for another purpose" in caplog.text
+    assert "no identity claim" not in caplog.text
