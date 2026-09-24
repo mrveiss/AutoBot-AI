@@ -20,6 +20,14 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
+class ConversationNotOwnedError(PermissionError):
+    """A caller named a conversation it does not own when creating a session (#17422).
+
+    Raised for someone else's conversation and for one with no resolvable owner
+    alike, so the refusal never says which.
+    """
+
+
 async def conversation_owner(chat_history_manager: Any, conversation_id: Optional[str]) -> Optional[str]:
     """The conversation's owner username, or None."""
     if not conversation_id:
