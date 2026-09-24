@@ -35,7 +35,8 @@ agent-to-agent coordination semantics as an anti-goal
 ## Scope grammar
 
 `<kind>:<segment>/<segment>/...`, kinds `path`, `kb`, `device`, `project`,
-`config`. A claim covers its **subtree**, and prefixes are segment-aligned:
+`config`, `issue`. A claim covers its **subtree**, and prefixes are
+segment-aligned:
 
 - `path:a/b` covers `path:a/b/c.py`
 - `path:a/b` does **not** cover `path:a/bc.py`
@@ -45,6 +46,25 @@ There is deliberately no `dir` kind. Two kinds over one namespace would need the
 overlap rule to know that `dir` and `file` are the same namespace while `kb` and
 `device` are not, and a rule with an exception table is the kind nobody applies
 correctly at the next call site.
+
+`issue:<number>` (#17091) is a GitHub issue, always a single segment — no
+subtree. It is what AutoBot's own dev-loop participation claims before acting
+on an issue, so it does not collide with an agent session already working the
+same one; `autobot-backend/agents/dev_loop_issue_gate.py` is the first caller.
+Not a `task` (Principle 1's `task` refusal is about task *identity*, which an
+issue outlives), so `services/task_claim.py` is the wrong place for it.
+
+**The dev loop's action history** lives beside the claims, in the same keyspace
+(`work_claims:actions:issue:<n>`, `autobot_shared/coordination/dev_loop_actions.py`).
+A claim says who holds an issue *now* and disappears on release; this is what was
+done to it and at what cost, including the attempts that never ran — an issue
+skipped because another session held it, and an action the spend or rate budget
+refused (#17091). A refusal that leaves no trace cannot be told apart from an
+action nobody attempted, which is the distinction `MEASUREMENT_DISCIPLINE.md`
+is about; `recent()` reads empty for an untouched issue and *raises* when Redis
+is unreachable, so those two never look the same either. Writing an entry is
+best-effort and returns `False` when it fails: the claim is already held by
+then, so a failed audit write must not fail the work it describes.
 
 ## Design tests
 

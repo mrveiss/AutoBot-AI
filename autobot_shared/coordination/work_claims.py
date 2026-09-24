@@ -91,7 +91,14 @@ CLAIM_TTL_S = env_int_clamped("AUTOBOT_WORK_CLAIM_TTL_S", 300, min_v=10, max_v=3
 #: case: the existing subtree-overlap rule degrades correctly to exact-match
 #: when a scope has no sub-segments, the same way ``project:acme`` already
 #: behaves. No new overlap semantics, no new kind of kind.
-VALID_KINDS = frozenset({"path", "kb", "device", "project", "config", "provider", "cpu", "queue"})
+#:
+#: ``issue`` (#17091): a GitHub issue number, flat -- ``issue:17091`` has no
+#: subtree, so the segment is always exactly one. It is the extension point for
+#: "the same claim registry the agents use" applied to AutoBot's own dev-loop
+#: participation. It is deliberately not a ``task``: an issue outlives any
+#: single run that acts on it, and #15957's ``task`` refusal is about task
+#: IDENTITY, so this belongs here rather than in ``services/task_claim.py``.
+VALID_KINDS = frozenset({"path", "kb", "device", "project", "config", "provider", "cpu", "queue", "issue"})
 
 #: Kinds this module deliberately refuses, and where each belongs instead.
 #:

@@ -83,8 +83,28 @@ def test_parse_rejects_unusable_scopes(raw):
 def test_parse_accepts_every_valid_kind():
     # provider/cpu/queue (#16951): flat, contended-resource kinds, not
     # filesystem-shaped trees -- parsed and overlap-checked identically.
-    for kind in ("path", "kb", "device", "project", "config", "provider", "cpu", "queue"):
+    # issue (#17091): AutoBot's own dev-loop claims, flat for the same reason.
+    for kind in sorted(VALID_KINDS):
         assert Scope.parse(f"{kind}:a/b").kind == kind
+
+
+def test_the_loop_above_covers_every_valid_kind():
+    """A kind added to VALID_KINDS without a parse rule would pass silently.
+
+    The loop is derived from VALID_KINDS rather than restated, so this pins the
+    set itself -- the one thing deriving it cannot check (#17091).
+    """
+    assert sorted(VALID_KINDS) == [
+        "config",
+        "cpu",
+        "device",
+        "issue",
+        "kb",
+        "path",
+        "project",
+        "provider",
+        "queue",
+    ]
 
 
 # ---------------------------------------------------------------------------

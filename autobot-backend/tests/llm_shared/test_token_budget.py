@@ -201,3 +201,111 @@ class TestBaseProviderIntegration:
         second = await provider.chat_completion(_request(session_id=session, max_tokens=100))
         assert second.error is not None
         assert "budget" in second.error.lower()
+
+
+class TestDevLoopBudgetGate:
+    """AutoBot's own dev-loop participation budget (#17091): spend (tokens)
+    and rate (actions/hour), both pre-flight, both disabled unless configured.
+    """
+
+    @pytest.mark.asyncio
+    async def test_disabled_by_default_is_a_noop(self):
+        assert token_budget.DEV_LOOP_TOKEN_BUDGET <= 0
+        assert token_budget.DEV_LOOP_RATE_PER_HOUR <= 0
+        gate = token_budget.TokenBudgetGate()
+        assert await gate.evaluate_dev_loop_action(1_000_000) is None
+
+    @pytest.mark.asyncio
+    async def test_under_spend_budget_proceeds(self, monkeypatch):
+        monkeypatch.setattr(token_budget, "DEV_LOOP_TOKEN_BUDGET", 1000)
+        gate = token_budget.TokenBudgetGate()
+        assert await gate.evaluate_dev_loop_action(100) is None
+
+    @pytest.mark.asyncio
+    async def test_over_spend_budget_refuses_without_raising(self, monkeypatch):
+        monkeypatch.setattr(token_budget, "DEV_LOOP_TOKEN_BUDGET", 100)
+        gate = token_budget.TokenBudgetGate()
+        refusal = await gate.evaluate_dev_loop_action(200)
+        assert isinstance(refusal, token_budget.DevLoopBudgetRefusal)
+        assert "token budget" in refusal.reason
+
+    @pytest.mark.asyncio
+    async def test_spend_accumulates_across_recorded_actions(self, monkeypatch):
+        monkeypatch.setattr(token_budget, "DEV_LOOP_TOKEN_BUDGET", 150)
+        gate = token_budget.TokenBudgetGate()
+
+        assert await gate.evaluate_dev_loop_action(100) is None
+        await gate.record_dev_loop_action(100)
+
+        refusal = await gate.evaluate_dev_loop_action(100)
+        assert isinstance(refusal, token_budget.DevLoopBudgetRefusal)
+
+    @pytest.mark.asyncio
+    async def test_under_rate_budget_proceeds(self, monkeypatch):
+        monkeypatch.setattr(token_budget, "DEV_LOOP_RATE_PER_HOUR", 3)
+        gate = token_budget.TokenBudgetGate()
+        for _ in range(2):
+            assert await gate.evaluate_dev_loop_action(1) is None
+            await gate.record_dev_loop_action(1)
+        assert await gate.evaluate_dev_loop_action(1) is None
+
+    @pytest.mark.asyncio
+    async def test_at_rate_budget_refuses_the_next_action(self, monkeypatch):
+        monkeypatch.setattr(token_budget, "DEV_LOOP_RATE_PER_HOUR", 2)
+        gate = token_budget.TokenBudgetGate()
+        for _ in range(2):
+            assert await gate.evaluate_dev_loop_action(1) is None
+            await gate.record_dev_loop_action(1)
+
+        refusal = await gate.evaluate_dev_loop_action(1)
+        assert isinstance(refusal, token_budget.DevLoopBudgetRefusal)
+        assert "rate budget" in refusal.reason
+
+    @pytest.mark.asyncio
+    async def test_spend_is_checked_before_rate(self, monkeypatch):
+        """An action already over its spend budget must not also spend a rate
+        slot -- evaluate_dev_loop_action must not call record itself."""
+        monkeypatch.setattr(token_budget, "DEV_LOOP_TOKEN_BUDGET", 10)
+        monkeypatch.setattr(token_budget, "DEV_LOOP_RATE_PER_HOUR", 5)
+        gate = token_budget.TokenBudgetGate()
+
+        refusal = await gate.evaluate_dev_loop_action(100)
+
+        assert isinstance(refusal, token_budget.DevLoopBudgetRefusal)
+        assert "token budget" in refusal.reason
+        status = await gate.remaining_dev_loop_budget()
+        assert status.actions_this_hour == 0, "evaluate() alone must never record a rate slot"
+
+    @pytest.mark.asyncio
+    async def test_remaining_dev_loop_budget_reports_usage(self, monkeypatch):
+        monkeypatch.setattr(token_budget, "DEV_LOOP_TOKEN_BUDGET", 100)
+        monkeypatch.setattr(token_budget, "DEV_LOOP_RATE_PER_HOUR", 5)
+        gate = token_budget.TokenBudgetGate()
+
+        await gate.record_dev_loop_action(30)
+
+        status = await gate.remaining_dev_loop_budget()
+        assert status.spend_used == 30
+        assert status.spend_budget == 100
+        assert status.actions_this_hour == 1
+        assert status.rate_budget == 5
+
+    @pytest.mark.asyncio
+    async def test_remaining_dev_loop_budget_reports_none_ceiling_when_unconfigured(self):
+        gate = token_budget.TokenBudgetGate()
+        status = await gate.remaining_dev_loop_budget()
+        assert status.spend_budget is None
+        assert status.rate_budget is None
+
+    @pytest.mark.asyncio
+    async def test_redis_unavailable_fails_open(self, monkeypatch):
+        monkeypatch.setattr(token_budget, "DEV_LOOP_TOKEN_BUDGET", 1)
+        gate = token_budget.TokenBudgetGate()
+
+        async def _boom():
+            raise ConnectionError("redis is down")
+
+        monkeypatch.setattr(gate, "_get_redis", _boom)
+
+        assert await gate.evaluate_dev_loop_action(1_000_000) is None
+        await gate.record_dev_loop_action(1_000_000)  # must not raise either

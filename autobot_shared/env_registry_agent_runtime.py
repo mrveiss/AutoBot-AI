@@ -300,6 +300,37 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_DEV_LOOP_ACTION_LOG_TTL_S",
+        type=int,
+        default=604800,
+        description=(
+            "How long one issue's dev-loop action history survives in the claim registry "
+            "(#17091). Long enough to answer 'why did the loop stop on this issue' after a "
+            "weekend; the floor keeps an hour of history at minimum, the ceiling bounds an "
+            "abandoned issue's entries at a month."
+        ),
+        component="orchestration",
+        range=(3600, 2592000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DEV_LOOP_ACTION_LOG_MAX",
+        type=int,
+        default=200,
+        description=(
+            "Dev-loop action entries kept per issue (#17091). The list is trimmed to the most "
+            "recent, so an issue the loop retries many times cannot crowd every other issue's "
+            "history out of Redis memory."
+        ),
+        component="orchestration",
+        range=(10, 5000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_WORK_CLAIM_TTL_S",
         type=int,
         default=300,
