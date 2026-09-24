@@ -33,9 +33,12 @@ import pathlib
 import re
 
 import pytest
+from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-_ROOT = pathlib.Path(__file__).resolve().parents[1]
+#: `repo_root()`, never `__file__.parents[N]` -- #15925 pins one spelling so a
+#: guard cannot silently bind a different tree than the rest of the suite.
+_ROOT = repo_root()
 _SCAN_DIRS = ("scripts", "pipeline-scripts", "tools")
 
 #: `cd "$(git_repo_root)"` in any form -- the guard that cannot fire.
