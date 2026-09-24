@@ -21,7 +21,6 @@ from __future__ import annotations
 import importlib
 
 import pytest
-from repo_tests.sdk_request_shared import _BACKEND, _BACKEND_API_ROOT
 
 from autobot_shared.api_routing import router_prefixes as routing
 
@@ -99,6 +98,15 @@ def _serving_openapi() -> dict:
     # through here.
     from fastapi import FastAPI
     from fastapi.openapi.utils import get_openapi
+
+    # `sdk_request_shared` imports `httpx` and `autobot_sdk` at module scope, so
+    # it belongs in here for the same reason FastAPI does -- and it is the reason
+    # the first fix was not enough: moving one import exposed the next one down
+    # the chain, and CI reported `ModuleNotFoundError: No module named 'httpx'`
+    # from the same line of the same conftest. The condition is not "fastapi is
+    # missing", it is "only pytest is installed", and every module-level import
+    # here has to answer to that (#14781).
+    from repo_tests.sdk_request_shared import _BACKEND, _BACKEND_API_ROOT
 
     registry = dict(routing.registry_entries(_BACKEND / "initialization" / "router_registry"))
     assert registry, "the router registry parsed no entries -- the oracles below would have nothing to mount"

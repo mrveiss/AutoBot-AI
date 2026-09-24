@@ -46,7 +46,16 @@ from typing import Sequence
 #: Lower it only in the change that removes baseline entries; raise it as audited
 #: entries accumulate. repo_tests/no_tracked_key_material_test.py holds it at or
 #: under the committed count and within a fixed headroom of it.
-FLOOR = 1_383
+#:
+#: 1,885 measured 2026-09-24 against 1,916 committed, same 31 margin. The jump
+#: from 1,383 is #14781 bringing the SLM console to eleven locales: ten generated
+#: `autobot-slm-frontend/src/locales/*.json` carry ~52 `Secret Keyword` findings
+#: each -- UI labels reading "Password", "API Key" and the like, audited
+#: `is_secret: false`. That is the same shape already accepted for
+#: `autobot-frontend/src/i18n/locales` (632 entries across its own eleven files),
+#: so it is the established treatment rather than a new exemption, and 22
+#: `Private Key` entries come OUT in the same change.
+FLOOR = 1_885
 
 
 def count_findings(baseline: object) -> int:

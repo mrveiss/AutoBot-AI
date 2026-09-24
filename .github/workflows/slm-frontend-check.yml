@@ -139,7 +139,15 @@ jobs:
       - name: Install pytest
         if: needs.changes.outputs.slm_frontend == 'true'
         working-directory: .
-        run: python3 -m pip install --quiet pytest
+        # pytest-asyncio as well as pytest, because `pytest.ini`'s global
+        # `addopts` carries `--asyncio-mode=auto` and this job runs from that
+        # rootdir. Bare pytest exits with "unrecognized arguments:
+        # --asyncio-mode=auto" before it collects anything -- the same hazard
+        # pytest.ini's own comment documents for a global `-n`, which it keeps
+        # out of addopts precisely so bare-pytest jobs like this one survive.
+        # These two guards are synchronous and need none of pytest-asyncio's
+        # behaviour; it is here to satisfy the rootdir's arguments.
+        run: python3 -m pip install --quiet pytest pytest-asyncio
 
       - name: i18n guards (bare literals, locale parity)
         if: needs.changes.outputs.slm_frontend == 'true'
