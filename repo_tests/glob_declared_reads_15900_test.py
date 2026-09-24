@@ -166,7 +166,10 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "root-relative `*.ts` sweep; the matching files live outside the python filter's trees",
     ),
     "*.vue": (
-        {"repo_tests/slm_frontend_calls_reach_served_routes_test.py"},
+        {
+            "repo_tests/slm_frontend_bare_ui_literals_test.py",
+            "repo_tests/slm_frontend_calls_reach_served_routes_test.py",
+        },
         "root-relative `*.vue` sweep; the matching files live outside the python filter's trees",
     ),
     "*.yaml": (

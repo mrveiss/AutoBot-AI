@@ -35,6 +35,16 @@ measuring nothing:
 - a string that is already an interpolation, a `$t(...)`/`t(...)` call, a URL, a
   path, or a single CamelCase/snake_case identifier.
 
+WHERE THIS RUNS, because a gate that does not fire on the change it guards is
+the shape #15665 is about. It declares a `*.vue` glob, and the python path
+filter does not cover `autobot-slm-frontend/` -- a gap recorded deliberately in
+`glob_declared_reads_15900_test.py`, since widening the filter to those trees
+would cost twelve shards on nearly every pull request. So a .vue-only change
+would not reach the python suite at all. `slm-frontend-check.yml`, which DOES
+trigger on `autobot-slm-frontend/**`, runs this file directly for exactly that
+reason. Two entry points, one guard, and the recorded glob dependency is what
+makes the arrangement legible rather than lucky.
+
 THERE IS NO BASELINE, and that is a measurement rather than an aspiration. The
 sweep #15665 asked for found FIVE user-visible literals across 113 components:
 one real `aria-label` (`App.vue`) and four sentences assembled around

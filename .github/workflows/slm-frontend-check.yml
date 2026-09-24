@@ -117,6 +117,23 @@ jobs:
         working-directory: .
         run: python3 scripts/lift_locale_translations.py --app autobot-slm-frontend/src/locales --check
 
+      # The two repo_tests guards run HERE as well as in the python suite, and
+      # the reason is #15900: they declare `*.vue` / `*.json` globs, which the
+      # python path filter does not cover. That gap is recorded deliberately in
+      # `repo_tests/glob_declared_reads_15900_test.py` -- widening the filter to
+      # those trees would cost twelve shards on nearly every pull request -- but
+      # the consequence is that a .vue-only change would not run them. A gate
+      # that does not fire on the change it guards is the vacuous shape #15665
+      # exists to close, so this workflow, which DOES trigger on
+      # autobot-slm-frontend/**, runs them on exactly those changes.
+      - name: i18n guards (bare literals, locale parity)
+        if: needs.changes.outputs.slm_frontend == 'true'
+        working-directory: .
+        run: |
+          python3 -m pytest -q \
+            repo_tests/slm_frontend_bare_ui_literals_test.py \
+            repo_tests/slm_frontend_i18n_parity_test.py
+
       - name: Build
         if: needs.changes.outputs.slm_frontend == 'true'
         # build:slm sets VITE_API_URL=/slm (the co-located base the vite config requires).
