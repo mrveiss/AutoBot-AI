@@ -27,6 +27,7 @@ What these pin, in the order the failure happens:
 
 from __future__ import annotations
 
+import ast
 import subprocess
 import sys
 from pathlib import Path
@@ -211,35 +212,135 @@ def test_the_shared_task_stages_the_module_and_runs_it():
     assert "{{ husk_venv_dir }}/bin/python" in rendered, "must run with the TARGET venv's interpreter"
 
 
-def test_the_shared_task_does_not_re_express_the_classification():
-    """A `find -name '*.dist-info'` step here would fork the rule that deletes."""
-    rendered = TASK_FILE.read_text(encoding="utf-8")
-
-    for forked in ("dist-info", "METADATA", "RECORD"):
-        assert f"-name '*{forked}" not in rendered
-    assert "rm -rf" not in rendered
-    assert "shell:" not in rendered, "a shell step here would fork the rule that decides a deletion"
-
-
-@pytest.mark.parametrize(
-    ("role_tasks", "venv_var"),
-    [
-        ("roles/backend/tasks/main.yml", "backend_code_dir"),
-        ("roles/slm_manager/tasks/main.yml", "slm_backend_dir"),
-    ],
+#: Spellings that would re-express the deletion rule in YAML instead of calling
+#: it. `.dist-info` carries the DOT because real directories are
+#: `pkg-1.0.dist-info` -- the first version of this list omitted it and let the
+#: worked example from its own docstring straight through (#17339 review).
+FORKED_RULE_MARKERS: tuple = (
+    "-name '*.dist-info'",
+    '-name "*.dist-info"',
+    "rm -rf",
+    "shell:",
+    "METADATA",
+    "RECORD",
 )
-def test_both_marker_capable_roles_include_the_repair(role_tasks, venv_var):
-    """`_COMPONENT_PIP_PATHS` names exactly these two venvs; nothing else can husk."""
+
+
+def _forked_rule_hits(rendered: str) -> list:
+    """Every re-expression marker present in *rendered*."""
+    return [marker for marker in FORKED_RULE_MARKERS if marker in rendered]
+
+
+def _task_content(path: Path) -> str:
+    """The task file's CONTENT with comments dropped.
+
+    Scanned after a YAML round-trip on purpose: this file's own header explains
+    the rule it must not fork, so it names `find -name '*.dist-info'`,
+    `METADATA` and `RECORD` in prose. A raw-text scan would flag the
+    documentation and force the explanation out -- the #16750 shape, where a
+    scan that reads comments makes the comment the defect.
+    """
+    return yaml.safe_dump(yaml.safe_load(path.read_text(encoding="utf-8")), default_flow_style=False)
+
+
+def test_the_detector_catches_its_own_worked_example():
+    """Positive control: a guard never shown to fire is not evidence.
+
+    The task file is clean, so the check below reports a true negative either
+    way -- which is exactly how a matcher that cannot match looks correct. This
+    feeds it the reimplementation the guard exists to stop.
+    """
+    worked_example = "ansible.builtin.command: find {{ dir }} -name '*.dist-info' -delete"
+
+    assert _forked_rule_hits(worked_example) == ["-name '*.dist-info'"]
+    assert _forked_rule_hits("ansible.builtin.shell: rm -rf {{ dir }}") == ["rm -rf", "shell:"]
+
+
+def test_the_shared_task_does_not_re_express_the_classification():
+    """A `find -name '*.dist-info'` STEP here would fork the rule that deletes.
+
+    Comments are exempt by construction (see `_task_content`): this file has to
+    be able to explain what it forbids.
+    """
+    assert _forked_rule_hits(_task_content(TASK_FILE)) == []
+
+
+#: Which ansible role provisions each marker-capable component's venv. The KEYS
+#: are checked against the set DERIVED from source below, so a new
+#: marker-capable component fails this file until someone maps it.
+COMPONENT_ROLES: dict = {
+    "autobot-backend": ("roles/backend/tasks/main.yml", "backend_code_dir"),
+    "autobot-slm-backend": ("roles/slm_manager/tasks/main.yml", "slm_backend_dir"),
+    "autobot-ai-stack": ("roles/ai-stack/tasks/main.yml", "ai_install_dir"),
+}
+
+
+def _assigned_value(module: Path, name: str):
+    """The value node of a module-level assignment, read with ast rather than import."""
+    tree = ast.parse(module.read_text(encoding="utf-8"), filename=str(module))
+    for node in ast.walk(tree):
+        targets = getattr(node, "targets", []) or ([node.target] if getattr(node, "target", None) else [])
+        if any(isinstance(t, ast.Name) and t.id == name for t in targets):
+            return node.value
+    raise AssertionError(f"{name} not found in {module} -- the derivation is broken, not the claim")
+
+
+def _dict_keys_from_source(module: Path, name: str) -> set:
+    value = _assigned_value(module, name)
+    assert isinstance(value, ast.Dict), f"{name} is no longer a dict literal"
+    return {key.value for key in value.keys if isinstance(key, ast.Constant)}
+
+
+def _explicit_list_components() -> set:
+    value = _assigned_value(SLM_ROOT / "api" / "venv_reconcile.py", "EXPLICIT_LIST_COMPONENTS")
+    return {
+        elt.value
+        for node in ast.walk(value)
+        if isinstance(node, (ast.Set, ast.List, ast.Tuple))
+        for elt in node.elts
+        if isinstance(elt, ast.Constant)
+    }
+
+
+def marker_capable_components() -> set:
+    """Components whose venv `reconcile_component` can stamp with a marker.
+
+    DERIVED from the source rather than restated: both dicts that reach
+    `reconcile_component`, minus the components that take the explicit-list
+    branch and never touch a requirements file. The first version of this PR
+    hand-wrote the set, missed `autobot-ai-stack`, and the test could not
+    notice -- because the claim was its own parametrisation.
+    """
+    code_sync = SLM_ROOT / "api" / "code_sync.py"
+    return (
+        _dict_keys_from_source(code_sync, "_COMPONENT_PIP_PATHS")
+        | _dict_keys_from_source(code_sync, "_WORKER_COMPONENT_PIP")
+    ) - _explicit_list_components()
+
+
+def test_the_role_map_covers_every_marker_capable_component():
+    """The falsifiable half: a new component in either dict fails here first."""
+    assert set(COMPONENT_ROLES) == marker_capable_components()
+
+
+def test_the_derivation_finds_the_component_the_first_version_missed():
+    """Positive control on the derivation itself (#17339 review)."""
+    capable = marker_capable_components()
+
+    assert "autobot-ai-stack" in capable
+    assert "autobot-npu-worker" not in capable
+
+
+@pytest.mark.parametrize(("component", "mapping"), sorted(COMPONENT_ROLES.items()))
+def test_every_marker_capable_role_includes_the_repair(component, mapping):
+    role_tasks, venv_var = mapping
     rendered = (ANSIBLE_ROOT / role_tasks).read_text(encoding="utf-8")
 
-    assert "_shared/tasks/clear_venv_husks.yml" in rendered
+    assert "_shared/tasks/clear_venv_husks.yml" in rendered, f"{component}'s role must include the repair"
     assert f'husk_venv_dir: "{{{{ {venv_var} }}}}/venv"' in rendered
 
 
-@pytest.mark.parametrize(
-    "role_tasks",
-    ["roles/backend/tasks/main.yml", "roles/slm_manager/tasks/main.yml"],
-)
+@pytest.mark.parametrize("role_tasks", sorted(mapping[0] for mapping in COMPONENT_ROLES.values()))
 def test_the_repair_precedes_the_first_pip_step(role_tasks):
     """After the pip step the deploy has already aborted, so order is the fix."""
     rendered = (ANSIBLE_ROOT / role_tasks).read_text(encoding="utf-8")

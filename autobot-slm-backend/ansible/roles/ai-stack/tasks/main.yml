@@ -141,6 +141,16 @@
     group: "{{ ai_group }}"
     mode: "0755"
 
+# #17339: this venv is marker-capable too -- `autobot-ai-stack` reaches
+# `reconcile_component` through `code_sync._WORKER_COMPONENT_PIP` and is NOT in
+# `EXPLICIT_LIST_COMPONENTS`, so a host code-synced before #17332 can carry
+# husks here. Cleared before the first pip step, since pip aborts at the first
+# husk it must uninstall.
+- name: "AI Stack | Clear venv provenance husks before pip (#17339)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/clear_venv_husks.yml
+  vars:
+    husk_venv_dir: "{{ ai_install_dir }}/venv"
+
 - name: Upgrade pip in venv
   ansible.builtin.pip:
     name: pip
