@@ -43,12 +43,14 @@ separator.
 from __future__ import annotations
 
 import pathlib
+import subprocess
 from typing import List, Tuple
 
 import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.paths import scrubbed_git_env
 from tools.lint._scan_helpers import tracked_paths
 
 _CONFIG = ".pre-commit-config.yaml"
@@ -128,14 +130,39 @@ def test_the_hook_is_still_armed() -> None:
     )
 
 
+def _git(cwd: pathlib.Path, *args: str) -> subprocess.CompletedProcess:
+    """#15246: env scrubbed -- an inherited GIT_DIR would point these calls at
+    the real repository instead of the throwaway one under tmp_path."""
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True, env=scrubbed_git_env())
+
+
 @pytest.mark.parametrize("marker", [_OUTER_PREFIXES[0], _SEPARATOR, _OUTER_PREFIXES[1]])
 def test_the_detector_recognises_each_marker_shape(marker: str, tmp_path: pathlib.Path) -> None:
-    """A detector is worth what it detects, and the separator is the easy miss.
+    """Each marker shape, run THROUGH `_conflict_sites` over a real tracked file.
 
-    Asserted through `_conflict_sites`' own predicate rather than re-implemented
-    here: a contrast written inline would pass against a detector that cannot
-    see the bare `=======`, which is precisely the bug in the acceptance
-    criteria's proposed regex.
+    The previous version of this test claimed in its docstring to assert
+    through the predicate rather than re-implement it, and then re-implemented
+    it inline. So it could not fail: dropping `or line.rstrip() == _SEPARATOR`
+    from `_conflict_sites` left all three cases green -- including the
+    separator, which this docstring calls the easy miss. Measured, not
+    inferred: that mutation gave `6 passed`.
+
+    It also accepted `tmp_path` and never used it, which was the fix reaching
+    for itself.
+
+    A test that re-states a predicate agrees with itself by construction, and
+    no amount of care in writing the restatement changes that. The only way to
+    pin a detector is to run it over something it must detect.
     """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "--quiet", "--initial-branch=main")
     line = marker if marker == _SEPARATOR else f"{marker}some-branch"
-    assert line.startswith(_OUTER_PREFIXES) or line.rstrip() == _SEPARATOR
+    (repo / "conflicted.txt").write_text(f"before\n{line}\nafter\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+
+    sites = _conflict_sites(repo)
+
+    assert [(path, number) for path, number, _ in sites] == [
+        ("conflicted.txt", 2)
+    ], f"the detector did not see {marker!r} on line 2 -- it returned {sites}"
