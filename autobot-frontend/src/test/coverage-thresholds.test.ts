@@ -52,29 +52,44 @@ function thresholdBlock(source: string): string {
   throw new Error('the `thresholds` block is not brace-balanced')
 }
 
-/** Top-level keys of the block, ignoring comments and nested objects. */
-function topLevelKeys(block: string): string[] {
+/**
+ * Top-level `key: value` pairs of the block, ignoring comments and nested
+ * objects.
+ *
+ * Both tests below read THIS, never the block's raw text. A regex over the raw
+ * text matches a metric that has been commented out just as happily as one
+ * vitest enforces -- which would let the exact evasion these tests exist to
+ * catch pass them both.
+ */
+function topLevelEntries(block: string): Map<string, string> {
   const body = block.slice(block.indexOf('{') + 1, block.lastIndexOf('}'))
-  const keys: string[] = []
+  const entries = new Map<string, string>()
   let depth = 0
   for (const rawLine of body.split('\n')) {
     const line = rawLine.replace(/\/\/.*$/, '').trim()
+    // A quoted key is captured whole: a per-file glob ('src/**') is not an
+    // identifier, and silently skipping it would hide the very key shape that
+    // makes a threshold block inert.
     if (depth === 0) {
-      const match = line.match(/^['"]?([A-Za-z0-9_]+)['"]?\s*:/)
-      if (match) keys.push(match[1])
+      const match = line.match(/^(?:'([^']*)'|"([^"]*)"|([A-Za-z0-9_$]+))\s*:\s*(.*)$/)
+      if (match) {
+        const key = match[1] ?? match[2] ?? match[3]
+        entries.set(key, (match[4] ?? '').trim().replace(/,$/, ''))
+      }
     }
     depth += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length
   }
-  return keys
+  return entries
 }
 
 describe('the coverage threshold block (#17324)', () => {
   if (!existsSync(CONFIG_PATH)) {
     throw new Error(`cannot read the config this test exists to check: ${CONFIG_PATH}`)
   }
-  const source = readFileSync(CONFIG_PATH, 'utf-8')
+  const source = readFileSync(CONFIG_PATH, 'utf-8').replace(/\/\*[\s\S]*?\*\//g, '')
   const block = thresholdBlock(source)
-  const keys = topLevelKeys(block)
+  const entries = topLevelEntries(block)
+  const keys = [...entries.keys()]
 
   it('uses only keys vitest reads as thresholds', () => {
     const globs = keys.filter(key => !THRESHOLD_KEYS.has(key))
@@ -87,9 +102,21 @@ describe('the coverage threshold block (#17324)', () => {
 
   it('still pins every metric to a number', () => {
     for (const metric of METRICS) {
-      const match = block.match(new RegExp(`\\b${metric}\\s*:\\s*(\\d+(?:\\.\\d+)?)`))
-      expect(match, `no floor pinned for ${metric} — an unpinned metric is ungated`).not.toBeNull()
-      expect(Number(match![1]), `${metric} floor must be a number`).not.toBeNaN()
+      const value = entries.get(metric)
+      expect(
+        value,
+        `no floor pinned for ${metric} — an unpinned metric is ungated. ` +
+          `Commenting one out leaves its text in the file but removes it from the ` +
+          `object vitest reads, which is why this checks the parsed entries.`,
+      ).toBeDefined()
+      // `Number('')` is 0, not NaN, so a bare `statements:` would otherwise read
+      // as a pinned floor of zero. Match the text, then rule on the value.
+      expect(value, `${metric} floor is not a number: ${JSON.stringify(value)}`).toMatch(/^\d+(\.\d+)?$/)
+      expect(
+        Number(value),
+        `${metric} floor is 0 — vitest enforces it and every run passes, which is ` +
+          `an inert gate wearing a number rather than a floor`,
+      ).toBeGreaterThan(0)
     }
   })
 })
