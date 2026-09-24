@@ -104,6 +104,26 @@ def test_excluded_module_does_not_use_the_decision_seam(relative_path: str, reas
     ), f"{relative_path} must not use the decision seam: {reason}"
 
 
+def test_the_detector_finds_a_seam_import_where_one_exists() -> None:
+    """Positive control: the exclusions above are worthless if `_imports` is blind.
+
+    Every case in the parametrised test asserts an ABSENCE. If `_imports`
+    returned an empty set for every file -- a changed AST node type, a silent
+    exception, a walk that stops early -- all nine would still pass, reporting
+    "nothing found" when it means "did not look". So one case asserts the
+    detector finds a seam import where the tree genuinely has one, and it is
+    deliberately a production caller (`claim_verifier` migrated onto the seam
+    in #17308) rather than a fixture that could drift out of the same shape.
+    """
+    user = _REPO_ROOT / "autobot-backend/services/claim_verifier.py"
+    names = _imports(user)
+
+    assert any(name == _SEAM_MODULE or name.startswith(f"{_SEAM_MODULE}.") for name in names), (
+        f"{_SEAM_MODULE} import not detected in a file that imports it -- "
+        "the exclusion checks above cannot be trusted while this fails"
+    )
+
+
 def test_the_repo_root_resolves_to_this_checkout() -> None:
     """A positive control: the derived root really is the tree under test."""
     assert (_REPO_ROOT / "autobot_shared").is_dir()
