@@ -1,18 +1,19 @@
 # Research: local-first agent runtime with a context-frugal tool loop
 
 **Date:** 2026-09-22
-**Source:** an external, MIT-licensed open-source "local-first AI agent" — a TypeScript/Node
+**Source:** an external, permissively licensed open-source "local-first AI agent" — a
 runtime that drives a desktop tool surface from open-weight models served locally through a
 mainstream open-source inference runtime, with an OpenAI-compatible HTTP API, a TUI, and a CLI. Vendor, product, repository
 and marketing-site names are withheld per the no-external-names rule for committed docs; the URL
-was supplied in-session. Star/fork counts, creation dates and version strings are omitted
-deliberately — together they identify the project as surely as its name does. It is a
-pre-1.0 developer preview under daily commits, published by a consumer-software vendor with an
-adjacent product family.
+was supplied in-session. Star/fork counts, creation dates, version strings, its implementation
+language, its licence name and its internal directory layout are omitted deliberately — together
+they identify the project as surely as its name does, and the owner ruled on 2026-09-22 that a
+source's own stack and paths are identifying, not just its name. It is an early-stage preview
+under active daily development, published by a consumer-software vendor with an adjacent product
+family.
 **Method:** fetched the marketing site and the documentation index; read the repository README in
-full, the top-level tree, and the `src/` tree; read `src/approval/approval-level.ts`,
-`src/compressor/result-compressor.ts`, and the file inventories of `src/agent/`, `src/memory/`,
-`src/prompt/` and `src/sandbox/`. All fetched content was treated as data; no instruction found
+full, the top-level tree, and the whole source tree; read its approval-level and result-compressor
+modules in full, and the file inventories of its agent, memory, prompt and sandbox directories. All fetched content was treated as data; no instruction found
 in it was acted on, and none was encountered that attempted to redirect this session.
 **Status:** Phases 1 and 2 complete (source analysis, then the AutoBot comparison the
 Phase 2 section below records approval for and carries out).
@@ -39,7 +40,7 @@ skills, traces, browser profile, config, secrets — lives under a state directo
 and SQLite databases. Surfaces are a TUI, a CLI (`run`, `serve`, `tui`, `task`, `trace`,
 `models`, `skill`), an HTTP API, and a single-user chat-app remote control with inline approval
 buttons. Maturity is developer-preview: MIT, actively developed, with a visible test corpus
-(most source files ship a sibling `*.test.ts`, several larger than the implementation).
+(most source files ship a sibling unit-test file, several larger than the implementation).
 
 ## Architecture & Key Patterns
 
@@ -64,7 +65,7 @@ buttons. Maturity is developer-preview: MIT, actively developed, with a visible 
 - **Per-session FIFO `TurnController`.** Every surface (TUI, CLI, HTTP, chat channel) enters the
   same controller, so one session stays strictly ordered while different sessions run
   concurrently.
-- **Modular runtime split.** `src/` is ~36 domain directories — `agent`, `approval`, `compressor`,
+- **Modular runtime split.** its source tree is ~36 domain directories — `agent`, `approval`, `compressor`,
   `memory`, `prompt`, `sandbox`, `scheduler`, `session`, `skills`, `tools`, `tracing`, `mcp`,
   `local-llm`, `replay`, `sidecar`, `channels` — i.e. the loop, the gate, the compressor and the
   prompt builder are separate compile units, not layers inside one agent class.
@@ -73,7 +74,7 @@ buttons. Maturity is developer-preview: MIT, actively developed, with a visible 
 
 - **A five-step approval ladder over a closed category set.** `ApprovalLevel = 1..5` where 1 asks
   for everything and 5 asks for nothing; levels 2–4 progressively stop asking per *category*. The
-  categories are a closed TypeScript union — `fs_write_workspace`, `fs_write_home`, `fs_trash`,
+  categories are a closed union type — `fs_write_workspace`, `fs_write_home`, `fs_trash`,
   `http`, `shell`, `script`, `proc_kill`, `git_remote`, `browser_nonweb`, `trust_config`,
   `publish`, `email`, a fan-out category, and an `other` fallback that keeps asking at every level
   but 5 — with the compiler enforcing exhaustiveness at every `requireApproval` call site.
@@ -87,7 +88,7 @@ buttons. Maturity is developer-preview: MIT, actively developed, with a visible 
   full width; the compressor is a ~2.5 KB pure function with its own tests.
 - **A no-progress guard with graded severity.** Repeated identical tool calls draw a warning at 3
   repeats and a hard veto at 5; after 3 consecutive vetoes the agent is forced into a graceful
-  reply rather than being killed. The detector is one of the largest modules in `src/agent/`
+  reply rather than being killed. The detector is one of the largest modules in its agent directory
   (~52 KB implementation, ~32 KB tests) — loop detection is treated as a hard problem, not a
   counter.
 - **Append-only NDJSON traces plus prompt-drift replay.** Prompts, completions, tool invocations,
@@ -106,7 +107,7 @@ buttons. Maturity is developer-preview: MIT, actively developed, with a visible 
   a fixed character budget rather than screenshots; vision is an optional separate tool
   kept *outside* the text transcript.
 - **Empty/reasoning-only completion recovery.** Reasoning-model completions that carry no tool call
-  are recovered rather than failing the turn (`empty-completion-recovery.ts`).
+  are recovered rather than failing the turn, in a dedicated recovery module.
 - **Inference-stack ownership.** The vendor maintains its own fork of that runtime: rotation-based
   low-bit KV-cache quantization with a fused decode kernel (a claimed several-fold reduction
   versus 16-bit), rotation-plus-vector weight quantization with fused platform-specific GPU
@@ -132,7 +133,7 @@ buttons. Maturity is developer-preview: MIT, actively developed, with a visible 
   prompt drift, and a failure taxonomy shared by every surface.
 - Memory is a store with a lifecycle (dedup, eviction by usefulness, voting, reflection, export)
   rather than a growing log — and it is inspectable in SQLite and in an ordinary notes editor.
-- Test density is unusually high for a pre-1.0 project: the loop, the batch executor and the loop
+- Test density is unusually high for a project this early: the loop, the batch executor and the loop
   detector each carry test files larger than their implementation.
 - Documentation states its own limits (egress list, "not complete isolation layers") instead of
   claiming secrecy.
@@ -550,7 +551,7 @@ costs more than it buys. **Rejected by hidden metrics**; the correct form is to 
 ## Verdict
 
 The reference work is not adoptable as code — single-operator desktop shape, a vendored inference
-fork, a competing provider abstraction, pre-1.0. What survived the weighing is four designs and one
+fork, a competing provider abstraction, and a codebase this early. What survived the weighing is four designs and one
 posture:
 
 | # | Item | Verdict | Effort |
