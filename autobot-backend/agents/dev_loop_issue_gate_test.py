@@ -10,6 +10,7 @@ work_claims needs real EVAL) and the real budget gate, not mocks of either.
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
@@ -318,3 +319,84 @@ class TestAFailingReleaseDoesNotMaskTheAction:
 
         assert await run_dev_loop_action(17091, intent="verify", estimated_tokens=1, action=_ok_action) == "done"
         assert released == ["issue:17091"], "the claim must be released even when the renewal task dies"
+
+
+class TestCancellationIsAnExitPathToo:
+    """The fourth exit path: the caller cancels while the action is in flight.
+
+    The other three -- normal return, the action raising, and the renewal task
+    raising something other than `CancelledError` -- each have their own test
+    above. Cancellation is the one that had none, and it is the least like the
+    others: the release sits in a `finally` and reaches Redis with an `await`,
+    and an `await` inside a `finally` on a cancelled task is exactly where
+    cleanup gets skipped. A leaked EXCLUSIVE claim locks the issue until its
+    lease TTL expires, so this is the path where a leak costs the most.
+
+    What the FIRST test does and does not prove, because the difference matters.
+    It proves the release is reached and completes: deleting the release from the
+    outer `finally` fails it. It does NOT prove much about suspension, because
+    `fakeredis` answers without yielding to the event loop -- inserting an
+    `await asyncio.sleep(0)` before the release, and even a second
+    `current_task().cancel()` in front of it, both leave it passing. A release
+    that never suspends can never be interrupted, so the risky shape was
+    untested by it.
+
+    The second test is the one that covers that shape: a release that suspends
+    before it records. That is the real client's behaviour and the only version
+    where "an await inside a finally on a cancelled task" can actually bite.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_cancelled_action_still_releases_the_claim(self, redis):
+        running = asyncio.Event()
+
+        async def _slow_action():
+            running.set()
+            await asyncio.sleep(60)
+
+        task = asyncio.create_task(run_dev_loop_action(17093, intent="verify", estimated_tokens=1, action=_slow_action))
+        await running.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        claims = await work_claims.list_claims(kind="issue")
+        assert not any(c.scope == "issue:17093" for c in claims), (
+            "cancelling the caller leaked the claim: issue:17093 is still held, and stays held "
+            "until the lease TTL expires"
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_release_that_suspends_still_completes_under_cancellation(self, redis, monkeypatch):
+        """The shape `fakeredis` cannot exercise: a release that yields first.
+
+        A real Redis client suspends on the socket, so the release's `await` is
+        a real suspension point inside a `finally` on a cancelled task. This
+        substitutes a release that yields before it records, which is the
+        minimum needed to tell "the release was attempted" from "the release
+        finished".
+        """
+        released: list[str] = []
+        running = asyncio.Event()
+
+        async def _suspending_release(scope, *, agent_id, task_id):
+            await asyncio.sleep(0)
+            released.append(scope)
+            return True
+
+        async def _slow_action():
+            running.set()
+            await asyncio.sleep(60)
+
+        monkeypatch.setattr(gate_module, "release", _suspending_release)
+
+        task = asyncio.create_task(run_dev_loop_action(17094, intent="verify", estimated_tokens=1, action=_slow_action))
+        await running.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert released == ["issue:17094"], (
+            "the release suspended and never finished: cancelling the caller leaks the claim "
+            "whenever the Redis call yields, which is every real client"
+        )
