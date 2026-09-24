@@ -70,12 +70,19 @@ class TestVncWebsocketProxyAuthentication:
         ws.accept.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_authenticated_handshake_reaches_accept(self):
-        """#14959 AC: an authenticated caller clears the gate and reaches accept();
-        the connection observation names them.
+    async def test_a_permitted_caller_reaches_accept(self):
+        """#14959 AC: a caller who clears the gate reaches accept(); the
+        connection observation names them.
+
+        #17054: `operator` rather than `user`. The desktop socket now requires
+        `mcp.desktop.control`, which only `admin` and `operator` hold, so a
+        `user` is refused before the handshake and this test's subject -- the
+        accept -- stops being reachable at all. `operator` is the LEAST
+        privileged role that still reaches it, so the test exercises the gate it
+        must pass rather than an admin bypassing everything.
         """
         ws = _fake_websocket()
-        fake_user = {"username": "alice", "role": "user"}
+        fake_user = {"username": "alice", "role": "operator"}
 
         with (
             patch("auth_middleware.authenticate_websocket", new=AsyncMock(return_value=fake_user)),
@@ -90,3 +97,30 @@ class TestVncWebsocketProxyAuthentication:
         ws.accept.assert_awaited_once()
         connect_call = mock_observe.await_args_list[0]
         assert connect_call.args[2]["user"] == "alice"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("role", ["user", "editor", "analyst", "readonly", "superadmin"])
+    async def test_an_authenticated_but_unpermitted_caller_is_refused_before_accept(self, role):
+        """#17054: authenticated is not enough, and nothing else covered this.
+
+        The unauthenticated case has a test (above). The case this gate actually
+        introduces -- a real signed-in account without `mcp.desktop.control` --
+        had none: it was being exercised only by accident, by the test above
+        using `role: "user"`, and that accident failed rather than asserted.
+
+        `superadmin` is in the list deliberately. `ROLE_PERMISSIONS[SUPERADMIN]`
+        is empty by #13854, so the role that sounds highest is refused; if that
+        is ever ruled wrong, the fix is that table and this parameter moves to
+        the permitted test -- one place, both asserted.
+        """
+        ws = _fake_websocket()
+
+        with patch(
+            "auth_middleware.authenticate_websocket",
+            new=AsyncMock(return_value={"username": "mallory", "role": role}),
+        ):
+            await websocket_proxy(ws, "desktop")
+
+        ws.accept.assert_not_awaited()
+        ws.close.assert_awaited_once()
+        assert ws.close.await_args.kwargs.get("code") == 1008

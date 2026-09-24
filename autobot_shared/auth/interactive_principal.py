@@ -57,6 +57,41 @@ def is_login_token(claims: Mapping[str, Any]) -> bool:
     return claims.get("token_type") == LOGIN_TOKEN_TYPE and NON_LOGIN_CLAIMS.isdisjoint(claims)
 
 
+def is_purpose_bound(claims: Mapping[str, Any]) -> bool:
+    """True when *claims* say the token was minted for something other than a login.
+
+    #17049: the backend accepted ANY token signed with the platform key as a
+    full user login, whatever it was minted for — a device JWT, an SLM
+    MFA-pending temp token issued *before* the second factor, or a
+    service-to-service token all resolved to their subject's ordinary login on
+    every endpoint.
+
+    Stated as a NEGATIVE check on purpose, and this is the part worth reading
+    before "improving" it into ``not is_login_token(...)``. That positive form
+    requires ``token_type: login``, which **only the backend mints**
+    (``auth_middleware.py``). Tokens minted by ``autobot-slm-backend`` carry
+    identity in ``sub`` and no ``token_type`` at all, and #12135 established
+    that those must keep working. Requiring the positive claim would refuse
+    every SLM-issued login — a fix that logs out the users it protects.
+
+    The positive form is the better end state; getting there means the SLM
+    minting ``token_type: login`` first, which is a cross-service migration and
+    not this function's decision to make.
+
+    Two ways a token is purpose-bound:
+
+    - it carries any :data:`NON_LOGIN_CLAIMS` member — ``aud``, ``device_id``,
+      ``mfa_pending``, ``run_id``, ``scope``, ``service``;
+    - it carries a ``token_type`` that is not ``login`` — e.g. the
+      ``token_type: device`` that ``services/device_token_service.py`` mints,
+      which none of the claims above would catch.
+    """
+    if not NON_LOGIN_CLAIMS.isdisjoint(claims):
+        return True
+    token_type = claims.get("token_type")
+    return token_type is not None and token_type != LOGIN_TOKEN_TYPE
+
+
 def is_interactive_human(user: Optional[Mapping[str, Any]]) -> bool:
     """True only for a person's interactive login; deny-by-default otherwise.
 
