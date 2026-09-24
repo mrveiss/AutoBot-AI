@@ -101,6 +101,22 @@ jobs:
         if: needs.changes.outputs.slm_frontend == 'true'
         run: npm run check:i18n
 
+      # #14781: the console now ships all 11 locales. Two things can rot: a key
+      # present in one locale and not the others (vue-i18n then falls back
+      # silently, so the gap is invisible until someone reads that language),
+      # and a hand-edited locale drifting from what the lifting rule produces.
+      # The first is `check:locales`; the second is the generator's own --check,
+      # which is why the generation is a script in the repo rather than a
+      # one-off someone ran.
+      - name: Locale parity
+        if: needs.changes.outputs.slm_frontend == 'true'
+        run: npm run check:locales
+
+      - name: Locales match the lifting rule
+        if: needs.changes.outputs.slm_frontend == 'true'
+        working-directory: .
+        run: python3 scripts/lift_locale_translations.py --app autobot-slm-frontend/src/locales --check
+
       - name: Build
         if: needs.changes.outputs.slm_frontend == 'true'
         # build:slm sets VITE_API_URL=/slm (the co-located base the vite config requires).
