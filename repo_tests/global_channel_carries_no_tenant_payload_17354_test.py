@@ -40,8 +40,17 @@ from repo_tests._paths import repo_root
 
 _BACKEND = repo_root() / "autobot-backend"
 
-#: The two spellings that reach the event bus.
-_PUBLISH_NAMES = {"publish", "publish_event"}
+#: The spellings that reach the event bus. `publish_event_safe` is
+#: `api/agent_events.py`'s wrapper: its channel is a PARAMETER, so the `publish`
+#: call inside it is opaque here, and a call site passing the broadcast constant
+#: would have been invisible too (#17354). Matching the wrapper by name keeps the
+#: deliberate broadcasts in view -- moving a publish behind a helper must not be
+#: a way out of this guard's reach.
+_PUBLISH_NAMES = {"publish", "publish_event", "publish_event_safe"}
+
+#: The one name that means "every authenticated client" without saying "global"
+#: (`api/agent_events.BROADCAST_CHANNEL`).
+_BROADCAST_CONSTANT = "BROADCAST_CHANNEL"
 
 #: `EventBus.publish`, `events.bus.publish_event` and `LiveEventManager.publish`
 #: all name their first and third parameters these, so one keyword spelling
@@ -66,13 +75,17 @@ _MIN_GLOBAL_PUBLISHES_SEEN = 15
 #: `api/agent.py`'s `_publish_event_safe` is the widest: a helper that hardcodes
 #: `"global"`, so none of its callers can scope itself.
 #:
-#: 11 -> 7 (#17363): four terminal/command publishes moved to `chat:{id}` and two
+#: 11 -> 5. Four terminal/command publishes moved to `chat:{id}` and two
 #: keyword-spelled payloads stopped counting as opaque once `_argument` could read
-#: them; the alias-aware matcher then added four sites, all with literal payloads,
-#: so the opaque count did not move. A widening of the matcher re-freezes this
-#: number -- "only shrinks" holds for a fixed detector, not across a change to
-#: what it can see.
-_MAX_OPAQUE_GLOBAL_PUBLISHES = 7
+#: them (#17363); the alias-aware matcher then added four sites, all with literal
+#: payloads, so the count did not move; then #17354's remaining two -- the agent
+#: router's `_publish_event_safe` and `cot_events._try_publish`, the two widest
+#: helpers, each hardcoding `"global"` for callers that had an owner -- took a
+#: channel parameter and left this population entirely.
+#:
+#: A widening of the matcher re-freezes this number: "only shrinks" holds for a
+#: fixed detector, not across a change to what it can see.
+_MAX_OPAQUE_GLOBAL_PUBLISHES = 5
 
 #: Pre-existing literal offenders, recorded so this guard blocks NEW ones today
 #: rather than waiting for a 6-site campaign. Each is a `task_id` or
@@ -150,7 +163,11 @@ def _is_global_publish(node: ast.AST, names: frozenset[str]) -> bool:
     if name not in names:
         return False
     channel = _argument(node, 0, _CHANNEL_PARAM)
-    return isinstance(channel, ast.Constant) and channel.value == "global"
+    if isinstance(channel, ast.Constant):
+        return channel.value == "global"
+    if isinstance(channel, ast.Name):
+        return channel.id == _BROADCAST_CONSTANT
+    return isinstance(channel, ast.Attribute) and channel.attr == _BROADCAST_CONSTANT
 
 
 def _scan_source(source: str, label: str) -> tuple[list[str], int, int]:
@@ -349,3 +366,22 @@ def test_an_unrelated_function_renamed_to_the_same_alias_is_not_scanned() -> Non
     _, _, seen = _scan_source(_ALIASED_UNRELATED, "fixture.py")
 
     assert seen == 0, "the alias must be honoured only when it actually binds a publish helper"
+
+
+_BROADCAST_CONSTANT_CALL = 'publish_event_safe(BROADCAST_CHANNEL, "x", {"session_id": "s1"})\n'
+_BROADCAST_CONSTANT_CLEAN = 'publish_event_safe(BROADCAST_CHANNEL, "x", {"message": "Agent paused."})\n'
+
+
+def test_the_broadcast_constant_is_scanned_like_the_literal() -> None:
+    """A helper's constant must not be a way out of the guard's reach (#17354)."""
+    offenders, _, seen = _scan_source(_BROADCAST_CONSTANT_CALL, "fixture.py")
+
+    assert seen == 1, "publishing via BROADCAST_CHANNEL must be scanned like publishing to 'global'"
+    assert offenders == ["fixture.py:1 ['session_id']"]
+
+
+def test_a_deliberate_broadcast_without_tenant_content_stays_clean() -> None:
+    """Negative control: the constant is not itself the offence."""
+    offenders, opaque, seen = _scan_source(_BROADCAST_CONSTANT_CLEAN, "fixture.py")
+
+    assert (seen, opaque, offenders) == (1, 0, [])
