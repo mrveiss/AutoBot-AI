@@ -25,9 +25,14 @@
 # Caller contract: set `husk_venv_dir` to the venv to repair. Include this
 # BEFORE the role's pip steps; after them the failure has already happened.
 #
-# Only two venvs can ever carry a marker -- `api/code_sync._COMPONENT_PIP_PATHS`
-# lists `autobot-backend` and `autobot-slm-backend` and nothing else writes one
-# -- so those two roles include this and no other role needs to.
+# THREE roles include this, not two. `api/code_sync._COMPONENT_PIP_PATHS` names
+# `autobot-backend` and `autobot-slm-backend`, but `_WORKER_COMPONENT_PIP` makes
+# `autobot-ai-stack` marker-capable too, because it is not in
+# `EXPLICIT_LIST_COMPONENTS`. The first draft of this task hand-wrote the set as
+# those two and missed ai-stack. The set is therefore no longer maintained here:
+# `test_the_role_map_covers_every_marker_capable_component` derives it from
+# those constants, so a fourth marker-capable component reddens that test rather
+# than going quietly unrepaired. Do not re-state the list in this comment.
 
 - name: "Venv husks | Stage the provenance module onto the node (#17339)"
   ansible.builtin.copy:

@@ -340,12 +340,63 @@ def test_every_marker_capable_role_includes_the_repair(component, mapping):
     assert f'husk_venv_dir: "{{{{ {venv_var} }}}}/venv"' in rendered
 
 
+#: Every shape a pip invocation takes in these role files. This guard first
+#: looked for `ansible.builtin.pip:` alone, so `slm_manager`'s editable install
+#: -- spelled `ansible.builtin.command:` with `.../venv/bin/pip install -e ...`
+#: -- was invisible to it. The guard passed while the repair ran AFTER the first
+#: real pip step, in the one venv this role's own comment calls the critical one
+#: (it runs the builtin updater, so a husk there blocks its own repair). The
+#: assertion was true of what it measured and false of what its name claims.
+_PIP_INVOCATION_PATTERNS = (
+    "ansible.builtin.pip:",
+    "/bin/pip ",
+    "pip install",
+    "-m pip ",
+)
+
+
+def _first_pip_invocation(rendered: str) -> tuple[int, str]:
+    """Offset of the earliest pip invocation of any shape, and the pattern that found it.
+
+    Raises rather than returning a sentinel when nothing matches: a file with no
+    pip invocation at all means the matcher has gone blind, which must not read
+    the same as "pip comes later".
+    """
+    hits = [(rendered.index(p), p) for p in _PIP_INVOCATION_PATTERNS if p in rendered]
+    if not hits:
+        raise AssertionError("no pip invocation of any known shape -- the matcher is blind, not the file clean")
+    return min(hits)
+
+
+def test_the_matcher_sees_a_command_shaped_pip_invocation():
+    """Positive control for the widening above.
+
+    `slm_manager` really does invoke pip through `ansible.builtin.command`, and
+    the original matcher scored that as "no pip here", so the ordering assertion
+    below passed vacuously. Without this control, narrowing the matcher back to
+    the module spelling would make the suite greener rather than redder -- which
+    is how the gap survived the first review.
+    """
+    command_shaped = (
+        '- name: "SLM | Install autobot_shared in venv (editable)"\n'
+        "  ansible.builtin.command:\n"
+        '    cmd: "{{ slm_backend_dir }}/venv/bin/pip install -e {{ slm_base_dir }}/autobot_shared"\n'
+    )
+    assert "ansible.builtin.pip:" not in command_shaped, "fixture must not use the module spelling"
+
+    _at, pattern = _first_pip_invocation(command_shaped)
+    assert pattern != "ansible.builtin.pip:", "the widened matcher found it by the module spelling"
+
+
 @pytest.mark.parametrize("role_tasks", sorted(mapping[0] for mapping in COMPONENT_ROLES.values()))
 def test_the_repair_precedes_the_first_pip_step(role_tasks):
     """After the pip step the deploy has already aborted, so order is the fix."""
     rendered = (ANSIBLE_ROOT / role_tasks).read_text(encoding="utf-8")
 
     include_at = rendered.index("_shared/tasks/clear_venv_husks.yml")
-    first_pip_at = rendered.index("ansible.builtin.pip:")
+    first_pip_at, pattern = _first_pip_invocation(rendered)
 
-    assert include_at < first_pip_at, "the husk repair must run before the first pip task"
+    assert include_at < first_pip_at, (
+        f"the husk repair must run before the first pip task; {role_tasks} reaches "
+        f"pip first via {pattern!r} at offset {first_pip_at}, repair at {include_at}"
+    )
