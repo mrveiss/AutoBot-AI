@@ -140,3 +140,82 @@ class TestTheOwnerChannelCannotNameSomeoneElse:
     def test_the_channel_uses_the_user_id_when_both_are_present(self):
         """The narrower field wins, so the fallback is only ever a fallback."""
         assert owner_channel({"user_id": "u1", "username": "alice"}) == "agent:u1"
+
+
+class TestTheRouterAddressesEventsToTheCaller:
+    """The endpoint-level bind (#17363).
+
+    Everything above proves `owner_channel` *builds* `agent:{id}`. None of it
+    proves any route *calls* it: revert `api/agent.py:688` or `:858` to
+    `BROADCAST_CHANNEL` and every test above stays green, because their observed
+    and expected values both originate inside the test. These two drive the real
+    handlers and read back the channel the handler itself passed, so the only
+    thing that can satisfy them is the call site.
+
+    The expected value is spelled as a literal rather than as
+    `owner_channel(user)`. Calling the helper to build the expectation is what
+    makes a test agree with itself: both sides would move together under a
+    revert and the assertion would hold while proving nothing.
+    """
+
+    #: Not a UUID on purpose -- a literal expectation must be readable beside
+    #: the identity it is derived from.
+    _USER = {"user_id": "u-7", "username": "alice"}
+    _CHANNEL = "agent:u-7"
+
+    @staticmethod
+    def _request() -> MagicMock:
+        request = MagicMock()
+        request.app.state.security_layer = MagicMock()
+        return request
+
+    @pytest.mark.asyncio
+    async def test_execute_command_addresses_the_caller_not_everyone(self):
+        """`api/agent.py:858` -> `:864`. The empty command is the cheapest path
+        that still reaches a publish: validation refuses it, and the refusal is
+        itself addressed to the caller."""
+        from api.agent import execute_command
+        from api.schemas_agent_requests import CommandExecutePayload
+
+        with patch("api.agent.publish_event_safe", new=AsyncMock()) as publish:
+            await execute_command(
+                request=self._request(),
+                payload=CommandExecutePayload(command="", user_role="admin"),
+                admin_check=True,
+                current_user=self._USER,
+            )
+
+        assert publish.await_args_list, "the handler published nothing -- this test proves nothing"
+        channels = [call.args[0] for call in publish.await_args_list]
+        assert channels == [self._CHANNEL], (
+            f"execute_command published on {channels}; a shell command and its "
+            f"refusal belong to the operator who ran it, not to every signed-in "
+            f"client (#17354, #17363)"
+        )
+
+    @pytest.mark.asyncio
+    async def test_receive_goal_addresses_the_caller_not_everyone(self):
+        """`api/agent.py:688`. The goal text is the operator's own words."""
+        from api.agent import receive_goal
+        from api.schemas_agent_requests import GoalPayload
+
+        request = self._request()
+        request.app.state.orchestrator = MagicMock()
+
+        with (
+            patch("api.agent.publish_goal_events", new=AsyncMock()) as publish,
+            patch("api.agent._check_goal_permission", return_value=None),
+            patch("api.agent._execute_goal_with_error_handling", new=AsyncMock(return_value={})),
+            patch("api.agent._handle_goal_result", new=AsyncMock(return_value={})),
+        ):
+            await receive_goal(
+                request=request,
+                payload=GoalPayload(goal="deploy the staging node", user_role="admin"),
+                current_user=self._USER,
+            )
+
+        assert publish.await_args_list, "the handler published nothing -- this test proves nothing"
+        assert publish.await_args.args[-1] == self._CHANNEL, (
+            f"receive_goal published on {publish.await_args.args[-1]}; the goal "
+            f"text is the caller's own (#17354, #17363)"
+        )
