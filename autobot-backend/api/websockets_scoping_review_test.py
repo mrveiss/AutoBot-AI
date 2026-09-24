@@ -116,3 +116,65 @@ async def test_the_owner_lookup_is_memoised_per_connection():
 async def test_a_non_dict_payload_is_not_treated_as_owned():
     event = {"type": "raw", "payload": "just a string"}
     assert await _event_is_for_user(event, "u1", {}) is True
+
+
+class TestAChatKeyedEventIsScopedToo:
+    """#17428: the same rule, for the keys the publishers actually use.
+
+    Each alias is asserted in PAIRS -- withheld from a non-owner AND delivered
+    to the owner. A guard that withholds from everyone satisfies the first
+    assertion and breaks the terminal, so neither half proves the fix alone.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("key", ["chat_id", "conversation_id"])
+    async def test_another_users_chat_event_is_withheld(self, key):
+        # Before #17428 this returned True: the payload had no `session_id`, so
+        # it took the "system-wide, visible to everyone" branch. This is the
+        # shape of `terminal_output`, which carries a sudo prompt and an
+        # `input_type: password` marker keyed by `chat_id`.
+        event = {"type": "terminal_output", "payload": {key: "c-bob", "output": "[sudo] password:"}}
+        with _with_manager(_Manager({"c-bob": "bob"})):
+            assert await _event_is_for_user(event, "alice", {}) is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("key", ["chat_id", "conversation_id"])
+    async def test_your_own_chat_event_is_still_delivered(self, key):
+        """The other half: scoping must not blank the owner's own terminal."""
+        event = {"type": "terminal_output", "payload": {key: "c-alice", "output": "$ ls"}}
+        with _with_manager(_Manager({"c-alice": "alice"})):
+            assert await _event_is_for_user(event, "alice", {}) is True
+
+    @pytest.mark.asyncio
+    async def test_a_synthetic_chat_id_is_unchanged(self):
+        """`InteractiveTerminalAgent("detect_pm")` has no chat file.
+
+        Unowned stays visible, exactly as for `session_id` -- this change adds
+        aliases to the existing resolution, it does not alter what an
+        unresolved owner means. Pinned so the behaviour is a decision rather
+        than a side effect; whether it SHOULD stay visible is the open question
+        on #17428.
+        """
+        event = {"type": "terminal_output", "payload": {"chat_id": "detect_pm"}}
+        with _with_manager(_Manager({})):
+            assert await _event_is_for_user(event, "alice", {}) is True
+
+    @pytest.mark.asyncio
+    async def test_a_terminal_session_id_is_not_treated_as_a_chat_id(self):
+        """Deliberately still unscoped: it names a different namespace.
+
+        Asserting the CURRENT behaviour rather than the desired one, so that
+        wiring it to the wrong store fails this test instead of passing
+        silently. It travels alongside `session_id` as a separate parameter, so
+        `get_session_owner` cannot answer for it.
+        """
+        event = {"type": "approval", "payload": {"terminal_session_id": "t-bob"}}
+        with _with_manager(_Manager({"t-bob": "bob"})):
+            assert await _event_is_for_user(event, "alice", {}) is True
+
+    @pytest.mark.asyncio
+    async def test_session_id_wins_when_both_are_present(self):
+        """Precedence is explicit, not incidental to dict ordering."""
+        event = {"type": "tool_output", "payload": {"session_id": "s-alice", "chat_id": "c-bob"}}
+        with _with_manager(_Manager({"s-alice": "alice", "c-bob": "bob"})):
+            assert await _event_is_for_user(event, "alice", {}) is True

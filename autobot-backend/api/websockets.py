@@ -521,7 +521,7 @@ async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache
     Scoping rules, in order:
 
     * an explicit ``user_id`` in the payload must match this connection;
-    * a ``session_id`` must resolve to a session this user owns;
+    * a ``session_id``/``chat_id``/``conversation_id`` resolving to a session this user owns (#17428);
     * anything else is a system-wide event (worker health, NPU status,
       diagnostics) and stays visible to everyone, as before.
 
@@ -536,7 +536,7 @@ async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache
     if claimed_user is not None:
         return str(claimed_user) == current_user_id
 
-    session_id = payload.get("session_id")
+    session_id = next((payload[k] for k in ("session_id", "chat_id", "conversation_id") if payload.get(k)), None)
     if not session_id:
         return True
 
