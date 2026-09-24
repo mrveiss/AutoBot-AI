@@ -14,6 +14,7 @@ Issue #1373: Initial RLM prototype.
 """
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared.validated_llm import Completer, complete_validated
 from rlm.types import ReflectionResult, ReflectionVerdict, RLMConfig
 
 logger = get_logger(__name__)
@@ -42,12 +43,28 @@ whether the response adequately answers the query.
 {response}
 
 ## Instructions
-Reply with EXACTLY this format (no extra text):
-SCORE: <float>
-CRITIQUE: <one paragraph explaining deficiencies, or "None" if score >= 0.7>
-HINT: <one sentence suggesting what the next attempt should focus on, \
-or "None" if score >= 0.7>
+Return a JSON object with `score` (0.0-1.0), `critique` (one paragraph on the
+deficiencies, empty when the score is high) and `hint` (one sentence on what
+the next attempt should focus on, empty when the score is high).
 """
+
+
+#: JSON Schema the evaluator reply must satisfy (#17307).
+#: ``_extract_float`` used to return ``0.5`` when the SCORE line was missing,
+#: and that number was compared against ``quality_threshold`` -- the same "a
+#: parse miss decides by arithmetic" defect #17306 found in the pre-action
+#: verifier. An unreadable reply now retries against this schema and then
+#: fails into the INDETERMINATE path, which already exists to mean "the
+#: evaluator broke" rather than "the response scored 0.5".
+_EVAL_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "score": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "critique": {"type": "string"},
+        "hint": {"type": "string"},
+    },
+    "required": ["score"],
+}
 
 
 class ResponseQualityEvaluator:
@@ -89,8 +106,15 @@ class ResponseQualityEvaluator:
         prompt = _EVAL_PROMPT.format(query=query, response=response)
 
         try:
-            raw = await self._call_llm(prompt)
-            return self._parse(raw, iteration)
+            payload = await complete_validated(
+                "",
+                prompt,
+                _EVAL_SCHEMA,
+                completer=self._completer(),
+                label="rlm.evaluator",
+            )
+            data = payload if isinstance(payload, dict) else payload.model_dump()
+            return self._result_from_payload(data, iteration)
         except Exception as exc:
             # #6697: previous log claimed "accepting response" while returning
             # verdict=FAIL with empty exception text when exc.__str__ was
@@ -134,22 +158,35 @@ class ResponseQualityEvaluator:
     # Response parsing
     # ------------------------------------------------------------------
 
-    def _parse(self, raw: str, iteration: int) -> ReflectionResult:
-        """Parse the three-line evaluator output into a ReflectionResult."""
-        score = self._extract_float(raw, "SCORE:")
-        critique = self._extract_line(raw, "CRITIQUE:")
-        hint = self._extract_line(raw, "HINT:")
+    def _completer(self) -> Completer:
+        """Return the completer the validated loop calls (#17307).
 
+        The transport is unchanged -- a direct local Ollama call, not
+        ``llm_service``, because this evaluator is deliberately local and
+        cheap. The loop only adds the retry and the schema check around it.
+        """
+
+        async def _complete(system_prompt: str, user_prompt: str) -> str:
+            combined = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+            return await self._call_llm(combined)
+
+        return _complete
+
+    def _result_from_payload(self, payload: dict, iteration: int) -> ReflectionResult:
+        """Turn a schema-valid evaluator reply into a ReflectionResult.
+
+        ``score`` is required by the schema, so the threshold compare below
+        always acts on a number the evaluator actually produced.
+        """
+        score = max(0.0, min(1.0, float(payload["score"])))
+        critique = str(payload.get("critique") or "").strip()
+        hint = str(payload.get("hint") or "").strip()
         if critique.lower() == "none":
             critique = ""
         if hint.lower() == "none":
             hint = ""
 
-        if score >= self.config.quality_threshold:
-            verdict = ReflectionVerdict.ACCEPT
-        else:
-            verdict = ReflectionVerdict.REFINE
-
+        verdict = ReflectionVerdict.ACCEPT if score >= self.config.quality_threshold else ReflectionVerdict.REFINE
         return ReflectionResult(
             verdict=verdict,
             quality_score=score,
@@ -157,25 +194,3 @@ class ResponseQualityEvaluator:
             refinement_hint=hint,
             iteration=iteration,
         )
-
-    @staticmethod
-    def _extract_float(text: str, prefix: str) -> float:
-        """Pull the first float after *prefix* in *text*."""
-        for line in text.splitlines():
-            stripped = line.strip()
-            if stripped.upper().startswith(prefix.upper()):
-                value_str = stripped[len(prefix) :].strip()
-                try:
-                    return max(0.0, min(1.0, float(value_str)))
-                except ValueError:
-                    pass
-        return 0.5  # Safe default when parsing fails
-
-    @staticmethod
-    def _extract_line(text: str, prefix: str) -> str:
-        """Pull the text after *prefix* on the first matching line."""
-        for line in text.splitlines():
-            stripped = line.strip()
-            if stripped.upper().startswith(prefix.upper()):
-                return stripped[len(prefix) :].strip()
-        return "None"

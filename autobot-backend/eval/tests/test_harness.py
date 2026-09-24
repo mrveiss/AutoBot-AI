@@ -11,6 +11,7 @@ baseline) and a "deliberately worse" candidate (drops below baseline) — the
 latter must be reported as a regression.
 """
 
+import json
 from unittest.mock import AsyncMock
 
 import pytest
@@ -37,7 +38,7 @@ def _golden(tid: str = "t1", task_class: str = "code_fix", baseline: float = 0.9
 def _scorer(score: float) -> ResponseQualityEvaluator:
     """Evaluator whose LLM always returns *score* (deterministic)."""
     evaluator = ResponseQualityEvaluator()
-    evaluator._call_llm = AsyncMock(return_value=f"SCORE: {score}\nCRITIQUE: None\nHINT: None")
+    evaluator._call_llm = AsyncMock(return_value=json.dumps({"score": score, "critique": "", "hint": ""}))
     return evaluator
 
 

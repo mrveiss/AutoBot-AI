@@ -337,7 +337,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/captcha_human_loop.py": 636,
     "autobot-backend/services/causal_inference_engine.py": 756,
     "autobot-backend/services/chat_knowledge_service_test.py": 775,
-    "autobot-backend/services/claim_verifier.py": 835,
+    "autobot-backend/services/claim_verifier.py": 830,
     "autobot-backend/services/codebase_indexing_service.py": 1010,
     "autobot-backend/services/command_approval_manager.py": 649,
     "autobot-backend/services/config_service.py": 605,

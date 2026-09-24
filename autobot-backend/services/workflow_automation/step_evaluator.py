@@ -11,6 +11,12 @@ LLM judge integration for evaluating workflow steps.
 from typing import Set
 
 from autobot_shared.logging_manager import get_logger
+from judges import (
+    DEGRADATION_EVALUATION_ERROR,
+    DEGRADATION_JUDGE_UNAVAILABLE,
+    ERROR_MODEL_SENTINEL,
+)
+from monitoring.prometheus_metrics import get_metrics_manager
 from type_defs.common import Metadata
 
 from .models import ActiveWorkflow, WorkflowStep, WorkflowStepStatus
@@ -206,39 +212,80 @@ class WorkflowStepEvaluator:
         return workflow_judgment, security_judgment
 
     def _check_judge_errors(self, judgments: tuple, step_id: str) -> Metadata | None:
-        """Return fail-open response if any judge errored, else None. (#1464)"""
-        error_judges = [j for j in judgments if j.llm_model_used == "error"]
+        """Resolve a step whose judges could not be read, else None (#1464, #17307).
+
+        The old form hard-coded ``should_proceed: True`` and said so in a
+        ``logger.warning``, so a step approved because nobody could read the
+        judge looked exactly like a step a judge approved. Now the outcome
+        comes from :data:`JUDGE_FAIL_CLOSED`, the response carries
+        ``judge_available: False`` and a degradation code, and both the
+        outcome and its cause are counted.
+        """
+        error_judges = [j for j in judgments if j.llm_model_used == ERROR_MODEL_SENTINEL]
         if not error_judges:
             return None
         reasons = [j.reasoning for j in error_judges]
+        return self._degraded_response(DEGRADATION_JUDGE_UNAVAILABLE, "; ".join(reasons), step_id)
+
+    def _degraded_response(self, degradation: str, detail: str, step_id: str) -> Metadata:
+        """Build the evaluation result for a step no judge could decide (#17307).
+
+        ``should_proceed`` follows the policy; everything else in the payload
+        exists so a consumer -- or an operator reading the metric -- can tell
+        this apart from a judgment. ``judge_available: False`` is the field to
+        branch on; ``degradation`` says which failure it was.
+        """
+        import judges  # noqa: PLC0415 -- read at call time so the policy can be patched
+
+        proceed = not judges.JUDGE_FAIL_CLOSED
+        verb = "Approved" if proceed else "Held"
         logger.warning(
-            "LLM judge(s) unavailable for step %s, approving by default: %s",
+            "step %s: %s — %s by the %s policy (AUTOBOT_JUDGE_FAIL_CLOSED=%s): %s",
             step_id,
-            "; ".join(reasons),
+            degradation,
+            verb.lower(),
+            "fail-closed" if judges.JUDGE_FAIL_CLOSED else "fail-open",
+            "1" if judges.JUDGE_FAIL_CLOSED else "0",
+            detail,
         )
+        self._record_degradation(degradation, proceed)
         return {
-            "should_proceed": True,
-            "reason": f"Approved (judge unavailable): {'; '.join(reasons)}",
-            "suggestions": ["Manual review recommended — judge was unavailable"],
+            "should_proceed": proceed,
+            "reason": f"{verb} ({degradation}): {detail}",
+            "judge_available": False,
+            "degradation": degradation,
+            "fail_closed": judges.JUDGE_FAIL_CLOSED,
+            "suggestions": ["Manual review recommended — no judgment was read for this step"],
         }
 
-    def _build_evaluation_error_response(self, error: Exception) -> Metadata:
+    @staticmethod
+    def _record_degradation(degradation: str, proceeded: bool) -> None:
+        """Count the degraded outcome and its cause (#17307).
+
+        Two existing counters rather than a new one: the approval counter is
+        where "approved" and "approved without a judgment" have to be
+        distinguishable, and the error counter is where the cause belongs.
+        A metrics backend that is not up must not break a workflow step, so a
+        failure here is logged and swallowed deliberately -- the decision it
+        annotates has already been made and logged above.
         """
-        Build error response for evaluation failure.
+        decision = "approved_judge_unavailable" if proceeded else "blocked_judge_unavailable"
+        try:
+            metrics = get_metrics_manager()
+            metrics.record_workflow_approval("step_evaluation", decision)
+            metrics.record_error(degradation, "workflow_step_evaluator", decision)
+        except Exception as exc:  # pragma: no cover - metrics backend optional
+            logger.debug("step_evaluator: could not record degradation metric: %s", exc)
 
-        Issue #665: Extracted from evaluate_step to reduce function length.
+    def _build_evaluation_error_response(self, error: Exception, step_id: str = "unknown") -> Metadata:
+        """Build the response for an evaluator failure (#665, #17307).
 
-        Args:
-            error: Exception that occurred
-
-        Returns:
-            Error response dictionary
+        Same class of defect as the judge-unavailable path: this returned a
+        bare ``should_proceed: True`` for *any* exception, so an evaluator that
+        crashed approved the step. It now goes through the same policy and
+        carries the same distinguishing fields.
         """
-        return {
-            "should_proceed": True,  # Default to proceed on evaluation error
-            "reason": f"Evaluation error: {str(error)}",
-            "suggestions": ["Manual review recommended due to evaluation error"],
-        }
+        return self._degraded_response(DEGRADATION_EVALUATION_ERROR, str(error), step_id)
 
     async def evaluate_step(self, workflow: ActiveWorkflow, step: WorkflowStep) -> Metadata:
         """Evaluate workflow step using LLM judges. Ref: #1088.
@@ -292,4 +339,4 @@ class WorkflowStepEvaluator:
 
         except Exception as e:
             logger.error("Error in step evaluation: %s", e)
-            return self._build_evaluation_error_response(e)
+            return self._build_evaluation_error_response(e, getattr(step, "step_id", "unknown"))

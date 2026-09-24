@@ -21,9 +21,11 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List
 
+from autobot_shared.env_utils import env_flag
 from autobot_shared.logging_manager import get_logger
 from llm_shared.json_utils import extract_json_object as _extract_json_object  # Issue #11520
 from llm_shared.types import LLMType
+from llm_shared.validated_llm import Completer, complete_validated, validate_against
 
 logger = get_logger(__name__)
 
@@ -51,6 +53,66 @@ class JudgmentDimension(Enum):
     CONSISTENCY = "consistency"
     FEASIBILITY = "feasibility"
     COMPLIANCE = "compliance"
+
+
+#: When true, a decision whose judgment could not be read is HELD rather than
+#: approved (#17307). Fail-open stays the default -- #1464 chose it so an
+#: unavailable LLM does not stall every workflow -- but it is a named policy
+#: now, read by every gate that acts on ``llm_model_used == "error"``
+#: (``workflow_automation/step_evaluator.py``, ``workflow_step_judge.py``),
+#: instead of each one hard-coding approval.
+JUDGE_FAIL_CLOSED: bool = env_flag("AUTOBOT_JUDGE_FAIL_CLOSED", False)
+
+#: Sentinel ``llm_model_used`` value an error judgment carries. The gates
+#: branch on this string, so it is defined once beside the policy.
+ERROR_MODEL_SENTINEL = "error"
+
+#: Reason codes a degraded evaluation result carries so a consumer can tell an
+#: approval from a default: no judgment was read, or the evaluator itself
+#: failed before judging.
+DEGRADATION_JUDGE_UNAVAILABLE = "judge_unavailable"
+DEGRADATION_EVALUATION_ERROR = "evaluation_error"
+
+
+#: Recommendations a judgment may return. ``step_evaluator.APPROVAL_RECOMMENDATIONS``
+#: reads these values, so the enum in the schema is what keeps a judge from
+#: inventing a fifth one that the gate would silently treat as "not approved".
+RECOMMENDATIONS = ("APPROVE", "REJECT", "CONDITIONAL", "REVISE")
+
+#: JSON Schema every judgment reply must satisfy (#17307).
+#: Before this, ``_parse_llm_response`` indexed ``overall_score``,
+#: ``recommendation`` and ``confidence`` straight out of a single-shot reply --
+#: any key or enum drift raised, became an error judgment, and
+#: ``workflow_automation/step_evaluator.py:208`` turned that into approval of
+#: the step the judge was asked to gate. The schema is now sent to the
+#: provider (native schema mode, #17305) *and* validated here, with a retry
+#: that feeds the validation error back to the model before anything fails.
+JUDGMENT_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "overall_score": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "recommendation": {"type": "string", "enum": list(RECOMMENDATIONS)},
+        "confidence": {"type": "string", "enum": [c.value for c in JudgmentConfidence]},
+        "reasoning": {"type": "string"},
+        "criterion_scores": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "dimension": {"type": "string", "enum": [d.value for d in JudgmentDimension]},
+                    "score": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                    "confidence": {"type": "string", "enum": [c.value for c in JudgmentConfidence]},
+                    "reasoning": {"type": "string"},
+                    "evidence": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["dimension", "score", "confidence", "reasoning"],
+            },
+        },
+        "improvement_suggestions": {"type": "array", "items": {"type": "string"}},
+        "alternatives_analysis": {"type": "array", "items": {"type": "object"}},
+    },
+    "required": ["overall_score", "recommendation", "confidence", "reasoning"],
+}
 
 
 @dataclass
@@ -89,6 +151,15 @@ class JudgmentResult:
     llm_model_used: str
 
 
+def _response_text(llm_response: Any) -> str:
+    """Return the text of an LLMResponse, a plain str, or a legacy dict reply."""
+    if hasattr(llm_response, "content"):
+        return llm_response.content or ""
+    if isinstance(llm_response, str):
+        return llm_response
+    return str(llm_response.get("content", ""))
+
+
 class BaseLLMJudge:
     """Base class for all LLM-based judges in AutoBot"""
 
@@ -122,8 +193,22 @@ class BaseLLMJudge:
 
         try:
             judgment_prompt = await self._prepare_judgment_prompt(subject, criteria, context, alternatives, **kwargs)
-            llm_response = await self._get_llm_evaluation(judgment_prompt)
-            judgment_result = await self._parse_llm_response(llm_response, subject, criteria, context, alternatives)
+            # #17307: one retry-and-validate loop, shared with structured_ops
+            # and the decision seam. A reply that does not satisfy
+            # JUDGMENT_SCHEMA is corrected against the schema and only then
+            # allowed to fail -- it is never indexed and never guessed at.
+            payload = await complete_validated(
+                self._get_system_prompt(),
+                judgment_prompt,
+                JUDGMENT_SCHEMA,
+                completer=self._judgment_completer(JUDGMENT_SCHEMA),
+                label=f"judges.{self.judge_type}",
+            )
+            judgment_result = self._judgment_from_payload(
+                payload if isinstance(payload, dict) else payload.model_dump(),
+                subject,
+                context,
+            )
             return await self._finalize_judgment_result(judgment_result, start_time)
 
         except Exception as e:
@@ -154,22 +239,52 @@ class BaseLLMJudge:
         """Prepare the prompt for LLM evaluation"""
         raise NotImplementedError("Subclasses must implement _prepare_judgment_prompt")
 
-    async def _get_llm_evaluation(self, prompt: str) -> Dict[str, Any]:
-        """Get structured evaluation from LLM"""
+    def _judgment_completer(self, schema: Dict[str, Any]) -> Completer:
+        """Return the completer the validated loop calls for this judge (#17307).
+
+        The transport stays ``_get_llm_evaluation`` -- subclasses and the
+        #10672 structured-output assertion both address that method -- so this
+        only adapts it to the (system, user) -> text shape the loop wants.
+        """
+
+        async def _complete(system_prompt: str, user_prompt: str) -> str:
+            response = await self._get_llm_evaluation(user_prompt, system_prompt=system_prompt, json_schema=schema)
+            return _response_text(response)
+
+        return _complete
+
+    async def _get_llm_evaluation(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+        json_schema: Dict[str, Any] | None = None,
+    ) -> Any:
+        """Get structured evaluation from LLM.
+
+        #17307: ``json_schema`` is forwarded so a provider with a native
+        schema mode constrains the reply (#17305) instead of the retry loop
+        having to correct it afterwards.
+        """
         if not self.llm_interface:
             from services.llm_service import get_llm_service  # Phase 2D #3185
 
             self.llm_interface = get_llm_service()
 
         try:
+            chat_kwargs: Dict[str, Any] = {
+                "llm_type": LLMType.ANALYSIS,
+                "temperature": 0.1,  # Low temperature for consistent judgments
+                "structured_output": True,  # #10672: force valid JSON so judgments aren't dropped
+            }
+            if json_schema is not None:
+                chat_kwargs["json_schema"] = json_schema
             response = await self.llm_interface.chat(
                 [
-                    {"role": "system", "content": self._get_system_prompt()},
+                    {"role": "system", "content": system_prompt or self._get_system_prompt()},
                     {"role": "user", "content": prompt},
                 ],
-                llm_type=LLMType.ANALYSIS,
-                temperature=0.1,  # Low temperature for consistent judgments
-                structured_output=True,  # #10672: force valid JSON so judgments aren't dropped
+                **chat_kwargs,
             )
 
             return response
@@ -202,6 +317,45 @@ Always respond with a structured JSON containing:
 
 Be precise, objective, and helpful in your judgments."""
 
+    def _judgment_from_payload(
+        self,
+        payload: Dict[str, Any],
+        subject: Any,
+        context: Dict[str, Any],
+    ) -> JudgmentResult:
+        """Build a JudgmentResult from a schema-valid judgment payload (#17307).
+
+        Every key read here is either required by ``JUDGMENT_SCHEMA`` or
+        defaulted, so this method cannot raise on key drift -- the drift is
+        caught, retried and reported by the validated loop instead of arriving
+        as a ``KeyError`` that the gate reads as approval.
+        """
+        criterion_scores = [
+            CriterionScore(
+                dimension=JudgmentDimension(item["dimension"]),
+                score=float(item["score"]),
+                confidence=JudgmentConfidence(item["confidence"]),
+                reasoning=item["reasoning"],
+                evidence=item.get("evidence", []),
+            )
+            for item in payload.get("criterion_scores", [])
+        ]
+        return JudgmentResult(
+            subject_id=str(hash(str(subject))),
+            judge_type=self.judge_type,
+            timestamp=datetime.now(tz=timezone.utc),
+            overall_score=float(payload["overall_score"]),
+            recommendation=payload["recommendation"],
+            confidence=JudgmentConfidence(payload["confidence"]),
+            criterion_scores=criterion_scores,
+            reasoning=payload["reasoning"],
+            alternatives_considered=payload.get("alternatives_analysis", []),
+            improvement_suggestions=payload.get("improvement_suggestions", []),
+            context_used=context,
+            processing_time_ms=0.0,  # Will be set by caller
+            llm_model_used=getattr(self.llm_interface, "current_model", "unknown"),
+        )
+
     async def _parse_llm_response(
         self,
         llm_response: Any,
@@ -210,50 +364,18 @@ Be precise, objective, and helpful in your judgments."""
         context: Dict[str, Any],
         alternatives: List[Any] | None = None,
     ) -> JudgmentResult:
-        """Parse LLM response into structured JudgmentResult"""
-        try:
-            # Extract text content from LLMResponse, str, or legacy dict (Phase 2D #3185)
-            if hasattr(llm_response, "content"):
-                raw_text = llm_response.content
-            elif isinstance(llm_response, str):
-                raw_text = llm_response
-            else:
-                raw_text = llm_response.get("content", "")
-            evaluation = _extract_json_object(raw_text)
+        """Validate a raw judge reply against JUDGMENT_SCHEMA, then convert it.
 
-            # Parse criterion scores
-            criterion_scores = []
-            for criterion_data in evaluation.get("criterion_scores", []):
-                criterion_scores.append(
-                    CriterionScore(
-                        dimension=JudgmentDimension(criterion_data["dimension"]),
-                        score=float(criterion_data["score"]),
-                        confidence=JudgmentConfidence(criterion_data["confidence"]),
-                        reasoning=criterion_data["reasoning"],
-                        evidence=criterion_data.get("evidence", []),
-                    )
-                )
-
-            # Create judgment result
-            return JudgmentResult(
-                subject_id=str(hash(str(subject))),
-                judge_type=self.judge_type,
-                timestamp=datetime.now(tz=timezone.utc),
-                overall_score=float(evaluation["overall_score"]),
-                recommendation=evaluation["recommendation"],
-                confidence=JudgmentConfidence(evaluation["confidence"]),
-                criterion_scores=criterion_scores,
-                reasoning=evaluation["reasoning"],
-                alternatives_considered=evaluation.get("alternatives_analysis", []),
-                improvement_suggestions=evaluation.get("improvement_suggestions", []),
-                context_used=context,
-                processing_time_ms=0.0,  # Will be set by caller
-                llm_model_used=getattr(self.llm_interface, "current_model", "unknown"),
-            )
-
-        except Exception as e:
-            logger.error("Failed to parse LLM response: %s", e)
-            raise
+        Kept for callers holding a response object of their own; ``make_judgment``
+        goes through the validated loop, which retries a bad reply before this
+        point is ever reached. *criteria* and *alternatives* are part of the
+        original signature and are not read -- the reply carries its own
+        dimensions.
+        """
+        payload = validate_against(_extract_json_object(_response_text(llm_response)), JUDGMENT_SCHEMA)
+        return self._judgment_from_payload(
+            payload if isinstance(payload, dict) else payload.model_dump(), subject, context
+        )
 
     async def _log_judgment(self, judgment: JudgmentResult):
         """Log judgment for transparency and auditing"""

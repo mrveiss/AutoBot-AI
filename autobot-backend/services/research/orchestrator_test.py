@@ -10,6 +10,7 @@ budget/failure-path logic — not the composed modules themselves (already
 tested in their own colocated test files).
 """
 
+import json
 from dataclasses import dataclass
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -199,9 +200,16 @@ class TestResearchFailurePaths:
 
 
 def _make_llm_with_agreement(verdict: str) -> AsyncMock:
-    """LLM mock whose .chat() always returns a fixed agreement verdict."""
+    """LLM mock whose .chat() always returns a fixed agreement verdict.
+
+    #17308: ``ClaimVerifier.classify_agreement`` reads a schema-validated
+    typed-decision reply now, not an ``AGREEMENT:`` line — an unreadable reply
+    raises rather than degrading to UNRELATED silently, which is what made
+    these two promotion tests fail rather than pass vacuously.
+    """
     llm = AsyncMock()
-    llm.chat = AsyncMock(return_value=SimpleNamespace(content=f"AGREEMENT: {verdict}\nRATIONALE: r", error=None))
+    payload = json.dumps({"agreement": {"answer": verdict.lower(), "probability": 0.9}})
+    llm.chat = AsyncMock(return_value=SimpleNamespace(content=payload, error=None))
     return llm
 
 

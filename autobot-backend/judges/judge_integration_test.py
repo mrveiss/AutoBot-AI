@@ -318,9 +318,14 @@ class TestJudgeIntegration:
 
             evaluation = await evaluator.evaluate_step(workflow, test_step)
 
-            # Fail-open: evaluation error does not crash, defaults to proceed.
+            # Fail-open by default (#1464) -- and now distinguishable from a
+            # judgment (#17307): the response says no judge was read and which
+            # failure it was, instead of only carrying a free-text reason.
             assert evaluation["should_proceed"] is True
-            assert "Evaluation error" in evaluation["reason"]
+            assert evaluation["judge_available"] is False
+            assert evaluation["degradation"] == "evaluation_error"
+            assert evaluation["fail_closed"] is False
+            assert "Judge error" in evaluation["reason"]
             mock_judges["workflow_step_judge"].evaluate_workflow_step.assert_called_once()
 
     def test_judge_performance_tracking(self, mock_judges):

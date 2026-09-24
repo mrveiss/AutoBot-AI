@@ -143,12 +143,14 @@ REACH = declare(
     # merged tree. Two readings because a local run of this floor is only
     # trustworthy since #17298 made the sweep import declarations from outside
     # repo_tests/ -- before that it silently checked a smaller set.
-    # Re-pinned 2956 -> 2958 (#17305, #17306): measured 3258 tracked backend
-    # python files (tests excluded). The previous pin was taken at 3256, exactly
-    # the 300 allowance, so the two non-test backend modules this branch adds --
-    # llm_shared/structured_output.py and providers/anthropic_request.py -- are
-    # the entire overage. Pinned at `population - growth`.
-    floor=2958,
+    # Re-pinned 2956 -> 2958 (#17305, #17306) and 2958 -> 2960 here (#17307,
+    # #17308): measured 3258 tracked backend python files (tests excluded) on
+    # the parent branch and 3260 on this one. The previous pin was taken at
+    # 3256, exactly the 300 allowance, so the four non-test backend modules
+    # this stack adds -- llm_shared/{structured_output,validated_llm,decisions}.py
+    # and providers/anthropic_request.py -- are the entire overage. Pinned at
+    # `population - growth`.
+    floor=2960,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )

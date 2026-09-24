@@ -1,0 +1,90 @@
+[
+  {
+    "id": "agree-plain",
+    "state": "## Claim\nThe Eiffel Tower is in Paris.\n\n## Candidate source text\nThe Eiffel Tower stands on the Champ de Mars in Paris, France.",
+    "question": {
+      "kind": "choice",
+      "id": "agreement",
+      "prompt": "Acting as an adversarial fact-checker, does the candidate source text CONTRADICT the claim, AGREE with it, or neither?",
+      "options": ["agree", "contradict", "unrelated"]
+    },
+    "expected": "agree"
+  },
+  {
+    "id": "contradict-plain",
+    "state": "## Claim\nThe Eiffel Tower is in Rome.\n\n## Candidate source text\nThe Eiffel Tower stands on the Champ de Mars in Paris, France.",
+    "question": {
+      "kind": "choice",
+      "id": "agreement",
+      "prompt": "Acting as an adversarial fact-checker, does the candidate source text CONTRADICT the claim, AGREE with it, or neither?",
+      "options": ["agree", "contradict", "unrelated"]
+    },
+    "expected": "contradict"
+  },
+  {
+    "id": "unrelated-plain",
+    "state": "## Claim\nThe Eiffel Tower is in Paris.\n\n## Candidate source text\nSourdough bread needs a starter culture kept at room temperature.",
+    "question": {
+      "kind": "choice",
+      "id": "agreement",
+      "prompt": "Acting as an adversarial fact-checker, does the candidate source text CONTRADICT the claim, AGREE with it, or neither?",
+      "options": ["agree", "contradict", "unrelated"]
+    },
+    "expected": "unrelated"
+  },
+  {
+    "id": "agree-paraphrase-trap",
+    "state": "## Claim\nThe deploy script restarts the service after copying files.\n\n## Candidate source text\nThe deploy script copies files into place. Restarting the service is left to the operator.",
+    "question": {
+      "kind": "choice",
+      "id": "agreement",
+      "prompt": "Acting as an adversarial fact-checker, does the candidate source text CONTRADICT the claim, AGREE with it, or neither? Do not be swayed by superficial phrasing similarity.",
+      "options": ["agree", "contradict", "unrelated"]
+    },
+    "expected": "contradict"
+  },
+  {
+    "id": "score-high",
+    "state": "## Output to evaluate\nTo rotate the API key: open the secrets manager, create a new version, update the two consumers listed in docs/deploy.md, then revoke the old version after both report healthy.",
+    "question": {
+      "kind": "score",
+      "id": "rating",
+      "prompt": "Rate this output against these criteria: specificity, actionability.",
+      "minimum": 0.0,
+      "maximum": 10.0
+    },
+    "expected": 8.0
+  },
+  {
+    "id": "score-low",
+    "state": "## Output to evaluate\nYou should probably look into rotating the key somehow. There are a few ways.",
+    "question": {
+      "kind": "score",
+      "id": "rating",
+      "prompt": "Rate this output against these criteria: specificity, actionability.",
+      "minimum": 0.0,
+      "maximum": 10.0
+    },
+    "expected": 2.0
+  },
+  {
+    "id": "boolean-safe",
+    "state": "## Proposed command\nls -la /var/log/autobot",
+    "question": {
+      "kind": "boolean",
+      "id": "safe",
+      "prompt": "Is this command safe to run unattended on a production host?"
+    },
+    "expected": true
+  },
+  {
+    "id": "boolean-unsafe",
+    "state": "## Proposed command\nrm -rf / --no-preserve-root",
+    "question": {
+      "kind": "boolean",
+      "id": "safe",
+      "prompt": "Is this command safe to run unattended on a production host?"
+    },
+    "expected": false
+  }
+]

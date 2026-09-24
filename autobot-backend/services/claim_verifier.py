@@ -32,6 +32,7 @@ from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_7_DAYS
+from llm_shared.decisions import ChoiceQuestion, LocalModelBackend, decide
 from services.knowledge_grounding_models import (
     Claim,
     KBSource,
@@ -168,46 +169,34 @@ class CorroborationResult:
 # during #12623 premise-check). Framed as "what evidence would contradict
 # this claim?" per the design doc, applied to a candidate source instead of
 # a proposed action.
-_CORROBORATION_SYSTEM_PROMPT = (
-    "You are an adversarial fact-checker. Your ONLY job is to find whether the "
-    "candidate source text CONTRADICTS the claim below. Actively look for "
-    "evidence against the claim rather than assuming agreement — do not be "
-    "swayed by superficial phrasing similarity."
-)
-
 _CORROBORATION_USER_TMPL = """\
 ## Claim
 {claim_text}
 
 ## Candidate source text
 {source_text}
-
-## Your task
-What evidence in the source above would contradict this claim, if any? \
-Respond with EXACTLY this format (no extra text):
-
-AGREEMENT: <AGREE|CONTRADICT|UNRELATED>
-RATIONALE: <one sentence>
 """
 
 
-def _build_corroboration_prompt(claim_text: str, source_text: str) -> tuple[str, str]:
-    """Return (system_prompt, user_prompt) for one agreement-classification call."""
-    user = _CORROBORATION_USER_TMPL.format(claim_text=claim_text, source_text=source_text[:2000])
-    return _CORROBORATION_SYSTEM_PROMPT, user
+#: The agreement verdict as a typed question for the decision seam (#17308).
+#: The adversarial framing is part of the question, not decoration: this
+#: decision decides whether a claim gets corroboration credit, and a
+#: classifier that assumes agreement from phrasing similarity is the failure
+#: mode #16700's fact-checking work was built against.
+_AGREEMENT_QUESTION = ChoiceQuestion(
+    id="agreement",
+    prompt=(
+        "Acting as an adversarial fact-checker, does the candidate source text CONTRADICT the claim, "
+        "AGREE with it, or neither? Actively look for evidence against the claim rather than assuming "
+        "agreement, and do not be swayed by superficial phrasing similarity."
+    ),
+    options=[a.value for a in SourceAgreement],
+)
 
 
-def _parse_agreement(raw: str) -> SourceAgreement:
-    """Extract the AGREEMENT verdict from the LLM response, defaulting to UNRELATED."""
-    for line in raw.splitlines():
-        stripped = line.strip()
-        if stripped.upper().startswith("AGREEMENT:"):
-            value = stripped[len("AGREEMENT:") :].strip().upper()
-            try:
-                return SourceAgreement(value.lower())
-            except ValueError:
-                return SourceAgreement.UNRELATED
-    return SourceAgreement.UNRELATED
+def _build_corroboration_state(claim_text: str, source_text: str) -> str:
+    """Return the shared state one agreement decision is taken against."""
+    return _CORROBORATION_USER_TMPL.format(claim_text=claim_text, source_text=source_text[:2000])
 
 
 def _source_domain(url: str | None) -> str | None:
@@ -291,26 +280,32 @@ class ClaimVerifier:
         flag either) on any LLM error or timeout, so a broken verifier can never
         wrongly promote or wrongly block a claim.
         """
-        llm = await self._llm()
-        system_prompt, user_prompt = _build_corroboration_prompt(claim_text, source_text)
+        backend = LocalModelBackend(llm_service=await self._llm())
         try:
-            response = await asyncio.wait_for(
-                llm.chat(
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=0.0,
+            result = await asyncio.wait_for(
+                decide(
+                    _build_corroboration_state(claim_text, source_text),
+                    [_AGREEMENT_QUESTION],
+                    backend=backend,
+                    label="claim_verifier.classify_agreement",
                 ),
                 timeout=_CORROBORATION_CLASSIFY_TIMEOUT_SECONDS,
             )
         except Exception as exc:
-            logger.warning("classify_agreement: LLM call failed (%s) — treating as UNRELATED", exc)
+            # #17308: the seam raises rather than returning a default, so the
+            # conservative verdict is chosen HERE, in the open, knowing the
+            # decision failed -- a bespoke parser used to reach the same
+            # UNRELATED by treating an unreadable reply as a readable one.
+            logger.warning("classify_agreement: decision failed (%s) — treating as UNRELATED", exc)
             return SourceAgreement.UNRELATED
-        if getattr(response, "error", None):
-            logger.warning("classify_agreement: LLM error: %s — treating as UNRELATED", response.error)
-            return SourceAgreement.UNRELATED
-        return _parse_agreement(response.content or "")
+        answer = result[_AGREEMENT_QUESTION.id]
+        logger.debug(
+            "classify_agreement: %s (p=%.2f, %s)",
+            answer.value,
+            answer.probability,
+            answer.calibration.value,
+        )
+        return SourceAgreement(answer.value)
 
     async def _classify_all(self, claim_text: str, sources: List[KBSource]) -> tuple[int, List[KBSource]]:
         """Classify every independent source; return (agree_count, contradicting_sources)."""

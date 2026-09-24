@@ -15,7 +15,7 @@ from typing import Any, Dict, FrozenSet, List
 from autobot_shared.logging_manager import get_logger
 from constants import WorkflowThresholds
 
-from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
+from . import ERROR_MODEL_SENTINEL, BaseLLMJudge, JudgmentDimension, JudgmentResult
 
 logger = get_logger(__name__)
 
@@ -297,14 +297,21 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
         try:
             judgment = await self.evaluate_workflow_step(step_data, workflow_context, user_context)
 
-            # Fail-open: if LLM judge errored, approve with warning
-            # instead of silently rejecting all steps (#1464)
-            if judgment.llm_model_used == "error":
+            # A judgment that could not be read resolves through the framework
+            # policy (#1464 chose fail-open; #17307 made it named and
+            # switchable), not through a hard-coded approval here.
+            if judgment.llm_model_used == ERROR_MODEL_SENTINEL:
+                import judges  # noqa: PLC0415 -- read at call time so the policy can be patched
+
+                proceed = not judges.JUDGE_FAIL_CLOSED
                 logger.warning(
-                    "LLM judge unavailable, approving step by default: %s",
+                    "LLM judge unavailable, %s step by the %s policy: %s",
+                    "approving" if proceed else "holding",
+                    "fail-open" if proceed else "fail-closed",
                     judgment.reasoning,
                 )
-                return True, f"Approved (judge unavailable): {judgment.reasoning}"
+                verb = "Approved" if proceed else "Held"
+                return proceed, f"{verb} (judge unavailable): {judgment.reasoning}"
 
             safety_score = self._extract_dimension_score(judgment, JudgmentDimension.SAFETY)
             quality_score = self._extract_dimension_score(judgment, JudgmentDimension.QUALITY)

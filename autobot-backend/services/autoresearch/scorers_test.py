@@ -105,11 +105,17 @@ class TestLLMJudgeScorer:
             criteria=["relevance", "specificity", "actionability"],
         )
 
+    @staticmethod
+    def _seam_reply(rating: float, probability: float = 0.9) -> MagicMock:
+        """A well-formed typed-decision reply carrying *rating* (#17307)."""
+        response = MagicMock()
+        response.content = json.dumps({"rating": {"answer": rating, "probability": probability}})
+        response.error = None
+        return response
+
     @pytest.mark.asyncio
-    async def test_score_parses_llm_rating(self, scorer, mock_llm) -> None:
-        mock_response = MagicMock()
-        mock_response.content = '{"rating": 8, "reasoning": "Good hypothesis"}'
-        mock_llm.chat.return_value = mock_response
+    async def test_score_reads_the_typed_rating(self, scorer, mock_llm) -> None:
+        mock_llm.chat.return_value = self._seam_reply(8)
 
         result = await scorer.score("A detailed hypothesis", {})
         assert result.score == 0.8  # 8/10 normalized
@@ -117,15 +123,35 @@ class TestLLMJudgeScorer:
         assert result.scorer_name == "llm_judge"
 
     @pytest.mark.asyncio
-    async def test_score_handles_non_json_response(self, scorer, mock_llm) -> None:
+    async def test_score_sends_the_schema_with_the_request(self, scorer, mock_llm) -> None:
+        """#17305: the range travels to the provider, not only into the prompt."""
+        mock_llm.chat.return_value = self._seam_reply(5)
+
+        await scorer.score("A hypothesis", {})
+
+        _args, kwargs = mock_llm.chat.call_args
+        rating_schema = kwargs["json_schema"]["properties"]["rating"]["properties"]["answer"]
+        assert kwargs["structured_output"] is True
+        assert (rating_schema["minimum"], rating_schema["maximum"]) == (0.0, 10.0)
+
+    @pytest.mark.asyncio
+    async def test_a_rating_in_prose_is_an_error_not_a_score(self, scorer, mock_llm) -> None:
+        """#17307: the regex that found "7" in any sentence is gone on purpose.
+
+        A reply the schema cannot read used to be scraped for a number, so a
+        refusal mentioning "7 out of 10" scored 0.7. It is now an error result
+        -- distinguishable from a rating the judge actually gave.
+        """
         mock_response = MagicMock()
         mock_response.content = "I rate this 7 out of 10"
+        mock_response.error = None
         mock_llm.chat.return_value = mock_response
 
         result = await scorer.score("A hypothesis", {})
-        # Falls back to regex extraction
-        assert result.score == 0.7
-        assert result.raw_score == 7
+
+        assert result.raw_score is None
+        assert result.score == 0.0
+        assert "error" in result.metadata
 
     @pytest.mark.asyncio
     async def test_score_handles_llm_failure(self, scorer, mock_llm) -> None:
@@ -134,26 +160,6 @@ class TestLLMJudgeScorer:
         result = await scorer.score("A hypothesis", {})
         assert result.score == 0.0
         assert "error" in result.metadata
-
-
-class TestLLMJudgeScorerParseRating:
-    """Unit tests for LLMJudgeScorer._parse_rating edge cases — Issue #3211."""
-
-    def test_parse_rating_completely_unparseable_returns_zero(self) -> None:
-        result = LLMJudgeScorer._parse_rating("no numbers here at all")
-        assert result == 0
-
-    def test_parse_rating_json_path(self) -> None:
-        assert LLMJudgeScorer._parse_rating('{"rating": 7, "reasoning": "ok"}') == 7
-
-    def test_parse_rating_regex_path(self) -> None:
-        assert LLMJudgeScorer._parse_rating("I give this 8 out of 10") == 8
-
-    def test_parse_rating_clamps_to_10(self) -> None:
-        assert LLMJudgeScorer._parse_rating('{"rating": 15}') == 10
-
-    def test_parse_rating_clamps_to_0(self) -> None:
-        assert LLMJudgeScorer._parse_rating('{"rating": -3}') == 0
 
 
 class TestValBpbScorerRunExperimentException:
@@ -176,7 +182,10 @@ class TestSubsetFractionPassthrough:
     async def test_llm_judge_accepts_subset_fraction_none(self) -> None:
         llm = AsyncMock()
         mock_response = MagicMock()
-        mock_response.content = '{"rating": 7, "reasoning": "ok"}'
+        # The typed-decision reply shape (#17307), and `error = None` because
+        # the seam checks it -- a bare MagicMock's truthy `.error` is an error.
+        mock_response.content = json.dumps({"rating": {"answer": 7, "probability": 0.8}})
+        mock_response.error = None
         llm.chat.return_value = mock_response
 
         scorer = LLMJudgeScorer(llm_service=llm, criteria=["quality"])
@@ -187,7 +196,10 @@ class TestSubsetFractionPassthrough:
     async def test_llm_judge_accepts_subset_fraction_value(self) -> None:
         llm = AsyncMock()
         mock_response = MagicMock()
-        mock_response.content = '{"rating": 6, "reasoning": "ok"}'
+        # The typed-decision reply shape (#17307), and `error = None` because
+        # the seam checks it -- a bare MagicMock's truthy `.error` is an error.
+        mock_response.content = json.dumps({"rating": {"answer": 6, "probability": 0.8}})
+        mock_response.error = None
         llm.chat.return_value = mock_response
 
         scorer = LLMJudgeScorer(llm_service=llm, criteria=["quality"])
