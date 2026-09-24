@@ -501,8 +501,9 @@ async def _run_pip_install(component: str, req_path: str, pip_bin: str, steps: L
     # to upgrade that package -- so the repair has to happen BEFORE the install,
     # not after a failure. pip stops at the first husk, so this clears the whole
     # venv in one pass rather than one failed deploy per husked package.
-    for site_packages in provenance.site_packages_dirs(Path(pip_bin).parents[1]):
-        provenance.clear_provenance_husks(site_packages, steps)
+    removed = provenance.clear_venv_husks(Path(pip_bin).parents[1])
+    if removed:
+        steps.append(f"venv-provenance: cleared {len(removed)} husk dist-info dir(s): {', '.join(removed)}")
     steps.append(f"pip: installing {req_path} into {Path(pip_bin).parent}")
     try:
         proc = await asyncio.create_subprocess_exec(

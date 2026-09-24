@@ -367,6 +367,15 @@
     group: "{{ slm_group }}"
   tags: ['slm', 'backend']
 
+# #17339: this venv is the one that runs the builtin updater, so a husk here
+# can block the very path that would otherwise repair it. Cleared with the
+# venv's own interpreter, which a husk does not affect.
+- name: "SLM | Clear venv provenance husks before pip (#17339)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/clear_venv_husks.yml
+  vars:
+    husk_venv_dir: "{{ slm_backend_dir }}/venv"
+  tags: ['slm', 'backend']
+
 - name: "SLM | Install autobot_shared in venv (editable)"
   ansible.builtin.command:
     cmd: "{{ slm_backend_dir }}/venv/bin/pip install -e {{ slm_base_dir }}/autobot_shared"

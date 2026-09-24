@@ -93,8 +93,6 @@ import os
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
-from autobot_shared.time_utils import utc_timestamp
-
 logger = logging.getLogger(__name__)
 
 # The one file this module ever writes inside a dist-info directory — never
@@ -196,6 +194,12 @@ def write_provenance_marker(dist_info: Path, component: str) -> None:
     surrounding install: a marker write failure means the NEXT candidacy
     check for this package fails closed (unverified), not that this run
     itself should abort."""
+    # Imported here, not at module scope (#17339): ansible stages THIS FILE
+    # alone onto a node and runs it with the target venv's own interpreter,
+    # where `autobot_shared` is not importable. Only the marker-writing half
+    # needs it, and that half never runs from the staged copy.
+    from autobot_shared.time_utils import utc_timestamp  # noqa: PLC0415
+
     payload = {"tool": "autobot-venv-reconcile", "component": component, "recorded_at": utc_timestamp()}
     marker = dist_info / PROVENANCE_MARKER_FILENAME
     try:
@@ -271,3 +275,56 @@ def split_by_provenance(names: Set[str], paths: Dict[str, Optional[Path]]) -> Tu
     for name in names:
         (verified if has_tool_provenance(paths.get(name)) else unverified).add(name)
     return verified, unverified
+
+
+def clear_venv_husks(venv_dir: Path) -> List[str]:
+    """Clear husks in every ``site-packages`` under *venv_dir*. Returns the names.
+
+    The whole-venv form of :func:`clear_provenance_husks`, extracted so the
+    ansible entry point below and ``api/venv_reconcile._run_pip_install`` share
+    one loop as well as one classification (#17339).
+    """
+    removed: List[str] = []
+    for site_packages in site_packages_dirs(venv_dir):
+        removed.extend(clear_provenance_husks(site_packages))
+    return removed
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Clear a venv's husks from the command line (#17339).
+
+    The reachable-from-ansible half of #17332's repair. A host whose only
+    entry point is provisioning never runs ``api/venv_reconcile``, so its
+    husks survive and every pip step that must upgrade a husked package keeps
+    aborting with ``uninstall-no-record-file``.
+
+    Deliberately runnable by the venv's OWN interpreter: a husk is a
+    ``dist-info`` directory, not a broken interpreter or a broken stdlib, so
+    this repairs the venv that is broken without needing a second one. That
+    matters most for ``autobot-slm-backend/venv``, which runs the builtin
+    updater -- the only other path to this repair -- and can therefore be the
+    venv whose husk blocks its own repair.
+
+    Exit status is 0 when there was nothing to clear: an absent venv on first
+    provisioning is not a failure, and neither is a healthy one.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Clear AUTOBOT_PROVENANCE dist-info husks from a venv (#17332).")
+    parser.add_argument("venv", help="path to the virtualenv to repair, e.g. /opt/autobot/autobot-backend/venv")
+    args = parser.parse_args(argv)
+
+    venv_dir = Path(args.venv)
+    if not venv_dir.is_dir():
+        print(f"venv-provenance: {venv_dir} does not exist, nothing to clear")
+        return 0
+    removed = clear_venv_husks(venv_dir)
+    if removed:
+        print(f"venv-provenance: cleared {len(removed)} husk dist-info dir(s): {', '.join(removed)}")
+    else:
+        print(f"venv-provenance: no husks in {venv_dir}")
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised through subprocess in tests
+    raise SystemExit(main())
