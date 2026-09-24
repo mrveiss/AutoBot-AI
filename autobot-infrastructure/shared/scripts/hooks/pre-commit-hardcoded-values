@@ -70,11 +70,26 @@ source "${PROJECT_ROOT}/scripts/lib/hardcoded-value-rules.sh" || {
 # GH#14151: get_staged_files' own git-diff failure (a corrupted index, say) is
 # propagated rather than masked, so a broken git cannot read as "nothing
 # staged".
+# #17329: hv_path_in_scan_dirs is applied here as well as hv_file_in_scope,
+# because this hook sees whatever is STAGED while the repo-wide scan walks
+# HV_SCAN_DIRS. Without it the two disagreed, and a staged file outside those
+# trees was blocked on commit, invisible to the scan, and impossible to
+# baseline -- leaving --no-verify as the only way to commit it, which switches
+# off every other hook too. Both callers now read the one list.
+#
+# Files outside HV_SCAN_DIRS are therefore NOT guarded here -- notably each
+# frontend's project-root configs, which sit outside */src. That is the scan's
+# long-standing scope, now applied consistently rather than silently only on
+# one side; widening it is #17329 option 2, whose surface is measured on that
+# issue rather than assumed.
 get_files_to_scan() {
     local staged file
     staged="$(get_staged_files '.' "$@")" || return 1
     while IFS= read -r file; do
-        [ -n "$file" ] && hv_file_in_scope "$file" && printf '%s\n' "$file"
+        [ -n "$file" ] \
+            && hv_file_in_scope "$file" \
+            && hv_path_in_scan_dirs "$file" \
+            && printf '%s\n' "$file"
     done <<< "$staged"
     return 0
 }

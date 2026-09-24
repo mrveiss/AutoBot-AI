@@ -107,6 +107,11 @@ jobs:
             frontend:
               - 'autobot-frontend/**'
               - '.github/workflows/ci.yml'
+              # #15002/#16260: the redactor drift guard reads the terminal
+              # plugin's copy, so a plugin-only edit must still run the
+              # frontend-tests job below. Dropped from #15002 because this
+              # file could not be staged through the hardcoded-values hook.
+              - 'autobot-plugins/terminal/**'
 
   # #13316: the suite is split twelve ways here; `python-suite` below reports the
   # combined verdict. Measured per-step baseline of the single job this replaces:

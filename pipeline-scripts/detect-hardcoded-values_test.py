@@ -43,17 +43,20 @@ _SCRIPT = Path(__file__).with_name("detect-hardcoded-values.sh")
 # exercises the same load-and-partition path CI runs.
 _LIB = Path(__file__).resolve().parent.parent / "scripts" / "lib" / "hardcoded-value-rules.sh"
 _BASELINE = Path(__file__).with_name("hardcoded_values_baseline.txt")
-# Kept in step with SCAN_DIRS in detect-hardcoded-values.sh; the guard below
-# asserts the two lists have not drifted, so a new scan directory cannot make
-# every hermetic test start refusing without anyone noticing why.
-_SCAN_DIRS = (
-    "autobot-backend",
-    "autobot-frontend/src",
-    "autobot_shared",
-    "autobot-slm-backend",
-    "autobot-slm-frontend/src",
-    "autobot-infrastructure",
-)
+
+
+def _scan_dirs_from_lib() -> tuple:
+    """Sourced, not copied or text-parsed: a parse reads where a value is
+    WRITTEN, so the old parse of `SCAN_DIRS=(` returned the literal
+    `${HV_SCAN_DIRS[@]}` once the list moved (#17329)."""
+    cmd = ["bash", "-c", f'source "{_LIB}"; printf "%s\n" "${{HV_SCAN_DIRS[@]}}"']
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)  # nosec B603 B607
+    dirs = tuple(line for line in out.stdout.splitlines() if line)
+    assert "autobot-backend" in dirs, f"HV_SCAN_DIRS resolved to {dirs!r} (stderr: {out.stderr[:200]})"
+    return dirs
+
+
+_SCAN_DIRS = _scan_dirs_from_lib()
 
 _BAD_ACCOUNT = "ka" + "li"
 _FLEET_IP = ".".join(("172", "16", "168", "77"))
@@ -253,11 +256,7 @@ def _write_baseline(root, lines: list[str]) -> None:
 
 def _baseline_keys(root) -> set:
     path = root / "pipeline-scripts" / "hardcoded_values_baseline.txt"
-    return {
-        ln.split("|", 1)[1]
-        for ln in path.read_text(encoding="utf-8").splitlines()
-        if ln[:1].isdigit()
-    }
+    return {ln.split("|", 1)[1] for ln in path.read_text(encoding="utf-8").splitlines() if ln[:1].isdigit()}
 
 
 def _run_flag(root, flag: str) -> subprocess.CompletedProcess:
@@ -315,9 +314,9 @@ def test_prune_cannot_add_a_key(tmp_path):
     assert _run_flag(root, "--prune-baseline").returncode == 0
     keys = _baseline_keys(root)
     assert not any("brand_new.py" in k for k in keys), f"prune ADDED a key: {sorted(keys)}"
-    assert json.loads(_run_flag(root, "--json").stdout)["ssot_violations"] >= 1, (
-        "prune silenced a finding it was never allowed to absorb"
-    )
+    assert (
+        json.loads(_run_flag(root, "--json").stdout)["ssot_violations"] >= 1
+    ), "prune silenced a finding it was never allowed to absorb"
 
 
 def test_prune_cannot_raise_a_count(tmp_path):
@@ -437,25 +436,28 @@ def test_a_missing_scan_dir_also_refuses_to_report_or_audit(tmp_path, missing):
     for flag in ("--json", "--audit-baseline"):
         result = _run_flag(root, flag)
         assert result.returncode != 0, f"{flag} reported on a partial tree: {result.stdout}"
-        assert "does not exist" in result.stderr
+        # #17329: `scripts` is now a scan directory AND the place the rule
+        # library lives, so removing it trips the earlier "cannot load" FATAL
+        # instead of the scan-directory check. Both are the same refusal --
+        # an incomplete tree must not be reported on -- so the assertion is on
+        # the refusal rather than on which guard got there first.
+        assert (
+            "does not exist" in result.stderr or "refusing to report clean" in result.stderr
+        ), f"{flag} neither scanned the tree nor refused it: {result.stderr[:200]}"
 
 
-def test_the_tests_scan_dir_list_matches_the_script(tmp_path):
-    """The fixture duplicates SCAN_DIRS; assert it has not drifted.
+def test_the_script_takes_its_scan_dirs_from_the_shared_definition(tmp_path):
+    """The script must still DELEGATE its list rather than re-declare one.
 
-    A new entry in the script and not here would leave every hermetic test
-    refusing, with a failure that points at the fixture rather than the cause.
+    #17329: the drift that matters is "a second list exists at all" -- a
+    literal is invisible to the pre-commit hook, the asymmetry this closed.
     """
     text = _SCRIPT.read_text(encoding="utf-8")
-    block = text.split("SCAN_DIRS=(", 1)[1].split(")", 1)[0]
-    in_script = tuple(
-        line.strip().strip('"')
-        for line in block.splitlines()
-        if line.strip() and not line.strip().startswith("#")
+    assert 'SCAN_DIRS=("${HV_SCAN_DIRS[@]}")' in text, (
+        "detect-hardcoded-values.sh no longer takes its directories from HV_SCAN_DIRS; "
+        "a literal list here is invisible to the pre-commit hook (#17329)"
     )
-    assert in_script == _SCAN_DIRS, (
-        f"SCAN_DIRS drifted — script has {in_script}, this file has {_SCAN_DIRS}"
-    )
+    assert len(_SCAN_DIRS) >= 6, f"HV_SCAN_DIRS resolved implausibly small: {_SCAN_DIRS!r}"
 
 
 # ── #14914: what the verdict is keyed on, and that something consumes it ─────
@@ -473,9 +475,7 @@ def test_the_tests_scan_dir_list_matches_the_script(tmp_path):
 def test_an_other_class_violation_alone_blocks(tmp_path):
     """The mutation, committed. A DSN literal is `other` and nothing else."""
     root = _hermetic_repo(tmp_path)
-    (root / "autobot-backend" / "db.py").write_text(
-        'ENGINE = "' + "sqlite" + ':///./app.db"\n', encoding="utf-8"
-    )
+    (root / "autobot-backend" / "db.py").write_text('ENGINE = "' + "sqlite" + ':///./app.db"\n', encoding="utf-8")
 
     report = _run(root)
 
@@ -491,9 +491,7 @@ def test_an_other_class_violation_alone_blocks(tmp_path):
 def test_a_clean_tree_still_passes(tmp_path):
     """The other direction. A gate that fails everything is not a gate."""
     root = _hermetic_repo(tmp_path)
-    (root / "autobot-backend" / "db.py").write_text(
-        "ENGINE = create_engine(config.database.url)\n", encoding="utf-8"
-    )
+    (root / "autobot-backend" / "db.py").write_text("ENGINE = create_engine(config.database.url)\n", encoding="utf-8")
 
     report = _run(root)
 
@@ -554,16 +552,18 @@ def test_both_entry_points_agree_on_what_blocks(tmp_path):
 
     hook_result = subprocess.run(  # nosec B603  # fixed argv, no shell
         ["bash", str(hook), "autobot-backend/db.py"],
-        capture_output=True, text=True, cwd=root,
+        capture_output=True,
+        text=True,
+        cwd=root,
     )
     report = _run(root)
 
     # Assert the fixture reached BOTH before comparing verdicts: two entry points
     # that each found nothing also "agree", and that agreement proves nothing.
     assert report["other_violations"] >= 1, f"the tree scan never saw the fixture: {report}"
-    assert "VIOLATION" in hook_result.stdout, (
-        f"the hook never saw the fixture, so its exit code says nothing: {hook_result.stdout!r}"
-    )
+    assert (
+        "VIOLATION" in hook_result.stdout
+    ), f"the hook never saw the fixture, so its exit code says nothing: {hook_result.stdout!r}"
 
     assert hook_result.returncode == 1, "the hook stopped blocking on an `other`-class violation"
     assert report["status"] == "fail", (

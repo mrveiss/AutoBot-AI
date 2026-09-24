@@ -33,6 +33,10 @@ python:
   # bypassed: a PR touching only this workflow computes `python != true`,
   # python-suite reports green, and the test guarding it never runs.
   - '.github/workflows/duplication-guard.yml'
+  # #17329: frontend_path_filter_mirror_test.py PARSES this file and compares it
+  # to frontend-test.yml's push paths, so its verdict depends on the content --
+  # a real dependency, covered here rather than recorded as a bypass.
+  - '.github/filters/frontend-paths.yml'
   # Read by repo_tests/npm_audit_covers_its_workspaces_test.py, which asserts the
   # audit's workspace set against the tracked tree (#16131). Without this, a change
   # confined to security.yml takes the required-context shim's green while the guard
