@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from autobot_shared.doc_chunking import estimate_tokens
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_int, env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
@@ -58,7 +58,13 @@ TOKEN_BUDGET_PER_RUN: int = env_int("AUTOBOT_LLM_TOKEN_BUDGET_PER_RUN", 0)
 # TTL (seconds) for a run's cumulative counter — bounds Redis memory for
 # abandoned sessions. Refreshed on every increment, so an active run's
 # counter never resets mid-conversation. Default: 24h.
-TOKEN_BUDGET_TTL_SECONDS: int = env_int("AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS", 86400)
+# `min_v=1`, because this value is handed to Redis `EXPIRE` (`_increment`),
+# and EXPIRE with a zero or negative TTL DELETES the key. The spend counter
+# would vanish and the next check would read zero spend -- a budget that
+# silently stops being a ceiling, which is worse than one set too low
+# (review finding on #17380). Distinct from the budget VALUES below, where 0
+# deliberately disables the gate; a TTL has no such meaning.
+TOKEN_BUDGET_TTL_SECONDS: int = env_int_clamped("AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS", 86400, min_v=1)
 
 # #17091: AutoBot's own dev-loop spend ceiling, tokens across all its actions
 # (not per-run — the dev loop has no "run" boundary a caller threads through).
@@ -69,7 +75,10 @@ DEV_LOOP_TOKEN_BUDGET: int = env_int("AUTOBOT_DEV_LOOP_TOKEN_BUDGET", 0)
 # is not tied to any session ending, so the ceiling is effectively "per this
 # many seconds" — refreshed on every increment, same as TOKEN_BUDGET_TTL_SECONDS.
 # Default: 24h, i.e. a daily spend ceiling.
-DEV_LOOP_BUDGET_TTL_SECONDS: int = env_int("AUTOBOT_DEV_LOOP_BUDGET_TTL_SECONDS", 86400)
+# Clamped for the same reason as TOKEN_BUDGET_TTL_SECONDS above: it reaches
+# the same `redis.expire`. The review named only this one, being the line
+# this PR touched; the defect is the shape, so both are clamped.
+DEV_LOOP_BUDGET_TTL_SECONDS: int = env_int_clamped("AUTOBOT_DEV_LOOP_BUDGET_TTL_SECONDS", 86400, min_v=1)
 
 # #17091: actions per hour. A fixed-window counter (current UTC hour bucket),
 # not sliding — simpler, and "at most N in any given clock hour" is what an

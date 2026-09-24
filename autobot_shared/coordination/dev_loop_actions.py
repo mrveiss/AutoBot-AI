@@ -62,11 +62,26 @@ _ACTIONS_KEY = "work_claims:actions:issue:{issue}"
 #: Outcomes. Every attempted action ends as exactly one of these, including the
 #: two that never invoke the action at all -- that is the point of recording.
 OUTCOME_RAN = "ran"
+#: The action completed, but its exclusive claim had lapsed before it did --
+#: so another agent could have been acting on the same issue at the same time.
+#: Its own outcome rather than `OUTCOME_RAN` with a note in the reason, because
+#: a history query for clean runs must not return it (review finding on #17380),
+#: and rather than `OUTCOME_FAILED`, because the action DID run and may have
+#: posted: calling it failed would invite a retry that duplicates real work.
+OUTCOME_RAN_CLAIM_LAPSED = "ran_claim_lapsed"
 OUTCOME_FAILED = "failed"
 OUTCOME_SKIPPED_CLAIMED = "skipped_claimed"
 OUTCOME_REFUSED_BUDGET = "refused_budget"
 
-OUTCOMES = frozenset({OUTCOME_RAN, OUTCOME_FAILED, OUTCOME_SKIPPED_CLAIMED, OUTCOME_REFUSED_BUDGET})
+OUTCOMES = frozenset(
+    {
+        OUTCOME_RAN,
+        OUTCOME_RAN_CLAIM_LAPSED,
+        OUTCOME_FAILED,
+        OUTCOME_SKIPPED_CLAIMED,
+        OUTCOME_REFUSED_BUDGET,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -189,6 +204,7 @@ __all__ = [
     "OUTCOMES",
     "OUTCOME_FAILED",
     "OUTCOME_RAN",
+    "OUTCOME_RAN_CLAIM_LAPSED",
     "OUTCOME_REFUSED_BUDGET",
     "OUTCOME_SKIPPED_CLAIMED",
     "action_payload",

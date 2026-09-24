@@ -27,6 +27,7 @@ from autobot_shared.coordination import dev_loop_actions, work_claims
 from autobot_shared.coordination.dev_loop_actions import (
     OUTCOME_FAILED,
     OUTCOME_RAN,
+    OUTCOME_RAN_CLAIM_LAPSED,
     OUTCOME_REFUSED_BUDGET,
     OUTCOME_SKIPPED_CLAIMED,
     last_refusal,
@@ -400,3 +401,98 @@ class TestCancellationIsAnExitPathToo:
             "the release suspended and never finished: cancelling the caller leaks the claim "
             "whenever the Redis call yields, which is every real client"
         )
+
+
+class TestALapsedClaimIsNotACleanRun:
+    """A run whose exclusive claim lapsed gets its own outcome (#17380 review).
+
+    `_renew_forever` records the loss and returns; the action deliberately keeps
+    running, because cancelling it mid-write is how "never partially posts"
+    gets broken. But the run is then recorded as OUTCOME_RAN with the lapse
+    appended to a free-text `reason` -- and nothing queries free text. Any
+    history query for clean runs returned a run another agent could have been
+    acting alongside, which is the collision the claim exists to prevent made
+    invisible after the fact.
+
+    The lapse was recorded and untested, which is why a reviewer found it and
+    the suite did not.
+    """
+
+    @staticmethod
+    def _lapsing_renewal(monkeypatch):
+        """Substitute the renewal at its real seam: the gate still calls this.
+
+        Returns an event the action must await. Without it the test is a race it
+        usually loses: the gate creates the renewal task and then awaits the
+        budget check, so an action that returns immediately reaches the
+        `finally` before the renewal coroutine has had its first step and
+        `claim_lost` is still empty. The first version of this test failed for
+        that reason and not because the code was wrong -- ordering asserted
+        with an event rather than hoped for with a sleep.
+        """
+        lapsed = asyncio.Event()
+
+        async def _renew_lapsed(scope, *, task_id, lost):
+            lost.append("the claim lapsed mid-action: another agent could have acquired this issue")
+            lapsed.set()
+
+        monkeypatch.setattr(gate_module, "_renew_forever", _renew_lapsed)
+        return lapsed
+
+    @staticmethod
+    def _action_awaiting(lapsed):
+        async def _action():
+            await lapsed.wait()
+            return "done"
+
+        return _action
+
+    @pytest.mark.asyncio
+    async def test_a_successful_action_whose_claim_lapsed_is_not_recorded_as_ran(self, redis, monkeypatch):
+        lapsed = self._lapsing_renewal(monkeypatch)
+
+        result = await run_dev_loop_action(
+            17380, intent="verify", estimated_tokens=1, action=self._action_awaiting(lapsed)
+        )
+        assert result == "done"
+
+        entry = (await recent(17380))[0]
+        assert entry.outcome == OUTCOME_RAN_CLAIM_LAPSED, (
+            f"recorded {entry.outcome!r}: a history query for clean runs would return a run whose "
+            "exclusivity was lost"
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_reason_still_names_the_lapse(self, redis, monkeypatch):
+        """The outcome is queryable; the reason is what a human reads."""
+        lapsed = self._lapsing_renewal(monkeypatch)
+
+        await run_dev_loop_action(17381, intent="verify", estimated_tokens=1, action=self._action_awaiting(lapsed))
+
+        assert "lapsed" in (await recent(17381))[0].reason
+
+    @pytest.mark.asyncio
+    async def test_a_failing_action_keeps_failed_even_when_the_claim_lapsed(self, redis, monkeypatch):
+        """Only an otherwise-clean run is relabelled -- a raised action is the
+        more serious fact and must not be softened into a lapse."""
+        lapsed = self._lapsing_renewal(monkeypatch)
+
+        async def _fails_after_the_lapse():
+            await lapsed.wait()
+            raise ValueError("simulated action failure")
+
+        with pytest.raises(ValueError, match="simulated action failure"):
+            await run_dev_loop_action(17382, intent="verify", estimated_tokens=1, action=_fails_after_the_lapse)
+
+        assert (await recent(17382))[0].outcome == OUTCOME_FAILED
+
+    @pytest.mark.asyncio
+    async def test_a_run_whose_claim_held_is_still_recorded_as_ran(self, redis):
+        """Negative control: without a lapse the outcome must not change.
+
+        Without this, the assertions above pass equally well against a gate that
+        labelled every run `ran_claim_lapsed`.
+        """
+        await run_dev_loop_action(17383, intent="verify", estimated_tokens=1, action=_ok_action)
+
+        assert (await recent(17383))[0].outcome == OUTCOME_RAN

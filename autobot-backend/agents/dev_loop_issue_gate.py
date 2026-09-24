@@ -40,6 +40,7 @@ from typing import Awaitable, Callable, TypeVar, Union
 from autobot_shared.coordination.dev_loop_actions import (
     OUTCOME_FAILED,
     OUTCOME_RAN,
+    OUTCOME_RAN_CLAIM_LAPSED,
     OUTCOME_REFUSED_BUDGET,
     OUTCOME_SKIPPED_CLAIMED,
     build_action,
@@ -160,6 +161,16 @@ async def run_dev_loop_action(
             await gate.record_dev_loop_action(estimated_tokens)
             if claim_lost:
                 reason = f"{reason + '; ' if reason else ''}{claim_lost[0]}"
+                # The OUTCOME changes too, not only the reason text (review
+                # finding on #17380). A run whose exclusive claim lapsed is a
+                # run another agent could have been acting alongside, so
+                # recording it as OUTCOME_RAN makes a collision invisible to
+                # any query that filters on clean runs -- and the reason field
+                # is free text nothing filters on. Only a run that would
+                # otherwise have been clean is relabelled: a raised action
+                # keeps OUTCOME_FAILED, which is the more serious fact.
+                if outcome == OUTCOME_RAN:
+                    outcome = OUTCOME_RAN_CLAIM_LAPSED
             await _record(issue_number, intent, outcome, estimated_tokens, reason)
         return result
     finally:

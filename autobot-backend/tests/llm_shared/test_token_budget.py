@@ -15,6 +15,7 @@ Covers:
   before the breaker is touched (breaker contract untouched)
 """
 
+from pathlib import Path
 from typing import AsyncIterator, Dict, List
 from unittest.mock import AsyncMock
 
@@ -309,3 +310,86 @@ class TestDevLoopBudgetGate:
 
         assert await gate.evaluate_dev_loop_action(1_000_000) is None
         await gate.record_dev_loop_action(1_000_000)  # must not raise either
+
+
+class TestATtlNeverReachesRedisAsZero:
+    """Both budget TTLs are clamped to >= 1 (#17380 review).
+
+    `_increment` hands these straight to `redis.expire`, and EXPIRE with a zero
+    or negative TTL DELETES the key. The spend counter would vanish and the next
+    check would read zero spend -- a budget that silently stops being a ceiling,
+    which is worse than one set too low, because nothing reports it.
+
+    Distinct from the budget VALUES (`TOKEN_BUDGET_PER_RUN`,
+    `DEV_LOOP_TOKEN_BUDGET`, `DEV_LOOP_RATE_PER_HOUR`), where 0 deliberately
+    disables the gate. A TTL has no such meaning, so 0 there is only a mistake.
+
+    WHY THIS READS SOURCE INSTEAD OF THE CONSTANTS. The constants are computed
+    at import, so testing them needs the module re-imported under a patched
+    environment, and both ways of doing that fail here: a throwaway
+    `spec_from_file_location` copy dies on `token_budget`'s relative imports
+    ("attempted relative import with no known parent package"), and
+    `importlib.reload` dies under pytest's `--import-mode=importlib` with "spec
+    not found for the module". Both were tried before this was written.
+
+    So the assertion is on the call site, which is what a regression would
+    change, plus one behavioural check that `env_int_clamped` really clamps --
+    without that second half this pins a spelling and trusts a helper.
+    """
+
+    _SOURCE = Path(__file__).resolve().parents[2] / "llm_shared" / "token_budget.py"
+
+    @pytest.mark.parametrize(
+        "constant,var",
+        [
+            ("TOKEN_BUDGET_TTL_SECONDS", "AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS"),
+            ("DEV_LOOP_BUDGET_TTL_SECONDS", "AUTOBOT_DEV_LOOP_BUDGET_TTL_SECONDS"),
+        ],
+    )
+    def test_the_ttl_is_read_through_a_clamped_helper(self, constant, var):
+        source = self._SOURCE.read_text(encoding="utf-8")
+        assignment = next(
+            (line for line in source.splitlines() if line.startswith(f"{constant}:")),
+            None,
+        )
+
+        assert assignment is not None, f"{constant} is no longer assigned at module scope"
+        assert "env_int_clamped(" in assignment, (
+            f"{constant} is read with a helper that does not clamp: {assignment.strip()!r}. "
+            "redis.expire would DELETE the spend key on a zero or negative value."
+        )
+        assert "min_v=1" in assignment, f"{constant} is clamped without a positive floor: {assignment.strip()!r}"
+        assert var in assignment, f"{constant} no longer reads {var}"
+
+    @pytest.mark.parametrize(
+        "constant",
+        ["TOKEN_BUDGET_PER_RUN", "DEV_LOOP_TOKEN_BUDGET", "DEV_LOOP_RATE_PER_HOUR"],
+    )
+    def test_the_budget_values_are_not_clamped(self, constant):
+        """Negative control, and a real requirement: 0 disables those gates.
+
+        It is also what stops the assertion above being satisfied by clamping
+        every env read in the file.
+        """
+        source = self._SOURCE.read_text(encoding="utf-8")
+        assignment = next(line for line in source.splitlines() if line.startswith(f"{constant}:"))
+
+        assert (
+            "env_int_clamped(" not in assignment
+        ), f"{constant} is clamped, but 0 must keep disabling its gate: {assignment.strip()!r}"
+
+    @pytest.mark.parametrize("raw", ["0", "-1"])
+    def test_the_clamped_helper_actually_clamps(self, monkeypatch, raw):
+        """The other half: the call site is only as good as the helper."""
+        from autobot_shared.env_utils import env_int_clamped
+
+        monkeypatch.setenv("AUTOBOT_TTL_CLAMP_PROBE", raw)
+
+        assert env_int_clamped("AUTOBOT_TTL_CLAMP_PROBE", 86400, min_v=1) == 1
+
+    def test_the_clamped_helper_leaves_a_sane_value_alone(self, monkeypatch):
+        monkeypatch.setenv("AUTOBOT_TTL_CLAMP_PROBE", "7200")
+
+        from autobot_shared.env_utils import env_int_clamped
+
+        assert env_int_clamped("AUTOBOT_TTL_CLAMP_PROBE", 86400, min_v=1) == 7200
