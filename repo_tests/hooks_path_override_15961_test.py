@@ -313,12 +313,17 @@ REACH = declare(
     # absorbs the largest branch in tonight's queue, which is the property
     # `population - growth` never had.
     floor=6736,
-    # #13049 note: this branch proposed 6800 and ADOPTS main's 6736 instead.
-    # #17318 landed first, and the rule the three sessions agreed is first-to-land
-    # wins so one measurement does not produce four numbers. 6736 is valid here
-    # with room to spare -- this branch adds two counted files, so slack ~204
-    # against the 401 allowance and ~199 below completed(). Re-derived on this
-    # tree rather than taken on trust; the arithmetic is in the commit message.
+    # #13049 note: this branch proposed 6800 and ADOPTS main's 6736. #17318
+    # landed first, and the rule the sessions agreed is first-to-land wins, so
+    # one measurement does not produce four numbers. 6736 is comfortably valid
+    # here -- unlike prompt-injection's pin, it is not at the bottom of its
+    # window, so the files this branch adds do not exhaust it.
+    #
+    # NO MEASURED NUMBERS, deliberately: an earlier version of this note cited a
+    # slack figure and was stale one rebase later. Four orphaned narratives
+    # accumulated across these floor files tonight for exactly that reason --
+    # the rebase resolves the value and nothing resolves the sentence. The
+    # arithmetic is in the commit message, which cannot drift from its tree.
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",

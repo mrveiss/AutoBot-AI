@@ -143,28 +143,29 @@ REACH = declare(
     # merged tree. Two readings because a local run of this floor is only
     # trustworthy since #17298 made the sweep import declarations from outside
     # repo_tests/ -- before that it silently checked a smaller set.
-    # Re-pinned 2956 -> 2958 (#17305, #17306): measured 3258 tracked backend
-    # python files (tests excluded). The previous pin was taken at 3256, exactly
-    # the 300 allowance, so the two non-test backend modules this branch adds --
-    # llm_shared/structured_output.py and providers/anthropic_request.py -- are
-    # the entire overage. Pinned at `population - growth`.
-    # Re-pinned 2958 -> 3100 (#13049). Main re-pinned this to 2958 at
-    # e8c7bf9b51 for its own population of 3258 -- slack exactly 300, the whole
-    # growth allowance, ZERO headroom again. This branch adds one non-test
-    # module under autobot-backend/ (llm_shared/optimization/accelerate_loader.py),
-    # so 3259 and slack 301. One over, for the second time on this declaration
-    # in one night.
+    # Re-pinned 2956 -> 2958 (#17305, #17306) and 2958 -> 2960 here (#17307,
+    # #17308): measured 3258 tracked backend python files (tests excluded) on
+    # the parent branch and 3260 on this one. The previous pin was taken at
+    # 3256, exactly the 300 allowance, so the four non-test backend modules
+    # this stack adds -- llm_shared/{structured_output,validated_llm,decisions}.py
+    # and providers/anthropic_request.py -- are the entire overage. Pinned at
+    # `population - growth`.
     #
-    # Measured on this tree rebased onto e8c7bf9b51:
-    #   git ls-files -- 'autobot-backend/*.py' | grep -v '_test\.py$' | wc -l
-    #     this branch 3259   origin/main 3258
+    # #13049 keeps 3100 instead of main's 2960, by agreement with autobot-ai-f8
+    # and autobot-ai-63 rather than unilaterally: 63 held back an identical pin
+    # so it would resolve here rather than race.
     #
-    # 3100, mid-window of [2959, 3259], not the minimum. This is the third time
-    # tonight a floor pinned at population - growth has gone red on the next
-    # branch, and the pattern is the issue rather than any one pin: main pins
-    # from its own population, the next branch adds a file, the branch that pays
-    # is never the branch that caused it. #17142 carries the argument; this pin
-    # buys ~159 files of headroom so the fourth branch does not repeat it.
+    # 2960 is `population - growth` and therefore has ZERO headroom by
+    # construction -- main itself sits exactly at the allowance, so the next
+    # branch adding one non-test backend module turns it red. This branch is
+    # that branch. 3100 is mid-window and absorbs it.
+    #
+    # NO MEASURED NUMBERS IN THIS COMMENT, deliberately. Four orphaned
+    # narratives accumulated in these floor files tonight because prose citing a
+    # population survives a rebase that changes it -- the resolver owns the
+    # value and nothing owns the sentence. The arithmetic for this pin lives in
+    # the commit message, which cannot drift from the tree it describes. Re-derive
+    # rather than trusting any figure written here or in the blocks above.
     floor=3100,
     growth=300,
     what="tracked backend python files (tests excluded)",
