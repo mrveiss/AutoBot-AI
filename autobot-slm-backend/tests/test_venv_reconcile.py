@@ -346,7 +346,15 @@ async def test_apply_removals_keeps_a_failed_uninstall_in_the_lock_for_retry(tmp
     graph = {"pkg-a": set(), "pkg-b": set()}
     dist_info_b = tmp_path / "pkg_b-1.0.dist-info"
     dist_info_b.mkdir()
-    (dist_info_b / vr.provenance.PROVENANCE_MARKER_FILENAME).write_text("{}", encoding="utf-8")
+    # #17332: METADATA and RECORD as well as the marker, because a dist-info
+    # holding ONLY the marker is not an installation -- it is the husk an
+    # upgrade used to leave behind, and `has_tool_provenance` now refuses to
+    # call one "ours". A prior run's install, which is what this test means,
+    # looks like this.
+    (dist_info_b / "METADATA").write_text("Name: pkg-b\nVersion: 1.0\n", encoding="utf-8")  # noqa: async_blocking_io
+    (dist_info_b / "RECORD").write_text("pkg_b-1.0.dist-info/METADATA,,\n", encoding="utf-8")  # noqa: async_blocking_io
+    marker_b = dist_info_b / vr.provenance.PROVENANCE_MARKER_FILENAME
+    marker_b.write_text("{}", encoding="utf-8")  # noqa: async_blocking_io
     dist_info_paths = {"pkg-a": None, "pkg-b": dist_info_b}
 
     async def _fake_uninstall(pip, names):

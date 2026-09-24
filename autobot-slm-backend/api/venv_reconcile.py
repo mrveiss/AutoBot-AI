@@ -496,6 +496,13 @@ async def install_pip_deps_for_component(component: str, steps: List[str]) -> bo
 
 
 async def _run_pip_install(component: str, req_path: str, pip_bin: str, steps: List[str]) -> bool:
+    # #17332: a dist-info husk left by this tool's own previously-unrecorded
+    # marker makes pip abort with `uninstall-no-record-file` the moment it has
+    # to upgrade that package -- so the repair has to happen BEFORE the install,
+    # not after a failure. pip stops at the first husk, so this clears the whole
+    # venv in one pass rather than one failed deploy per husked package.
+    for site_packages in provenance.site_packages_dirs(Path(pip_bin).parents[1]):
+        provenance.clear_provenance_husks(site_packages, steps)
     steps.append(f"pip: installing {req_path} into {Path(pip_bin).parent}")
     try:
         proc = await asyncio.create_subprocess_exec(

@@ -10,6 +10,20 @@
     path: "{{ project_root }}/{{ requirements_file }}"
   register: requirements_stat
 
+# #17246: `code_source` is the controller's git checkout and no task syncs it
+# to a node, so this constraints path did not exist here -- the #17242 class,
+# caught by the widened detector rather than by another failed provision. The
+# file is staged onto the node first and read from there.
+- name: "Stage the manifests this node's pip step reads (#17246, #17331)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/stage_shared_manifests.yml
+  when: not (autobot_shared_manifests_staged | default(false))
+  # Tagged `always` for the reason update-all-nodes.yml gives at its own
+  # staging task: the staged file is a precondition of the pip step below,
+  # so a tag selection that runs the install but not the staging would
+  # constrain against a file that is not there. Enumerating the consumer
+  # tags would go stale; `always` cannot.
+  tags: [always]
+
 - name: Install Python packages from requirements.txt
   pip:
     requirements: "{{ project_root }}/{{ requirements_file }}"
@@ -19,7 +33,7 @@
     # #15684: constraints/shared.txt applied here too, the same shape every
     # other pip site in this venv now uses -- see openvino.yml, already
     # ahead of this one.
-    extra_args: "-c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt"
+    extra_args: "-c {{ autobot.base_dir }}/constraints/shared.txt"
   become_user: "{{ service_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "120"

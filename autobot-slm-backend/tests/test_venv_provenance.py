@@ -68,19 +68,38 @@ def test_dist_info_paths_normalizes_names_and_maps_missing_to_none(tmp_path: Pat
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# A dist-info as an installer leaves it
+# ---------------------------------------------------------------------------
+
+
+def _installed_dist_info(parent: Path, stem: str) -> Path:
+    """#17332: a dist-info with METADATA and RECORD -- an actual installation.
+
+    These tests used to build the directory with `mkdir()` alone, so every
+    "installed package" in them was shaped exactly like the husk an upgrade
+    leaves behind. `has_tool_provenance` now refuses to call such a directory
+    ours, which is the point of #17332, so the fixtures have to describe a
+    real install rather than the debris of one.
+    """
+    dist_info = parent / stem
+    dist_info.mkdir(parents=True)
+    (dist_info / "METADATA").write_text(f"Name: {stem.split('-')[0]}\nVersion: 1.0\n", encoding="utf-8")
+    (dist_info / "RECORD").write_text(f"{stem}/METADATA,,\n{stem}/RECORD,,\n", encoding="utf-8")
+    return dist_info
+
+
 def test_has_tool_provenance_false_when_dist_info_is_none() -> None:
     assert provenance.has_tool_provenance(None) is False
 
 
 def test_has_tool_provenance_false_when_marker_absent(tmp_path: Path) -> None:
-    dist_info = tmp_path / "pkg-1.0.dist-info"
-    dist_info.mkdir()
+    dist_info = _installed_dist_info(tmp_path, "pkg-1.0.dist-info")
     assert provenance.has_tool_provenance(dist_info) is False
 
 
 def test_write_provenance_marker_then_has_tool_provenance_true(tmp_path: Path) -> None:
-    dist_info = tmp_path / "pkg-1.0.dist-info"
-    dist_info.mkdir()
+    dist_info = _installed_dist_info(tmp_path, "pkg-1.0.dist-info")
     provenance.write_provenance_marker(dist_info, "test-comp")
     assert provenance.has_tool_provenance(dist_info) is True
     payload = json.loads((dist_info / provenance.PROVENANCE_MARKER_FILENAME).read_text(encoding="utf-8"))
@@ -103,8 +122,7 @@ def test_write_provenance_marker_swallows_oserror_instead_of_raising(tmp_path: P
 
 
 def test_mark_current_set_stamps_present_packages_and_reports_a_count(tmp_path: Path) -> None:
-    dist_info_a = tmp_path / "pkg-a-1.0.dist-info"
-    dist_info_a.mkdir()
+    dist_info_a = _installed_dist_info(tmp_path, "pkg-a-1.0.dist-info")
     paths = {"pkg-a": dist_info_a, "pkg-missing": tmp_path / "nowhere.dist-info"}
 
     steps: list = []
@@ -126,8 +144,7 @@ def test_mark_current_set_appends_no_step_when_nothing_to_stamp(tmp_path: Path) 
 
 
 def test_split_by_provenance_separates_marked_from_unmarked(tmp_path: Path) -> None:
-    verified_dist_info = tmp_path / "pkg-verified-1.0.dist-info"
-    verified_dist_info.mkdir()
+    verified_dist_info = _installed_dist_info(tmp_path, "pkg-verified-1.0.dist-info")
     provenance.write_provenance_marker(verified_dist_info, "test-comp")
     unverified_dist_info = tmp_path / "pkg-unverified-1.0.dist-info"
     unverified_dist_info.mkdir()  # no marker — e.g. an operator's own install

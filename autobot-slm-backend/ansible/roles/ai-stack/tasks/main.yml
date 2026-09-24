@@ -201,12 +201,26 @@
   # the SAME host share a controller file, and the later generation can
   # replace it before the earlier copy reads it.
 
-- name: Create filtered AI-stack requirements (on the controller, #14272, #17242)
+# #17331: the generated file is installed ON THE NODE, so the rewritten `-c`
+# must name a path that exists THERE. It used to name code_source, which only
+# the controller has -- the same defect #17242 fixed for the execution side and
+# left on the payload side. Confirmed failing in the backend role on a
+# non-manager host; unexercised here only because no ai_stack node has been
+# provisioned since, which makes it a prediction rather than an observation.
+- name: "AI Stack | Stage the manifests this node's pip step reads (#17331)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/stage_shared_manifests.yml
+  when:
+    - _ai_requirements_file.stat.exists
+    - not (autobot_shared_manifests_staged | default(false))
+  tags: ['ai', 'deploy']
+
+- name: Create filtered AI-stack requirements (on the controller, #14272, #17242, #17331)
   ansible.builtin.shell:
     cmd: >-
       bash {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/scripts/build-filtered-requirements.sh
       {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/{{ ai_stack_requirements_rel }}
       {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}
+      {{ autobot.base_dir }}
       > /tmp/filtered-requirements-ai.{{ inventory_hostname }}.{{ _req_run_id }}.txt
   changed_when: false
   delegate_to: localhost
