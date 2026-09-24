@@ -24,7 +24,9 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int
+from autobot_shared.security.path_validator import validate_path
 from llc.models.attachment import LLCWorkItemAttachment
+from llc.storage_root import llc_local_storage_root
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,8 @@ LLC_ATTACHMENT_MAX_BYTES = env_int("LLC_ATTACHMENT_MAX_BYTES", _DEFAULT_MAX_BYTE
 _TEXT_SUFFIXES = {".txt", ".md", ".py", ".ts", ".js", ".json", ".yaml", ".yml", ".toml", ".csv"}
 
 _STORAGE_BACKEND = os.getenv("LLC_STORAGE_BACKEND", "local_disk")
-_LOCAL_STORAGE_PATH = Path(os.getenv("LLC_STORAGE_PATH", str(Path.home() / ".autobot" / "llc" / "attachments")))
+#: #17302: one definition of the root, shared with `kb/artifact_ingestor.py`.
+_LOCAL_STORAGE_PATH = llc_local_storage_root()
 
 
 class AttachmentTooLarge(Exception):
@@ -85,10 +88,16 @@ def _storage_path(company_id: str, work_item_id: str, attachment_id: str, filena
     # rather than trusted.
     ext = Path(filename).suffix[:_MAX_SUFFIX_LEN]
     root = _resolve_storage_root().resolve()
-    dest = (root / safe[0] / safe[1] / f"{safe[2]}{ext}").resolve()
-    if not dest.is_relative_to(root):
-        raise ValueError(f"attachment path escaped the storage root: {dest}")
-    return dest
+    candidate = root / safe[0] / safe[1] / f"{safe[2]}{ext}"
+    # #17300 AC3: containment goes through the house validator rather than a
+    # local `is_relative_to`. The property is identical -- `validate_path`
+    # resolves both sides and refuses anything not under `root` -- but routing
+    # it here means this call site inherits `_canonicalize`'s
+    # decode-before-resolve and the known-bypass coverage instead of a reader
+    # having to re-derive that the UUID parse above makes the segments inert.
+    # It raises ValueError on escape, which is the contract this function
+    # already documented.
+    return validate_path(str(candidate), allowed_roots=(str(root),))
 
 
 def _extract_text(path: Path, filename: str) -> Optional[str]:
