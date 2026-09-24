@@ -138,9 +138,10 @@ def _argument(node: ast.Call, position: int, keyword: str) -> ast.AST | None:
 def _local_publish_names(tree: ast.Module) -> frozenset[str]:
     """`_PUBLISH_NAMES` plus whatever this module renamed them to on import.
 
-    `agent_loop/loop.py:59` and `orchestration/primitives/events.py:20` both do
+    `agent_loop/loop.py` and `orchestration/primitives/events.py` both bind
     `from events.bus import publish_event as _bus_publish_event`, and
-    `orchestrator.py:87` renames it again on re-export. Matching the call name
+    `orchestrator.py` renames that re-export again as `_publish_event`. The
+    alias is the durable referent here, not the import's position: matching the call name
     alone missed four `global` publishes carrying `task_id` (#17363) -- found by
     re-deriving this population with grep after the matcher changed, which is
     what RATCHET_BASELINES.md's rule 3 exists for. Read from the module's own
