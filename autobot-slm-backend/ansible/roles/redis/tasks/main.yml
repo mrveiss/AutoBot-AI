@@ -5,11 +5,15 @@
 
 - name: "Redis | Check if Redis Stack is already installed"
   ansible.builtin.command:
-    cmd: dpkg -l redis-stack-server
+    cmd: "dpkg-query -W --showformat=${Status} redis-stack-server"
+  # (#17387) `dpkg -l <pkg>` answers "does dpkg KNOW this package", NOT "is it
+  # installed": a package removed without --purge stays in the database in `rc`
+  # state (`deinstall ok config-files`) and `dpkg -l` still exits 0. The comment
+  # this replaces asserted the opposite and was copied into four roles, so the
+  # false premise propagated with it. `${Status}` distinguishes all three
+  # states; `rc` collapsed them into two, and grouped the wrong two.
   register: _redis_installed
   changed_when: false
-  # (#2872) Intentional: dpkg exits rc=1 when package is not installed;
-  # the result gates conditional installation below.
   failed_when: false
   tags: ['redis', 'packages']
 
@@ -18,7 +22,7 @@
     url: https://packages.redis.io/gpg
     state: present
   become: true
-  when: _redis_installed.rc != 0
+  when: "'install ok installed' not in _redis_installed.stdout"
   tags: ['redis', 'packages']
 
 # #7178: Redis only publishes redis-stack-server for jammy/bullseye/focal.
@@ -42,7 +46,7 @@
     apt_repo_spec: "deb https://packages.redis.io/deb {{ redis_stack_suite }} main"
     apt_repo_filename: "redis"
     apt_repo_label: "Redis Stack"
-  when: _redis_installed.rc != 0
+  when: "'install ok installed' not in _redis_installed.stdout"
   tags: ['redis', 'packages']
 
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
@@ -55,7 +59,7 @@
   become: true
   changed_when: false
   failed_when: false
-  when: _redis_installed.rc != 0
+  when: "'install ok installed' not in _redis_installed.stdout"
   tags: ['redis', 'packages']
 
 # #16020: Redis reads /etc/autobot/certs/server-cert.pem (see
@@ -73,7 +77,7 @@
       - redis-stack-server
     state: present
   become: true
-  when: _redis_installed.rc != 0
+  when: "'install ok installed' not in _redis_installed.stdout"
   tags: ['redis', 'packages']
 
 - name: "Redis | Create redis system group"

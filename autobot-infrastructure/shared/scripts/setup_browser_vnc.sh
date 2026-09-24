@@ -31,7 +31,11 @@ run_on_browser_vm() {
 
 # Step 1: Check if VNC components are installed
 echo "[1/7] Checking VNC installation..."
-if run_on_browser_vm "dpkg -l | grep -q tigervnc-standalone-server"; then
+# (#17387) `^ii` anchors this on the INSTALLED state. An unanchored grep of
+# `dpkg -l` also matches a package in `rc` state -- removed but not purged --
+# which would report VNC as present on a VM that has none, and the script would
+# go on to configure a server that is not there.
+if run_on_browser_vm "dpkg -l tigervnc-standalone-server 2>/dev/null | grep -q '^ii'"; then
     echo "  TigerVNC already installed"
 else
     echo "  TigerVNC not found - please run installation first"
