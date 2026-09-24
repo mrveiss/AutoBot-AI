@@ -150,6 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     source_dir = root / SOURCE_LOCALES
 
     app_en_tree = json.loads((app_dir / "en.json").read_text(encoding="utf-8"))
+    app_en_flat = flatten(app_en_tree)
     source_en = flatten(json.loads((source_dir / "en.json").read_text(encoding="utf-8")))
 
     by_text: dict[str, list[str]] = {}
@@ -169,7 +170,12 @@ def main(argv: list[str] | None = None) -> int:
                 drifted.append(locale)
             continue
         target.write_text(rendered, encoding="utf-8")
-        lifted = sum(1 for k, v in flatten(built).items() if v != flatten(app_en_tree).get(k))
+        # `flatten(app_en_tree)` hoisted out of the comprehension (review finding
+        # on #17395): inside it, the whole 3,193-key tree was re-flattened once
+        # per key per locale -- roughly 31,950 traversals and over 100 million
+        # entry visits for one run. `--check` never reached this line, so the
+        # cost only appeared when writing.
+        lifted = sum(1 for k, v in flatten(built).items() if v != app_en_flat.get(k))
         print(f"{locale}: {lifted} lifted translations")  # noqa: print -- stdout IS this CLI's interface
 
     if drifted:

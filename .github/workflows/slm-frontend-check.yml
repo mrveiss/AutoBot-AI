@@ -20,6 +20,14 @@ on:
       - 'autobot-slm-frontend/**'
       - '.github/workflows/slm-frontend-check.yml'
       - 'autobot-frontend/scripts/check-i18n-keys.mjs'
+      # The lifting rule's INPUTS, not just its output (review finding on
+      # #17395). `lift_locale_translations.py --check` regenerates the SLM
+      # locales from `autobot-frontend`'s and fails on drift -- so a PR that
+      # changes only the source locales, or only the generator, must start
+      # this workflow. Without these two such a PR passes untested and the
+      # NEXT SLM change reports drift the earlier one caused.
+      - 'autobot-frontend/src/i18n/locales/**'
+      - 'scripts/lift_locale_translations.py'
   pull_request:
     branches: [release, main, develop]
     # #13388: SAFE — "SLM Frontend Check" is NOT one of the ten required contexts
@@ -31,6 +39,14 @@ on:
       - 'autobot-slm-frontend/**'
       - '.github/workflows/slm-frontend-check.yml'
       - 'autobot-frontend/scripts/check-i18n-keys.mjs'
+      # The lifting rule's INPUTS, not just its output (review finding on
+      # #17395). `lift_locale_translations.py --check` regenerates the SLM
+      # locales from `autobot-frontend`'s and fails on drift -- so a PR that
+      # changes only the source locales, or only the generator, must start
+      # this workflow. Without these two such a PR passes untested and the
+      # NEXT SLM change reports drift the earlier one caused.
+      - 'autobot-frontend/src/i18n/locales/**'
+      - 'scripts/lift_locale_translations.py'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -59,6 +75,11 @@ jobs:
               - 'autobot-slm-frontend/**'
               - '.github/workflows/slm-frontend-check.yml'
               - 'autobot-frontend/scripts/check-i18n-keys.mjs'
+              # Mirrors the `on:` paths above -- the trigger and the
+              # job-level filter have to agree, or the workflow starts and
+              # every step self-skips.
+              - 'autobot-frontend/src/i18n/locales/**'
+              - 'scripts/lift_locale_translations.py'
 
   slm-frontend-check:
     name: SLM Frontend Check
