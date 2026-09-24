@@ -56,7 +56,10 @@ _BROADCAST_CONSTANT = "BROADCAST_CHANNEL"
 #: all name their first and third parameters these, so one keyword spelling
 #: covers every publisher this guard scans (#17363).
 _CHANNEL_PARAM = "channel"
-_PAYLOAD_PARAM = "payload"
+#: Both spellings. `publish_event(..., payload=)` and
+#: `publish_event_safe(..., data=)` name the same argument; every call site is
+#: positional today, so this is a hole with no instance rather than a live gap.
+_PAYLOAD_PARAMS = ("payload", "data")
 
 #: Keys that name one tenant's content or one tenant's resource. Deliberately
 #: narrower than "anything that looks private": `message`, `output`, `result`
@@ -121,8 +124,14 @@ _KNOWN_TENANT_KEYS_ON_GLOBAL = frozenset(
 )
 
 
-def _argument(node: ast.Call, position: int, keyword: str) -> ast.AST | None:
-    """The argument reaching one parameter, positionally or by keyword (#17363).
+def _argument(node: ast.Call, position: int, *keywords: str) -> ast.AST | None:
+    """The argument reaching one parameter, positionally or by any of *keywords*.
+
+    Several spellings, because the scanned functions do not agree on one. The bus
+    publishes with `payload=`; `api/agent_events.py:publish_event_safe` names the
+    same parameter `data=`. Matching only one name means a call using the other
+    resolves to `None` and lands in the opaque bucket -- safe, but it inflates the
+    count and hides which publishes were actually read (#17363).
 
     A `**kwargs` splat carries `kw.arg is None` and resolves to `None` here, which
     lands it in the opaque bucket -- the safe side.
@@ -130,7 +139,7 @@ def _argument(node: ast.Call, position: int, keyword: str) -> ast.AST | None:
     if len(node.args) > position:
         return node.args[position]
     for kw in node.keywords:
-        if kw.arg == keyword:
+        if kw.arg in keywords:
             return kw.value
     return None
 
@@ -187,7 +196,7 @@ def _scan_source(source: str, label: str) -> tuple[list[str], int, int]:
             continue
         seen += 1
         where = f"{label}:{node.lineno}"
-        payload = _argument(node, 2, _PAYLOAD_PARAM)
+        payload = _argument(node, 2, *_PAYLOAD_PARAMS)
         if not isinstance(payload, ast.Dict):
             opaque += 1
             continue
@@ -302,6 +311,8 @@ _KEYWORD_CHANNEL = 'publish_event(channel="global", event_type="x", payload={"us
 _KEYWORD_OPAQUE = 'publish_event("global", "x", payload=data)\n'
 _KWARGS_SPLAT = 'publish_event("global", "x", **extra)\n'
 _CLEAN_PAYLOAD = 'publish_event("global", "x", payload={"count": 3})\n'
+#: `publish_event_safe` spells the payload `data=`, not `payload=`.
+_DATA_KEYWORD = 'publish_event_safe("global", "x", data={"session_id": "s1"})\n'
 #: Half literal, half variable. `ast.Dict.keys` holds a None for the `**` entry.
 _SPREAD_PAYLOAD = 'publish_event("global", "x", payload={"type": "a", **ctx})\n'
 #: The same shape hiding a tenant key inside the spread -- unreadable from here.
@@ -339,6 +350,19 @@ def test_a_payload_passed_by_name_as_a_variable_counts_as_opaque() -> None:
     offenders, opaque, seen = _scan_source(_KEYWORD_OPAQUE, "fixture.py")
 
     assert (seen, opaque, offenders) == (1, 1, [])
+
+
+def test_the_data_keyword_is_inspected_like_payload() -> None:
+    """`publish_event_safe(..., data=)` names the same argument as `payload=`.
+
+    Matching one spelling only would resolve the other to `None` and bucket it as
+    opaque -- safe, but it inflates the count and hides which publishes were read.
+    Every call site is positional today, so this closes a hole with no instance.
+    """
+    offenders, opaque, seen = _scan_source(_DATA_KEYWORD, "fixture.py")
+
+    assert opaque == 0, "the payload was readable; it must not be counted as opaque"
+    assert offenders and "session_id" in offenders[0], f"a tenant key inside `data=` must be reported, got {offenders}"
 
 
 def test_a_spread_inside_the_payload_counts_as_opaque() -> None:
