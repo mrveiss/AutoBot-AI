@@ -107,3 +107,48 @@ async def test_a_refused_post_is_reported_not_swallowed(wired):
     assert outcome.post.posted is False
     assert outcome.as_payload()["post"]["reason"] == "no vault-owned credential"
     assert outcome.verification.counts()["met"] == 1, "the verification still happened and is still reportable"
+
+
+@pytest.mark.asyncio
+async def test_a_second_run_does_not_post_a_second_comment(wired, monkeypatch):
+    """`gh issue comment` is not idempotent, and a caller that retries after a
+    reported failure cannot tell "never sent" from "sent but unobserved"."""
+    wired["box"]["body"] = _BODY
+    monkeypatch.setattr(
+        ac_verification_run,
+        "fetch_issue",
+        lambda n, repo_root=None: (_BODY, [("c1", "```autobot-ac-verification\n{}\n```")]),
+    )
+
+    outcome = await verify_and_post(17090, search=_search, read=_read)
+
+    assert wired["posted"] == []
+    assert outcome.post.posted is False
+    assert "already on this issue" in outcome.post.reason
+    assert outcome.verification.counts()["met"] == 1, "the verification still ran and is still reportable"
+
+
+@pytest.mark.asyncio
+async def test_force_posts_anyway(wired, monkeypatch):
+    """The escape hatch is explicit, so a deliberate re-run is possible."""
+    monkeypatch.setattr(
+        ac_verification_run,
+        "fetch_issue",
+        lambda n, repo_root=None: (_BODY, [("c1", "```autobot-ac-verification\n{}\n```")]),
+    )
+
+    await verify_and_post(17090, search=_search, read=_read, force=True)
+
+    assert len(wired["posted"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_credential_cache_is_reset_before_any_gh_call(wired, monkeypatch):
+    """#13859's lesson, applied to this caller: the cache is module-level and
+    shared with the audit worker, which resets it first thing in every task."""
+    calls: list[str] = []
+    monkeypatch.setattr(ac_verification_run, "reset_env_cache", lambda: calls.append("reset"))
+
+    await verify_and_post(17090, search=_search, read=_read)
+
+    assert calls == ["reset"], "a run that reuses a prior run's token can use a revoked one"
