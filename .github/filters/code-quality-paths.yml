@@ -44,6 +44,14 @@
 # the same step.
 backend:
   - '**/*.py'
+  # #17353: generic, mirroring '**/*.py' above. The shell size ratchet's
+  # --audit-ceilings step lives in `code-quality`, which only runs when this
+  # filter says so. Without a generic entry, 4 of the 10 grandfathered files
+  # (install.sh, scripts/pr-preflight.sh, autobot-slm-backend/ansible/deploy.sh,
+  # autobot-infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh) sit
+  # outside every other entry -- so a PR editing only one of them skipped the
+  # audit entirely, in exactly the case the gate exists to catch.
+  - '**/*.sh'
   - '**/requirements*.txt'
   - 'requirements-ci/**'
   - 'repo_tests/**'
