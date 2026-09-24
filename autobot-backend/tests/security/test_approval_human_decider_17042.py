@@ -38,12 +38,14 @@ import llc.api.approvals as llc_api
 from api.user_management.human_decider import HUMAN_DECISION_REQUIRED, classify_author_type
 from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_interactive_human, is_login_token
 from llc.deps import get_session as llc_get_session
-from tests.security.credential_harness import (
+from tests.security._credential_harness import (
     ASYNC_ROUTE_EXPECTED,
     CALLER,
     HUMAN_KINDS,
+    MIN_KINDS_REACHING_HUMAN_CHECK_LLC,
     ORG,
     OTHER,
+    REFUSED_AT_AUTHENTICATION,
     REFUSED_BY_HUMAN_CHECK,
     credentials,
     install_real_resolution,
@@ -59,9 +61,13 @@ _LLC_EXPECTED = {
     "run_jwt": (401, "resolution"),
     "run_jwt_on_platform_key": (401, "resolution"),
     "device_jwt": (401, "resolution"),
-    "device_jwt_on_platform_key": (403, REFUSED_BY_HUMAN_CHECK),
-    "slm_mfa_pending_token": (403, REFUSED_BY_HUMAN_CHECK),
-    "slm_service_token": (403, REFUSED_BY_HUMAN_CHECK),
+    # #17049: refused at AUTHENTICATION now, not by the human check. Still
+    # refused, earlier, and the LLC route's sync `get_current_user` does not
+    # extend to the device reader -- so unlike ASYNC_ROUTE_EXPECTED, the device
+    # kind lands on 401 here rather than the device allow-list's 403.
+    "device_jwt_on_platform_key": (401, REFUSED_AT_AUTHENTICATION),
+    "slm_mfa_pending_token": (401, REFUSED_AT_AUTHENTICATION),
+    "slm_service_token": (401, REFUSED_AT_AUTHENTICATION),
     "dev_header": (403, REFUSED_BY_HUMAN_CHECK),
     "auth_disabled": (403, REFUSED_BY_HUMAN_CHECK),
     "llc_agent_api_key": (401, "resolution"),
@@ -314,3 +320,20 @@ def test_classify_author_type_records_a_run_jwt_as_agent():
 
 def test_classify_author_type_never_defaults_to_human_for_no_user():
     assert classify_author_type(None) == "agent"
+
+
+def test_the_llc_human_check_is_still_exercised():
+    """#17049 moved three kinds to an earlier refusal on this route too.
+
+    Same argument as the agent-terminal table, with a lower floor: this route's
+    sync `get_current_user` never resolved `internal_service_key` to a user, so
+    it reached the human check on neither side of #17049. This fails if the remaining coverage
+    drops, so the gate cannot end up tested by nothing while each individual
+    move looks like an improvement.
+    """
+    reaching = sorted(k for k, (_s, refuser) in _LLC_EXPECTED.items() if refuser == REFUSED_BY_HUMAN_CHECK)
+
+    assert len(reaching) >= MIN_KINDS_REACHING_HUMAN_CHECK_LLC, (
+        f"only {len(reaching)} credential kind(s) still reach the #17042 human check on the LLC "
+        f"route ({reaching}) — below the floor of {MIN_KINDS_REACHING_HUMAN_CHECK_LLC}."
+    )

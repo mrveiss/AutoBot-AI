@@ -61,7 +61,15 @@ async def test_a_handshake_failure_closes_the_socket_before_any_relay():
     vnc_ws = MagicMock()
 
     with (
-        patch("auth_middleware.authenticate_websocket", new=AsyncMock(return_value={"username": "alice"})),
+        patch(
+            "auth_middleware.authenticate_websocket",
+            # #17054: the desktop gate now requires `mcp.desktop.control`, so a
+            # roleless user is refused with 1008 BEFORE the VNC handshake runs.
+            # Giving alice a role that holds it keeps this test on its own
+            # subject -- the handshake leg -- rather than silently becoming a
+            # second authz test and losing the 1011 path entirely.
+            new=AsyncMock(return_value={"username": "alice", "role": "admin"}),
+        ),
         patch("api.vnc_proxy.get_http_client", return_value=_fake_http_client(vnc_ws)),
         patch("api.vnc_proxy.record_observation", new=AsyncMock()),
         patch("api.vnc_proxy.get_vnc_password", new=AsyncMock(side_effect=VncAuthError("no secret registered"))),
@@ -85,7 +93,15 @@ async def test_a_successful_handshake_reaches_the_relay():
     vnc_ws = MagicMock()
 
     with (
-        patch("auth_middleware.authenticate_websocket", new=AsyncMock(return_value={"username": "alice"})),
+        patch(
+            "auth_middleware.authenticate_websocket",
+            # #17054: the desktop gate now requires `mcp.desktop.control`, so a
+            # roleless user is refused with 1008 BEFORE the VNC handshake runs.
+            # Giving alice a role that holds it keeps this test on its own
+            # subject -- the handshake leg -- rather than silently becoming a
+            # second authz test and losing the 1011 path entirely.
+            new=AsyncMock(return_value={"username": "alice", "role": "admin"}),
+        ),
         patch("api.vnc_proxy.get_http_client", return_value=_fake_http_client(vnc_ws)),
         patch("api.vnc_proxy.record_observation", new=AsyncMock()),
         patch("api.vnc_proxy.get_vnc_password", new=AsyncMock(return_value=b"the-password")),
