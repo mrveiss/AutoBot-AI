@@ -33,23 +33,126 @@ _ROUTE_DECORATORS = {"get", "post", "put", "patch", "delete", "websocket"}
 
 #: A floor, not a census: a walk that finds no routes would make
 #: `test_every_route_on_this_router_declares_a_gate` pass by matching nothing.
+#: Raise it when routes are added. Lowering it to clear a red is how a guard
+#: stops guarding.
 _MIN_ROUTES_SEEN = 10
 
+#: The dependencies that actually authenticate. #17348: the first version of
+#: this guard matched the *presence* of a `dependencies=` keyword and the
+#: *name* `current_user`, so `dependencies=[Depends(anything)]` and
+#: `current_user: str = Query(...)` both passed an anonymous route. These names
+#: are asserted to be the ones this module really imports by
+#: `test_the_auth_vocabulary_matches_what_the_module_imports`, so a rename
+#: breaks the guard loudly instead of narrowing it silently.
+_AUTH_DEPENDENCIES = {"get_current_user", "check_admin_permission"}
 
-def _declares_a_gate(node) -> bool:
-    """Admin dependency, an authenticated-user parameter, or the socket's own check."""
+#: The WebSocket route authenticates inside its own body: FastAPI has no
+#: `Request` to hand a router-level dependency on a socket route.
+_WS_GATE = "open_authenticated_ws"
+
+
+def _is_auth_depends(node) -> bool:
+    """`Depends(get_current_user)` / `Depends(check_admin_permission)`, by VALUE."""
+    import ast
+
+    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "Depends"):
+        return False
+    return any(isinstance(arg, ast.Name) and arg.id in _AUTH_DEPENDENCIES for arg in node.args)
+
+
+def _module_level_lists(tree) -> dict:
+    """Module-level `NAME = [...]` bindings, so `dependencies=_ADMIN` resolves.
+
+    The router spells its admin gate as a shared `_ADMIN` list rather than
+    repeating `[Depends(check_admin_permission)]` at five decorators. A guard
+    that only understands list literals would read that as "no dependencies".
+    """
+    import ast
+
+    bindings = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.List):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    bindings[target.id] = node.value.elts
+    return bindings
+
+
+def _decorator_gate(node, bindings) -> bool:
+    """A `dependencies=` whose CONTENTS include an auth dependency."""
     import ast
 
     for decorator in node.decorator_list:
-        if isinstance(decorator, ast.Call) and any(kw.arg == "dependencies" for kw in decorator.keywords):
-            return True
+        if not isinstance(decorator, ast.Call):
+            continue
+        for keyword in decorator.keywords:
+            if keyword.arg != "dependencies":
+                continue
+            value = keyword.value
+            elements = (
+                value.elts
+                if isinstance(value, ast.List)
+                else bindings.get(value.id, []) if isinstance(value, ast.Name) else []
+            )
+            if any(_is_auth_depends(element) for element in elements):
+                return True
+    return False
+
+
+def _parameter_gate(node) -> bool:
+    """A parameter whose DEFAULT is an auth dependency.
+
+    Keyed on the default rather than the parameter name, which also makes the
+    check independent of whether the author called it `current_user`.
+    """
     args = node.args
-    if any(arg.arg == "current_user" for arg in [*args.args, *args.kwonlyargs]):
-        return True
+    defaults = list(args.defaults)
+    positional = [*args.posonlyargs, *args.args]
+    paired = list(zip(positional[len(positional) - len(defaults) :], defaults))
+    paired += [(arg, default) for arg, default in zip(args.kwonlyargs, args.kw_defaults) if default is not None]
+    return any(_is_auth_depends(default) for _arg, default in paired)
+
+
+def _body_gate(node) -> bool:
+    """The socket's own in-body check."""
+    import ast
+
     return any(
-        isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name) and inner.func.id == "open_authenticated_ws"
+        isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name) and inner.func.id == _WS_GATE
         for inner in ast.walk(node)
     )
+
+
+def _declares_a_gate(node, bindings=None) -> bool:
+    """Admin dependency, an authenticated-user parameter, or the socket's own check."""
+    bindings = {} if bindings is None else bindings
+    return _decorator_gate(node, bindings) or _parameter_gate(node) or _body_gate(node)
+
+
+def _route_nodes(tree) -> list:
+    """Every function carrying a `@router.<verb>` decorator."""
+    import ast
+
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and any(
+            isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr in _ROUTE_DECORATORS
+            for d in node.decorator_list
+        )
+    ]
+
+
+def _ungated_routes(tree) -> list:
+    """Route names with no gate -- the whole verdict, from one place.
+
+    #17348: the real test and the meta-tests below drive THIS function, so the
+    RED case exercises the same logic the guard uses rather than a paraphrase
+    of it.
+    """
+    bindings = _module_level_lists(tree)
+    return [node.name for node in _route_nodes(tree) if not _declares_a_gate(node, bindings)]
 
 
 ALICE = {"username": "alice", "role": "user"}
@@ -279,26 +382,120 @@ def test_every_route_on_this_router_declares_a_gate():
     import inspect
 
     tree = ast.parse(inspect.getsource(lro))
-    routes = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and any(
-            isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr in _ROUTE_DECORATORS
-            for d in node.decorator_list
-        )
-    ]
+    routes = _route_nodes(tree)
 
     assert len(routes) >= _MIN_ROUTES_SEEN, (
         f"only {len(routes)} route(s) found in {lro.__name__} -- this guard has stopped "
         "reaching its subject, so its verdict means nothing"
     )
 
-    ungated = [node.name for node in routes if not _declares_a_gate(node)]
+    ungated = _ungated_routes(tree)
     assert not ungated, (
         "route(s) on /api/long-running with no authentication gate (#17010):\n  "
         + "\n  ".join(ungated)
         + "\n\nEvery route needs one of: `dependencies=_ADMIN` on the decorator, "
         "`current_user: dict = Depends(get_current_user)` in the signature, or "
         "`open_authenticated_ws(...)` in the body for a WebSocket."
+    )
+
+
+# ---------------------------------------------------------------------------
+# #17348: the guard's own RED case, committed rather than re-run by hand
+# ---------------------------------------------------------------------------
+
+_SYNTHETIC_ROUTER = """
+_ADMIN = [Depends(check_admin_permission)]
+_UNRELATED = [Depends(get_operation_manager)]
+
+
+@router.post("/admin-gated", dependencies=_ADMIN)
+async def admin_gated():
+    return {}
+
+
+@router.get("/user-gated")
+async def user_gated(current_user: dict = Depends(get_current_user)):
+    return {}
+
+
+@router.get("/inline-list-gated", dependencies=[Depends(get_current_user)])
+async def inline_list_gated():
+    return {}
+
+
+@router.websocket("/socket")
+async def socket(websocket):
+    if not await open_authenticated_ws(websocket, allow=None):
+        return
+
+
+@router.get("/anonymous")
+async def anonymous():
+    return {}
+
+
+@router.get("/dependencies-but-not-auth", dependencies=_UNRELATED)
+async def dependencies_but_not_auth():
+    return {}
+
+
+@router.get("/named-but-not-bound")
+async def named_but_not_bound(current_user: str = Query("anyone")):
+    return {}
+"""
+
+
+def _synthetic_ungated() -> list:
+    import ast
+
+    return _ungated_routes(ast.parse(_SYNTHETIC_ROUTER))
+
+
+def test_the_guard_names_an_ungated_route():
+    """The RED case. Without it, a typo in `_ROUTE_DECORATORS` leaves the guard green and blind."""
+    assert "anonymous" in _synthetic_ungated()
+
+
+def test_a_dependencies_list_without_an_auth_dependency_does_not_count():
+    """#17348: presence of `dependencies=` used to be enough, contents unread."""
+    assert "dependencies_but_not_auth" in _synthetic_ungated()
+
+
+def test_a_parameter_merely_named_current_user_does_not_count():
+    """#17348: the NAME used to be enough, the default unread."""
+    assert "named_but_not_bound" in _synthetic_ungated()
+
+
+@pytest.mark.parametrize(
+    "route",
+    ["admin_gated", "user_gated", "inline_list_gated", "socket"],
+    ids=["shared _ADMIN list", "parameter default", "inline list literal", "websocket in-body"],
+)
+def test_each_gating_shape_is_recognised(route):
+    """One control per shape: two of the same shape cannot show the others work.
+
+    `_ADMIN` is the shape that matters most -- the router spells its admin gate
+    as a shared module-level list, so a guard that only understood list
+    literals would read five gated routes as ungated.
+    """
+    assert route not in _synthetic_ungated()
+
+
+def test_the_auth_vocabulary_matches_what_the_module_imports():
+    """A renamed dependency must break this guard loudly, not narrow it silently."""
+    import ast
+    import inspect
+
+    imported = {
+        alias.asname or alias.name
+        for node in ast.walk(ast.parse(inspect.getsource(lro)))
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+
+    missing = sorted(_AUTH_DEPENDENCIES - imported)
+    assert not missing, (
+        f"{missing} are in _AUTH_DEPENDENCIES but {lro.__name__} does not import them -- "
+        "either they were renamed (update both) or this guard is now checking for a name "
+        "that cannot appear, which makes every route read as ungated"
     )
