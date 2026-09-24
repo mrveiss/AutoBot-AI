@@ -181,19 +181,38 @@ def test_a_percent_encoded_extension_is_decoded_before_the_write():
     assert "%" not in dest.name
 
 
-def test_an_extension_that_decodes_into_a_traversal_is_refused():
-    """The other half of the same change, and the one that fails CLOSED.
+@pytest.mark.parametrize("groups", [1, 2, 3, 4, 5])
+def test_an_extension_that_decodes_into_a_traversal_is_refused_at_every_depth(groups: int):
+    """Every traversal depth, because the depth decides WHERE it lands.
 
-    Fullwidth confusables survive `pathlib` untouched -- they are not path
-    separators -- so the old check accepted this filename. NFKC folds `U+FF0F`
-    to `/` and `U+FE52` to `.`, so after canonicalisation the extension reads
-    as `/../../..` and walks above the storage root. Containment then refuses
-    it.
+    This is the case a review caught and the single-depth version of this test
+    missed. The extension `.／﹒﹒` repeated N times normalises to N `..`
+    segments, and the file is built at `<root>/<company>/<item>/<name>`:
 
-    Refusing is right. The point of pinning it is that it is a NEW refusal:
-    an upload that used to succeed now does not, and callers see that.
+        1 group  -> <root>/<company>/<item>/x     same dir
+        2        -> <root>/<company>/x            escapes the work item
+        3        -> <root>/x                      escapes the tenant, ON the root
+        4, 5     -> above <root>                  escapes the root entirely
+
+    The original test used **five**, which climbs above the root and is refused
+    by a root-level containment check. The reviewer used **three**, which stops
+    exactly on the root -- so `is_relative_to(root)` was True and the file
+    landed outside its tenant's directory while still "in the root". The
+    assertion passed for the wrong reason and the defect sat one repetition
+    away from it.
+
+    Containment is now to the tenant directory, so every depth that leaves
+    `<root>/<company>/<item>/` is refused, not only the ones that leave the root.
     """
-    hostile = "notes." + "\uff0f\ufe52\ufe52" * 5
+    hostile = "notes." + "\uff0f\ufe52\ufe52" * groups
 
     with pytest.raises(ValueError):
         _storage_path(_COMPANY, _WORK_ITEM, _ATTACHMENT, hostile)
+
+
+def test_a_well_formed_upload_still_lands_in_its_tenant_directory():
+    """The contrast. Tenant-level containment must not refuse ordinary uploads."""
+    dest = _storage_path(_COMPANY, _WORK_ITEM, _ATTACHMENT, "notes.txt")
+
+    assert dest.parent == (_resolve_storage_root() / _COMPANY / _WORK_ITEM).resolve()
+    assert dest.name.endswith(".txt")
