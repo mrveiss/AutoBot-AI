@@ -38,7 +38,10 @@ a simulation that never removes anything.
 
 from __future__ import annotations
 
+import builtins
+import contextlib
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -87,6 +90,47 @@ def site_packages(tmp_path: Path) -> Path:
     path = tmp_path / "venv" / "lib" / "python3.14" / "site-packages"
     path.mkdir(parents=True)
     return path
+
+
+@contextlib.contextmanager
+def _record_update_refused():
+    """Refuse the RECORD update at the seam where it actually happens.
+
+    These tests used to patch `Path.write_text` filtered on a file named
+    RECORD. #17371 made the update atomic -- it writes
+    `RECORD.autobot-provenance-tmp` through builtin `open` and `os.replace`s it
+    into place -- so that patch stopped firing. One test failed loudly. The
+    other went on passing while reproducing nothing at all, which is the
+    dangerous half: a test that no longer injects the fault it names still
+    reports green, and its green is indistinguishable from a working fix.
+
+    Two defences against a repeat. The suffix comes from the module under test
+    (`prov.RECORD_TMP_SUFFIX`) rather than being spelled here, and the injector
+    asserts on exit that it actually fired -- so if the write moves again this
+    fails instead of quietly passing.
+
+    What it models: with an atomic replace, a read-only RECORD *file* is no
+    longer the failure case (the replace only needs the directory). "RECORD
+    cannot be updated" now means a dist-info directory this process cannot
+    write into.
+    """
+    real_open = builtins.open
+    fired = {"count": 0}
+
+    def refuse_temp(file, *args, **kwargs):
+        if str(file).endswith(prov.RECORD_TMP_SUFFIX):
+            fired["count"] += 1
+            raise PermissionError(13, "Permission denied")
+        return real_open(file, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(builtins, "open", refuse_temp)
+        yield
+
+    assert fired["count"] > 0, (
+        "the fault was never injected -- the RECORD write has moved again and this test "
+        "is asserting against an ordinary successful stamp"
+    )
 
 
 def test_the_old_unrecorded_marker_reproduces_the_husk(site_packages: Path) -> None:
@@ -180,18 +224,13 @@ def test_a_record_that_cannot_be_written_leaves_no_marker(site_packages: Path) -
     the same end state by different routes, and only the first had a test.
 
     Monkeypatched rather than chmod-ed: as root the permission bits do not
-    refuse the write, so a chmod test would pass by not reproducing anything.
+    refuse the write, so a chmod test would pass by not reproducing anything --
+    the same way this test itself silently stopped reproducing anything when
+    #17371 moved the write. See `_record_update_refused`.
     """
     dist_info = _install(site_packages, "pypdf", "6.18.1")
-    real_write_text = Path.write_text
 
-    def refuse_record(self: Path, *args: object, **kwargs: object) -> int:
-        if self.name == "RECORD":
-            raise PermissionError(13, "Permission denied")
-        return real_write_text(self, *args, **kwargs)  # type: ignore[arg-type]
-
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(Path, "write_text", refuse_record)
+    with _record_update_refused():
         prov.write_provenance_marker(dist_info, "autobot-backend")
 
     assert not (dist_info / prov.PROVENANCE_MARKER_FILENAME).exists(), (
@@ -211,15 +250,8 @@ def test_an_unrecordable_stamp_does_not_leave_a_husk(site_packages: Path) -> Non
     stamping having quietly stopped working everywhere.
     """
     dist_info = _install(site_packages, "cachetools", "7.1.8")
-    real_write_text = Path.write_text
 
-    def refuse_record(self: Path, *args: object, **kwargs: object) -> int:
-        if self.name == "RECORD":
-            raise PermissionError(13, "Permission denied")
-        return real_write_text(self, *args, **kwargs)  # type: ignore[arg-type]
-
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(Path, "write_text", refuse_record)
+    with _record_update_refused():
         prov.write_provenance_marker(dist_info, "autobot-backend")
 
     _uninstall_like_pip(site_packages, dist_info)
@@ -284,3 +316,135 @@ def test_site_packages_are_found_by_glob_not_by_version(tmp_path: Path) -> None:
     found = prov.site_packages_dirs(venv)
 
     assert [p.parent.name for p in found] == ["python3.99"]
+
+
+# ---------------------------------------------------------------------------
+# The deletion must not reach out of the directory it is clearing (#17362)
+# ---------------------------------------------------------------------------
+
+
+def test_a_symlinked_dist_info_is_not_a_husk(site_packages: Path, tmp_path: Path) -> None:
+    """`is_dir` and `iterdir` follow links, so the predicate could be aimed outside.
+
+    A `*.dist-info` symlink whose target directory holds one file named
+    `AUTOBOT_PROVENANCE` matched every clause of the husk test, and the removal
+    then reached THROUGH the link and unlinked that file in the target -- a
+    directory that need not be inside `site-packages` at all. The predicate's
+    docstring promises it "cannot reach a real installation, an operator's
+    files, or another tool's"; through a link it could.
+
+    Theoretical when written, and it stays theoretical: nothing here creates
+    such a link. What changed is the blast radius -- #17339 runs this as root,
+    unconditionally, on every provisioned host, in three venvs. The assertion
+    that matters is the last one: the file in the TARGET survives.
+    """
+    outside = tmp_path / "not-site-packages"
+    outside.mkdir()
+    bystander = outside / prov.PROVENANCE_MARKER_FILENAME
+    bystander.write_text("{}\n", encoding="utf-8")
+
+    link = site_packages / "borrowed-1.0.dist-info"
+    link.symlink_to(outside, target_is_directory=True)
+
+    assert not prov.is_provenance_husk(link), "a symlink is not a husk, whatever it points at"
+    assert prov.clear_provenance_husks(site_packages) == []
+    assert (
+        bystander.is_file()
+    ), "the husk clearer deleted a file through a symlink, outside the directory it was clearing"
+    assert link.is_symlink(), "and the link itself is left alone rather than half-removed"
+
+
+def test_the_marker_unlink_refuses_a_directory_that_is_a_link(tmp_path: Path) -> None:
+    """The removal enforces it too, not only the predicate that gates it.
+
+    Defence in depth against a link planted between the check and the
+    deletion: `_unlink_marker_within` opens with `O_NOFOLLOW | O_DIRECTORY`, so
+    it raises rather than acting through a link that `is_provenance_husk`
+    never saw.
+    """
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / prov.PROVENANCE_MARKER_FILENAME).write_text("{}\n", encoding="utf-8")
+    link = tmp_path / "link-1.0.dist-info"
+    link.symlink_to(real, target_is_directory=True)
+
+    with pytest.raises(OSError):
+        prov._unlink_marker_within(link)
+
+    assert (real / prov.PROVENANCE_MARKER_FILENAME).is_file()
+
+
+# ---------------------------------------------------------------------------
+# RECORD is a manifest, and a half-written one is worse than a husk (#17371)
+# ---------------------------------------------------------------------------
+
+
+def test_an_interrupted_record_rewrite_leaves_the_original_intact(site_packages: Path) -> None:
+    """The atomicity claim, proved rather than asserted.
+
+    A happy-path content check cannot tell an atomic write from a truncating
+    one -- both end with the right bytes -- so this fails the replace after the
+    temp file is written and asserts the ORIGINAL is still complete. Against
+    the old `Path.write_text`, which opens with `"w"`, the manifest would
+    already have been truncated before this point.
+
+    RECORD is what pip uses to know what a package owns. A husk is annoying and
+    locally repairable; a truncated manifest breaks pip's management of a
+    package that was working fine, picked by whatever happened to be mid-write.
+    """
+    dist_info = _install(site_packages, "pypdf", "6.18.1")
+    record = dist_info / "RECORD"
+    before = record.read_text(encoding="utf-8")
+
+    def no_space(src: object, dst: object) -> None:
+        raise OSError(28, "No space left on device")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(os, "replace", no_space)
+        prov.write_provenance_marker(dist_info, "autobot-backend")
+
+    assert record.read_text(encoding="utf-8") == before, "the manifest was damaged by a failed stamp"
+    assert [
+        entry.name for entry in dist_info.iterdir() if entry.name.startswith("RECORD.")
+    ] == [], "a failed replace left temp litter beside the manifest -- a husk in a different costume"
+    assert not (
+        dist_info / prov.PROVENANCE_MARKER_FILENAME
+    ).exists(), "and the unrecordable marker is still taken back (#17357)"
+
+
+def test_the_record_keeps_its_mode_across_the_replace(site_packages: Path) -> None:
+    """`os.replace` installs the TEMP file's mode, not the target's.
+
+    Since #17339 this runs as root on every provisioned host, which is exactly
+    where the temp file's identity differs from the manifest's. A RECORD that
+    comes back `0600` or root-owned breaks pip for the venv's own user -- the
+    failure this whole module exists to prevent, arriving by another route.
+    """
+    dist_info = _install(site_packages, "pypdf", "6.18.1")
+    record = dist_info / "RECORD"
+    record.chmod(0o640)
+
+    prov.write_provenance_marker(dist_info, "autobot-backend")
+
+    assert record.stat().st_mode & 0o777 == 0o640
+    assert prov.PROVENANCE_MARKER_FILENAME in record.read_text(
+        encoding="utf-8"
+    ), "premise: the replace actually happened, so the mode check is not vacuous"
+
+
+def test_a_non_utf8_record_does_not_abort_the_run(site_packages: Path) -> None:
+    """`UnicodeDecodeError` is a ValueError, so `except OSError` never caught it.
+
+    The caller promises "best-effort, never fatal to the surrounding install",
+    and this path was fatal: it propagated out through `mark_current_set`'s
+    loop and abandoned every package after this one. Low probability -- pip
+    writes UTF-8 -- but the cost is not proportional to the probability.
+    """
+    dist_info = _install(site_packages, "pypdf", "6.18.1")
+    (dist_info / "RECORD").write_bytes(b"pypdf-6.18.1.dist-info/METADATA,,\n\xff\xfe not utf-8\n")
+
+    prov.write_provenance_marker(dist_info, "autobot-backend")
+
+    assert not (
+        dist_info / prov.PROVENANCE_MARKER_FILENAME
+    ).exists(), "an unreadable RECORD is unrecordable, so the package reads as unverified"

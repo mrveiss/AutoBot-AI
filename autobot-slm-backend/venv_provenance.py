@@ -153,8 +153,18 @@ def is_provenance_husk(dist_info: Path) -> bool:
     AND carry this tool's marker AND contain nothing else. Anything else --
     another tool's leftovers, a partial install, a directory with files this
     module did not write -- is not ours to classify and is left alone.
+
+    It must also be a real directory, not a symlink to one (#17362). `is_dir`
+    and `iterdir` both follow links, so a `*.dist-info` symlink pointing at a
+    directory whose sole entry is a file named `AUTOBOT_PROVENANCE` used to
+    answer True here -- and the deletion then reached THROUGH the link and
+    removed that file in the target directory, outside `site-packages`
+    entirely. That contradicted the promise this docstring makes two paragraphs
+    up, which is the reason it is checked rather than assumed: #17339 made this
+    predicate run as root on every provisioned host, in three venvs, so the
+    property has to hold rather than merely be likely.
     """
-    if not dist_info.is_dir():
+    if dist_info.is_symlink() or not dist_info.is_dir():
         return False
     if any((dist_info / name).exists() for name in _DISTRIBUTION_FILES):
         return False
@@ -176,6 +186,75 @@ def has_tool_provenance(dist_info: Optional[Path]) -> bool:
     if dist_info is None or not (dist_info / PROVENANCE_MARKER_FILENAME).is_file():
         return False
     return not is_provenance_husk(dist_info)
+
+
+#: Suffix of the temp file `_replace_record_atomically` replaces RECORD from.
+#: Named rather than inlined so a test can refuse exactly that write without
+#: hardcoding the spelling -- the #17357 tests broke silently once the RECORD
+#: write moved, and a shared constant is what makes that break loud.
+RECORD_TMP_SUFFIX = ".autobot-provenance-tmp"
+
+
+def _preserve_record_identity(record: Path, tmp: Path) -> None:
+    """Give *tmp* the mode and ownership of *record* before it replaces it (#17371).
+
+    `os.replace` installs the temp file's own mode and owner. A `RECORD` that
+    becomes root-owned or `0600` breaks pip for the venv's own user -- and
+    since #17339 this runs as root on every provisioned host, which is exactly
+    where the temp file's owner differs from the manifest's.
+
+    A failure to `chown` is not fatal: it means this process is not root, in
+    which case it could not have changed the owner anyway and the file it
+    created already belongs to the right user.
+    """
+    try:
+        stat = record.stat()
+    except OSError:
+        return
+    try:
+        os.chmod(tmp, stat.st_mode & 0o7777)
+    except OSError as exc:
+        logger.warning("venv-provenance: could not carry %s's mode onto its replacement: %s", record, exc)
+    try:
+        os.chown(tmp, stat.st_uid, stat.st_gid)
+    except (OSError, AttributeError):
+        pass
+
+
+def _replace_record_atomically(record: Path, body: str) -> None:
+    """Replace *record* with *body* via a temp file and `os.replace` (#17371).
+
+    `Path.write_text` opens with `"w"`, which truncates before writing, so an
+    interrupted run -- a kill during provisioning, a full disk, an OOM, a power
+    loss -- can leave RECORD short or empty. RECORD is the manifest pip uses to
+    know what a package owns, so losing it breaks pip's management of a package
+    that was working, chosen by whatever happened to be mid-write rather than
+    by having any problem. The reconciler re-stamps every declared package on
+    every run, so the exposure is once per package per run.
+
+    `os.replace` is atomic within a filesystem, and the temp file is created in
+    the same directory to guarantee that. A reader sees the old complete file
+    or the new complete file, never a partial one. The temp file is removed on
+    any failure so a failed run leaves no `RECORD.*` litter beside the manifest
+    -- which would be a husk in a different costume.
+    """
+    tmp = record.with_name(f"{record.name}{RECORD_TMP_SUFFIX}")
+    try:
+        with open(tmp, "w", encoding="utf-8") as handle:
+            handle.write(body)
+            handle.flush()
+            os.fsync(handle.fileno())
+        _preserve_record_identity(record, tmp)
+        os.replace(tmp, record)
+    except BaseException:
+        # Including KeyboardInterrupt and SystemExit: an interrupted
+        # provisioning run is the scenario this function exists for, and the
+        # temp file must not outlive it.
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _record_marker_in_record(dist_info: Path, marker: Path) -> bool:
@@ -201,11 +280,21 @@ def _record_marker_in_record(dist_info: Path, marker: Path) -> bool:
     if not record.is_file():
         return False
     entry = f"{dist_info.name}/{marker.name}"
-    body = record.read_text(encoding="utf-8")
+    try:
+        body = record.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        # A ValueError, so the caller's `except OSError` would NOT catch it and
+        # it would abort the remaining packages in `mark_current_set`'s loop --
+        # fatal, against that caller's "never fatal to the surrounding install"
+        # (#17371). Unreadable RECORD is treated as unrecordable: the package
+        # is left unstamped and reads as unverified, exactly as a missing
+        # RECORD does.
+        logger.warning("venv-provenance: %s has a non-UTF-8 RECORD (%s); leaving it untouched", dist_info.name, exc)
+        return False
     if any(line.split(",", 1)[0] == entry for line in body.splitlines()):
         return True
     separator = "" if body.endswith("\n") or not body else "\n"
-    record.write_text(f"{body}{separator}{entry},,\n", encoding="utf-8")
+    _replace_record_atomically(record, f"{body}{separator}{entry},,\n")
     return True
 
 
@@ -293,6 +382,24 @@ def site_packages_dirs(venv_dir: Path) -> List[Path]:
     return sorted(venv_dir.glob("lib/python*/site-packages"))
 
 
+def _unlink_marker_within(dist_info: Path) -> None:
+    """Remove the marker inside *dist_info* without following a link out of it (#17362).
+
+    `O_NOFOLLOW` fails with `ELOOP` if *dist_info* is itself a symlink, and
+    `O_DIRECTORY` fails with `ENOTDIR` if it is not a directory, so the
+    descriptor can only name the real directory being cleared. Unlinking
+    relative to that descriptor removes the entry inside it -- `unlink` never
+    follows the final component, so a symlinked marker loses the link, not its
+    target. Both failures are `OSError`, which the caller already logs and
+    skips.
+    """
+    fd = os.open(dist_info, os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY)
+    try:
+        os.unlink(PROVENANCE_MARKER_FILENAME, dir_fd=fd)
+    finally:
+        os.close(fd)
+
+
 def clear_provenance_husks(site_packages: Path, steps: Optional[List[str]] = None) -> List[str]:
     """Remove the husks this module's own unrecorded marker left (#17332).
 
@@ -306,6 +413,12 @@ def clear_provenance_husks(site_packages: Path, steps: Optional[List[str]] = Non
     directory that describes no installed distribution and whose *sole* content
     is this module's own marker -- it cannot reach a real installation, an
     operator's files, or another tool's. Each removal is logged by name.
+
+    The removal enforces that last clause itself rather than trusting the
+    predicate to have done so (#17362): `_unlink_marker_within` opens the
+    directory with `O_NOFOLLOW | O_DIRECTORY` and unlinks by `dir_fd`, so the
+    deletion cannot leave the directory it is clearing even if a link is
+    planted between the check and the removal.
     """
     removed: List[str] = []
     if not site_packages.is_dir():
@@ -314,7 +427,7 @@ def clear_provenance_husks(site_packages: Path, steps: Optional[List[str]] = Non
         if not is_provenance_husk(dist_info):
             continue
         try:
-            (dist_info / PROVENANCE_MARKER_FILENAME).unlink()
+            _unlink_marker_within(dist_info)
             dist_info.rmdir()
         except OSError as exc:
             logger.warning("venv-provenance: could not clear husk %s: %s", dist_info, exc)
