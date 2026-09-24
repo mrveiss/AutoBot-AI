@@ -166,3 +166,54 @@ async def test_the_same_peer_is_not_refused_by_its_own_hold(claim_registry) -> N
         assert first.granted
         async with hold_scopes([scope], agent_id=identity, task_id="task-a", intent="again") as again:
             assert again.granted, "a peer must not be refused by its own existing hold"
+
+
+@pytest.mark.asyncio
+async def test_the_executor_claims_as_the_peer(claim_registry) -> None:
+    """The binding test -- and the only one here that proves the FIX, not the helper.
+
+    Everything above proves `claim_identity` returns the right string.
+    `task_executor` actually calling it was, until this test, guarded by
+    nothing: a review found that reverting the call site to the literal
+    `"a2a-executor"` left all nine tests passing, and running the mutation
+    confirmed it. Nine green tests, zero of them attached to the change.
+
+    Why the refusal test could not see it, which is worth keeping because it
+    looked like the obvious guard: `ClaimConflict.requested` carries the scope
+    string, never the requester's `agent_id`, so peer B's identity never
+    reaches the artifact; and peer A's holder name, which the artifact does
+    carry, was seeded by the test calling `claim_identity` itself rather than
+    by the executor. Both halves of that assertion were satisfied without the
+    call site participating at all.
+
+    So this asserts on what the call site hands the registry, through a spy
+    that delegates to the real `hold_scopes`. The identity passed there IS the
+    behaviour under test -- whether that identity is correct is already covered
+    above, and separating the two is what makes each of them mean something.
+    """
+    from a2a import task_executor as module
+    from a2a.task_executor import execute_a2a_task
+
+    seen: list[str] = []
+    real_hold_scopes = module.hold_scopes
+
+    def spy(scopes, **kwargs):
+        seen.append(kwargs["agent_id"])
+        return real_hold_scopes(scopes, **kwargs)
+
+    tm = _task_manager_mock()
+    with (
+        patch.object(module, "hold_scopes", spy),
+        patch("a2a.task_executor.get_task_manager", return_value=tm),
+        patch("a2a.task_executor.get_trust_manager", return_value=MagicMock()),
+    ):
+        await execute_a2a_task(
+            "task-a", "do a thing", context={"declared_scopes": ["path:some/thing"]}, peer_id="peer-a"
+        )
+
+    assert seen, "premise: the executor never reached hold_scopes, so this asserts nothing"
+    assert seen == [claim_identity("peer-a", "task-a")], (
+        f"the executor claimed as {seen!r} rather than as its peer -- the identity is built "
+        "correctly and then not used, which every other test here would miss"
+    )
+    assert "a2a-executor" not in seen

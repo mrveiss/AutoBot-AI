@@ -112,8 +112,13 @@ async def execute_a2a_task(
 
     try:
         # #16950: claim as the PEER, not as one shared "a2a-executor". A single
-        # identity made every admitted peer one claimant, so a scope held by one
-        # entitled another's task to write it -- laundering, in claim terms.
+        # identity made every admitted peer one claimant -- which cost
+        # ATTRIBUTION, not scope isolation: `work_claims`' Lua matches a holder
+        # on agent_id AND task_id, and task ids are server-minted per task, so
+        # one peer could never act on another's hold. What it destroyed is WHO:
+        # a refusal named "a2a-executor" instead of the peer actually holding
+        # the scope. See `peer_identity.claim_identity`, which states this at
+        # length because the obvious guess is the wrong one.
         async with hold_scopes(
             declared,
             agent_id=claim_identity(peer_id, task_id),
