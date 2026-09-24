@@ -22,36 +22,16 @@ Issue #6534); any change there must be reflected here.
 
 from __future__ import annotations
 
-from enum import Enum
-
 import pytest
 from fastapi import FastAPI, Query
 from fastapi.testclient import TestClient
 
-# ---------------------------------------------------------------------------
-# Local re-definition of the enums (same values as api/marketplace.py #6534)
-# ---------------------------------------------------------------------------
-# These are kept in sync by the test assertions below.  If the real enums
-# change, add the new value here AND update the known-valid smoke test.
-
-
-class CatalogCategory(str, Enum):
-    ALL = "all"
-    EXAMPLE = "example"
-    ANALYTICS = "analytics"
-    OBSERVABILITY = "observability"
-    INTEGRATION = "integration"
-    AGENT = "agent"
-    TOOL = "tool"
-    OTHER = "other"
-
-
-class CatalogSort(str, Enum):
-    DOWNLOADS = "downloads"
-    RATING = "rating"
-    NAME = "name"
-    NEWEST = "newest"
-
+# #14881: the real enums, not a copy. This module used to redeclare both with a
+# comment promising they were "kept in sync by the test assertions below" --
+# see TestEnumParity's removal note below for why that promise could not hold.
+# tests/api/test_marketplace.py already imports these at module level, so the
+# import is proven safe in this environment rather than assumed.
+from api.marketplace import CatalogCategory, CatalogSort
 
 # ---------------------------------------------------------------------------
 # Minimal test app — mirrors the real /catalog endpoint's query-param contract
@@ -80,25 +60,20 @@ def client() -> TestClient:
 
 
 # ---------------------------------------------------------------------------
-# Verify our local enums exactly match the real marketplace enums
+# TestEnumParity removed (#14881)
 # ---------------------------------------------------------------------------
-
-
-class TestEnumParity:
-    """These tests fail immediately when the real enums diverge from our copy."""
-
-    def test_catalog_category_values_match_real_enum(self):
-        """Verify our inline enum covers all real CatalogCategory values."""
-        expected = {"all", "example", "analytics", "observability", "integration", "agent", "tool", "other"}
-        actual = {c.value for c in CatalogCategory}
-        assert actual == expected, f"Enum mismatch — update test: {actual ^ expected}"
-
-    def test_catalog_sort_values_match_real_enum(self):
-        """Verify our inline enum covers all real CatalogSort values."""
-        expected = {"downloads", "rating", "name", "newest"}
-        actual = {s.value for s in CatalogSort}
-        assert actual == expected, f"Enum mismatch — update test: {actual ^ expected}"
-
+# It was titled "Verify our local enums exactly match the real marketplace
+# enums" and its docstring said "These tests fail immediately when the real
+# enums diverge from our copy". Neither was true: both methods compared this
+# file's local copy against a THIRD hardcoded literal set written a few lines
+# below it, and never imported api/marketplace.py at all. A value added to or
+# removed from the real enum was invisible to them -- a test asserting a
+# literal against a literal, in the name of catching drift.
+#
+# Deleting rather than repairing it is the point. With the enums imported
+# above, parity is structural: `_make_app()` now validates against the same
+# class the real /catalog endpoint does, so a divergence cannot exist to be
+# asserted about, and the 422 cases below exercise the real vocabulary.
 
 # ---------------------------------------------------------------------------
 # Invalid category → 422

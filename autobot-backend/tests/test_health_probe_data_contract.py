@@ -50,9 +50,18 @@ class BatchJobStatus(str, Enum):
 
 
 class BatchJobType(str, Enum):
+    # #14881: mirrors api/schemas_workflows.py exactly. It used to declare
+    # ai_task and report -- neither of which exists in production, and neither
+    # of which any test referenced -- while omitting file_conversion,
+    # report_generation, backup and custom, which do. A stub of a module other
+    # collectors import may be a SUBSET of production; it may never invent a
+    # member, because a test exercising one asserts against a value the real
+    # system cannot produce. Enforced by repo_tests/enum_hand_copy_guard_test.py.
     data_processing = "data_processing"
-    ai_task = "ai_task"
-    report = "report"
+    file_conversion = "file_conversion"
+    report_generation = "report_generation"
+    backup = "backup"
+    custom = "custom"
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +136,11 @@ if "autobot_shared.redis_client" not in sys.modules:
 if "autobot_shared.error_boundaries" not in sys.modules:
 
     class _ErrorCategory(Enum):
+        # #14881: CLIENT_ERROR removed -- production's ErrorCategory
+        # (utils/error_boundaries/types.py) has 18 members and that is not one
+        # of them; nothing referenced it. A minimal stub is fine, an invented
+        # member is not.
         SERVER_ERROR = "server_error"
-        CLIENT_ERROR = "client_error"
 
     _eb = types.ModuleType("autobot_shared.error_boundaries")
     _eb.__package__ = "autobot_shared"

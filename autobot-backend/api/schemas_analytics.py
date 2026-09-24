@@ -16,7 +16,15 @@ from fastapi import Query
 from pydantic import BaseModel, Field
 
 from api.schemas_common import SuccessMessageResponse
+from autobot_shared.code_review_enums import CheckCategory, CheckSeverity, ReviewCategory, ReviewSeverity
 from autobot_shared.status_enums import RiskLevel, Severity
+
+# #14881: these four are NOT redeclared here. The API used to carry a
+# hand-copy of each with identical members, while api/analytics_precommit.py
+# already imported BUILTIN_CHECKS from the same module -- one symbol imported
+# and its enums retyped by hand, with nothing keeping them in step. The domain
+# classes carry the ``str`` mixin now, so one class serves both the engine and
+# the wire format.
 from constants import PATH
 from type_defs.common import Metadata
 
@@ -1431,24 +1439,6 @@ class QualityDrillDownResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class CheckSeverity(str, Enum):
-    """Severity levels for pre-commit checks."""
-
-    BLOCK = "block"
-    WARN = "warn"
-    INFO = "info"
-
-
-class CheckCategory(str, Enum):
-    """Categories of pre-commit checks."""
-
-    SECURITY = "security"
-    QUALITY = "quality"
-    STYLE = "style"
-    DEBUG = "debug"
-    DOCS = "docs"
-
-
 class CheckResult(BaseModel):
     """Result of a single check."""
 
@@ -2548,28 +2538,6 @@ class PerformancePatternDefinition(BaseModel):
 # ---------------------------------------------------------------------------
 # analytics_code_review.py enums + schemas
 # ---------------------------------------------------------------------------
-
-
-class ReviewSeverity(str, Enum):
-    """Review comment severity levels."""
-
-    CRITICAL = "critical"
-    WARNING = "warning"
-    INFO = "info"
-    SUGGESTION = "suggestion"
-
-
-class ReviewCategory(str, Enum):
-    """Categories of review findings."""
-
-    SECURITY = "security"
-    PERFORMANCE = "performance"
-    STYLE = "style"
-    BUG_RISK = "bug_risk"
-    MAINTAINABILITY = "maintainability"
-    DOCUMENTATION = "documentation"
-    TESTING = "testing"
-    BEST_PRACTICE = "best_practice"
 
 
 class ReviewComment(BaseModel):
