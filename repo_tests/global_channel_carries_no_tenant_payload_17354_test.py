@@ -267,11 +267,16 @@ def test_the_opaque_publish_count_only_shrinks() -> None:
     """
     _, opaque, _ = _scan()
 
-    assert opaque <= _MAX_OPAQUE_GLOBAL_PUBLISHES, (
-        f"{opaque} publishes to 'global' pass an opaque payload, up from "
+    # `==`, not `<=`: this test is named for shrinking and `<=` does not enforce
+    # it. Under `<=` a fixed publish leaves the constant claiming a blind spot
+    # that no longer exists, and the guard goes on passing while describing the
+    # tree it was written against rather than the tree it is scanning (#17363).
+    assert opaque == _MAX_OPAQUE_GLOBAL_PUBLISHES, (
+        f"{opaque} publishes to 'global' pass an opaque payload; the pin says "
         f"{_MAX_OPAQUE_GLOBAL_PUBLISHES}. This guard cannot see inside them, so each new one is "
-        "an unreviewable broadcast. Either pass a literal payload or publish to a scoped "
-        "channel; do not raise this number."
+        "an unreviewable broadcast. If the count ROSE, pass a literal payload or publish to a "
+        "scoped channel -- do not raise the pin. If it FELL, lower the pin in the same commit "
+        "that fixed the publish, so the number keeps meaning what it says."
     )
 
 
