@@ -42,6 +42,11 @@ opts into via ``AUTOBOT_INJECTION_HARDBLOCK_ENABLED`` (default off) --
 rejects the turn here; every other HIGH/CRITICAL hit is logged as a
 security event for audit/trend visibility without disrupting the
 conversation.
+
+
+Boundary: this module deliberately declares **no** detector of its own — it
+composes the canonical ones. That is why it is not in the redaction census; see
+``docs/developer/REDACTION_BOUNDARY.md`` (#16688).
 """
 
 from __future__ import annotations

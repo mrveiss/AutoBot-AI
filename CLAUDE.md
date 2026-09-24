@@ -18,6 +18,7 @@ repeated here; where the two disagree, **this file wins**.
 | Need a service, port, or architecture fact | [`AUTOBOT_REFERENCE.md`](docs/developer/AUTOBOT_REFERENCE.md) |
 | Adding an event type, WebSocket route, bus, or session state | [`EVENT_STATE_DOCTRINE.md`](docs/developer/EVENT_STATE_DOCTRINE.md) |
 | Reviewing or changing path validation, session ownership, plugin loading, or secrets | [`THREAT_MODEL.md`](docs/developer/THREAT_MODEL.md) |
+| Adding a redactor, adding a detector to one, or picking which redactor to call | [`REDACTION_BOUNDARY.md`](docs/developer/REDACTION_BOUNDARY.md) |
 | Adding or bumping a HuggingFace `from_pretrained` call site | [`MODEL_REVISION_PINNING.md`](docs/developer/MODEL_REVISION_PINNING.md) |
 | Claiming a work scope, adding a lock/lease, or any "which agent owns this" state | [`AGENT_COORDINATION.md`](docs/developer/AGENT_COORDINATION.md) |
 | Deviating from a standard pattern on purpose | [`ARCHITECTURE_EXCEPTIONS.md`](docs/developer/ARCHITECTURE_EXCEPTIONS.md) |
