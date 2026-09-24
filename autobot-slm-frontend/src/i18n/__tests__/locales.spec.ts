@@ -26,7 +26,11 @@ describe('the locale set', () => {
 
   it('has messages loaded for every one of them', () => {
     for (const locale of EXPECTED) {
-      expect(Object.keys(i18n.global.messages[locale] ?? {}).length).toBeGreaterThan(0)
+      // Indexed through an explicit `Record<string, unknown>`: `messages` is
+      // keyed by the locale codes found on disk, so TypeScript has no literal
+      // union to check a runtime string against (TS7053 on #17395).
+      const bundles = i18n.global.messages as unknown as Record<string, unknown>
+      expect(Object.keys((bundles[locale] ?? {}) as object).length).toBeGreaterThan(0)
     }
   })
 })

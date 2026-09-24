@@ -83,7 +83,17 @@ export function getLocaleDir(locale: string): 'rtl' | 'ltr' {
   return messages[locale]?._meta?.dir === 'rtl' ? 'rtl' : 'ltr'
 }
 
-const i18n = createI18n({
+// The generics are explicit, and that is the fix for a real CI failure rather
+// than decoration. `createI18n`'s schema overload defaults its `Locales`
+// parameter to the literal `'en-US'`; passing `messages` typed as a wide
+// `Record<string, LocaleBundle>` gives TypeScript no literal keys to infer, so
+// it fell back to that default and demanded an `"en-US"` bundle this app does
+// not ship (TS2769 on #17395). Naming `Locales` as `string` says what is true:
+// the locale set comes from a glob and is not a fixed key union. Adding an
+// en-US.json would have silenced the compiler by adopting a locale we do not
+// have, which is the wrong direction -- the type was lying about which locales
+// exist, and the app would have run anyway.
+const i18n = createI18n<[LocaleBundle], string>({
   legacy: true,
   locale: resolveInitialLocale(),
   fallbackLocale: 'en',
