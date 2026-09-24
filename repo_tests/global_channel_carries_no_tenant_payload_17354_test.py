@@ -20,10 +20,11 @@ What this guard can and cannot see, stated because the gap is large:
 - It reads **literal dict payloads**. `publish("global", event, {"task_id": ...})`
   is visible.
 - It cannot read a payload passed as a variable —
-  `publish("global", event_name, data)` in `api/agent.py:197`,
-  `chat_workflow/cot_events.py:201` and nine others. Those are counted, not
-  inspected, and `_MAX_OPAQUE_GLOBAL_PUBLISHES` is a ratchet so the blind spot
-  cannot grow quietly. Lowering it is the only legal direction.
+  `publish("global", event_name, data)` in `api/agent.py`'s
+  `_publish_event_safe`, `chat_workflow/cot_events.py`'s `_try_publish`, and
+  nine others. Those are counted, not inspected, and
+  `_MAX_OPAQUE_GLOBAL_PUBLISHES` is a ratchet so the blind spot cannot grow
+  quietly. Lowering it is the only legal direction.
 
 Mutation check: put `"user_input"` into any `global` publish's literal payload
 and `test_no_new_global_publish_carries_a_tenant_key` goes red naming the file
@@ -56,8 +57,8 @@ _MIN_GLOBAL_PUBLISHES_SEEN = 15
 #: Publishes to `global` whose payload is a variable, so no literal scan can see
 #: inside it. Counted rather than inspected. **This may only SHRINK** -- scoping
 #: one of them, or making its payload a literal, lowers the number.
-#: `api/agent.py:197` is the widest: a helper that hardcodes `"global"`, so none
-#: of its callers can scope itself.
+#: `api/agent.py`'s `_publish_event_safe` is the widest: a helper that hardcodes
+#: `"global"`, so none of its callers can scope itself.
 _MAX_OPAQUE_GLOBAL_PUBLISHES = 11
 
 #: Pre-existing literal offenders, recorded so this guard blocks NEW ones today
