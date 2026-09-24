@@ -42,6 +42,11 @@ already says it holds a credential. ``scan_content_for_credentials`` and
 text (a message body, a document, a log line) with no field name to go on,
 for exactly the case a config-model redactor cannot reach: a credential
 sitting in prose ("your temporary password is X"), not behind a named field.
+
+
+Boundary: this module is one of seven that own a secret detector — see
+``docs/developer/REDACTION_BOUNDARY.md`` for which redactor owns which shape of
+the problem, and add a new detector there rather than starting an eighth (#16688).
 """
 
 from __future__ import annotations
@@ -238,9 +243,21 @@ _PEM_BLOCK_RE = re.compile(
     rf"[\s\S]{{0,{_PEM_BODY_MAX}}}?-----END [A-Z0-9 ]{{0,{_PEM_HEADER_MAX}}}PRIVATE KEY-----"
 )
 
-# A JWT is three base64url segments joined by dots; the first two decode to
-# JSON objects, so both start with the base64url encoding of ``{"`` (``eyJ``).
-_JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")
+# A JWT is three base64url segments joined by dots. The HEADER always decodes
+# to a JSON object opening ``{"`` (``eyJ``) -- ``alg`` is mandatory, so it is
+# never the empty object. The PAYLOAD is only anchored on the dot structure.
+#
+# #16688: requiring ``eyJ`` on the payload too -- which this pattern did until
+# the redaction census -- makes this scanner strictly narrower than the one in
+# ``a2a/pii_pipeline.py`` (``jwt_re``), which anchors the header alone. A
+# payload only starts ``eyJ`` when its JSON begins exactly ``{"``. A serializer
+# emitting a space after the brace (``{ "sub": ...``) encodes to ``eyAi``, and
+# one padding before it gives ``IHsi``. Both are well-formed tokens that were
+# redacted on the A2A path and passed through untouched here -- and this is the
+# module ``llm_shared.credential_redaction`` delegates to, so the miss landed in
+# logs. Widened to match; deliberately a superset, never a narrowing
+# (see docs/developer/REDACTION_BOUNDARY.md).
+_JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")
 
 # Provider-specific prefixes with a fixed, well-documented shape — the same
 # patterns every mainstream secret scanner (gitleaks, trufflehog, detect-secrets)

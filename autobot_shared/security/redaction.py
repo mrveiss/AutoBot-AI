@@ -17,6 +17,11 @@ Two shapes are covered, sharing one canonical secret-key/pattern set:
   log-line text.
 * :func:`redact_mapping` — mapping/kv level. Masks dict values whose key matches
   a known secret key fragment.
+
+
+Boundary: this module is one of seven that own a secret detector — see
+``docs/developer/REDACTION_BOUNDARY.md`` for which redactor owns which shape of
+the problem, and add a new detector there rather than starting an eighth (#16688).
 """
 
 import re

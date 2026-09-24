@@ -26,6 +26,11 @@ Usage
     except PIIBlocked as exc:
         # log and return error to caller
         ...
+
+
+Boundary: this module is one of seven that own a secret detector — see
+``docs/developer/REDACTION_BOUNDARY.md`` for which redactor owns which shape of
+the problem, and add a new detector there rather than starting an eighth (#16688).
 """
 
 import hashlib

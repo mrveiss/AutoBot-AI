@@ -38,6 +38,21 @@ _JWT_SHAPED = ".".join(
         "dGhpc2lzYXNpZ25hdHVyZQ",
     ]
 )
+
+# #16688: a JWT whose PAYLOAD does not begin ``eyJ``. A payload only starts
+# ``eyJ`` when its JSON begins exactly ``{"``; a serializer that emits a space
+# after the brace (``{ "sub": ...``) base64url-encodes to ``eyAi`` instead.
+# The token below is well-formed and was matched by ``a2a/pii_pipeline.py``
+# while this scanner missed it -- and this is the module
+# ``llm_shared.credential_redaction`` delegates its log redaction to.
+# Payload decodes to: { "sub": "1234567890", "name": "A" }
+_JWT_NON_EYJ_PAYLOAD = ".".join(
+    [
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+        "eyAic3ViIjogIjEyMzQ1Njc4OTAiLCAibmFtZSI6ICJBIiB9",  # pragma: allowlist secret
+        "dGhpc2lzYXNpZ25hdHVyZQ",
+    ]
+)
 _PEM_SHAPED = "\n".join(
     [
         "-----BEGIN " + "RSA PRIVATE KEY-----",
@@ -54,6 +69,7 @@ _TRUE_POSITIVES = [
     ("phrase_password", "Welcome! Your temporary password is Xy9#mK2!Zq. Please log in and change it."),
     ("phrase_api_key", f"Here is your API key: {_OPENAI_SHAPED}"),
     ("jwt", f"Authorization header: {_JWT_SHAPED}"),
+    ("jwt_non_eyj_payload", f"Authorization header: {_JWT_NON_EYJ_PAYLOAD}"),
     ("pem_private_key", _PEM_SHAPED),
     ("basic_auth_url", "Connect via https://admin:sup3rSecret1@db.example.com:5432/mydb"),
     ("aws_key", f"{_AWS_SHAPED} is our old access key, please rotate it"),
@@ -154,3 +170,21 @@ def test_multiple_distinct_credentials_are_all_found() -> None:
     matches = scan_content_for_credentials(text)
     assert {m.pattern for m in matches} == {"known_key_prefix"}
     assert len(matches) == 2
+
+
+def test_a_jwt_is_matched_on_its_header_not_its_payload_shape() -> None:
+    """#16688: the JWT rule itself must fire, not some other detector.
+
+    Asserting only "something matched" would pass if the high-entropy rule
+    happened to claim the span, which would leave the narrowing unfixed and
+    the test green.
+    """
+    matches = scan_content_for_credentials(_JWT_NON_EYJ_PAYLOAD)
+    kinds = {m.pattern for m in matches}
+    assert "jwt" in kinds, f"expected the jwt rule to fire, got {kinds or 'no matches'}"
+
+
+def test_the_jwt_rule_is_not_narrower_than_the_a2a_scanner() -> None:
+    """Both JWT shapes must redact, so this module cannot miss what A2A blocks."""
+    for token in (_JWT_SHAPED, _JWT_NON_EYJ_PAYLOAD):
+        assert token not in redact_content(token), f"{token!r} survived redaction"
