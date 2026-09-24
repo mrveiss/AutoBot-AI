@@ -15,12 +15,14 @@ the document and false in the tree.
 
 WHAT THIS MATCHES, and why each arm exists:
 
-1. `client.set(key, value, nx=True, ex=…/px=…)` -- the Python spelling of a
-   lease: create-if-absent plus an expiry. That combination is what makes a key
-   a *claim* rather than a value.
-2. `client.setnx(...)` / `msetnx(...)` -- create-if-absent without the TTL in
-   the same call. Usually paired with a separate `expire`, which is the same
-   lease in two statements.
+1. `client.set(key, value, nx=True)`, with or without `ex`/`px` in the same
+   call -- create-if-absent is what makes a key a *claim* rather than a value,
+   and the expiry may arrive in a separate `expire(...)` a line later. The TTL
+   was required here at first, which left `set(nx=True)` + `expire(...)`
+   invisible while the identical `setnx(...)` + `expire(...)` was caught: one
+   spelling of a thing spelled several ways, the blind spot this file's own
+   Lua arm exists to avoid.
+2. `client.setnx(...)` / `msetnx(...)` -- the same lease under its older name.
 3. A Lua script containing `redis.call('SET', …)` together with an `NX`, `EX`
    or `PX` token -- how `work_claims` itself acquires, so the arm that makes
    this guard's own subject visible. Without it `work_claims` would be exempt
@@ -94,6 +96,12 @@ _ALLOWED: dict[str, str] = {
     ),
     "autobot-backend/services/run_jwt.py": "#7677 — a refreshed JTI's denylist entry, so an old token is one-use.",
     "autobot-backend/utils/celery_reliability.py": "#11607 — Celery task dedup by task id.",
+    "autobot-backend/services/feature_flags.py": (
+        "#14866 -- a PERMANENT write-once provisioning, not a lease: the access-control enforcement "
+        "mode is set with `nx` and NO expiry, so there is no holder, no renewal and nothing to lose "
+        "a race for. Found by widening this arm to `set(nx=...)` without a TTL, which is the trade "
+        "that widening makes: one invisible two-statement lease exchanged for one reasoned entry here."
+    ),
     "autobot-backend/events/channel_stream.py": (
         "#14815 — a watermark, not a lock: SETNX keeps the LOWEST broken event id for a channel."
     ),
@@ -124,8 +132,15 @@ def _sites_in_source(source: str, label: str) -> list[str]:
         if isinstance(node, ast.Call):
             name = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
             keywords = {kw.arg for kw in node.keywords if kw.arg}
-            if name == "set" and "nx" in keywords and ({"ex", "px"} & keywords):
-                found.append(f"{label}:{node.lineno} set-nx-ttl")
+            if name == "set" and "nx" in keywords:
+                # The TTL is NOT required in the same call (review): a
+                # `set(key, val, nx=True)` followed by a separate `expire(...)`
+                # is the identical two-statement lease this guard already
+                # catches when it is spelled `setnx`, and requiring `ex`/`px`
+                # here left that one spelling invisible -- the exact
+                # one-spelling-of-several blind spot #17363 was widened for.
+                kind = "set-nx-ttl" if {"ex", "px"} & keywords else "set-nx"
+                found.append(f"{label}:{node.lineno} {kind}")
             elif name in ("setnx", "msetnx"):
                 found.append(f"{label}:{node.lineno} {name}")
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
@@ -253,3 +268,17 @@ def test_a_create_if_absent_write_to_a_collection_is_not_a_claim() -> None:
 def test_a_lua_set_without_a_lease_token_is_not_a_claim() -> None:
     """Keeps `redis_optimizer`'s generated example out; see the module docstring."""
     assert _sites_in_source(_ORDINARY_LUA, "ordinary.py") == []
+
+
+_PLANTED_SET_NX_NO_TTL = 'await client.set("lock:thing", "1", nx=True)\nawait client.expire("lock:thing", 30)\n'
+
+
+def test_the_detector_catches_a_two_statement_lease() -> None:
+    """`set(nx=True)` then `expire(...)` -- the spelling the first version missed."""
+    sites = _sites_in_source(_PLANTED_SET_NX_NO_TTL, "planted.py")
+
+    assert sites == ["planted.py:1 set-nx"], (
+        "a create-if-absent write whose expiry arrives in the next statement is the same "
+        "lease as `setnx` + `expire`, and must not be invisible because the TTL is not in "
+        "the same call"
+    )

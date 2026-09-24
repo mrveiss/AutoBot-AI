@@ -136,7 +136,8 @@ async def run_dev_loop_action(
         await _record(issue_number, intent, OUTCOME_SKIPPED_CLAIMED, 0, str(claimed))
         return IssueClaimSkipped(issue_number=issue_number, holder=claimed)
 
-    renewal_task = asyncio.create_task(_renew_forever(scope, task_id=task_id))
+    claim_lost: list[str] = []
+    renewal_task = asyncio.create_task(_renew_forever(scope, task_id=task_id, lost=claim_lost))
     try:
         gate = get_token_budget_gate()
         refusal = await gate.evaluate_dev_loop_action(estimated_tokens)
@@ -157,13 +158,33 @@ async def run_dev_loop_action(
             # action must still count against the budget, or it burns real
             # spend unbounded on the failure path (AC3).
             await gate.record_dev_loop_action(estimated_tokens)
+            if claim_lost:
+                reason = f"{reason + '; ' if reason else ''}{claim_lost[0]}"
             await _record(issue_number, intent, outcome, estimated_tokens, reason)
         return result
     finally:
         renewal_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
+        # Suppress anything the renewal raises, not only CancelledError (review):
+        # `await renewal_task` re-raises whatever it ended with, and an exception
+        # here would skip the release below entirely -- a real claim leak, not a
+        # masked log line.
+        with contextlib.suppress(BaseException):
             await renewal_task
-        await release(scope, agent_id=DEV_LOOP_AGENT_ID, task_id=task_id)
+        try:
+            await release(scope, agent_id=DEV_LOOP_AGENT_ID, task_id=task_id)
+        except Exception:  # noqa: BLE001 -- see below; this must not mask the action's own error
+            # `release` reaches Redis and can raise (ClaimUnavailable on an
+            # outage). Raised from inside this `finally` it would REPLACE the
+            # exception already propagating from `action()`, which contradicts
+            # this function's own contract two docstrings up -- the caller would
+            # see a release failure instead of what actually went wrong. The
+            # claim then lapses on its own TTL, which is what the TTL is for.
+            logger.warning(
+                "dev loop: releasing the claim on %s failed; it lapses in <= %ss",
+                scope,
+                CLAIM_TTL_S,
+                exc_info=True,
+            )
 
 
 async def _record(issue_number: int, intent: str, outcome: str, estimated_tokens: int, reason: str) -> None:
@@ -173,7 +194,7 @@ async def _record(issue_number: int, intent: str, outcome: str, estimated_tokens
     that never invoke the action -- a refusal that leaves no trace cannot be
     told apart from an action nobody attempted.
     """
-    await record(
+    written = await record(
         build_action(
             issue_number,
             intent=intent,
@@ -182,9 +203,14 @@ async def _record(issue_number: int, intent: str, outcome: str, estimated_tokens
             reason=reason,
         )
     )
+    if not written:
+        # `record` already logged the cause; this names what was lost, because a
+        # discarded False is the difference between a healthy audit trail and a
+        # silently degraded one (review).
+        logger.warning("dev loop: issue #%s's %s outcome is NOT in the action history", issue_number, outcome)
 
 
-async def _renew_forever(scope: str, *, task_id: str) -> None:
+async def _renew_forever(scope: str, *, task_id: str, lost: list[str]) -> None:
     """Keep *scope* alive for as long as *action* runs (review finding).
 
     The claim's TTL (`work_claims.CLAIM_TTL_S`, 300s by default) is not a
@@ -199,7 +225,13 @@ async def _renew_forever(scope: str, *, task_id: str) -> None:
         await asyncio.sleep(_RENEW_INTERVAL_S)
         try:
             if not await renew(scope, agent_id=DEV_LOOP_AGENT_ID, task_id=task_id):
+                # Recorded, not only logged (review): the action keeps running --
+                # cancelling it mid-write is how AC3's "never partially posts"
+                # gets broken -- but a run whose claim lapsed is a run another
+                # agent could have collided with, and the history has to say so
+                # or the collision is invisible afterwards.
                 logger.warning("dev loop: claim on %s was no longer held at renew", scope)
+                lost.append("the claim lapsed mid-action: another agent could have acquired this issue")
                 return
         except Exception:  # noqa: BLE001 -- a renew failure must not kill the run
             logger.warning("dev loop: renewing claim on %s failed", scope, exc_info=True)

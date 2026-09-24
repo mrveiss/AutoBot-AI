@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock
 import pytest
 import pytest_asyncio
 
+from agents import dev_loop_issue_gate as gate_module
 from agents.dev_loop_issue_gate import (
     DEV_LOOP_AGENT_ID,
     IssueBudgetExhausted,
@@ -270,3 +271,50 @@ class TestTheActionIsRecorded:
         """Nothing found, from a reachable store -- the other half of AC3's
         distinction. `recent` raises when Redis is unavailable instead."""
         assert await recent(4242) == []
+
+
+class TestAFailingReleaseDoesNotMaskTheAction:
+    """A review finding: `release` reaches Redis and can raise.
+
+    Raised from inside the outer `finally` it would REPLACE the exception
+    already propagating from the action, so the caller would be told the release
+    failed and never told what actually went wrong.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_actions_own_exception_still_reaches_the_caller(self, redis, monkeypatch):
+        async def _boom(*args, **kwargs):
+            raise RuntimeError("redis went away at release time")
+
+        monkeypatch.setattr(gate_module, "release", _boom)
+
+        with pytest.raises(ValueError, match="simulated action failure"):
+            await run_dev_loop_action(17091, intent="verify", estimated_tokens=1, action=_failing_action)
+
+    @pytest.mark.asyncio
+    async def test_a_successful_action_still_returns_its_value(self, redis, monkeypatch):
+        async def _boom(*args, **kwargs):
+            raise RuntimeError("redis went away at release time")
+
+        monkeypatch.setattr(gate_module, "release", _boom)
+
+        assert await run_dev_loop_action(17091, intent="verify", estimated_tokens=1, action=_ok_action) == "done"
+
+    @pytest.mark.asyncio
+    async def test_a_renewal_that_dies_badly_does_not_skip_the_release(self, redis, monkeypatch):
+        """`await renewal_task` re-raises whatever it ended with; anything other
+        than CancelledError would have skipped the release entirely."""
+        released: list[str] = []
+
+        async def _renew_boom(scope, *, task_id, lost):
+            raise RuntimeError("renewal died")
+
+        async def _record_release(scope, *, agent_id, task_id):
+            released.append(scope)
+            return True
+
+        monkeypatch.setattr(gate_module, "_renew_forever", _renew_boom)
+        monkeypatch.setattr(gate_module, "release", _record_release)
+
+        assert await run_dev_loop_action(17091, intent="verify", estimated_tokens=1, action=_ok_action) == "done"
+        assert released == ["issue:17091"], "the claim must be released even when the renewal task dies"

@@ -145,7 +145,15 @@ async def recent(issue: int, *, limit: int = DEFAULT_RECENT_LIMIT) -> list[DevLo
     client = await get_async_redis_client(database="main")
     if client is None:
         raise RuntimeError("dev-loop actions: Redis client unavailable; this issue's history cannot be read")
-    raw = await client.lrange(_ACTIONS_KEY.format(issue=issue), 0, max(limit, 1) - 1)
+    try:
+        raw = await client.lrange(_ACTIONS_KEY.format(issue=issue), 0, max(limit, 1) - 1)
+    except Exception as exc:  # noqa: BLE001 -- re-raised, never swallowed; see below
+        # A connection that drops mid-call is the same fact as a client that was
+        # never there, and callers key on this contract (`RuntimeError`, "cannot
+        # be read") to tell it apart from an empty history. Without this, one of
+        # the two ways Redis can be unavailable raises the redis library's own
+        # type and slips past that check (review).
+        raise RuntimeError("dev-loop actions: this issue's history cannot be read") from exc
     return [_decode(entry) for entry in raw]
 
 
