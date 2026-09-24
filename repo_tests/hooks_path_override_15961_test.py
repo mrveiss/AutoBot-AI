@@ -300,6 +300,12 @@ REACH = declare(
     # total +22 (#17327 +14, #17323 +3, #17330 +2, this +2, #17335 +1, #17341 +0);
     # 6538 had 3 files of headroom and #17327 alone would have breached it four
     # times over. Credit to autobot-ai-87 for the in-flight arithmetic.
+    #
+    # Held at 6736 for #17305/#17306 (+7 counted files -> population 6943, slack
+    # 207 of 401, and 206 files below `completed()`'s 6942). Re-measured on the
+    # rebased tree rather than assumed: the mid-window pin absorbs this branch,
+    # so the 6543 this branch carried before the rebase is superseded, not
+    # lowered -- 6736 is the stricter of the two.
     floor=6736,
     growth=400,
     skips=1,

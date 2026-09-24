@@ -126,11 +126,14 @@ def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
 REACH = declare(
     "audio-extension-allowlist",
     discover=_tracked_python_files,
-    # Re-pinned 5450 -> 5752 (#17317): measured 6152 tracked python files. This
-    # one had NOT tripped before today; it does now because three merges landed
-    # in an hour. Same cause as hooks-path-override, different scope -- which is
-    # the point #17142 makes: it is the allowance that is wrong, not the floors.
-    floor=5752,
+    # Re-pinned 5450 -> 5752 (#17317) and held at 5757 here (#17305, #17306):
+    # the same re-pin measured one merge apart. #17317 read 6152 tracked python
+    # files on its tree; this branch's seven new modules make it 6159, so 5757
+    # is the value measured against the tree that actually merges. Both are
+    # legal -- the window here is 700 wide (skips=300 + growth=400) -- and the
+    # higher is kept because a floor only ever ratchets up: it asserts the sweep
+    # reached MORE, which is the strict direction for a reach floor.
+    floor=5757,
     growth=400,
     skips=300,
     what="tracked python files",

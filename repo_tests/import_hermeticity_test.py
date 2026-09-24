@@ -155,7 +155,12 @@ REACH = declare(
     # autobot_shared/ across both backends. This branch adds exactly one
     # (autobot_shared/security/path_http.py, the shared path->HTTP translation
     # for #13579); the remaining growth is main's.
-    floor=602,
+    # Re-pinned 602 -> 604 (#17305, #17306): measured 664 non-test modules
+    # against a 60 allowance main had spent down to 56. The in-scope additions
+    # are this branch's shared-module pair, autobot_shared/verifier_degradation.py
+    # and verifier_prompt.py, both extracted to keep their callers under the
+    # 600-line ceiling. Pinned at `population - growth`.
+    floor=604,
     what="non-test modules under api/ and autobot_shared/, both backends",
     growth=60,
 )

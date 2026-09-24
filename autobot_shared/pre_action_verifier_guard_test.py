@@ -111,8 +111,15 @@ def test_parse_probability_clamps_to_the_unit_interval():
     assert parse_probability("REFUTATION_PROBABILITY: -0.2") == pytest.approx(0.0)
 
 
-def test_parse_probability_defaults_conservatively_on_malformed_input():
-    assert parse_probability("nothing here") == pytest.approx(0.5)
+def test_parse_probability_reports_a_miss_as_none():
+    """#17306: the old 0.5 "conservative default" was a threshold coincidence.
+
+    It blocked four action classes and passed network mutations, and moved
+    with any raised ``VERIFIER_THRESHOLD_*``. A miss is now None and the
+    outcome comes from the degraded-response policy --
+    ``verifier_degradation_test.py`` covers that resolution per class.
+    """
+    assert parse_probability("nothing here") is None
 
 
 def test_parse_rationale_extracts_the_labeled_text():

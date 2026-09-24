@@ -152,8 +152,9 @@ class TestParsing:
         raw = "REFUTATION_PROBABILITY: -0.2"
         assert _parse_probability(raw) == pytest.approx(0.0)
 
-    def test_parse_probability_missing_returns_conservative(self):
-        assert _parse_probability("nothing here") == pytest.approx(0.5)
+    def test_parse_probability_missing_returns_none(self):
+        """#17306: a miss is no longer a stand-in 0.5 compared to a threshold."""
+        assert _parse_probability("nothing here") is None
 
     def test_parse_rationale_extracted(self):
         rat = _parse_rationale(_REFUTE_RESPONSE)
