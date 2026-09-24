@@ -54,10 +54,29 @@ jobs:
 
   smoke-test:
     needs: changes
-    # Fail-closed on pull requests: if `changes` errors, `needs` skips this job
-    # rather than reporting green, and the shim's complement leaves the context
-    # unreported — which blocks the pull request, the safe direction.
-    if: github.event_name != 'pull_request' || needs.changes.outputs.docker == 'true'
+    # Runs on a pull request when the filter says Docker paths changed -- and
+    # ALSO when the filter did not answer at all (#17126).
+    #
+    # The comment this replaces claimed fail-closed: "if `changes` errors,
+    # `needs` skips this job rather than reporting green, and the shim's
+    # complement leaves the context unreported -- which blocks the pull
+    # request". Two of those three steps were right and the conclusion was
+    # wrong. GitHub counts a SKIPPED check run as satisfying a required status
+    # check, so a `changes` failure skipped both this job and the shim and the
+    # required `smoke-test` context was satisfied with no smoke test run at
+    # all. A comment cannot hold an invariant the platform decides.
+    #
+    # `needs.changes.result != 'success'` is therefore not an escape hatch but
+    # the point: when nothing can say whether an image could have changed, the
+    # honest answer is to build it. That costs a full run on a rare
+    # infrastructure failure, which is the correct direction for a gate the
+    # owner rule of 2026-09-19 states nothing lands without.
+    if: >-
+      always() && (
+        github.event_name != 'pull_request'
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.docker == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
