@@ -141,15 +141,93 @@ def test_re_stamping_does_not_duplicate_the_record_entry(site_packages: Path) ->
     assert body.count(prov.PROVENANCE_MARKER_FILENAME) == 1
 
 
-def test_a_distribution_without_a_record_is_still_stamped(site_packages: Path) -> None:
-    """Best-effort: a missing RECORD must not make the stamp itself fail."""
+def test_a_distribution_without_a_record_is_left_unstamped(site_packages: Path) -> None:
+    """#17357 reverses the answer this test used to assert, so the reasoning lives here.
+
+    It read: "Best-effort: a missing RECORD must not make the stamp itself
+    fail" -- true about the stamp, wrong about the outcome. With no RECORD to
+    list it in, the marker IS the unrecorded extra file of #17332. Stamping
+    anyway seeds the husk this module exists to prevent, one package at a time,
+    from the repair itself.
+
+    Unstamped is not a failure state. `has_tool_provenance` returns False, the
+    package reads as unverified, and removing it then needs the operator opt-in
+    (`AUTOBOT_VENV_RECONCILE_ALLOW_UNVERIFIED_REMOVAL`). That is a state this
+    module already knows how to handle; a husk is one that breaks pip for every
+    package after it. The trade is provenance for one package against pip for
+    the whole venv.
+    """
     dist_info = site_packages / "odd-1.0.dist-info"
     dist_info.mkdir(parents=True)
     (dist_info / "METADATA").write_text("Name: odd\n", encoding="utf-8")
 
     prov.write_provenance_marker(dist_info, "autobot-backend")
 
-    assert (dist_info / prov.PROVENANCE_MARKER_FILENAME).is_file()
+    assert not (dist_info / prov.PROVENANCE_MARKER_FILENAME).exists(), (
+        "a marker no RECORD lists is a husk seed, not provenance -- it survives the "
+        "next uninstall and keeps the dist-info alive (#17332)"
+    )
+    assert not prov.has_tool_provenance(dist_info), "and the package must read as unverified instead"
+
+
+def test_a_record_that_cannot_be_written_leaves_no_marker(site_packages: Path) -> None:
+    """The path with no coverage before #17357: RECORD present, but unwritable.
+
+    #17338's `except OSError` wrapped BOTH the marker write and the RECORD
+    append, so a failure in the second arrived with the marker already on disk
+    and was logged as "could not write marker" -- a message describing the
+    write that actually succeeded. Absent-RECORD and unwritable-RECORD reach
+    the same end state by different routes, and only the first had a test.
+
+    Monkeypatched rather than chmod-ed: as root the permission bits do not
+    refuse the write, so a chmod test would pass by not reproducing anything.
+    """
+    dist_info = _install(site_packages, "pypdf", "6.18.1")
+    real_write_text = Path.write_text
+
+    def refuse_record(self: Path, *args: object, **kwargs: object) -> int:
+        if self.name == "RECORD":
+            raise PermissionError(13, "Permission denied")
+        return real_write_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(Path, "write_text", refuse_record)
+        prov.write_provenance_marker(dist_info, "autobot-backend")
+
+    assert not (dist_info / prov.PROVENANCE_MARKER_FILENAME).exists(), (
+        "the marker write succeeded and only the RECORD append failed -- the marker "
+        "must not be left behind unrecorded"
+    )
+    assert not prov.has_tool_provenance(dist_info)
+
+
+def test_an_unrecordable_stamp_does_not_leave_a_husk(site_packages: Path) -> None:
+    """The payoff, run through the #17332 sequence that produced the outage.
+
+    The two tests above assert the marker is absent. This one asserts what that
+    absence BUYS, which is the only reason to want it: the dist-info goes away
+    with its own uninstall instead of surviving as debris. Without this, "no
+    marker" is just a missing file, and nothing distinguishes the fix from
+    stamping having quietly stopped working everywhere.
+    """
+    dist_info = _install(site_packages, "cachetools", "7.1.8")
+    real_write_text = Path.write_text
+
+    def refuse_record(self: Path, *args: object, **kwargs: object) -> int:
+        if self.name == "RECORD":
+            raise PermissionError(13, "Permission denied")
+        return real_write_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(Path, "write_text", refuse_record)
+        prov.write_provenance_marker(dist_info, "autobot-backend")
+
+    _uninstall_like_pip(site_packages, dist_info)
+
+    assert not dist_info.exists(), (
+        "an unrecordable stamp must not cost the package its uninstall -- this is the "
+        "husk of #17332, reintroduced by the code written to repair it"
+    )
 
 
 def test_clearing_removes_every_husk_in_one_pass(site_packages: Path) -> None:

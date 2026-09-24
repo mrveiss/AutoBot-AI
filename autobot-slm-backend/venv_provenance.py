@@ -48,6 +48,18 @@ wired into. The marker is now written into `RECORD`
 assumed, and a husk left by the old behaviour is cleared before an install
 (`clear_provenance_husks`).
 
+That claim is exact, and #17357 is what made it exact rather than usual. #17338
+appended the `RECORD` entry after writing the marker, and the append could
+no-op -- no `RECORD` to append to, or an `OSError` swallowed by the same
+handler as the marker write -- which left the marker on disk unrecorded: one
+package back in the state above, from the code that exists to prevent it. So
+the stamp and its `RECORD` entry are now one operation. A marker that cannot be
+recorded is not left behind, and the package simply reads as unverified next
+time. The invariant therefore holds in every case, at the price of provenance
+for a package whose `RECORD` is missing or unwritable -- a price this module
+was already built to pay, since "unverified" is a state it handles and a husk
+is not.
+
 Concretely:
 
 - Every reconcile run stamps the marker onto every package in the CURRENT
@@ -166,8 +178,8 @@ def has_tool_provenance(dist_info: Optional[Path]) -> bool:
     return not is_provenance_husk(dist_info)
 
 
-def _record_marker_in_record(dist_info: Path, marker: Path) -> None:
-    """List the marker in the distribution's own `RECORD` (#17332).
+def _record_marker_in_record(dist_info: Path, marker: Path) -> bool:
+    """List the marker in the distribution's own `RECORD` (#17332). True if it is listed.
 
     pip deletes the paths `RECORD` names and then the directory if nothing is
     left; an unrecorded file keeps the directory alive as a husk that blocks
@@ -177,23 +189,80 @@ def _record_marker_in_record(dist_info: Path, marker: Path) -> None:
     The hash and size columns are left empty, which is what pip itself writes
     for `RECORD` and is accepted on uninstall. Idempotent: the reconciler
     re-stamps every declared package on every run.
+
+    The return value is what the caller needs to keep that claim true rather
+    than mostly true (#17357): a distribution with no `RECORD` cannot list the
+    marker, so a marker left there would be exactly the unrecorded file this
+    function exists to prevent. `OSError` is deliberately NOT caught here --
+    the caller must be able to tell "not recorded" from "recorded", and a
+    swallowed error here would report success for a write that did not happen.
     """
     record = dist_info / "RECORD"
     if not record.is_file():
-        return
+        return False
     entry = f"{dist_info.name}/{marker.name}"
     body = record.read_text(encoding="utf-8")
     if any(line.split(",", 1)[0] == entry for line in body.splitlines()):
-        return
+        return True
     separator = "" if body.endswith("\n") or not body else "\n"
     record.write_text(f"{body}{separator}{entry},,\n", encoding="utf-8")
+    return True
+
+
+def _take_back_unrecorded_marker(marker: Path, component: str, why: str) -> None:
+    """Remove a marker this call just wrote but could not get listed in `RECORD` (#17357).
+
+    This is a rollback, not a cleanup: the only file it can remove is the one
+    the caller wrote microseconds earlier in the same call, so it never
+    deletes state belonging to an earlier run or to anything else.
+
+    Leaving it instead is the #17332 defect reintroduced one package at a time
+    -- an unrecorded file in a `dist-info`, which survives the next uninstall
+    and turns the directory into a husk that blocks every later pip run for
+    that name. Unstamped is a state this module already handles (the package
+    reads as unverified and is not removed without
+    `AUTOBOT_VENV_RECONCILE_ALLOW_UNVERIFIED_REMOVAL`); a husk is a state that
+    breaks pip for everything downstream of it.
+    """
+    try:
+        marker.unlink(missing_ok=True)
+    except OSError as exc:
+        logger.warning(
+            "venv-provenance[%s]: %s is unrecorded AND could not be removed (%s) -- "
+            "this dist-info will survive its next uninstall as a husk (#17332)",
+            component,
+            marker,
+            exc,
+        )
+        return
+    logger.info(
+        "venv-provenance[%s]: left %s unstamped -- %s; it will read as unverified rather than seed a husk",
+        component,
+        marker.parent.name,
+        why,
+    )
 
 
 def write_provenance_marker(dist_info: Path, component: str) -> None:
     """Stamp *dist_info* as this tool's own — best-effort, never fatal to the
     surrounding install: a marker write failure means the NEXT candidacy
     check for this package fails closed (unverified), not that this run
-    itself should abort."""
+    itself should abort.
+
+    A marker that cannot be listed in `RECORD` is not written at all (#17357).
+    The stamp and its `RECORD` entry are one operation, because the marker is
+    only safe to leave on disk while pip knows to delete it: half of it -- a
+    marker with no entry -- is precisely the #17332 husk, a `dist-info` that
+    survives its own uninstall and blocks every later pip run for that name.
+
+    So the two ways this can fail land in the same place, which is the place
+    the paragraph above already promised: unstamped, read as unverified next
+    time, removable only under
+    `AUTOBOT_VENV_RECONCILE_ALLOW_UNVERIFIED_REMOVAL`. That costs provenance
+    for one package in one run. The alternative -- stamp anyway, as this did
+    before #17357 -- keeps provenance and knowingly seeds a husk, trading a
+    state this module handles for one that breaks pip for everything after it.
+    """
     # Imported here, not at module scope (#17339): ansible stages THIS FILE
     # alone onto a node and runs it with the target venv's own interpreter,
     # where `autobot_shared` is not importable. Only the marker-writing half
@@ -204,9 +273,15 @@ def write_provenance_marker(dist_info: Path, component: str) -> None:
     marker = dist_info / PROVENANCE_MARKER_FILENAME
     try:
         marker.write_text(json.dumps(payload) + "\n", encoding="utf-8")
-        _record_marker_in_record(dist_info, marker)
+        recorded = _record_marker_in_record(dist_info, marker)
     except OSError as exc:
         logger.warning("venv-provenance[%s]: could not write marker at %s: %s", component, marker, exc)
+        # The marker may be on disk already: this also catches an OSError from
+        # the RECORD step, which runs after the marker write has succeeded.
+        _take_back_unrecorded_marker(marker, component, f"RECORD could not be updated: {exc}")
+        return
+    if not recorded:
+        _take_back_unrecorded_marker(marker, component, "the distribution has no RECORD to list it in")
 
 
 def site_packages_dirs(venv_dir: Path) -> List[Path]:
