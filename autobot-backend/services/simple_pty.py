@@ -33,6 +33,13 @@ _TRANSCRIPT_MAX_CHARS = 1_000_000
 # milliseconds poll() takes instead of the seconds select() took.
 _READ_POLL_TIMEOUT_MS = seconds_to_poll_timeout_ms(TimingConstants.POLL_INTERVAL)
 
+#: How long the write loop waits for input before re-checking its own stop
+#: conditions (#17355). NOT a latency budget: `get()` returns the moment an item
+#: is queued, so this bounds only how often an IDLE loop wakes, and how long
+#: after `running = False` the thread notices. `get_nowait()` made both zero --
+#: the loop re-entered immediately and every idle session burned a core.
+_WRITE_WAIT_TIMEOUT_S = TimingConstants.MICRO_DELAY
+
 
 def _read_pty_data(fd: int) -> tuple:
     """Read data from PTY and return (event_type, content) (Issue #315: extracted).
@@ -225,12 +232,28 @@ class SimplePTY:
         logger.info("PTY read loop ended for session %s", self.session_id)
 
     def _write_loop(self) -> None:
-        """Background thread to write to PTY"""
+        """Write queued input to the PTY, waiting between items (#17355).
+
+        The wait is BOUNDED, not blocking, and not absent. `get_nowait()` made
+        this a hot spin: `queue.Empty` on an idle session re-entered the loop
+        immediately, so one saturated core per live terminal, whether or not
+        anything ever leaked.
+
+        A plain blocking `get()` is the trap, because it looks correct against
+        `cleanup()`, which does send a `None` sentinel. It would park forever on
+        three paths that stop this loop without one: the sentinel's `put` sits
+        inside a swallowing `try/except` AFTER `running = False` is already set,
+        an abandoned session never calls `cleanup()` at all, and the loop's
+        second condition -- `master_fd is not None` -- is signalled by nothing.
+        The timeout is what lets both conditions be re-checked regardless of
+        what the caller did, failed to do, or documented.
+        """
         while self.running and self.master_fd is not None:
             try:
-                # Wait for input without timeout
+                # Bounded wait: returns immediately when input arrives, and
+                # otherwise hands control back to the conditions above.
                 try:
-                    text = self.input_queue.get_nowait()
+                    text = self.input_queue.get(timeout=_WRITE_WAIT_TIMEOUT_S)
                     if text is None:  # Shutdown signal
                         break
 
@@ -400,13 +423,15 @@ class SimplePTY:
                 logger.debug("Failed to terminate process: %s", e)
             self.process = None
 
-        # Wait for threads to complete naturally
-        if self.reader_thread and self.reader_thread.is_alive():
-            # Signal shutdown via running flag, thread will exit naturally
-            pass  # Thread will exit when running=False
-        if self.writer_thread and self.writer_thread.is_alive():
-            # Thread will exit when running=False and queue is processed
-            pass
+        # #17355: this does NOT wait, and the comments here used to say it did.
+        # Both threads exit on their own next iteration -- the reader within
+        # _READ_POLL_TIMEOUT_MS, the writer within _WRITE_WAIT_TIMEOUT_S -- so
+        # the exit is bounded, but nothing here joins them and cleanup() returns
+        # before either has finished. That was true only because the writer
+        # spun; now it is true because both waits are bounded. No join is added
+        # deliberately: cleanup() is reached from async request paths, and a
+        # blocking join there would stall an event loop to save a few
+        # milliseconds of thread lifetime.
 
         logger.info("PTY cleanup completed for session %s", self.session_id)
 
