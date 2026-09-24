@@ -43,7 +43,9 @@ agent-to-agent coordination semantics as an anti-goal
 ## Scope grammar
 
 `<kind>:<segment>/<segment>/...`, kinds `path`, `kb`, `device`, `project`,
-`config`, `issue`. A claim covers its **subtree**, and prefixes are
+`config`, `provider`, `cpu`, `queue`, `issue` — all nine of
+`work_claims.VALID_KINDS`; `task` is deliberately absent and belongs to
+`task_claim` instead. A claim covers its **subtree**, and prefixes are
 segment-aligned:
 
 - `path:a/b` covers `path:a/b/c.py`

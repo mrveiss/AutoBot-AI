@@ -55,66 +55,108 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 #: Trees scanned. Frontend and infra are out of scope: a claim primitive is a
 #: Redis call from Python.
 _ROOTS = ("autobot-backend", "autobot_shared", "autobot-slm-backend", "scripts", "pipeline-scripts")
 
 #: `redis.call('SET', ...)` inside a Lua script body.
-_LUA_SET = re.compile(r"redis\.call\(\s*['\"]SET['\"]", re.I)
+#: `SETNX` as well as `SET` (review finding on #17380). A Lua script spelling
+#: its acquisition `redis.call('SETNX', KEYS[1], ARGV[1])` with a separate
+#: expiry is the same primitive, and the Python `setnx` arm cannot look inside
+#: a string literal -- so that spelling was invisible to both arms at once.
+#: Same one-spelling-of-several blind spot as the `set(nx=True)` + `expire()`
+#: pair this matcher was widened for earlier in the same PR.
+_LUA_SET = re.compile(r"redis\.call\(\s*['\"]SET(?:NX)?['\"]", re.I)
 
 #: The tokens that turn such a SET into a lease acquire.
 _LUA_LEASE_TOKEN = re.compile(r"['\"](EX|PX|NX)['\"]", re.I)
 
+#: A separate expiry call in the same script. `SETNX` takes no expiry argument
+#: -- the exclusivity is in the command name and the TTL arrives as its own
+#: `PEXPIRE`/`EXPIRE` -- so requiring a quoted `'PX'` beside it demanded a shape
+#: that spelling cannot have, which is the same blind spot as requiring `ex=`
+#: in the Python `set(nx=True)` arm (review finding on #17380).
+_LUA_EXPIRY_CALL = re.compile(r"redis\.call\(\s*['\"]P?EXPIRE(?:AT)?['\"]", re.I)
+
 #: THE registry. Not an exemption -- the subject.
 _THE_REGISTRY = "autobot_shared/coordination/work_claims.py"
 
-#: Every file allowed to hold a claim-or-lock primitive today, and why.
+#: Every file allowed to hold a claim-or-lock primitive, with HOW MANY it holds
+#: and why. The count is the half a filename-only registry could not express
+#: (review finding on #17380): a second primitive added to an already-listed
+#: file was accepted, because the check asked "is this file allowed?" and never
+#: "is this the primitive we allowed?".
 #:
-#: SHRINK-ONLY. A new entry means a second thing in the tree can claim a key
-#: with an owner and a TTL, which is exactly what #16653 exists to make someone
-#: argue for in review rather than discover later. The issue number is the one
-#: that introduced the site, recovered with `git log -S`, not a guess.
-_ALLOWED: dict[str, str] = {
-    _THE_REGISTRY: "#15947 — THE claim registry. Every agent scope claim goes through it.",
-    "autobot-backend/services/task_claim.py": (
-        "#6468, documented as the one exception in #15957 — task IDENTITY, which a work scope is not."
+#: Bidirectional, per the repo's census rule: a count that GROWS fails as a new
+#: unreviewed primitive, and a count that SHRINKS fails as a stale entry. The
+#: old stale-entry check only fired when a file lost its LAST primitive, so
+#: going from two to one was invisible in both directions at once.
+_ALLOWED: dict[str, tuple[int, str]] = {
+    "autobot-backend/events/channel_stream.py": (
+        1,
+        "#14815 — a watermark, not a lock: SETNX keeps the LOWEST broken event id for a channel.",
     ),
-    "autobot_shared/leader_lease.py": (
-        "#12842 — process leadership, not work scope: which replica runs a loop, not who owns a path."
+    "autobot-backend/llc/notifications/router.py": (
+        1,
+        "#8579 — one uvicorn worker runs the notification router.",
     ),
-    "autobot_shared/idempotency.py": (
-        "#15813 — an idempotency claim on a REQUEST, so a retry does not create twice. No owner, no renew."
-    ),
-    "autobot-backend/llc/sync/outbound_sync.py": "#8521 — leader election for the LLC outbound sync loop.",
-    "autobot-backend/llc/notifications/router.py": "#8579 — one uvicorn worker runs the notification router.",
     "autobot-backend/llc/services/work_item_service.py": (
-        "#8213 — an LLC *work item* checkout: product domain state, not agent coordination."
+        2,
+        "#8213 — an LLC *work item* checkout: product domain state, not agent coordination.",
+    ),
+    "autobot-backend/llc/sync/outbound_sync.py": (
+        1,
+        "#8521 — leader election for the LLC outbound sync loop.",
+    ),
+    "autobot-backend/services/feature_flags.py": (
+        1,
+        "#14866 -- a PERMANENT write-once provisioning, not a lease: the access-control enforcement mode is set with `nx` and NO expiry, so there is no holder, no renewal and nothing to lose a race for. Found by widening this arm to `set(nx=...)` without a TTL, which is the trade that widening makes: one invisible two-statement lease exchanged for one reasoned entry here.",
     ),
     "autobot-backend/services/gateway/ingest_governor.py": (
-        "#14143 — inbound message dedup keyed by platform/channel/message id."
+        1,
+        "#14143 — inbound message dedup keyed by platform/channel/message id.",
     ),
-    "autobot-backend/services/run_jwt.py": "#7677 — a refreshed JTI's denylist entry, so an old token is one-use.",
-    "autobot-backend/utils/celery_reliability.py": "#11607 — Celery task dedup by task id.",
-    "autobot-backend/services/feature_flags.py": (
-        "#14866 -- a PERMANENT write-once provisioning, not a lease: the access-control enforcement "
-        "mode is set with `nx` and NO expiry, so there is no holder, no renewal and nothing to lose "
-        "a race for. Found by widening this arm to `set(nx=...)` without a TTL, which is the trade "
-        "that widening makes: one invisible two-statement lease exchanged for one reasoned entry here."
+    "autobot-backend/services/run_jwt.py": (
+        1,
+        "#7677 — a refreshed JTI's denylist entry, so an old token is one-use.",
     ),
-    "autobot-backend/events/channel_stream.py": (
-        "#14815 — a watermark, not a lock: SETNX keeps the LOWEST broken event id for a channel."
+    "autobot-backend/services/task_claim.py": (
+        1,
+        "#6468, documented as the one exception in #15957 — task IDENTITY, which a work scope is not.",
+    ),
+    "autobot-backend/utils/celery_reliability.py": (
+        1,
+        "#11607 — Celery task dedup by task id.",
+    ),
+    "autobot_shared/coordination/work_claims.py": (
+        2,
+        "#15947 — THE claim registry. Every agent scope claim goes through it.",
+    ),
+    "autobot_shared/idempotency.py": (
+        2,
+        "#15813 — an idempotency claim on a REQUEST, so a retry does not create twice. No owner, no renew.",
+    ),
+    "autobot_shared/leader_lease.py": (
+        1,
+        "#12842 — process leadership, not work scope: which replica runs a loop, not who owns a path.",
     ),
 }
 
-#: A floor, not a census. If the matcher stops finding primitives the assertions
-#: below would all pass by matching nothing -- the failure mode this file exists
-#: to prevent, applied to itself.
+#: A floor on FINDINGS, kept as a matcher check and no longer the only one. The
+#: repo's rule is that a vacuity floor binds to the sweep's REACH -- files
+#: parsed, nodes visited -- never to the number of findings, because a sweep
+#: that stops reading half the tree and still finds 12 primitives elsewhere
+#: passes a findings floor (review finding on #17380). `REACH` below is that
+#: bound; this stays as the separate assertion that the MATCHER still matches.
 _MIN_SITES_SEEN = 12
 
 
-def _iter_sources() -> list[Path]:
-    root = repo_root()
+def _iter_sources(root: Path | None = None) -> list[Path]:
+    """Every module this guard sweeps. Empty on an empty tree, never raising --
+    `_reach.declare`'s contract for a `discover` callable (#16154)."""
+    root = root or repo_root()
     files: list[Path] = []
     for tree in _ROOTS:
         for path in sorted((root / tree).rglob("*.py")):
@@ -123,6 +165,21 @@ def _iter_sources() -> list[Path]:
                 continue
             files.append(path)
     return files
+
+
+#: The sweep's reach, declared so the meta-test proves the floor against the
+#: live population (#15928) instead of this file asserting its own number.
+#: Pinned MID-WINDOW, not at `population - growth`. With 3,001 modules live and
+#: `growth=50`, a floor of 2,951 puts the slack exactly at the allowance, so the
+#: very next module anyone adds reds the meta-test -- zero headroom by
+#: construction (#17142). 2,976 leaves room for 25 more before a bump is due.
+REACH = declare(
+    "one-claim-registry",
+    discover=_iter_sources,
+    floor=2_976,
+    what="Python modules swept for claim-or-lock primitives",
+    growth=50,
+)
 
 
 def _sites_in_source(source: str, label: str) -> list[str]:
@@ -144,9 +201,36 @@ def _sites_in_source(source: str, label: str) -> list[str]:
             elif name in ("setnx", "msetnx"):
                 found.append(f"{label}:{node.lineno} {name}")
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if _LUA_SET.search(node.value) and _LUA_LEASE_TOKEN.search(node.value):
+            if _LUA_SET.search(node.value) and (
+                _LUA_LEASE_TOKEN.search(node.value) or _LUA_EXPIRY_CALL.search(node.value)
+            ):
                 found.append(f"{label}:{node.lineno} lua-lease")
     return found
+
+
+def _unreadable() -> list[str]:
+    """Modules the sweep could not parse, as `path (reason)`.
+
+    Returned rather than swallowed (review finding on #17380). Both handlers
+    below used to `continue`, so a module the sweep could not read contributed
+    no findings and said nothing -- the sweep's own blind spots were
+    indistinguishable from a clean file, which is the failure this guard exists
+    to prevent applied to itself.
+    """
+    root = repo_root()
+    blind: list[str] = []
+    for path in _iter_sources():
+        label = path.relative_to(root).as_posix()
+        try:
+            source = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            blind.append(f"{label} (not utf-8)")
+            continue
+        try:
+            ast.parse(source)
+        except SyntaxError as exc:
+            blind.append(f"{label} (SyntaxError: {exc.msg})")
+    return blind
 
 
 def _scan() -> list[str]:
@@ -194,19 +278,44 @@ def test_no_new_claim_or_lock_primitive_outside_the_registry() -> None:
     )
 
 
-def test_the_exemption_list_has_no_stale_entries() -> None:
-    """Shrink-only: a file that stops holding a primitive leaves the list."""
-    stale = sorted(set(_ALLOWED) - _files_with_sites())
+def test_every_exemption_holds_exactly_the_primitives_it_declares() -> None:
+    """Bidirectional, per file: a growth and a shrink both fail (#17380 review).
 
-    assert not stale, (
-        "these files no longer hold a claim-or-lock primitive -- delete their entries so the "
-        "exemption list cannot drift upward (#16653):\n  " + "\n  ".join(stale)
+    The previous version compared only the SET of filenames, so it caught a file
+    that lost its LAST primitive and nothing else. Two failures hid in that gap,
+    in opposite directions:
+
+    - a developer adding a SECOND primitive to an already-listed file -- the
+      check asked "is this file allowed?" and never "is this the primitive we
+      allowed?", so an unreviewed lock landed inside an approved exemption;
+    - a file going from two primitives to one -- a removal nobody reviewed
+      either, and the stale check still passed because the file retained one.
+
+    Three files hold two each today (`work_item_service.py`, `work_claims.py`,
+    `idempotency.py`), so the gap was not hypothetical.
+    """
+    from collections import Counter
+
+    actual = Counter(site.split(":", 1)[0] for site in _scan())
+
+    drifted = [
+        f"{path}: declares {declared}, found {actual.get(path, 0)}"
+        for path, (declared, _reason) in sorted(_ALLOWED.items())
+        if actual.get(path, 0) != declared
+    ]
+
+    assert not drifted, (
+        "these exemptions no longer match what the file holds (#16653, #17380):\n  "
+        + "\n  ".join(drifted)
+        + "\nA HIGHER count is a new claim primitive inside an approved file -- review it and "
+        "raise the number, or move it behind the registry. A LOWER count is a primitive that "
+        "went away -- lower the number, or delete the entry when it reaches zero."
     )
 
 
 def test_every_exemption_names_its_issue() -> None:
     """ "Why is this allowed" must be answerable without a git blame."""
-    unexplained = sorted(path for path, reason in _ALLOWED.items() if not re.search(r"#\d{4,5}", reason))
+    unexplained = sorted(path for path, (_count, reason) in _ALLOWED.items() if not re.search(r"#\d{4,5}", reason))
 
     assert not unexplained, "every _ALLOWED entry must name the issue that introduced it:\n  " + "\n  ".join(
         unexplained
@@ -282,3 +391,68 @@ def test_the_detector_catches_a_two_statement_lease() -> None:
         "lease as `setnx` + `expire`, and must not be invisible because the TTL is not in "
         "the same call"
     )
+
+
+def test_the_sweep_parses_every_module_it_reads() -> None:
+    """Reach, not findings: the bound the repo's rule actually asks for.
+
+    `test_the_scan_reaches_the_primitives_it_guards` asserts the MATCHER still
+    matches. It cannot notice the sweep going blind: a scan that stops reading
+    half the tree and still finds 12 primitives in the half it reads passes a
+    findings floor while missing everything in the other half.
+    """
+    parsed = REACH.examined(repo_root())
+    REACH.completed(len(parsed))
+
+    assert len(parsed) >= 2_976, (
+        f"the sweep reached {len(parsed)} modules, expected at least 2,976 -- it has stopped "
+        "reading its subject, so every assertion above would pass by matching nothing"
+    )
+
+
+def test_the_sweep_has_no_blind_spots() -> None:
+    """A module the sweep cannot parse is a finding, not a silent skip."""
+    blind = _unreadable()
+
+    assert not blind, (
+        "the sweep could not read these modules, so any claim primitive in them is invisible "
+        "to every assertion in this file:\n  " + "\n  ".join(blind[:10])
+    )
+
+
+def test_the_detector_catches_a_planted_lua_setnx() -> None:
+    """`redis.call('SETNX', ...)` is the same primitive as `'SET'` with NX.
+
+    The matcher required the literal `SET`, and the Python `setnx` arm cannot
+    look inside a string -- so a Lua script spelling its acquisition `SETNX`
+    was invisible to both arms at once (review finding on #17380).
+    """
+    source = 'SCRIPT = """\nif redis.call(\'SETNX\', KEYS[1], ARGV[1]) == 1 then\n  redis.call(\'PEXPIRE\', KEYS[1], ARGV[2])\nend\n"""\n'
+
+    assert _sites_in_source(source, "planted.py"), "a Lua SETNX acquisition with a lease token must be caught"
+
+
+def test_a_lua_setnx_without_a_lease_token_is_not_a_claim() -> None:
+    """Negative control for the widened arm: NX alone is not a lease.
+
+    Without this, the assertion above is satisfied by a matcher that flags every
+    Lua script containing SETNX, which would make a watermark or a dedup key
+    read as a lock.
+    """
+    source = 'SCRIPT = """redis.call(\'SETNX\', KEYS[1], ARGV[1])"""\n'
+
+    assert not _sites_in_source(source, "planted.py")
+
+
+def test_widening_the_lua_arm_did_not_narrow_it() -> None:
+    """A plain `redis.call('SET', ...)` lease must still match.
+
+    This is here because the first attempt at the widening wrote `SETNX?`,
+    which makes only the `X` optional and therefore requires the `N` -- it
+    stopped matching plain `SET` and the live site count fell from 15 to 12. A
+    narrowing disguised as a widening, caught by re-measuring rather than by
+    any test, so now a test holds it.
+    """
+    source = "SCRIPT = \"\"\"redis.call('SET', KEYS[1], ARGV[1], 'NX', 'PX', ARGV[2])\"\"\"\n"
+
+    assert _sites_in_source(source, "planted.py"), "the plain SET spelling stopped matching"
