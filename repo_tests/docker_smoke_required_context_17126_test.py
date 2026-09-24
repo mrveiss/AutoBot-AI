@@ -207,16 +207,6 @@ def test_the_condition_is_pinned_whole_not_clause_by_clause(workflow: str) -> No
     )
 
 
-def test_swapping_the_connective_would_be_caught() -> None:
-    """The control for the pin: an `&&` variant must not equal the pinned form,
-    even though it contains every clause the older assertions look for."""
-    inverted = _EXPECTED_CONDITIONS[_SHIM].replace("||", "&&")
-
-    assert "needs.changes.result != 'success'" in inverted, "premise: the clauses survive the swap"
-    assert "needs.changes.outputs.docker != 'true'" in inverted, "premise: so a substring check passes"
-    assert inverted != _EXPECTED_CONDITIONS[_SHIM], "but the whole-condition pin catches it"
-
-
 # --- Positive controls -------------------------------------------------------
 #
 # Every assertion above is a substring check against a live file, which passes
@@ -238,6 +228,35 @@ def test_the_always_check_rejects_the_shape_that_caused_17126() -> None:
     assert "always()" in _WITH_ALWAYS
     assert "always()" in _condition(_job(_SHIM)), "the live shim must carry what this control describes"
     assert _condition(_job(_SHIM)) != _WITHOUT_ALWAYS, "the live shim must not be the pre-#17126 shape"
+
+
+def test_the_pin_is_sensitive_to_the_connective_and_not_only_the_clauses() -> None:
+    """Swap `||` for `&&` in the LIVE condition and the pin must reject it.
+
+    This was `_EXPECTED_CONDITIONS[_SHIM].replace("||", "&&") != _EXPECTED_
+    CONDITIONS[_SHIM]` -- two of this module's own literals compared to each
+    other, which is a tautology the moment the pin contains an `||`, and it
+    never touched a workflow file. It also sat ABOVE the positive-controls
+    banner, so its name and position read as a live guard (review finding on
+    #17388). Both halves are fixed: it reads the live condition, and it lives
+    down here with the other controls.
+
+    Reading the live file is what makes it non-vacuous. If the shim's condition
+    ever stopped joining its disjuncts with `||`, the swap would be a no-op and
+    the inequality below would fail -- which is the property being claimed:
+    that `test_the_condition_is_pinned_whole_not_clause_by_clause` can see a
+    connective, where a substring check cannot.
+    """
+    live = _condition(_job(_SHIM))
+    inverted = live.replace("||", "&&")
+
+    assert "needs.changes.result != 'success'" in inverted, "premise: the clauses survive the swap"
+    assert "needs.changes.outputs.docker != 'true'" in inverted, "premise: so a substring check passes"
+    assert inverted != live, (
+        "swapping the connective in the live shim changed nothing -- either it no longer joins its "
+        "disjuncts with `||`, or the pin above is comparing something that cannot distinguish them"
+    )
+    assert live == _EXPECTED_CONDITIONS[_SHIM], "and the pin is what the live file actually says"
 
 
 def test_the_order_check_rejects_a_refusal_that_reports_first() -> None:

@@ -124,7 +124,8 @@ jobs:
           DOCKER_CHANGED: ${{ needs.changes.outputs.docker }}
         run: |
           if [ "$CHANGES_RESULT" != "success" ]; then
-            echo "::error::Path detection did not succeed (changes job: $CHANGES_RESULT)."
+            echo "::error::Path detection did not succeed (changes job: $CHANGES_RESULT,"
+            echo "::error::docker filter: ${DOCKER_CHANGED:-<unset>})."
             echo "This shim reports the required 'smoke-test' context only when it KNOWS"
             echo "no Docker-related path changed. It cannot know that now, so it refuses"
             echo "rather than reporting green -- a skipped or absent run would otherwise"
@@ -135,4 +136,5 @@ jobs:
           echo "The image build and compose smoke test in docker-smoke-test.yml"
           echo "do not apply, so the required 'smoke-test' context is reported"
           echo "green from here."
-          echo "Path set: .github/filters/docker-paths.yml (#15299)."
+          echo "Path set: .github/filters/docker-paths.yml (#15299);"
+          echo "that filter answered docker=${DOCKER_CHANGED:-<unset>}."
