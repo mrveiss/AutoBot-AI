@@ -201,6 +201,45 @@ def test_no_locale_value_is_an_empty_string() -> None:
     assert not offenders, "empty locale values render as blank UI:\n  " + "\n  ".join(offenders[:10])
 
 
+#: The opening delimiter of a PEM armour block. Written as the delimiter alone,
+#: without the ``BEGIN <kind> KEY`` phrase that follows it, because that phrase
+#: is what ``detect-secrets``' own matcher looks for -- spelling it here would
+#: make this guard the next finding.
+_PEM_ARMOUR = "-----BEGIN "
+
+
+def test_no_locale_value_carries_a_pem_armour_block() -> None:
+    """A key format example is not a translatable string (#14781).
+
+    The console's extractor swept the placeholder of every PEM textarea into
+    ``en.json`` under a slug of its own contents --
+    ``securityView.bEGINPRIVATEKEYENDPRIVATEKEY`` -- and this PR then copied
+    those values into ten more locale files, which put a literal private-key
+    armour header in eleven checked-in files and made ``detect-secrets`` flag
+    every one of them. The keys are gone and the placeholders now say what to
+    paste rather than showing a fake key.
+
+    The reason this is a guard and not just a fix: the tempting repair was to
+    mark the findings ``is_secret: false`` in ``.secrets.baseline``, which
+    silences the detector on a whole class of string in order to keep keys that
+    should not exist. This asserts the class stays out of the locale files, so
+    the baseline never has to carry it.
+    """
+    offenders: list[str] = []
+    for locale in _EXPECTED_LOCALES:
+        for key, value in _flatten(_bundle(locale)).items():
+            if isinstance(value, str) and _PEM_ARMOUR in value:
+                offenders.append(f"{locale}:{key}")
+
+    assert not offenders, (
+        "these locale values carry a PEM armour block:\n  "
+        + "\n  ".join(offenders[:10])
+        + "\nA key or certificate format example is the same in every language. Make the "
+        "placeholder an instruction ('Paste the PEM-encoded private key') rather than a "
+        "specimen key -- see securityView.pemKeyHint."
+    )
+
+
 def test_the_comment_stripper_would_not_hide_real_code() -> None:
     """Positive control: stripping comments must not strip the code beside them.
 
