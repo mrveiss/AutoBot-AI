@@ -148,6 +148,27 @@ jobs:
             # and CI had never passed it, so the number was never known. It does
             # not contribute to the exit code -- report-only until the first
             # real count has been read and triaged.
+            #
+            # The split, the Company OS subtotal and the GUI-unreachable list go
+            # to this job's SUMMARY. scripts/dead_surface.py writes it there
+            # itself, rather than this step piping the auditor's stdout
+            # somewhere -- a pipeline between the audit and its own exit code is
+            # how a failing audit comes to read as a passing job.
+            #
+            # It is NOT in the job log yet. That module is not a CLI entry point
+            # and must not print (#16008), and the entry point that would print
+            # it cannot currently be edited: audit_api_wiring.py carries
+            # pre-existing hardcoded-value findings in a directory the repo-wide
+            # scan does not walk, so they cannot be baselined (#17329), plus a
+            # `main` over the function-length threshold, at exactly its size
+            # ceiling. report_dead_surface() returns the lines, so once #17330
+            # lands this is one line at the call site.
+            #
+            # The GUI-gap count is pinned in scripts/dead_surface_baseline.txt,
+            # UNMEASURED until this job prints a real figure once -- measuring it
+            # needs the backend imported to dump its OpenAPI schema, so the first
+            # number has to come from here. The comparison prints; it does not
+            # gate (AC3).
             python scripts/audit_api_wiring.py --openapi openapi.json "${SLM_ARGS[@]}" \
               --baseline scripts/api_wiring_baseline.txt --dead-surface --fail-on-unwired
           else
