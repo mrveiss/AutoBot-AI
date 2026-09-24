@@ -211,3 +211,35 @@ def test_the_workflow_files_parse(name: str) -> None:
     """A YAML error would make every `_job` lookup above raise rather than fail,
     which reads as an error and not as a verdict -- worth its own assertion."""
     assert _workflow(name).get("jobs"), f"{name} declares no jobs"
+
+
+def test_the_shim_cannot_report_green_without_its_own_detector_saying_so() -> None:
+    """The invariant that actually holds, asserted because the comment used to
+    claim a stronger one that does not (review finding on this PR).
+
+    There are two `changes` jobs, one per workflow, and the shim can only see
+    its own -- so when both detectors fail, both workflows report the
+    `smoke-test` context and may disagree. What is NOT possible, and what
+    #17126 needs, is the shim reporting green without its own detector having
+    said no Docker paths changed. That is a property of the script's order:
+    the refusal is checked and exits before any success message.
+    """
+    steps = _job(_SHIM).get("steps", [])
+    script = "\n".join(str(step.get("run", "")) for step in steps if step.get("run"))
+
+    refusal = script.index("exit 1")
+    success = script.index("No Docker-related paths changed")
+    assert refusal < success, "the shim must refuse before it can report, or a failed detector reports green"
+    assert 'CHANGES_RESULT" != "success"' in script, (
+        "the refusal must be conditioned on the shim's OWN detector result; a refusal conditioned on "
+        "anything else would let a failed detection reach the success message"
+    )
+
+
+def test_the_real_build_also_runs_on_its_own_detector_failure() -> None:
+    """The other half of the two-detector picture: neither workflow's failure is
+    silent, and the real build is what makes a green mean a smoke test ran."""
+    condition = _condition(_job(_REAL))
+
+    assert "needs.changes.result != 'success'" in condition
+    assert "always()" in condition

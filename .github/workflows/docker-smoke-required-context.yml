@@ -71,15 +71,27 @@ jobs:
     # required `smoke-test` context was met with no Docker smoke test run.
     #
     # Now: this job runs unless the real one is going to, and refuses when its
-    # own detector did not answer. The three cases are mutually exclusive, so
-    # exactly one check run named `smoke-test` ever carries a conclusion:
+    # own detector did not answer:
     #
     #   changes ok, docker != true   -> this job runs and succeeds (legitimate)
     #   changes ok, docker == true   -> this job SKIPS; the real build reports
-    #   changes not ok               -> this job runs and FAILS; the real
-    #                                   workflow's own detector decides its
-    #                                   side independently (it now builds when
-    #                                   its detection fails)
+    #   changes NOT ok               -> this job runs and FAILS
+    #
+    # THE FIRST TWO ARE MUTUALLY EXCLUSIVE. THE THIRD IS NOT A THIRD CASE, and
+    # an earlier version of this comment claimed it was -- that "exactly one
+    # check run named `smoke-test` ever carries a conclusion". It does not.
+    # There are TWO `changes` jobs, one per workflow, and this one can only see
+    # its own. When both detectors fail, this job reports failure and the real
+    # build also runs (its own `needs.changes.result != 'success'` fires) and
+    # reports whatever the build does -- two check runs, one context, possibly
+    # opposite conclusions, resolved by whichever completed last.
+    #
+    # The invariant that actually holds, and the one #17126 needs, is narrower
+    # and stronger: THIS JOB CANNOT REPORT GREEN UNLESS ITS OWN DETECTOR SAID
+    # NO DOCKER PATHS CHANGED. A disagreement between the two detectors can
+    # therefore block a pull request whose image build passed -- conservative,
+    # self-resolving on a re-run -- and can never admit one where no build ran.
+    # The complement assumption those two detectors rest on is #17391's subject.
     if: >-
       always() && (
         needs.changes.result != 'success'

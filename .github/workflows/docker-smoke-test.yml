@@ -71,6 +71,13 @@ jobs:
     # honest answer is to build it. That costs a full run on a rare
     # infrastructure failure, which is the correct direction for a gate the
     # owner rule of 2026-09-19 states nothing lands without.
+    #
+    # Note what this does NOT claim: the shim in
+    # docker-smoke-required-context.yml has its own `changes` job, so when both
+    # detectors fail this job and that one both report the `smoke-test` context,
+    # possibly disagreeing. That is deliberate and safe in one direction only --
+    # a build that ran and passed is a true green, and the shim's simultaneous
+    # failure blocks until a re-run rather than admitting a PR no build covered.
     if: >-
       always() && (
         github.event_name != 'pull_request'
