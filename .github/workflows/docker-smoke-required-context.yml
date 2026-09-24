@@ -86,12 +86,30 @@ jobs:
     # reports whatever the build does -- two check runs, one context, possibly
     # opposite conclusions, resolved by whichever completed last.
     #
-    # The invariant that actually holds, and the one #17126 needs, is narrower
-    # and stronger: THIS JOB CANNOT REPORT GREEN UNLESS ITS OWN DETECTOR SAID
-    # NO DOCKER PATHS CHANGED. A disagreement between the two detectors can
-    # therefore block a pull request whose image build passed -- conservative,
-    # self-resolving on a re-run -- and can never admit one where no build ran.
-    # The complement assumption those two detectors rest on is #17391's subject.
+    # What holds is narrower: THIS JOB CANNOT REPORT GREEN UNLESS ITS OWN
+    # DETECTOR SAID NO DOCKER PATHS CHANGED. That is true and it is not
+    # sufficient, which the first correction of this comment also got wrong.
+    # With S = this workflow's detector and R = the real build's, on a pull
+    # request where both succeed:
+    #
+    #   S.docker  R.docker   publishers
+    #   true      true       real only          correct
+    #   false     false      shim only          correct
+    #   true      false      NEITHER            no context is created at all
+    #   false     true       BOTH               shim green + the build's result
+    #
+    # The third row is #17126's own hole by another door: a required check that
+    # satisfies the gate by never existing. The fourth is worse than
+    # conservative -- the shim's green does NOT mean a build ran, and whether it
+    # or a failing build decides the context depends on which completed last.
+    #
+    # Neither row is a defect in either condition: each is correct for the value
+    # its own detector computed. The design asks ONE question of TWO detectors
+    # and assumes they agree, and two `dorny/paths-filter` runs in separate
+    # workflow runs can resolve a moving base differently. That is the
+    # single-publisher problem, not a condition bug, and it is #17391 -- not
+    # closable inside this file, and stated here so nobody reads the invariant
+    # above as a safety guarantee it does not carry.
     if: >-
       always() && (
         needs.changes.result != 'success'

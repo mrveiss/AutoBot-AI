@@ -82,11 +82,14 @@ jobs:
     # trigger is pull_request only), so nothing double-reports there.
     #
     # Note what this does NOT claim: the shim in
-    # docker-smoke-required-context.yml has its own `changes` job, so when both
-    # detectors fail this job and that one both report the `smoke-test` context,
-    # possibly disagreeing. That is deliberate and safe in one direction only --
-    # a build that ran and passed is a true green, and the shim's simultaneous
-    # failure blocks until a re-run rather than admitting a PR no build covered.
+    # docker-smoke-required-context.yml has its OWN `changes` job, so the two
+    # can disagree -- and when they do, this context gets either two
+    # conclusions or none. The four-case table is in that file's comment. The
+    # case worth knowing here: if the shim's detector says no Docker paths
+    # changed while this one says they did, the shim publishes a green with no
+    # build behind it, and whether that or this build's result decides the
+    # context depends on completion order. Tracked as #17391, the
+    # single-publisher problem; it is not fixable in either condition alone.
     if: >-
       always() && (
         github.event_name != 'pull_request'
