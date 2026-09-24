@@ -23,6 +23,10 @@ import logging
 import pytest
 
 audit_tasks = importlib.import_module("workers.audit_tasks")
+# #17090 moved the credential path out of the worker into a module the AC
+# verifier shares; the worker's names still resolve to it, so the tests below
+# patch whichever module owns the thing they are substituting.
+credential = importlib.import_module("services.github_service_credential")
 
 
 @pytest.fixture(autouse=True)
@@ -173,8 +177,11 @@ class TestTheGapIsReportedEvenWhenItWorks:
         def _boom():
             raise RuntimeError("vault unreachable")
 
-        monkeypatch.setattr(audit_tasks, "_read_filing_token", _boom)
-        monkeypatch.setattr(audit_tasks, "run_or_schedule", lambda coro: _boom())
+        # #17090 moved the credential path to services/github_service_credential.py;
+        # `audit_tasks._resolve_filing_token` is that module's function, so its
+        # internals are patched where they now live.
+        monkeypatch.setattr(credential, "_read_service_token", _boom)
+        monkeypatch.setattr(credential, "run_or_schedule", lambda coro: _boom())
 
         assert audit_tasks._resolve_filing_token() is None
 
@@ -245,8 +252,11 @@ class TestTheTokenValueNeverReachesALogOrException:
         def _boom():
             raise RuntimeError(token)
 
-        monkeypatch.setattr(audit_tasks, "_read_filing_token", _boom)
-        monkeypatch.setattr(audit_tasks, "run_or_schedule", lambda coro: _boom())
+        # #17090 moved the credential path to services/github_service_credential.py;
+        # `audit_tasks._resolve_filing_token` is that module's function, so its
+        # internals are patched where they now live.
+        monkeypatch.setattr(credential, "_read_service_token", _boom)
+        monkeypatch.setattr(credential, "run_or_schedule", lambda coro: _boom())
 
         with caplog.at_level(logging.WARNING):
             result = audit_tasks._resolve_filing_token()

@@ -4,7 +4,10 @@
 # Author: mrveiss
 """Tests for credential redaction (GH#9037)."""
 
+import pytest
+
 from llm_shared.credential_redaction import (
+    SENSITIVE_KEYS,
     redact_api_key,
     redact_dict,
     redact_string,
@@ -135,3 +138,66 @@ def test_redact_string_leaves_an_ordinary_sentence_untouched():
 def test_redact_string_does_not_quarantine_a_forwarded_code_snippet():
     text = "import os\napi_key = os.environ.get('SOME_KEY')\ndef getKey():\n    return apiKey"
     assert redact_string(text) == text
+
+
+# ---------------------------------------------------------------------------
+# #16688: SENSITIVE_KEYS is derived from the shared vocabulary, not hand-copied.
+# The derivation must only ever WIDEN. A redaction consolidation that narrows
+# is a silent under-redaction, and nothing else in this suite would catch it.
+# ---------------------------------------------------------------------------
+
+# The literal set this module carried before the vocabulary was shared. Kept
+# here deliberately as a frozen historical record -- it is the thing the union
+# must never lose, so it must not be imported from the module under test.
+_PRE_16688_SENSITIVE_KEYS = frozenset(
+    {"apikey", "token", "bearer", "password", "secret", "credential", "auth", "authorization"}
+)
+
+
+def _normalized(key: str) -> str:
+    return key.lower().replace("_", "").replace("-", "")
+
+
+def _is_sensitive(key: str) -> bool:
+    return any(fragment in _normalized(key) for fragment in SENSITIVE_KEYS)
+
+
+def test_derived_vocabulary_still_covers_every_key_the_literal_set_covered() -> None:
+    """Every pre-#16688 fragment must still match, or something stopped being redacted."""
+    lost = sorted(f for f in _PRE_16688_SENSITIVE_KEYS if not _is_sensitive(f))
+    assert not lost, f"these stopped being treated as sensitive: {lost}"
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        # The authorization terms the shared suffix vocabulary does NOT carry --
+        # a straight replacement would have dropped all three.
+        "Authorization",
+        "auth_header",
+        "x_auth",
+        "bearer_token",
+        # Carried by the shared vocabulary.
+        "api_key",
+        "client_secret",
+        "db_password",
+        "session_token",
+        # Gained from the shared vocabulary; previously missed here.
+        "tls_cert",
+        "db_dsn",
+        "hmac_signature",
+        "private_pem",
+        "random_seed",
+        "salt_value",
+        "passphrase",
+    ],
+)
+def test_a_sensitive_key_is_redacted(key: str) -> None:
+    out = redact_dict({key: "sup3rSecretValue1234567890"})
+    assert "sup3rSecretValue1234567890" not in str(out), f"{key} leaked its value"
+
+
+@pytest.mark.parametrize("key", ["user_name", "model", "temperature", "message_count", "status"])
+def test_an_ordinary_key_keeps_its_value(key: str) -> None:
+    """The union widens the sensitive set, so guard the false-positive side too."""
+    assert redact_dict({key: "plain-value"})[key] == "plain-value"

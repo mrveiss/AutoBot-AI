@@ -27,11 +27,19 @@ from typing import Any, NamedTuple
 
 from celery.signals import beat_init, worker_ready
 
-from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from celery_app import celery_app
+from services.github_service_credential import (
+    FILING_CREDENTIAL_VAULT_KEY,
+    gh_env,
+)
+from services.github_service_credential import reset_env_cache as reset_gh_env_cache
+from services.github_service_credential import resolve_service_token as _resolve_filing_token
+from services.github_service_credential import (
+    vault_backed_now,
+)
 from workers.audit_queries import MAX_LOG_CHARS, list_open_issue_titles, vulture_scan
 
 logger = get_logger(__name__)
@@ -65,7 +73,10 @@ _GH_REPO = "mrveiss/AutoBot-AI"
 # misleading name, so the name changed rather than the warnings being
 # suppressed. A scanner-suppression comment here would have taught the next
 # reader that this file logs secrets and that we decided not to mind.
-_FILING_CREDENTIAL_VAULT_KEY = "github_issue_filing_token"
+#: Re-exported under its original private name for the callers and tests that
+#: named it here before #17090 moved the credential path into
+#: `services/github_service_credential.py`.
+_FILING_CREDENTIAL_VAULT_KEY = FILING_CREDENTIAL_VAULT_KEY
 
 # Labels applied to all discovery issues filed by this daemon
 _AUDIT_LABELS = "enhancement,observability,priority: medium"
@@ -147,16 +158,19 @@ def _record_filing_status(redis, outcome: "FilingOutcome | None", vault_backed: 
 
 
 def _vault_backed_now() -> bool:
-    """Did THIS run resolve a vault-owned token? Read, never re-derive.
+    """Did THIS run resolve a vault-owned token? Read, never re-derive (#13859)."""
+    return vault_backed_now()
 
-    Reads the cache `_gh_available` already populated rather than calling
-    `_gh_env()` again. Re-deriving would trigger a second vault round-trip --
-    and, where `_gh_available` is substituted, a lookup that the run itself
-    never made, so the recorded credential source would describe a code path
-    that did not execute. An empty cache means nothing resolved a token, which
-    is exactly "not vault-backed".
+
+def _gh_env() -> tuple[dict[str, str], bool]:
+    """Subprocess environment for every `gh` call, and whether the vault supplied it.
+
+    Delegates to the shared credential module (#17090), passing this module's own
+    `_resolve_filing_token` rather than letting it resolve for itself: the name is
+    looked up here at call time, so a test that substitutes it still governs what
+    the worker's `gh` subprocesses see.
     """
-    return bool(_gh_env_cache[1]) if _gh_env_cache is not None else False
+    return gh_env(resolve=lambda: _resolve_filing_token())
 
 
 def _run_status(outcome: FilingOutcome) -> str:
@@ -236,114 +250,6 @@ def _run(cmd: list[str], cwd: str | None = None, env: dict[str, str] | None = No
         return result.returncode, result.stdout, result.stderr
     except Exception as exc:
         return 1, "", str(exc)
-
-
-def _resolve_filing_token() -> str | None:
-    """Read the issue-filing token from the SYSTEM vault (#13859).
-
-    The worker used to rely entirely on ambient `gh` CLI auth for whichever
-    account Celery happened to run as. Nothing owned that credential, nothing
-    rotated it, nothing audited its use, and the only place its absence showed
-    up was a log line — which is exactly how it lapsed unnoticed in #13570.
-
-    SYSTEM vault and `PrincipalKind.SERVICE`: this is a background task, not a
-    user session, so there is no user vault it could belong to and the audit
-    trail should attribute filings to the service rather than to whoever last
-    logged into the host. `VaultKind.SYSTEM` is documented as the home for
-    "admin-only system secrets (provider keys, internal tokens)".
-
-    Returns None when no token is stored — the caller decides what that means,
-    and says so loudly rather than silently continuing on ambient state.
-    """
-    try:
-        return run_or_schedule(_read_filing_token())
-    except Exception as exc:  # noqa: BLE001 — a vault outage must not kill the audit run
-        # Class name only, never the exception text. This is a secrets path, and
-        # a message that happens to interpolate a value would put it in the log.
-        # CodeQL flags it as clear-text-logging-sensitive-data and is right to:
-        # the guarantee should be structural, not a reader having audited every
-        # exception type these calls can raise.
-        logger.warning("audit: vault lookup for the filing token failed (%s)", type(exc).__name__)
-        return None
-
-
-async def _read_filing_token() -> str | None:
-    from sqlalchemy import select  # noqa: PLC0415
-
-    from api.user_management.dependencies import get_async_session  # noqa: PLC0415
-    from autobot_shared.secrets_vault import VaultKind, VaultRef  # noqa: PLC0415
-    from models.secret import Secret  # noqa: PLC0415
-    from services.envelope_secrets_service import (  # noqa: PLC0415
-        EnvelopeSecretsService,
-        SecretAccessError,
-        SecretNotFoundError,
-    )
-
-    owner = VaultRef(kind=VaultKind.SYSTEM)
-    owner_str = owner.to_str()
-    async for session in get_async_session():
-        result = await session.execute(
-            select(Secret).where(Secret.name == _FILING_CREDENTIAL_VAULT_KEY, Secret.owner_vault == owner_str)
-        )
-        row = result.scalar_one_or_none()
-        if row is None:
-            return None
-        try:
-            raw = await EnvelopeSecretsService().read(session, secret_id=row.id, accessible_vaults=[owner])
-        except (SecretNotFoundError, SecretAccessError) as exc:
-            # Class name only — same reason as above.
-            logger.warning("audit: filing token present but unreadable (%s)", type(exc).__name__)
-            return None
-        return raw.decode("utf-8").strip() or None
-    return None
-
-
-# (env, came_from_vault) — one fact, cached together. Deriving the second from
-# the first is what made the detector lie (#13859 review).
-_gh_env_cache: tuple[dict[str, str], bool] | None = None
-
-
-def reset_gh_env_cache() -> None:
-    """Drop the cached credential so the next run re-reads the vault (#13859).
-
-    Called at the start of every audit task. Celery workers are long-lived, so
-    without this a rotated or revoked token would keep working for the life of
-    the process — which would defeat the revocation this issue is about.
-    """
-    global _gh_env_cache
-    _gh_env_cache = None
-
-
-def _gh_env() -> tuple[dict[str, str], bool]:
-    """Subprocess environment for every `gh` call, and whether the vault
-    supplied the token (#13859).
-
-    Mirrors the LLC Copilot adapter: both GH_TOKEN and GITHUB_TOKEN, because
-    different gh subcommands read different ones.
-
-    Returns the flag rather than letting callers test `"GH_TOKEN" in env`. That
-    test answers "does this process have a token anywhere?", which is a
-    different question: the env starts as a copy of os.environ, and an ambient
-    GH_TOKEN is exactly what the pre-#13859 CRITICAL log told operators to set
-    — docker-compose injects an empty one unconditionally. Deriving the flag
-    that way reported ambient state as vault-owned, suppressed the warning this
-    change exists to emit, and told the operator the credential came from the
-    vault while asking them to put one there.
-
-    Cached per run: a task files one issue per finding, and a vault round-trip
-    per finding would be pure waste.
-    """
-    global _gh_env_cache
-    if _gh_env_cache is not None:
-        env, from_vault = _gh_env_cache
-        return dict(env), from_vault
-    env = dict(os.environ)
-    token = _resolve_filing_token()
-    if token:
-        env["GH_TOKEN"] = token
-        env["GITHUB_TOKEN"] = token
-    _gh_env_cache = (env, bool(token))
-    return dict(env), bool(token)
 
 
 def _repo_root() -> Path:
