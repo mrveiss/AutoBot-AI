@@ -98,7 +98,8 @@ _MAX_OPAQUE_GLOBAL_PUBLISHES = 5
 #:
 #: This list may only SHRINK -- `test_the_baseline_has_no_stale_entries` fails
 #: when an entry stops offending, so a fix cannot leave its record behind. The
-#: one exception is a widening of the matcher: the last two entries are not new
+#: one exception is a widening of the matcher: the approval-gate and
+#: autoresearch entries are not new
 #: code, they are pre-existing sites the positional-only read could not see
 #: (#17363). Both are a human-decision notification -- an approval awaiting a
 #: reviewer, a research checkpoint awaiting a decision -- so the fix is an

@@ -5,7 +5,9 @@ tags:
 
 # Source Analysis: A Single-Config, Layer-Streamed LLM Fine-Tuning CLI
 
-Phase 1 only — source analysis. AutoBot comparison **not started** (awaiting go-ahead).
+Source analysis **and** the AutoBot comparison — see `# AutoBot Comparison` below for four
+adoption candidates (A1-A4), what we already do better, and the gaps. The header previously
+said the comparison had not started; it was written during phase 1 and never updated.
 
 ## What It Is
 
