@@ -202,20 +202,25 @@ def _scan() -> Tuple[Dict[str, Set[str]], Dict[Tuple[str, str], FrozenSet[str]],
 REACH = declare(
     "enum-hand-copy-census",
     discover=_tracked_python,
-    # 5965, NOT 5755. The first version of this declaration pinned 5755 --
-    # population 6155 minus growth 400, i.e. THE MINIMUM OF THE WINDOW -- and it
-    # went red on the very next rebase, when main gained ten files and the
-    # population reached 6165. Slack 410 against an allowance of 400.
+    # 5965, NOT the `population - growth` value. The first version of this
+    # declaration used that formula and went red on the very next rebase, when
+    # main gained a handful of files -- which is what "zero tolerance by
+    # construction" means in practice.
     #
-    # That happened within the hour, on a declaration written by the same author
+    # It happened within the hour, on a declaration written by the same author
     # who had just filed the argument on #17142 that a floor pinned at
-    # `population - growth` is not a floor but a snapshot, with zero tolerance
-    # by construction. Knowing the rule did not prevent it; reach_declarations_test
-    # did, which is the whole case for the mechanism.
+    # `population - growth` is a snapshot rather than a floor. Knowing the rule
+    # did not prevent it; reach_declarations_test did, which is the whole case
+    # for the check being mechanical. Self-reported on #17142 with the figures.
     #
-    # Re-measured on this tree rebased onto e8c7bf9b51: 6,165 tracked .py files
-    # excluding .worktrees/. Window [5765, 6165]; 5965 is mid-window and buys
-    # ~200 files of headroom instead of ten.
+    # 5965 is mid-window and buys room for ordinary growth instead of a handful
+    # of files.
+    #
+    # NO MEASURED NUMBERS HERE, deliberately: an earlier version of this comment
+    # cited the population and the window, and both were stale one rebase later.
+    # Prose citing a measurement survives the rebase that changes it -- the
+    # resolver owns the value and nothing owns the sentence. The arithmetic is
+    # in the commit message, which cannot drift from the tree it describes.
     floor=5965,
     growth=400,
     what="tracked python files",
