@@ -429,7 +429,16 @@ def clear_provenance_husks(site_packages: Path, steps: Optional[List[str]] = Non
         try:
             _unlink_marker_within(dist_info)
             dist_info.rmdir()
-        except OSError as exc:
+        except (OSError, NotImplementedError) as exc:
+            # NotImplementedError, not just OSError (#17398 review): CPython
+            # raises it *before* the syscall when `os.unlink` does not support
+            # `dir_fd` on the running platform, and it is not an OSError
+            # subclass. Uncaught, it would escape this loop and abandon the
+            # whole sweep rather than skipping one husk. `os.unlink in
+            # os.supports_dir_fd` is True on Linux, which is the only platform
+            # this provisions, so this is an untested edge rather than a live
+            # bug -- which is exactly the kind that surfaces on the one host
+            # that differs.
             logger.warning("venv-provenance: could not clear husk %s: %s", dist_info, exc)
             continue
         removed.append(dist_info.name)

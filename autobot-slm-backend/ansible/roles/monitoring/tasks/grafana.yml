@@ -26,7 +26,7 @@
     state: absent
   when:
     - ansible_facts['os_family'] == "Debian"
-    - "'install ok installed' not in _grafana_installed.stdout"
+    - "'ok installed' not in _grafana_installed.stdout"
   # (#2872) Intentional: legacy key may not exist; removal is best-effort
   # cleanup before adding the new signed keyring file.
   failed_when: false
@@ -40,7 +40,7 @@
     - /etc/apt/sources.list.d/grafana.sources
   when:
     - ansible_facts['os_family'] == "Debian"
-    - "'install ok installed' not in _grafana_installed.stdout"
+    - "'ok installed' not in _grafana_installed.stdout"
 
 - name: Add Grafana APT signing key
   ansible.builtin.get_url:
@@ -49,7 +49,7 @@
     mode: "0644"
   when:
     - ansible_facts['os_family'] == "Debian"
-    - "'install ok installed' not in _grafana_installed.stdout"
+    - "'ok installed' not in _grafana_installed.stdout"
 
 # #7218: idempotent repo-add — preserve device-shipped Grafana repo if present.
 # Refresh handled by the bounded-shell task below (#6719).
@@ -62,7 +62,7 @@
     apt_repo_label: "Grafana (monitoring)"
   when:
     - ansible_facts['os_family'] == "Debian"
-    - "'install ok installed' not in _grafana_installed.stdout"
+    - "'ok installed' not in _grafana_installed.stdout"
 
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
 - name: Grafana | Refresh apt cache after PPA add (best-effort, bounded; #6719)
@@ -76,7 +76,7 @@
   failed_when: false
   when:
     - ansible_facts['os_family'] == "Debian"
-    - "'install ok installed' not in _grafana_installed.stdout"
+    - "'ok installed' not in _grafana_installed.stdout"
 
 - name: Install Grafana
   ansible.builtin.apt:
@@ -84,7 +84,7 @@
     state: present
   when:
     - ansible_facts['os_family'] == "Debian"
-    - "'install ok installed' not in _grafana_installed.stdout"
+    - "'ok installed' not in _grafana_installed.stdout"
 
 # #16299: grafana_admin_password's own role default (defaults/main.yml) is the
 # guessable literal "admin". When this role runs alongside slm_manager

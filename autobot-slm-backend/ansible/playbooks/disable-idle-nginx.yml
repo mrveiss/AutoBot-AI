@@ -32,11 +32,11 @@
         name: nginx
         state: stopped
         enabled: false
-      when: "'install ok installed' in _nginx_installed.stdout"
+      when: "'ok installed' in _nginx_installed.stdout"
 
     - name: "Report nginx status"
       ansible.builtin.debug:
         msg: >-
           {{ inventory_hostname }}: nginx
-          {{ 'was stopped and disabled' if 'install ok installed' in _nginx_installed.stdout
+          {{ 'was stopped and disabled' if 'ok installed' in _nginx_installed.stdout
              else 'not installed (no action needed)' }}

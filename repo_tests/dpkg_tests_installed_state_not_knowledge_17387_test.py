@@ -65,6 +65,21 @@ _DPKG_LIST = re.compile(r"\bdpkg\s+-l\b")
 _DPKG_QUERY = re.compile(r"\bdpkg\s+-l\b|\bdpkg-query\b")
 _INSTALLED_ANCHOR = re.compile(r"\^ii")
 _RC_GATE = re.compile(r"\.rc\s*(?:!=|==)")
+#: The quoted literal in an installed-test gate: `'<literal>' in|not in <var>.stdout`.
+_STATUS_GATE = re.compile(r"'([^']+)'\s+(?:not\s+)?in\s+\w+\.stdout")
+
+#: dpkg's Status field is `<want> <error> <status>`; only the third says whether
+#: the package is installed. `hold ok installed` is the row that matters: a held
+#: package IS installed, and a gate keyed on the whole `install ok installed`
+#: string calls it absent and re-runs the install.
+_DPKG_STATUS_TRUTH = {
+    "install ok installed": True,
+    "hold ok installed": True,
+    "deinstall ok config-files": False,
+    "unknown ok not-installed": False,
+    "install ok half-installed": False,
+    "install ok half-configured": False,
+}
 
 #: Lines where "does dpkg KNOW this package" is the correct question. Keyed by
 #: exact text rather than line number, so the exemption travels with the line and
@@ -231,3 +246,52 @@ def test_every_exemption_still_exists(line: str) -> None:
         f"exempted line is gone from the tree; delete the entry rather than leaving it to "
         f"exempt a line that may come back for another reason: {line!r}"
     )
+
+
+def _installed_test_literals() -> List[str]:
+    """Quoted status literals gating on a variable registered from a DPKG query.
+
+    Scoped through `_dpkg_registrations()` rather than scanning every
+    `'x' in y.stdout` in the tree. The first version did the latter and
+    collected `PONG`, `active (running)`, `role:master` and twenty others --
+    unrelated gates, then checked against a dpkg Status truth table they have
+    no reason to satisfy. The test failed, which is the only reason the scan
+    was caught being wrong rather than the code.
+    """
+    found: List[str] = []
+    for relative, variable in _dpkg_registrations():
+        try:
+            text = (repo_root() / relative).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        gate = re.compile(r"'([^']+)'\s+(?:not\s+)?in\s+" + re.escape(variable) + r"\.stdout")
+        found.extend(gate.findall(text))
+    return sorted(set(found))
+
+
+def test_the_gate_literals_were_actually_found() -> None:
+    """Otherwise the parametrised test below passes by iterating an empty set."""
+    literals = _installed_test_literals()
+    assert literals, "no `'<status>' in <var>.stdout` gate found -- the scan matched nothing"
+
+
+@pytest.mark.parametrize(("status", "is_installed"), sorted(_DPKG_STATUS_TRUTH.items()))
+def test_every_gate_literal_classifies_every_dpkg_status(status: str, is_installed: bool) -> None:
+    """The gate must agree with dpkg about what "installed" means, for every Status.
+
+    `hold ok installed` is why this exists. #17387 replaced an `rc`-based check
+    with `'install ok installed' in stdout`, which is False for a held package
+    -- so a package that IS installed read as absent and the role re-ran its
+    install. The `rc` check it replaced got that case RIGHT, so the fix was a
+    regression on the one input nobody thought to try.
+
+    dpkg's Status is `<want> <error> <status>`. `want` is install/hold/deinstall
+    and says nothing about presence; only the third field does. `'ok installed'`
+    matches `install ok installed` and `hold ok installed`, and no other row --
+    `half-installed` and `not-installed` do not contain it.
+    """
+    for literal in _installed_test_literals():
+        assert (literal in status) is is_installed, (
+            f"gate literal {literal!r} classifies {status!r} as "
+            f"{literal in status}, but dpkg says installed={is_installed}"
+        )
