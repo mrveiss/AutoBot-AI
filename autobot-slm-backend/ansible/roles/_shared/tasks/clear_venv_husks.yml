@@ -1,0 +1,63 @@
+---
+# Clear this tool's own dist-info husks from a venv, before pip meets them (#17339).
+#
+# #17332 stopped the provenance marker CREATING husks and repaired the existing
+# ones -- but only on the path that runs `api/venv_reconcile.py`, which is the
+# builtin updater's. A host reached only by ansible provisioning never executes
+# that code, so its husks survive and every pip step that must upgrade a husked
+# package aborts with `uninstall-no-record-file`. pip stops at the FIRST one, so
+# a host with several needs several failed runs to discover them all.
+#
+# The classification is not re-expressed here. `is_provenance_husk` admits only
+# a directory that describes no installed distribution (no METADATA, no RECORD),
+# carries this tool's marker, and contains nothing else -- and that rule decides
+# a deletion, which is the one place a second implementation is least
+# acceptable. So this stages the module and calls it, rather than writing a
+# `find -name '*.dist-info'` shell step that would fork the rule.
+#
+# Run with the TARGET VENV'S OWN interpreter, deliberately. A husk is a
+# dist-info directory, not a broken interpreter or a broken stdlib, so the venv
+# that is broken can repair itself. That matters for `autobot-slm-backend/venv`:
+# it runs the builtin updater, which is the only other path to this repair, so
+# a husk there can block its own fix. The module imports stdlib only -- the one
+# `autobot_shared` import it had is lazy since #17339 for exactly this reason.
+#
+# Caller contract: set `husk_venv_dir` to the venv to repair. Include this
+# BEFORE the role's pip steps; after them the failure has already happened.
+#
+# Only two venvs can ever carry a marker -- `api/code_sync._COMPONENT_PIP_PATHS`
+# lists `autobot-backend` and `autobot-slm-backend` and nothing else writes one
+# -- so those two roles include this and no other role needs to.
+
+- name: "Venv husks | Stage the provenance module onto the node (#17339)"
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../../autobot-slm-backend/venv_provenance.py"
+    dest: "{{ autobot.base_dir }}/venv_provenance.py"
+    owner: "{{ autobot.user }}"
+    mode: "0644"
+  become: true
+  # `copy:` reads `src` on the CONTROLLER, which is where `code_source` lives,
+  # and writes it to the node -- the #17242/#17331 invariant, that nothing
+  # syncs the checkout to a fleet node, is why this is a copy and not a path.
+
+- name: "Venv husks | Does {{ husk_venv_dir }} exist yet? (#17339)"
+  ansible.builtin.stat:
+    path: "{{ husk_venv_dir }}"
+  register: _husk_venv_stat
+
+- name: "Venv husks | Clear husks with the venv's own interpreter (#17339)"
+  ansible.builtin.command:
+    cmd: "{{ husk_venv_dir }}/bin/python {{ autobot.base_dir }}/venv_provenance.py {{ husk_venv_dir }}"
+  register: _husk_clear
+  # A venv with nothing to clear is success, not a no-op to hide: the output
+  # says which of the two it was, and `changed_when` keeps a clean host quiet
+  # without making a repaired one silent.
+  changed_when: "'cleared' in _husk_clear.stdout"
+  failed_when: _husk_clear.rc != 0
+  when: _husk_venv_stat.stat.exists
+  become: true
+
+- name: "Venv husks | Report what was cleared (#17339)"
+  ansible.builtin.debug:
+    msg: "{{ _husk_clear.stdout }}"
+  when: _husk_venv_stat.stat.exists and _husk_clear.stdout is defined

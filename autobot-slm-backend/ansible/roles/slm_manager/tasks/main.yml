@@ -382,6 +382,15 @@
 # `virtualenv` executable, absent from these hosts -- matches the
 # interpreter the earlier `python3.14 -m venv {{ slm_backend_dir }}/venv`
 # task in this file already targets.
+# #17339: this venv is the one that runs the builtin updater, so a husk here
+# can block the very path that would otherwise repair it. Cleared with the
+# venv's own interpreter, which a husk does not affect.
+- name: "SLM | Clear venv provenance husks before pip (#17339)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/clear_venv_husks.yml
+  vars:
+    husk_venv_dir: "{{ slm_backend_dir }}/venv"
+  tags: ['slm', 'backend']
+
 - name: "SLM | Install Python requirements"
   ansible.builtin.pip:
     requirements: "{{ slm_backend_dir }}/requirements.txt"

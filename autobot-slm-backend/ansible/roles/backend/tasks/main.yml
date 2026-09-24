@@ -912,6 +912,14 @@
       group: "{{ backend_group }}"
       recurse: true
 
+  # #17339: before ANY pip step in this role, clear the dist-info husks #17332
+  # left on hosts that only ever see provisioning. pip aborts at the first one
+  # it must uninstall, so this has to precede the upgrade, not follow a failure.
+  - name: "Backend | Clear venv provenance husks before pip (#17339)"
+    ansible.builtin.include_tasks: ../../_shared/tasks/clear_venv_husks.yml
+    vars:
+      husk_venv_dir: "{{ backend_code_dir }}/venv"
+
   - name: Upgrade pip
     ansible.builtin.pip:
       name: pip
