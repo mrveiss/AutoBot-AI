@@ -72,6 +72,15 @@ jobs:
     # infrastructure failure, which is the correct direction for a gate the
     # owner rule of 2026-09-19 states nothing lands without.
     #
+    # The widening reaches EVERY trigger, not only pull_request (review): on
+    # `merge_group`, `push` and `schedule`, a `changes` job that fails now runs
+    # the full build where it previously skipped. On merge_group that is a
+    # ~45-minute build for every queued entrant when the detector blips, which
+    # is a real cost -- and still the right direction, because the merge queue
+    # is the last gate before main and "we could not tell" must not become
+    # "we did not look". The shim does not run on merge_group at all (its
+    # trigger is pull_request only), so nothing double-reports there.
+    #
     # Note what this does NOT claim: the shim in
     # docker-smoke-required-context.yml has its own `changes` job, so when both
     # detectors fail this job and that one both report the `smoke-test` context,
