@@ -32,6 +32,21 @@ def _search(_terms):
     return f"{_FILE}:2: line two has content"
 
 
+#: Twenty numbered lines, so a citation to line 1 and one to line 12 are both
+#: real -- the substring collision is only reachable when the low line exists.
+_LONG_CONTENT = "".join(f"line {n}\n" for n in range(1, 21))
+
+
+def _read_long(path: str):
+    return _LONG_CONTENT if path == _FILE else None
+
+
+def _search_showing_line_12(_terms):
+    # Two-space indent and a trailing colon, exactly as `code_searcher` joins
+    # its hits -- the indent is why the check has to strip before matching.
+    return f"  {_FILE}:12: line 12"
+
+
 def _answer(value: str, reasoning: str, probability: float = 0.9) -> DecisionResult:
     return DecisionResult(
         answers={
@@ -265,3 +280,119 @@ class TestACitationMustHaveBeenShown:
         result = await verify_criterion(_criterion("`decide` is wired"), search=_search, read=_read)
 
         assert any("no such file" in reason for reason in result.rejected_citations)
+
+
+class TestTheEvidenceCheckIsAnchored:
+    """A citation to line 1 must not ride in on the evidence quoting line 12.
+
+    The check was `str(citation) not in evidence` over the whole blob, and
+    `Citation.__str__` has no terminator -- so `...:1` was a substring of
+    `...:12` and the fabricated citation passed. The class of collision, not an
+    edge of it: the lower the line number, the likelier it is, which made line 1
+    the cheapest citation to invent inside the check that exists to reject
+    invented citations (review finding on #17397).
+
+    The test that shipped before this one asserted line 1 against evidence
+    showing line 2, where no digit overlap exists -- it passed for a reason
+    unrelated to what it was asserting.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_low_line_is_not_satisfied_by_a_higher_one_on_the_same_path(self, decided):
+        decided["box"]["result"] = _answer(Verdict.MET.value, f"implemented at {_FILE}:1")
+
+        result = await verify_criterion(
+            _criterion("`decide` is wired"), search=_search_showing_line_12, read=_read_long
+        )
+
+        assert (
+            result.verdict is Verdict.CANT_TELL
+        ), "line 1 was accepted because the evidence quotes line 12 -- the substring collision"
+        assert any("not in the evidence" in reason for reason in result.rejected_citations)
+
+    @pytest.mark.asyncio
+    async def test_the_shown_two_digit_line_is_still_accepted(self, decided):
+        """Positive control: anchoring must not reject the line actually shown."""
+        decided["box"]["result"] = _answer(Verdict.MET.value, f"implemented at {_FILE}:12")
+
+        result = await verify_criterion(
+            _criterion("`decide` is wired"), search=_search_showing_line_12, read=_read_long
+        )
+
+        assert result.verdict is Verdict.MET
+        assert [str(c) for c in result.citations] == [f"{_FILE}:12"]
+
+    @pytest.mark.asyncio
+    async def test_a_path_that_is_a_tail_of_the_shown_path_is_not_a_match(self, decided):
+        """The other half of the collision: `a.py:1` inside `ba.py:1`.
+
+        Both paths are readable here on purpose. If only the shown one were,
+        the citation would be rejected for not existing and this would pass
+        without ever reaching the evidence check.
+        """
+        tail = _FILE.rsplit("/", 1)[-1]  # `ac_verifier.py`, a tail of `_FILE`
+        decided["box"]["result"] = _answer(Verdict.MET.value, f"implemented at {tail}:12")
+
+        def _read_both(path: str):
+            return _LONG_CONTENT if path in (_FILE, tail) else None
+
+        result = await verify_criterion(
+            _criterion("`decide` is wired"), search=_search_showing_line_12, read=_read_both
+        )
+
+        assert result.verdict is Verdict.CANT_TELL
+        assert any("not in the evidence" in reason for reason in result.rejected_citations)
+
+
+class TestTruncatedCriteriaReachTheReader:
+    """The CRITICAL's repair, asserted end to end rather than in a unit.
+
+    `criteria_after_the_section` is unit-tested in `ac_criteria_test.py` and the
+    wiring in `verify_issue` reads correctly -- but a mutation deleting that
+    wiring passed every test in this PR, because nothing drove the count
+    through to the comment a human reads. Surfacing the truncation IS the fix,
+    so this asserts the whole path: body with boxes after the closing heading ->
+    `verify_issue` -> `render_comment` (review finding on #17397).
+    """
+
+    _BODY = (
+        "## Acceptance criteria\n"
+        "- [ ] `decide` is wired\n"
+        "\n"
+        "## Notes for the implementer\n"
+        "- [ ] a box below the closing heading\n"
+        "- [ ] and a second one\n"
+    )
+
+    @pytest.mark.asyncio
+    async def test_the_comment_says_how_many_boxes_went_unverified(self, decided):
+        decided["box"]["result"] = _answer(Verdict.MET.value, f"see {_FILE}:2")
+
+        comment = render_comment(await verify_issue(17090, self._BODY, search=_search, read=_read))
+
+        assert "> **Not verified:**" in comment, "the count never reached the rendered comment"
+        assert "2 checkbox line(s)" in comment
+        assert "the section ended at a heading" in comment
+
+    @pytest.mark.asyncio
+    async def test_it_verified_only_the_one_criterion_inside_the_section(self, decided):
+        """The count is a note, not a silent inclusion: 3 boxes, 1 verified."""
+        decided["box"]["result"] = _answer(Verdict.MET.value, f"see {_FILE}:2")
+
+        verification = await verify_issue(17090, self._BODY, search=_search, read=_read)
+
+        assert len(verification.results) == 1
+
+    @pytest.mark.asyncio
+    async def test_a_body_with_nothing_after_the_section_says_nothing(self, decided):
+        """Negative control: the note must not appear when there is no truncation.
+
+        Without this, the assertions above pass equally well against a
+        `render_comment` that emits the note unconditionally.
+        """
+        decided["box"]["result"] = _answer(Verdict.MET.value, f"see {_FILE}:2")
+        body = "## Acceptance criteria\n- [ ] `decide` is wired\n"
+
+        comment = render_comment(await verify_issue(17090, body, search=_search, read=_read))
+
+        assert "checkbox line(s) appear after" not in comment

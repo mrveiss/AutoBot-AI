@@ -147,6 +147,26 @@ def _state(criterion: Criterion, evidence: str) -> str:
     )
 
 
+def _quoted_in(citation: Citation, evidence: str) -> bool:
+    """Whether *evidence* quotes this exact `path:line`.
+
+    A blob-wide ``str(citation) not in evidence`` was the wrong test, and it
+    passed a fabricated citation routinely rather than at an edge.
+    ``Citation.__str__`` is ``path:line`` with no terminator, so ``:1`` is a
+    substring of ``:12``, ``:100`` and ``:1002``, and ``a.py:1`` is a substring
+    of ``ba.py:12``. The lower the line number the likelier the collision,
+    which made line 1 the cheapest citation to invent -- inside the check whose
+    whole purpose is to reject invented citations (review finding on #17397).
+
+    ``code_searcher`` emits one ``path:line: content`` hit per line, joined with
+    a two-space indent, so the test is a per-line prefix match after stripping.
+    The trailing colon is the load-bearing character: it is what stops ``:1``
+    matching ``:12``.
+    """
+    prefix = f"{citation.path}:{citation.line}:"
+    return any(line.strip().startswith(prefix) for line in evidence.splitlines())
+
+
 def _validated(
     criterion: Criterion,
     verdict: Verdict,
@@ -176,7 +196,7 @@ def _validated(
     rejected = list(rejected)
     verified = []
     for citation in opened:
-        if evidence and str(citation) not in evidence:
+        if evidence and not _quoted_in(citation, evidence):
             rejected.append(f"{citation}: real, but not in the evidence this verdict was shown")
             continue
         verified.append(citation)
