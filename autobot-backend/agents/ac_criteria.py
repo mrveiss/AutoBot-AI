@@ -44,8 +44,22 @@ logger = get_logger(__name__)
 #: bold "headings" both appear in this repo's issues, so both are matched.
 _AC_HEADING = re.compile(r"^\s*(?:#{1,6}\s*|\*\*)\s*acceptance\s+criteria\b", re.I)
 
-#: Any other heading -- what closes the section.
-_ANY_HEADING = re.compile(r"^\s*(?:#{1,6}\s+|\*\*\s*[A-Za-z])")
+#: A heading at COLUMN ZERO, with its level captured. Anchored at column zero
+#: and levelled because the first version was neither, and both mistakes
+#: silently dropped criteria (found by a code-reviewer pass on the merged
+#: #17090):
+#:
+#:   - `^\s*` let an INDENTED `**Note:** ...` under a criterion match the bold
+#:     branch, so a clarifying note ended the section one criterion in;
+#:   - no level comparison meant a DEEPER heading (`### Implementation notes`)
+#:     inside the acceptance-criteria section ended it, dropping every criterion
+#:     below the sub-heading.
+#:
+#: Both reported the criteria they did read as the whole list. A truncated list
+#: presented as complete is the worst failure this module can have, so the rule
+#: is now: only a heading at column zero, at the same level or higher than the
+#: one that opened the section, closes it.
+_HEADING_AT_MARGIN = re.compile(r"^(?P<hashes>#{1,6})\s+\S|^(?P<bold>\*\*)\s*[A-Za-z]")
 
 #: A checkbox line. The capture is the criterion's own text.
 _CHECKBOX = re.compile(r"^\s*[-*]\s*\[( |x|X)\]\s*(?P<text>.+?)\s*$")
@@ -121,24 +135,45 @@ class Citation:
         return f"{self.path}:{self.line}"
 
 
-def _section_lines(markdown: str) -> list[str]:
-    """The lines under the acceptance-criteria heading, or []."""
+def _heading_level(line: str) -> int | None:
+    """The line's heading level, or None when it is not a heading at the margin.
+
+    A bold pseudo-heading counts as level 2, which is what this repo's issues
+    use it for -- `**Acceptance criteria**` alongside `## Acceptance criteria`.
+    """
+    match = _HEADING_AT_MARGIN.match(line)
+    if match is None:
+        return None
+    hashes = match.group("hashes")
+    return len(hashes) if hashes else 2
+
+
+def _section_lines(markdown: str) -> tuple[list[str], list[str]]:
+    """(the acceptance-criteria section's lines, the lines after it).
+
+    The second half is not decoration: a checkbox that appears after the
+    section is a criterion this module did NOT read, and the caller reports
+    that rather than presenting a short list as the whole one.
+    """
     lines = markdown.splitlines()
     for start, line in enumerate(lines):
-        if _AC_HEADING.match(line):
-            body: list[str] = []
-            for candidate in lines[start + 1 :]:
-                if _ANY_HEADING.match(candidate) and not _CHECKBOX.match(candidate):
-                    break
-                body.append(candidate)
-            return body
-    return []
+        if not _AC_HEADING.match(line):
+            continue
+        opened_at = _heading_level(line) or 2
+        body: list[str] = []
+        for offset, candidate in enumerate(lines[start + 1 :]):
+            level = _heading_level(candidate)
+            if level is not None and level <= opened_at and not _CHECKBOX.match(candidate):
+                return body, lines[start + 1 + offset :]
+            body.append(candidate)
+        return body, []
+    return [], []
 
 
 def _criteria_in(markdown: str, *, source: str, first_index: int) -> list[Criterion]:
     """Checkbox criteria under *markdown*'s AC heading, continuations folded in."""
     found: list[Criterion] = []
-    for line in _section_lines(markdown):
+    for line in _section_lines(markdown)[0]:
         match = _CHECKBOX.match(line)
         if match:
             found.append(
@@ -168,6 +203,18 @@ def extract_criteria(body: str, comments: Sequence[tuple[str, str]] = ()) -> lis
         amended = _criteria_in(comment_body, source=f"comment:{comment_id}", first_index=len(criteria) + 1)
         criteria.extend(amended)
     return criteria
+
+
+def criteria_after_the_section(markdown: str) -> int:
+    """Checkbox lines that appear AFTER the acceptance-criteria section ends.
+
+    Zero is the normal case. Anything else means the section was closed by a
+    heading and more checkboxes follow, so this module read a subset -- which the
+    caller must say out loud. "No more criteria" and "stopped looking" are
+    different facts (MEASUREMENT_DISCIPLINE.md), and the first version of this
+    module could not tell them apart.
+    """
+    return sum(1 for line in _section_lines(markdown)[1] if _CHECKBOX.match(line))
 
 
 def unparsed_amendment_hint(comments: Sequence[tuple[str, str]]) -> Optional[str]:
@@ -359,6 +406,7 @@ def code_searcher(
 __all__ = [
     "Citation",
     "Criterion",
+    "criteria_after_the_section",
     "extract_criteria",
     "code_searcher",
     "criterion_terms",

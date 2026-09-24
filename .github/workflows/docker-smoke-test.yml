@@ -54,10 +54,48 @@ jobs:
 
   smoke-test:
     needs: changes
-    # Fail-closed on pull requests: if `changes` errors, `needs` skips this job
-    # rather than reporting green, and the shim's complement leaves the context
-    # unreported — which blocks the pull request, the safe direction.
-    if: github.event_name != 'pull_request' || needs.changes.outputs.docker == 'true'
+    # Runs on a pull request when the filter says Docker paths changed -- and
+    # ALSO when the filter did not answer at all (#17126).
+    #
+    # The comment this replaces claimed fail-closed: "if `changes` errors,
+    # `needs` skips this job rather than reporting green, and the shim's
+    # complement leaves the context unreported -- which blocks the pull
+    # request". Two of those three steps were right and the conclusion was
+    # wrong. GitHub counts a SKIPPED check run as satisfying a required status
+    # check, so a `changes` failure skipped both this job and the shim and the
+    # required `smoke-test` context was satisfied with no smoke test run at
+    # all. A comment cannot hold an invariant the platform decides.
+    #
+    # `needs.changes.result != 'success'` is therefore not an escape hatch but
+    # the point: when nothing can say whether an image could have changed, the
+    # honest answer is to build it. That costs a full run on a rare
+    # infrastructure failure, which is the correct direction for a gate the
+    # owner rule of 2026-09-19 states nothing lands without.
+    #
+    # The widening reaches EVERY trigger, not only pull_request (review): on
+    # `merge_group`, `push` and `schedule`, a `changes` job that fails now runs
+    # the full build where it previously skipped. On merge_group that is a
+    # ~45-minute build for every queued entrant when the detector blips, which
+    # is a real cost -- and still the right direction, because the merge queue
+    # is the last gate before main and "we could not tell" must not become
+    # "we did not look". The shim does not run on merge_group at all (its
+    # trigger is pull_request only), so nothing double-reports there.
+    #
+    # Note what this does NOT claim: the shim in
+    # docker-smoke-required-context.yml has its OWN `changes` job, so the two
+    # can disagree -- and when they do, this context gets either two
+    # conclusions or none. The four-case table is in that file's comment. The
+    # case worth knowing here: if the shim's detector says no Docker paths
+    # changed while this one says they did, the shim publishes a green with no
+    # build behind it, and whether that or this build's result decides the
+    # context depends on completion order. Tracked as #17391, the
+    # single-publisher problem; it is not fixable in either condition alone.
+    if: >-
+      always() && (
+        github.event_name != 'pull_request'
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.docker == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
