@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Awaitable, Callable
 from fastapi import WebSocket
 
 from autobot_shared.auth.device_capabilities import DeviceCapability
-from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.auth.permissions import Permission, is_admin_role, role_has_permission
 from autobot_shared.websocket_subprotocol import accept_websocket
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -306,12 +306,51 @@ async def enforce_ws_desktop_auth(websocket: WebSocket) -> "dict | None":
     Named per surface rather than per capability so the surface->capability
     mapping lives in one readable place: an endpoint asks for "the desktop
     guard" and cannot understate what its own socket hands out.
+
+    #17054: the capability requirement above applies to a *paired device*. An
+    ordinary browser session presents no device credential, so
+    ``enforce_ws_remote_control_auth`` delegated it to
+    :func:`enforce_ws_authentication`, which asks only "is this somebody" -- and
+    any signed-in account, whatever its role, got full view AND input of the
+    managed desktop. The capability names were in the signature the whole time
+    and never reached the path most callers take.
+
+    A user credential now has to hold ``mcp.desktop.control`` for its role.
+    ``control`` rather than ``read`` because of the paragraph above: this socket
+    cannot grant view without input, so the weaker permission would be a
+    view-only grant that is not view-only.
+
+    Answered through ``role_has_permission``, the canonical source, and NOT
+    through ``is_admin_role``. #13854 deliberately removed the administrative
+    short-circuit from that function because it made a predicate the most
+    permissive permission source in the system; re-adding it here would reverse
+    that ruling one call site at a time. The consequence is explicit and worth
+    reading before changing this: ``ROLE_PERMISSIONS[Role.SUPERADMIN]`` is empty,
+    so **a superadmin is refused the desktop** while ``admin`` and ``operator``
+    are admitted. If that is wrong, the fix is to give superadmin its
+    ROLE_PERMISSIONS entries -- one place -- not a bypass here.
     """
-    return await enforce_ws_remote_control_auth(
+    user = await enforce_ws_remote_control_auth(
         websocket,
         DeviceCapability.DESKTOP_VIEW,
         DeviceCapability.DESKTOP_INPUT,
     )
+    if user is None:
+        return None
+    if user.get("device_id"):
+        # A paired device already passed the capability gate above against its
+        # own grant set; the role check below does not apply to it (#15146).
+        return user
+    if role_has_permission(user.get("role"), Permission.MCP_DESKTOP_CONTROL):
+        return user
+    logger.warning(
+        "Desktop socket denied: role %r lacks %s (user=%s)",
+        user.get("role"),
+        Permission.MCP_DESKTOP_CONTROL.value,
+        user.get("username") or user.get("user_id"),
+    )
+    await _close_policy(websocket, "Desktop access requires the desktop-control permission")
+    return None
 
 
 async def open_authenticated_ws(
