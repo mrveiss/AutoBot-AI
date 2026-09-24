@@ -126,6 +126,44 @@ response, a log line, an issue, a PR comment — is already redacted.
 - The shared password-epoch helper fails CLOSED in both services (#16411, #16422, owner decisions): a Redis error, or a non-integer stored
   marker or `iat`, raises `RevocationCheckUnavailable` (a `ConnectionError`), which the SLM denies as above and [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401; an `except` reading it as "not revoked" is a fail-open.
 
+## 5. Remote desktop access
+
+**Boundary:** an authenticated user vs. the *managed desktop*. Not an auth boundary — the
+caller is logged in — so a missing check reads as a working feature, which is how
+[#17054](https://github.com/mrveiss/AutoBot-AI/issues/17054) survived: the capability names
+were in the guard's signature and applied only to paired devices.
+
+**Canonical enforcement:** [`autobot-backend/api/ws_security.py`](../../autobot-backend/api/ws_security.py)
+— `enforce_ws_desktop_auth` is the one gate. `api/vnc_proxy.py`'s websockify route calls it
+before proxying; nothing else may open that socket.
+
+**Policy**
+- A **paired device** is judged on its own grant set: it must hold BOTH
+  `DESKTOP_VIEW` and `DESKTOP_INPUT` (`evaluate_device_capabilities`, #15146).
+- A **user credential** must hold `mcp.desktop.control` for its role, answered by
+  `role_has_permission` against `ROLE_PERMISSIONS`. Today that is `admin` and `operator`.
+- Everyone else is refused in the handshake with `1008`, before any RFB byte is proxied.
+
+**Invariants**
+- **`control`, never `read`.** The RFB proxy carries framebuffer and input on one stream —
+  `_forward_client_to_vnc` forwards the client's KeyEvent and PointerEvent frames verbatim —
+  so opening the socket grants input as inseparably as it grants view. Admitting on
+  `mcp.desktop.read` would be a view-only grant that is not view-only. A genuine view-only
+  tier needs RFB message-level filtering on the client→server direction, which this gate
+  does not attempt.
+- **The permission table is the source, not `is_admin_role`.**
+  [#13854](https://github.com/mrveiss/AutoBot-AI/issues/13854) removed the administrative
+  short-circuit from `role_has_permission` because it made a predicate the most permissive
+  permission source in the system. A bypass at this call site would reverse that ruling one
+  file at a time.
+- **Consequence, deliberate and asserted:** `ROLE_PERMISSIONS[Role.SUPERADMIN]` is empty by
+  that same decision, so **a superadmin is refused the desktop**. If that is wrong, the fix
+  is superadmin's `ROLE_PERMISSIONS` entries — one place — not a bypass in the gate.
+  `desktop_ws_role_gate_17054_test.py` asserts both the table's answer and the socket's, so
+  the two cannot drift.
+- Authorisation runs once, before `accept()`. A socket already open is not re-authorised; a
+  role change takes effect on the next handshake.
+
 ## Cross-cutting
 
 - **Egress:** any new outbound HTTP goes through the guarded fetch —
