@@ -126,6 +126,21 @@ jobs:
       # that does not fire on the change it guards is the vacuous shape #15665
       # exists to close, so this workflow, which DOES trigger on
       # autobot-slm-frontend/**, runs them on exactly those changes.
+      # This job sets up Node and nothing else, so the pytest step below needs
+      # an interpreter. Minimal on purpose: both guards import only the stdlib
+      # (`json`, `re`, `html.parser`) plus `repo_tests._paths`, so pytest is the
+      # whole dependency -- no requirements file, no cache key to invalidate.
+      - name: Set up Python for the i18n guards
+        if: needs.changes.outputs.slm_frontend == 'true'
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install pytest
+        if: needs.changes.outputs.slm_frontend == 'true'
+        working-directory: .
+        run: python3 -m pip install --quiet pytest
+
       - name: i18n guards (bare literals, locale parity)
         if: needs.changes.outputs.slm_frontend == 'true'
         working-directory: .
