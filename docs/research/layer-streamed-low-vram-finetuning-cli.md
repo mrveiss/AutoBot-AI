@@ -27,11 +27,12 @@ base layers through a small VRAM buffer pool.
 
 ## Architecture & Key Patterns
 
-- **`src/` package split by concern**: `commands/` (CLI surface), `config/` (Pydantic v2
-  schema as declared single source of truth), `trainer/` (one module per backend),
-  `utils/` (streaming runtime, shard format, adapter wiring), `monitoring/` (callbacks,
-  trace log, dashboard), `plugins/`, `mcp_server/`, `ui/` (HTTP + SSE + static JS),
-  `cloud/`, `registry/`, `recipes/`, `eval/`, `bench/`.
+- **Package split by concern**, roughly a dozen top-level areas: the CLI surface, a
+  schema layer holding the declared single source of truth, one training module per
+  backend, a streaming runtime with its shard format and adapter wiring, monitoring
+  (callbacks, trace log, dashboard), a plugin system, a tool-server endpoint, a web UI
+  over HTTP and server-sent events, plus cloud, registry, recipe, evaluation and
+  benchmark areas. Directory names and the schema library are omitted per line 18.
 - **Light core, heavy extras.** Base install carries only CLI/validation/formatting
   dependencies; the training stack (tensor framework, model library, adapter and
   preference-trainer libraries) lives behind an optional extra and is lazy-imported

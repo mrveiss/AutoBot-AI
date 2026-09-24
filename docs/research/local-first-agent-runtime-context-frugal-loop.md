@@ -39,7 +39,7 @@ vision, MCP servers, and a large SaaS-connector catalogue. State — sessions, m
 skills, traces, browser profile, config, secrets — lives under a state directory as plain files
 and SQLite databases. Surfaces are a TUI, a CLI (`run`, `serve`, `tui`, `task`, `trace`,
 `models`, `skill`), an HTTP API, and a single-user chat-app remote control with inline approval
-buttons. Maturity is developer-preview: MIT, actively developed, with a visible test corpus
+buttons. Maturity is developer-preview: permissively licensed, actively developed, with a visible test corpus
 (most source files ship a sibling unit-test file, several larger than the implementation).
 
 ## Architecture & Key Patterns
@@ -172,7 +172,7 @@ buttons. Maturity is developer-preview: MIT, actively developed, with a visible 
   ~9B model still clears about half the tasks, a mid-size MoE about 70%.
 - Inference claims: a several-fold KV-cache compression versus 16-bit, and a large decode-throughput
   gain from speculative heads.
-- Zero marginal cost (MIT, local models, no token billing), a large integration catalogue, and an
+- Zero marginal cost (permissive licence, local models, no token billing), a large integration catalogue, and an
   accelerator-programme affiliation with no equity involvement.
 
 **Hidden (the costs an adopter inherits):**
