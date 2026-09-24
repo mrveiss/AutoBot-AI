@@ -28,6 +28,24 @@ than a visible English one:
    "Stornieren" for "Cancel") is a typo or a niche sense being outvoted, which
    is the case worth taking. A 3-to-2 split is genuine ambiguity, which is not.
 
+WHAT THE MAJORITY RULE DOES NOT DO, because the threshold reads like a
+correctness guarantee and is not one (review finding on #17395). It bounds
+SPELLING drift, not SEMANTIC drift. It has no notion of context: it knows two
+keys share an English source, never that they mean the same thing. A real
+homonym is therefore decided by how the source corpus happens to be skewed --
+`es` has `Save` translated as `Guardar` (a file) five times and `Ahorrar`
+(money) once, so the 0.83 majority lifts `Guardar`, which is right here for a
+reason the algorithm cannot check. A corpus leaning the other way would lift
+the wrong sense just as confidently.
+
+No wrong lift has been found in the generated output -- every
+disagreement-that-still-lifted case in de/es/fr/pl/pt/lv resolves to a spelling
+variant or a plausible UI sense -- but that is six locales spot-checked, not ten
+verified, and confirming the rest needs a speaker of each language. The subset
+worth reviewing is exactly the one this rule cannot self-verify: keys where
+`hits / len(usable) < 1.0`, i.e. the candidates disagreed and a majority still
+won.
+
 Deterministic: the same inputs produce the same files, so the generated locales
 can be regenerated and diffed rather than trusted. Run with `--check` in CI to
 assert they are still what this rule produces.

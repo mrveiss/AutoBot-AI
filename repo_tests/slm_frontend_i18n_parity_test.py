@@ -79,6 +79,13 @@ def _code(path: Path) -> str:
 #: is load-bearing: `import.meta.glob('../locales/*.json')` contains `/*`, and an
 #: unanchored pattern treated it as a comment opener and ate the rest of the file
 #: up to the next `*/` -- the assertion then failed on the very line it guards.
+#:
+#: The anchor is a heuristic and not a parser, which is worth stating rather than
+#: leaving to be discovered (review finding on #17395): these patterns have no
+#: string-literal awareness, so a value like `"a // b"` -- whitespace, then a
+#: comment opener, inside quotes -- would still be truncated as if it were a
+#: comment. None of the three files read below contains one today. If one appears
+#: the fix is a real tokenizer, not a longer regex.
 _BLOCK_COMMENT = re.compile(r"(?:^|(?<=\s))/\*.*?\*/", re.S | re.M)
 _LINE_COMMENT = re.compile(r"(?:^|(?<=\s))//.*$")
 

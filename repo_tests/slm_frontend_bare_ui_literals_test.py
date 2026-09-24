@@ -23,6 +23,16 @@ WHAT COUNTS AS USER-VISIBLE, and the boundary is the whole design:
   as visible as body text and is the shape that hides from a text-node-only
   scan.
 
+  Those six are a CLOSED list, not a rule, and that is the guard's main blind
+  spot (review finding on #17395). A literal in a custom component's own prop --
+  `<StatusCard message="Node is unreachable" />`, or `caption`, `hint`, `tooltip`
+  -- is user-visible and this guard does not look at it. There are none today:
+  every non-listed attribute carrying prose in the app right now is a Vue
+  `<transition>` CSS class (`enter-active-class` and friends), checked with a
+  scanner built for that question rather than assumed. Adding a name here is the
+  fix when one appears; the zero baseline below is zero for the shapes named
+  above, not for every readable attribute.
+
 WHAT DOES NOT COUNT, listed because an unstated exclusion is how a guard ends up
 measuring nothing:
 
