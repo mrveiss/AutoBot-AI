@@ -232,7 +232,17 @@ async def _authorize_channel(channel: str, user_payload: dict | None) -> bool:
     if channel.startswith("workflow:") or channel.startswith("heartbeat:") or channel.startswith("task:"):
         return await _authorize_resource_channel(channel, user_payload)
     # ``global`` is the shared broadcast channel: every authenticated client is
-    # meant to see it, and it carries no per-tenant payload of its own.
+    # meant to see it, so nothing tenant-scoped may be published to it.
+    #
+    # #17354: that used to read "and it carries no per-tenant payload of its
+    # own", asserted as a property. It was not one -- ``api/workflow.py`` put
+    # seven publishes here carrying an operator's ``user_input``, a workflow's
+    # ``user_message``, step descriptions and error text, so every signed-in
+    # client received them. Those are now on ``workflow:{id}``, which the
+    # resolver below gates on ``view`` permission. The sentence is a REQUIREMENT
+    # on publishers, enforced by
+    # ``repo_tests/global_channel_carries_no_tenant_payload_17354_test.py`` --
+    # a comment cannot hold an invariant that seven call sites can break.
     if channel == "global":
         return True
     # Everything else is DENIED.  This used to `return True`, which was
