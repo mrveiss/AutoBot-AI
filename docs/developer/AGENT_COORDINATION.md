@@ -17,6 +17,14 @@ agent-to-agent coordination semantics as an anti-goal
    the answer to a coordination problem — `services/task_claim.py` already
    exists for task identity, and #15957 decides whether they merge. A third is
    not open for discussion.
+
+   Enforced since #16653 by `repo_tests/one_claim_registry_16653_test.py`: a
+   `SET … NX` with a TTL, a `SETNX`, or a Lua acquire script outside the frozen
+   exemption list fails CI. The list names the issue that introduced each
+   allowed site and is shrink-only, so "this one is different" is an argument
+   made in review rather than a discovery made later. Until then this principle
+   was enforced by nothing — it was true in this document and unchecked in the
+   tree.
 2. **Every claim expires.** A lock that can outlive its holder turns one crashed
    agent into a permanently blocked project, which is worse than the collision
    it prevents. TTL plus renew, never an unbounded hold.
