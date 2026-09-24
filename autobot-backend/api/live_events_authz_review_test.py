@@ -69,3 +69,53 @@ async def test_an_admin_is_still_denied_an_unrecognised_prefix():
     # an unknown channel has no rule to bypass.
     admin = {"user_id": "u2", "username": "root", "roles": ["admin"]}
     assert await _authorize_channel("research:abc", admin) is False
+
+
+# ---------------------------------------------------------------------------
+# #17359: the admin bypass against the payload AUTHENTICATION actually builds
+# ---------------------------------------------------------------------------
+
+#: What `auth_middleware.authenticate_websocket` returns: `role`, singular, a
+#: string. Every admin test above this line uses a `roles` LIST, which is a
+#: shape production never produces -- so they passed while the bypass was inert
+#: on every real connection. These assert the shape that reaches the socket.
+_PROD_ADMIN = {"user_id": "u2", "username": "root", "role": "admin"}
+_PROD_SUPERADMIN = {"user_id": "u3", "username": "su", "role": "superadmin"}
+_PROD_USER = {"user_id": "u1", "username": "alice", "role": "user"}
+
+
+@pytest.mark.asyncio
+async def test_a_production_shaped_admin_payload_gets_the_bypass():
+    """The regression this file could not previously see."""
+    assert await _authorize_channel("agent:u1", _PROD_ADMIN) is True
+
+
+@pytest.mark.asyncio
+async def test_a_superadmin_gets_the_bypass():
+    """`"admin" in roles` refused a superadmin even where the key existed.
+
+    `is_admin_role` accepts both and is case-insensitive (#12786, #14944).
+    """
+    assert await _authorize_channel("agent:u1", _PROD_SUPERADMIN) is True
+
+
+@pytest.mark.asyncio
+async def test_a_production_shaped_non_admin_is_still_denied():
+    """The positive control: "admin passes" is only meaningful if someone fails.
+
+    Without this, a bypass that returned True unconditionally would satisfy both
+    tests above.
+
+    Asserted against ANOTHER user's channel: the first draft of this control used
+    `agent:u1`, which is `_PROD_USER`'s own channel, so the self-scope rule
+    returned True and the control failed for the right reason. A control has to
+    name a case the rule genuinely refuses.
+    """
+    assert await _authorize_channel("agent:someone-else", _PROD_USER) is False
+
+
+@pytest.mark.asyncio
+async def test_the_roles_list_shape_is_still_honoured():
+    """Tolerating both shapes, so fixing the reader does not break any caller
+    that does supply a list."""
+    assert await _authorize_channel("agent:u1", {"user_id": "u2", "username": "root", "roles": ["admin"]}) is True

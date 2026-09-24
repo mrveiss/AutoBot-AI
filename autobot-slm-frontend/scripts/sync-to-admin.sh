@@ -18,7 +18,11 @@ source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 REMOTE_HOST="${AUTOBOT_SLM_HOST:-localhost}"
 REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
-REMOTE_PATH="/home/autobot/slm-admin"
+# The deploy path ON THE REMOTE HOST, overridable without editing this script
+# (#17329). Same shape as emergency-rollback.sh's REMOTE_BASE_DIR: a remote
+# root must be nameable separately from any local one, and the default keeps
+# today's behaviour exactly.
+REMOTE_PATH="${AUTOBOT_SLM_ADMIN_REMOTE_PATH:-/home/autobot/slm-admin}"
 
 echo "==================================="
 echo "SLM Admin Deployment Sync"

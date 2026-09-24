@@ -75,7 +75,7 @@ class TestHardcodedIPDetection:
     def test_blocks_hardcoded_redis_ip(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/worker.py": 'REDIS_HOST = "172.16.168.23"\n'},
+            {"autobot-backend/src/worker.py": 'REDIS_HOST = "172.16.168.23"\n'},
         )
         assert result.returncode != 0
         assert "172.16.168.23" in result.stdout
@@ -83,7 +83,7 @@ class TestHardcodedIPDetection:
     def test_blocks_hardcoded_backend_ip_in_typescript(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/api.ts": 'export const URL = "172.16.168.20:8001";\n'},
+            {"autobot-backend/src/api.ts": 'export const URL = "172.16.168.20:8001";\n'},
         )
         assert result.returncode != 0
 
@@ -91,7 +91,7 @@ class TestHardcodedIPDetection:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/Comp.vue": ("<script>\nconst h = '172.16.168.21';\n</script>\n"),
+                "autobot-backend/src/Comp.vue": ("<script>\nconst h = '172.16.168.21';\n</script>\n"),
             },
         )
         assert result.returncode != 0
@@ -101,7 +101,7 @@ class TestHardcodedIPDetection:
         whose names happen to contain 'temp' (template_loader, temporal_*, etc.)."""
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/template_loader.py": 'X = "172.16.168.20"\n'},
+            {"autobot-backend/src/template_loader.py": 'X = "172.16.168.20"\n'},
         )
         assert result.returncode != 0
         assert "172.16.168.20" in result.stdout
@@ -110,7 +110,7 @@ class TestHardcodedIPDetection:
         """#6782: same fix — temporal_* paths must be scanned."""
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/temporal_search.py": 'X = "172.16.168.21"\n'},
+            {"autobot-backend/src/temporal_search.py": 'X = "172.16.168.21"\n'},
         )
         assert result.returncode != 0
 
@@ -123,7 +123,7 @@ class TestAllowlistedContexts:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "ssot_config.py": ("# This file IS the SSOT — IPs allowed\n" 'DEFAULT_REDIS = "172.16.168.23"\n'),
+                "autobot-backend/ssot_config.py": ("# This file IS the SSOT — IPs allowed\n" 'DEFAULT_REDIS = "172.16.168.23"\n'),
             },
         )
         assert result.returncode == 0, f"hook should allow ssot_config.py:\n{result.stdout}"
@@ -132,7 +132,7 @@ class TestAllowlistedContexts:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "network_constants.py": ('PRIVATE_PREFIX = "172.16.168."\n'),
+                "autobot-backend/network_constants.py": ('PRIVATE_PREFIX = "172.16.168."\n'),
             },
         )
         assert result.returncode == 0
@@ -141,7 +141,7 @@ class TestAllowlistedContexts:
         # Test fixtures legitimately use literal IPs to validate behavior
         result = _run_hook_with_staged(
             tmp_path,
-            {"test_redis.py": 'EXAMPLE_HOST = "172.16.168.23"\n'},
+            {"autobot-backend/test_redis.py": 'EXAMPLE_HOST = "172.16.168.23"\n'},
         )
         assert result.returncode == 0
 
@@ -149,7 +149,7 @@ class TestAllowlistedContexts:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "module_test.py": 'FIXTURE = "172.16.168.20"\n',
+                "autobot-backend/module_test.py": 'FIXTURE = "172.16.168.20"\n',
             },
         )
         assert result.returncode == 0
@@ -159,7 +159,7 @@ class TestAllowlistedContexts:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/db.py": ("import os\n" 'host = os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")\n'),
+                "autobot-backend/src/db.py": ("import os\n" 'host = os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")\n'),
             },
         )
         # NOTE: This test documents the CURRENT behavior of the hook —
@@ -186,7 +186,7 @@ class TestAllowlistedContexts:
         """
         result = _run_hook_with_staged(
             tmp_path,
-            {"deploy.yaml": 'host: "172.16.168.23"\n'},
+            {"autobot-backend/deploy.yaml": 'host: "172.16.168.23"\n'},
         )
         assert result.returncode != 0
         assert "172.16.168.23" in result.stdout
@@ -215,7 +215,7 @@ class TestRepoTestsSupportModuleExemption:
         # module, collected by nothing, imported only by *_test.py siblings.
         result = _run_hook_with_staged(
             tmp_path,
-            {"repo_tests/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
+            {"autobot-backend/repo_tests/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
         )
         assert result.returncode == 0, f"repo_tests/ support module should be exempt:\n{result.stdout}"
 
@@ -236,7 +236,7 @@ class TestRepoTestsSupportModuleExemption:
         # path segment `repo_tests/`.
         result = _run_hook_with_staged(
             tmp_path,
-            {"not_repo_tests/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
+            {"autobot-backend/not_repo_tests/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
         )
         assert result.returncode != 0
         assert self._URL in result.stdout
@@ -256,7 +256,7 @@ class TestWorkflowUrlExemption:
     def test_allows_a_vendor_url_in_a_workflow(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {".github/workflows/ci.yml": f'      - run: curl -fsSL "{self._VENDOR}" -o p.tgz\n'},
+            {"autobot-infrastructure/.github/workflows/ci.yml": f'      - run: curl -fsSL "{self._VENDOR}" -o p.tgz\n'},
         )
         assert result.returncode == 0, result.stdout
 
@@ -264,22 +264,39 @@ class TestWorkflowUrlExemption:
         """#15515: a composite action is a piece of a workflow; its pip index is not deployment config."""
         result = _run_hook_with_staged(
             tmp_path,
-            {".github/actions/setup/action.yml": "          --extra-index-url https://download.pytorch.org/whl/cpu\n"},
+            {"autobot-infrastructure/.github/actions/setup/action.yml": "          --extra-index-url https://download.pytorch.org/whl/cpu\n"},
         )
         assert result.returncode == 0, result.stdout
 
     def test_still_blocks_the_same_url_outside_workflows(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"deploy/install.yml": f'      - run: curl -fsSL "{self._VENDOR}" -o p.tgz\n'},
+            {"autobot-infrastructure/deploy/install.yml": f'      - run: curl -fsSL "{self._VENDOR}" -o p.tgz\n'},
         )
         assert result.returncode != 0
         assert "prometheus/releases/download" in result.stdout
 
-    def test_still_blocks_an_autobot_ip_in_a_workflow(self, tmp_path: Path) -> None:
+    def test_a_repo_root_github_file_is_out_of_scope_entirely(self, tmp_path: Path) -> None:
+        """#17329/#16260: the hook scans HV_SCAN_DIRS, and .github/ is not one.
+
+        The cases above stage their workflows under autobot-infrastructure/ so
+        the vendor-URL rule is still exercised. This one pins the scope change
+        itself: an IP that WOULD be blocked inside a scanned tree is not judged
+        at the repo root, because the repo-wide scan never walks there and a
+        finding it produced could never be baselined. That asymmetry is what
+        made ci.yml and frontend-test.yml uneditable for months (#16260).
+        """
         result = _run_hook_with_staged(
             tmp_path,
             {".github/workflows/deploy.yml": "      - run: curl -fsS http://172.16.168.23/health\n"},
+        )
+        assert result.returncode == 0, result.stdout
+        assert "No in-scope files staged" in result.stdout
+
+    def test_still_blocks_an_autobot_ip_in_a_workflow(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"autobot-infrastructure/.github/workflows/deploy.yml": "      - run: curl -fsS http://172.16.168.23/health\n"},
         )
         assert result.returncode != 0
         assert "172.16.168.23" in result.stdout
@@ -293,12 +310,12 @@ class TestNonBlockingPatterns:
         # 192.168.x is universal example IP space; tests/SSRF guards use it
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/check.py": 'BLOCK = "192.168.1.1"\n'},
+            {"autobot-backend/src/check.py": 'BLOCK = "192.168.1.1"\n'},
         )
         assert result.returncode == 0
 
     def test_allows_loopback_literal(self, tmp_path: Path) -> None:
-        result = _run_hook_with_staged(tmp_path, {"src/local.py": 'HOST = "127.0.0.1"\n'})
+        result = _run_hook_with_staged(tmp_path, {"autobot-backend/src/local.py": 'HOST = "127.0.0.1"\n'})
         assert result.returncode == 0
 
     def test_allows_comments(self, tmp_path: Path) -> None:
@@ -306,7 +323,7 @@ class TestNonBlockingPatterns:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/doc.py": (
+                "autobot-backend/src/doc.py": (
                     "# Production Redis lives at 172.16.168.23\n"
                     "import os\n"
                     'host = os.environ["AUTOBOT_REDIS_HOST"]\n'
@@ -341,7 +358,7 @@ class TestHardcodedPorts:
     def test_blocks_hardcoded_backend_port_in_url(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/api.py": 'URL = "http://example.com:8001/api"\n'},
+            {"autobot-backend/src/api.py": 'URL = "http://example.com:8001/api"\n'},
         )
         assert result.returncode != 0
         assert "8001" in result.stdout
@@ -351,7 +368,7 @@ class TestHardcodedPorts:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/api.py": (
+                "autobot-backend/src/api.py": (
                     "from autobot_shared.ssot_config import config\n"
                     'URL = f"http://{config.vm.main}:{config.port.backend}/api"\n'
                 ),
@@ -377,7 +394,7 @@ class TestMagicNumbers:
     def test_blocks_limit_10_with_spaces(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": "def search(limit = 10):\n    pass\n"},
+            {"autobot-backend/src/q.py": "def search(limit = 10):\n    pass\n"},
         )
         assert result.returncode != 0
         assert "10" in result.stdout
@@ -387,7 +404,7 @@ class TestMagicNumbers:
         # when the regex is tightened to catch the no-spaces form too.
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": "def search(limit=10):\n    pass\n"},
+            {"autobot-backend/src/q.py": "def search(limit=10):\n    pass\n"},
         )
         assert result.returncode == 0
 
@@ -396,7 +413,7 @@ class TestMagicNumbers:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/q.py": (
+                "autobot-backend/src/q.py": (
                     "from constants import QueryDefaults\n"
                     "def search(limit=QueryDefaults.DEFAULT_SEARCH_LIMIT):\n"
                     "    pass\n"
@@ -414,7 +431,7 @@ class TestMagicNumbers:
     def test_blocks_call_argument_limit_10(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": 'def c(d):\n    return d.get("limit", 10)\n'},
+            {"autobot-backend/src/q.py": 'def c(d):\n    return d.get("limit", 10)\n'},
         )
         assert result.returncode != 0
         assert "10" in result.stdout
@@ -422,7 +439,7 @@ class TestMagicNumbers:
     def test_blocks_call_argument_page_size_50(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": 'def e(d):\n    return d.get("page_size", 50)\n'},
+            {"autobot-backend/src/q.py": 'def e(d):\n    return d.get("page_size", 50)\n'},
         )
         assert result.returncode != 0
         assert "50" in result.stdout
@@ -430,7 +447,7 @@ class TestMagicNumbers:
     def test_blocks_call_argument_limit_100(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": 'def f(d):\n    return d.get("limit", 100)\n'},
+            {"autobot-backend/src/q.py": 'def f(d):\n    return d.get("limit", 100)\n'},
         )
         assert result.returncode != 0
         assert "100" in result.stdout
@@ -438,7 +455,7 @@ class TestMagicNumbers:
     def test_blocks_call_argument_max_results_5(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": 'def g(d):\n    return d.get("max_results", 5)\n'},
+            {"autobot-backend/src/q.py": 'def g(d):\n    return d.get("max_results", 5)\n'},
         )
         assert result.returncode != 0
         assert "5" in result.stdout
@@ -448,7 +465,7 @@ class TestMagicNumbers:
         # limit/page_size/max_results/batch literals the rule targets.
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": 'def h(d):\n    return d.get("count", 10)\n'},
+            {"autobot-backend/src/q.py": 'def h(d):\n    return d.get("count", 10)\n'},
         )
         assert result.returncode == 0
 
@@ -456,7 +473,7 @@ class TestMagicNumbers:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/q.py": (
+                "autobot-backend/src/q.py": (
                     "from constants import QueryDefaults\n"
                     'def i(d):\n    return d.get("limit", QueryDefaults.DEFAULT_SEARCH_LIMIT)\n'
                 ),
@@ -481,7 +498,7 @@ class TestHardcodedRoles:
     def test_blocks_hardcoded_role_string(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/chat.py": 'msg = {"role": "user", "content": "hi"}\n'},
+            {"autobot-backend/src/chat.py": 'msg = {"role": "user", "content": "hi"}\n'},
         )
         assert result.returncode != 0
         assert "user" in result.stdout
@@ -490,7 +507,7 @@ class TestHardcodedRoles:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/chat.py": (
+                "autobot-backend/src/chat.py": (
                     "from constants import CategoryDefaults\n" 'msg = {"role": CategoryDefaults.ROLE_USER}\n'
                 ),
             },
@@ -500,7 +517,7 @@ class TestHardcodedRoles:
     def test_blocks_call_argument(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/chat.py": 'def a(msg):\n    return msg.get("role", "user")\n'},
+            {"autobot-backend/src/chat.py": 'def a(msg):\n    return msg.get("role", "user")\n'},
         )
         assert result.returncode != 0
         assert "user" in result.stdout
@@ -510,7 +527,7 @@ class TestHardcodedRoles:
         # five literal characters ", \, x, 2, 7 — never an apostrophe.
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/chat.py": "msg = {'role': 'user', 'content': 'hi'}\n"},
+            {"autobot-backend/src/chat.py": "msg = {'role': 'user', 'content': 'hi'}\n"},
         )
         assert result.returncode != 0
         assert "user" in result.stdout
@@ -518,7 +535,7 @@ class TestHardcodedRoles:
     def test_blocks_single_quoted_call_argument(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/chat.py": "def a(msg):\n    return msg.get('role', 'user')\n"},
+            {"autobot-backend/src/chat.py": "def a(msg):\n    return msg.get('role', 'user')\n"},
         )
         assert result.returncode != 0
         assert "user" in result.stdout
@@ -526,7 +543,7 @@ class TestHardcodedRoles:
     def test_allows_unrelated_key_in_call_argument(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/chat.py": 'ids = [doc.get("id", "unknown_id") for doc in docs]\n'},
+            {"autobot-backend/src/chat.py": 'ids = [doc.get("id", "unknown_id") for doc in docs]\n'},
         )
         assert result.returncode == 0
 
@@ -537,7 +554,7 @@ class TestHardcodedRoles:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/q.ts": ("/**\n" " * role: 'user'\n" " */\n" "export const x = 1\n"),
+                "autobot-backend/src/q.ts": ("/**\n" " * role: 'user'\n" " */\n" "export const x = 1\n"),
             },
         )
         assert result.returncode == 0
@@ -546,7 +563,7 @@ class TestHardcodedRoles:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/types.ts": ("export interface Options {\n" "  role?: 'user' | 'assistant' | 'system'\n" "}\n"),
+                "autobot-backend/src/types.ts": ("export interface Options {\n" "  role?: 'user' | 'assistant' | 'system'\n" "}\n"),
             },
         )
         assert result.returncode == 0
@@ -568,7 +585,7 @@ class TestHardcodedCategories:
     def test_blocks_plain_assignment(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": 'category = "general"\n'},
+            {"autobot-backend/src/q.py": 'category = "general"\n'},
         )
         assert result.returncode != 0
         assert "general" in result.stdout
@@ -576,7 +593,7 @@ class TestHardcodedCategories:
     def test_blocks_dict_literal_value(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": 'q = {"category": "general"}\n'},
+            {"autobot-backend/src/q.py": 'q = {"category": "general"}\n'},
         )
         assert result.returncode != 0
         assert "general" in result.stdout
@@ -584,7 +601,7 @@ class TestHardcodedCategories:
     def test_blocks_function_default(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": 'def search(category="general"):\n    pass\n'},
+            {"autobot-backend/src/q.py": 'def search(category="general"):\n    pass\n'},
         )
         assert result.returncode != 0
         assert "general" in result.stdout
@@ -595,7 +612,7 @@ class TestHardcodedCategories:
         # standalone call-argument case with no assignment wrapper at all.
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": 'def b(req):\n    return req.get("category", "general")\n'},
+            {"autobot-backend/src/q.py": 'def b(req):\n    return req.get("category", "general")\n'},
         )
         assert result.returncode != 0
         assert "general" in result.stdout
@@ -608,7 +625,7 @@ class TestHardcodedCategories:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/q.py": ("def a(docs):\n" '    return len(set(doc.get("category", "general") for doc in docs))\n'),
+                "autobot-backend/src/q.py": ("def a(docs):\n" '    return len(set(doc.get("category", "general") for doc in docs))\n'),
             },
         )
         assert result.returncode != 0
@@ -624,7 +641,7 @@ class TestHardcodedCategories:
         # the repo-wide audit: autobot-backend/agents/kb_librarian/librarian.py:50.
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": "def c(tool_info):\n    return f\"- Category: {tool_info.get('category', 'general')}\"\n"},
+            {"autobot-backend/src/q.py": "def c(tool_info):\n    return f\"- Category: {tool_info.get('category', 'general')}\"\n"},
         )
         assert result.returncode != 0
         assert "general" in result.stdout
@@ -633,7 +650,7 @@ class TestHardcodedCategories:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/q.py": ("from constants import CategoryDefaults\n" 'q = {"category": CategoryDefaults.GENERAL}\n'),
+                "autobot-backend/src/q.py": ("from constants import CategoryDefaults\n" 'q = {"category": CategoryDefaults.GENERAL}\n'),
             },
         )
         assert result.returncode == 0
@@ -645,7 +662,7 @@ class TestHardcodedCategories:
         # "any .get() with two string args" false positive.
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": 'ids = [doc.get("id", "unknown_id") for doc in docs]\n'},
+            {"autobot-backend/src/q.py": 'ids = [doc.get("id", "unknown_id") for doc in docs]\n'},
         )
         assert result.returncode == 0
 
@@ -656,7 +673,7 @@ class TestHardcodedCategories:
         # vocabulary happens to line up.
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/q.py": 'CATEGORIES = ("category", "general")\n'},
+            {"autobot-backend/src/q.py": 'CATEGORIES = ("category", "general")\n'},
         )
         assert result.returncode == 0
 
@@ -672,7 +689,7 @@ class TestHardcodedCategories:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/q.ts": ("/**\n" " * mode: 'general'\n" " */\n" "export const x = 1\n"),
+                "autobot-backend/src/q.ts": ("/**\n" " * mode: 'general'\n" " */\n" "export const x = 1\n"),
             },
         )
         assert result.returncode == 0
@@ -684,7 +701,7 @@ class TestHardcodedCategories:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/types.ts": (
+                "autobot-backend/src/types.ts": (
                     "export interface Options {\n" "  mode?: 'semantic' | 'keyword' | 'hybrid' | 'auto'\n" "}\n"
                 ),
             },
@@ -697,7 +714,7 @@ class TestHardcodedCategories:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/q.py": (
+                "autobot-backend/src/q.py": (
                     "from constants import CategoryDefaults\n"
                     'cats = [doc.get("category", CategoryDefaults.GENERAL) for doc in docs]\n'
                 ),
@@ -713,7 +730,7 @@ class TestHardcodedPaths:
     def test_blocks_hardcoded_opt_autobot_path(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/p.py": 'BASE = "/opt/autobot/data"\n'},
+            {"autobot-backend/src/p.py": 'BASE = "/opt/autobot/data"\n'},
         )
         assert result.returncode != 0
         assert "/opt/autobot" in result.stdout
@@ -722,7 +739,7 @@ class TestHardcodedPaths:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/p.py": ("from autobot_shared.ssot_config import config\n" "BASE = config.path.base_dir\n"),
+                "autobot-backend/src/p.py": ("from autobot_shared.ssot_config import config\n" "BASE = config.path.base_dir\n"),
             },
         )
         assert result.returncode == 0
@@ -747,7 +764,7 @@ class TestHardcodedModelNames:
         # qwen3.5:9b IS in the hardcoded model_pattern, so this is caught.
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/llm.py": 'MODEL = "qwen3.5:9b"\n'},
+            {"autobot-backend/src/llm.py": 'MODEL = "qwen3.5:9b"\n'},
         )
         assert result.returncode != 0
         assert "qwen3.5:9b" in result.stdout
@@ -765,7 +782,7 @@ class TestHardcodedModelNames:
         """
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/llm.py": 'MODEL = "qwen3:8b"\n'},
+            {"autobot-backend/src/llm.py": 'MODEL = "qwen3:8b"\n'},
         )
         assert result.returncode != 0
         assert "qwen3:8b" in result.stdout
@@ -774,7 +791,7 @@ class TestHardcodedModelNames:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/llm.py": ("from autobot_shared.ssot_config import config\n" "MODEL = config.llm.default_model\n"),
+                "autobot-backend/src/llm.py": ("from autobot_shared.ssot_config import config\n" "MODEL = config.llm.default_model\n"),
             },
         )
         assert result.returncode == 0
@@ -787,7 +804,7 @@ class TestHardcodedDbDsns:
     def test_blocks_hardcoded_sqlite_dsn(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/db.py": 'DSN = "sqlite:///app.db"\n'},
+            {"autobot-backend/src/db.py": 'DSN = "sqlite:///app.db"\n'},
         )
         assert result.returncode != 0
         assert "sqlite" in result.stdout
@@ -796,7 +813,7 @@ class TestHardcodedDbDsns:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/db.py": ("import os\n" 'DSN = os.getenv("DATABASE_URL")\n'),
+                "autobot-backend/src/db.py": ("import os\n" 'DSN = os.getenv("DATABASE_URL")\n'),
             },
         )
         assert result.returncode == 0
@@ -810,7 +827,7 @@ class TestHardcodedTimeouts:
         # Uses one of the timeout_values the hook treats as common magic numbers
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/api.py": "def fetch(timeout=30):\n    pass\n"},
+            {"autobot-backend/src/api.py": "def fetch(timeout=30):\n    pass\n"},
         )
         # NOTE: this asserts the CURRENT hook behavior — timeout=30 is a
         # common literal the hook tries to flag. If this test fails after
@@ -824,7 +841,7 @@ class TestHardcodedTimeouts:
         # no `=`/`:` between the field name and the default.
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/api.py": 'def b(d):\n    return d.get("timeout", 30)\n'},
+            {"autobot-backend/src/api.py": 'def b(d):\n    return d.get("timeout", 30)\n'},
         )
         assert result.returncode != 0
         assert "30" in result.stdout
@@ -832,7 +849,7 @@ class TestHardcodedTimeouts:
     def test_allows_call_argument_unrelated_key(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"src/api.py": 'def c(d):\n    return d.get("retry_count", 30)\n'},
+            {"autobot-backend/src/api.py": 'def c(d):\n    return d.get("retry_count", 30)\n'},
         )
         assert result.returncode == 0
 
@@ -840,7 +857,7 @@ class TestHardcodedTimeouts:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/api.py": (
+                "autobot-backend/src/api.py": (
                     "from autobot_shared.ssot_config import config\n"
                     "def fetch(timeout=config.timeout.default):\n"
                     "    pass\n"

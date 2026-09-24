@@ -27,11 +27,28 @@ _KEY = f"ssot|autobot-backend/svc.py|{_FLEET_IP}"
 
 
 def _scan_dirs() -> list[str]:
-    """SCAN_DIRS read from the script itself, so this file cannot drift from it."""
-    text = (_HERE / "detect-hardcoded-values.sh").read_text(encoding="utf-8")
-    block = text.split("SCAN_DIRS=(", 1)[1].split(")", 1)[0]
-    dirs = [line.strip().strip('"') for line in block.splitlines() if line.strip().startswith('"')]
-    assert "autobot-backend" in dirs, f"SCAN_DIRS parse found {dirs!r}"
+    """The scanned directories, taken from the definition both entry points read.
+
+    #17329: the list moved to HV_SCAN_DIRS in scripts/lib/hardcoded-value-rules.sh
+    so the repo-wide scan and the pre-commit hook could stop disagreeing about
+    scope. detect-hardcoded-values.sh now spells it `SCAN_DIRS=("${HV_SCAN_DIRS[@]}")`,
+    and the text parse that used to live here found exactly that literal.
+
+    SOURCED rather than parsed, which is also why it could break: a text parse
+    reads where a value is written, and the value moved. Asking bash for the
+    array is the same question the script asks, so a future move cannot
+    silently answer it wrong -- it fails to source instead.
+    """
+    lib = _HERE.parent / "scripts" / "lib" / "hardcoded-value-rules.sh"
+    out = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["bash", "-c", f'source "{lib}"; printf "%s\\n" "${{HV_SCAN_DIRS[@]}}"'],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    dirs = [line for line in out.stdout.splitlines() if line]
+    assert "autobot-backend" in dirs, f"HV_SCAN_DIRS resolved to {dirs!r} (stderr: {out.stderr[:200]})"
     return dirs
 
 

@@ -190,7 +190,7 @@ class TestEvictLayerToMetaStandard:
                 "llm_shared.optimization.meta_eviction._import_torch",
                 return_value=mock_torch,
             ),
-            patch("llm_shared.optimization.meta_eviction._import_accelerate") as mock_acc,
+            patch("llm_shared.optimization.meta_eviction.lazy_accelerate") as mock_acc,
         ):
             evict_layer_to_meta(layer)
         mock_acc.assert_not_called()
@@ -231,7 +231,7 @@ class TestEvictLayerToMetaQuantized:
                 return_value=mock_torch,
             ),
             patch(
-                "llm_shared.optimization.meta_eviction._import_accelerate",
+                "llm_shared.optimization.meta_eviction.lazy_accelerate",
                 return_value=mock_acc,
             ),
         ):
@@ -268,7 +268,7 @@ class TestEvictLayerToMetaQuantized:
                 return_value=mock_torch,
             ),
             patch(
-                "llm_shared.optimization.meta_eviction._import_accelerate",
+                "llm_shared.optimization.meta_eviction.lazy_accelerate",
                 return_value=mock_acc,
             ),
         ):
@@ -288,7 +288,7 @@ class TestEvictLayerToMetaQuantized:
                 return_value=mock_torch,
             ),
             patch(
-                "llm_shared.optimization.meta_eviction._import_accelerate",
+                "llm_shared.optimization.meta_eviction.lazy_accelerate",
                 side_effect=ImportError("accelerate not installed"),
             ),
         ):

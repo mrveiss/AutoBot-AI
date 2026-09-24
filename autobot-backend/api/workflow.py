@@ -551,7 +551,7 @@ async def approve_workflow_step(
 
     # Publish approval event
     await publish_event(
-        "global",
+        f"workflow:{workflow_id}",
         "workflow_approval",
         {
             "workflow_id": workflow_id,
@@ -643,7 +643,7 @@ async def _wait_for_step_approval(workflow_id: str, workflow: dict, step: dict) 
 
     # Publish approval request event
     await publish_event(
-        "global",
+        f"workflow:{workflow_id}",
         "workflow_approval_required",
         {
             "workflow_id": workflow_id,
@@ -681,7 +681,7 @@ async def _publish_step_started(workflow_id: str, step: Metadata, step_index: in
         total_steps: Total number of steps
     """
     await publish_event(
-        "global",
+        f"workflow:{workflow_id}",
         "workflow_step_started",
         {
             "workflow_id": workflow_id,
@@ -705,7 +705,7 @@ async def _publish_step_completed(workflow_id: str, step: Metadata) -> None:
         step: Step data with result
     """
     await publish_event(
-        "global",
+        f"workflow:{workflow_id}",
         "workflow_step_completed",
         {
             "workflow_id": workflow_id,
@@ -832,7 +832,7 @@ async def _finalize_workflow_completed(workflow_id: str, workflow: Metadata, ste
     _record_workflow_metrics(workflow_type, workflow_start_time, "success")
 
     await publish_event(
-        "global",
+        f"workflow:{workflow_id}",
         "workflow_completed",
         {
             "workflow_id": workflow_id,
@@ -860,7 +860,7 @@ async def _finalize_workflow_failed(workflow_id: str, workflow: Metadata, error:
     _record_workflow_metrics(workflow_type, workflow_start_time, "failed")
 
     await publish_event(
-        "global",
+        f"workflow:{workflow_id}",
         "workflow_failed",
         {
             "workflow_id": workflow_id,
@@ -980,7 +980,7 @@ async def cancel_workflow(workflow_id: str, admin_check: bool = Depends(check_ad
                     future.cancel()
 
     await publish_event(
-        "global",
+        f"workflow:{workflow_id}",
         "workflow_cancelled",
         {"workflow_id": workflow_id, "user_message": user_message},
         persist=PersistStrategy.NONE,

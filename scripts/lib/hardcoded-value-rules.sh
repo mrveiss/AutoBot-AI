@@ -235,6 +235,47 @@ _HV_EXCLUDE_RE+='|(/constants/|config\.py$|config\.yaml$|\.env|\.example$|\.lock
 _HV_EXCLUDE_RE+='|(detect-hardcoded-values\.sh$|hardcoded-value-rules\.sh$|pre-commit-hardcoded-values$)'
 _HV_EXT_RE="\.(${HV_SCAN_EXTENSIONS})$"
 
+# ── directory scope (#17329) ─────────────────────────────────────────────────
+# The trees both entry points look at. This list lived only in
+# detect-hardcoded-values.sh, so the repo-wide scan applied it and the
+# pre-commit hook -- which sees whatever is staged -- did not. Anything outside
+# these trees was therefore BLOCKED on commit, INVISIBLE to the scan, and
+# IMPOSSIBLE to baseline: the baseline is keyed to what the scan finds, and
+# --audit-baseline fails on an entry the scan cannot reproduce. A file in that
+# gap could only be committed with --no-verify.
+#
+# It lives here now because a scope two callers must agree on is not something
+# to keep in one of them. autobot-infrastructure (#14316) is in the list
+# because the deployment/ops scripts that actually touch hosts, paths and
+# accounts have no type system or linter enforcing indirection on them.
+#
+# Note what this does NOT cover: project-root files in either frontend
+# (vitest.config.ts, vite.config.ts and their SLM twins) sit outside
+# */src and are unscanned by both entry points. That is the status quo made
+# consistent, not coverage -- widening the list is #17329's option 2, measured
+# there rather than guessed at.
+HV_SCAN_DIRS=(
+    "autobot-backend"
+    "autobot-frontend"
+    "autobot_shared"
+    "autobot-slm-backend"
+    "autobot-slm-frontend"
+    "autobot-infrastructure"
+    "scripts"
+)
+
+# 0 when *$1* lies inside one of HV_SCAN_DIRS.
+hv_path_in_scan_dirs() {
+    local path="${1:-}" dir
+    [ -n "$path" ] || return 1
+    for dir in "${HV_SCAN_DIRS[@]}"; do
+        case "$path" in
+            "$dir"/*) return 0 ;;
+        esac
+    done
+    return 1
+}
+
 # 0 when *$1* should be scanned.
 hv_file_in_scope() {
     local path="${1:-}"
@@ -245,7 +286,15 @@ hv_file_in_scope() {
 }
 
 # ── shared line predicates ───────────────────────────────────────────────────
-_HV_COMMENT_RE='^[[:space:]]*(#|//|\*)'
+# #17329: `/*` as well. The pattern already means "this line is a comment" --
+# `#`, `//` and a continuation `*` were listed and the block OPENER was not, so
+# a one-line `/* ... */` doc comment was scanned as code. Only the safe half of
+# that refinement: adding `process.env` to _HV_CONFIG_RE below was measured and
+# REJECTED, because `process.env.X || 'http://<ip>:5173'` reads config AND
+# hardcodes a fallback, and exempting the line hides the fallback -- the defect
+# #14198's port-fallback hook exists for. Ten tracked findings, two of them
+# internal IPs, would have gone invisible.
+_HV_COMMENT_RE='^[[:space:]]*(#|//|/\*|\*)'
 # A line already going through config / an env var. Detector 1 also honoured an
 # explicit `noqa` marker; both are union members.
 _HV_CONFIG_RE='(config\.|CONFIG\[|getenv|os\.environ|ssot_config|AUTOBOT_[A-Z_]+|NetworkConstants)'
@@ -587,6 +636,12 @@ hv_scan_tree() {
     local -a includes=() args=()
     IFS='|' read -r -a includes <<< "$HV_SCAN_EXTENSIONS"
     for ext in "${includes[@]}"; do args+=("--include=*.${ext}"); done
+    # #17329: the scan roots now include each frontend's project root, which
+    # contains node_modules. _HV_EXCLUDE_RE already drops those paths from the
+    # FINDINGS, but the walk would still read every matching file inside a
+    # ~790MB tree on the way. Pruning the directory is the same decision made
+    # one step earlier.
+    for skip in node_modules .venv venv dist build __pycache__; do args+=("--exclude-dir=${skip}"); done
     [ -d "$root" ] || return 0
     while IFS= read -r raw; do
         [ -n "$raw" ] || continue

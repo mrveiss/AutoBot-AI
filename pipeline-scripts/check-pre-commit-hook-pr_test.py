@@ -310,8 +310,8 @@ class TestChangedLinesOnly:
 
     def test_a_pre_existing_violation_in_a_touched_file_does_not_fail(self, tmp_path: Path) -> None:
         """The reported symptom: four PRs red on other commits' violations."""
-        base, _ = _amend_pr(tmp_path, {"m.py": "def f():\n" + _OFFENDING})
-        (tmp_path / "m.py").write_text("def f():\n" + _OFFENDING + _CLEAN, encoding="utf-8")
+        base, _ = _amend_pr(tmp_path, {"autobot-backend/m.py": "def f():\n" + _OFFENDING})
+        (tmp_path / "autobot-backend/m.py").write_text("def f():\n" + _OFFENDING + _CLEAN, encoding="utf-8")
         head = _commit_pr(tmp_path)
 
         result = _run_scoped(tmp_path, "pre-commit-hardcoded-values", base, head)
@@ -325,8 +325,8 @@ class TestChangedLinesOnly:
         Without this, the whole change is indistinguishable from deleting the
         guard — which is exactly how a loosened check stops catching anything.
         """
-        base, _ = _amend_pr(tmp_path, {"m.py": "def f():\n" + _CLEAN})
-        (tmp_path / "m.py").write_text("def f():\n" + _CLEAN + _OFFENDING, encoding="utf-8")
+        base, _ = _amend_pr(tmp_path, {"autobot-backend/m.py": "def f():\n" + _CLEAN})
+        (tmp_path / "autobot-backend/m.py").write_text("def f():\n" + _CLEAN + _OFFENDING, encoding="utf-8")
         head = _commit_pr(tmp_path)
 
         result = _run_scoped(tmp_path, "pre-commit-hardcoded-values", base, head)
@@ -335,8 +335,8 @@ class TestChangedLinesOnly:
         assert "lines this PR added" in result.stdout
 
     def test_a_clean_pr_stays_clean(self, tmp_path: Path) -> None:
-        base, _ = _amend_pr(tmp_path, {"m.py": "def f():\n" + _CLEAN})
-        (tmp_path / "m.py").write_text("def f():\n" + _CLEAN + "    OTHER = g()\n", encoding="utf-8")
+        base, _ = _amend_pr(tmp_path, {"autobot-backend/m.py": "def f():\n" + _CLEAN})
+        (tmp_path / "autobot-backend/m.py").write_text("def f():\n" + _CLEAN + "    OTHER = g()\n", encoding="utf-8")
         head = _commit_pr(tmp_path)
 
         result = _run_scoped(tmp_path, "pre-commit-hardcoded-values", base, head)
@@ -350,8 +350,8 @@ class TestChangedLinesOnly:
         if the default changed too, the blast radius would be every guard that
         runs through this wrapper.
         """
-        base, _ = _amend_pr(tmp_path, {"m.py": "def f():\n" + _OFFENDING})
-        (tmp_path / "m.py").write_text("def f():\n" + _OFFENDING + _CLEAN, encoding="utf-8")
+        base, _ = _amend_pr(tmp_path, {"autobot-backend/m.py": "def f():\n" + _OFFENDING})
+        (tmp_path / "autobot-backend/m.py").write_text("def f():\n" + _OFFENDING + _CLEAN, encoding="utf-8")
         head = _commit_pr(tmp_path)
 
         result = _run_wrapper(tmp_path, "pre-commit-hardcoded-values", base, head)

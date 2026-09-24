@@ -51,6 +51,7 @@ frontend:
   - 'pipeline-scripts/npm_audit_gate.py'
   # #15002: the redactor drift guard runs in this suite and reads the terminal
   # plugin's copy, so a plugin-only edit must still run it.
-  # Not yet mirrored in frontend-test.yml's push list or ci.yml's filter: both
-  # files trip the hardcoded-values hook on pre-existing URLs (#16260).
+  # Mirrored in frontend-test.yml's push list and ci.yml's filter since #17329
+  # made those files editable again -- both had been dropped from #15002
+  # because the hardcoded-values hook blocked staging them (#16260).
   - 'autobot-plugins/terminal/**'

@@ -31,7 +31,14 @@ ENV_FILE="${PROJECT_ROOT}/.env"
 STARTUP_WAIT_SECONDS=5
 SSH_KEY="${AUTOBOT_SSH_KEY:-${HOME}/.ssh/autobot_key}"
 SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
-REMOTE_ENV_FILE="/opt/autobot/.env"
+# The install root ON THE REMOTE HOST. Deliberately its own name rather than
+# AUTOBOT_BASE_DIR: this script already resolves PROJECT_ROOT for the LOCAL
+# .env two lines above, and the two roots must be able to differ -- a developer
+# whose local AUTOBOT_BASE_DIR points at a checkout would otherwise send this
+# rollback looking for the remote .env at their own path. Default matches
+# lib/ssot-config.sh's own `${AUTOBOT_BASE_DIR:-/opt/autobot}` (#17329).
+REMOTE_BASE_DIR="${AUTOBOT_REMOTE_BASE_DIR:-/opt/autobot}"
+REMOTE_ENV_FILE="${REMOTE_BASE_DIR}/.env"
 
 # ---------------------------------------------------------------------------
 # Output helpers
