@@ -85,7 +85,14 @@ MATCHERLESS_EVENTS = frozenset(
 _SPECIFIER_FORM = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)\(.*\)$")
 
 #: Marks a hook command that runs an in-repo script, so its path can be checked.
-_SCRIPT_REFERENCE = re.compile(r"(?:\$CLAUDE_PROJECT_DIR|\$\(git rev-parse --show-toplevel\)[^/]*)/(\S+?\.(?:sh|py))")
+#: `"` after the variable because #17410 quotes the expansion -- an unquoted
+#: `$CLAUDE_PROJECT_DIR` word-splits under `sh -c` when the path holds a space.
+#: Both spellings must match: quoting one hook must not blind the scan to the
+#: rest, and a scan that finds nothing is indistinguishable from a tree with no
+#: hooks in it -- which is what this file exists to prevent.
+_SCRIPT_REFERENCE = re.compile(
+    r"(?:\$CLAUDE_PROJECT_DIR\"?|\$\(git rev-parse --show-toplevel\)[^/]*)/(\S+?\.(?:sh|py))"
+)
 
 
 def _load_settings() -> dict:
@@ -146,7 +153,9 @@ def unreachable(settings: dict) -> list[str]:
         matcher = entry.get("matcher", "")
         if event in MATCHERLESS_EVENTS:
             if matcher:
-                findings.append(f"{where}: matcher {matcher!r} on {event}, which carries no tool name — it selects nothing")
+                findings.append(
+                    f"{where}: matcher {matcher!r} on {event}, which carries no tool name — it selects nothing"
+                )
             continue
         if not matcher:
             findings.append(f"{where}: empty matcher on {event}, which fires per tool call — it selects nothing")
@@ -169,7 +178,9 @@ def missing_commands(settings: dict, root: Path) -> list[str]:
             command = hook.get("command", "")
             for relative in _SCRIPT_REFERENCE.findall(command):
                 if not (root / relative).is_file():
-                    findings.append(f"hooks.{event}[{index}].hooks[{position}]: script not in the repository: {relative}")
+                    findings.append(
+                        f"hooks.{event}[{index}].hooks[{position}]: script not in the repository: {relative}"
+                    )
     return findings
 
 
@@ -258,7 +269,16 @@ def test_mutating_a_known_good_matcher_makes_the_check_fail(broken: str):
 
 def test_a_missing_script_is_reported_with_its_path(tmp_path: Path):
     """The command check must fail too, not only the matcher check."""
-    settings = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/gone.sh"}]}]}}
+    settings = {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "Bash",
+                    "hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/gone.sh"}],
+                }
+            ]
+        }
+    }
     findings = missing_commands(settings, tmp_path)
     assert len(findings) == 1
     assert ".claude/hooks/gone.sh" in findings[0]
