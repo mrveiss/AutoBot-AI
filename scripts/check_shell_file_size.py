@@ -227,6 +227,13 @@ def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> tuple[int, se
     for rel in sorted(tracked):
         line_count = count_lines(root / rel)
         if line_count is None:
+            # NOT a skip. The docstring's contract is that an unmeasured file is
+            # not a passing one, and a `continue` here would quietly exempt
+            # exactly the files least likely to be readable -- a broken symlink,
+            # a bad mode, a non-UTF-8 script. It is reported and deliberately
+            # does NOT count toward `reached`, so it cannot prop up the floor
+            # check in run_audit() without having been ruled on.
+            problems.append(unmeasured(rel))
             continue
         reached += 1
         seen.add(normalise(rel))

@@ -31,6 +31,18 @@ HOOK_PATH = REPO_ROOT / "scripts" / "check_shell_file_size.py"
 PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 
 
+def _prefixes_from_exclude(pattern: str) -> set[str]:
+    """The literal prefixes a pre-commit `exclude:` regex names.
+
+    Handles the two shapes this repo uses: a bare `^\\.worktrees/` and an
+    alternation `^(\\.worktrees/|autobot-infrastructure/)`.
+    """
+    body = pattern.lstrip("^")
+    if body.startswith("(") and body.endswith(")"):
+        body = body[1:-1]
+    return {alt.replace("\\", "") for alt in body.split("|") if alt}
+
+
 @pytest.fixture(scope="module")
 def hook():
     """Load the hook by path — scripts/ is not an importable package."""
@@ -116,13 +128,16 @@ def test_excluded_prefixes_mirror_the_pre_commit_config(hook):
         if "check_shell_file_size.py" in str(entry.get("entry", ""))
     ]
     assert len(entries) == 1, f"expected exactly one shell-size hook entry, found {len(entries)}"
-    exclude = entries[0].get("exclude", "")
-    for prefix in hook.EXCLUDED_PREFIXES:
-        assert prefix in exclude, (
-            f"{prefix!r} is in EXCLUDED_PREFIXES but not in the hook's `exclude:` in "
-            f"{PRE_COMMIT_CONFIG.name}. The tree walk and the staged-file path would "
-            "then disagree about what is in scope."
-        )
+    assert _prefixes_from_exclude(entries[0].get("exclude", "")) == set(hook.EXCLUDED_PREFIXES), (
+        f"the hook's `exclude:` in {PRE_COMMIT_CONFIG.name} and EXCLUDED_PREFIXES in "
+        "scripts/check_shell_file_size.py describe different sets. The tree walk and "
+        "the staged-file path would then disagree about what is in scope.\n"
+        "Checked as SET EQUALITY, not containment: a one-way `prefix in exclude` test "
+        "passes when the yaml is WIDENED, because '.worktrees/' is a substring of "
+        "'^(\\.worktrees/|autobot-infrastructure/)'. That widening is precisely the "
+        "'align it with the Python gate' mistake this file exists to refuse, and it "
+        "would have silently stopped pre-commit gating infrastructure shell files."
+    )
 
 
 def test_the_infrastructure_tree_is_in_scope(hook):
@@ -172,6 +187,16 @@ def test_a_file_at_its_exact_ceiling_passes(hook):
 
 def test_an_unlisted_compliant_file_passes(hook):
     assert hook.verdict("scripts/some_small_script.sh", 40) is None
+
+
+def test_an_unlisted_file_at_exactly_max_lines_passes(hook):
+    """600 is the limit, not the first violation -- `> MAX_LINES` is strict.
+
+    Pinned because the off-by-one is invisible either way in review: a gate that
+    fails at exactly the limit and one that fails one past it read identically.
+    """
+    assert hook.verdict("scripts/some_script.sh", hook.MAX_LINES) is None
+    assert hook.verdict("scripts/some_script.sh", hook.MAX_LINES + 1) is not None
 
 
 def test_an_unlisted_oversized_file_is_told_to_split(hook):
