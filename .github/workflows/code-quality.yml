@@ -670,6 +670,19 @@ jobs:
         # run reports how many files that walk reached.
         python3 scripts/check_python_file_size.py --audit-ceilings
 
+    - name: Audit the shell-file-size ceilings for drift (#17353)
+      run: |
+        # Same reasoning as the Python audit above: the pre-commit hook only
+        # sees staged files, so an entry whose file shrank, moved or was
+        # deleted would sit there exempting nothing until somebody happened to
+        # touch it. This walks every in-scope tracked *.sh file.
+        #
+        # Shell is gated NARROWER than Python in one direction and WIDER in
+        # another: `autobot-infrastructure/` stays in scope here, because that
+        # is where shell lives and excluding it would leave the gate checking
+        # 4 of the 10 oversized files.
+        python3 scripts/check_shell_file_size.py --audit-ceilings
+
     - name: Audit requirements-ci for silent drift from production (#14551)
       run: |
         # autobot-backend/requirements.txt and autobot-slm-backend/requirements.txt
