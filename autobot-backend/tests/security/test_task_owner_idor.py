@@ -10,7 +10,11 @@ Acceptance criteria:
   - User A answers a question; user B answering the same task's question → 403.
   - Admin user can steer/answer any task (bypass).
   - First caller establishes ownership (SET NX pattern).
-  - verify_task_owner degrades gracefully on Redis outage (fail-open).
+  - verify_task_owner DENIES when the ownership store is unreachable (#17060,
+    fail-closed). It used to fail open, which removed the only authorization on
+    /steer and /answer for every task at once, during the outage nobody is
+    watching. The admin bypass is checked before any Redis call, so an operator
+    still gets in.
 """
 
 from unittest.mock import patch
@@ -43,9 +47,28 @@ async def _fake_redis_delete(key, *, store):
     return 1
 
 
+class _FakeClient:
+    """Just enough async client for the reads task_owner performs.
+
+    #17060: the module acquires a client and calls `.get()` on it, rather than
+    going through `redis_get` -- that wrapper returns `None` both for "no client"
+    and for "no such key", which is the collapse the fix exists to undo. So the
+    healthy path has to be faked at the client, not at the wrapper.
+    """
+
+    def __init__(self, store):
+        self._store = store
+
+    async def get(self, key):
+        return self._store.get(key)
+
+
 def _patch_redis(store):
+    async def _acquire(*_args, **_kwargs):
+        return _FakeClient(store)
+
     return (
-        patch("services.task_owner.redis_get", new=lambda key: _fake_redis_get(key, store=store)),
+        patch("services.task_owner.get_async_redis_client", new=_acquire),
         patch(
             "services.task_owner.redis_set",
             new=lambda key, val, expire=None: _fake_redis_set(key, val, expire=expire, store=store),
@@ -94,15 +117,71 @@ class TestVerifyTaskOwner:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_redis_outage_fails_open(self):
+    async def test_a_real_outage_denies_a_non_admin(self):
+        """#17060: the scenario in the issue title, mocked where production breaks.
+
+        A real outage does NOT raise. `get_async_redis_client` returns None when
+        Redis is disabled or the circuit breaker is open, and `redis_get` turns
+        that into the same None it returns for a missing key. The first version of
+        this fix caught `Exception` and was verified with a test that RAISED from
+        `redis_get` -- a path production never takes. Green suite, live hole.
+        This mocks the acquisition returning None instead.
+        """
         from services.task_owner import verify_task_owner
 
-        async def _boom(key):
-            raise ConnectionError("Redis down")
+        async def _no_client(*args, **kwargs):
+            return None
 
-        with patch("services.task_owner.redis_get", new=_boom):
+        with patch("services.task_owner.get_async_redis_client", new=_no_client):
             result = await verify_task_owner("task-xyz", "user-A")
-        assert result is True  # fail-open: task interaction must not block
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_a_command_failure_after_a_good_connection_also_denies(self):
+        """The narrower window the first fix actually covered: mid-flight failure."""
+        from services.task_owner import verify_task_owner
+
+        class _Boom:
+            async def get(self, _key):
+                raise ConnectionError("connection reset mid-command")
+
+        async def _client(*args, **kwargs):
+            return _Boom()
+
+        with patch("services.task_owner.get_async_redis_client", new=_client):
+            result = await verify_task_owner("task-xyz", "user-A")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_an_outage_still_admits_an_admin(self):
+        """Fail-closed must not lock the operator out of a stuck task.
+
+        The admin bypass is evaluated before the store is touched, so it is
+        unaffected -- which is what makes denying non-admins acceptable rather
+        than an outage of its own.
+        """
+        from services.task_owner import verify_task_owner
+
+        async def _no_client(*args, **kwargs):
+            return None
+
+        with patch("services.task_owner.get_async_redis_client", new=_no_client):
+            result = await verify_task_owner("task-xyz", "user-A", user_role="admin")
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_an_unowned_task_is_still_adopted_when_the_store_is_healthy(self):
+        """The positive control: without it, "denies" could just mean "always denies".
+
+        Denying on unavailability is only a fix if the healthy path still works.
+        """
+        from services.task_owner import verify_task_owner
+
+        store: dict = {}
+        p0, p1, p2 = _patch_redis(store)
+        with p0, p1, p2:
+            result = await verify_task_owner("task-fresh", "user-A")
+        assert result is True
 
 
 class TestRegisterTaskOwner:
