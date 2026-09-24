@@ -10,6 +10,8 @@ while publishing the operator's goal text, the shell command they ran and its
 stdout. No caller could fix that, because the channel was not theirs to pass.
 """
 
+import uuid
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -82,3 +84,59 @@ def test_the_broadcast_constant_is_still_the_broadcast_channel():
     follows the constant is watching the wrong name.
     """
     assert BROADCAST_CHANNEL == "global"
+
+
+class TestTheOwnerChannelCannotNameSomeoneElse:
+    """`agent:{id}` is admitted on EITHER field, so the two must never collide.
+
+    `api/live_events.py:_authorize_channel` answers the `agent:` prefix with
+    `claimed_id in (user_id, username)` -- either field, no tag saying which
+    namespace the claimed id came from. `owner_channel` builds the channel the
+    same way, `user_id` first and `username` as the fallback, so the two ends
+    agree on the spelling. What keeps that safe is not the check: it is that no
+    username can equal another account's user id.
+
+    That safety rests on two facts in two files neither of which knows about the
+    other -- user ids are UUIDs, usernames exclude the hyphen -- so it is a
+    coincidence until something asserts it. A review of #17363 raised the
+    collision as a possible cross-tenant read; it is not one today, and these
+    are the two facts that make it so. If either moves (numeric user ids, or a
+    username pattern that admits `-`), this fails instead of a tenant reading
+    another tenant's goal text, shell commands and stdout.
+    """
+
+    #: The model's own declaration, asserted from source rather than through the
+    #: ORM: `UserCore` has no `__table__` at import time, and a guard that needs
+    #: a mapped class configured is a guard that skips when the mapping is lazy.
+    _MODEL = Path(__file__).resolve().parents[2] / "autobot_shared" / "user_management" / "models" / "user.py"
+
+    def test_a_user_id_is_a_uuid(self):
+        source = self._MODEL.read_text(encoding="utf-8")
+
+        assert "id: Mapped[uuid.UUID]" in source, (
+            "the user primary key is no longer declared as a UUID; if it is now numeric or "
+            "free text, `agent:{id}` authorization on either field can collide (#17363)"
+        )
+
+    def test_a_uuid_can_never_be_a_username(self):
+        from autobot_shared.user_management.schemas.user import _checked_username
+
+        with pytest.raises(ValueError, match="letters, numbers"):
+            _checked_username(str(uuid.uuid4()))
+
+    def test_no_username_may_contain_the_character_a_uuid_always_has(self):
+        from autobot_shared.user_management.schemas.user import _checked_username
+
+        with pytest.raises(ValueError, match="letters, numbers"):
+            _checked_username("a-b")
+
+    def test_an_ordinary_username_is_still_accepted(self):
+        """Positive control: a validator that rejected everything would pass the
+        two assertions above while breaking registration."""
+        from autobot_shared.user_management.schemas.user import _checked_username
+
+        assert _checked_username("alice_9") == "alice_9"
+
+    def test_the_channel_uses_the_user_id_when_both_are_present(self):
+        """The narrower field wins, so the fallback is only ever a fallback."""
+        assert owner_channel({"user_id": "u1", "username": "alice"}) == "agent:u1"
