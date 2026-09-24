@@ -943,7 +943,7 @@ async def get_current_user(request: Request) -> Dict:
             )
         return device_user
 
-    raise_auth_error("AUTH_0002", "Authentication required")
+    raise_auth_error("AUTH_0002")
 
 
 def verify_internal_api_key(provided: str | None) -> bool:
@@ -983,7 +983,7 @@ def check_admin_permission(request: Request) -> bool:
     user_data = get_auth_middleware().get_user_from_request(request)
 
     if not user_data:
-        raise_auth_error("AUTH_0002", "Authentication required")
+        raise_auth_error("AUTH_0002")
 
     # Issue #744: Require explicit role - no guest fallback for security
     user_role = user_data.get("role")

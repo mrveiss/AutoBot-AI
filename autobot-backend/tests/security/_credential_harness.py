@@ -87,19 +87,51 @@ REFUSED_BY_HUMAN_CHECK = "human"
 #: (status, refuser) per non-human kind on a decision route behind the async
 #: ``get_current_user``, outside the run/device path allow-lists. "human" means
 #: the #17042 check refused it, so a test asserts its detail, not just a status.
+#: #17049 moved three kinds off the human check: two to 401, one to the device path. They are still REFUSED -- what
+#: changed is where. The backend used to accept any platform-key token as a
+#: login and let the #17042 human check refuse it at the decision gate; it now
+#: refuses them at AUTHENTICATION, because a token minted for a device, for a
+#: pre-MFA challenge, or for service-to-service traffic is not a login. Earlier
+#: refusal is the better posture, and the credential never reaching the gate is
+#: the point rather than a regression.
+#:
+#: The cost is real and bounded: those three no longer exercise the human check.
+#: One of them (``device_jwt_on_platform_key``) does not even reach 401 -- the
+#: device reader recognises it and its allow-list refuses it at 403.
+#: Four kinds still do -- see ``REFUSED_BY_HUMAN_CHECK`` below and
+#: ``test_the_human_decision_check_is_still_exercised``, which fails if that
+#: number falls, so the gate cannot quietly stop being tested by everything.
+REFUSED_AT_AUTHENTICATION = "authentication"
+
 ASYNC_ROUTE_EXPECTED = {
     "pre_17042_login_jwt": (403, REFUSED_BY_HUMAN_CHECK),
     "internal_service_key": (403, REFUSED_BY_HUMAN_CHECK),
     "run_jwt": (403, "run-JWT path allow-list"),
     "run_jwt_on_platform_key": (403, "run-JWT path allow-list"),
     "device_jwt": (403, "device-JWT path allow-list"),
-    "device_jwt_on_platform_key": (403, REFUSED_BY_HUMAN_CHECK),
-    "slm_mfa_pending_token": (403, REFUSED_BY_HUMAN_CHECK),
-    "slm_service_token": (403, REFUSED_BY_HUMAN_CHECK),
+    # #17049: refused as a login, then RECOGNISED by the device reader and
+    # refused by its allow-list -- so with the fallback secret it now behaves
+    # exactly like a properly-keyed device JWT, which is the outcome the issue
+    # asked for. Better than a bare 401: the reason names the device path.
+    "device_jwt_on_platform_key": (403, "device-JWT path allow-list"),
+    "slm_mfa_pending_token": (401, REFUSED_AT_AUTHENTICATION),  # #17049
+    "slm_service_token": (401, REFUSED_AT_AUTHENTICATION),  # #17049
     "dev_header": (403, REFUSED_BY_HUMAN_CHECK),
     "auth_disabled": (403, REFUSED_BY_HUMAN_CHECK),
     "llc_agent_api_key": (401, "resolution"),
 }
+
+#: Floors on how many kinds still reach the #17042 human check. #17049 refused
+#: three of them earlier, so each table lost coverage; if a floor reaches 0 the
+#: check is untested there and a regression weakening it would go unnoticed.
+#:
+#: The two numbers differ and that is not an oversight: on the LLC route the
+#: sync ``get_current_user`` does not resolve ``internal_service_key`` to a user
+#: at all (401 at resolution), so that kind never reached the human check there
+#: even before #17049. Asserting one shared number would have been wrong for one
+#: of the two tables.
+MIN_KINDS_REACHING_HUMAN_CHECK = 4
+MIN_KINDS_REACHING_HUMAN_CHECK_LLC = 3
 
 
 def token_validator(secret_of, audience: str):
