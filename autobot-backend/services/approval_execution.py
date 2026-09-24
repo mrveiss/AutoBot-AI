@@ -48,14 +48,52 @@ PostApprovalAction = Callable[["Approval", "AsyncSession"], Awaitable[None]]
 
 _REGISTRY: dict[str, PostApprovalAction] = {}
 
+#: action -> the production module that PROPOSES it (#17315). Registered in
+#: the same call as the handler, so the two halves of a gate cannot drift
+#: apart: an action with an executor and no proposer is unreachable, which
+#: is how the orphan-storage gate shipped dead.
+_PROPOSERS: dict[str, str] = {}
+
 #: The ``audit_log`` operation every dispatcher-recorded failure shares,
 #: regardless of which action failed -- the action name is in ``resource``.
 _AUDIT_OPERATION = "approval.post_action_failed"
 
 
-def register_post_approval_action(action: str, handler: PostApprovalAction) -> None:
-    """Register *handler* to run when an approved gate's context names *action*."""
+def register_post_approval_action(action: str, handler: PostApprovalAction, *, proposed_by: str) -> None:
+    """Register *handler* to run when an approved gate's context names *action*.
+
+    *proposed_by* is the dotted path of the production module that creates
+    such an approval (e.g. ``"api.admin_orphan_storage"``). It is required
+    and verified, not documentation: #17315 found this registry holding one
+    action whose only ``context["action"]`` producer was the registering
+    module itself, so an admin could never propose the one deletion the
+    owner rule (#17038) requires to be proposed. Declaring the proposer
+    here lets ``approval_execution_proposer_test.py`` check every registered
+    action against a real entry point, so the next action cannot land
+    unreachable the same way.
+    """
+    if not action or not action.strip():
+        raise ValueError("a post-approval action needs a non-empty name")
+    if not proposed_by or not proposed_by.strip():
+        raise ValueError(f"action {action!r} must name the production module that proposes it (#17315)")
     _REGISTRY[action] = handler
+    _PROPOSERS[action] = proposed_by.strip()
+
+
+def is_registered_action(action: str) -> bool:
+    """Whether *action* has a handler -- the creation-time check (#17315).
+
+    ``POST /approval-gates`` calls this to refuse an unknown action while
+    it is still only a request. Catching it at approval time instead
+    leaves the only remaining option: telling a human who already said yes
+    that nothing happened.
+    """
+    return action in _REGISTRY
+
+
+def registered_action_proposers() -> dict[str, str]:
+    """Every registered action mapped to the module that proposes it (#17315)."""
+    return dict(_PROPOSERS)
 
 
 async def run_post_approval_actions(approval: "Approval", session: "AsyncSession") -> None:

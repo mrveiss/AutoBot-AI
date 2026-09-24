@@ -31,6 +31,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from models.approval import ApprovalStatus, ApprovalType
+from services.approval_execution import is_registered_action
 from services.approval_gate_service import ApprovalGateService
 
 logger = get_logger(__name__)
@@ -93,6 +94,36 @@ def _to_response(approval) -> ApprovalGateResponse:
     )
 
 
+def _reject_unregistered_action(context: dict | None) -> None:
+    """Refuse a ``context.action`` that names no registered handler (#17315).
+
+    ``context`` is caller-supplied and reaches
+    ``services.approval_execution.run_post_approval_actions`` verbatim, which
+    dispatches on ``context["action"]``. An action with no handler is recorded
+    there as a durable anomaly -- an ApprovalComment plus an
+    ``approval.post_action_failed`` audit entry that module's own docstring
+    calls "a real defect, not a no-op". Any authenticated caller could
+    therefore mint those by naming a string that never existed.
+
+    Creation is the only place the request can simply be refused. At approval
+    time a human has already said yes, and the sole remaining option is to
+    record that nothing happened. An approval with no ``action`` at all stays
+    valid: that is the ordinary gate (``compose_tool_handler`` creates one),
+    and the dispatcher returns early for it.
+    """
+    action = (context or {}).get("action")
+    if action is None:
+        return
+    if not isinstance(action, str) or not is_registered_action(action):
+        # Deliberately does not echo the value back or list what IS
+        # registered: the caller supplied it, and the set of live actions is
+        # not theirs to enumerate.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="context.action names no registered post-approval handler",
+        )
+
+
 # -- Endpoints ---------------------------------------------------------
 
 
@@ -112,6 +143,7 @@ async def create_approval(
     session: AsyncSession = Depends(get_db_session),
 ):
     """Create a new approval gate request (#1402)."""
+    _reject_unregistered_action(body.context)
     svc = ApprovalGateService(session)
     approval = await svc.create_approval(
         title=body.title,
