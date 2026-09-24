@@ -70,26 +70,25 @@ def test_discover_bridges_structure():
 
 
 def test_discover_bridges_known_names():
-    from api.mcp_registry import discover_bridges
+    """Every bridge on disk is discovered, and nothing else is (#14631).
 
-    result = discover_bridges()
-    names = {entry[0] for entry in result}
-    expected = {
-        "knowledge_mcp",
-        "vnc_mcp",
-        "sequential_thinking_mcp",
-        "structured_thinking_mcp",
-        "filesystem_mcp",
-        "browser_mcp",
-        "http_client_mcp",
-        "database_mcp",
-        "git_mcp",
-        "prometheus_mcp",
-        "redis_mcp",
-        # #14586: the twelfth governed bridge.
-        "manual_mcp",
-    }
-    assert names == expected
+    This used to compare against a hardcoded set of twelve names -- the fourth
+    hand-maintained copy of "every governed bridge", and the one that caught
+    #14586's omission only because it happened to assert `==` rather than a
+    subset. The literal is gone: the expectation is derived from the same
+    filesystem scan the governance tooling uses, so adding a thirteenth bridge
+    cannot require an edit here, and a bridge that stops being discovered still
+    fails.
+    """
+    from api.mcp_registry import discover_bridges
+    from autobot_shared.auth.mcp_bridge_scan import bridge_files, bridge_name
+
+    on_disk = {bridge_name(path) for path in bridge_files()}
+    # A scan that found nothing would make the comparison below vacuous.
+    assert on_disk, "the bridge scan found no bridges — fix the sweep, not this assertion"
+
+    names = {entry[0] for entry in discover_bridges()}
+    assert names == on_disk
 
 
 def test_discover_bridges_manifest_registry_populated():

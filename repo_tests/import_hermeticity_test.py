@@ -162,7 +162,23 @@ REACH = declare(
     # extracted to keep their callers under the 600-line ceiling; this branch's
     # own new modules live under llm_shared/, outside this scope, so the pin
     # does not move again. Pinned at `population - growth`.
-    floor=604,
+    # #14881 pins 635 rather than main's 604. This branch adds a module under
+    # the counted roots (autobot_shared/code_review_enums.py, the shared home
+    # the four hand-copied enums moved to), and main's pin is `population -
+    # growth` -- zero headroom by construction, so one added module is enough.
+    # Second time this declaration has gone red that way in a night.
+    #
+    # 635 is mid-window, not the bottom. The block above records this population
+    # growing ~52 modules per 30 days, so a floor at the bottom of its band is
+    # red again within weeks of ordinary work.
+    #
+    # NO MEASURED NUMBERS HERE, deliberately: prose citing a population survives
+    # the rebase that changes it, which is how these floor files accumulated
+    # several stale narratives in one night -- the resolver owns the value and
+    # nothing owns the sentence. The arithmetic is in the commit message, which
+    # cannot drift from the tree it describes. Re-derive rather than trusting
+    # any figure written here.
+    floor=635,
     what="non-test modules under api/ and autobot_shared/, both backends",
     growth=60,
 )

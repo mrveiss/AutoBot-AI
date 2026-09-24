@@ -324,6 +324,11 @@ REACH = declare(
     # accumulated across these floor files tonight for exactly that reason --
     # the rebase resolves the value and nothing resolves the sentence. The
     # arithmetic is in the commit message, which cannot drift from its tree.
+    #
+    # #14881/#14631 reached the same conclusion independently on its own branch
+    # and also adopts 6736. Two branches, one measurement, one number -- which
+    # is what first-to-land is for. Its wording carried a slack figure; that is
+    # dropped here rather than merged, for the reason the paragraph above gives.
     growth=400,
     skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
