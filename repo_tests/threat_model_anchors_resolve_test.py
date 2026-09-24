@@ -67,9 +67,32 @@ def _anchors() -> list[tuple[str, str, int]]:
     return found
 
 
+#: The doc must stay readable in full during a review -- the premise is that it
+#: is cheaper to read than to re-derive. The number is NOT a readability
+#: measurement; it was the document's size when this guard was written.
+#:
+#: Raised 140 -> 160 (#17054) for a FIFTH trust boundary, remote desktop access.
+#: Holding 140 would have meant one of two worse outcomes: leaving a real
+#: boundary out of the threat model, or cutting existing coverage to fit it.
+#: What the number protects is per-boundary cost, because a reviewer reads the
+#: preamble, the cross-cutting section, and the one section their diff touches:
+#:
+#:     before   140 / 4 boundaries = 35.0 lines each
+#:     after    160 / 5 boundaries = 32.0 lines each
+#:
+#: So the doc got DENSER, not baggier, and the new section is the second-shortest
+#: of the five -- its full reasoning lives in `enforce_ws_desktop_auth`'s
+#: docstring, which is where a reader who wants it already is.
+#:
+#: MOVE THIS ONLY FOR A NEW BOUNDARY, and state the arithmetic when you do.
+#: Prose growth inside the existing sections must still hit this wall -- that is
+#: the property being kept, and raising the number for prose retires it.
+_MAX_LINES = 160
+
+
 def test_document_exists_and_is_short_enough_to_read_every_review():
     # The whole premise is that it is cheaper to read than to re-derive.
-    assert len(_doc_text().splitlines()) <= 140
+    assert len(_doc_text().splitlines()) <= _MAX_LINES
 
 
 def test_every_relative_link_resolves():

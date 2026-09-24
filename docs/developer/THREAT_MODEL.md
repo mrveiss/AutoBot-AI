@@ -1,6 +1,6 @@
 # Threat Model — Trust Boundaries by Subsystem
 
-Read this **before** the `secreview` checklist when a diff touches one of these four
+Read this **before** the `secreview` checklist when a diff touches one of these five
 subsystems. It exists so a review states the invariant a change breaks instead of
 re-deriving the trust model from the implementation.
 
@@ -130,39 +130,21 @@ response, a log line, an issue, a PR comment — is already redacted.
 
 **Boundary:** an authenticated user vs. the *managed desktop*. Not an auth boundary — the
 caller is logged in — so a missing check reads as a working feature, which is how
-[#17054](https://github.com/mrveiss/AutoBot-AI/issues/17054) survived: the capability names
-were in the guard's signature and applied only to paired devices.
+[#17054](https://github.com/mrveiss/AutoBot-AI/issues/17054) survived.
 
 **Canonical enforcement:** [`autobot-backend/api/ws_security.py`](../../autobot-backend/api/ws_security.py)
-— `enforce_ws_desktop_auth` is the one gate. `api/vnc_proxy.py`'s websockify route calls it
-before proxying; nothing else may open that socket.
-
-**Policy**
-- A **paired device** is judged on its own grant set: it must hold BOTH
-  `DESKTOP_VIEW` and `DESKTOP_INPUT` (`evaluate_device_capabilities`, #15146).
-- A **user credential** must hold `mcp.desktop.control` for its role, answered by
-  `role_has_permission` against `ROLE_PERMISSIONS`. Today that is `admin` and `operator`.
-- Everyone else is refused in the handshake with `1008`, before any RFB byte is proxied.
+`enforce_ws_desktop_auth` — the one gate; `api/vnc_proxy.py`'s websockify route calls it before
+proxying. A paired device is judged on its own grants (`DESKTOP_VIEW`+`DESKTOP_INPUT`, #15146); a
+user credential must hold `mcp.desktop.control` via `role_has_permission`; everyone else is
+refused `1008` before any RFB byte. Full reasoning is in that function's docstring.
 
 **Invariants**
-- **`control`, never `read`.** The RFB proxy carries framebuffer and input on one stream —
-  `_forward_client_to_vnc` forwards the client's KeyEvent and PointerEvent frames verbatim —
-  so opening the socket grants input as inseparably as it grants view. Admitting on
-  `mcp.desktop.read` would be a view-only grant that is not view-only. A genuine view-only
-  tier needs RFB message-level filtering on the client→server direction, which this gate
-  does not attempt.
-- **The permission table is the source, not `is_admin_role`.**
-  [#13854](https://github.com/mrveiss/AutoBot-AI/issues/13854) removed the administrative
-  short-circuit from `role_has_permission` because it made a predicate the most permissive
-  permission source in the system. A bypass at this call site would reverse that ruling one
-  file at a time.
-- **Consequence, deliberate and asserted:** `ROLE_PERMISSIONS[Role.SUPERADMIN]` is empty by
-  that same decision, so **a superadmin is refused the desktop**. If that is wrong, the fix
-  is superadmin's `ROLE_PERMISSIONS` entries — one place — not a bypass in the gate.
-  `desktop_ws_role_gate_17054_test.py` asserts both the table's answer and the socket's, so
-  the two cannot drift.
-- Authorisation runs once, before `accept()`. A socket already open is not re-authorised; a
-  role change takes effect on the next handshake.
+- **`control`, never `read`.** RFB carries framebuffer and input on one stream, so the socket
+  cannot grant view without input — `mcp.desktop.read` would be a view-only grant that is not.
+- **The permission table decides, not `is_admin_role`** (#13854). A bypass here reverses that
+  ruling one call site at a time. Consequence: `superadmin`'s entry is empty, so it is refused —
+  fix that in `ROLE_PERMISSIONS`, not in the gate. `desktop_ws_role_gate_17054_test.py` asserts
+  both the table's answer and the socket's.
 
 ## Cross-cutting
 
