@@ -54,7 +54,10 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || {
   exit 1
 }
 
-cd "$(git_repo_root)" 2>/dev/null || { echo "not a git repo" >&2; exit 2; }
+# Two steps, never `cd "$(git_repo_root)" || ...`: an empty substitution makes
+# that `cd ""`, a no-op success, so the guard could never fire (#17410).
+repo_root=$(git_repo_root) || { echo "not a git repo" >&2; exit 2; }
+cd "$repo_root" || { echo "not a git repo" >&2; exit 2; }
 [ -n "$BRANCH" ] || BRANCH=$(git branch --show-current 2>/dev/null)
 
 FAILURES=0

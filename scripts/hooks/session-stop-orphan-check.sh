@@ -17,7 +17,10 @@ set -euo pipefail
 # shellcheck source=scripts/lib/git-root.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/git-root.sh" || exit 0
 
-cd "$(git_repo_root)" || exit 0
+# `cd "$(git_repo_root)"` alone never fails: an empty substitution makes it
+# `cd ""`, a no-op success, and a later git call then dies under set -e (#17410).
+repo_root=$(git_repo_root) || exit 0
+cd "$repo_root" || exit 0
 
 # Skip if a git operation is in progress (race condition with in-progress commits)
 if [ -f "$(git rev-parse --git-dir 2>/dev/null)/index.lock" ]; then
