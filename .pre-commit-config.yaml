@@ -962,6 +962,20 @@ repos:
         stages: [pre-commit]
         description: "Reject Python files exceeding 600 lines to prevent god-module regressions (#5060)"
 
+      - id: shell-file-size
+        name: Shell file size guard (#17353, max 600 lines)
+        entry: python3 scripts/check_shell_file_size.py
+        language: python
+        files: \.sh$
+        # Narrower than python-file-size on purpose: autobot-infrastructure/ is
+        # WHERE SHELL LIVES, and excluding it would drop 6 of the 10 oversized
+        # shell files -- the gate would report green having checked almost
+        # nothing. Mirrored by EXCLUDED_PREFIXES in the hook, which a ratchet
+        # test parses this file to verify.
+        exclude: ^\.worktrees/
+        stages: [pre-commit]
+        description: "Reject shell files exceeding 600 lines; grandfathered files may not grow (#17353)"
+
       - id: canonical-check-py
         name: Canonical check — Python (#7458)
         entry: python3 tools/lint/canonical_check.py --files
