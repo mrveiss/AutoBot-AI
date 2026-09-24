@@ -177,3 +177,91 @@ def test_the_refusal_names_which_predicate_fired(monkeypatch: pytest.MonkeyPatch
         assert mw._extract_user_from_jwt(_Req("t")) is None
     assert "minted for another purpose" in caplog.text
     assert "no identity claim" not in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# The WebSocket path, and an honest account of what its guard is worth
+# ---------------------------------------------------------------------------
+
+#: A purpose-bound token that ALSO carries the claims the WS path subscripts.
+#: No minter produces this shape today -- see the test below for why that is
+#: the point rather than a reason to skip it.
+_DEVICE_JWT_WITH_USERNAME = {
+    "sub": "alice",
+    "username": "alice",
+    "role": "user",
+    "device_id": "dev-1",
+    "scope": "read",
+    "token_type": "device",
+}
+
+
+@pytest.mark.asyncio
+async def test_the_websocket_path_refuses_a_purpose_bound_token_carrying_a_username(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The WS guard is defence in depth TODAY. This is the shape that makes it load-bearing.
+
+    Recorded because a review could not substantiate this change's "identical
+    defect" claim for the WebSocket path, and the review was right. The two
+    paths differ in a way the claim glossed:
+
+    * HTTP -- `_extract_user_from_jwt` falls back `username or sub or user_id`,
+      and a device JWT carries `user_id`. It authenticated. That is the defect.
+    * WS -- builds its result with DIRECT subscripts, `token_data["username"]`,
+      and **no purpose-bound minter emits `username`**
+      (`services/device_token_service.py` is the only one setting a
+      `token_type`; its payload is device_id/user_id/scope/platform/iat). So a
+      device JWT already died on a `KeyError` swallowed by `except Exception`.
+
+    Rejecting by accident and rejecting on purpose are the same outcome and
+    different guarantees. The accidental one stops holding the moment a minter
+    adds a `username` claim -- a change with no obvious connection to
+    authentication -- and nothing in the suite would fail when it does.
+
+    So this test supplies the shape no minter produces yet, and asserts the
+    refusal is the guard's rather than the subscript's. Remove the
+    `is_purpose_bound` arm at the WS call site and it authenticates a device
+    token as its owning user.
+    """
+    module = _load_real_auth_middleware()
+
+    class _WS:
+        headers: dict = {}
+        query_params = {"token": "t"}
+
+    monkeypatch.setattr(module, "resolve_ws_token", lambda ws: "t", raising=False)
+    monkeypatch.setattr(
+        module,
+        "get_auth_middleware",
+        lambda: type("_M", (), {"verify_jwt_token": staticmethod(lambda token: _DEVICE_JWT_WITH_USERNAME)})(),
+        raising=False,
+    )
+
+    assert await module.authenticate_websocket(_WS()) is None, (
+        "a device token that happens to carry a username authenticated over the WebSocket -- "
+        "the refusal was the subscript's, not the guard's"
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_websocket_path_still_admits_an_ordinary_login(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The contrast. Without it, "refuses a device token" is satisfied by refusing everyone."""
+    module = _load_real_auth_middleware()
+
+    class _WS:
+        headers: dict = {}
+        query_params = {"token": "t"}
+
+    monkeypatch.setattr(module, "resolve_ws_token", lambda ws: "t", raising=False)
+    monkeypatch.setattr(
+        module,
+        "get_auth_middleware",
+        lambda: type("_M", (), {"verify_jwt_token": staticmethod(lambda token: _BACKEND_LOGIN)})(),
+        raising=False,
+    )
+
+    user = await module.authenticate_websocket(_WS())
+
+    assert user is not None and user["username"] == "alice"
+    assert user["auth_method"] == "jwt_websocket"
