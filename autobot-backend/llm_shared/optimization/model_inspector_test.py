@@ -325,7 +325,7 @@ class TestInspectModel:
                 return_value=MagicMock(),
             ),
             patch(
-                "llm_shared.optimization.model_inspector._import_accelerate",
+                "llm_shared.optimization.model_inspector.lazy_accelerate",
                 side_effect=ImportError("accelerate missing"),
             ),
         ):
@@ -351,7 +351,7 @@ class TestInspectModel:
                 return_value=mock_transformers,
             ),
             patch(
-                "llm_shared.optimization.model_inspector._import_accelerate",
+                "llm_shared.optimization.model_inspector.lazy_accelerate",
                 return_value=mock_accelerate,
             ),
         ):
@@ -377,7 +377,7 @@ class TestInspectModel:
                 return_value=mock_transformers,
             ),
             patch(
-                "llm_shared.optimization.model_inspector._import_accelerate",
+                "llm_shared.optimization.model_inspector.lazy_accelerate",
                 return_value=mock_accelerate,
             ),
         ):
@@ -401,7 +401,7 @@ class TestInspectModel:
                 return_value=mock_transformers,
             ),
             patch(
-                "llm_shared.optimization.model_inspector._import_accelerate",
+                "llm_shared.optimization.model_inspector.lazy_accelerate",
                 return_value=mock_accelerate,
             ),
         ):
@@ -424,7 +424,7 @@ class TestInspectModel:
                 return_value=mock_transformers,
             ),
             patch(
-                "llm_shared.optimization.model_inspector._import_accelerate",
+                "llm_shared.optimization.model_inspector.lazy_accelerate",
                 return_value=mock_accelerate,
             ),
         ):

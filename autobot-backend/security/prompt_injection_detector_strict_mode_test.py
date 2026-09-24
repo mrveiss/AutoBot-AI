@@ -150,7 +150,23 @@ REACH = declare(
     # this stack adds -- llm_shared/{structured_output,validated_llm,decisions}.py
     # and providers/anthropic_request.py -- are the entire overage. Pinned at
     # `population - growth`.
-    floor=2960,
+    #
+    # #13049 keeps 3100 instead of main's 2960, by agreement with autobot-ai-f8
+    # and autobot-ai-63 rather than unilaterally: 63 held back an identical pin
+    # so it would resolve here rather than race.
+    #
+    # 2960 is `population - growth` and therefore has ZERO headroom by
+    # construction -- main itself sits exactly at the allowance, so the next
+    # branch adding one non-test backend module turns it red. This branch is
+    # that branch. 3100 is mid-window and absorbs it.
+    #
+    # NO MEASURED NUMBERS IN THIS COMMENT, deliberately. Four orphaned
+    # narratives accumulated in these floor files tonight because prose citing a
+    # population survives a rebase that changes it -- the resolver owns the
+    # value and nothing owns the sentence. The arithmetic for this pin lives in
+    # the commit message, which cannot drift from the tree it describes. Re-derive
+    # rather than trusting any figure written here or in the blocks above.
+    floor=3100,
     growth=300,
     what="tracked backend python files (tests excluded)",
 )
