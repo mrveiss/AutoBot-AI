@@ -224,3 +224,44 @@ class TestTheComment:
 
         assert "can't tell" in comment
         assert "a met verdict was discarded" in comment
+
+
+class TestACitationMustHaveBeenShown:
+    """A real line that was never in the evidence is not evidence (#17090).
+
+    The citation check used to prove only that a `file:line` exists and is not
+    blank, so a citation to any real, non-blank line in the tree survived --
+    whether or not it had anything to do with the criterion. A code-reviewer
+    pass on the merged code made the point with this file's own fixture: line 2
+    of `_FILE` says "line two has content", which supports nothing.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_real_line_absent_from_the_evidence_is_rejected(self, decided):
+        decided["box"]["result"] = _answer(Verdict.MET.value, f"see {_FILE}:1")
+
+        # `_search` shows line 2 only, so line 1 is real, non-blank, and unshown.
+        result = await verify_criterion(_criterion("`decide` is wired"), search=_search, read=_read)
+
+        assert result.verdict is Verdict.CANT_TELL
+        assert any("not in the evidence" in reason for reason in result.rejected_citations)
+
+    @pytest.mark.asyncio
+    async def test_a_shown_line_is_still_accepted(self, decided):
+        """Positive control: the new check must not reject everything."""
+        decided["box"]["result"] = _answer(Verdict.MET.value, f"see {_FILE}:2")
+
+        result = await verify_criterion(_criterion("`decide` is wired"), search=_search, read=_read)
+
+        assert result.verdict is Verdict.MET
+        assert [str(c) for c in result.citations] == [f"{_FILE}:2"]
+
+    @pytest.mark.asyncio
+    async def test_a_nonexistent_path_still_reports_that_reason(self, decided):
+        """Existence is checked BEFORE the evidence filter, so the more precise
+        reason survives rather than being replaced by the vaguer one."""
+        decided["box"]["result"] = _answer(Verdict.MET.value, "see services/invented.py:5")
+
+        result = await verify_criterion(_criterion("`decide` is wired"), search=_search, read=_read)
+
+        assert any("no such file" in reason for reason in result.rejected_citations)

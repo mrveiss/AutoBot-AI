@@ -42,6 +42,7 @@ from agents.ac_criteria import (
     Citation,
     Criterion,
     code_searcher,
+    criteria_after_the_section,
     criterion_terms,
     extract_criteria,
     file_reader,
@@ -152,12 +153,33 @@ def _validated(
     reasoning: str,
     probability: float,
     read: Callable[[str], Optional[str]],
+    evidence: str = "",
 ) -> CriterionResult:
-    """Downgrade a verdict whose citations do not survive being opened."""
+    """Downgrade a verdict whose citations do not survive being opened.
+
+    A citation must ALSO appear in the evidence the model was shown (review
+    finding on the merged #17090). Opening the line proved only that it exists
+    and is not blank -- so a citation to a real, non-blank line anywhere in the
+    tree passed, whether or not it had anything to do with the criterion. The
+    evidence block is `path:line: content` per hit, so requiring the `path:line`
+    prefix to appear in it means a verdict can only rest on something the model
+    was actually looking at. `evidence=""` keeps the old behaviour for a caller
+    that has no evidence text to check against, and says so by defaulting.
+    """
     if verdict not in _EVIDENCE_REQUIRED:
         return CriterionResult(criterion=criterion, verdict=verdict, reasoning=reasoning, probability=probability)
 
-    verified, rejected = verify_citations(parse_citations(reasoning), read)
+    # Existence first, so a fabricated PATH still reports "no such file" rather
+    # than the vaguer "not in the evidence"; the evidence check then filters what
+    # survived. Both reasons are useful and they answer different questions.
+    opened, rejected = verify_citations(parse_citations(reasoning), read)
+    rejected = list(rejected)
+    verified = []
+    for citation in opened:
+        if evidence and str(citation) not in evidence:
+            rejected.append(f"{citation}: real, but not in the evidence this verdict was shown")
+            continue
+        verified.append(citation)
     if verified:
         return CriterionResult(
             criterion=criterion,
@@ -204,7 +226,7 @@ async def verify_criterion(
         )
 
     answer = result[_QUESTION_ID]
-    return _validated(criterion, Verdict(str(answer.value)), answer.reasoning, answer.probability, read)
+    return _validated(criterion, Verdict(str(answer.value)), answer.reasoning, answer.probability, read, evidence)
 
 
 async def verify_issue(
@@ -226,6 +248,13 @@ async def verify_issue(
     notes: list[str] = []
     if not criteria:
         notes.append("no acceptance criteria were found in this issue: nothing was verified")
+    unread = criteria_after_the_section(body)
+    if unread:
+        notes.append(
+            f"{unread} checkbox line(s) appear after the acceptance-criteria section and were NOT "
+            "verified -- the section ended at a heading. Move them under the criteria heading, or "
+            "read them yourself; this result covers only what is above that heading"
+        )
     hint = unparsed_amendment_hint(comments)
     if hint:
         notes.append(hint)
