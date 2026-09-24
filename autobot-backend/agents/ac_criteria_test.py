@@ -18,6 +18,7 @@ from agents.ac_criteria import (
     Citation,
     Criterion,
     code_searcher,
+    criteria_after_the_section,
     criterion_terms,
     extract_criteria,
     file_reader,
@@ -176,3 +177,51 @@ class TestTheGitPlumbingActuallyReads:
     @pytest.mark.skipif(not _has_ref(), reason="origin/main is not present in this checkout")
     def test_the_searcher_says_so_when_a_term_matches_nothing(self):
         assert "no match" in code_searcher()(["ZzQqNoSuchIdentifierAnywhere"])
+
+
+class TestTheSectionIsNotTruncatedSilently:
+    """A truncated criteria list reported as complete is this module's worst
+    failure, and the first version had three ways to produce one (#17090).
+
+    Found by a code-reviewer pass on the MERGED code, reproduced before fixing:
+    a sub-heading inside the section dropped every criterion below it, and an
+    indented `**Note:**` under a criterion ended the section one criterion in.
+    Both reported what they had read as the whole list.
+    """
+
+    def test_a_deeper_sub_heading_does_not_end_the_section(self):
+        body = "## Acceptance criteria\n- [ ] one\n- [ ] two\n### Notes\ntext\n- [ ] three\n- [ ] four\n"
+
+        assert [c.text for c in extract_criteria(body)] == ["one", "two", "three", "four"]
+
+    def test_an_indented_bold_note_belongs_to_its_criterion(self):
+        body = "## Acceptance criteria\n- [ ] Do X\n  **Note:** remember Y\n- [ ] Do Z\n"
+
+        texts = [c.text for c in extract_criteria(body)]
+        assert len(texts) == 2
+        assert texts[0] == "Do X **Note:** remember Y"
+        assert texts[1] == "Do Z"
+
+    def test_a_same_level_heading_still_ends_the_section(self):
+        """The negative half: `## Related`'s checkboxes are not criteria."""
+        body = "## Acceptance criteria\n- [ ] a\n- [ ] b\n## Related\n- [ ] not a criterion\n"
+
+        assert [c.text for c in extract_criteria(body)] == ["a", "b"]
+
+    def test_checkboxes_after_the_section_are_counted_not_ignored(self):
+        """ "No more criteria" and "stopped looking" must not read the same."""
+        body = "## Acceptance criteria\n- [ ] a\n## Related\n- [ ] x\n- [ ] y\n"
+
+        assert criteria_after_the_section(body) == 2
+
+    def test_an_untruncated_section_reports_nothing_left_behind(self):
+        """The positive control for the counter: it must be able to say zero."""
+        body = "## Acceptance criteria\n- [ ] a\n- [ ] b\n\nSome trailing prose.\n"
+
+        assert criteria_after_the_section(body) == 0
+
+    def test_a_bold_pseudo_heading_opens_a_section_too(self):
+        """This repo's issues use both `## Acceptance criteria` and the bold form."""
+        body = "**Acceptance criteria**\n- [ ] a\n- [ ] b\n"
+
+        assert [c.text for c in extract_criteria(body)] == ["a", "b"]

@@ -10,7 +10,7 @@ control of it, and answer or redirect its host selection. Here every route is
 exercised as the owner (alice), a second non-admin user (bob) and an admin,
 against sessions that are owned, unowned (recorded before the change) or
 missing. The decision routes also get a negative control per non-human
-credential kind, resolved by production code (tests/security/credential_harness).
+credential kind, resolved by production code (tests/security/_credential_harness).
 """
 
 import asyncio
@@ -31,7 +31,7 @@ from api.user_management.human_decider import HUMAN_DECISION_REQUIRED
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from services.agent_terminal.models import AgentTerminalSession
 from services.command_approval_manager import AgentRole
-from tests.security.credential_harness import (
+from tests.security._credential_harness import (
     ASYNC_ROUTE_EXPECTED,
     REFUSED_BY_HUMAN_CHECK,
     credentials,
@@ -439,3 +439,24 @@ def test_a_person_gets_through_the_same_resolution(terminal, real_auth_middlewar
 
     assert response.status_code == 200, response.text
     assert terminal.service.approve_command.await_args.kwargs["user_id"] == "alice"
+
+
+def test_the_human_decision_check_is_still_exercised():
+    """#17049 took three credential kinds off this gate; four must still reach it.
+
+    The three now refused at authentication (or by the device allow-list) are
+    refused EARLIER, which is the better posture — but they no longer prove the
+    #17042 human check refuses them, because they never arrive. This asserts the
+    check has not quietly stopped being tested by everything: if a later change
+    moves the remaining kinds to an earlier refusal too, the gate would be
+    covered by nothing and a regression weakening it would pass unnoticed.
+    """
+    from tests.security._credential_harness import MIN_KINDS_REACHING_HUMAN_CHECK
+
+    reaching = sorted(k for k, (_s, refuser) in ASYNC_ROUTE_EXPECTED.items() if refuser == REFUSED_BY_HUMAN_CHECK)
+
+    assert len(reaching) >= MIN_KINDS_REACHING_HUMAN_CHECK, (
+        f"only {len(reaching)} credential kind(s) still reach the #17042 human check "
+        f"({reaching}) — below the floor of {MIN_KINDS_REACHING_HUMAN_CHECK}. Refusing earlier is "
+        "good, but something must still prove the decision gate itself refuses a non-human."
+    )
