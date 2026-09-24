@@ -279,10 +279,16 @@ class ArtifactIngestor:
 
         if product.storage_path:
             if not _is_text_path(product.storage_path):
+                # The extension, not the path (#17302). `storage_path` is
+                # agent-supplied, and CLAUDE.md forbids internal filesystem
+                # paths in logs -- doubly so for one an attacker chooses. The
+                # extension is what the decision was made on, is bounded, and
+                # the product id below is the join key for anyone who needs the
+                # path from the row.
                 logger.info(
-                    "ArtifactIngestor: skipping binary storage_path %s for product %s",
-                    product.storage_path,
+                    "ArtifactIngestor: skipping product %s -- extension %r is not indexable text",
                     product.id,
+                    os.path.splitext(product.storage_path)[1][:16],
                 )
                 return None
             contained = _contained_storage_path(product.storage_path, product.id)
@@ -293,11 +299,16 @@ class ArtifactIngestor:
                 # string is the string used (#17302).
                 with open(contained, encoding="utf-8", errors="replace") as fh:
                     return fh.read()
-            except Exception:
-                logger.exception(
-                    "ArtifactIngestor: could not read storage_path %s for product %s",
-                    product.storage_path,
+            except Exception as exc:
+                # Type, not the exception object: an OSError stringifies with
+                # the filename, so `logger.exception` would put the
+                # agent-supplied path back into the log through the traceback
+                # after it was removed from the format string. The cost is the
+                # traceback; the product id recovers the path from the row.
+                logger.warning(
+                    "ArtifactIngestor: unreadable storage_path for product %s (%s)",
                     product.id,
+                    type(exc).__name__,
                 )
                 return None
 

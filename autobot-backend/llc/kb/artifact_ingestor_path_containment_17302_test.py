@@ -33,6 +33,7 @@ from typing import List, Optional
 
 import pytest
 
+from llc.kb import artifact_ingestor
 from llc.kb.artifact_ingestor import ArtifactIngestor, _contained_storage_path
 
 
@@ -200,6 +201,14 @@ async def test_a_refusal_is_a_clean_skip_not_a_swallowed_exception(
     what an operator sees: a warning naming containment and #17302, versus an
     exception traceback saying the file could not be read, which reads like a
     missing file rather than a rejected one and sends the reader somewhere else.
+
+    The negative assertion names `unreadable storage_path`, the literal the
+    read-failure branch logs. That coupling is deliberate and was nearly lost:
+    when that message was reworded, this assertion went on checking for the OLD
+    text, which no longer appears anywhere -- passing unconditionally, for a
+    string that could never be present. A negative assertion against a literal
+    is only as good as the literal still existing, so `test_the_read_failure_log_literal_still_exists`
+    below pins it.
     """
     import logging
 
@@ -214,5 +223,20 @@ async def test_a_refusal_is_a_clean_skip_not_a_swallowed_exception(
 
     assert "#17302" in caplog.text, "the refusal must say why it refused"
     assert (
-        "could not read storage_path" not in caplog.text
+        "unreadable storage_path" not in caplog.text
     ), "a refused path was reported as an unreadable file -- the operator is told the wrong thing"
+
+
+def test_the_read_failure_log_literal_still_exists() -> None:
+    """The negative assertion above is worthless if its literal is renamed.
+
+    `assert "x" not in caplog.text` passes for two different reasons: the
+    branch did not fire, or `x` is not what the branch says any more. Only the
+    first is a result. This pins the second so a rename fails here, loudly,
+    instead of quietly making the other test unconditional.
+    """
+    source = pathlib.Path(artifact_ingestor.__file__).read_text(encoding="utf-8")
+    assert "unreadable storage_path" in source, (
+        "the read-failure log message was renamed; update the negative assertion in "
+        "test_a_refusal_is_a_clean_skip_not_a_swallowed_exception to match, or it now asserts nothing"
+    )
