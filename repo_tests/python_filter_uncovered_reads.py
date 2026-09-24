@@ -52,8 +52,16 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         "autobot-frontend/scripts/check-ts-delta.sh",
         "autobot-frontend/src/components/terminal/SSHTerminal.vue",
         "autobot-frontend/src/types/generated/api.ts",
+        # #17329: hardcoded_values_scope_agreement_test.py passes these three as
+        # PARAMETERS to hv_path_in_scan_dirs, a pure string predicate -- it never
+        # opens them, and its verdict cannot change when their content does.
+        # Covering them would run twelve shards on every frontend config or
+        # component edit, which is the trade the CLAUDE.md entry below refuses.
+        "autobot-frontend/vitest.config.ts",
         "autobot-slm-frontend/openapi.json",
+        "autobot-slm-frontend/src/App.vue",
         "autobot-slm-frontend/src/composables/useAutobotApi.ts",
+        "autobot-slm-frontend/vitest.config.ts",
         "autobot-slm-frontend/src/types/generated/api.ts",
         "autobot-slm-frontend/src/views/tools/admin/TerminalTool.vue",
         # #17129: doc_index_worktree_contamination_16934_test.py's "CLAUDE.md" is a
@@ -115,9 +123,17 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: dict key, never opened) above are both new bypasses, not a denominator
 #: correction.
 #:
+#: RAISED 42 -> 45 by #17329: the three frontend paths above are new bypasses,
+#: not a denominator correction. hardcoded_values_scope_agreement_test.py names
+#: them as PARAMETERS to a string predicate, never opening them, so covering
+#: them in the filter would run twelve shards on every frontend config edit for
+#: a guard that cannot depend on their content. The same run's fourth find,
+#: `.github/filters/frontend-paths.yml`, IS a real read -- the mirror guard
+#: parses it -- so it was covered in the filter instead and is not counted here.
+#:
 #: RAISED 41 -> 42 by #17020: `autobot-frontend/src/components/terminal/
 #: SSHTerminal.vue` above is a new bypass -- frontend_ws_client_route_pin_17020_test.py
 #: reads it by concrete literal path to pin its WebSocket URL against the real
 #: backend route, and `autobot-frontend/src/components/` is outside the python
 #: filter's trees. A new bypass, not a denominator correction.
-MAX_UNCOVERED_READS = 42
+MAX_UNCOVERED_READS = 45
