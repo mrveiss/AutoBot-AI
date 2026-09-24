@@ -191,6 +191,14 @@ def _scan_source(source: str, label: str) -> tuple[list[str], int, int]:
         if not isinstance(payload, ast.Dict):
             opaque += 1
             continue
+        # A `**spread` entry gives `ast.Dict.keys` a None, and dropping it
+        # silently makes `{"type": "x", **ctx}` count as INSPECTED while half of
+        # it is a variable this guard cannot read. A payload is only inspectable
+        # when every key is a literal; anything else is opaque, which is the
+        # premise the count rests on.
+        if any(k is None for k in payload.keys):
+            opaque += 1
+            continue
         keys = {k.value for k in payload.keys if isinstance(k, ast.Constant)}
         if keys & _TENANT_KEYS:
             offenders.append(f"{where} {sorted(keys & _TENANT_KEYS)}")
@@ -294,6 +302,10 @@ _KEYWORD_CHANNEL = 'publish_event(channel="global", event_type="x", payload={"us
 _KEYWORD_OPAQUE = 'publish_event("global", "x", payload=data)\n'
 _KWARGS_SPLAT = 'publish_event("global", "x", **extra)\n'
 _CLEAN_PAYLOAD = 'publish_event("global", "x", payload={"count": 3})\n'
+#: Half literal, half variable. `ast.Dict.keys` holds a None for the `**` entry.
+_SPREAD_PAYLOAD = 'publish_event("global", "x", payload={"type": "a", **ctx})\n'
+#: The same shape hiding a tenant key inside the spread -- unreadable from here.
+_SPREAD_HIDING_TENANT = 'publish_event("global", "x", payload={"type": "a", **session})\n'
 _SCOPED_CHANNEL = 'publish_event(f"chat:{cid}", "x", payload={"task_id": "t1"})\n'
 
 
@@ -327,6 +339,40 @@ def test_a_payload_passed_by_name_as_a_variable_counts_as_opaque() -> None:
     offenders, opaque, seen = _scan_source(_KEYWORD_OPAQUE, "fixture.py")
 
     assert (seen, opaque, offenders) == (1, 1, [])
+
+
+def test_a_spread_inside_the_payload_counts_as_opaque() -> None:
+    """`{"type": "a", **ctx}` is half a literal, and half is not inspectable.
+
+    `ast.Dict.keys` holds `None` for a `**` entry. Filtering to `ast.Constant`
+    drops it silently, so the dict read as fully inspected while `ctx` could
+    carry anything -- including a tenant key this guard exists to find. A
+    payload is inspectable only when EVERY key is a literal.
+    """
+    offenders, opaque, seen = _scan_source(_SPREAD_PAYLOAD, "fixture.py")
+
+    assert (seen, opaque, offenders) == (1, 1, [])
+
+
+def test_a_spread_is_opaque_even_beside_a_clean_literal_key() -> None:
+    """The literal half must not buy a clean verdict for the variable half.
+
+    Before the fix this returned `opaque=0` with no offender: `"type"` is not a
+    tenant key, and the spread was invisible. The publish looked inspected and
+    was not.
+    """
+    offenders, opaque, seen = _scan_source(_SPREAD_HIDING_TENANT, "fixture.py")
+
+    assert opaque == 1, "a payload that is partly a variable is not an inspected payload"
+    assert offenders == [], "and it is counted, not reported as a known-bad key"
+
+
+def test_a_fully_literal_payload_is_still_inspected() -> None:
+    """Positive control: counting every dict as opaque would satisfy both tests
+    above while destroying the guard's actual job."""
+    _, opaque, seen = _scan_source(_CLEAN_PAYLOAD, "fixture.py")
+
+    assert (seen, opaque) == (1, 0)
 
 
 def test_a_kwargs_splat_counts_as_opaque() -> None:
