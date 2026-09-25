@@ -150,6 +150,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/deployment_script_scan.py",
             "repo_tests/embedded_python_dependency_declared_test.py",
             "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
+            "repo_tests/git_repo_root_calls_are_guarded_17418_test.py",
             "repo_tests/hook_decision_exit_codes_15956_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/one_git_enumeration_15926_test.py",
