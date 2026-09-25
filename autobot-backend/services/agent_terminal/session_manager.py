@@ -9,7 +9,6 @@ Manages agent terminal session lifecycle: create, get, list, close, persist.
 """
 
 import asyncio
-import inspect
 import json
 import uuid
 from typing import Dict, List
@@ -17,19 +16,20 @@ from typing import Dict, List
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
+from services.command_approval_manager import AgentRole
+from type_defs.common import Metadata
+
+from .conversation_owner import ConversationNotOwnedError, conversation_owner, verified_conversation_owner
+from .models import AgentSessionState, AgentTerminalSession
+from .redis_usability import usable_redis
+
+logger = get_logger(__name__)
 
 # #13478: how long a session holding a pending approval survives in Redis.
 # Deliberately long: the thing it is waiting for is a person, and #13481
 # established that an approval does not expire on a timer. This bounds the
 # stored session, not the approval's validity.
 APPROVAL_PENDING_SESSION_TTL: int = env_int("AUTOBOT_APPROVAL_PENDING_SESSION_TTL_SECONDS", default=7 * 24 * 60 * 60)
-from services.command_approval_manager import AgentRole
-from type_defs.common import Metadata
-
-from .conversation_owner import ConversationNotOwnedError, conversation_owner, verified_conversation_owner
-from .models import AgentSessionState, AgentTerminalSession
-
-logger = get_logger(__name__)
 
 # O(1) lookup optimization constants (Issue #326)
 APPROVAL_RESPONSE_KEYWORDS = {"approved", "denied", "executed", "rejected"}
@@ -114,31 +114,6 @@ def _apply_restored_approval_state(
         logger.warning(f"Found approval request but no command in metadata " f"for conversation {conversation_id}")
 
 
-def _usable_redis(client: object) -> bool:
-    """True only for something that can actually serve a Redis call (#17436).
-
-    NOT a truthiness test, deliberately. A coroutine object is truthy, so
-    `if self.redis_client:` passed for the un-awaited
-    `get_redis_client(async_client=True)` that `initialization/agent_presence_sync`
-    handed in -- and `_persist_session` then ran against a coroutine. So are a
-    Mock, a half-built client and a functools.partial: the guard read as a client
-    check and was a presence check, which passes for every wrong value anyone has
-    actually passed.
-
-    Checked by capability, not isinstance, so a genuine fake still works.
-
-    The methods are the ones THIS class calls -- measured, not assumed:
-    `get`, `setex`, `delete`. An earlier version checked `hgetall`/`hset`,
-    carried over from EdgeLearner (#16499) and never called here; such a client
-    passed the guard and failed inside `_persist_session`, which catches and
-    logs -- session stays in memory, nothing says so. Checking the WRONG
-    capability is the truthiness bug again, just harder to see.
-    """
-    if client is None or inspect.iscoroutine(client) or inspect.isawaitable(client):
-        return False
-    return all(callable(getattr(client, name, None)) for name in ("get", "setex", "delete"))
-
-
 class SessionManager:
     """Manages agent terminal session lifecycle"""
 
@@ -150,7 +125,7 @@ class SessionManager:
             redis_client: Redis client for session persistence
             chat_history_manager: ChatHistoryManager instance for approval restoration
         """
-        if redis_client is not None and not _usable_redis(redis_client):
+        if redis_client is not None and not usable_redis(redis_client):
             # #17436: reached through a process-wide singleton, so a bad client
             # here poisons every later consumer. Refuse at the boundary.
             raise TypeError(
@@ -319,7 +294,7 @@ class SessionManager:
         if conversation_id and self.chat_history_manager:
             await self._restore_pending_approval(session, conversation_id)
 
-        if _usable_redis(self.redis_client):
+        if usable_redis(self.redis_client):
             await self._persist_session(session)
 
         return session

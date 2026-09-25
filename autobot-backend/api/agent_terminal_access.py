@@ -41,7 +41,7 @@ from autobot_shared.redis_client import get_redis_client
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from services.agent_terminal import AgentTerminalService
 from services.agent_terminal.conversation_owner import ConversationNotOwnedError
-from services.agent_terminal.session_manager import _usable_redis
+from services.agent_terminal.redis_usability import usable_redis
 
 logger = get_logger(__name__)
 
@@ -81,10 +81,10 @@ def _adopt_redis_client(service: AgentTerminalService, candidate: Any) -> None:
     construction, because the service does not own a setter and adding one to a
     file already at its size ceiling is a separate change.
     """
-    if candidate is None or not _usable_redis(candidate) or _usable_redis(service.redis_client):
+    if candidate is None or not usable_redis(candidate) or usable_redis(service.redis_client):
         return
     with _agent_terminal_service_lock:
-        if _usable_redis(service.redis_client):
+        if usable_redis(service.redis_client):
             return
         logger.info("Adopting a usable Redis client onto the existing AgentTerminalService")
         service.redis_client = candidate

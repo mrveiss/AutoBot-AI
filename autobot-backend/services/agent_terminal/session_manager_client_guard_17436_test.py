@@ -23,9 +23,11 @@ wrong one.
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
-from services.agent_terminal.session_manager import _usable_redis
+from services.agent_terminal.redis_usability import usable_redis
 
 
 async def _a_coroutine() -> None:
@@ -62,23 +64,60 @@ def test_a_coroutine_is_truthy_which_is_why_the_old_guard_passed() -> None:
 def test_the_guard_refuses_a_coroutine() -> None:
     coro = _a_coroutine()
     try:
-        assert _usable_redis(coro) is False
+        assert usable_redis(coro) is False
     finally:
         coro.close()
 
 
 def test_the_guard_refuses_none() -> None:
-    assert _usable_redis(None) is False
+    assert usable_redis(None) is False
 
 
 def test_the_guard_refuses_an_object_that_merely_exists() -> None:
     """A Mock, a partial, a half-built client -- all truthy, none usable."""
-    assert _usable_redis(object()) is False
+    assert usable_redis(object()) is False
 
 
 def test_the_guard_accepts_a_capability_complete_client() -> None:
     """Checked by capability, not isinstance, so test fakes still work."""
-    assert _usable_redis(_FakeRedis()) is True
+    assert usable_redis(_FakeRedis()) is True
+
+
+def test_a_genuine_async_client_is_usable_even_though_it_is_awaitable() -> None:
+    """The guard must reject a COROUTINE, not everything awaitable (#17435).
+
+    ``redis.asyncio.Redis`` implements ``__await__`` for its lazy connection
+    setup, so ``inspect.isawaitable`` is True for every correct async client.
+    An earlier version of the guard tested exactly that and therefore refused
+    the properly-awaited client it exists to admit --
+    ``fakeredis.aioredis.FakeRedis`` was rejected in
+    ``session_manager_tenant_16975_test`` for the same reason.
+
+    The double is hand-built rather than imported so this holds without
+    fakeredis, and the ``isawaitable`` assertion is not decoration: without it
+    someone could drop ``__await__`` from the double and this test would pass
+    while testing nothing.
+    """
+
+    class _AsyncRedis:
+        def __await__(self):
+            yield
+            return self
+
+        async def get(self, *args, **kwargs):
+            return None
+
+        async def setex(self, *args, **kwargs):
+            return True
+
+        async def delete(self, *args, **kwargs):
+            return 1
+
+    client = _AsyncRedis()
+
+    assert inspect.isawaitable(client) is True, "the double no longer has the property under test"
+    assert inspect.iscoroutine(client) is False, "an async client is awaitable but is not a coroutine"
+    assert usable_redis(client) is True
 
 
 def test_the_service_refuses_a_coroutine_at_construction() -> None:
@@ -121,7 +160,7 @@ def test_a_client_missing_the_methods_this_class_calls_is_refused() -> None:
         async def hset(self, *_a: object, **_k: object) -> int:
             return 1
 
-    assert _usable_redis(_WrongShape()) is False
+    assert usable_redis(_WrongShape()) is False
 
 
 def test_a_later_usable_client_is_adopted_by_an_existing_singleton(monkeypatch) -> None:
