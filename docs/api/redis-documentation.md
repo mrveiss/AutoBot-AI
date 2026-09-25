@@ -33,7 +33,7 @@ redis:
 - **Container-to-container**: `redis:6379`
 - **Host-to-container**: `localhost:6379` or `127.0.0.1:6379`
 - **Container-to-host**: `host.docker.internal:6379`
-- **Web Interface**: http://localhost:8002/
+- **Web Interface**: http://localhost:8001/
 
 ## Database Schema
 
