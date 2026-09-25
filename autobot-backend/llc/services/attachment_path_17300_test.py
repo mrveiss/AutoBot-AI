@@ -151,3 +151,68 @@ async def test_a_well_formed_upload_still_writes(tmp_path):
     # to_thread: #7444's guard covers test files too, and a bare read_bytes in an
     # async test trips it.
     assert await asyncio.to_thread(written[0].read_bytes) == b"data"
+
+
+# ---------------------------------------------------------------------------
+# What routing containment through `validate_path` actually changed (#17302)
+# ---------------------------------------------------------------------------
+
+
+def test_a_percent_encoded_extension_is_decoded_before_the_write():
+    """#17302 moved containment onto `validate_path`, and that is NOT behaviour-preserving here.
+
+    Recorded because I claimed it was, on the evidence that all 16 tests above
+    passed. They did, and that was not evidence: none of them uses a filename
+    containing `%` or a non-ASCII character, so none exercises the input class
+    that changed. A suite passing over inputs that do not reach the change
+    says nothing about the change.
+
+    `validate_path` runs `_canonicalize` -- multi-round percent-decode plus
+    NFKC -- before resolving. The old local `is_relative_to` check did not.
+    So an extension of `.%74xt` now persists as `.txt` where it previously
+    persisted literally. Decoding before resolving is the house rule
+    (THREAT_MODEL.md section 1) and a literal `%74` on disk was never wanted,
+    so this is the better behaviour -- but it is a behaviour change, and it
+    belongs in a test rather than in a claim.
+    """
+    dest = _storage_path(_COMPANY, _WORK_ITEM, _ATTACHMENT, "notes.%74xt")
+
+    assert dest.name.endswith(".txt")
+    assert "%" not in dest.name
+
+
+@pytest.mark.parametrize("groups", [1, 2, 3, 4, 5])
+def test_an_extension_that_decodes_into_a_traversal_is_refused_at_every_depth(groups: int):
+    """Every traversal depth, because the depth decides WHERE it lands.
+
+    This is the case a review caught and the single-depth version of this test
+    missed. The extension `.／﹒﹒` repeated N times normalises to N `..`
+    segments, and the file is built at `<root>/<company>/<item>/<name>`:
+
+        1 group  -> <root>/<company>/<item>/x     same dir
+        2        -> <root>/<company>/x            escapes the work item
+        3        -> <root>/x                      escapes the tenant, ON the root
+        4, 5     -> above <root>                  escapes the root entirely
+
+    The original test used **five**, which climbs above the root and is refused
+    by a root-level containment check. The reviewer used **three**, which stops
+    exactly on the root -- so `is_relative_to(root)` was True and the file
+    landed outside its tenant's directory while still "in the root". The
+    assertion passed for the wrong reason and the defect sat one repetition
+    away from it.
+
+    Containment is now to the tenant directory, so every depth that leaves
+    `<root>/<company>/<item>/` is refused, not only the ones that leave the root.
+    """
+    hostile = "notes." + "\uff0f\ufe52\ufe52" * groups
+
+    with pytest.raises(ValueError):
+        _storage_path(_COMPANY, _WORK_ITEM, _ATTACHMENT, hostile)
+
+
+def test_a_well_formed_upload_still_lands_in_its_tenant_directory():
+    """The contrast. Tenant-level containment must not refuse ordinary uploads."""
+    dest = _storage_path(_COMPANY, _WORK_ITEM, _ATTACHMENT, "notes.txt")
+
+    assert dest.parent == (_resolve_storage_root() / _COMPANY / _WORK_ITEM).resolve()
+    assert dest.name.endswith(".txt")

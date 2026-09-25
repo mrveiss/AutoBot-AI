@@ -263,18 +263,18 @@ async def load_plugin(
             detail=f"Plugin not found: {plugin_name}",
         )
 
-    # Load plugin without auto-granting capabilities (Issue #9049)
-    # Operator must explicitly approve capabilities via /approve-capabilities
-    # Auto-grant only for official plugins from core-plugins directory
-    auto_grant = manifest.trust_tier == TrustTier.OFFICIAL
+    # Issue #9049: auto-grant capabilities for official plugins only.
     plugin_config = config.config if config else {}
-    plugin = await loader.load_plugin(manifest, plugin_config, grant_capabilities=auto_grant)
+    plugin = await loader.load_plugin(manifest, plugin_config)
 
     if not plugin:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to load plugin: {plugin_name}",
         )
+
+    if manifest.trust_tier == TrustTier.OFFICIAL:
+        CapabilityChecker().grant_capabilities(manifest.name, manifest.capabilities)
 
     # Save config to Redis
     if plugin_config:

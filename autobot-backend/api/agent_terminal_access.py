@@ -40,6 +40,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from services.agent_terminal import AgentTerminalService
+from services.agent_terminal.conversation_owner import ConversationNotOwnedError
 
 logger = get_logger(__name__)
 
@@ -84,6 +85,19 @@ async def require_session_access(
     if session is None or not may_access_session(session, user):
         raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
     return session
+
+
+async def create_session_for_caller(service: AgentTerminalService, user: Mapping[str, Any], **fields: Any) -> Any:
+    """Create a session owned by the caller (#14989, #16975); 404 for a conversation they do not own (#17422).
+
+    ``conversation_id`` comes from the request body, so it is the one input here
+    the caller controls: the service refuses it unless the caller owns it, and the
+    refusal answers the same 404 as a missing session.
+    """
+    try:
+        return await service.create_session(owner=user.get("username"), tenant_id=user.get("org_id"), **fields)
+    except ConversationNotOwnedError:
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND) from None
 
 
 async def session_owner(
