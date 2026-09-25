@@ -5264,7 +5264,7 @@
   "knowledge.maintenance.qualityScore": "Kvalitātes rādītājs",
   "knowledge.maintenance.qualityDimensions": "Kvalitātes dimensijas",
   "knowledge.maintenance.issuesFound": "Atrastas problēmas",
-  "knowledge.maintenance.critical": "Kritīsks",
+  "knowledge.maintenance.critical": "Kritisks",
   "knowledge.maintenance.warnings": "Brīdinājumi",
   "knowledge.maintenance.topRecommendations": "Galvenais ieteikumi",
   "knowledge.maintenance.healthError": "Nevar ielādēt veselības mērrādžī. Noklikšķiniet uz \"Atjaunināt visu\", lai mēģinātu vēlreiz.",

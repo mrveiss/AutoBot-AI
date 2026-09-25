@@ -23,11 +23,25 @@ import sys
 from pathlib import Path, PurePosixPath
 from typing import Callable, Dict, Mapping, Sequence
 
-#: Where the glob-declared guard inputs are recorded (#15900). Read as DATA via
-#: `ast`, never imported: that module imports pytest and imports from this
-#: package, so importing it here would both pull pytest into the hook and close
-#: a cycle.
-GLOB_RECORD = "repo_tests/glob_declared_reads_15900_test.py"
+#: Where the glob-declared guard inputs are recorded (#15900).
+#:
+#: The record moved out of `glob_declared_reads_15900_test.py` when that file
+#: reached the 600-line ceiling (#14781), and this constant did not follow it --
+#: the parse then found the name absent and returned `{}`, which
+#: `prepush_selection_test.py` caught because it asserts the parse found
+#: SOMETHING rather than iterating whatever came back. Without that assertion
+#: pre-push selection would have silently stopped consulting the record and
+#: every glob-declared guard would have dropped out of selection with nothing
+#: failing to say so.
+#:
+#: Still read as DATA via `ast` rather than imported, but the reason changed
+#: with the move and the old one is no longer true. The record's new home
+#: imports nothing but `__future__`, so there is no pytest to pull into the hook
+#: and no cycle to close. What remains is that a git hook must not depend on
+#: `repo_tests` being importable -- a missing `__init__`, a broken sibling or an
+#: interpreter without pytest would take the hook down with it, and the hook's
+#: job is to run when the tree is in a bad state.
+GLOB_RECORD = "repo_tests/_glob_declared_uncovered.py"
 _RECORD_NAME = "GLOB_DECLARED_UNCOVERED"
 
 #: Guards that police the guards. They enumerate every tracked file, so a NEW

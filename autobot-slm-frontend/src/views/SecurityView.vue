@@ -1347,7 +1347,7 @@ const scoreColor = computed(() => {
                   id="cert-ca"
                   v-model="uploadForm.ca_cert"
                   rows="4"
-                  :placeholder="$t('securityView.bEGINCERTIFICATEENDCERTIFICATE')"
+                  :placeholder="$t('securityView.pemCertificateHint')"
                   class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
                 ></textarea>
               </div>
@@ -1358,7 +1358,7 @@ const scoreColor = computed(() => {
                   id="cert-server"
                   v-model="uploadForm.server_cert"
                   rows="4"
-                  :placeholder="$t('securityView.bEGINCERTIFICATEENDCERTIFICATE')"
+                  :placeholder="$t('securityView.pemCertificateHint')"
                   class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
                 ></textarea>
               </div>
@@ -1369,7 +1369,7 @@ const scoreColor = computed(() => {
                   id="cert-key"
                   v-model="uploadForm.server_key"
                   rows="4"
-                  :placeholder="$t('securityView.bEGINPRIVATEKEYENDPRIVATEKEY')"
+                  :placeholder="$t('securityView.pemKeyHint')"
                   class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
                 ></textarea>
                 <p class="text-xs text-gray-500 mt-1">{{ $t('securityView.thePrivateKeyWillBeEncrypted') }}</p>
