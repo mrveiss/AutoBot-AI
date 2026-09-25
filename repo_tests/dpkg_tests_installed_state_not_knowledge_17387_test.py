@@ -48,6 +48,7 @@ goes red naming that file and task.
 
 from __future__ import annotations
 
+import ast
 import pathlib
 import re
 from typing import Iterator, List, Sequence, Tuple
@@ -57,7 +58,7 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-_SCANNED_SUFFIXES = (".yml", ".yaml", ".sh")
+_SCANNED_SUFFIXES = (".yml", ".yaml", ".sh", ".py")
 _DPKG_LIST = re.compile(r"\bdpkg\s+-l\b")
 #: A dpkg *listing query*, not any mention of dpkg. `fuser /var/lib/dpkg/lock`
 #: is a lock check whose `.rc` gate is correct, and matching on the substring
@@ -113,6 +114,50 @@ def _scanned_files(root: pathlib.Path) -> List[pathlib.Path]:
     return sorted(out)
 
 
+def _python_dpkg_strings(text: str) -> List[Tuple[int, str]]:
+    """`dpkg -l` inside a Python STRING that is code, not a docstring (#17411).
+
+    `.py` joined this guard's domain because the pattern was fixed where the
+    guard looked and left standing where it did not --
+    `services/advanced_workflow/step_generator.py` generated
+    `dpkg -l | grep {package}` as a workflow validation command, and `.py` was
+    outside `_SCANNED_SUFFIXES`.
+
+    Parsed rather than grepped, because a line scan over Python reports this
+    guard's own docstring and its test literals. `ast` separates a string that
+    is executed from one that documents: module, class and function docstrings
+    are excluded by identity, so prose describing the defect does not read as
+    the defect. An f-string's literal parts are joined, since
+    `f"dpkg -l | grep {pkg}"` carries the pattern across a placeholder.
+    """
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return []
+    docstring_nodes = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant):
+                docstring_nodes.add(id(node.body[0].value))
+    # An f-string is both a JoinedStr and a set of Constant children, so a naive
+    # walk reports it twice. The literal parts are only meaningful joined.
+    inside_fstring = {id(part) for node in ast.walk(tree) if isinstance(node, ast.JoinedStr) for part in node.values}
+    found: List[Tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if id(node) in docstring_nodes or id(node) in inside_fstring:
+            continue
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if _DPKG_LIST.search(node.value):
+                found.append((node.lineno, node.value.strip()[:70]))
+        elif isinstance(node, ast.JoinedStr):
+            literal = "".join(
+                part.value for part in node.values if isinstance(part, ast.Constant) and isinstance(part.value, str)
+            )
+            if _DPKG_LIST.search(literal):
+                found.append((node.lineno, literal.strip()[:70]))
+    return found
+
+
 def _code_lines_using_dpkg_list(root: pathlib.Path | None = None) -> List[Tuple[str, int, str]]:
     """Every non-comment line invoking `dpkg -l`, as (relative path, lineno, text).
 
@@ -126,6 +171,25 @@ def _code_lines_using_dpkg_list(root: pathlib.Path | None = None) -> List[Tuple[
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
+            continue
+        if path.suffix == ".py":
+            # Substring first, AST second. Parsing every .py in the repo took the
+            # guard past 120s; almost none of them mention dpkg at all, and a
+            # file that does not contain the literal cannot contain it inside a
+            # string either. The parse is only needed to tell a docstring from
+            # code, which is a question about the few files that match.
+            if not _DPKG_LIST.search(text):
+                continue
+            if path.name == pathlib.Path(__file__).name:
+                # This guard's own fixtures, `what=` text and assertion messages
+                # all contain `dpkg -l` as DATA about the pattern. Scanning them
+                # reported six hits in itself -- an exemption dict key, a reach
+                # description, two failure messages. A file whose subject is a
+                # pattern necessarily contains it.
+                continue
+            found.extend(
+                (str(path.relative_to(base)), number, snippet) for number, snippet in _python_dpkg_strings(text)
+            )
             continue
         for number, line in enumerate(text.splitlines(), start=1):
             match = _DPKG_LIST.search(line)
@@ -190,7 +254,7 @@ DPKG_LIST_CALL_SITES = declare(
     discover=_code_lines_using_dpkg_list,
     floor=3,
     growth=3,
-    what="non-comment lines invoking `dpkg -l` (#17387)",
+    what="`dpkg -l` invocations in shell/YAML lines and Python strings (#17387, #17411)",
 )
 
 #: 6 today: the four rewritten by #17387 (postgresql, grafana, redis,
