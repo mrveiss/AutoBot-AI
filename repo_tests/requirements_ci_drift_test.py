@@ -272,3 +272,71 @@ def test_the_checker_needs_no_third_party_import():
         and line.split()[1].split(".")[0] not in {"argparse", "logging", "pathlib", "re", "sys"}
     ]
     assert third_party == [], f"the checker imports non-stdlib modules: {third_party}"
+
+
+# --------------------------------------------------------------------------
+# #17448 — the two planes may both declare a package and still install
+# different releases. #14551 above checks PRESENCE and says so itself.
+# --------------------------------------------------------------------------
+
+
+def test_constraint_of_strips_extras_and_markers():
+    assert checker.constraint_of("sqlalchemy>=2.0.54,<2.1") == ">=2.0.54,<2.1"
+    assert checker.constraint_of("sqlalchemy[asyncio] >= 2.0.54") == ">=2.0.54"
+    assert checker.constraint_of("uvicorn==0.53.0 ; python_version >= '3.12'") == "==0.53.0"
+    assert checker.constraint_of("greenlet") == ""
+
+
+def test_two_unbounded_constraints_do_not_diverge():
+    """Both reach the newest release, so a differing FLOOR changes nothing.
+
+    This is the case that makes a naive string comparison useless: `>=2.0.52`
+    and `>=2.0.54` look different and install the same thing.
+    """
+    assert checker.can_resolve_differently(">=2.0.52", ">=2.0.54") is False
+    assert checker.can_resolve_differently(">=1.0", ">=1.0") is False
+
+
+def test_a_pin_against_an_unbounded_floor_diverges():
+    """The shape that took SQLAlchemy 2.1.0 into one venv and 2.0.54 into another."""
+    assert checker.can_resolve_differently("==2.0.54", ">=2.0.54") is True
+    assert checker.can_resolve_differently(">=2.0.54,<2.1", ">=2.0.54") is True
+    assert checker.can_resolve_differently("==1.0", "==2.0") is True
+
+
+def test_the_comparison_is_per_service_file_not_a_merged_plane():
+    """A deliberate per-service split must not be reported as a conflict.
+
+    `websockets` is capped `<16` in autobot-backend because langgraph-sdk
+    requires it, and floored `>=17.1` in autobot-slm-backend, which has had its
+    own venv since #16394. Both are documented at their own site. A merged
+    "service plane" would either report that as a conflict -- training people to
+    ignore this guard -- or silently discard one of the two constraints through
+    `production_requirement_names`' last-wins update, and then compare the
+    survivor. Entries are keyed by file for exactly that reason.
+    """
+    drift, compared = checker.compute_constraint_drift(REPO_ROOT)
+    assert compared > 0
+    assert all("::" in entry for entry in drift)
+    files = {entry.split("::", 1)[0] for entry in drift}
+    assert files <= set(checker._PRODUCTION_REQUIREMENTS), f"unexpected file keys: {files}"
+
+
+def test_the_constraint_audit_is_clean_on_the_real_tree():
+    """The baseline matches what the tree actually declares, both directions."""
+    compared, problems = checker.audit_constraint_drift(REPO_ROOT)
+    assert compared > 0, "the constraint check compared nothing"
+    assert not problems, "\n".join(problems)
+
+
+def test_the_baseline_is_not_empty_and_not_everything():
+    """A floor and a ceiling on the record itself.
+
+    Empty would mean the two planes already agree, which they do not. Covering
+    every compared pair would mean the guard permits anything and the number
+    stops meaning improvement.
+    """
+    baseline = checker.load_constraint_baseline(REPO_ROOT)
+    _, compared = checker.compute_constraint_drift(REPO_ROOT)
+    assert baseline, "the constraint baseline is empty -- the guard would assert nothing"
+    assert len(baseline) < compared, "every shared pair is baselined -- nothing is being held"

@@ -145,9 +145,7 @@ def load_allowlist(root: pathlib.Path | None = None) -> set[str]:
     return names
 
 
-def compute_drift(
-    production: dict[str, str], ci: dict[str, str], allowlist: set[str]
-) -> tuple[list[str], list[str]]:
+def compute_drift(production: dict[str, str], ci: dict[str, str], allowlist: set[str]) -> tuple[list[str], list[str]]:
     """Return ``(new_drift, stale_allowlist_entries)``.
 
     ``new_drift`` — production packages missing from CI and NOT on the
@@ -163,6 +161,111 @@ def compute_drift(
     new_drift = sorted(missing - allowlist)
     stale = sorted(entry for entry in allowlist if entry not in missing)
     return new_drift, stale
+
+
+#: Pairs whose CI and service constraints can already resolve differently.
+#: One ``<service file>::<package>`` per line. **ONLY SHRINKS.**
+_CONSTRAINT_BASELINE_FILE = "repo_tests/requirements_constraint_drift_baseline.txt"
+
+#: A specifier that cannot float to the newest release. Two constraints that can
+#: BOTH reach latest resolve to the same version however their floors differ, so
+#: `>=2.0.52` vs `>=2.0.54` is not a divergence -- both take whatever is newest.
+#: Divergence needs at least one side pinned or capped.
+_BOUNDED = re.compile(r"(==|~=|<)")
+
+_SPECIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(?:\[[^\]]*\])?\s*(.*)$")
+
+
+def constraint_of(raw: str) -> str:
+    """The version specifier from a raw requirement line; extras and markers dropped."""
+    body = raw.split(";", 1)[0].strip()
+    match = _SPECIFIER.match(body)
+    return (match.group(1) or "").replace(" ", "") if match else ""
+
+
+def can_resolve_differently(one: str, other: str) -> bool:
+    """True when two specifiers for one package can install different releases."""
+    if one == other:
+        return False
+    return bool(_BOUNDED.search(one) or _BOUNDED.search(other))
+
+
+def load_constraint_baseline(root: pathlib.Path | None = None) -> set[str]:
+    base = root if root is not None else repo_root()
+    path = base / _CONSTRAINT_BASELINE_FILE
+    if not path.is_file():
+        return set()
+    out: set[str] = set()
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line:
+            out.add(line)
+    return out
+
+
+def compute_constraint_drift(root: pathlib.Path | None = None) -> tuple[list[str], int]:
+    """``(["<file>::<package>", ...], pairs compared)`` -- PER SERVICE FILE.
+
+    Deliberately not against a merged "service plane". ``production_requirement_names``
+    flattens both backends with last-wins, and they are allowed to disagree:
+    ``websockets`` is capped ``<16`` in autobot-backend (langgraph-sdk needs it)
+    and floored ``>=17.1`` in autobot-slm-backend, each with its own venv since
+    #16394, each documented at its own site. Comparing a flattened plane would
+    report that deliberate split as a conflict and train people to ignore this
+    guard -- while still missing the real thing, because last-wins had already
+    discarded one of the two constraints before the comparison ran.
+    """
+    base = root if root is not None else repo_root()
+    ci = ci_requirement_names(base)
+    found: list[str] = []
+    compared = 0
+    for rel in _PRODUCTION_REQUIREMENTS:
+        service = parse_requirements(base / rel)
+        for name in sorted(set(service) & set(ci)):
+            compared += 1
+            if can_resolve_differently(constraint_of(ci[name]), constraint_of(service[name])):
+                found.append(f"{rel}::{name}")
+    return found, compared
+
+
+def audit_constraint_drift(root: pathlib.Path | None = None) -> tuple[int, list[str]]:
+    """#17448: the two planes may declare a package, and still install different releases.
+
+    #14551 above checks PRESENCE -- is the package mirrored into CI at all. It
+    says so itself: "What this guard does NOT do: merge the two dependency
+    sets." A package declared on both planes as ``==2.0.54`` and ``>=2.0.54``
+    passes it cleanly, and that is exactly how the SLM test venv took SQLAlchemy
+    2.1.0 while CI's own venv stayed on 2.0.54 -- 2.1 dropped ``greenlet`` as a
+    hard dependency, nothing declared it directly, and every SLM test module
+    failed at import (#17433). The migration gates hit the identical resolution
+    from the identical cause a day later (#17499). Two point fixes, one
+    unguarded mechanism, 50 more candidate pairs.
+    """
+    base = root if root is not None else repo_root()
+    drift, compared = compute_constraint_drift(base)
+    problems: list[str] = []
+    if not compared:
+        return 0, ["no package appears on both planes -- the constraint check compared nothing."]
+
+    baseline = load_constraint_baseline(base)
+    new = sorted(set(drift) - baseline)
+    stale = sorted(baseline - set(drift))
+
+    if new:
+        problems.append(
+            f"{len(new)} package(s) whose CI and service constraints can resolve to "
+            f"different releases and are not recorded in {_CONSTRAINT_BASELINE_FILE}:\n"
+            + "\n".join(f"  {entry}" for entry in new)
+            + "\n\nCI pins what production runs; an unbounded service constraint takes "
+            "whatever published last. Make the two agree, or record the pair with its reason "
+            "(#17448)."
+        )
+    if stale:
+        problems.append(
+            f"stale entries in {_CONSTRAINT_BASELINE_FILE} (the pair now agrees, or the "
+            f"package left a plane): {stale}. This list only shrinks -- delete these lines."
+        )
+    return compared, problems
 
 
 def audit_drift(root: pathlib.Path | None = None) -> tuple[int, list[str]]:
@@ -214,11 +317,23 @@ def configure_logging() -> None:
 
 def run_audit() -> int:
     reached, problems = audit_drift()
+    pairs, constraint_problems = audit_constraint_drift()
+    problems = [*problems, *constraint_problems]
     if problems:
         logger.error("%s", "\n\n".join(problems))
-        logger.error("\nrequirements-ci drift audit FAILED over %d production package(s) (#14551).", reached)
+        logger.error(
+            "\nrequirements-ci drift audit FAILED over %d production package(s) (#14551) "
+            "and %d shared pair(s) (#17448).",
+            reached,
+            pairs,
+        )
         return 1
-    logger.info("requirements-ci drift audit clean over %d production package(s) (#14551).", reached)
+    logger.info(
+        "requirements-ci drift audit clean: %d production package(s) mirrored (#14551), "
+        "%d shared pair(s) constraint-checked (#17448).",
+        reached,
+        pairs,
+    )
     return 0
 
 
