@@ -118,3 +118,30 @@ def test_a_cross_tenant_upload_is_still_refused():
 
     assert resp.status_code == 404
     recorder.assert_not_awaited()
+
+
+def test_an_unstorable_filename_is_a_400_not_a_500():
+    """A filename the storage layer refuses is bad input, not a server fault (#17302).
+
+    `_storage_path` raises `ValueError` for an id that is not a UUID and for an
+    extension that cannot be placed inside the storage root. Nothing caught it:
+    it reached the global `Exception` handler and became a generic 500, which
+    tells the caller to retry something that can never succeed.
+
+    Deliberately split from the unit tests that prove which inputs raise. Those
+    assert "this filename is refused"; this asserts "a refusal is mapped to
+    400". Merging them would let either half pass for the other's reason --
+    a route that 400s on everything, or a `_storage_path` that raises on
+    nothing, each looks correct through a single combined test.
+    """
+    org = str(uuid.uuid4())
+    client = _make_idor_app(caller_org_id=org, item_company_id=org)
+
+    with patch(
+        "llc.services.attachment_service.AttachmentService.upload",
+        new=AsyncMock(side_effect=ValueError("attachment path escaped the storage root")),
+    ):
+        response = _upload(client, company_id=org)
+
+    assert response.status_code == 400, f"expected 400, got {response.status_code}: {response.text}"
+    assert "escaped" not in response.text, "the refusal must not echo the internal path detail"

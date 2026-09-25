@@ -13,6 +13,7 @@
  */
 
 import { computed, onMounted, onUnmounted } from 'vue'
+import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useFleetStore } from '@/stores/fleet'
@@ -353,6 +354,9 @@ onUnmounted(() => {
 
     <!-- User & Logout -->
     <div class="p-4 border-t border-gray-800">
+      <!-- #14781: the console carries 11 locales; this is how a user reaches them -->
+      <LanguageSwitcher />
+
       <!-- Issue #754: High contrast toggle -->
       <button
         @click="highContrast.toggle()"

@@ -1,4 +1,8 @@
 {
+  "_meta": {
+    "dir": "ltr",
+    "source": "authored"
+  },
   "addNodeModal": {
     "addNewNode": "Add New Node",
     "addNode": "Add Node",
@@ -8,7 +12,6 @@
     "authenticationMethod": "Authentication Method",
     "authenticationMethodAria": "Authentication method",
     "availableRolesAria": "Available roles",
-    "bEGINOPENSSHPRIVATEKEYENDOPENSSH": "-----BEGIN OPENSSH PRIVATE KEY-----\n...\n-----END OPENSSH PRIVATE KEY-----",
     "cancel": "Cancel",
     "closeDialogAria": "Close dialog",
     "connectionFailed": "Connection Failed",
@@ -73,6 +76,7 @@
     "saving": "Saving...",
     "selectedRolesWillConfigure": "Selected roles will configure:",
     "showPasswordAria": "Show password",
+    "sshKeyPemHint": "Paste your OpenSSH private key in PEM format",
     "startEnrollmentImmediatelyAfter": "Start enrollment immediately after adding",
     "successfullyConnectedTo": "Successfully connected to {ip}. OS: {os}",
     "sudoUserWithPassword": "Sudo user with password",
@@ -403,12 +407,16 @@
       "unhealthy": "Unhealthy:",
       "unknown": "unknown",
       "updatesAvailableAria": "{count} updates available",
-      "user": "User"
+      "user": "User",
+      "languageLabel": "Language"
     },
     "skipLink": {},
     "toastContainer": {
       "dismissNotification": "Dismiss notification",
       "notifications": "Notifications"
+    },
+    "app": {
+      "mainContentAria": "Main content"
     }
   },
   "deploymentLogViewer": {
@@ -1171,7 +1179,8 @@
       "totalErrors": "Total Errors",
       "trend": "Trend",
       "type": "Type",
-      "unresolved": "Unresolved"
+      "unresolved": "Unresolved",
+      "resolvedByAt": "By {by} at {at}"
     },
     "fleetMetricsCard": {
       "acrossValue0Nodes": "Across {value0} nodes",
@@ -1866,8 +1875,6 @@
     "auditLogs": "Audit Logs",
     "authentication": "Authentication",
     "authorization": "Authorization",
-    "bEGINCERTIFICATEENDCERTIFICATE": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-    "bEGINPRIVATEKEYENDPRIVATEKEY": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
     "backendAccessibleAt": "Backend API will be accessible at https://backend-host:{port}",
     "cACertificatePEM": "CA Certificate (PEM)",
     "cancel": "Cancel",
@@ -1925,6 +1932,8 @@
     "nodeManagement": "Node Management",
     "options": "Options",
     "pageValue0OfValue1": "Page {value0} of {value1}",
+    "pemCertificateHint": "Paste the PEM-encoded certificate",
+    "pemKeyHint": "Paste the PEM-encoded private key",
     "policyViolations": "Policy Violations",
     "portValue0": "Port {value0}",
     "previous": "Previous",
@@ -2762,6 +2771,12 @@
       "verifyAndEnable": "Verify and Enable",
       "whatThisKeyIsFor": "What this key is for",
       "yourAccountIsProtectedWithValue0": "Your account is protected with {value0} authentication"
+    },
+    "cache": {
+      "databaseLabel": "{name} (DB {db})"
+    },
+    "llm": {
+      "latencyMs": "({ms}ms)"
     }
   },
   "settingsView": {
@@ -3244,6 +3259,9 @@
     "toolsLayout": {
       "infrastructureAndManagementTools": "Infrastructure and management tools",
       "tools": "Tools"
+    },
+    "batch": {
+      "jobTypeAndId": "{type} - ID: {id}"
     }
   },
   "toolsView": {
