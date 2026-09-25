@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from api._post_sync_plan import ordered_post_sync_plan
 from autobot_shared.ssot_config import config
 from models.database import Node, NodeRole, Role, RoleStatus, SyncType
 from services.auth import get_current_user
@@ -573,11 +574,8 @@ async def get_node_actions(
     roles_result = await db.execute(select(Role).where(Role.name.in_(role_names)))
     node_roles = list(roles_result.scalars().all())
 
-    actions: List[PostSyncAction] = []
-    for role in node_roles:
-        actions.extend(_classify_post_sync(role))
-
-    return NodeActionsResponse(node_id=node_id, actions=actions)
+    actions = [action for role in node_roles for action in _classify_post_sync(role)]
+    return NodeActionsResponse(node_id=node_id, actions=ordered_post_sync_plan(actions))
 
 
 async def _resolve_node_and_role(
