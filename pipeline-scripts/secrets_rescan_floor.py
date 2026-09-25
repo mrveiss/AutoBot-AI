@@ -55,7 +55,14 @@ from typing import Sequence
 #: `autobot-frontend/src/i18n/locales` (632 entries across its own eleven files),
 #: so it is the established treatment rather than a new exemption, and 22
 #: `Private Key` entries come OUT in the same change.
-FLOOR = 1_885
+#:
+#: 1,369 measured 2026-09-25 against 1,400 committed, same 31 margin. DOWN from
+#: 1,885 because #14781's ten GENERATED SLM locale files left the scan: they are
+#: produced by `scripts/lift_locale_translations.py` from sources that are
+#: themselves scanned, so 505 of their entries were 10x the findings for 0x the
+#: coverage. Lowered in the change that removes the entries, as this file's own
+#: rule requires.
+FLOOR = 1_369
 
 
 def count_findings(baseline: object) -> int:

@@ -272,3 +272,64 @@ def test_the_comment_stripper_leaves_a_glob_path_alone() -> None:
     assert "'../locales/*.json'" in stripped
     assert "const n = 2" in stripped
     assert "a real comment" not in stripped
+
+
+#: The one locale that is hand-maintained rather than generated. Everything else
+#: under `src/locales/` is produced by `scripts/lift_locale_translations.py`.
+_AUTHORED_LOCALE = "en"
+
+
+def _secret_exclude_patterns() -> list[str]:
+    baseline = json.loads((repo_root() / ".secrets.baseline").read_text(encoding="utf-8"))
+    for entry in baseline.get("filters_used", []):
+        if entry["path"].endswith("should_exclude_file"):
+            return list(entry.get("pattern", []))
+    return []
+
+
+def test_the_generated_locales_are_excluded_from_secret_scanning_and_en_is_not() -> None:
+    """The exclude pattern must name exactly the generated locales (#14781).
+
+    Those ten files are produced from sources that are themselves scanned --
+    `autobot-frontend/src/i18n/locales/*` (in the frozen legacy set) and this
+    app's own `en.json` (individually reasoned). A value can only reach a
+    generated file by coming from one of those, so scanning them again produced
+    505 baseline entries for no additional coverage, and
+    `secrets_baseline_reasons_guard_test.py` then required a tracked reason for
+    every one of them.
+
+    Excluded rather than reasoned, and this test is what makes that safe:
+
+    - an eleventh generated locale added without extending the pattern fails
+      here, so it cannot slip into the tree unscanned AND unexcluded;
+    - `en.json` must stay scanned, because it is authored -- a secret typed into
+      it must still be caught;
+    - a pattern covering a file that is NOT generated fails too, so the
+      exclusion cannot quietly widen.
+
+    The derivation itself is enforced separately: `lift_locale_translations.py
+    --check` runs in CI and fails if any generated file is not exactly what the
+    rule produces, so the files cannot be hand-edited to smuggle a value past
+    the excluded scan.
+    """
+    import re
+
+    patterns = [re.compile(p) for p in _secret_exclude_patterns()]
+    on_disk = sorted(p.stem for p in (repo_root() / _LOCALES).iterdir() if p.suffix == ".json")
+
+    def excluded(stem: str) -> bool:
+        path = f"{_LOCALES.as_posix()}/{stem}.json"
+        return any(rx.match(path) for rx in patterns)
+
+    generated = [stem for stem in on_disk if stem != _AUTHORED_LOCALE]
+    missing = [stem for stem in generated if not excluded(stem)]
+    over = [stem for stem in on_disk if stem == _AUTHORED_LOCALE and excluded(stem)]
+
+    assert not missing, (
+        "these generated locales are still scanned for secrets, so every entry in them needs a "
+        f"tracked reason: {missing}. Extend the should_exclude_file pattern in .secrets.baseline."
+    )
+    assert not over, (
+        f"{_AUTHORED_LOCALE}.json is hand-authored and must stay scanned -- a secret typed into it "
+        "has to be caught. Narrow the exclude pattern."
+    )
