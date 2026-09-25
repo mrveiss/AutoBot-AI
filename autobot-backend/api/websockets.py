@@ -22,7 +22,7 @@ from auth_middleware import authenticate_websocket
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from events.bus import get_event_bus
-from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
+from type_defs.common import BROADCAST_EVENT_TYPES, SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -522,11 +522,11 @@ async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache
 
     * an explicit ``user_id`` in the payload must match this connection;
     * a ``session_id``/``chat_id``/``conversation_id`` resolving to a session this user owns (#17428);
-    * anything else is a system-wide event (worker health, NPU status,
-      diagnostics) and stays visible to everyone, as before.
+    * anything else is WITHHELD unless its ``type`` is declared in
+      ``BROADCAST_EVENT_TYPES`` -- infrastructure telemetry with no tenant.
 
-    Fails **closed** for session-scoped events: if ownership cannot be
-    resolved, the event is withheld rather than shown to the wrong user.
+    Fails **closed** (#17428, owner ruling): an unresolvable owner withholds,
+    and a broadcast is a declaration a reviewer sees rather than a default.
     """
     payload = event_data.get("payload") or {}
     if not isinstance(payload, dict):
@@ -538,7 +538,7 @@ async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache
 
     session_id = next((payload[k] for k in ("session_id", "chat_id", "conversation_id") if payload.get(k)), None)
     if not session_id:
-        return True
+        return event_data.get("type") in BROADCAST_EVENT_TYPES
 
     session_id = str(session_id)
     if session_id in owner_cache:
@@ -551,9 +551,9 @@ async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache
         manager = ResourceFactory.get_initialized_chat_history_manager()
         if manager is not None:
             owner = await manager.get_session_owner(session_id)
-            # An unowned session predates ownership tracking and stays visible;
-            # an owned one is visible only to its owner.
-            allowed = owner is None or str(owner) == current_user_id
+            # #17428: unresolved owner withholds unless the type is declared.
+            declared = event_data.get("type") in BROADCAST_EVENT_TYPES
+            allowed = declared if owner is None else str(owner) == current_user_id
     except Exception as exc:
         logger.warning("Could not resolve session owner for %s, withholding: %s", session_id, exc)
         allowed = False
