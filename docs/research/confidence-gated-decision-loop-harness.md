@@ -35,8 +35,8 @@ questions → encode goal+observation+bounded history into the state budget → 
 gate the answer against a risk-tiered confidence threshold → execute → record. One model round
 trip per step, ~200ms, self-reported at ~$0.0002 per completed 5-step run.
 
-**Maturity: pre-alpha, 6 days old.** Created 2026-09-19, last pushed 2026-09-21, 24 commits,
-A small contributor set with most commits by one author, an early pre-1.0 version, and a low issue count. There
+**Maturity: pre-alpha, days rather than months old.** A small contributor set with most commits
+by one author, an early pre-1.0 version, and a low issue count. There
 is a 10-file test suite but **no CI**: `.github/` contains only `images/`. Nothing runs those
 tests on push.
 
@@ -173,11 +173,11 @@ Key patterns:
 
 ### Visible vs Hidden Metrics
 
-**Visible (all self-reported, single author, single date 2026-09-19):**
+**Visible (all self-reported, single author, a single measurement date):**
 
 - 15 benchmark rows: 3 scenarios × 5 runs, goal met 15/15, mean 199–241ms model latency,
   0.20–1.45s wall, $0.000044–$0.000265 per run.
-- A protocol conformance report claiming 40/40 checks in the base class.
+- A self-run conformance report claiming a full pass against an interop protocol's base class.
 - Rapid early attention on a social-coding platform.
 
 **What the visible numbers do not support:** the benchmark environment is the package's own toy
