@@ -88,8 +88,20 @@ _VISIBLE_ATTRS = frozenset({"placeholder", "title", "alt", "aria-label", "aria-d
 #: Elements whose contents are never prose.
 _OPAQUE_TAGS = frozenset({"script", "style", "code", "pre", "svg", "path"})
 
-#: Two consecutive letters, so `1.2`, `%` and `·` are not prose.
-_HAS_WORD = re.compile(r"[A-Za-z]{2,}")
+#: Two consecutive LETTERS IN ANY SCRIPT, so `1.2`, `%` and `·` are not prose.
+#:
+#: `[A-Za-z]{2,}` until #17395: an ASCII-only word test in a guard whose entire
+#: purpose is internationalisation. A hardcoded Arabic, Hebrew, Persian or Urdu
+#: label contains no ASCII letter, so it scored as "not prose" and the guard
+#: passed it -- four of the eleven shipped locales were invisible to the check
+#: written to protect them. Measured when it was fixed: the widening surfaced
+#: zero new offenders, so nothing had actually slipped through yet. The guard was
+#: lucky rather than correct, which is precisely the state a guard must not be
+#: left in.
+#:
+#: `[^\W\d_]` is "word character, not a digit, not an underscore" -- a letter in
+#: any script.
+_HAS_WORD = re.compile(r"[^\W\d_]{2,}", re.UNICODE)
 
 #: A single identifier -- `FleetOverview`, `node_id`, `kebab-case-thing`.
 _IDENTIFIER_ONLY = re.compile(r"^[A-Za-z][A-Za-z0-9]*([_-][A-Za-z0-9]+)*$")
@@ -259,6 +271,11 @@ _CAUGHT = {
     "nested deeply": "<template><div><section><p>Something went wrong</p></section></div></template>",
     "multiline tag": '<template>\n<button\n  class="x"\n  title="Retry the deploy"\n>ok</button>\n</template>',
     "text beside an interpolation": "<template><p>Resolved by {{ user }} yesterday</p></template>",
+    # #17395: non-Latin visible text. The ASCII-only word test scored each of
+    # these as "not prose", so a guard for internationalisation could not see an
+    # untranslated label in four of the locales this repo ships.
+    "arabic text node": "<template><button>حذف العقدة</button></template>",
+    "hebrew title attribute": '<template><button title="מחק את הצומת">x</button></template>',
 }
 
 _IGNORED = {
@@ -267,6 +284,9 @@ _IGNORED = {
     "a short token": "<template><span>OK</span></template>",
     "an identifier": "<template><span>FleetOverview</span></template>",
     "a number": "<template><span>1.25</span></template>",
+    # The other half of the non-Latin contrast pair: widening the word test to
+    # every script must not make digits into prose, whatever script they are in.
+    "non-latin digits": "<template><span>١٢٣٤٥</span></template>",
     "script contents": "<template><div>{{ x }}</div></template><script>const s = 'Delete this node'</script>",
 }
 

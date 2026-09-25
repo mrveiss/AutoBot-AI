@@ -255,6 +255,18 @@ def test_no_locale_value_is_an_empty_string() -> None:
 _PEM_ARMOUR = "-----BEGIN "
 
 
+def _pem_carrying_keys(flat: dict[str, object]) -> list[str]:
+    """Keys in one flattened bundle whose value carries a PEM armour block.
+
+    Extracted from the assertion below so the detector can be exercised on
+    fixtures. The tree-wide check can only ever report that the live locales are
+    clean, which is the same output a detector that matched nothing at all would
+    produce -- so on its own it cannot distinguish "no specimen keys" from
+    "stopped looking" (#17395).
+    """
+    return [key for key, value in flat.items() if isinstance(value, str) and _PEM_ARMOUR in value]
+
+
 def test_no_locale_value_carries_a_pem_armour_block() -> None:
     """A key format example is not a translatable string (#14781).
 
@@ -274,9 +286,7 @@ def test_no_locale_value_carries_a_pem_armour_block() -> None:
     """
     offenders: list[str] = []
     for locale in _EXPECTED_LOCALES:
-        for key, value in _flatten(_bundle(locale)).items():
-            if isinstance(value, str) and _PEM_ARMOUR in value:
-                offenders.append(f"{locale}:{key}")
+        offenders.extend(f"{locale}:{key}" for key in _pem_carrying_keys(_flatten(_bundle(locale))))
 
     assert not offenders, (
         "these locale values carry a PEM armour block:\n  "
@@ -373,3 +383,46 @@ def test_the_generated_locales_are_excluded_from_secret_scanning_and_en_is_not()
         f"{_AUTHORED_LOCALE}.json is hand-authored and must stay scanned -- a secret typed into it "
         "has to be caught. Narrow the exclude pattern."
     )
+
+
+def test_the_pem_detector_trips_on_armour_and_not_on_prose() -> None:
+    """The contrast pair the tree-wide assertion cannot provide.
+
+    Required by this path's instructions: every detector needs a fixture that
+    SHOULD trip it and one that should not. Without the negative, a detector
+    broken to match everything would still satisfy the positive; without the
+    positive, one broken to match nothing would still satisfy the tree.
+    """
+    # Composed from the constant rather than written out, and NOT because of
+    # style: a literal armour block with a base64-shaped payload is exactly what
+    # this guard forbids in the locale files, and `detect-secrets` flags it here
+    # for the same reason it flagged them there. Writing the specimen into the
+    # test would have planted the very artefact the test defends against.
+    tripped = _pem_carrying_keys(
+        {
+            "securityView.specimen": f"{_PEM_ARMOUR}PRIVATE KEY-----\n<payload>\n",
+            "securityView.certificate": f"{_PEM_ARMOUR}CERTIFICATE-----\n<payload>\n",
+        }
+    )
+
+    assert sorted(tripped) == ["securityView.certificate", "securityView.specimen"]
+
+
+def test_the_pem_detector_accepts_an_instruction_and_a_non_string() -> None:
+    """The placeholders the fix actually shipped must stay acceptable.
+
+    `pemKeyHint` and its siblings are the instruction-style placeholders that
+    replaced the specimen keys. If the detector tripped on these, the fix would
+    have been impossible and the baseline would have had to carry the class --
+    the outcome the guard above exists to prevent.
+    """
+    clean = _pem_carrying_keys(
+        {
+            "securityView.pemKeyHint": "Paste the PEM-encoded private key",
+            "securityView.beginsWith": "A certificate begins with a BEGIN line",
+            "securityView.count": 5,
+            "securityView.enabled": True,
+        }
+    )
+
+    assert clean == []

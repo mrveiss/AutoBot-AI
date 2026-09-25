@@ -25,7 +25,12 @@ def _locales_dir() -> Path:
     this checker would drift from this one the first time either changed.
     """
     if "--locales" in sys.argv:
-        return Path(sys.argv[sys.argv.index("--locales") + 1]).resolve()
+        flag = sys.argv.index("--locales")
+        if flag + 1 >= len(sys.argv):
+            # Without this the flag-as-last-argument case raises IndexError and
+            # the CI step reports a traceback instead of the mistake (#17395).
+            raise SystemExit("--locales requires a directory argument")
+        return Path(sys.argv[flag + 1]).resolve()
     return Path(__file__).parent.parent / "src" / "i18n" / "locales"
 
 
