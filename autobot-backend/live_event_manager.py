@@ -19,6 +19,36 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from events.channel_stream import get_channel_event_stream
 
+#: Event types a `global` subscriber receives even when they are published on a
+#: scoped channel (#17363).
+#:
+#: `global` admits every authenticated client (`api/live_events.py:_authorize_channel`),
+#: and this manager used to mirror EVERY non-`global` publish to those subscribers.
+#: So `agent:{user_id}` scoping was correct at the publish site and void at the
+#: delivery boundary: an operator's goal text, shell command and stdout reached
+#: every signed-in client regardless of the channel they were addressed to.
+#:
+#: The mirror is not removed, because #15949 depends on it -- the claim-projection
+#: dashboard subscribes to `global` and reads claim events published on
+#: `agent:{agent_id}`, and that issue rejected a second publish to `global` as
+#: double-delivery with mismatched event ids.
+#:
+#: It is keyed on the EVENT TYPE rather than the channel prefix because `agent:`
+#: is overloaded: `agent:{user_id}` is a human operator's private channel and
+#: `agent:{agent_id}` is an automation agent's claim channel. A prefix rule cannot
+#: separate them; these three names can.
+#:
+#: An ALLOWLIST on purpose. A denylist of known-sensitive event types cannot see a
+#: new one, so a scoped channel would be public by default -- which is the defect
+#: this replaces.
+MIRRORED_TO_GLOBAL_SUBSCRIBERS = frozenset(
+    {
+        "work_claim_acquired",  # services/claim_projection.py ACQUIRED  (#15949)
+        "work_claim_released",  # services/claim_projection.py RELEASED  (#15949)
+        "work_claim_conflict",  # services/claim_projection.py CONFLICT  (#15949)
+    }
+)
+
 logger = get_logger(__name__)
 
 # #14819: session and chat make a conversation addressable, which is what lets
@@ -96,7 +126,7 @@ class LiveEventManager:
         logger.debug("Client removed from all channel subscriptions")
 
     async def publish(self, channel: str, event_type: str, payload: dict, *, durable: bool = False) -> int:
-        """Publish event to channel subscribers and global subscribers.
+        """Publish to the channel's subscribers, and to `global` only where allowed.
 
         #14817: the sequence number comes from :class:`ChannelEventStream`
         (Redis ``INCR``), so it is monotonic across restarts and shared between
@@ -123,7 +153,7 @@ class LiveEventManager:
         async with self._lock:
             recipients: Set[WebSocket] = set()
             recipients.update(self._subscriptions.get(channel, set()))
-            if channel != "global":
+            if channel != "global" and event_type in MIRRORED_TO_GLOBAL_SUBSCRIBERS:
                 recipients.update(self._subscriptions.get("global", set()))
             recipients_copy = set(recipients)
         disconnected: list = []
