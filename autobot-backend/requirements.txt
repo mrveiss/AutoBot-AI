@@ -25,6 +25,15 @@ psutil>=7.2.2  # Issue #927: CPU monitoring for wake word optimization
 
 # Database
 sqlalchemy>=2.0.54
+# greenlet is declared explicitly, not left to SQLAlchemy (#17432). SQLAlchemy
+# ships it as an `[asyncio]` extra AND, in some releases, under a
+# `platform_machine == "x86_64" or ...` marker -- so whether it arrives depends
+# on the release the floor resolves to and on the machine resolving it. It
+# stopped arriving on 2026-09-24 and every `docker-smoke-test` run failed on
+# `main` with `ModuleNotFoundError: No module named 'greenlet'` before the
+# container could start. The async engine is a direct requirement of this
+# service, so it is declared directly rather than inherited conditionally.
+greenlet>=3.1.0  # SQLAlchemy async engine dependency -- see the note above
 alembic>=1.20.0
 aiosqlite>=0.22.1
 asyncpg>=0.31.0  # Async PostgreSQL driver — required for RBAC user modes (single_company+) (#9713)
