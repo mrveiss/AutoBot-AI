@@ -91,7 +91,14 @@ CLAIM_TTL_S = env_int_clamped("AUTOBOT_WORK_CLAIM_TTL_S", 300, min_v=10, max_v=3
 #: case: the existing subtree-overlap rule degrades correctly to exact-match
 #: when a scope has no sub-segments, the same way ``project:acme`` already
 #: behaves. No new overlap semantics, no new kind of kind.
-VALID_KINDS = frozenset({"path", "kb", "device", "project", "config", "provider", "cpu", "queue"})
+#:
+#: ``issue`` (#17091): a GitHub issue number, flat -- ``issue:17091`` has no
+#: subtree, so the segment is always exactly one. It is the extension point for
+#: "the same claim registry the agents use" applied to AutoBot's own dev-loop
+#: participation. It is deliberately not a ``task``: an issue outlives any
+#: single run that acts on it, and #15957's ``task`` refusal is about task
+#: IDENTITY, so this belongs here rather than in ``services/task_claim.py``.
+VALID_KINDS = frozenset({"path", "kb", "device", "project", "config", "provider", "cpu", "queue", "issue"})
 
 #: Kinds this module deliberately refuses, and where each belongs instead.
 #:
@@ -111,6 +118,20 @@ RESERVED_KINDS = MappingProxyType(
         "agent can hold a task while touching scopes it never claimed (#15957)",
     }
 )
+
+
+#: Kinds that name a single thing rather than a tree, so a claim on one is an
+#: exact match and nothing else (#16951, #17091). Enforced at PARSE time
+#: (review finding on #17380): `overlaps` compares segment-aligned prefixes, so
+#: `issue:42/a` and `issue:42/b` are NOT overlapping and BOTH exclusive claims
+#: succeed -- on the same issue, which is precisely the collision the registry
+#: exists to prevent. The module already documented `issue` as "flat ... the
+#: segment is always exactly one"; parsing simply did not enforce it.
+#:
+#: All four flat kinds, not just the one the review named: `provider:x/y` and
+#: `provider:x/z` have the identical hole. Nothing in the tree uses a
+#: multi-segment flat scope, checked before enforcing.
+FLAT_KINDS = frozenset({"issue", "provider", "cpu", "queue"})
 
 
 def _require_kind(kind: str) -> None:
@@ -196,6 +217,8 @@ class Scope:
                 raise ScopeError(f"scope {raw!r} contains a relative segment {segment!r}")
             if not _SEGMENT.match(segment):
                 raise ScopeError(f"scope {raw!r} has an unusable segment {segment!r}")
+        if kind in FLAT_KINDS and len(segments) > 1:
+            raise ScopeError(f"scope {raw!r} has {len(segments)} segments; {kind!r} is flat and takes exactly one")
         return cls(kind=kind, path="/".join(segments))
 
     def overlaps(self, other: Scope) -> bool:
