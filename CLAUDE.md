@@ -71,6 +71,10 @@ Rules here accumulate; some pull against each other. **Precedence, highest first
 2. **The newer, more specific instruction** over the older, more general one. An owner rule dated
    today outranks a standing rule; a rule naming this PR outranks a rule about PRs. Say which one
    you applied when they disagree, rather than picking silently.
+   *Scope:* this orders rules **that already apply**. It does not re-open which file wins — the
+   project-over-global precedence stated at the top of this file is settled first, and a newer
+   global rule does not override this file by being newer. Where a global rule is newer **and**
+   this file is silent, there is no conflict and it simply applies.
 3. **Evidence rules over process rules.** A tick needs code evidence even when ticking would close
    a thing the process wants closed.
 4. **Everything else**, in the order it appears.

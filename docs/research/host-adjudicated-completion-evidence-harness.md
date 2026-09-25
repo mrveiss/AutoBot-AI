@@ -21,7 +21,7 @@ a large test corpus; the maintainers describe one desktop platform as well teste
 thin, and a third as internal-only.
 **Method:** read the repository README and its own code map in full; listed the top level and the
 runtime, shared-contract, capability, QA and autonomous-directive directories; read in full or in
-part eleven runtime modules — completion evidence, typed task postconditions, the untrusted-content
+part the ten runtime modules named below — completion evidence, typed task postconditions, the untrusted-content
 taint layer, the verification core, deliverable provenance, the autonomy decision ledger, the
 ambiguity-resolution policy, the workspace lease, the capability projection function, the
 cross-boundary schema validator — and the autonomous-loop suite's README.
@@ -53,7 +53,9 @@ in code rather than asserted in a README.
 
 - **One process, one port, no frontend build.** The runtime serves the frontend statically and
   streams a frozen event bus to it. The frontend is ~80 plain scripts loaded in dependency order
-  by hand.
+  by hand. **Unreconciled:** the overview above counts ~133 hand-ordered frontend script modules.
+  The two figures were taken at different points in the read and it is not established whether they
+  cover the same population; treat the order of magnitude as the claim, not either exact number.
 - **A frozen, additive-only cross-boundary contract.** A shared directory holds ~60 typed event
   definitions validated in *both* directions by a 75-line zero-dependency JSON-schema-lite
   validator. Renaming or removing an event or field is prohibited by policy.
@@ -423,6 +425,18 @@ branch. What survives is the narrower observation that AutoBot's two overlapping
 (`work_claims` scope registry and `services/task_claim.py`'s flat `task:claim:{id}` mutex, kept
 separate by owner ruling #15957) mean a caller must know which to use.
 
+## Mechanism 8 — ambiguity resolution: NOT AUDITED
+
+Stated rather than omitted, because a gap that is not named reads as a finding of "nothing there".
+
+The source's ambiguity-resolution policy was read during Phase 1 and listed in the Method, but **no
+AutoBot comparison was performed for it**, and the Phase 2 summary originally skipped from 7 to 9
+without saying so. Nothing here should be read as "we already have this" or as "the source is
+ahead" — neither was established.
+
+What a later audit would have to answer: where a request under-specifies a target, does our side
+resolve it, refuse it, or guess — and is that decision recorded anywhere a reviewer can find it.
+
 ## Mechanisms 1–3 — completion evidence, the verdict gate, and criteria-as-data
 
 **Audit — no `not_assessed` state exists.** `autobot_shared/status_enums.py:40-60` (`TaskStatus`)
@@ -708,6 +722,7 @@ model" would need that field added, under the doctrine's additive-and-optional r
 | 5 | Diagnostic delta | **adopt** — pure function, no baseline to maintain | trivial–moderate |
 | 6 | Derived provenance | adopt-with-conditions — needs `parent_run_id` on agent runs; the walk already exists | moderate |
 | 7 | Ledger of non-actions | adopt-with-conditions, narrowed to a `binding` vocabulary on the existing GOVERNANCE category | moderate |
+| 8 | Ambiguity resolution | **not audited** — no AutoBot comparison was made; see the note above Mechanism 9 | unknown |
 | 9 | Per-turn capability projection | **already ours** via per-agent `adapter_config`, re-applied every invocation | — |
 | 10 | Lease at the mutating call | **rejected-by-hidden-metrics** — declared-up-front is the better fit | — |
 | 11 | Loop governance | mostly rejected (we file to Issues); adopt the "a quiet tick still reports" rule | trivial |
