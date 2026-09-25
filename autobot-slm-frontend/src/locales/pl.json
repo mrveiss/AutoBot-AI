@@ -133,7 +133,7 @@
       "recentDelegations": "Recent Delegations",
       "selectAnAgentTo": "Select an agent to view details and delegate tasks",
       "selectReport": "Select report...",
-      "submit": "Składać",
+      "submit": "Złóż",
       "task": "Zadanie",
       "total": "Total"
     },
@@ -2961,7 +2961,7 @@
     "progress": "Postęp",
     "refresh": "Odśwież",
     "securityUpdates": "Security Updates",
-    "select": "Wybierać",
+    "select": "Wybierz",
     "selectAllCountPackages": "Select all {count} packages",
     "severity": "Powaga",
     "started": "Rozpoczęto",
@@ -3214,7 +3214,7 @@
         "history": "Historia",
         "noAnalysisHistoryYet": "No analysis history yet",
         "noImageCapturedGo": "No image captured. Go to Capture tab first.",
-        "preview": "Zapowiedź",
+        "preview": "Podgląd",
         "screenCapture": "Screen Capture",
         "selectImageFile": "Select Image File",
         "uploadFile": "Prześlij plik"
