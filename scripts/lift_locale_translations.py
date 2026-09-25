@@ -84,7 +84,21 @@ RTL_LOCALES = frozenset({"ar", "fa", "he", "ur"})
 
 
 def flatten(node: dict, prefix: str = "") -> dict[str, Any]:
-    """`{"a": {"b": 1}}` -> `{"a.b": 1}`."""
+    """Key every message in a locale tree by its dotted path to the root.
+
+    Recurses only into dict values; anything else is a leaf, so a list of
+    strings stays one entry rather than becoming indexed children. That matters
+    for the lifting rule below, which matches a message by its exact English
+    text -- a list flattened into `k.0`, `k.1` would compare fragments against
+    whole strings and find nothing.
+
+    The dotted path is what lets two apps' locale files be compared at all:
+    `en.json` nests by feature, so only a path-keyed view can ask "does this
+    app's `addNodeModal.cancel` have the same English text as some key in the
+    main app's bundle".
+
+        {"addNodeModal": {"cancel": "Cancel"}}  ->  {"addNodeModal.cancel": "Cancel"}
+    """
     out: dict[str, Any] = {}
     for key, value in node.items():
         path = f"{prefix}.{key}" if prefix else key
