@@ -49,6 +49,7 @@ goes red naming that file and task.
 from __future__ import annotations
 
 import ast
+import functools
 import pathlib
 import re
 from typing import Iterator, List, Sequence, Tuple
@@ -94,6 +95,15 @@ _KNOWLEDGE_IS_THE_RIGHT_QUESTION = {
 }
 
 
+#: Memoized by root (#17411). Widening to `.py` made these enumerations rglob
+#: the whole repository, and they are called once per test and once per
+#: parametrised case -- the suite went to 137s against pre-push's 128s budget,
+#: and a guard slow enough to be noticed is one someone narrows. 35s memoized.
+#:
+#: Keyed on root, so the empty-tree calls `reach_declarations_test` makes and
+#: the tmp_path fixtures below each get their own entry. The returned lists are
+#: shared between callers: nothing here mutates them, and nothing should.
+@functools.lru_cache(maxsize=None)
 def _scanned_files(root: pathlib.Path) -> List[pathlib.Path]:
     """Files under *root* -- the root given, never `repo_root()` (#17387 review).
 
@@ -158,6 +168,7 @@ def _python_dpkg_strings(text: str) -> List[Tuple[int, str]]:
     return found
 
 
+@functools.lru_cache(maxsize=None)
 def _code_lines_using_dpkg_list(root: pathlib.Path | None = None) -> List[Tuple[str, int, str]]:
     """Every non-comment line invoking `dpkg -l`, as (relative path, lineno, text).
 
@@ -221,6 +232,7 @@ def _walk_tasks(node: object) -> Iterator[dict]:
                 yield from _walk_tasks(node[key])
 
 
+@functools.lru_cache(maxsize=None)
 def _dpkg_registrations(root: pathlib.Path | None = None) -> List[Tuple[str, str]]:
     """(relative path, registered var) for each task whose command runs dpkg.
 
