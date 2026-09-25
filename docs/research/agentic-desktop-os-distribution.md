@@ -25,10 +25,10 @@ internal operation, and — the part that distinguishes it from the many other o
 spins — a built-in agent layer: ten agent CLIs (ours among them) as lazy-installing stubs, a
 skill directory symlinked into each vendor's skill path, an unattended `agent prompt <task>` entry
 point, a crash-diagnosis flow wired to the OS core-dump facility, and a panel that tracks each
-agent subscription's session and weekly limit usage. Maturity: one year old, on its fourth major
-release, platform-verified 43k repo stars and 530 contributors, and a foundation with eight-figure
-pledged funding behind it. Governance is explicit single-owner benevolent dictatorship, stated as
-doctrine, not an accident of the project's age.
+agent subscription's session and weekly limit usage. Maturity: young but past its first major
+releases, with substantial platform-verified popularity, a sizeable contributor base, and a
+foundation holding significant pledged funding. Governance is explicit single-owner benevolent
+dictatorship, stated as doctrine, not an accident of the project's age.
 
 ### Architecture & Key Patterns
 
@@ -113,12 +113,11 @@ doctrine, not an accident of the project's age.
 
 ### Visible vs Hidden Metrics
 
-- **Visible:** ~1.19M first-year ISO downloads and ~374k on the latest release (self-reported);
-  35-second-to-2-minute install
-  (self-reported); "over 1,000 community plugins" on the landing page, while the registry page
-  itself rendered **0 indexed plugins** at fetch time (unverified, and internally inconsistent);
-  20+ themes, 45+ locales; runs on a 2011 laptop with 2GB RAM (self-reported demo); $21.7M pledged
-  foundation funding.
+- **Visible:** a large self-reported first-year download count and a substantial figure for the
+  latest release; a sub-two-minute install (self-reported); a landing-page claim of a large
+  community plugin catalogue, while the registry page itself rendered **0 indexed plugins** at
+  fetch time (unverified, and internally inconsistent); a wide theme and locale selection; runs on
+  decade-old hardware with 2GB RAM (self-reported demo); significant pledged foundation funding.
 - **Hidden:** (1) you inherit a rolling-release base's churn, deliberately lagged one month —
   the lag is the mitigation *and* the delay on security fixes; (2) replacing the base package
   manager means the vendor now owns an update path that must stay correct forever, and a user who
@@ -127,7 +126,7 @@ doctrine, not an accident of the project's age.
   verification is unexplained; (4) auto-approving agents on a sudo-capable account is an
   unbounded blast radius with no documented containment; (5) rollback asymmetry (root yes, `/home`
   no) means config conflicts are manual work exactly when the system is already broken;
-  (6) bus factor 1 by doctrine; (7) a 51-section manual is the real learning curve behind the
+  (6) bus factor 1 by doctrine; (7) a many-sectioned manual is the real learning curve behind the
   "fantastic defaults" claim.
 - **Weighing:** the visible wins are adoption and install speed, which are the *distribution's*
   metrics and transfer to nobody else. What transfers is the mechanism set — one introspectable
@@ -153,8 +152,12 @@ greps that came back empty are named — *nothing found* and *did not look* are 
 
 #### 1. Snapshot-before-mutate + auto-rollback on the **primary** update path — ADOPT
 
-- **Already-exists audit:** AutoBot has both halves of this pattern, on the *wrong* path. The
-  drift-resolve path snapshots before touching anything —
+- **Already-exists audit:** AutoBot has both halves of this pattern, on the *wrong* path, and the
+  snapshot half is **best-effort rather than guaranteed**: `_snapshot_component()` returns
+  `Optional[str]` with three `return None` paths, and its caller (`code_sync.py:3032`) passes the
+  result into every component branch **without checking it**, so a failed snapshot still lets the
+  post-sync mutations run and leaves `_rollback_component()` with nothing to restore (filed as
+  #17474). The drift-resolve path attempts to snapshot before touching anything —
   `autobot-slm-backend/api/code_sync.py:3032` calls `_snapshot_component()`
   (`code_sync.py:2467-2511`) with the comment "snapshot the deployed dir BEFORE any mutation for
   rollback", and `_rollback_component()` (`code_sync.py:2555-2585`) has seven call sites
