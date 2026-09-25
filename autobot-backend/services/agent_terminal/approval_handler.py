@@ -193,7 +193,11 @@ class ApprovalHandler:
                 from events.bus import PersistStrategy, publish_event
 
                 await publish_event(
-                    "global",
+                    # #17363: the payload names the conversation, the terminal
+                    # session, the command and the operator's comment. `global`
+                    # is authorised for every signed-in client, so this was a
+                    # broadcast of one tenant's approval traffic to all of them.
+                    f"chat:{session.conversation_id}",
                     event_type="command_approval_status",
                     payload={
                         "conversation_id": session.conversation_id,
