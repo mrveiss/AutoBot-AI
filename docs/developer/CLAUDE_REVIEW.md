@@ -159,6 +159,31 @@ red means the tick moves to the next non-colliding issue, never to a workaround.
 
 ---
 
+## Review threads are cleared before CI, not during it
+
+**A PR does not get a CI run while it has unresolved review comments** (owner rule 2026-09-25).
+Resolving a thread costs **no CI**; a CI cycle costs ~35 minutes on a serialized shard queue. A
+reviewer who has already named what will break is evidence that has been paid for, and spending a
+run ahead of reading it buys a second opinion while ignoring the first.
+
+Measured: one PR spent **four cycles** discovering guards one at a time while fourteen review
+comments sat unread behind them.
+
+**A resolution needs an argument, not a click.** The count of unresolved threads is the gate, and
+the count is satisfiable without the substance — so the gate measures the wrong thing unless
+resolutions carry replies. Two shapes both count as resolved and only one is:
+
+    replied with what changed, or why it does not apply   -> resolved
+    clicked resolve, nothing on the record                -> the finding is gone, not answered
+
+When sweeping a PR for eligibility, **read the resolutions, not just the number.** A thread
+resolved silently on a PR that then fails on the thing the reviewer named is the gate defeating
+itself, and it will look like a passing check.
+
+**Reply before the fix is pushed, and say so.** A resolved thread whose fix is still local reads to
+the next person as *already fixed on this branch*. State that the change is committed and not yet
+pushed, so nobody infers it from the diff.
+
 ## Merge-Blocking Findings Gate (#10024)
 
 Closes the review-to-merge race: a finding caught in review must not be merged
