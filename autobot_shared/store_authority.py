@@ -47,6 +47,16 @@ class Store(str, Enum):
     REDIS = "redis"
     CHROMADB = "chromadb"
     DISK = "disk"
+    #: Process memory that outlives the request but not the process (#17450).
+    #: NOT a place bytes survive, and named here precisely so a concept kept
+    #: this way can be DECLARED and seen to be inadequate. Before this member
+    #: existed the MCP pre-auth lockout could not be written down at all: it is
+    #: not one of the durable stores, so `stores_written()` correctly reported
+    #: nothing, every entry was correct and every audit passed. An absence
+    #: nobody could have corrected is a gap in the type, not in the table.
+    #:
+    #: A concept declared PROCESS is a finding, not a resting state.
+    PROCESS = "process"
 
 
 @dataclass(frozen=True)
@@ -261,6 +271,40 @@ STORE_AUTHORITY: dict[str, Concept] = {
         rebuilt_by="An expired proposal is re-proposed by the next loop cycle.",
         note="Deliberate exception. The pending-approval payload is a 7-day handoff between the "
         "loop and its operator; the configuration it proposes is durable only once accepted.",
+    ),
+    "request_idempotency": Concept(
+        name="request_idempotency",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot-backend/middleware/idempotency_middleware.py",),
+        rebuilt_by="Nothing rebuilds it. Losing a key means a replayed request is executed a "
+        "second time rather than returning the stored response.",
+        note="Deliberate exception, and narrower than it looks. The record is a TTL'd receipt "
+        "for one request, not user-owned state -- the durable effect it guards lives in "
+        "whatever store the handler itself writes. Declared because Redis is the AUTHORITY "
+        "here rather than a projection, which this registry requires justifying (#17450). "
+        "It is single-store, so the dual-store guard was never going to surface it: it "
+        "belongs by judgement, not because a detector found it.",
+    ),
+    "pre_auth_lockout": Concept(
+        name="pre_auth_lockout",
+        system_of_record=Store.PROCESS,
+        projections=(),
+        write_sites=("autobot-backend/mcp_server/auth_throttle.py",),
+        rebuilt_by="Nothing rebuilds it. A restart clears every lockout and every failure "
+        "count, so an attacker's budget resets with the process.",
+        note="NOT a deliberate exception -- a declared inadequacy (#17450). The lockout lives "
+        "in an OrderedDict on a module-level singleton, so it is per worker and per "
+        "process lifetime. Two consequences: a restart clears it mid-attack, and with "
+        "uvicorn --workers N the effective threshold is N x the configured one. The "
+        "backend runs --workers 1 today (measured), so the second is latent, not live -- "
+        "but nothing ties the throttle's correctness to that value, so raising worker "
+        "count for throughput would silently weaken an authentication control. "
+        "#8170 already states this exact principle for LLM rate limits and was scoped to "
+        "them. Declared here so the weakness is visible to the registry that exists to "
+        "surface it, rather than absent from it. Sharing the state is unresolved: it "
+        "needs a decision on what happens when the shared store is unavailable, which "
+        "is a threat-model question and not mine to settle.",
     ),
 }
 
