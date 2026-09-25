@@ -51,7 +51,16 @@ _MIN_CRITERIA_PATHS = 30
 _MIN_LAMBDA_PATHS = 12
 
 
-def _tree() -> ast.Module:
+def _tree(source: str | None = None) -> ast.Module:
+    """The system module's AST, or a fixture's.
+
+    Parameterised so the path scanners can be exercised on synthetic source. A
+    scanner that can only be pointed at the real tree can only ever report
+    "nothing missing", which is indistinguishable from "saw nothing" -- the
+    failure this whole issue is about, applied to its own guard.
+    """
+    if source is not None:
+        return ast.parse(source)
     return ast.parse((repo_root() / _SYSTEM).read_text(encoding="utf-8"))
 
 
@@ -114,9 +123,9 @@ def _joined_path(node: ast.AST, constants: dict[str, str]) -> str | None:
     return None
 
 
-def _lambda_paths() -> list[tuple[int, str]]:
+def _lambda_paths(source: str | None = None) -> list[tuple[int, str]]:
     """``(line, path)`` for every repo-relative path a feature-check lambda builds."""
-    tree = _tree()
+    tree = _tree(source)
     constants = _module_string_constants(tree)
     found: list[tuple[int, str]] = []
     for node in ast.walk(tree):
@@ -126,7 +135,11 @@ def _lambda_paths() -> list[tuple[int, str]]:
             if not (isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.Div)):
                 continue
             joined = _joined_path(inner, constants)
-            if joined and "/" in joined and not joined.startswith(("/api", "http", "//")):
+            # No `"/" in joined` requirement: that silently dropped every
+            # single-segment path, and `src`/`tests` are exactly the roots this
+            # guard exists to catch. Only `root / ...` chains reach here, so a
+            # non-path string cannot be collected by accident.
+            if joined and not joined.startswith(("/api", "http", "//")):
                 found.append((inner.lineno, joined))
     # A nested chain yields its prefix as well as the whole; keep only the
     # longest path per line, which is the one the code actually opens.
@@ -431,3 +444,140 @@ class TestAPhaseVerifiedElsewhereReportsNoScore:
 
         assert aggregate["structural_presence"] == 75.0
         assert aggregate["phases_excluded_from_score"] == 0
+
+
+class TestTheScannerSeesSingleSegmentPaths:
+    """The contrast pair this guard shipped without (#17089 review).
+
+    The filter required ``"/" in joined``, which silently dropped every
+    single-segment path -- so ``root / "src"``, ``root / "tests"`` and
+    ``root / "scripts"`` were never collected, and `src`/`tests` are exactly the
+    pre-reorganisation roots this PR exists to remove. The guard reported
+    "15 of 15 paths exist" while not looking at four more, two of them missing.
+
+    This is the same defect the scanner itself hit earlier in this PR, one layer
+    out: there, extracting a constant made it see 4 paths instead of 15 and the
+    FLOOR caught it, because a floor asserts a population. Here there was no
+    floor over single-segment paths, so the blind spot was silent. A fixture
+    carrying a missing single-segment path is what a floor cannot supply.
+    """
+
+    def test_a_missing_single_segment_path_is_collected(self) -> None:
+        source = 'checks = {"x": lambda: (root / "definitely_absent_dir").exists()}\n'
+
+        collected = [path for _, path in _lambda_paths(source)]
+
+        assert "definitely_absent_dir" in collected, (
+            "a single-segment path was not collected, so a dead check against a bare "
+            f"directory would go unreported; got {collected}"
+        )
+
+    def test_a_url_is_still_excluded(self) -> None:
+        # The other half: widening to single segments must not start treating
+        # endpoint strings as filesystem paths.
+        source = (
+            "checks = {\n"
+            '  "a": lambda: self._check("/api/system/health"),\n'
+            '  "b": lambda: self._check("https://example.invalid/x"),\n'
+            "}\n"
+        )
+
+        collected = [path for _, path in _lambda_paths(source)]
+
+        assert collected == [], f"URLs and endpoints are not filesystem paths; got {collected}"
+
+    def test_every_single_segment_root_in_the_live_tree_exists(self) -> None:
+        root = repo_root()
+        missing = [
+            f"{_SYSTEM}:{line} -> {path}"
+            for line, path in _lambda_paths()
+            if "/" not in path and not (root / path.split("*")[0]).exists()
+        ]
+
+        assert not missing, "feature checks point at bare directories that do not exist:\n  " + "\n  ".join(missing)
+
+
+def _glob_checks(source: str | None = None) -> list[tuple[int, str, str, bool]]:
+    """``(line, base, pattern, recursive)`` for every ``.glob``/``.rglob`` check."""
+    tree = _tree(source)
+    constants = _module_string_constants(tree)
+    found: list[tuple[int, str, str, bool]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (isinstance(func, ast.Attribute) and func.attr in ("glob", "rglob")):
+            continue
+        base = _joined_path(func.value, constants)
+        if base is None or not node.args:
+            continue
+        first = node.args[0]
+        if not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
+            continue
+        found.append((node.lineno, base, first.value, func.attr == "rglob"))
+    return found
+
+
+class TestNoFeatureCheckIsDeadOnArrival:
+    """A check whose glob matches nothing reports False forever (#17089).
+
+    The trap this closes is one this PR fell into. Correcting
+    ``autobot-vue/src/components`` to ``autobot-frontend/src/components`` made
+    the DIRECTORY right and left the CHECK dead, because ``glob`` does not
+    recurse and those components live in subdirectories. The path guard passed --
+    it only asked whether the base directory existed -- so "15 of 15 paths
+    exist" was true and "every check can pass" was false. Four checks were dead
+    at that point: two Terminal/Settings globs and two against a repo-root
+    ``scripts/`` that holds no security or profiling scripts.
+
+    Existence of a path is not evidence that a check can succeed. This asserts
+    the stronger property.
+    """
+
+    def test_the_parse_found_the_glob_checks(self) -> None:
+        checks = _glob_checks()
+
+        assert len(checks) >= 6, (
+            f"only {len(checks)} glob checks parsed; the feature-check shape changed and this "
+            "guard has stopped seeing them"
+        )
+
+    def test_every_glob_check_matches_at_least_one_file(self) -> None:
+        root = repo_root()
+        dead = []
+        for line, base, pattern, recursive in _glob_checks():
+            directory = root / base
+            if not directory.is_dir():
+                dead.append(f"{_SYSTEM}:{line} -> {base} is not a directory")
+                continue
+            matches = directory.rglob(pattern) if recursive else directory.glob(pattern)
+            if not any(matches):
+                dead.append(
+                    f"{_SYSTEM}:{line} -> ({base}).{'rglob' if recursive else 'glob'}" f"({pattern!r}) matches nothing"
+                )
+
+        assert not dead, (
+            "these feature checks can only ever report False -- the path exists but the "
+            "pattern matches no file, so the check is dead on arrival:\n  " + "\n  ".join(dead)
+        )
+
+    def test_a_glob_matching_nothing_is_reported(self) -> None:
+        # The positive control, on a fixture: without it this guard is satisfied
+        # by a parser that returns an empty list for every input.
+        source = 'checks = {"x": lambda: any((root / "repo_tests").glob("*definitely_no_such_file*"))}\n'
+
+        checks = _glob_checks(source)
+
+        assert len(checks) == 1, checks
+        line, base, pattern, recursive = checks[0]
+        assert base == "repo_tests" and pattern == "*definitely_no_such_file*" and recursive is False
+        assert not any((repo_root() / base).glob(pattern)), "the fixture's premise is that it matches nothing"
+
+    def test_recursion_is_recorded_because_it_changes_the_answer(self) -> None:
+        # `glob` vs `rglob` is the difference between dead and alive for the
+        # Terminal/Settings checks, so the guard must not flatten them.
+        plain = _glob_checks('checks = {"a": lambda: any((root / "x").glob("*y*"))}\n')
+        deep = _glob_checks('checks = {"a": lambda: any((root / "x").rglob("*y*"))}\n')
+
+        assert plain[0][3] is False
+        assert deep[0][3] is True
