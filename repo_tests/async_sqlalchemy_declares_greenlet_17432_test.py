@@ -39,10 +39,11 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 #: Names whose use implies SQLAlchemy's async engine, and therefore greenlet.
-#: `async_engine_from_config` was missing and is used at
-#: `autobot-backend/migrations/env.py:18,99` -- a service reaching the async
-#: engine only through it passed this guard without declaring greenlet (#17433
-#: review). All are `sqlalchemy.ext.asyncio` entry points.
+#: `async_engine_from_config` was missing, and `run_async_migrations` in
+#: `autobot-backend/migrations/env.py` reaches the async engine through it and
+#: through no other name in this set -- so a service doing the same passed this
+#: guard without declaring greenlet (#17433 review). All are
+#: `sqlalchemy.ext.asyncio` entry points.
 _ASYNC_MARKERS = (
     "AsyncSession",
     "create_async_engine",
