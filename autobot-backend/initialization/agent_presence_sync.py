@@ -63,7 +63,7 @@ async def start(app: "FastAPI") -> None:
 async def _sync_once() -> None:
     from agents.agent_client import get_agent_client
     from api.agent_terminal import get_agent_terminal_service
-    from autobot_shared.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_async_redis_client
     from chat_workflow import get_chat_workflow_manager
     from llc.services.agent_presence_queries import distinct_company_ids_with_agents
     from protocols.agent_presence import get_presence_registry
@@ -76,7 +76,10 @@ async def _sync_once() -> None:
 
     registry = get_presence_registry()
     agent_client = await get_agent_client()
-    terminal_service = get_agent_terminal_service(redis_client=get_redis_client(async_client=True))
+    # #17436: `get_redis_client(async_client=True)` is a SYNC function returning a
+    # coroutine, so the un-awaited call handed the service a coroutine object as its
+    # client -- and the service is a singleton, so startup order baked it in.
+    terminal_service = get_agent_terminal_service(redis_client=await get_async_redis_client())
 
     await sync_ai_stack_presence(registry, agent_client.registry, get_chat_workflow_manager())
     await sync_session_presence(registry, terminal_service.session_manager)

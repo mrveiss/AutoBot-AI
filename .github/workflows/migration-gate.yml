@@ -43,6 +43,21 @@ on:
   # "nothing to verify" is stated rather than inferred from a skip.
   pull_request:
     branches: [ release, main ]
+  # #17490: every trigger above is path-driven, so a break whose cause is not a
+  # commit is invisible to all of them. That is not hypothetical -- #17490 was
+  # exactly this: SQLAlchemy 2.1.0 was published, `migration-gate.yml` installed
+  # an unpinned `sqlalchemy>=2.0`, and the chain started failing on a
+  # `type "approvaltype" does not exist` that no diff in this repository caused.
+  # It then surfaced on #17439, a Redis PR touching no migration files, whose
+  # author could reasonably have read it as theirs.
+  #
+  # A daily run makes the matrix answer "does the chain still build today", not
+  # only "did this diff break it". Offset from the 02:00 cluster (coverage,
+  # branch-cleanup) so a Postgres service container is not competing with them.
+  schedule:
+    - cron: '40 4 * * *'
+  # Manual re-run, for confirming a fix without pushing a path-touching commit.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -89,7 +104,15 @@ jobs:
     # filter output still runs the gate instead of silently skipping it. On PRs
     # that touch no migration paths this job is skipped, and the
     # `migration-matrix` job below turns that into an explicit verdict.
-    if: needs.changes.outputs.migrations != 'false'
+    #
+    # #17490: the scheduled and manual runs ignore the filter entirely. Their
+    # whole purpose is to catch a break no diff caused, so gating them on "did
+    # a path change" would reproduce the blind spot they exist to close --
+    # a scheduled run has no diff to filter on.
+    if: >-
+      needs.changes.outputs.migrations != 'false'
+      || github.event_name == 'schedule'
+      || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
