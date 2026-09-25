@@ -530,7 +530,12 @@ class TestTheReportNamesItsEnvironment:
     """A number without its environment is what caused two retractions in one day."""
 
     def _one(self):
-        return [checker.Shortfall(checker.Declaration("pkg", ">=", "2.0", "req.txt:1"), "1.0")]
+        return [
+            checker.Shortfall(
+                checker.Declaration(source="req.txt:1", name="pkg", operator=">=", required="2.0"),
+                "1.0",
+            )
+        ]
 
     def test_the_default_still_names_the_running_interpreter(self):
         assert "interpreter running this check" in checker.render(self._one(), 1)[0]

@@ -70,7 +70,7 @@ _KNOWN_UNSCANNED = {
     ),
     "repo_tests/requirements_constraint_drift_baseline.txt": (
         "a record of `<service file>::<package>` PAIRS, not a manifest — it names the "
-        "packages whose CI and service constraints can resolve to different releases, "
+        "packages whose CI and service planes declare different constraints, "
         "for tools/lint/check_requirements_ci_drift.py (#17448). It carries no version "
         "specifiers and nothing installs from it; like its sibling below it is in this "
         "population only because its filename contains `requirements` (#14562)."

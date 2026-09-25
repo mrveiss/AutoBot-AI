@@ -1,10 +1,15 @@
 # requirements constraint-drift baseline (#17448)
 #
 # One `<service requirements file>::<package>` per line. Each entry is a package
-# declared on BOTH planes whose two constraints can resolve to DIFFERENT
-# releases -- typically `==X` in requirements-ci/*.txt against an unbounded
-# `>=X` in the service file, so CI installs exactly X while the service takes
-# whatever published most recently.
+# declared on BOTH planes where the two planes DECLARE DIFFERENT constraints --
+# typically `==X` in requirements-ci/*.txt against an unbounded `>=X` in the
+# service file.
+#
+# It says "declare differently", not "resolve differently", and the distinction
+# is the point. Which releases two specifiers actually select depends on the set
+# of versions that exist, which no offline check can know. An earlier version of
+# this guard claimed resolution and was wrong in both directions (#17502 review):
+# it called `>=1,!=2.1` and `>=1` identical, and `==1.0` and `==1.0.0` different.
 #
 # WHY THIS IS NOT COSMETIC. That is how the SLM test venv took SQLAlchemy 2.1.0
 # while CI's own venv stayed on 2.0.54. 2.1 dropped `greenlet` as a hard
@@ -22,8 +27,9 @@
 # agree. A pair that stops diverging while its line remains is a hard error, not
 # a silent no-op: a stale entry exempts nothing while looking authoritative.
 #
-# Measured 2026-09-25: 78 pairs appear on both planes, 52 of them can diverge.
-# Adding a line here is a decision to leave one of those 52 in place, and it
+# Measured 2026-09-25: 78 pairs appear on both planes, 53 of them declare
+# differently. That is a count of DECLARATIONS, not of live version conflicts.
+# Adding a line here is a decision to leave one of those 53 in place, and it
 # needs a reason in the PR that adds it.
 autobot-backend/requirements.txt::aiofiles
 autobot-backend/requirements.txt::aiohttp
@@ -57,6 +63,7 @@ autobot-backend/requirements.txt::structlog
 autobot-backend/requirements.txt::torchmetrics
 autobot-backend/requirements.txt::uvicorn
 autobot-backend/requirements.txt::watchdog
+autobot-backend/requirements.txt::weasyprint
 autobot-backend/requirements.txt::websockets
 autobot-slm-backend/requirements.txt::aiofiles
 autobot-slm-backend/requirements.txt::aiohttp

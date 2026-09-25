@@ -218,6 +218,10 @@ def parse_declarations(files: Iterable[Path], root: Path) -> list[Declaration]:
     return out
 
 
+#: Seconds the probe may take before the target counts as unreadable.
+_PROBE_TIMEOUT = 120
+
+
 class InterpreterUnreadable(RuntimeError):
     """A named interpreter could not be queried. NOT the same as 'nothing installed'."""
 
@@ -293,9 +297,12 @@ def installed_versions(names: Iterable[str], python: Path | None = None) -> dict
                 continue
             except Exception:  # noqa: BLE001 - malformed metadata raises many types
                 found[name] = UNREADABLE
-        if duplicate_metadata_names():
+        # Hoisted: each call scans EVERY installed distribution, so calling it
+        # per name made one audit do N+1 full metadata scans (#17502 review).
+        duplicates = duplicate_metadata_names()
+        if duplicates:
             for name in wanted:
-                if canonical(name) in duplicate_metadata_names():
+                if canonical(name) in duplicates:
                     found[name] = UNREADABLE
         return found
     _, versions, duplicates = _remote_versions(wanted, python)
@@ -318,9 +325,15 @@ def _remote_versions(names: Sequence[str], python: Path) -> tuple[str, dict[str,
             input=json.dumps(list(names)),
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=_PROBE_TIMEOUT,
             check=False,
         )
+    except subprocess.TimeoutExpired as exc:
+        # Not an OSError, so the clause below never caught it: a hung target
+        # ended the run with a traceback instead of the documented FATAL + exit
+        # 2. This is the same third-state argument one layer out -- a probe that
+        # did not finish is "could not look", never "nothing is installed".
+        raise InterpreterUnreadable(f"{python} did not answer within {_PROBE_TIMEOUT}s") from exc
     except OSError as exc:
         raise InterpreterUnreadable(f"could not run {python}: {exc}") from exc
     if completed.returncode != 0:
@@ -329,7 +342,11 @@ def _remote_versions(names: Sequence[str], python: Path) -> tuple[str, dict[str,
         payload = json.loads(completed.stdout)
     except ValueError as exc:
         raise InterpreterUnreadable(f"{python} returned unparseable output: {exc}") from exc
-    return payload["v"], payload["p"], frozenset(payload.get("dup", ()))
+    try:
+        return payload["v"], payload["p"], frozenset(payload.get("dup", ()))
+    except (KeyError, TypeError) as exc:
+        # Valid JSON of the wrong shape is still an unread environment.
+        raise InterpreterUnreadable(f"{python} returned JSON without the expected keys: {exc}") from exc
 
 
 def resolve_interpreter(target: Path) -> Path:
@@ -456,6 +473,10 @@ def render(
         # it applies to a deployed venv, and printing it there would tell an
         # operator to fix production by running a CI-parity script.
         lines.extend(f"  {shortfall.describe()}" for shortfall in found[:limit])
+        if len(found) > limit:
+            # Without this the deployed report silently truncated and never said
+            # so -- a list that hides entries without admitting it (#17502).
+            lines.append(f"  ... and {len(found) - limit} more; re-run with --all to list them")
         lines.append(
             "This is a DEPLOYED environment, not a local or CI one: these are the versions "
             "actually serving traffic. Changing them goes through the builtin updater, never "
