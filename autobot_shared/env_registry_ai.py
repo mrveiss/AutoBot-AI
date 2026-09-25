@@ -155,6 +155,46 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_DEV_LOOP_TOKEN_BUDGET",
+        type=int,
+        default=0,
+        description=(
+            "Cumulative token ceiling for AutoBot's own dev-loop participation (#17091). "
+            "Zero disables the spend gate, which is the shipped default; the rate ceiling "
+            "below is independent of it."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DEV_LOOP_BUDGET_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "Seconds the dev loop's cumulative token counter survives in Redis. Refreshed "
+            "on every recorded action, so it is a floor on how long spend is remembered."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DEV_LOOP_RATE_PER_HOUR",
+        type=int,
+        default=0,
+        description=(
+            "Dev-loop actions allowed per fixed UTC hour window (#17091). Zero disables the "
+            "rate gate. Checked before every action, never after."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_MAX_DELEGATIONS_PER_TURN",
         type=int,
         default=5,
