@@ -125,12 +125,18 @@ def _usable_redis(client: object) -> bool:
     check and was a presence check, which passes for every wrong value anyone has
     actually passed.
 
-    Checked by capability rather than isinstance so a fake that genuinely
-    implements the calls still works in tests.
+    Checked by capability, not isinstance, so a genuine fake still works.
+
+    The methods are the ones THIS class calls -- measured, not assumed:
+    `get`, `setex`, `delete`. An earlier version checked `hgetall`/`hset`,
+    carried over from EdgeLearner (#16499) and never called here; such a client
+    passed the guard and failed inside `_persist_session`, which catches and
+    logs -- session stays in memory, nothing says so. Checking the WRONG
+    capability is the truthiness bug again, just harder to see.
     """
     if client is None or inspect.iscoroutine(client) or inspect.isawaitable(client):
         return False
-    return callable(getattr(client, "hgetall", None)) and callable(getattr(client, "hset", None))
+    return all(callable(getattr(client, name, None)) for name in ("get", "setex", "delete"))
 
 
 class SessionManager:
@@ -145,9 +151,8 @@ class SessionManager:
             chat_history_manager: ChatHistoryManager instance for approval restoration
         """
         if redis_client is not None and not _usable_redis(redis_client):
-            # #17436: this service is a process-wide singleton built by whichever
-            # caller reaches it first, so accepting a bad client here poisons every
-            # later consumer. Refuse at the boundary rather than at first use.
+            # #17436: reached through a process-wide singleton, so a bad client
+            # here poisons every later consumer. Refuse at the boundary.
             raise TypeError(
                 f"redis_client is not a usable Redis client: {type(redis_client).__name__}. "
                 "An un-awaited get_redis_client(async_client=True) returns a coroutine; "

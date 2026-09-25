@@ -33,12 +33,20 @@ async def _a_coroutine() -> None:
 
 
 class _FakeRedis:
-    """A capability-complete fake: the guard must accept this."""
+    """A capability-complete fake: the guard must accept this.
 
-    async def hgetall(self, *_a: object, **_k: object) -> dict:
-        return {}
+    These are the methods `SessionManager` actually calls. Keeping the fake and
+    the guard on the same list is deliberate -- if they drift, the test starts
+    certifying a client shape the real code cannot use.
+    """
 
-    async def hset(self, *_a: object, **_k: object) -> int:
+    async def get(self, *_a: object, **_k: object) -> None:
+        return None
+
+    async def setex(self, *_a: object, **_k: object) -> bool:
+        return True
+
+    async def delete(self, *_a: object, **_k: object) -> int:
         return 1
 
 
@@ -94,3 +102,74 @@ def test_the_service_still_accepts_no_client_at_all() -> None:
     from services.agent_terminal.session_manager import SessionManager
 
     assert SessionManager(redis_client=None) is not None
+
+
+def test_a_client_missing_the_methods_this_class_calls_is_refused() -> None:
+    """The guard must check what SessionManager USES, not what looks Redis-shaped.
+
+    `hgetall`/`hset` is a real Redis client shape and the wrong one here: this
+    class calls `get`, `setex` and `delete`. Such a client would pass a
+    capability guard aimed at the wrong methods, then fail inside
+    `_persist_session` -- which catches and logs, leaving the session in memory
+    and nothing to say so.
+    """
+
+    class _WrongShape:
+        async def hgetall(self, *_a: object, **_k: object) -> dict:
+            return {}
+
+        async def hset(self, *_a: object, **_k: object) -> int:
+            return 1
+
+    assert _usable_redis(_WrongShape()) is False
+
+
+def test_a_later_usable_client_is_adopted_by_an_existing_singleton(monkeypatch) -> None:
+    """Awaiting the client is not enough if the singleton was already built without one.
+
+    `chat_workflow/tool_handler.py` calls `ensure_agent_terminal_service` with no
+    `redis_client` at all. On that ordering the singleton is built with `None`,
+    and every later client -- however correctly awaited -- was discarded. So the
+    await fix alone would have been inert on exactly the path that matters.
+    """
+    from api import agent_terminal_access as access
+
+    monkeypatch.setattr(access, "_agent_terminal_service_instance", None)
+    first = access.ensure_agent_terminal_service(redis_client=None)
+    assert first.redis_client is None, "precondition: built without a client"
+
+    client = _FakeRedis()
+    second = access.ensure_agent_terminal_service(redis_client=client)
+
+    assert second is first, "the singleton must not be rebuilt"
+    assert second.redis_client is client, "a usable later client must be adopted"
+    assert second.session_manager.redis_client is client, "the collaborator must be updated too"
+
+
+def test_an_unusable_later_client_is_not_adopted(monkeypatch) -> None:
+    """The upgrade only ever installs something usable."""
+    from api import agent_terminal_access as access
+
+    monkeypatch.setattr(access, "_agent_terminal_service_instance", None)
+    service = access.ensure_agent_terminal_service(redis_client=None)
+
+    coro = _a_coroutine()
+    try:
+        access.ensure_agent_terminal_service(redis_client=coro)
+    finally:
+        coro.close()
+
+    assert service.redis_client is None, "a coroutine must never be adopted"
+
+
+def test_a_working_client_is_not_swapped_out(monkeypatch) -> None:
+    """Never replace a usable client -- in-flight callers hold it."""
+    from api import agent_terminal_access as access
+
+    monkeypatch.setattr(access, "_agent_terminal_service_instance", None)
+    original = _FakeRedis()
+    service = access.ensure_agent_terminal_service(redis_client=original)
+
+    access.ensure_agent_terminal_service(redis_client=_FakeRedis())
+
+    assert service.redis_client is original, "a usable client must not be replaced"

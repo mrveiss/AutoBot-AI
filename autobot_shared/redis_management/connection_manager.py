@@ -45,8 +45,7 @@ from autobot_shared.redis_management.config import (
     RedisConfig,
     RedisConfigLoader,
 )
-from autobot_shared.redis_management.database_names import database_name as database_name_of
-from autobot_shared.redis_management.database_names import database_number
+from autobot_shared.redis_management.database_names import database_number, validated_name
 from autobot_shared.redis_management.statistics import (
     ConnectionMetrics,
     ManagerStats,
@@ -1056,7 +1055,7 @@ class RedisConnectionManager:
 
         Features: Circuit breaker, TCP keepalive, WeakSet tracking, statistics.
         """
-        database_name = database_name_of(database_name)
+        database_name = validated_name(database_name)
         precondition_result = self._check_sync_client_preconditions(database_name)
         if precondition_result is False:
             return None
@@ -1162,7 +1161,7 @@ class RedisConnectionManager:
         Features: Circuit breaker, loading dataset handling, TCP keepalive,
         WeakSet tracking, enhanced statistics.
         """
-        database_name = database_name_of(database_name)
+        database_name = validated_name(database_name)
         if not self._config.get("enabled", True):
             logger.warning("Redis is disabled in configuration")
             return None

@@ -41,6 +41,7 @@ from autobot_shared.redis_client import get_redis_client
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from services.agent_terminal import AgentTerminalService
 from services.agent_terminal.conversation_owner import ConversationNotOwnedError
+from services.agent_terminal.session_manager import _usable_redis
 
 logger = get_logger(__name__)
 
@@ -50,14 +51,46 @@ _agent_terminal_service_lock = threading.Lock()
 
 
 def ensure_agent_terminal_service(**kwargs: Any) -> AgentTerminalService:
-    """The singleton, built from ``kwargs`` by whichever caller gets there first (thread-safe)."""
+    """The singleton, built from ``kwargs`` by whichever caller gets there first (thread-safe).
+
+    A later caller's ``redis_client`` is ADOPTED if the instance has none usable
+    (#17436). Whoever arrives first wins, and `chat_workflow/tool_handler.py`
+    calls this with no ``redis_client`` at all -- so on that ordering the
+    singleton was built with ``None`` and every later client, however correctly
+    awaited, was discarded. Fixing the await alone would have left this PR inert
+    on exactly that path.
+
+    Only an upgrade: an unusable client is never installed, and a working one is
+    never swapped out from under in-flight callers.
+    """
     global _agent_terminal_service_instance
     if _agent_terminal_service_instance is None:
         with _agent_terminal_service_lock:
             if _agent_terminal_service_instance is None:
                 logger.info("Initializing AgentTerminalService singleton")
                 _agent_terminal_service_instance = AgentTerminalService(**kwargs)
+                return _agent_terminal_service_instance
+    _adopt_redis_client(_agent_terminal_service_instance, kwargs.get("redis_client"))
     return _agent_terminal_service_instance
+
+
+def _adopt_redis_client(service: AgentTerminalService, candidate: Any) -> None:
+    """Install *candidate* on an existing singleton that has no usable client.
+
+    Reaches into the two collaborators that were handed the client at
+    construction, because the service does not own a setter and adding one to a
+    file already at its size ceiling is a separate change.
+    """
+    if candidate is None or not _usable_redis(candidate) or _usable_redis(service.redis_client):
+        return
+    with _agent_terminal_service_lock:
+        if _usable_redis(service.redis_client):
+            return
+        logger.info("Adopting a usable Redis client onto the existing AgentTerminalService")
+        service.redis_client = candidate
+        service.session_manager.redis_client = candidate
+        if getattr(service, "terminal_logger", None) is not None:
+            service.terminal_logger.redis_client = candidate
 
 
 def get_agent_terminal_service(redis_client=Depends(get_redis_client)) -> AgentTerminalService:

@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from autobot_shared.redis_management.types import DATABASE_MAPPING, RedisDatabase
 
-__all__ = ["database_name", "database_number"]
+__all__ = ["database_name", "database_number", "validated_name"]
 
 
 def database_name(database: RedisDatabase | str) -> str:
@@ -62,3 +62,19 @@ def database_number(database: RedisDatabase | str) -> int:
             "number, not a key, and str() of it is not one either."
         )
     return DATABASE_MAPPING[name]
+
+
+def validated_name(database: RedisDatabase | str) -> str:
+    """The registry name for *database*, refusing one nothing declares.
+
+    Normalise-and-refuse in ONE call, so a caller cannot do half of it. It also
+    keeps the refusal ABOVE the caller's `try`: `get_sync_client` wraps pool
+    creation in `except Exception: return None`, so a `KeyError` raised down
+    inside `_get_database_number` came back as "Redis unavailable" and fed the
+    circuit breaker. A programming error reported as an outage is the same
+    defect as a programming error reported as success -- it is just louder about
+    the wrong thing. Raised here, it reaches the caller intact.
+    """
+    name = database_name(database)
+    database_number(name)
+    return name
