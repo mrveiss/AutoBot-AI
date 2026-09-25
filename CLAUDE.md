@@ -40,6 +40,12 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 
 ## Never violate
 
+- **Before acting on a measurement, name what it is about.** Which environment, which path, which
+  symbol, which question. `MEASUREMENT_DISCIPLINE.md` family **F** — *correct, complete, and about
+  a different question* — is the one that reads as a clean answer, so the doc does not fire unless
+  you already suspect it. Discriminator: **would more data change the answer?** If no, it is F. A
+  version is not a fact until the venv is named; a symbol is not absent until the concept is
+  searched; a `0` from a failed command is not a measurement.
 - **Say "I don't know" — never fabricate.** But an admission is not a closure — it is an opening: it means *"I need help, let's find this together"*, so **ask right then** in an interactive session, and where there is nobody to ask leave the criterion unticked, file it, and never drop it. A *stated* gap is a finding; an *unstated* one is the defect. A guessed cause, count or verdict is the one error treated as serious — for an agent a wrong answer is not an opinion, it executes. "I could not determine X" is a contribution. Guards and reports distinguish *nothing found* from *did not look*. See [`MEASUREMENT_DISCIPLINE.md`](docs/developer/MEASUREMENT_DISCIPLINE.md).
 - **PRs target `main`; `release` is the release branch.** `release`/`master` are blocked by the pre-commit hook — use `issue-*` or `hotfix-*`.
 - **Never work from a stale base** — and the half that bites is the judgement, not the freshness. Answer "is this already done?" against current `origin/main` and the issue's acceptance criteria, **never against an old branch**: a stale answer points toward doing *more* work, so nothing pushes back on it, and reviving such a branch can regress newer code. `git fetch origin` and branch from (or rebase onto) current base before the first edit — the auto-update bot only refreshes branches that already have a PR, so the window this covers is everything before the first push.
@@ -55,6 +61,35 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 - **Finish what you started — append before you open** (owner rule 2026-09-19). Before opening a new PR, check for an open PR the change can be appended to (same scope, risk, owner) and append; fix and land existing PRs before opening new ones; finish started issues before starting new ones.
 - **Issues touching the same file go in ONE PR, solved by ONE agent** (owner rule 2026-09-18). Hub files — registries, ratchet baselines, `.secrets.baseline`, `.github/`, `CLAUDE.md` — are exempt; one agent may split sequentially, the next PR opening after the previous merges. Check the open PRs touching a file before editing it.
 - **A pushed PR ends the tick — never wait on its CI.** Pushing is the sweep point: check every *other* in-flight PR once (approval gate, CI verdict, behind-ness), act on what is green or red, then start the next non-colliding scoped issue immediately. The PR just pushed is re-checked at the next sweep, never polled.
+
+## When rules conflict
+
+Rules here accumulate; some pull against each other. **Precedence, highest first:**
+
+1. **Safety and disclosure** — nothing internal in outward artifacts, no agent deletes data or
+   credentials, never edit `/opt/autobot/`. These never yield to throughput.
+2. **The newer, more specific instruction** over the older, more general one. An owner rule dated
+   today outranks a standing rule; a rule naming this PR outranks a rule about PRs. Say which one
+   you applied when they disagree, rather than picking silently.
+3. **Evidence rules over process rules.** A tick needs code evidence even when ticking would close
+   a thing the process wants closed.
+4. **Everything else**, in the order it appears.
+
+**The PR-granularity rules agree on "fewer PRs" and disagree on the unit.** Resolve in this order:
+
+    same file      -> ONE PR, ONE agent        (strongest: avoids conflicts, not just CI cost)
+    same scope     -> batch into one PR
+    same issue     -> one branch, never split
+    already open   -> append rather than open a new one
+
+When two apply, the **earlier line wins**. Hub files — registries, ratchet baselines,
+`.secrets.baseline`, `.github/`, `CLAUDE.md` — are exempt from the file rule, as stated below.
+
+**Known conflict, unresolved by design:** *finish everything* and *one PR's CI at a time* cannot
+both hold at a queue depth above one. Serialization wins while it is in force; the completion goal
+becomes *nothing mergeable left unmerged, nothing merged left uncleaned*, which is checkable at any
+instant. A goal phrased as "no work in flight" has no reachable end state in a repo with running CI
+and will read as permanent failure.
 
 ## Git/PR Workflow
 
