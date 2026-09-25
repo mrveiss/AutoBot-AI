@@ -22,8 +22,14 @@ fi
 N="$1"
 # shellcheck source=scripts/lib/git-root.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../scripts/lib/git-root.sh"
-ROOT=$(git_repo_root)
-cd "$ROOT"
+# Two steps, never a bare assignment (#17418). `git_repo_root` returns 1 with
+# NO stdout outside a work tree, and a bare failing substitution under
+# `set -e` aborts here with exit 1 and empty stderr -- which is this
+# script's own verdict for "forward-tracking references found, closure
+# blocked". A caller reading the code could not tell a real finding from a
+# run that never looked. Exit 2 is already this file's invocation error.
+ROOT=$(git_repo_root) || { echo "check-issue-close-refs: not a git repo" >&2; exit 2; }
+cd "$ROOT" || { echo "check-issue-close-refs: cannot enter $ROOT" >&2; exit 2; }
 SELF="pipeline-scripts/check-issue-close-refs.sh"
 
 EXCLUDES=(--exclude-dir=.git --exclude-dir=.worktrees --exclude-dir=node_modules

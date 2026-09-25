@@ -59,20 +59,82 @@ jobs:
     # real smoke test legitimately does not run.
     name: smoke-test
     needs: changes
-    # Exact complement of docker-smoke-test.yml's
-    # `needs.changes.outputs.docker == 'true'`.
+    # `always()` and then the complement, in that order, because the order is
+    # the fix (#17126).
     #
-    # Fail-closed: if `changes` errors, `needs` skips this job rather than
-    # reporting green, so a broken detector can never fake a pass. It leaves the
-    # context unreported, which blocks the pull request — the safe direction.
-    if: needs.changes.outputs.docker != 'true'
+    # This used to read `if: needs.changes.outputs.docker != 'true'` under a
+    # comment asserting fail-closed: "if `changes` errors, `needs` skips this
+    # job rather than reporting green ... which blocks the pull request". A
+    # skipped job does not block anything -- GitHub counts a SKIPPED check run
+    # as SATISFYING a required status check. So a failed or cancelled `changes`
+    # skipped this job AND the real one in docker-smoke-test.yml, and the
+    # required `smoke-test` context was met with no Docker smoke test run.
+    #
+    # Now: this job runs unless the real one is going to, and refuses when its
+    # own detector did not answer:
+    #
+    #   changes ok, docker != true   -> this job runs and succeeds (legitimate)
+    #   changes ok, docker == true   -> this job SKIPS; the real build reports
+    #   changes NOT ok               -> this job runs and FAILS
+    #
+    # THE FIRST TWO ARE MUTUALLY EXCLUSIVE. THE THIRD IS NOT A THIRD CASE, and
+    # an earlier version of this comment claimed it was -- that "exactly one
+    # check run named `smoke-test` ever carries a conclusion". It does not.
+    # There are TWO `changes` jobs, one per workflow, and this one can only see
+    # its own. When both detectors fail, this job reports failure and the real
+    # build also runs (its own `needs.changes.result != 'success'` fires) and
+    # reports whatever the build does -- two check runs, one context, possibly
+    # opposite conclusions, resolved by whichever completed last.
+    #
+    # What holds is narrower: THIS JOB CANNOT REPORT GREEN UNLESS ITS OWN
+    # DETECTOR SAID NO DOCKER PATHS CHANGED. That is true and it is not
+    # sufficient, which the first correction of this comment also got wrong.
+    # With S = this workflow's detector and R = the real build's, on a pull
+    # request where both succeed:
+    #
+    #   S.docker  R.docker   publishers
+    #   true      true       real only          correct
+    #   false     false      shim only          correct
+    #   true      false      NEITHER            no context is created at all
+    #   false     true       BOTH               shim green + the build's result
+    #
+    # The third row is #17126's own hole by another door: a required check that
+    # satisfies the gate by never existing. The fourth is worse than
+    # conservative -- the shim's green does NOT mean a build ran, and whether it
+    # or a failing build decides the context depends on which completed last.
+    #
+    # Neither row is a defect in either condition: each is correct for the value
+    # its own detector computed. The design asks ONE question of TWO detectors
+    # and assumes they agree, and two `dorny/paths-filter` runs in separate
+    # workflow runs can resolve a moving base differently. That is the
+    # single-publisher problem, not a condition bug, and it is #17391 -- not
+    # closable inside this file, and stated here so nobody reads the invariant
+    # above as a safety guarantee it does not carry.
+    if: >-
+      always() && (
+        needs.changes.result != 'success'
+        || needs.changes.outputs.docker != 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: No Docker-related changes — reporting required context as success
+      - name: Report the required context, or refuse when detection failed
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          DOCKER_CHANGED: ${{ needs.changes.outputs.docker }}
         run: |
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "::error::Path detection did not succeed (changes job: $CHANGES_RESULT,"
+            echo "::error::docker filter: ${DOCKER_CHANGED:-<unset>})."
+            echo "This shim reports the required 'smoke-test' context only when it KNOWS"
+            echo "no Docker-related path changed. It cannot know that now, so it refuses"
+            echo "rather than reporting green -- a skipped or absent run would otherwise"
+            echo "satisfy the required check with no smoke test at all (#17126)."
+            exit 1
+          fi
           echo "No Docker-related paths changed in this pull request."
           echo "The image build and compose smoke test in docker-smoke-test.yml"
           echo "do not apply, so the required 'smoke-test' context is reported"
           echo "green from here."
-          echo "Path set: .github/filters/docker-paths.yml (#15299)."
+          echo "Path set: .github/filters/docker-paths.yml (#15299);"
+          echo "that filter answered docker=${DOCKER_CHANGED:-<unset>}."

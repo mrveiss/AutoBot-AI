@@ -496,3 +496,22 @@ def test_grep_and_python_agree_on_the_shared_pattern(subject: str, expected: boo
     python_ok = re.match(pattern, subject) is not None
     assert grep_ok == python_ok, f"engines disagree on {subject!r}: grep={grep_ok} python={python_ok}"
     assert grep_ok is expected, f"{subject!r}: expected {expected}, both engines said {grep_ok}"
+
+
+def test_outside_a_work_tree_is_fatal_not_scanned(repo: Path, tmp_path: Path) -> None:
+    """#17410: `cd "$(git_repo_root)" || exit 2` never fired outside a repo.
+
+    An empty substitution makes it `cd ""` -- a no-op success -- so the guard
+    carried on scanning whatever directory it was started in.
+    """
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    res = subprocess.run(
+        ["bash", str(repo / "scripts" / "lint-conventions.sh"), "--all"],
+        cwd=elsewhere,
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "HOME": str(elsewhere), "GIT_CEILING_DIRECTORIES": str(tmp_path)},
+    )
+    assert res.returncode == 2, res.stdout + res.stderr
+    assert "not a git repo" in res.stderr

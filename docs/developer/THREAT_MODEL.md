@@ -1,6 +1,6 @@
 # Threat Model — Trust Boundaries by Subsystem
 
-Read this **before** the `secreview` checklist when a diff touches one of these four
+Read this **before** the `secreview` checklist when a diff touches one of these five
 subsystems. It exists so a review states the invariant a change breaks instead of
 re-deriving the trust model from the implementation.
 
@@ -125,6 +125,26 @@ response, a log line, an issue, a PR comment — is already redacted.
   [`jwks_verifier.py`](../../autobot-slm-backend/services/jwks_verifier.py) `verify_authority_token` (:218) denies the token (401) at both call sites; the write side stays best-effort.
 - The shared password-epoch helper fails CLOSED in both services (#16411, #16422, owner decisions): a Redis error, or a non-integer stored
   marker or `iat`, raises `RevocationCheckUnavailable` (a `ConnectionError`), which the SLM denies as above and [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401; an `except` reading it as "not revoked" is a fail-open.
+
+## 5. Remote desktop access
+
+**Boundary:** an authenticated user vs. the *managed desktop*. Not an auth boundary — the
+caller is logged in — so a missing check reads as a working feature, which is how
+[#17054](https://github.com/mrveiss/AutoBot-AI/issues/17054) survived.
+
+**Canonical enforcement:** [`autobot-backend/api/ws_security.py`](../../autobot-backend/api/ws_security.py)
+`enforce_ws_desktop_auth` — the one gate; `api/vnc_proxy.py`'s websockify route calls it before
+proxying. A paired device is judged on its own grants (`DESKTOP_VIEW`+`DESKTOP_INPUT`, #15146); a
+user credential must hold `mcp.desktop.control` via `role_has_permission`; everyone else is
+refused `1008` before any RFB byte. Full reasoning is in that function's docstring.
+
+**Invariants**
+- **`control`, never `read`.** RFB carries framebuffer and input on one stream, so the socket
+  cannot grant view without input — `mcp.desktop.read` would be a view-only grant that is not.
+- **The permission table decides, not `is_admin_role`** (#13854). A bypass here reverses that
+  ruling one call site at a time. Consequence: `superadmin`'s entry is empty, so it is refused —
+  fix that in `ROLE_PERMISSIONS`, not in the gate. `desktop_ws_role_gate_17054_test.py` asserts
+  both the table's answer and the socket's.
 
 ## Cross-cutting
 

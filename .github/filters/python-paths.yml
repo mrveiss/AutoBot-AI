@@ -144,6 +144,10 @@ python:
   # verified" note: neither library sources anything. Both look like they might
   # -- git-scope.sh contains the word `source` four times and
   # hardcoded-value-rules.sh six -- and every occurrence is prose in a comment.
+  # #17418: closure gate 2, read by pipeline-scripts/check_issue_close_refs_guard_test.py
+  # for its exit-code contract -- 1 means findings, 2 means it could not run, and a bare
+  # `$(git_repo_root)` used to produce 1 for a run that never looked.
+  - 'pipeline-scripts/check-issue-close-refs.sh'
   - 'pipeline-scripts/check-pre-commit-hook-pr.sh'
   - 'pipeline-scripts/check_baseline_no_growth.sh'
   # #15333: the open-alert ceiling gate, read by literal from
@@ -151,6 +155,9 @@ python:
   - 'pipeline-scripts/check_codeql_alert_ceiling.sh'
   - 'pipeline-scripts/detect-hardcoded-values.sh'
   - 'pipeline-scripts/pr-queue-open-list.sh'
+  # #17418: sourced by check-issue-close-refs.sh, whose exit-code contract is tested.
+  # git_repo_root's failure mode -- returns 1 with NO stdout -- is the whole subject.
+  - 'scripts/lib/git-root.sh'
   - 'scripts/lib/git-scope.sh'
   - 'scripts/lib/hardcoded-value-rules.sh'
   # #15473: the same shape one level out. scripts/lint_conventions_test.py runs

@@ -8,11 +8,15 @@
 
 - name: Check if PostgreSQL is already installed
   ansible.builtin.command:
-    cmd: "dpkg -l postgresql-{{ postgresql_version }}"
+    cmd: "dpkg-query -W --showformat=${Status} postgresql-{{ postgresql_version }}"
+  # (#17387) `dpkg -l <pkg>` answers "does dpkg KNOW this package", NOT "is it
+  # installed": a package removed without --purge stays in the database in `rc`
+  # state (`deinstall ok config-files`) and `dpkg -l` still exits 0. The comment
+  # this replaces asserted the opposite and was copied into four roles, so the
+  # false premise propagated with it. `${Status}` distinguishes all three
+  # states; `rc` collapsed them into two, and grouped the wrong two.
   register: _pg_installed
   changed_when: false
-  # (#2872) Intentional: dpkg exits rc=1 when package is not installed;
-  # the result gates conditional installation below.
   failed_when: false
 
 - name: Determine PostgreSQL APT release codename
@@ -26,7 +30,7 @@
   vars:
     _pgdg_codename_map:
       kali-rolling: "bookworm"
-  when: _pg_installed.rc != 0
+  when: "'ok installed' not in _pg_installed.stdout"
 
 - name: Fail if OS is too old for PostgreSQL 16
   ansible.builtin.fail:
@@ -36,7 +40,7 @@
       ({{ ansible_facts['distribution_release'] }}).
       Either upgrade the VM OS or set postgresql_version to "14".
   when:
-    - _pg_installed.rc != 0
+    - "'ok installed' not in _pg_installed.stdout"
     - ansible_facts['distribution_release'] in ['focal', 'bionic', 'xenial', 'buster']
     - postgresql_apt_release | default('', true) | length == 0
 
@@ -46,7 +50,7 @@
     dest: /usr/share/keyrings/pgdg.asc
     mode: "0644"
   become: true
-  when: _pg_installed.rc != 0
+  when: "'ok installed' not in _pg_installed.stdout"
 
 # #7218: idempotent repo-add — preserve device-shipped pgdg repo if present
 - name: "PostgreSQL | Add PostgreSQL APT repository (idempotent, #7218)"
@@ -56,7 +60,7 @@
     apt_repo_spec: "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt {{ _pgdg_release }}-pgdg main"
     apt_repo_filename: "pgdg"
     apt_repo_label: "PostgreSQL pgdg"
-  when: _pg_installed.rc != 0
+  when: "'ok installed' not in _pg_installed.stdout"
 
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
 - name: PostgreSQL | Refresh apt cache after PPA add (best-effort, bounded; #6719)
@@ -68,7 +72,7 @@
   become: true
   changed_when: false
   failed_when: false
-  when: _pg_installed.rc != 0
+  when: "'ok installed' not in _pg_installed.stdout"
 
 - name: Ensure en_US.UTF-8 locale is available
   community.general.locale_gen:
@@ -96,7 +100,7 @@
       - libpq-dev
     state: present
   become: true
-  when: _pg_installed.rc != 0
+  when: "'ok installed' not in _pg_installed.stdout"
 
 - name: Check if PostgreSQL cluster data directory exists
   ansible.builtin.stat:
@@ -104,12 +108,43 @@
   register: _pg_cluster_exists
   become: true
 
+- name: Check whether the postgres system user exists
+  # (#17387) `pg_createcluster` below runs as `become_user: postgres`, and its
+  # guard fires when the data directory is absent -- which is exactly the state
+  # a removed-but-not-purged package leaves behind. So the guard fired
+  # precisely when this user was most likely missing, and the run died with
+  # `sudo: unknown user postgres`: a late failure naming the user rather than
+  # the uninstalled package, which points the reader at creating a user instead
+  # of at the skipped install.
+  ansible.builtin.command:
+    cmd: id -u postgres
+  register: _pg_system_user
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Fail with the real cause when PostgreSQL is absent
+  ansible.builtin.fail:
+    msg: >-
+      PostgreSQL {{ postgresql_version }} is not installed on this node: there
+      is no postgres system user and no cluster at {{ postgresql_data_dir }}.
+      The install step was skipped, which means package detection reported the
+      package as present. A package in `rc` state (deinstall ok config-files)
+      is removed but not purged and still satisfies `dpkg -l` (#17387); check
+      `dpkg-query -W --showformat=${Status} postgresql-{{ postgresql_version }}`
+      on this node.
+  when:
+    - not _pg_cluster_exists.stat.exists
+    - _pg_system_user.rc != 0
+
 - name: Initialize PostgreSQL cluster if missing
   ansible.builtin.command:
     cmd: "pg_createcluster {{ postgresql_version }} main"
   become: true
   become_user: postgres
-  when: not _pg_cluster_exists.stat.exists
+  when:
+    - not _pg_cluster_exists.stat.exists
+    - _pg_system_user.rc == 0
   changed_when: true
 
 - name: Ensure PostgreSQL service is enabled

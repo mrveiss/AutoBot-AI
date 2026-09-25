@@ -12,7 +12,7 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 // LiveEventManager (global channel), so useEventBus is the correct subscriber.
 import { useEventBus } from '@/composables/useEventBus'
 import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
+import { getApiBase, getServiceUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useCaptchaStatus')
@@ -26,7 +26,6 @@ export interface CaptchaEvent {
   url: string
   captcha_type: string
   screenshot?: string
-  vnc_url: string
   timeout_seconds: number
   timestamp: string
   message: string
@@ -141,9 +140,33 @@ export function useCaptchaStatus() {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  /**
+   * Open the browser session's VNC view (#17423).
+   *
+   * The URL comes from SSOT -- `getServiceUrl('vnc')`, built in `ssot-config`
+   * from the configured VM host and VNC port -- and from nowhere else. This
+   * used to prefer a field on the CAPTCHA payload and fall back to a URL built
+   * inline from two VITE_* variables with hardcoded defaults -- a
+   * browser-LOCAL address, right only where the browser runs beside the user,
+   * and wrong in a way that shows nothing: the window opens and points at
+   * nothing. The literals are deliberately not repeated here; a comment that
+   * quotes what a guard forbids becomes the guard's next finding (#16750).
+   *
+   * The payload field is gone as well. `_notify_captcha_detected` publishes on
+   * `global`, which every authenticated client may subscribe to, so shipping
+   * one tenant's browser session URL there disclosed it to all of them
+   * (#17363); nothing populates it now.
+   *
+   * `getServiceUrl` returns `string | undefined`, so the guard is required and
+   * not defensive. Refusing loudly is the point: the previous behaviour opened
+   * a window at a URL it had invented.
+   */
   function openVnc() {
-    const defaultVncUrl = `http://${import.meta.env.VITE_LOCALHOST || 'localhost'}:${import.meta.env.VITE_VNC_PORT || '6080'}/vnc.html`
-    const vncUrl = activeCaptcha.value?.vnc_url || defaultVncUrl
+    const vncUrl = getServiceUrl('vnc')
+    if (!vncUrl) {
+      logger.error('No VNC URL configured; cannot open the CAPTCHA browser view')
+      return
+    }
     window.open(vncUrl, '_blank', 'noopener,noreferrer')
   }
 
