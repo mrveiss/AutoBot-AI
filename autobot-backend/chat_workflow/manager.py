@@ -25,6 +25,7 @@ from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from chat_workflow import limits
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
     TOOL_CALL_CLOSE_RE,
@@ -408,8 +409,7 @@ class ChatWorkflowManager(
             logger.error("❌ Failed to initialize ChatWorkflowManager: %s", e)
             return False
 
-    # Issue #352: Maximum iterations for multi-step task continuation
-    MAX_CONTINUATION_ITERATIONS = 5
+    MAX_CONTINUATION_ITERATIONS = limits.MAX_CONTINUATION_ITERATIONS  # #352, #17468: one shared value
 
     # Issue #351 Fix: Tag patterns for thought/planning detection
     THOUGHT_TAG_PATTERN = re.compile(r"\[THOUGHT\]", re.IGNORECASE)

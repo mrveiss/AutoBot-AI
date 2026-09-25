@@ -14,6 +14,7 @@ so peer trust levels evolve continuously from real interaction history.
 
 from typing import Any, Dict
 
+from a2a.peer_identity import claim_identity
 from agents.declared_scope_check import INVALID_DECLARED_SCOPE
 from agents.scope_enforcement import hold_scopes
 from autobot_shared.coordination.work_claims import ScopeError, conflict_payload
@@ -110,8 +111,20 @@ async def execute_a2a_task(
         return task is None or task.status.state in _TERMINAL_STATES
 
     try:
+        # #16950: claim as the PEER, not as one shared "a2a-executor". A single
+        # identity made every admitted peer one claimant -- which cost
+        # ATTRIBUTION, not scope isolation: `work_claims`' Lua matches a holder
+        # on agent_id AND task_id, and task ids are server-minted per task, so
+        # one peer could never act on another's hold. What it destroyed is WHO:
+        # a refusal named "a2a-executor" instead of the peer actually holding
+        # the scope. See `peer_identity.claim_identity`, which states this at
+        # length because the obvious guess is the wrong one.
         async with hold_scopes(
-            declared, agent_id="a2a-executor", task_id=task_id, intent=input_text[:120], stop=_task_is_over
+            declared,
+            agent_id=claim_identity(peer_id, task_id),
+            task_id=task_id,
+            intent=input_text[:120],
+            stop=_task_is_over,
         ) as held:
             if not held.granted:
                 _report_refusal(manager, task_id, held.conflict)

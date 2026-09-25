@@ -310,7 +310,6 @@ class CaptchaHumanLoop:
             captcha_id=captcha_id,
             url=url,
             captcha_type=captcha_type,
-            screenshot_b64=screenshot_b64,
         )
         return resolution_event
 
@@ -496,9 +495,12 @@ class CaptchaHumanLoop:
         captcha_id: str,
         url: str,
         captcha_type: str,
-        screenshot_b64: str,
     ) -> None:
-        """Send WebSocket notification that CAPTCHA was detected."""
+        """Send WebSocket notification that CAPTCHA was detected.
+
+        #17363: no `screenshot`/`vnc_url` here -- `global` reaches every
+        signed-in client and this singleton has no owner to scope to (#17372).
+        """
         await publish_event(
             "global",
             "captcha_detected",
@@ -506,8 +508,6 @@ class CaptchaHumanLoop:
                 "captcha_id": captcha_id,
                 "url": url,
                 "captcha_type": captcha_type,
-                "screenshot": screenshot_b64,
-                "vnc_url": self.vnc_url,
                 "timeout_seconds": self.timeout_seconds,
                 "timestamp": utc_timestamp(),
                 "message": f"CAPTCHA detected at {url}. Please solve manually via VNC.",
