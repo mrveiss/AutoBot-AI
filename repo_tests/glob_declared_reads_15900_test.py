@@ -47,6 +47,20 @@ import pytest
 #: rather than at an arbitrary line, and appends now land in a small data file
 #: instead of colliding inside a long test.
 from repo_tests._glob_declared_uncovered import GLOB_DECLARED_UNCOVERED
+
+#: The two modules whose own text must never enter the scanned population: this
+#: guard and the record it imports. Both hold quoted glob strings that are the
+#: RECORD rather than a read of the tree, so scanning either rediscovers every
+#: entry from itself -- and `test_the_record_only_shrinks` could then never
+#: fire, because an entry stays "declared" after its dependent guard stops
+#: declaring it. A record that reads itself cannot go stale, which is the same
+#: as not being checked.
+#:
+#: The record was part of this file until the 600-line ceiling forced the split
+#: (#5060); it needed adding here the moment it became a second file, and the
+#: guard caught that on the first run rather than letting the record quietly
+#: become unfalsifiable.
+_SELF_AND_ITS_RECORD = frozenset({Path(__file__).name, "_glob_declared_uncovered.py"})
 from repo_tests._paths import repo_root
 from repo_tests.python_filter_covers_its_guards_test import _filter_patterns, _is_covered
 
@@ -148,14 +162,10 @@ def _declared() -> tuple[dict[str, set[str]], int]:
     declarations: dict[str, set[str]] = {}
     parsed = 0
     for rel in tracked_paths(REPO_ROOT, "repo_tests/*.py"):
-        # THIS module is excluded, and for the opposite reason to #15990's census.
-        # There the guard counted invocations, so skipping itself hid a real
-        # bypass. Here the record's own KEYS are quoted glob strings, so scanning
-        # this file rediscovers every entry from the record itself — and
-        # `test_the_record_only_shrinks` could then never fire, because an entry
-        # stays "declared" after its dependent guard stops declaring it. A record
-        # that reads itself cannot go stale, which is the same as not checking.
-        if Path(rel).name == Path(__file__).name:
+        # Excluded for the opposite reason to #15990's census: there the guard
+        # counted invocations, so skipping itself hid a real bypass. Here the
+        # record's own KEYS are quoted globs -- see `_SELF_AND_ITS_RECORD`.
+        if Path(rel).name in _SELF_AND_ITS_RECORD:
             continue
         try:
             source = (REPO_ROOT / rel).read_text(encoding="utf-8")
@@ -298,7 +308,7 @@ def test_the_record_cannot_rediscover_itself() -> None:
     A record that cannot go stale is not being checked.
     """
     declarations, _ = _declared()
-    own = {g for g, guards in declarations.items() if any(Path(__file__).name in x for x in guards)}
+    own = {g for g, guards in declarations.items() if any(Path(x).name in _SELF_AND_ITS_RECORD for x in guards)}
     assert not own, f"this module's own strings entered the population: {sorted(own)}"
 
 
