@@ -31,6 +31,7 @@ from langchain_core.runnables import RunnableConfig
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
+from chat_workflow import limits
 
 try:
     from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -1511,9 +1512,8 @@ def route_after_reflection(state: ChatState) -> str:
 def route_after_execution(state: ChatState) -> str:
     """Route after tool execution — may loop back for continuation.
 
-    Issue #3254: Aborts to persist_conversation when the tool-call loop
-    detector has fired ``_LOOP_ABORT_THRESHOLD`` or more consecutive times,
-    preventing infinite repetition even when ``should_continue`` is True.
+    Issue #3254: aborts to persist_conversation once the tool-call loop detector
+    has fired ``_LOOP_ABORT_THRESHOLD`` times, preventing infinite repetition.
     """
     if state.get("error"):
         return "persist_conversation"
@@ -1527,7 +1527,7 @@ def route_after_execution(state: ChatState) -> str:
         )
         return "persist_conversation"
 
-    if state.get("should_continue") and state.get("iteration_count", 0) < 5:
+    if state.get("should_continue") and state.get("iteration_count", 0) < limits.MAX_CONTINUATION_ITERATIONS:
         return "generate_response"
     return "persist_conversation"
 
