@@ -25,7 +25,7 @@ APPROVAL_PENDING_SESSION_TTL: int = env_int("AUTOBOT_APPROVAL_PENDING_SESSION_TT
 from services.command_approval_manager import AgentRole
 from type_defs.common import Metadata
 
-from .conversation_owner import conversation_owner
+from .conversation_owner import ConversationNotOwnedError, conversation_owner, verified_conversation_owner
 from .models import AgentSessionState, AgentTerminalSession
 
 logger = get_logger(__name__)
@@ -246,16 +246,19 @@ class SessionManager:
             conversation_id: Optional chat conversation ID to link
             host: Target host for command execution
             metadata: Additional session metadata
-            owner: Authenticated creator's username (#14989/#14960); None = the conversation's owner (#17053)
+            owner: Authenticated creator's username (#14989/#14960); None = the conversation's owner (#17053).
+                An explicit owner must also own ``conversation_id`` (#17422).
             tenant_id: The creator's org_id, from the JWT claim only (#16975).
                 None if it could not be determined -- never guessed here.
 
         Returns:
             Created session
+
+        Raises:
+            ConversationNotOwnedError: ``owner`` was given and does not own ``conversation_id``.
         """
         session_id = str(uuid.uuid4())
-        if owner is None:
-            owner = await self._conversation_owner(conversation_id)
+        owner = await self._owner_for(conversation_id, owner)
         pty_session_id = await self._setup_pty_for_session(session_id, conversation_id, owner)
 
         session = AgentTerminalSession(
@@ -357,6 +360,20 @@ class SessionManager:
         # approval message and the GUI button carry), so the restore was
         # unreachable from the one path that needed it.
         return await self._rebuild_session_from_pending_approval(session_id)
+
+    async def _owner_for(self, conversation_id: str | None, owner: str | None) -> str | None:
+        """The session's owner: ``owner`` if it owns the conversation, else the conversation's (#17422).
+
+        ``conversation_id`` is caller-supplied; an explicit owner narrows authority
+        and never stands in for checking it. An unowned conversation is refused
+        too -- it is admin-only (#17053), and binding it would stamp the caller.
+        So is one whose owner record cannot be read (``verified_conversation_owner``).
+        """
+        if owner is None:
+            return await self._conversation_owner(conversation_id)
+        if conversation_id and await verified_conversation_owner(self.chat_history_manager, conversation_id) != owner:
+            raise ConversationNotOwnedError(conversation_id)
+        return owner
 
     async def _conversation_owner(self, conversation_id: str | None) -> str | None:
         """Owner of the conversation driving a session, or None: admin-only (#17053)."""

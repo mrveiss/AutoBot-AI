@@ -190,3 +190,36 @@ STREAMING_MESSAGE_TYPES: StreamingTypes = StreamingTypes(
         ]
     )
 )
+
+
+# Event types that are genuinely system-wide: infrastructure telemetry with no
+# tenant in the payload under any spelling. `/api/ws` delivers these to every
+# connected client when no owner can be resolved; everything else is WITHHELD
+# (#17428, owner ruling 2026-09-25).
+#
+# AN ALLOWLIST, NOT A DENYLIST, and that is the whole design. A denylist of
+# known-sensitive types cannot see a new one, so a newly added scoped event
+# would be public by default. Here the default is private and a broadcast is a
+# declaration a reviewer sees. Same shape as `MIRRORED_TO_GLOBAL_SUBSCRIBERS`
+# in `live_event_manager.py`, landing on #17375 for the fan-out side.
+#
+# Each entry names its publisher, so a stale one is findable. Adding a type
+# here makes it visible to every authenticated client -- that is the review.
+BROADCAST_EVENT_TYPES: frozenset = frozenset(
+    {
+        "npu_worker_status_change",  # services/load_balancer.py:648 -- worker health
+        "npu.worker.removed",  # services/npu_worker_manager.py:1086 -- worker lifecycle
+        "worker_capability_report",  # worker_node.py:292 -- capability advertisement
+        "worker_task_start",  # worker_node.py:389 -- worker telemetry, no tenant fields
+        "worker_task_end",  # worker_node.py:405 -- worker telemetry, no tenant fields
+        "log_message",  # diagnostics.py:157,192,252 -- the operator log stream
+        # api/agent.py:754,797 -- AgentOrchestrator is a process-wide singleton,
+        # so its run state is genuinely everyone's, and both payloads are a fixed
+        # sentence with no identifier. Found only after a first pass concluded
+        # they did not exist: they publish through a private two-argument
+        # `_publish_event_safe(event_name, data)` that hardcodes the channel, so
+        # neither `publish_event(` nor a channel argument appears on their lines.
+        "agent_paused",
+        "agent_resumed",
+    }
+)

@@ -23,14 +23,26 @@ per-conversation tracking).
 Counters are stored in Redis (shared across all uvicorn workers, mirroring
 ``LLMCrossWorkerRateLimiter`` / #8170) and fall back to allow-all when Redis
 is unavailable — a Redis outage must never hard-block LLM calls.
+
+EXTENDED for #17091 with a second, named scope: AutoBot's own dev-loop
+participation (``autobot-backend/agents/dev_loop_issue_gate.py``), rather than
+forking a second module for it. The per-run gate above answers "would this one
+LLM call blow the run's ceiling"; the dev-loop gate answers "should AutoBot's
+own loop act again at all", and adds a dimension the per-run gate has no
+concept of: a rate ceiling (actions per hour), not only a spend ceiling.
+Spend stays in TOKEN units, matching this module's own convention, rather than
+converting through ``autobot_shared.model_pricing`` for a dollar figure — a
+token count is already the unit both this gate and #17092's page need.
 """
 
 from __future__ import annotations
 
+import time
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from autobot_shared.doc_chunking import estimate_tokens
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_int, env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
@@ -46,7 +58,34 @@ TOKEN_BUDGET_PER_RUN: int = env_int("AUTOBOT_LLM_TOKEN_BUDGET_PER_RUN", 0)
 # TTL (seconds) for a run's cumulative counter — bounds Redis memory for
 # abandoned sessions. Refreshed on every increment, so an active run's
 # counter never resets mid-conversation. Default: 24h.
-TOKEN_BUDGET_TTL_SECONDS: int = env_int("AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS", 86400)
+# `min_v=1`, because this value is handed to Redis `EXPIRE` (`_increment`),
+# and EXPIRE with a zero or negative TTL DELETES the key. The spend counter
+# would vanish and the next check would read zero spend -- a budget that
+# silently stops being a ceiling, which is worse than one set too low
+# (review finding on #17380). Distinct from the budget VALUES below, where 0
+# deliberately disables the gate; a TTL has no such meaning.
+TOKEN_BUDGET_TTL_SECONDS: int = env_int_clamped("AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS", 86400, min_v=1)
+
+# #17091: AutoBot's own dev-loop spend ceiling, tokens across all its actions
+# (not per-run — the dev loop has no "run" boundary a caller threads through).
+# 0 disables the gate, matching TOKEN_BUDGET_PER_RUN's convention.
+DEV_LOOP_TOKEN_BUDGET: int = env_int("AUTOBOT_DEV_LOOP_TOKEN_BUDGET", 0)
+
+# TTL for the cumulative dev-loop spend counter. Unlike a per-run counter this
+# is not tied to any session ending, so the ceiling is effectively "per this
+# many seconds" — refreshed on every increment, same as TOKEN_BUDGET_TTL_SECONDS.
+# Default: 24h, i.e. a daily spend ceiling.
+# Clamped for the same reason as TOKEN_BUDGET_TTL_SECONDS above: it reaches
+# the same `redis.expire`. The review named only this one, being the line
+# this PR touched; the defect is the shape, so both are clamped.
+DEV_LOOP_BUDGET_TTL_SECONDS: int = env_int_clamped("AUTOBOT_DEV_LOOP_BUDGET_TTL_SECONDS", 86400, min_v=1)
+
+# #17091: actions per hour. A fixed-window counter (current UTC hour bucket),
+# not sliding — simpler, and "at most N in any given clock hour" is what an
+# hourly rate ceiling means here. 0 disables the gate.
+DEV_LOOP_RATE_PER_HOUR: int = env_int("AUTOBOT_DEV_LOOP_RATE_PER_HOUR", 0)
+
+_DEV_LOOP_SCOPE = "dev_loop"
 
 # Token estimation delegates to autobot_shared.doc_chunking.estimate_tokens
 # (chars/4 — accurate tokenisation is unnecessary for a budget *ceiling*
@@ -63,6 +102,36 @@ def _estimate_request_tokens(request: LLMRequest) -> int:
 def _estimate_response_tokens(response: LLMResponse) -> int:
     """Estimate a completed response's token cost when the provider didn't report usage."""
     return estimate_tokens(response.content or "")
+
+
+_HOUR_SECONDS = 3600  # the definition of an hour, not a tunable ceiling -- #17091's budgets are the env vars above
+
+
+def _current_hour_bucket() -> int:
+    """The current UTC hour as an integer bucket id, for the fixed-window rate counter."""
+    return int(time.time() // _HOUR_SECONDS)
+
+
+@dataclass(frozen=True)
+class DevLoopBudgetRefusal:
+    """Why AutoBot's dev loop stopped before this action (#17091 AC 3).
+
+    Exactly one of ``spend``/``rate`` is why: an action never fails both
+    checks in the same evaluation, since spend is checked first and a spend
+    refusal returns before the rate check runs.
+    """
+
+    reason: str
+
+
+@dataclass(frozen=True)
+class DevLoopBudgetStatus:
+    """Remaining spend and rate, for #17092's page. ``None`` means "no ceiling configured"."""
+
+    spend_used: int
+    spend_budget: Optional[int]
+    actions_this_hour: int
+    rate_budget: Optional[int]
 
 
 def _scope_key(request: LLMRequest) -> str:
@@ -128,20 +197,123 @@ class TokenBudgetGate:
             return
 
         try:
-            await self._increment(_scope_key(request), used)
+            await self._increment(_scope_key(request), used, TOKEN_BUDGET_TTL_SECONDS)
         except Exception:
             logger.debug("token budget gate: Redis unavailable — usage not recorded", exc_info=True)
+
+    async def evaluate_dev_loop_action(self, estimated_tokens: int) -> Optional[DevLoopBudgetRefusal]:
+        """Return why AutoBot's dev loop must stop before this action; ``None`` to proceed.
+
+        Checked before EVERY dev-loop action (#17091 AC 2/3), never after: the
+        caller (``dev_loop_issue_gate.run_dev_loop_action``) never invokes its
+        action when this returns non-``None``, so nothing is ever partially
+        done. Spend is checked before rate -- an action already over budget
+        should not also spend a slot in this hour's rate window.
+        """
+        if DEV_LOOP_TOKEN_BUDGET <= 0 and DEV_LOOP_RATE_PER_HOUR <= 0:
+            return None
+
+        try:
+            if DEV_LOOP_TOKEN_BUDGET > 0:
+                spent = await self._get_cumulative(_DEV_LOOP_SCOPE)
+                if spent + estimated_tokens > DEV_LOOP_TOKEN_BUDGET:
+                    reason = (
+                        f"dev-loop token budget exhausted ({spent}/{DEV_LOOP_TOKEN_BUDGET} "
+                        f"tokens used, this action estimated at {estimated_tokens})"
+                    )
+                    logger.warning("dev loop budget gate: %s", reason)
+                    return DevLoopBudgetRefusal(reason=reason)
+
+            if DEV_LOOP_RATE_PER_HOUR > 0:
+                actions = await self._get_hourly_rate()
+                if actions >= DEV_LOOP_RATE_PER_HOUR:
+                    reason = f"dev-loop rate budget exhausted ({actions}/{DEV_LOOP_RATE_PER_HOUR} actions this hour)"
+                    logger.warning("dev loop budget gate: %s", reason)
+                    return DevLoopBudgetRefusal(reason=reason)
+        except Exception:
+            logger.debug("dev loop budget gate: Redis unavailable — allowing action", exc_info=True)
+            return None
+
+        return None
+
+    async def record_dev_loop_action(self, tokens_used: int) -> None:
+        """Record one dev-loop action: its token spend, and one slot in this hour's rate window."""
+        try:
+            if DEV_LOOP_TOKEN_BUDGET > 0 and tokens_used > 0:
+                await self._increment(_DEV_LOOP_SCOPE, tokens_used, DEV_LOOP_BUDGET_TTL_SECONDS)
+            if DEV_LOOP_RATE_PER_HOUR > 0:
+                await self._increment_hourly_rate()
+        except Exception:
+            logger.debug("dev loop budget gate: Redis unavailable — action not recorded", exc_info=True)
+
+    async def remaining_dev_loop_budget(self) -> DevLoopBudgetStatus:
+        """Current spend and this hour's action count, for #17092's page.
+
+        Never raises: a Redis outage reads as zero usage rather than failing
+        the page, matching this module's allow-all-on-outage contract.
+        """
+        spend_used = 0
+        actions_this_hour = 0
+        try:
+            if DEV_LOOP_TOKEN_BUDGET > 0:
+                spend_used = await self._get_cumulative(_DEV_LOOP_SCOPE)
+            if DEV_LOOP_RATE_PER_HOUR > 0:
+                actions_this_hour = await self._get_hourly_rate()
+        except Exception:
+            logger.debug("dev loop budget gate: Redis unavailable — reporting zero usage", exc_info=True)
+        return DevLoopBudgetStatus(
+            spend_used=spend_used,
+            spend_budget=DEV_LOOP_TOKEN_BUDGET if DEV_LOOP_TOKEN_BUDGET > 0 else None,
+            actions_this_hour=actions_this_hour,
+            rate_budget=DEV_LOOP_RATE_PER_HOUR if DEV_LOOP_RATE_PER_HOUR > 0 else None,
+        )
 
     async def _get_cumulative(self, scope: str) -> int:
         redis = await self._get_redis()
         raw = await redis.get(f"{_KEY_PREFIX}:{scope}")
         return int(raw) if raw else 0
 
-    async def _increment(self, scope: str, amount: int) -> None:
+    async def _increment(self, scope: str, amount: int, ttl_seconds: int) -> None:
+        """Increment the spend counter and (re)set its expiry, atomically.
+
+        Two separate round-trips were a real failure mode, not a theoretical one
+        (review finding on #17380): when `INCRBY` CREATES the key and `EXPIRE`
+        then fails, the key is left with no expiry at all, and
+        `record_dev_loop_action` suppresses the error. The counter then never
+        resets, so once the stored spend passes the ceiling every later action
+        is refused until someone deletes the key by hand -- a budget that
+        silently becomes a permanent block.
+
+        Redis preserves an existing expiry across an increment, so only the
+        FIRST write is exposed; that is exactly the write that matters, because
+        it is the one that creates the key. MULTI/EXEC closes it: before EXEC
+        neither command has applied, after EXEC both have.
+        """
         redis = await self._get_redis()
         key = f"{_KEY_PREFIX}:{scope}"
-        await redis.incrby(key, amount)
-        await redis.expire(key, TOKEN_BUDGET_TTL_SECONDS)
+        async with redis.pipeline(transaction=True) as pipe:
+            pipe.incrby(key, amount)
+            pipe.expire(key, ttl_seconds)
+            await pipe.execute()
+
+    async def _get_hourly_rate(self) -> int:
+        redis = await self._get_redis()
+        raw = await redis.get(f"{_KEY_PREFIX}:{_DEV_LOOP_SCOPE}:rate:{_current_hour_bucket()}")
+        return int(raw) if raw else 0
+
+    async def _increment_hourly_rate(self) -> None:
+        """Same atomicity as `_increment`, for the same reason.
+
+        The review named only the spend counter; this carries the identical
+        two-round-trip shape, and an hour bucket left without an expiry blocks
+        the rate gate for that bucket forever rather than for an hour.
+        """
+        redis = await self._get_redis()
+        key = f"{_KEY_PREFIX}:{_DEV_LOOP_SCOPE}:rate:{_current_hour_bucket()}"
+        async with redis.pipeline(transaction=True) as pipe:
+            pipe.incrby(key, 1)
+            pipe.expire(key, _HOUR_SECONDS)
+            await pipe.execute()
 
     async def _get_redis(self):
         from autobot_shared.redis_client import get_async_redis_client  # noqa: PLC0415
@@ -159,6 +331,11 @@ get_token_budget_gate = lazy_singleton(TokenBudgetGate)
 __all__ = [
     "TOKEN_BUDGET_PER_RUN",
     "TOKEN_BUDGET_TTL_SECONDS",
+    "DEV_LOOP_TOKEN_BUDGET",
+    "DEV_LOOP_BUDGET_TTL_SECONDS",
+    "DEV_LOOP_RATE_PER_HOUR",
+    "DevLoopBudgetRefusal",
+    "DevLoopBudgetStatus",
     "TokenBudgetGate",
     "get_token_budget_gate",
 ]

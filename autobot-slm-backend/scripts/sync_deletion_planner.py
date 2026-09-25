@@ -70,7 +70,18 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# The backend root alone is not enough: importing `services.git_subprocess` runs
+# `services/__init__.py`, which imports AuthService -> `autobot_shared.auth.jwt_core`.
+# `autobot_shared` lives at the REPO root, one level above the backend root, so a
+# backend-root-only path raised ModuleNotFoundError and aborted the [PRE-FLIGHT]
+# unshallow task -- failing every code-sync run (#17452). Backend root precedes the
+# repo root for the same reason dump_openapi.py gives: the backend package must win
+# over any repo-root shim of the same name.
+_SCRIPT = Path(__file__).resolve()
+for _path in (str(_SCRIPT.parents[2]), str(_SCRIPT.parents[1])):
+    if _path in sys.path:
+        sys.path.remove(_path)
+    sys.path.insert(0, _path)
 
 from services.git_subprocess import ensure_full_history  # noqa: E402
 from services.sync_deletions import DeletionPlan, compute_bootstrap_plan, compute_deletion_plan  # noqa: E402

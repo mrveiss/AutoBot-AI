@@ -21,11 +21,8 @@ from __future__ import annotations
 import importlib
 
 import pytest
-from fastapi import FastAPI
-from fastapi.openapi.utils import get_openapi
 
 from autobot_shared.api_routing import router_prefixes as routing
-from repo_tests.sdk_request_shared import _BACKEND, _BACKEND_API_ROOT
 
 #: Backend modules serving the paths ``SDK_REQUESTS`` (``sdk_request_shared.py``)
 #: names. Only these are imported, so the oracle costs one small app rather
@@ -90,6 +87,27 @@ def _serving_openapi() -> dict:
     copies of the mount loop is how the query oracle and the body oracle would
     come to describe two different applications.
     """
+    # Imported here rather than at module scope, and that is load-bearing for
+    # every OTHER test in ``repo_tests/``: pytest imports this ``conftest.py``
+    # before collecting any file in the directory, so a module-level
+    # ``from fastapi import ...`` made FastAPI a hard dependency of running a
+    # single unrelated guard -- ``pytest repo_tests/some_other_test.py`` exited
+    # 4 with "module 'fastapi' is not installed" on any checkout without the
+    # backend's dependencies, which is what a frontend CI job has (#14781).
+    # The two fixtures that need it are the only consumers, and they reach it
+    # through here.
+    from fastapi import FastAPI
+    from fastapi.openapi.utils import get_openapi
+
+    # `sdk_request_shared` imports `httpx` and `autobot_sdk` at module scope, so
+    # it belongs in here for the same reason FastAPI does -- and it is the reason
+    # the first fix was not enough: moving one import exposed the next one down
+    # the chain, and CI reported `ModuleNotFoundError: No module named 'httpx'`
+    # from the same line of the same conftest. The condition is not "fastapi is
+    # missing", it is "only pytest is installed", and every module-level import
+    # here has to answer to that (#14781).
+    from repo_tests.sdk_request_shared import _BACKEND, _BACKEND_API_ROOT
+
     registry = dict(routing.registry_entries(_BACKEND / "initialization" / "router_registry"))
     assert registry, "the router registry parsed no entries -- the oracles below would have nothing to mount"
 

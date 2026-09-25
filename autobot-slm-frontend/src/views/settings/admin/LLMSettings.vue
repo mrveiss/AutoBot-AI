@@ -233,7 +233,7 @@ onMounted(fetchConfig)
       <span class="font-medium">{{ testResult.provider }}:</span>
       {{ testResult.message }}
       <span v-if="testResult.latency_ms" class="text-sm opacity-75">
-        ({{ testResult.latency_ms }}ms)
+        {{ $t('settings.llm.latencyMs', { ms: testResult.latency_ms }) }}
       </span>
       <button class="ml-auto opacity-60 hover:opacity-100" @click="testResult = null" :aria-label="$t('settings.admin.lLMSettings.dismiss')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

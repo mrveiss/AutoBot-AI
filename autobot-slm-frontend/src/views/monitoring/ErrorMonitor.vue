@@ -609,8 +609,12 @@ onUnmounted(() => {
                 >{{ $t('monitoring.errorMonitor.resolved') }}</label
               >
               <p class="text-sm text-gray-900">
-                By {{ selectedError.resolved_by }} at
-                {{ formatTimestamp(selectedError.resolved_at || '') }}
+                {{
+                  $t('monitoring.errorMonitor.resolvedByAt', {
+                    by: selectedError.resolved_by,
+                    at: formatTimestamp(selectedError.resolved_at || ''),
+                  })
+                }}
               </p>
             </div>
           </div>

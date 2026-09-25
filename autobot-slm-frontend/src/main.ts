@@ -8,7 +8,7 @@ import { createPinia } from 'pinia'
 
 import App from './App.vue'
 import router from './router'
-import i18n from './i18n'
+import i18n, { initI18n } from './i18n'
 
 import './assets/styles/main.css'
 
@@ -24,5 +24,8 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.use(i18n)
+// #14781: set html[lang]/html[dir] from the resolved locale before mount, so an
+// RTL language lays out right-to-left on first paint rather than after a switch.
+initI18n()
 
 app.mount('#app')
