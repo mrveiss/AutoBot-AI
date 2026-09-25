@@ -14,15 +14,16 @@ AutoBot uses Redis Stack as a centralized database for:
 ```yaml
 # docker-compose.yml
 redis:
-  image: redis/redis-stack:latest
+  image: redis/redis-stack:7.4.0-v1
   container_name: autobot-redis
   ports:
     - "6379:6379"    # Redis server
-    - "8002:8443"    # RedisInsight web interface
+    - "127.0.0.1:8001:8001"    # RedisInsight web interface (localhost only)
   volumes:
     - redis_data:/data
-    - ./config/redis.conf:/usr/local/etc/redis/redis.conf
-  command: redis-server /usr/local/etc/redis/redis.conf
+  environment:
+    # Redis Stack is configured via REDIS_ARGS, not a mounted redis.conf.
+    - REDIS_ARGS=--appendonly yes --save 60 1 --maxmemory 512mb --maxmemory-policy allkeys-lru
   networks:
     - autobot-network
   restart: unless-stopped

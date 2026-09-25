@@ -588,8 +588,12 @@ Before performing manual operations:
    ```
 
 3. **Validate configuration:**
+   Redis has no offline config-syntax validator. The effective validation is
+   the restart in step 4 — the service will fail to start and its journal will
+   show the parse error. Before restarting, capture the pre-change baseline so
+   step 6 can compare:
    ```bash
-   redis-stack-server /etc/redis/redis.conf --test-memory 1
+   redis-cli CONFIG GET '*' | sort > /tmp/redis-config.pre-change.txt
    ```
 
 4. **Apply changes** (choose one):
