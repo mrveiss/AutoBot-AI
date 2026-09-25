@@ -3,5 +3,6 @@ redis>=8.1.0,<9.0
 chromadb==1.5.9
 sqlalchemy==2.0.54
 aiosqlite==0.22.1
+greenlet==3.3.2  # SQLAlchemy async engine dependency, mirrored from the backends (#17432). Declared here rather than allowlisted in requirements_ci_drift_baseline.txt: this set declares sqlalchemy AND aiosqlite, so a test opening an async engine against it fails exactly as the SLM container did. "Not observed failing" is not "does not need it" -- that invisibility is what hid #17432 for a day.
 alembic==1.20.0  # migration-gate static tests import migrations.baseline (#10001)
 psycopg2-binary>=2.9.13,<3.0.0  # production dep (autobot-slm-backend/requirements.txt): the sync driver every migrations/*.py uses. migrations/utils.py + migrations/runner.py import it at module level, so migrations/utils_test.py fails collection without it (#13086)
