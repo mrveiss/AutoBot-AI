@@ -270,12 +270,16 @@ have no use for. **Rejected.**
 
 ## What We Already Do Better
 
-1. **WebSocket token transport.** We keep the credential out of the URL entirely —
-   `Sec-WebSocket-Protocol: bearer, <jwt>` preferred, with read and echo owned by one module
-   (`websocket_subprotocol.py`) and a repo guard failing any module that authenticates a
-   socket then calls `.accept(` itself. The reference work's answer to the same problem is a
-   30-second single-use ticket, which still puts a credential in a query string and adds a
-   lock-guarded expiring store to maintain. Ours also logs fallback use, throttled per route.
+1. **WebSocket token transport.** `Sec-WebSocket-Protocol: bearer, <jwt>` is preferred, with
+   read and echo owned by one module (`websocket_subprotocol.py`) and a repo guard failing any
+   module that authenticates a socket then calls `.accept(` itself. `?token=` remains a
+   fallback — `resolve_ws_token` returns `subprotocol_token or websocket.query_params.get("token")`
+   (`websocket_subprotocol.py:101`) — logged and throttled per route. An earlier revision of
+   this line claimed the credential is out of the URL *entirely*, which the fallback
+   contradicts, and the next sentence of the same paragraph already admitted it. The reference
+   work's answer is a 30-second single-use ticket, which also puts a credential in a query
+   string but adds a lock-guarded expiring store to maintain. **The difference is the store,
+   not the query string** — a narrower claim than the one this section originally made.
 2. **A typed env-var registry.** `EnvVarSpec` carries type, default, description, component,
    numeric range, `deprecated_since` and `replaces` (`env_registry.py:20-30`) and a pre-commit
    hook enforces registration of `os.getenv` call sites. The reference work has no equivalent
