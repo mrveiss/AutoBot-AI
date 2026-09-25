@@ -152,7 +152,12 @@ jobs:
         # api/secrets.py reports, and pip already installs it with fastapi.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install \
+          # -c pins these to the versions requirements-ci/storage.txt already
+          # declares (#17490). Without it these are lower bounds, so pip took
+          # sqlalchemy 2.1.0 over the declared ==2.0.54 and this gate ran on a
+          # version no other job uses. The names stay listed here because this
+          # job installs a hand-picked subset, not the whole file.
+          python -m pip install -c requirements-ci/storage.txt \
             "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite \
             pydantic pydantic-settings \
             bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \

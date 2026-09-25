@@ -9,12 +9,12 @@ Covers GET /plugins/{plugin_name}/env-status — env-var configuration
 status without leaking values.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 
-from plugin_manager import get_plugin_env_status
+from plugin_manager import get_plugin_env_status, load_plugin
 
 
 @pytest.mark.asyncio
@@ -143,3 +143,106 @@ async def test_env_status_endpoint_with_real_loader_no_mock(monkeypatch):
     assert entry.description == "Integration test var."
     assert entry.docs_url == "https://example.com/docs"
     assert entry.obtain_steps == ["step1", "step2"]
+
+
+# --- Issue #17420: manual plugin-load path -------------------------------
+#
+# Regression coverage for a two-part defect:
+#   1. Signature mismatch — plugin_manager.load_plugin passed
+#      grant_capabilities= to loader.load_plugin, which accepts no such
+#      argument, so every manual load raised TypeError.
+#   2. #9049 auto-grant contract — official plugins should auto-grant on
+#      load; non-official plugins must remain ungranted until an operator
+#      approves them via /approve-capabilities.
+
+
+def _make_load_endpoint_mocks(trust_tier, capabilities):
+    """Build the mocks used by every manual-load test.
+
+    Returns (loader_mock, manifest_mock, loaded_plugin) so each test can
+    assert on the call surface it cares about.
+    """
+    from autobot_shared.plugin_sdk.base import PluginManifest
+
+    manifest = MagicMock(spec=PluginManifest)
+    manifest.name = "test-plugin"
+    manifest.trust_tier = trust_tier
+    manifest.capabilities = capabilities
+
+    loaded_plugin = MagicMock()
+    loaded_plugin.name = "test-plugin"
+
+    loader = MagicMock()
+    loader.discover_plugins.return_value = [manifest]
+    loader.load_plugin = AsyncMock(return_value=loaded_plugin)
+
+    return loader, manifest, loaded_plugin
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_endpoint_does_not_pass_grant_capabilities_kwarg():
+    """Mutation guard for #17420.
+
+    loader.load_plugin(manifest, config, grant_capabilities=...) would
+    TypeError at runtime; the endpoint must call it with positional
+    manifest + config only.
+    """
+    from autobot_shared.plugin_sdk.capabilities import Capability, TrustTier
+
+    loader, _, _ = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [Capability.KB_READ])
+
+    with (
+        patch("plugin_manager.get_plugin_loader", return_value=loader),
+        patch("plugin_manager._save_plugin_config", new=AsyncMock()),
+        patch("plugin_manager.CapabilityChecker"),
+    ):
+        await load_plugin(plugin_name="test-plugin", config=None, admin_check=True)
+
+    loader.load_plugin.assert_awaited_once()
+    _, kwargs = loader.load_plugin.call_args
+    assert "grant_capabilities" not in kwargs, (
+        "loader.load_plugin does not accept grant_capabilities kwarg — " "passing it raises TypeError (#17420)"
+    )
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_endpoint_auto_grants_official_plugin_capabilities():
+    """#9049 contract: official plugins auto-grant on load."""
+    from autobot_shared.plugin_sdk.capabilities import Capability, TrustTier
+
+    granted = [Capability.KB_READ, Capability.LLM_CALL]
+    loader, manifest, _ = _make_load_endpoint_mocks(TrustTier.OFFICIAL, granted)
+
+    with (
+        patch("plugin_manager.get_plugin_loader", return_value=loader),
+        patch("plugin_manager._save_plugin_config", new=AsyncMock()),
+        patch("plugin_manager.CapabilityChecker") as checker_cls,
+    ):
+        checker_instance = checker_cls.return_value
+        result = await load_plugin(plugin_name="test-plugin", config=None, admin_check=True)
+
+    assert result["status"] == "success"
+    checker_instance.grant_capabilities.assert_called_once_with("test-plugin", granted)
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_endpoint_does_not_auto_grant_community_plugin():
+    """#9049 contract: non-official plugins are NOT auto-granted.
+
+    Positive control for the OFFICIAL test above — proves the endpoint is
+    actually gating on trust_tier, not blindly granting every load.
+    """
+    from autobot_shared.plugin_sdk.capabilities import Capability, TrustTier
+
+    loader, _, _ = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [Capability.KB_READ])
+
+    with (
+        patch("plugin_manager.get_plugin_loader", return_value=loader),
+        patch("plugin_manager._save_plugin_config", new=AsyncMock()),
+        patch("plugin_manager.CapabilityChecker") as checker_cls,
+    ):
+        checker_instance = checker_cls.return_value
+        result = await load_plugin(plugin_name="test-plugin", config=None, admin_check=True)
+
+    assert result["status"] == "success"
+    checker_instance.grant_capabilities.assert_not_called()
