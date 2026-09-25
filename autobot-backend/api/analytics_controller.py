@@ -178,8 +178,7 @@ class AnalyticsController:
     async def get_redis_connection(self, database: RedisDatabase) -> redis.Redis:
         """Get Redis connection for specific database"""
         try:
-            db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
-            return await get_async_redis_client(database=db_name)
+            return await get_async_redis_client(database=database)
         except Exception as e:
             logger.error("Failed to get Redis connection for %s: %s", database, e)
             return None

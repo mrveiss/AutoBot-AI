@@ -45,13 +45,15 @@ from autobot_shared.redis_management.config import (
     RedisConfig,
     RedisConfigLoader,
 )
+from autobot_shared.redis_management.database_names import database_name as database_name_of
+from autobot_shared.redis_management.database_names import database_number
 from autobot_shared.redis_management.statistics import (
     ConnectionMetrics,
     ManagerStats,
     PoolStatistics,
     RedisStats,
 )
-from autobot_shared.redis_management.types import DATABASE_MAPPING, ConnectionState
+from autobot_shared.redis_management.types import ConnectionState, RedisDatabase
 from autobot_shared.retry_mechanism import RetryConfig as _RetryConfig
 from autobot_shared.retry_mechanism import RetryMechanism as _RetryMechanism
 from autobot_shared.retry_mechanism import RetryStrategy as _RetryStrategy
@@ -728,14 +730,9 @@ class RedisConnectionManager:
         except Exception as e:
             logger.debug("Failed to record Prometheus metrics: %s", e)
 
-    def _get_database_number(self, database_name: str) -> int:
-        """Get database number for a given database name."""
-        if database_name not in DATABASE_MAPPING:
-            logger.warning(
-                f"Unknown database name '{database_name}', defaulting to DB 0. "
-                f"Available: {sorted(DATABASE_MAPPING)}"
-            )
-        return DATABASE_MAPPING.get(database_name, 0)
+    def _get_database_number(self, name: str) -> int:
+        """Resolve *name* to its DB number, refusing one nothing declares (#17435)."""
+        return database_number(name)
 
     def _check_circuit_breaker(self, database_name: str) -> bool:
         """Check if circuit breaker is open for a database."""
@@ -1048,7 +1045,7 @@ class RedisConnectionManager:
         self._update_stats(database_name, success=False, error=str(error))
         self._states[database_name] = ConnectionState.FAILED
 
-    def get_sync_client(self, database_name: str = "main") -> redis.Redis | None:
+    def get_sync_client(self, database_name: RedisDatabase | str = "main") -> redis.Redis | None:
         """
         Get synchronous Redis client with circuit breaker.
 
@@ -1059,6 +1056,7 @@ class RedisConnectionManager:
 
         Features: Circuit breaker, TCP keepalive, WeakSet tracking, statistics.
         """
+        database_name = database_name_of(database_name)
         precondition_result = self._check_sync_client_preconditions(database_name)
         if precondition_result is False:
             return None
@@ -1152,7 +1150,7 @@ class RedisConnectionManager:
         self._active_async_connections.add(client)
         return client
 
-    async def get_async_client(self, database_name: str = "main") -> async_redis.Redis | None:
+    async def get_async_client(self, database_name: RedisDatabase | str = "main") -> async_redis.Redis | None:
         """
         Get asynchronous Redis client with circuit breaker.
 
@@ -1164,6 +1162,7 @@ class RedisConnectionManager:
         Features: Circuit breaker, loading dataset handling, TCP keepalive,
         WeakSet tracking, enhanced statistics.
         """
+        database_name = database_name_of(database_name)
         if not self._config.get("enabled", True):
             logger.warning("Redis is disabled in configuration")
             return None

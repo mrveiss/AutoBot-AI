@@ -9,6 +9,7 @@ Manages agent terminal session lifecycle: create, get, list, close, persist.
 """
 
 import asyncio
+import inspect
 import json
 import uuid
 from typing import Dict, List
@@ -113,6 +114,25 @@ def _apply_restored_approval_state(
         logger.warning(f"Found approval request but no command in metadata " f"for conversation {conversation_id}")
 
 
+def _usable_redis(client: object) -> bool:
+    """True only for something that can actually serve a Redis call (#17436).
+
+    NOT a truthiness test, deliberately. A coroutine object is truthy, so
+    `if self.redis_client:` passed for the un-awaited
+    `get_redis_client(async_client=True)` that `initialization/agent_presence_sync`
+    handed in -- and `_persist_session` then ran against a coroutine. So are a
+    Mock, a half-built client and a functools.partial: the guard read as a client
+    check and was a presence check, which passes for every wrong value anyone has
+    actually passed.
+
+    Checked by capability rather than isinstance so a fake that genuinely
+    implements the calls still works in tests.
+    """
+    if client is None or inspect.iscoroutine(client) or inspect.isawaitable(client):
+        return False
+    return callable(getattr(client, "hgetall", None)) and callable(getattr(client, "hset", None))
+
+
 class SessionManager:
     """Manages agent terminal session lifecycle"""
 
@@ -124,6 +144,15 @@ class SessionManager:
             redis_client: Redis client for session persistence
             chat_history_manager: ChatHistoryManager instance for approval restoration
         """
+        if redis_client is not None and not _usable_redis(redis_client):
+            # #17436: this service is a process-wide singleton built by whichever
+            # caller reaches it first, so accepting a bad client here poisons every
+            # later consumer. Refuse at the boundary rather than at first use.
+            raise TypeError(
+                f"redis_client is not a usable Redis client: {type(redis_client).__name__}. "
+                "An un-awaited get_redis_client(async_client=True) returns a coroutine; "
+                "use `await get_async_redis_client(...)`."
+            )
         self.redis_client = redis_client
         self.chat_history_manager = chat_history_manager
         self.sessions: Dict[str, AgentTerminalSession] = {}
@@ -282,7 +311,7 @@ class SessionManager:
         if conversation_id and self.chat_history_manager:
             await self._restore_pending_approval(session, conversation_id)
 
-        if self.redis_client:
+        if _usable_redis(self.redis_client):
             await self._persist_session(session)
 
         return session
