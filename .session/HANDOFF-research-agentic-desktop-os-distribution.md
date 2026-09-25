@@ -1,7 +1,7 @@
 # Handoff: research/agentic-desktop-os-distribution (no branch — research-scope session)
 
-status: complete (research), artifacts UNLANDED by owner decision
-pr: none — this session wrote no code, opened no branch
+status: complete (research); artifacts LANDED via PR #17472 (#17471)
+pr: #17472 carries the documents and index rows; this session itself wrote no code and opened no branch
 base_at_read: origin/main 4c9034782d
 local_main_behind: yes — main tree sits at 2e00fa4a67, origin/main is 4c9034782d (fast-forward needed)
 gates: n/a (no code change)

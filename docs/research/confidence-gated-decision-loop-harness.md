@@ -21,8 +21,8 @@ tags:
 
 ### What It Is
 
-A permissively licensed package (~1,300 lines across nine core modules, plus a ~570-line protocol
-server and an ~18KB CLI) that turns a **decision-only model** into an agent loop. The model class
+A permissively licensed package (a low-thousands-of-lines core across a handful of modules, plus a
+small protocol server and CLI) that turns a **decision-only model** into an agent loop. The model class
 it targets is not a text generator: a vendor's "reflex" model that takes a `state` object plus a
 map of typed `questions` and returns, in one forward pass, an answer per question with a full
 probability distribution and a confidence — three primitives only (`choice` over ≤255 named
