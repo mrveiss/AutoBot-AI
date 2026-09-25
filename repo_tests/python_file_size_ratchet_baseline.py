@@ -163,7 +163,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1343,
-    "autobot-backend/chat_workflow/manager.py": 4067,
+    "autobot-backend/chat_workflow/manager.py": 3982,  # #17513: markers extracted
     "autobot-backend/chat_workflow/tool_handler.py": 3721,  # #11542: external MCP dispatch merged into MCPDispatcher
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
