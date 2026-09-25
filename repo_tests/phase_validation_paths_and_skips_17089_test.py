@@ -75,19 +75,66 @@ def _criteria_paths() -> list[tuple[str, str]]:
     return found
 
 
+def _module_string_constants(tree: ast.Module) -> dict[str, str]:
+    """Module-level ``NAME = "text"`` assignments, for resolving path pieces.
+
+    The feature checks compose paths as ``root / _SHARED_SCRIPTS / "x.py"``, so a
+    scanner that only collects string literals sees ``"x.py"`` and misses the
+    directory. Resolving the constant is what keeps this guard looking at the
+    same path the code builds.
+    """
+    constants: dict[str, str] = {}
+    for stmt in tree.body:
+        if not isinstance(stmt, ast.Assign) or len(stmt.targets) != 1:
+            continue
+        target = stmt.targets[0]
+        if isinstance(target, ast.Name) and isinstance(stmt.value, ast.Constant):
+            if isinstance(stmt.value.value, str):
+                constants[target.id] = stmt.value.value
+    return constants
+
+
+def _joined_path(node: ast.AST, constants: dict[str, str]) -> str | None:
+    """Flatten a ``root / a / b`` division chain into ``"a/b"``.
+
+    ``None`` when any operand is neither a string constant nor a known
+    module-level string -- an unresolvable piece must not silently yield a
+    shorter path that then "exists".
+    """
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return "" if node.id == "root" else constants.get(node.id)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        left = _joined_path(node.left, constants)
+        right = _joined_path(node.right, constants)
+        if left is None or right is None:
+            return None
+        return f"{left}/{right}".lstrip("/")
+    return None
+
+
 def _lambda_paths() -> list[tuple[int, str]]:
-    """``(line, path)`` for repo-relative path literals inside any lambda."""
+    """``(line, path)`` for every repo-relative path a feature-check lambda builds."""
+    tree = _tree()
+    constants = _module_string_constants(tree)
     found: list[tuple[int, str]] = []
-    for node in ast.walk(_tree()):
+    for node in ast.walk(tree):
         if not isinstance(node, ast.Lambda):
             continue
         for inner in ast.walk(node):
-            if not (isinstance(inner, ast.Constant) and isinstance(inner.value, str)):
+            if not (isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.Div)):
                 continue
-            text = inner.value
-            if "/" in text and not text.startswith(("/api", "http", "//")):
-                found.append((inner.lineno, text))
-    return sorted(set(found))
+            joined = _joined_path(inner, constants)
+            if joined and "/" in joined and not joined.startswith(("/api", "http", "//")):
+                found.append((inner.lineno, joined))
+    # A nested chain yields its prefix as well as the whole; keep only the
+    # longest path per line, which is the one the code actually opens.
+    longest: dict[int, str] = {}
+    for line, path in found:
+        if len(path) > len(longest.get(line, "")):
+            longest[line] = path
+    return sorted(longest.items())
 
 
 def _policy():
@@ -281,4 +328,33 @@ class TestEveryMethodItCallsOnItselfExists:
         assert not missing, (
             f"{_SYSTEM} calls methods on itself that are not defined: {missing}. "
             "py_compile cannot see this; only running the line can."
+        )
+
+
+class TestTheProgressionManagerDoesNotPromoteOnPresence:
+    """The consumer where this defect had teeth (#17089).
+
+    ``phase_progression_manager`` calls ``validate_all_phases()`` and then
+    decided a phase was completed from a bare percentage -- so a ``--ci-mode``
+    run, in which only file-existence checks execute, could mark a phase
+    complete and PROGRESS it on "the files are present". The percentage it read
+    no longer exists when anything was skipped, and this pins that it asks the
+    honest field instead of reintroducing a numeric read.
+    """
+
+    _CONSUMER = Path("autobot-backend/phase_progression_manager.py")
+
+    def test_it_gates_on_complete_and_not_on_a_bare_percentage(self) -> None:
+        source = (repo_root() / self._CONSUMER).read_text(encoding="utf-8")
+
+        assert (
+            "from scripts.phase_validation_system import PhaseValidator" in source
+        ), "this guard's premise is that this module consumes the validator; the import is gone"
+        assert '["completion_percentage"]' not in source, (
+            "phase_progression_manager reads `completion_percentage` from validation results "
+            "again. That key is absent whenever a check group was skipped, so this both "
+            "KeyErrors and -- if defaulted -- promotes phases on file presence (#17089)."
+        )
+        assert source.count('["complete"]') >= 2, (
+            "both progression decisions must consult `complete`, which is False whenever " "anything was skipped"
         )

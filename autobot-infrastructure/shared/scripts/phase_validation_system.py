@@ -23,7 +23,7 @@ import psutil
 import requests
 
 # Import centralized Redis client
-from phase_score import LIVE_STACK_GROUPS, NOT_CHECKED, PhaseScore, overall
+from phase_score import LIVE_STACK_GROUPS, PhaseScore, overall
 
 from autobot_shared.network_constants import ServiceURLs
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client  # noqa: F401
@@ -31,6 +31,12 @@ from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+
+#: This script's own directory, as a repo-relative path. Four feature checks
+#: point at siblings of this file; naming it once keeps them readable and means
+#: a future move updates one line rather than four.
+_SHARED_SCRIPTS = "autobot-infrastructure/shared/scripts"
 
 
 class PhaseValidationCriteria:
@@ -790,9 +796,9 @@ class PhaseValidator:
             "dependency_scanning": lambda: (root / ".github/workflows/security.yml").exists(),
             "sast_analysis": lambda: (root / ".bandit").exists(),
             "container_security": lambda: any((root / "scripts").glob("*security*")),
-            "system_metrics": lambda: (root / "autobot-infrastructure/shared/scripts/monitoring_system.py").exists(),
+            "system_metrics": lambda: (root / _SHARED_SCRIPTS / "monitoring_system.py").exists(),
             "health_checks": lambda: self._check_endpoint_sync("/api/system/health"),
-            "performance_dashboard": lambda: (root / "autobot-infrastructure/shared/scripts/performance_dashboard.py").exists(),
+            "performance_dashboard": lambda: (root / _SHARED_SCRIPTS / "performance_dashboard.py").exists(),
             "chat_interface": lambda: (root / "autobot-frontend/src/components").exists(),
             "terminal_interface": lambda: any((root / "autobot-frontend/src/components").glob("*Terminal*")),
             "settings_panel": lambda: any((root / "autobot-frontend/src/components").glob("*Settings*")),
@@ -802,8 +808,8 @@ class PhaseValidator:
             "self_awareness": lambda: (root / "autobot-backend/llm_self_awareness.py").exists(),
             "phase_progression": lambda: (root / "autobot-backend/phase_progression_manager.py").exists(),
             "unit_testing": lambda: (root / "tests").exists(),
-            "integration_testing": lambda: (root / "autobot-infrastructure/shared/scripts/automated_testing_procedure.py").exists(),
-            "performance_testing": lambda: (root / "autobot-infrastructure/shared/scripts/comprehensive_code_profiler.py").exists(),
+            "integration_testing": lambda: (root / _SHARED_SCRIPTS / "automated_testing_procedure.py").exists(),
+            "performance_testing": lambda: (root / _SHARED_SCRIPTS / "comprehensive_code_profiler.py").exists(),
             "code_quality_checks": lambda: any((root / "scripts").glob("*profile*")),
             "task_planning": lambda: any((root / "src").glob("*orchestrat*")),
             "agent_coordination": lambda: (root / "autobot-backend/orchestrator.py").exists(),
