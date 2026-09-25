@@ -9,6 +9,18 @@
  * Renders categorised badges (schema, build, install, restart) with
  * click-to-execute support. Used in the per-node orchestration view
  * to show what needs to happen after code sync.
+ *
+ * THE ORDER IS THE SERVER'S AND IS EXECUTABLE TOP TO BOTTOM. `get_node_actions`
+ * returns installs, then schema, then builds, then restarts, with every systemd
+ * unit scheduled at most once (`api/_post_sync_plan.py`). It used to return
+ * them role-major, which put a restart before the install it depends on and
+ * listed a shared unit twice.
+ *
+ * So this component must NOT sort, filter or group them: the sequence carries
+ * meaning, and a second ordering policy here would be a second place to get it
+ * wrong. It numbers them instead, because a flat row of badges gives a reader
+ * no reason to think left-to-right is anything but arbitrary -- which is the
+ * complaint that prompted the change.
  */
 
 import type { PostSyncAction } from '@/composables/useRoles'
@@ -89,7 +101,7 @@ function isExecuting(
       {{ $t('orchestration.postSyncActionBadges.postSync') }}
     </span>
     <button
-      v-for="action in actions"
+      v-for="(action, index) in actions"
       :key="`${action.role_name}-${action.category}`"
       @click.stop="emit('execute', action)"
       :disabled="executingAction !== null"
@@ -101,6 +113,12 @@ function isExecuting(
         getStyle(action.category).hoverBg,
       ]"
     >
+      <!-- Step number: the list is a sequence and a flat row of badges does not
+           say so. A numeral rather than a word, so this adds no string to
+           translate in eleven locales. It sits BEFORE the v-if/v-else pair --
+           putting it between them silently breaks the pairing, since Vue
+           requires those branches to be adjacent siblings. -->
+      <span class="tabular-nums opacity-70">{{ index + 1 }}</span>
       <!-- Spinner when executing -->
       <svg
         v-if="isExecuting(action, executingAction)"

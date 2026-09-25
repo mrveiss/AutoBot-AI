@@ -27,6 +27,7 @@ import pytest
 import pytest_asyncio
 
 from autobot_shared.coordination.work_claims import (
+    FLAT_KINDS,
     RESERVED_KINDS,
     VALID_KINDS,
     Claim,
@@ -81,10 +82,64 @@ def test_parse_rejects_unusable_scopes(raw):
 
 
 def test_parse_accepts_every_valid_kind():
-    # provider/cpu/queue (#16951): flat, contended-resource kinds, not
-    # filesystem-shaped trees -- parsed and overlap-checked identically.
-    for kind in ("path", "kb", "device", "project", "config", "provider", "cpu", "queue"):
+    """Every kind parses a path of the shape that kind is allowed to have.
+
+    This used to assert `f"{kind}:a/b"` for EVERY kind, which quietly made a
+    multi-segment flat scope part of the contract (review finding on #17380).
+    It was not one: the module documents `issue` as "flat -- `issue:17091` has
+    no subtree, so the segment is always exactly one", and `provider`/`cpu`/
+    `queue` the same way.
+
+    Accepting `issue:42/a` had a consequence. `overlaps` compares
+    segment-aligned prefixes, so `issue:42/a` and `issue:42/b` do NOT overlap
+    and both exclusive claims succeed -- on one issue, which is the collision
+    the registry exists to prevent.
+
+    #16951's ruling that flat kinds "need no special case" was about OVERLAP
+    semantics, and it still holds: the overlap rule is untouched. What was
+    missing is parse-time validation of the input it is given.
+    """
+    for kind in sorted(VALID_KINDS - FLAT_KINDS):
         assert Scope.parse(f"{kind}:a/b").kind == kind
+    for kind in sorted(FLAT_KINDS):
+        assert Scope.parse(f"{kind}:a").kind == kind
+
+
+def test_a_flat_kind_refuses_a_subtree():
+    """The hole itself: two exclusive claims on one issue.
+
+    Without this, `issue:42/a` and `issue:42/b` are non-overlapping scopes and
+    `try_acquire` grants both.
+    """
+    for kind in sorted(FLAT_KINDS):
+        with pytest.raises(ScopeError, match="flat and takes exactly one"):
+            Scope.parse(f"{kind}:42/a")
+
+
+def test_the_flat_kinds_are_a_subset_of_the_valid_ones():
+    """A flat kind that is not a valid kind would be dead configuration, and a
+    valid kind wrongly listed as flat would reject legitimate subtrees."""
+    assert FLAT_KINDS <= VALID_KINDS
+    assert sorted(FLAT_KINDS) == ["cpu", "issue", "provider", "queue"]
+
+
+def test_the_loop_above_covers_every_valid_kind():
+    """A kind added to VALID_KINDS without a parse rule would pass silently.
+
+    The loop is derived from VALID_KINDS rather than restated, so this pins the
+    set itself -- the one thing deriving it cannot check (#17091).
+    """
+    assert sorted(VALID_KINDS) == [
+        "config",
+        "cpu",
+        "device",
+        "issue",
+        "kb",
+        "path",
+        "project",
+        "provider",
+        "queue",
+    ]
 
 
 # ---------------------------------------------------------------------------
