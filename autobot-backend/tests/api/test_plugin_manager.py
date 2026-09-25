@@ -191,16 +191,17 @@ async def test_load_plugin_endpoint_does_not_pass_grant_capabilities_kwarg():
 
     loader, _, _ = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [Capability.KB_READ])
 
-    with patch("plugin_manager.get_plugin_loader", return_value=loader), patch(
-        "plugin_manager._save_plugin_config", new=AsyncMock()
-    ), patch("plugin_manager.CapabilityChecker"):
+    with (
+        patch("plugin_manager.get_plugin_loader", return_value=loader),
+        patch("plugin_manager._save_plugin_config", new=AsyncMock()),
+        patch("plugin_manager.CapabilityChecker"),
+    ):
         await load_plugin(plugin_name="test-plugin", config=None, admin_check=True)
 
     loader.load_plugin.assert_awaited_once()
     _, kwargs = loader.load_plugin.call_args
     assert "grant_capabilities" not in kwargs, (
-        "loader.load_plugin does not accept grant_capabilities kwarg — "
-        "passing it raises TypeError (#17420)"
+        "loader.load_plugin does not accept grant_capabilities kwarg — " "passing it raises TypeError (#17420)"
     )
 
 
@@ -212,9 +213,11 @@ async def test_load_plugin_endpoint_auto_grants_official_plugin_capabilities():
     granted = [Capability.KB_READ, Capability.LLM_CALL]
     loader, manifest, _ = _make_load_endpoint_mocks(TrustTier.OFFICIAL, granted)
 
-    with patch("plugin_manager.get_plugin_loader", return_value=loader), patch(
-        "plugin_manager._save_plugin_config", new=AsyncMock()
-    ), patch("plugin_manager.CapabilityChecker") as checker_cls:
+    with (
+        patch("plugin_manager.get_plugin_loader", return_value=loader),
+        patch("plugin_manager._save_plugin_config", new=AsyncMock()),
+        patch("plugin_manager.CapabilityChecker") as checker_cls,
+    ):
         checker_instance = checker_cls.return_value
         result = await load_plugin(plugin_name="test-plugin", config=None, admin_check=True)
 
@@ -233,9 +236,11 @@ async def test_load_plugin_endpoint_does_not_auto_grant_community_plugin():
 
     loader, _, _ = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [Capability.KB_READ])
 
-    with patch("plugin_manager.get_plugin_loader", return_value=loader), patch(
-        "plugin_manager._save_plugin_config", new=AsyncMock()
-    ), patch("plugin_manager.CapabilityChecker") as checker_cls:
+    with (
+        patch("plugin_manager.get_plugin_loader", return_value=loader),
+        patch("plugin_manager._save_plugin_config", new=AsyncMock()),
+        patch("plugin_manager.CapabilityChecker") as checker_cls,
+    ):
         checker_instance = checker_cls.return_value
         result = await load_plugin(plugin_name="test-plugin", config=None, admin_check=True)
 
