@@ -24,6 +24,7 @@ import aiohttp
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from api.agent_events import BROADCAST_CHANNEL, owner_channel, publish_event_safe, publish_goal_events
 from api.schemas_agent import (
     AgentAvailableData,
     AgentCommandApprovalResponse,
@@ -50,7 +51,6 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import TimingConstants
 from dependencies import get_config, get_knowledge_base
-from events.bus import PersistStrategy, get_event_bus
 from exceptions import InternalError, SubprocessError
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -185,18 +185,6 @@ def _validate_command_request(command: str | None, security_layer, user_role: st
         )
 
     return None
-
-
-async def _publish_event_safe(event_name: str, data: dict) -> None:
-    """
-    Publish event with error handling (non-critical operation).
-
-    Issue #281: Extracted helper for safe event publishing.
-    """
-    try:
-        await get_event_bus().publish("global", event_name, data, persist=PersistStrategy.NONE)
-    except Exception as e:
-        logger.warning("Failed to publish %s event: %s", event_name, e)
 
 
 async def _run_subprocess(command: str, security_layer, user_role: str) -> tuple:
@@ -417,6 +405,7 @@ async def _handle_command_result(
     stdout: bytes,
     stderr: bytes,
     returncode: int,
+    channel: str | None,
 ):
     """
     Process command execution result and publish completion events.
@@ -430,6 +419,8 @@ async def _handle_command_result(
         stdout: Command stdout bytes
         stderr: Command stderr bytes
         returncode: Process return code
+        channel: The caller's own channel -- the command and its output are
+            theirs, not everyone's (#17354)
 
     Returns:
         Success dict or JSONResponse with error
@@ -439,14 +430,16 @@ async def _handle_command_result(
 
     if returncode == 0:
         response = _build_success_response(command, output, security_layer, user_role)
-        await _publish_event_safe(
+        await publish_event_safe(
+            channel,
             "command_execution_end",
             {"command": command, "status": "success", "output": output},
         )
         return response
 
     response = _build_error_response(command, output, error, returncode, security_layer, user_role)
-    await _publish_event_safe(
+    await publish_event_safe(
+        channel,
         "command_execution_end",
         {
             "command": command,
@@ -554,22 +547,13 @@ def _check_goal_permission(security_layer, user_role: str, goal: str) -> JSONRes
     return None
 
 
-async def _publish_goal_events(goal: str, use_phi2: bool) -> None:
-    """
-    Publish goal-related events (user_message and goal_received).
-
-    Issue #620.
-    """
-    await _publish_event_safe("user_message", {"message": goal})
-    await _publish_event_safe("goal_received", {"goal": goal, "use_phi2": use_phi2})
-
-
 async def _handle_goal_result(
     security_layer,
     user_role: str,
     goal: str,
     result_dict: dict,
     task_start_time: float,
+    channel: str | None,
 ) -> dict:
     """
     Process goal execution result and publish completion events.
@@ -582,6 +566,7 @@ async def _handle_goal_result(
         goal: Original goal string
         result_dict: Result from orchestrator
         task_start_time: Start timestamp for metrics
+        channel: The caller's own channel (#17354)
 
     Returns:
         Response dict with message
@@ -589,7 +574,7 @@ async def _handle_goal_result(
     response_message, tool_output_content, tool_name = _process_tool_result(result_dict)
 
     if tool_output_content and tool_name != "respond_conversationally":
-        await _publish_event_safe("tool_output", {"output": tool_output_content})
+        await publish_event_safe(channel, "tool_output", {"output": tool_output_content})
 
     security_layer.audit_log(
         "submit_goal",
@@ -598,7 +583,7 @@ async def _handle_goal_result(
         {"goal": goal, "result": response_message},
     )
 
-    await _publish_event_safe("goal_completed", {"goal": goal, "result": response_message})
+    await publish_event_safe(channel, "goal_completed", {"goal": goal, "result": response_message})
 
     _record_goal_metrics(task_start_time, "success")
 
@@ -699,8 +684,9 @@ async def receive_goal(
 
     logging.info(f"Received goal via API: {goal}")
 
-    # Publish events (Issue #620: uses helper)
-    await _publish_goal_events(goal, use_phi2)
+    # Publish events (Issue #620: uses helper; #17354: to the caller, not all of them)
+    channel = owner_channel(current_user)
+    await publish_goal_events(goal, use_phi2, channel)
 
     # Track task execution start time for Prometheus metrics
     task_start_time = time.time()
@@ -709,7 +695,7 @@ async def receive_goal(
     result_dict = await _execute_goal_with_error_handling(orchestrator, goal, task_start_time)
 
     # Process and return result (Issue #620: uses helper)
-    return await _handle_goal_result(security_layer, user_role, goal, result_dict, task_start_time)
+    return await _handle_goal_result(security_layer, user_role, goal, result_dict, task_start_time, channel)
 
 
 @router.post("/pause", response_model=AgentMessageResponse)
@@ -751,7 +737,7 @@ async def pause_agent_api(
         ) from e
 
     security_layer.audit_log("agent_pause", user_role, "success", {})
-    await _publish_event_safe("agent_paused", {"message": "Agent operation paused."})
+    await publish_event_safe(BROADCAST_CHANNEL, "agent_paused", {"message": "Agent operation paused."})
     return {"message": "Agent paused successfully."}
 
 
@@ -794,7 +780,7 @@ async def resume_agent_api(
         ) from e
 
     security_layer.audit_log("agent_resume", user_role, "success", {})
-    await _publish_event_safe("agent_resumed", {"message": "Agent operation resumed."})
+    await publish_event_safe(BROADCAST_CHANNEL, "agent_resumed", {"message": "Agent operation resumed."})
     return {"message": "Agent resumed successfully."}
 
 
@@ -843,7 +829,10 @@ async def command_approval(
     error_code_prefix="AGENT",
 )
 async def execute_command(
-    request: Request, payload: CommandExecutePayload, admin_check: bool = Depends(check_admin_permission)
+    request: Request,
+    payload: CommandExecutePayload,
+    admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Executes a shell command and returns its output.
@@ -866,23 +855,24 @@ async def execute_command(
     """
     security_layer = request.app.state.security_layer
     command, user_role = payload.command, payload.user_role
+    channel = owner_channel(current_user)  # #17354: not every signed-in client
 
     # Validate command request (Issue #281: uses helper)
     validation_error = _validate_command_request(command, security_layer, user_role)
     if validation_error:
         if not command:
-            await _publish_event_safe("error", {"message": "No command provided for execution."})
+            await publish_event_safe(channel, "error", {"message": "No command provided for execution."})
         return validation_error
 
     # Publish start event (Issue #281: uses helper)
-    await _publish_event_safe("command_execution_start", {"command": command})
+    await publish_event_safe(channel, "command_execution_start", {"command": command})
     logging.info(f"Executing command: {command}")
 
     # Execute subprocess (Issue #281: uses helper)
     stdout, stderr, returncode = await _run_subprocess(command, security_layer, user_role)
 
     # Handle result and publish completion event (Issue #620: uses helper)
-    return await _handle_command_result(security_layer, user_role, command, stdout, stderr, returncode)
+    return await _handle_command_result(security_layer, user_role, command, stdout, stderr, returncode, channel)
 
 
 # ====================================================================

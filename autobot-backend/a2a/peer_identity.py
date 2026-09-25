@@ -52,6 +52,42 @@ def peer_trust_key(subject: str, peer_id: str) -> str:
     return f"{quote(subject, safe='')}/{quote(peer_id, safe='')}"
 
 
+#: Prefix for a work-claim identity derived from an A2A peer. Namespaced so a
+#: peer cannot present an id that collides with an internal agent's.
+CLAIM_PREFIX = "a2a"
+
+
+def claim_identity(peer_id: str | None, task_id: str) -> str:
+    """The work-claim holder for a task submitted by *peer_id* (#16950).
+
+    Every A2A task used to claim its scopes as the literal ``"a2a-executor"``,
+    so every admitted peer was ONE claimant. The ingress gate at ``api/a2a.py``
+    identifies the peer correctly; the identity was dropped one layer in.
+
+    What that cost, stated precisely because the obvious guess is wrong: it did
+    NOT let one peer act on another's hold. ``work_claims``' Lua treats a holder
+    as the same only when ``agent_id`` AND ``task_id`` both match, so two peers'
+    tasks conflicted anyway — their task ids differ. What was lost is
+    ATTRIBUTION: a refusal named ``a2a-executor`` rather than the peer actually
+    holding the scope, so an operator could not tell which peer to talk to, and
+    any policy keyed on ``agent_id`` — rate, budget, audit — saw every peer as
+    one. #16950's first criterion is identity end to end; this is the A2A leg of
+    it.
+
+    An absent peer id does NOT fall back to a shared name. Anonymous callers are
+    already refused at ingress, so this is defence in depth -- but a fallback
+    constant would rebuild the exact aliasing this function exists to remove, so
+    an unidentified caller gets an identity unique to its own task and can
+    therefore alias nobody.
+
+    Percent-encoded for the same reason as :func:`peer_trust_key`: a ``/`` or
+    ``:`` inside a peer id must not let two different peers produce one key.
+    """
+    if not peer_id:
+        return f"{CLAIM_PREFIX}:anonymous:{quote(task_id, safe='')}"
+    return f"{CLAIM_PREFIX}:{quote(peer_id, safe='')}"
+
+
 def jwt_subject_for_audit(authorization: str | None) -> str | None:
     """The ``sub`` claim of a bearer token, **unverified**: for audit and logging only.
 
