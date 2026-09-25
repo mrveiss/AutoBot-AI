@@ -41,17 +41,24 @@ _ASYNC_MARKERS = ("AsyncSession", "create_async_engine")
 _SQLALCHEMY = re.compile(r"^sqlalchemy\b", re.IGNORECASE | re.MULTILINE)
 _GREENLET_FLOOR = re.compile(r"^greenlet\s*(==|>=)\s*\d", re.IGNORECASE | re.MULTILINE)
 
-#: Requirements files with no sibling source tree to scan. Each needs its own
-#: reason, so the list cannot quietly absorb a service that simply forgot.
-_NO_SIBLING_SOURCE: Dict[str, str] = {
-    "requirements-ci/storage.txt": (
-        "a CI-only dependency set, not a deployed service: it has no source tree of its own, "
-        "and it pins exact versions rather than floors. It declares sqlalchemy and aiosqlite, so "
-        "async-engine tests running against it would need greenlet -- but no failure has been "
-        "observed there, and #17432 deliberately did not change it in the PR whose job was "
-        "unblocking a red base. Recorded rather than fixed blind."
-    ),
-}
+#: Requirements files excused from the rule, each with its reason. Empty on
+#: purpose: `requirements-ci/storage.txt` was the candidate and is **mirrored**
+#: instead (`greenlet==3.3.2`), because "nothing has been observed failing
+#: there" is not "it does not need it" -- and that exact invisibility is what
+#: hid #17432 for a day. A test that skips, or never opens an async engine,
+#: observes nothing either way.
+#:
+#: The mechanism stays so a future exemption must carry a reason and cannot
+#: outlive its file (`test_the_exemption_list_still_matches_the_tree`).
+_NO_SIBLING_SOURCE: Dict[str, str] = {}
+
+#: STATED LIMITATION: a requirements file with no sibling Python tree --
+#: `requirements-ci/*.txt` is the live example -- reaches the async-usage check
+#: and finds nothing, so it passes without being examined. That is a pass by
+#: absence of evidence, not by evidence of absence. It is recorded here rather
+#: than hidden because the rule this guard enforces is exactly that distinction;
+#: closing it means teaching the guard which test suites run against which
+#: requirements set, which nothing in the tree currently records.
 
 
 def _requirements_files(root: pathlib.Path) -> List[pathlib.Path]:
