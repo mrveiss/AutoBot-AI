@@ -186,7 +186,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
     async def _notify_session_started(self, command: str) -> None:
         """Publish session started event. Issue #620."""
         await publish_event(
-            "global",
+            f"chat:{self.chat_id}",
             "terminal_session",
             {
                 "chat_id": self.chat_id,
@@ -319,7 +319,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
     async def _handle_sudo_prompt(self, prompt_data: str):
         """Handle sudo password prompts"""
         await publish_event(
-            "global",
+            f"chat:{self.chat_id}",
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -338,7 +338,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
     async def _handle_input_prompt(self, prompt_data: str):
         """Handle interactive prompts"""
         await publish_event(
-            "global",
+            f"chat:{self.chat_id}",
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -354,7 +354,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
     async def _send_to_chat(self, output: str):
         """Send regular output to chat"""
         await publish_event(
-            "global",
+            f"chat:{self.chat_id}",
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -368,7 +368,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
     async def _send_error(self, error: str):
         """Send error message to chat"""
         await publish_event(
-            "global",
+            f"chat:{self.chat_id}",
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -411,7 +411,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
         """Allow user to take full control of terminal"""
         self.input_mode = "user"
         await publish_event(
-            "global",
+            f"chat:{self.chat_id}",
             "terminal_control",
             {
                 "chat_id": self.chat_id,
@@ -425,7 +425,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
         """Return control to agent"""
         self.input_mode = "agent"
         await publish_event(
-            "global",
+            f"chat:{self.chat_id}",
             "terminal_control",
             {
                 "chat_id": self.chat_id,
@@ -483,7 +483,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
             output_lines = len(self.output_buffer)
 
         await publish_event(
-            "global",
+            f"chat:{self.chat_id}",
             "terminal_session",
             {
                 "chat_id": self.chat_id,
