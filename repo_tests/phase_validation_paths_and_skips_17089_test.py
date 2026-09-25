@@ -167,17 +167,34 @@ def _criteria_gate_lists() -> list[tuple[str, list[str]]]:
     return out
 
 
+#: The loaded policy module, so repeated calls neither re-execute it nor
+#: re-enter `sys.modules`.
+_POLICY_MODULE: list = []
+
+
 def _policy():
     """``phase_score`` loaded by path -- it imports nothing but the stdlib.
 
-    Registered in ``sys.modules`` before execution because ``dataclasses``
-    resolves ``cls.__module__`` through it; without that the class body raises.
+    It must be in ``sys.modules`` WHILE the module body runs, because
+    ``dataclasses`` resolves ``cls.__module__`` through it and the class body
+    raises without it. It must NOT stay there afterwards: the suite's
+    sys.modules leak guard fails a test file that installs a key outside
+    ``repo_tests/``, and it was right to -- a module left in ``sys.modules``
+    under a bare name can be picked up by anything later in the same process,
+    and the first file to notice was an unrelated one several shards away.
+
+    So the registration is scoped to the exec and removed in a ``finally``.
     """
-    spec = importlib.util.spec_from_file_location("phase_score", repo_root() / _POLICY)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["phase_score"] = module
-    spec.loader.exec_module(module)
-    return module
+    if not _POLICY_MODULE:
+        spec = importlib.util.spec_from_file_location("phase_score", repo_root() / _POLICY)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["phase_score"] = module
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            sys.modules.pop("phase_score", None)
+        _POLICY_MODULE.append(module)
+    return _POLICY_MODULE[0]
 
 
 class TestEveryReferencedPathExists:
