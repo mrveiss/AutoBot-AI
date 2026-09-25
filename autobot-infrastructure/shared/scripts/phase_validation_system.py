@@ -23,6 +23,8 @@ import psutil
 import requests
 
 # Import centralized Redis client
+from phase_score import LIVE_STACK_GROUPS, NOT_CHECKED, PhaseScore, overall
+
 from autobot_shared.network_constants import ServiceURLs
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client  # noqa: F401
 
@@ -39,6 +41,14 @@ class PhaseValidationCriteria:
     # pre-reorganization layout (``src/``, ``backend/``, ``autobot-vue/``) is
     # gone and references to it produced a 22.63% maturity score that masked
     # real progress.
+    #
+    # #17089: that refresh covered THIS DICT and not the feature-check lambdas in
+    # ``_get_feature_checks``, which kept pointing at ``src/``, ``backend/`` and
+    # ``autobot-vue/`` -- 14 of their 15 paths did not exist. The comment was
+    # accurate about what it sits above and wrong about the file as a whole, and
+    # nothing failed because the same change began skipping those checks in CI.
+    # A guard now asserts every path referenced here and there exists:
+    # ``repo_tests/phase_validation_paths_and_skips_17089_test.py``.
     PHASE_CRITERIA = {
         "Phase 1: Core Infrastructure": {
             "description": "Establish foundational system architecture",
@@ -109,7 +119,7 @@ class PhaseValidationCriteria:
                 "autobot-backend/llm_multi_provider.py",
                 "autobot-backend/prompt_manager.py",
             ],
-            "directories": ["autobot-backend/llm_interface_pkg/"],
+            "directories": ["autobot-backend/llm_shared/"],  # renamed from llm_interface_pkg in #6941
             "endpoints": ["/api/llm/status", "/api/llm/status/comprehensive"],
             "services": ["ollama"],
             "weight": 85,
@@ -198,6 +208,16 @@ class PhaseValidationCriteria:
             "directories": ["autobot-frontend/src/components/"],
             "endpoints": [ServiceURLs.FRONTEND_LOCAL],
             "ui_features": ["chat_interface", "terminal_interface", "settings_panel"],
+            # #17089 AC3: the checks below can only see that files exist. These
+            # workflows are what actually exercise this phase, and the report
+            # links to them instead of this phase claiming a UI verdict of its
+            # own. A file-presence sweep has no business reporting on UX.
+            "authoritative_gates": [
+                ".github/workflows/frontend-test.yml",
+                ".github/workflows/visual-regression.yml",
+                ".github/workflows/stylelint-tokens.yml",
+                ".github/workflows/frontend-typecheck-regression.yml",
+            ],
             "weight": 75,
         },
         "Phase 7: Testing and Validation": {
@@ -360,8 +380,7 @@ class PhaseValidator:
             "recommendations": [],
         }
 
-        total_weighted_score = 0
-        total_weight = 0
+        scored: list[tuple[PhaseScore, float]] = []
 
         for phase_name, criteria in PhaseValidationCriteria.PHASE_CRITERIA.items():
             logger.info("📋 Validating %s...", phase_name)
@@ -369,31 +388,48 @@ class PhaseValidator:
             phase_result = await self._validate_phase(phase_name, criteria)
             validation_results["phases"][phase_name] = phase_result
 
-            # Calculate weighted score
-            phase_weight = criteria.get("weight", 50)
-            weighted_score = phase_result["completion_percentage"] * phase_weight / 100
-            total_weighted_score += weighted_score
-            total_weight += phase_weight
+            scored.append(
+                (
+                    PhaseScore(
+                        ran=phase_result["checks_ran"],
+                        passed=phase_result["checks_passed"],
+                        skipped=tuple(phase_result.get("not_checked", {})),
+                    ),
+                    float(criteria.get("weight", 50)),
+                )
+            )
 
-            logger.info(f"✅ {phase_name}: {phase_result['completion_percentage']:.1f}% complete")
+            measured = "complete" if phase_result["complete"] else phase_result["status"]
+            logger.info(
+                "%s: %.1f%% structural presence (%s)",
+                phase_name,
+                phase_result["structural_presence_percentage"],
+                measured,
+            )
 
-        # Calculate overall system maturity
-        overall_completion = (total_weighted_score / total_weight) * 100 if total_weight > 0 else 0
+        # #17089: the aggregate comes from the shared policy, which decides
+        # whether the figure may be called maturity at all. `overall_maturity`
+        # is None (not 0) when any group was skipped -- 0 would read as
+        # "measured and found empty", which is the confusion being removed.
+        # The #7496 note still applies: `_output_json_results` and the CI gate
+        # read these top-level keys, so they stay top-level.
+        aggregate = overall(scored)
+        validation_results.update(aggregate)
 
-        # Top-level alias (#7496) — `_output_json_results` and the CI gate read
-        # `results["overall_maturity"]`; without this key the gate always saw 0
-        # and tripped the 60% threshold even when validation succeeded.
-        validation_results["overall_maturity"] = round(overall_completion, 2)
-
+        structural = aggregate["structural_presence"]
         validation_results["overall_assessment"] = {
-            "system_maturity_score": round(overall_completion, 2),
-            "development_stage": self._determine_development_stage(overall_completion),
-            "ready_for_production": overall_completion >= 85,
+            "structural_presence_score": structural,
+            "measures": aggregate["measures"],
+            "development_stage": (
+                self._determine_development_stage(structural)
+                if aggregate["overall_maturity"] is not None
+                else "not assessed (checks skipped)"
+            ),
+            "ready_for_production": aggregate["ready_for_production"],
             "critical_phases_complete": self._check_critical_phases(validation_results["phases"]),
             "total_phases_evaluated": len(PhaseValidationCriteria.PHASE_CRITERIA),
-            "phases_fully_complete": len(
-                [p for p in validation_results["phases"].values() if p["completion_percentage"] >= 95]
-            ),
+            "phases_fully_complete": aggregate["phases_complete"],
+            "not_checked": aggregate["skipped_detail"],
         }
 
         # Generate recommendations
@@ -401,17 +437,6 @@ class PhaseValidator:
 
         self.validation_results = validation_results
         return validation_results
-
-    def _determine_phase_status(self, completion_percentage: float) -> str:
-        """Determine phase status from completion percentage (Issue #665: extracted helper)."""
-        if completion_percentage >= 95:
-            return "complete"
-        elif completion_percentage >= 75:
-            return "mostly_complete"
-        elif completion_percentage >= 50:
-            return "in_progress"
-        else:
-            return "incomplete"
 
     async def _validate_phase_features(self, criteria: Dict[str, Any], results: Dict[str, Any]) -> tuple:
         """Validate all feature types in criteria (Issue #665: extracted helper)."""
@@ -448,7 +473,8 @@ class PhaseValidator:
         empty_validation = {"passed": 0, "total": 0, "details": []}
         return {
             "phase_name": phase_name,
-            "completion_percentage": 0,
+            "structural_presence_percentage": 0,
+            "complete": False,
             "status": "incomplete",
             "validations": {
                 k: dict(empty_validation)
@@ -486,7 +512,18 @@ class PhaseValidator:
         # running, so they'd count 0/N and drag the score below the
         # threshold. Structural file/directory checks are the only signal
         # that's meaningful pre-deploy.
-        if not self.ci_mode:
+        skipped: list[str] = []
+        if self.ci_mode:
+            # #17089: record what did NOT run instead of quietly shrinking the
+            # denominator. #7496 skipped these groups for a sound reason -- no
+            # live stack in CI -- but dropping them from the total turned a
+            # skipped check into a passed one, and the less a run could measure
+            # the higher it scored.
+            # Only groups this phase actually declares -- naming a group the
+            # phase never had would over-report what went unchecked, which is
+            # the same dishonesty in the other direction.
+            skipped = [key for key in LIVE_STACK_GROUPS if key in criteria]
+        else:
             async_validation_map = {
                 "endpoints": self._validate_endpoints,
                 "services": self._validate_services,
@@ -502,9 +539,11 @@ class PhaseValidator:
             total_checks += ft
             passed_checks += fp
 
-        if total_checks > 0:
-            results["completion_percentage"] = round((passed_checks / total_checks) * 100, 2)
-        results["status"] = self._determine_phase_status(results["completion_percentage"])
+        score = PhaseScore(ran=total_checks, passed=passed_checks, skipped=tuple(skipped))
+        results.update(score.as_report())
+        results["weight"] = criteria.get("weight", 50)
+        if "authoritative_gates" in criteria:
+            results["authoritative_gates"] = list(criteria["authoritative_gates"])
         return results
 
     def _validate_files(self, files: List[str]) -> Dict[str, Any]:
@@ -751,24 +790,24 @@ class PhaseValidator:
             "dependency_scanning": lambda: (root / ".github/workflows/security.yml").exists(),
             "sast_analysis": lambda: (root / ".bandit").exists(),
             "container_security": lambda: any((root / "scripts").glob("*security*")),
-            "system_metrics": lambda: (root / "scripts/monitoring_system.py").exists(),
+            "system_metrics": lambda: (root / "autobot-infrastructure/shared/scripts/monitoring_system.py").exists(),
             "health_checks": lambda: self._check_endpoint_sync("/api/system/health"),
-            "performance_dashboard": lambda: (root / "scripts/performance_dashboard.py").exists(),
-            "chat_interface": lambda: (root / "autobot-vue/src/components").exists(),
-            "terminal_interface": lambda: any((root / "autobot-vue/src/components").glob("*Terminal*")),
-            "settings_panel": lambda: any((root / "autobot-vue/src/components").glob("*Settings*")),
-            "multimodal_ai": lambda: (root / "src/agents").exists(),
-            "code_search": lambda: any((root / "src/agents").glob("*code_search*")),
-            "advanced_research": lambda: any((root / "src/agents").glob("*research*")),
-            "self_awareness": lambda: (root / "src/llm_self_awareness.py").exists(),
-            "phase_progression": lambda: (root / "src/phase_progression_manager.py").exists(),
+            "performance_dashboard": lambda: (root / "autobot-infrastructure/shared/scripts/performance_dashboard.py").exists(),
+            "chat_interface": lambda: (root / "autobot-frontend/src/components").exists(),
+            "terminal_interface": lambda: any((root / "autobot-frontend/src/components").glob("*Terminal*")),
+            "settings_panel": lambda: any((root / "autobot-frontend/src/components").glob("*Settings*")),
+            "multimodal_ai": lambda: (root / "autobot-backend/agents").exists(),
+            "code_search": lambda: any((root / "autobot-backend/agents").glob("*code_search*")),
+            "advanced_research": lambda: any((root / "autobot-backend/agents").glob("*research*")),
+            "self_awareness": lambda: (root / "autobot-backend/llm_self_awareness.py").exists(),
+            "phase_progression": lambda: (root / "autobot-backend/phase_progression_manager.py").exists(),
             "unit_testing": lambda: (root / "tests").exists(),
-            "integration_testing": lambda: (root / "scripts/automated_testing_procedure.py").exists(),
-            "performance_testing": lambda: (root / "scripts/comprehensive_code_profiler.py").exists(),
+            "integration_testing": lambda: (root / "autobot-infrastructure/shared/scripts/automated_testing_procedure.py").exists(),
+            "performance_testing": lambda: (root / "autobot-infrastructure/shared/scripts/comprehensive_code_profiler.py").exists(),
             "code_quality_checks": lambda: any((root / "scripts").glob("*profile*")),
             "task_planning": lambda: any((root / "src").glob("*orchestrat*")),
-            "agent_coordination": lambda: (root / "src/orchestrator.py").exists(),
-            "workflow_management": lambda: (root / "backend/api/orchestration.py").exists(),
+            "agent_coordination": lambda: (root / "autobot-backend/orchestrator.py").exists(),
+            "workflow_management": lambda: (root / "autobot-backend/api/orchestration.py").exists(),
         }
 
     async def _validate_single_feature(self, feature_type: str, feature: str) -> bool:
@@ -816,7 +855,10 @@ class PhaseValidator:
 
         for phase_name in critical_phases:
             if phase_name in phases:
-                if phases[phase_name]["completion_percentage"] < 90:
+                # #17089: `complete` is False whenever a group was skipped, so a
+                # CI run can no longer report critical phases complete on file
+                # presence alone. Reading a percentage here was how it could.
+                if not phases[phase_name]["complete"]:
                     return False
         return True
 
@@ -826,19 +868,25 @@ class PhaseValidator:
 
         # Check each phase for issues
         for phase_name, phase_data in phases.items():
-            completion = phase_data["completion_percentage"]
+            present = phase_data["structural_presence_percentage"]
+            # #17089: the noun follows what was measured. Calling 100% structural
+            # presence "complete" is the original defect in sentence form.
+            noun = "complete" if phase_data["complete"] else "structural presence"
 
-            if completion < 50:
+            if present < 50:
+                recommendations.append(f"🔴 CRITICAL: {phase_name} needs significant work ({present:.1f}% {noun})")
+            elif present < 75:
+                recommendations.append(f"🟡 MEDIUM: {phase_name} requires attention ({present:.1f}% {noun})")
+            elif present < 95:
+                recommendations.append(f"🟢 LOW: {phase_name} nearly there ({present:.1f}% {noun})")
+            elif not phase_data["complete"]:
                 recommendations.append(
-                    f"🔴 CRITICAL: {phase_name} needs significant work " f"({completion:.1f}% complete)"
+                    f"⚪ UNVERIFIED: {phase_name} is {present:.1f}% structurally present but "
+                    f"{phase_data.get('why_not_complete', 'checks were skipped')}"
                 )
-            elif completion < 75:
-                recommendations.append(f"🟡 MEDIUM: {phase_name} requires attention " f"({completion:.1f}% complete)")
-            elif completion < 95:
-                recommendations.append(f"🟢 LOW: {phase_name} nearly complete ({completion:.1f}% complete)")
 
         # Performance recommendations
-        overall_completion = sum(p["completion_percentage"] for p in phases.values()) / len(phases)
+        overall_completion = sum(p["structural_presence_percentage"] for p in phases.values()) / len(phases)
 
         if overall_completion < 70:
             recommendations.append("🎯 Focus on completing critical infrastructure phases first")
@@ -881,7 +929,10 @@ def _output_json_results(results: Dict[str, Any], output_file: str = None):
             {
                 "name": phase_name,
                 "status": phase_data.get("status", "unknown"),
-                "completion_percentage": phase_data.get("completion_percentage", 0),
+                "structural_presence_percentage": phase_data.get("structural_presence_percentage", 0),
+                "complete": phase_data.get("complete", False),
+                "not_checked": phase_data.get("not_checked", {}),
+                "authoritative_gates": phase_data.get("authoritative_gates", []),
                 # #7496: ``_validate_phase`` stores per-check details under
                 # ``validations`` (plural). The old key ``validation_details``
                 # silently defaulted to ``{}`` in every report.
@@ -916,8 +967,9 @@ def _output_summary_results(results: Dict[str, Any]):
 
     for phase_name, phase_data in results.get("phases", {}).items():
         status = phase_data.get("status", "unknown")
-        completion = phase_data.get("completion_percentage", 0)
-        logger.info("[%s] %s: %.1f%% complete", status, phase_name, completion)
+        present = phase_data.get("structural_presence_percentage", 0)
+        noun = "complete" if phase_data.get("complete") else "structural presence"
+        logger.info("[%s] %s: %.1f%% %s", status, phase_name, present, noun)
 
     logger.info("")
     logger.info("Recommendations:")
