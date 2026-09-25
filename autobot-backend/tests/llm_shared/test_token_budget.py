@@ -140,6 +140,22 @@ def _reset_budget(monkeypatch):
     """
     fake_redis = _FakeRedis()
     monkeypatch.setattr(token_budget.TokenBudgetGate, "_get_redis", AsyncMock(return_value=fake_redis))
+    # BOTH dev-loop gates start disabled, so each test sets only the one it is
+    # about (review finding on #17380, third instance of this shape).
+    #
+    # `evaluate_dev_loop_action` checks spend BEFORE rate, so a rate test that
+    # patches only `DEV_LOOP_RATE_PER_HOUR` was refused by the SPEND gate in any
+    # process with `AUTOBOT_DEV_LOOP_TOKEN_BUDGET` set to a small positive value
+    # -- and the failure read as the rate gate misbehaving. Six tests here
+    # depended on the other gate being off and got it only from the ambient
+    # environment.
+    #
+    # Fixed at the fixture rather than per test, deliberately: I patched two
+    # individual tests in this file earlier on this PR and corrected this
+    # docstring, and did not sweep for the rest -- so the reviewer found four
+    # more. A premise every test needs belongs where every test gets it.
+    monkeypatch.setattr(token_budget, "DEV_LOOP_TOKEN_BUDGET", 0)
+    monkeypatch.setattr(token_budget, "DEV_LOOP_RATE_PER_HOUR", 0)
     yield fake_redis
 
 
