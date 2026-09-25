@@ -390,7 +390,9 @@ onUnmounted(() => {
                 {{ job.status }}
               </span>
             </div>
-            <p class="text-sm text-gray-500 mt-1">{{ job.type }} - ID: {{ job.id.slice(0, 8) }}</p>
+            <p class="text-sm text-gray-500 mt-1">
+              {{ $t('tools.batch.jobTypeAndId', { type: job.type, id: job.id.slice(0, 8) }) }}
+            </p>
           </div>
           <div class="flex items-center gap-2">
             <button
