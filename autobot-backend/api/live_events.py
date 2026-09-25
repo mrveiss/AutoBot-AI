@@ -265,9 +265,19 @@ async def _authorize_channel(channel: str, user_payload: dict | None) -> bool:
     # ``user_message``, step descriptions and error text, so every signed-in
     # client received them. Those are now on ``workflow:{id}``, which the
     # resolver below gates on ``view`` permission. The sentence is a REQUIREMENT
-    # on publishers, enforced by
+    # on publishers, partly enforced by
     # ``repo_tests/global_channel_carries_no_tenant_payload_17354_test.py`` --
     # a comment cannot hold an invariant that seven call sites can break.
+    #
+    # "Partly" is the honest word and #17363 is why it is here: the guard reads
+    # LITERAL payloads only, so seven publishes that pass a variable are counted
+    # and not inspected; eleven pre-existing sites carrying a ``task_id`` or
+    # ``workflow_id`` are baselined rather than fixed; and the requirement holds
+    # for the SEVEN keys in its ``_TENANT_KEYS``, not for everything private.
+    # So this channel is best read as: a new publisher must not put tenant
+    # content here, and what is already here is a recorded debt (#17373), not a
+    # clean bill. Anything owner-specific belongs on ``chat:``/``session:``
+    # (owner-checked) or ``agent:``/``task:`` (self- or admin-checked) instead.
     if channel == "global":
         return True
     # Everything else is DENIED.  This used to `return True`, which was

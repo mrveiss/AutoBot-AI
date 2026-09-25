@@ -21,9 +21,19 @@
  *   // entries is a reactive array of TraceEntry[]
  */
 
-import { ref, computed, isRef, onUnmounted, getCurrentInstance, type Ref, type ComputedRef, type MaybeRef } from 'vue'
+import {
+  ref,
+  computed,
+  isRef,
+  watch,
+  onUnmounted,
+  getCurrentInstance,
+  type Ref,
+  type ComputedRef,
+  type MaybeRef,
+} from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import globalWebSocketService from '@/services/GlobalWebSocketService'
+import liveEventService, { type LiveEvent } from '@/services/LiveEventService'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -83,15 +93,6 @@ function nextId(): string {
 // ---------------------------------------------------------------------------
 
 type RawPayload = Record<string, unknown>
-
-const COT_EVENT_TYPES = [
-  'agent.step.start',
-  'agent.step.complete',
-  'agent.tool.call',
-  'agent.tool.result',
-  'agent.llm.chunk',
-  'agent.plan',
-] as const
 
 // ---------------------------------------------------------------------------
 // Composable
@@ -236,25 +237,43 @@ export function useReasoningTrace(
   }
 
   // -------------------------------------------------------------------------
-  // Subscribe via GlobalWebSocketService
+  // Subscribe to the OWNING SESSION's channel (#17354)
   // -------------------------------------------------------------------------
+  //
+  // These events used to arrive on `global`, which `_authorize_channel` admits
+  // every authenticated client to, and the `session_id` comparison in each
+  // handler above was the only thing keeping one operator's tool calls, tool
+  // results and streamed model text off another's screen. Filtering in the
+  // client does not stop the bytes arriving. `session:{id}` is owner-checked by
+  // `_authorize_conversation_channel`, so the check now happens where it is
+  // enforced; the handler-level comparisons stay as a second layer.
+  //
+  // The session id may be a ref that resolves after setup (it usually is), so
+  // the subscription is re-bound when it changes rather than read once.
 
-  for (const eventType of COT_EVENT_TYPES) {
-    const unsubscribe = globalWebSocketService.on(eventType, (raw: unknown) => {
-      try {
-        // GlobalWebSocketService delivers the whole WebSocket message object.
-        // EventManager publishes: { type: eventType, payload: {...} }
-        const msg = raw as Record<string, unknown>
-        const payload =
-          (msg['payload'] as RawPayload | undefined) ??
-          (msg as RawPayload)
-        handlerMap[eventType]?.(payload)
-      } catch (err) {
-        logger.error(`Error handling ${eventType}:`, err)
-      }
-    })
-    unsubscribers.push(unsubscribe)
+  let unsubscribeChannel: (() => void) | null = null
+
+  function handleLiveEvent(event: LiveEvent): void {
+    const handler = handlerMap[event.event_type]
+    if (!handler) return
+    try {
+      handler(event.payload as RawPayload)
+    } catch (err) {
+      logger.error(`Error handling ${event.event_type}:`, err)
+    }
   }
+
+  function bindSession(id: string | null | undefined): void {
+    unsubscribeChannel?.()
+    unsubscribeChannel = id ? liveEventService.subscribe(`session:${id}`, handleLiveEvent) : null
+  }
+
+  bindSession(_sessionId.value)
+  unsubscribers.push(watch(_sessionId, (id) => bindSession(id)))
+  unsubscribers.push(() => {
+    unsubscribeChannel?.()
+    unsubscribeChannel = null
+  })
 
   // -------------------------------------------------------------------------
   // Auto-cleanup on component unmount
