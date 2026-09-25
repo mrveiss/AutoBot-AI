@@ -78,6 +78,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 _SRC = Path("autobot-slm-frontend") / "src"
 
@@ -180,19 +181,52 @@ def _scan() -> tuple[list[str], int]:
     return offenders, scanned
 
 
-#: A floor, not a census: if the walk stops finding components, every assertion
-#: below would pass by matching nothing.
-_MIN_COMPONENTS_SEEN = 100
+def _components(root: Path | None = None) -> list[Path]:
+    """Every `.vue` component this guard walks.
+
+    Empty list on a tree without the directory rather than a raise, which is
+    `_reach.declare`'s contract for a `discover` callable (#16154).
+    """
+    src = (root or repo_root()) / _SRC
+    return sorted(src.rglob("*.vue")) if src.is_dir() else []
+
+
+#: Migrated from a hand-rolled minimum-components constant of 100 (#15928, via
+#: #17395's CI). The population was RE-MEASURED rather than carried across --
+#: 113 components today -- because copying the old number into `declare` pins a
+#: value nobody checked against this tree, which is what the migration exists to
+#: stop.
+#:
+#: Pinned mid-window: 103 leaves room for 10 more components before a bump is
+#: due, where `population - growth` would put the slack exactly at the allowance
+#: and red on the next component anyone adds (#17142).
+REACH = declare(
+    "slm-frontend-components",
+    discover=_components,
+    floor=103,
+    what="Vue components under autobot-slm-frontend/src",
+    growth=20,
+)
 
 
 def test_the_scan_reaches_the_components_it_guards() -> None:
-    """A walk that matches nothing would make the assertion below vacuous."""
+    """A walk that matches nothing would make the assertion below vacuous.
+
+    Bound to `REACH`, so `reach_declarations_test` proves the floor against the
+    live population rather than this file asserting its own number.
+    """
+    components = REACH.examined(repo_root())
+    REACH.completed(len(components))
     _, scanned = _scan()
 
-    assert scanned >= _MIN_COMPONENTS_SEEN, (
-        f"only {scanned} component(s) found under {_SRC.as_posix()}, expected at least "
-        f"{_MIN_COMPONENTS_SEEN} -- this guard has stopped reaching its subject, so a pass "
-        "means nothing was looked at rather than nothing was wrong"
+    assert len(components) >= REACH.floor, (
+        f"only {len(components)} component(s) found under {_SRC.as_posix()}, expected at least "
+        f"{REACH.floor} -- this guard has stopped reaching its subject, so a pass means nothing "
+        "was looked at rather than nothing was wrong"
+    )
+    assert scanned == len(components), (
+        f"the scan read {scanned} of {len(components)} components -- the walk and the declared "
+        "population have diverged, so the floor no longer describes what is examined"
     )
 
 

@@ -36,6 +36,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 _APP = Path("autobot-slm-frontend")
 _LOCALES = _APP / "src" / "locales"
@@ -49,8 +50,37 @@ _EXPECTED_LOCALES = ("ar", "de", "en", "es", "fa", "fr", "he", "lv", "pl", "pt",
 
 _RTL_LOCALES = frozenset({"ar", "fa", "he", "ur"})
 
-#: A floor: a truncated en.json would make parity trivially true.
-_MIN_KEYS = 3_000
+
+def _en_message_keys(root: Path | None = None) -> list[str]:
+    """Every message key in `en.json` -- the population parity is asserted over.
+
+    Returns an empty list on a tree without the file rather than raising, which
+    is `_reach.declare`'s contract for a `discover` callable (#16154).
+    """
+    path = (root or repo_root()) / _LOCALES / "en.json"
+    if not path.exists():
+        return []
+    return [key for key in _flatten(json.loads(path.read_text(encoding="utf-8"))) if not key.startswith("_meta")]
+
+
+#: Migrated from a hand-rolled minimum-keys constant of 3,000 (#15928, via
+#: #17395's CI). Named indirectly on purpose: the migration detector matches
+#: a floor-shaped name at line start, and its own source splits such names
+#: for the same reason.
+#: The population was RE-MEASURED rather than carried across -- 3,191 keys today
+#: -- because copying the old constant into `declare` would pin a number nobody
+#: had checked against this tree, which is the whole point of the migration.
+#:
+#: Pinned mid-window: 3,161 leaves room for 30 more keys before the meta-test
+#: asks for a bump, where `population - growth` would put the slack exactly at
+#: the allowance and red on the next key anyone adds (#17142).
+REACH = declare(
+    "slm-frontend-locale-keys",
+    discover=_en_message_keys,
+    floor=3_161,
+    what="message keys in autobot-slm-frontend's en.json",
+    growth=60,
+)
 
 
 def _flatten(node: dict, prefix: str = "") -> dict[str, object]:
@@ -120,8 +150,18 @@ def test_every_locale_file_exists() -> None:
 
 
 def test_english_is_not_a_stub() -> None:
-    """The floor: parity with an empty en.json would be parity with nothing."""
-    assert len(_keys("en")) >= _MIN_KEYS
+    """The floor: parity with an empty en.json would be parity with nothing.
+
+    Bound to `REACH` so `reach_declarations_test` proves the floor against the
+    live population instead of this file asserting its own number.
+    """
+    keys = REACH.examined(repo_root())
+    REACH.completed(len(keys))
+
+    assert len(keys) >= REACH.floor, (
+        f"en.json carries {len(keys)} message keys, expected at least {REACH.floor} -- a truncated "
+        "English bundle would make every parity assertion below trivially true"
+    )
 
 
 @pytest.mark.parametrize("locale", [loc for loc in _EXPECTED_LOCALES if loc != "en"])
