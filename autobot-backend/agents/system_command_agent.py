@@ -403,7 +403,7 @@ class SystemCommandAgent(StandardizedAgent):
         elif result:
             event_data["exit_code"] = result["exit_code"]
             event_data["duration"] = result["duration"]
-        await publish_event("global", "command_execution", event_data, persist=PersistStrategy.NONE)
+        await publish_event(f"chat:{chat_id}", "command_execution", event_data, persist=PersistStrategy.NONE)
 
     def _build_execution_result(self, result: dict) -> Dict[str, Any]:
         """Build execution result dict (Issue #398: extracted)."""
@@ -492,7 +492,7 @@ class SystemCommandAgent(StandardizedAgent):
     async def _request_user_confirmation(self, command: str, chat_id: str) -> bool:
         """Request user confirmation for dangerous commands"""
         await publish_event(
-            "global",
+            f"chat:{chat_id}",  # #17363: owner-scoped, not every signed-in client
             "command_confirmation",
             {
                 "chat_id": chat_id,
