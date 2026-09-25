@@ -14,18 +14,27 @@ every server that exposes it, for deterministic collision resolution.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, AsyncContextManager, Callable, Sequence
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import redact_provider_error
+from skills.sync.mcp_client import RejectedTool
 from type_defs.mcp import MCPToolDefinition
 
 logger = get_logger(__name__)
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
-# A client factory takes a server URI and returns an async-context-manager
-# object exposing `discover_tools() -> list[MCPToolDefinition]` (MCPClient's shape).
+# A client factory takes a server URI and returns an async-context-manager object
+# exposing `discover_tools_detailed() -> ToolDiscovery` (MCPClient's shape, #17467).
+#
+# Required rather than probed. The first version of #17467 used
+# `getattr(client, "discover_tools_detailed", None)` to stay compatible with
+# older clients -- and an `AsyncMock` auto-creates every attribute, so the probe
+# answered "yes" for every test double and returned mocks where tools were
+# expected. A capability probe that cannot say no is not a probe. The contract is
+# stated here instead, and doubles implement it.
 ClientFactory = Callable[[str], AsyncContextManager[Any]]
 
 
@@ -36,36 +45,114 @@ def server_id_from_uri(uri: str) -> str:
     return _SLUG_RE.sub("_", slug).strip("_") or "mcp"
 
 
+#: Exception types that mean OUR bug, not the server's state (#17439, #17467).
+#: A `KeyError` from our own code is not an unreachable server, and laundering
+#: one into the other is how a programming error becomes an operational metric.
+_OUR_BUG = (AttributeError, KeyError, TypeError, NameError, ImportError, IndexError)
+
+
 @dataclass(frozen=True)
 class ServerToolList:
-    """Tools discovered from one reachable server."""
+    """Tools discovered from one reachable server, and the ones it advertised that we refused."""
 
     server_id: str
     server_uri: str
     tools: list[MCPToolDefinition]
+    rejected: list[RejectedTool] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ServerDiscoveryFailure:
+    """A server that yielded no tool list, and which kind of failure it was (#17467).
+
+    `kind` is `"transport"` when we could not talk to the server and `"schema"`
+    when it answered and its payload was the problem. The old code logged the
+    word "unreachable" for both, so an operator was actively misinformed that a
+    reachable server was down.
+    """
+
+    server_id: str
+    server_uri: str
+    kind: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class MultiServerDiscovery:
+    """Every server's outcome: the ones that answered, and the ones that did not."""
+
+    servers: list[ServerToolList] = field(default_factory=list)
+    failures: list[ServerDiscoveryFailure] = field(default_factory=list)
+
+
+async def discover_tools_multi_server_detailed(
+    server_uris: Sequence[str],
+    client_factory: ClientFactory,
+) -> MultiServerDiscovery:
+    """Discover tools from every server URI, recording why any server yielded none (#17467).
+
+    Three outcomes per server, and they were previously one:
+
+    * answered, tools accepted -- and any tool it advertised that we refused is
+      carried on the `ServerToolList` rather than dropped to a log line;
+    * answered, payload unusable -- recorded as `kind="schema"`;
+    * could not be reached -- recorded as `kind="transport"`.
+
+    The old code logged *"skipping unreachable server"* for all three, so an
+    operator debugging a reachable server with a bad schema was sent to look at
+    the network.
+
+    A programming error is re-raised rather than recorded. `_OUR_BUG` types mean
+    a defect here, and absorbing one as a server-side failure is exactly the
+    laundering #17439 found: an undeclared name came back as "Redis
+    unavailable" and fed a circuit breaker. A bug in this loop affects every
+    server, so failing loudly is also the more useful behaviour.
+    """
+    outcome = MultiServerDiscovery()
+    for uri in server_uris:
+        sid = server_id_from_uri(uri)
+        try:
+            async with client_factory(uri) as client:
+                discovery = await client.discover_tools_detailed()
+                tools, rejected = discovery.accepted, list(discovery.rejected)
+            outcome.servers.append(ServerToolList(server_id=sid, server_uri=uri, tools=tools, rejected=rejected))
+            logger.info(
+                "mcp_aggregation: discovered server=%s tools=%d rejected=%d",
+                sid,
+                len(tools),
+                len(rejected),
+            )
+        except _OUR_BUG:
+            logger.exception("mcp_aggregation: internal error discovering server=%s — not a server fault", sid)
+            raise
+        except Exception as exc:  # noqa: BLE001
+            kind = "schema" if _is_schema_failure(exc) else "transport"
+            reason = redact_provider_error(exc)
+            outcome.failures.append(ServerDiscoveryFailure(server_id=sid, server_uri=uri, kind=kind, reason=reason))
+            logger.warning("mcp_aggregation: server=%s yielded no tools (%s): %s", sid, kind, reason)
+    return outcome
+
+
+def _is_schema_failure(exc: BaseException) -> bool:
+    """Whether *exc* means the server answered and its payload was wrong.
+
+    Matched on the exception's own class name rather than by importing pydantic
+    here: the validation error may arrive from any layer that parses the
+    payload, and this module has no reason to depend on the validator in use.
+    """
+    return "ValidationError" in type(exc).__name__
 
 
 async def discover_tools_multi_server(
     server_uris: Sequence[str],
     client_factory: ClientFactory,
 ) -> list[ServerToolList]:
-    """Discover tools from every server URI, skipping unreachable servers.
+    """The servers that answered — see the `_detailed` form for why the others did not.
 
-    Opens `client_factory(uri)` as an async context manager per server and
-    calls `discover_tools()` on it. A server that raises on connect or
-    discovery is logged and omitted — it never aborts the other servers.
+    Kept so existing callers are unchanged, and implemented over the same pass
+    rather than duplicating the loop: one truth, two views.
     """
-    results: list[ServerToolList] = []
-    for uri in server_uris:
-        sid = server_id_from_uri(uri)
-        try:
-            async with client_factory(uri) as client:
-                tools = await client.discover_tools()
-            results.append(ServerToolList(server_id=sid, server_uri=uri, tools=tools))
-            logger.info("mcp_aggregation: discovered server=%s tools=%d", sid, len(tools))
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("mcp_aggregation: skipping unreachable server %s: %s", uri, exc)
-    return results
+    return (await discover_tools_multi_server_detailed(server_uris, client_factory)).servers
 
 
 @dataclass(frozen=True)
