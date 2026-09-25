@@ -17,7 +17,13 @@ redis_client_password: "{{ redis_password }}"
 redis_maxmemory: "2gb"
 redis_maxmemory_policy: "allkeys-lru"
 redis_data_dir: "/var/lib/redis"
-redis_config_file: "/etc/redis/redis.conf"
+# #17434: THE canonical Redis config path. Every other site derives from this
+# one -- roles/redis renders it, the systemd drop-in passes it to the packaged
+# wrapper, and repo_tests/redis_config_path_is_canonical_17434_test.py fails on
+# any other spelling. It read /etc/redis/redis.conf until #17434: a plain-redis
+# path this role never rendered and no node ever had, inherited by
+# roles/redis-replication in nine tasks.
+redis_config_file: "/etc/redis-stack.conf"
 redis_install_stack: true
 redis_install_from_repo: true
 

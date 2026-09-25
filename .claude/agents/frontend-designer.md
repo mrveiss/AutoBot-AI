@@ -163,7 +163,7 @@ ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.ym
 ssh autobot@<frontend-host> "vim /home/autobot/app.py"
 
 # WRONG - Remote configuration change  
-ssh autobot@<database-host> "sudo vim /etc/redis/redis.conf"
+ssh autobot@<database-host> "sudo vim /etc/redis-stack.conf"
 
 # WRONG - Direct Docker changes on a remote host
 ssh autobot@<aiml-host> "docker-compose up -d"

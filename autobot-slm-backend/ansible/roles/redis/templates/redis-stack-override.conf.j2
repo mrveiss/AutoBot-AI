@@ -20,3 +20,36 @@ RestartSec=5s
 # Environment
 Environment="REDIS_PORT={{ redis_port }}"
 Environment="REDIS_BIND=0.0.0.0"
+
+# #17434: pass the rendered config. THIS is what makes every directive above and
+# every directive in {{ redis_config_file }} take effect.
+#
+# The packaged unit is `ExecStart=/opt/redis-stack/bin/redis-stack-server` with no
+# argument, and the wrapper then picks the file itself:
+#
+#     if [ -f "${1}" ]; then CONFFILE="${1}"; shift
+#     elif [ -f ${BASEDIR}/etc/redis-stack.conf ]; then CONFFILE=${BASEDIR}/etc/...
+#
+# so with no argument it silently used the package's own 23-byte default and the
+# role's 2933-byte render was dead weight -- `maxmemory 6gb` read back as `0`,
+# `appendonly yes` as `no`, and `requirepass` as empty. The wrapper `shift`s the
+# argument and still appends every `--loadmodule`, so passing it costs no Stack
+# module. An ExecStart= reset is required first: a drop-in appends otherwise.
+# The config activated below writes a pidfile to /var/run/redis/ and a log to
+# /var/log/redis/ (redis-stack.conf.j2:66,68) and NOTHING in roles/redis ever
+# created either -- neither exists on a provisioned node. While the config was
+# ignored that cost nothing; activating it without these would fail Redis at
+# startup on the logfile, which is the whole data store. systemd creates both
+# with this unit's User=/Group= on every start -- and /run must be recreated
+# every start regardless, being a tmpfs that is empty after a reboot.
+LogsDirectory=redis
+RuntimeDirectory=redis
+
+ExecStart=
+ExecStart=/opt/redis-stack/bin/redis-stack-server {{ redis_config_file }}
+
+# Fail loudly instead of falling back. Without this a missing or unreadable
+# config sends the wrapper down the same silent branch as before -- the data
+# store would come up with no requirepass and nothing would report it. A store
+# that will not start is a smaller problem than one that starts unauthenticated.
+ExecStartPre=/usr/bin/test -r {{ redis_config_file }}

@@ -117,7 +117,10 @@
           # Logging
           logfile /var/log/redis/redis-server.log
           loglevel notice
-        dest: /etc/redis/redis.conf
+        # #17434: was the plain-redis path, which the daemon never reads -- so
+        # this provisioning mode rendered a full config, requirepass included,
+        # into a file nothing opened and produced an unauthenticated store.
+        dest: "{{ redis_config_file | default('/etc/redis-stack.conf') }}"
         backup: true
 
     - name: Create Redis log directory

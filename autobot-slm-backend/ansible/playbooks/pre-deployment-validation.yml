@@ -103,8 +103,10 @@
         - path: "/etc/autobot/backend-env"
           mode: "0640"
       redis:
-        - path: "/etc/redis/redis.conf"
-          mode: "0644"
+        # #17434: was /etc/redis/redis.conf at 0644 -- an assertion that passed
+        # only while the real config was missing. The role renders 0640.
+        - path: "{{ redis_config_file | default('/etc/redis-stack.conf') }}"
+          mode: "0640"
       ai_stack:
         - path: "/etc/autobot/ai-stack-env"
           mode: "0640"

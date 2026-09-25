@@ -97,7 +97,7 @@ This runbook provides operational procedures for managing the Redis service with
 │  ┌─────────────────────────────────────────────────┐  │
 │  │  Redis Server Process                           │  │
 │  │  • Port: 6379                                   │  │
-│  │  • Config: /etc/redis/redis.conf               │  │
+│  │  • Config: /etc/redis-stack.conf               │  │
 │  │  • Data: /var/lib/redis/                       │  │
 │  │  • Logs: /var/log/redis/redis-server.log       │  │
 │  └─────────────────────────────────────────────────┘  │
@@ -578,13 +578,13 @@ Before performing manual operations:
 1. **Backup current configuration:**
    ```bash
    ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
-     "sudo cp /etc/redis/redis.conf /etc/redis/redis.conf.backup.$(date +%Y%m%d_%H%M%S)"
+     "sudo cp /etc/redis-stack.conf /etc/redis-stack.conf.backup.$(date +%Y%m%d_%H%M%S)"
    ```
 
 2. **Edit configuration:**
    ```bash
    ssh -i ~/.ssh/autobot_key autobot@<database-ip>
-   sudo vim /etc/redis/redis.conf
+   sudo vim /etc/redis-stack.conf
    ```
 
 3. **Validate configuration:**
@@ -1216,7 +1216,7 @@ scp -i ~/.ssh/autobot_key \
 
    # Config backup
    ssh autobot@<database-ip> \
-     "sudo cp /etc/redis/redis.conf /etc/redis/redis.conf.pre-upgrade"
+     "sudo cp /etc/redis-stack.conf /etc/redis-stack.conf.pre-upgrade"
    ```
 
 2. **Update Redis:**
@@ -1266,7 +1266,7 @@ ssh autobot@<database-ip> << 'EOF'
   sudo apt install redis-stack-server=<previous_version>
 
   # Restore config
-  sudo cp /etc/redis/redis.conf.pre-upgrade /etc/redis/redis.conf
+  sudo cp /etc/redis-stack.conf.pre-upgrade /etc/redis-stack.conf
 
   # Restore data (if needed)
   sudo cp /var/lib/redis/dump.rdb.pre-upgrade /var/lib/redis/dump.rdb
@@ -1685,7 +1685,7 @@ redis-cli -h <database-ip> --bigkeys
 
 ### Redis Configuration
 
-**Location:** `/etc/redis/redis.conf` (on Redis VM)
+**Location:** `/etc/redis-stack.conf` (on Redis VM)
 
 **Key Settings:**
 ```ini

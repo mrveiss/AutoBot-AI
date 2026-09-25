@@ -163,7 +163,7 @@
 - name: "Redis | Configure Redis Stack"
   template:
     src: redis-stack.conf.j2
-    dest: /etc/redis-stack.conf
+    dest: "{{ redis_config_file }}"
     owner: autobot
     group: autobot
     mode: '0640'
