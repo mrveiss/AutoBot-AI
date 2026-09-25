@@ -288,11 +288,14 @@ STORE_AUTHORITY: dict[str, Concept] = {
     ),
     "pre_auth_lockout": Concept(
         name="pre_auth_lockout",
-        system_of_record=Store.PROCESS,
+        system_of_record=Store.REDIS,
         projections=(),
-        write_sites=("autobot-backend/mcp_server/auth_throttle.py",),
-        rebuilt_by="Nothing rebuilds it. A restart clears every lockout and every failure "
-        "count, so an attacker's budget resets with the process.",
+        write_sites=(
+            "autobot-backend/mcp_server/auth_throttle.py",
+            "autobot-backend/mcp_server/auth_throttle_store.py",
+        ),
+        rebuilt_by="Nothing rebuilds it. Losing the Redis state drops back to per-process "
+        "counting, where a restart clears every lockout and every failure count.",
         note="NOT a deliberate exception -- a declared inadequacy (#17450). The lockout lives "
         "in an OrderedDict on a module-level singleton, so it is per worker and per "
         "process lifetime. Two consequences: a restart clears it mid-attack, and with "
@@ -302,9 +305,12 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "count for throughput would silently weaken an authentication control. "
         "#8170 already states this exact principle for LLM rate limits and was scoped to "
         "them. Declared here so the weakness is visible to the registry that exists to "
-        "surface it, rather than absent from it. Sharing the state is unresolved: it "
-        "needs a decision on what happens when the shared store is unavailable, which "
-        "is a threat-model question and not mine to settle.",
+        "surface it, rather than absent from it. Shared state landed with #17450: Redis when it "
+        "answers, this per-process path when it does not. Degrading was the owner's "
+        "decision -- the worst case equals what shipped before, so it adds no outage "
+        "mode and no new attack, where fail-closed would let anyone who can degrade "
+        "Redis cause a total auth outage. Every state change is logged, because an "
+        "unlogged fallback becomes permanent.",
     ),
 }
 

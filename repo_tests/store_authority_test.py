@@ -451,7 +451,7 @@ def test_process_memory_is_expressible_at_all():
     fail any check. This is the assertion that would notice.
     """
     assert Store.PROCESS.value == "process"
-    assert STORE_AUTHORITY["pre_auth_lockout"].system_of_record is Store.PROCESS
+    assert Store.PROCESS in set(Store), "the vocabulary must keep a name for process-local state"
 
 
 def test_the_lockout_declaration_names_what_a_restart_costs():
@@ -462,5 +462,6 @@ def test_the_lockout_declaration_names_what_a_restart_costs():
     sentences leave the note, the entry becomes a rubber stamp.
     """
     note = STORE_AUTHORITY["pre_auth_lockout"].note.lower()
-    assert "restart" in note, "the note must say a restart clears the lockout"
+    assert "restart" in note, "the note must say what a restart costs when degraded"
     assert "worker" in note, "the note must say worker count multiplies the threshold"
+    assert "degrad" in note, "the note must say the shared store degrades rather than failing"
