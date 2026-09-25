@@ -35,15 +35,36 @@ async def conversation_owner(chat_history_manager: Any, conversation_id: Optiona
     return await _durable_owner(chat_history_manager, conversation_id) or await _granted_owner(conversation_id)
 
 
-async def _durable_owner(chat_history_manager: Any, conversation_id: str) -> Optional[str]:
-    """The owner recorded in the chat session file, or None."""
-    if not chat_history_manager:
-        return None
+async def verified_conversation_owner(chat_history_manager: Any, conversation_id: str) -> Optional[str]:
+    """The owner a caller's claim on ``conversation_id`` is checked against (#17422), or None.
+
+    Unlike ``conversation_owner``, an owner record that cannot be read refuses
+    rather than falling through to the Redis grant: the chat ownership gate
+    grants a conversation whose file it cannot read to its next caller, so a
+    grant written then proves nothing about who owns it.
+    """
     try:
-        owner = await chat_history_manager.get_session_owner(conversation_id)
+        durable = await _read_durable_owner(chat_history_manager, conversation_id)
+    except Exception as exc:
+        logger.warning("Refusing a claim on conversation %s: its owner is unreadable: %s", conversation_id[:8], exc)
+        raise ConversationNotOwnedError(conversation_id) from exc
+    return durable or await _granted_owner(conversation_id)
+
+
+async def _durable_owner(chat_history_manager: Any, conversation_id: str) -> Optional[str]:
+    """The owner recorded in the chat session file, or None -- also when it cannot be read."""
+    try:
+        return await _read_durable_owner(chat_history_manager, conversation_id)
     except Exception as exc:
         logger.warning("Could not read the owner of conversation %s: %s", conversation_id[:8], exc)
         return None
+
+
+async def _read_durable_owner(chat_history_manager: Any, conversation_id: str) -> Optional[str]:
+    """The owner recorded in the chat session file, or None; a failed read raises."""
+    if not chat_history_manager:
+        return None
+    owner = await chat_history_manager.get_session_owner(conversation_id)
     return owner if isinstance(owner, str) and owner else None
 
 

@@ -28,6 +28,8 @@ from fastapi.testclient import TestClient
 import api.agent_terminal as terminal_api
 import api.agent_terminal_access as access
 from constants.error_constants import ERR_SESSION_NOT_FOUND
+from security.session_owner_errors import SessionOwnerUnreadable
+from security.session_ownership import SessionOwnershipValidator
 from services.agent_terminal.conversation_owner import ConversationNotOwnedError
 from services.agent_terminal.session_manager import SessionManager
 from services.command_approval_manager import AgentRole
@@ -38,13 +40,32 @@ ADMIN = {"username": "root", "role": "admin", "auth_method": "session", "org_id"
 
 #: conversation_id -> its recorded owner; None is a conversation nobody owns.
 CONVERSATIONS = {"conv-alice": "alice", "conv-unowned": None}
+#: A conversation whose session file exists but cannot be read or decrypted.
+UNREADABLE = "conv-unreadable"
 
 
 class _ChatHistory:
     """ChatHistoryManager's owner accessor over CONVERSATIONS."""
 
     async def get_session_owner(self, conversation_id):
+        if conversation_id == UNREADABLE:
+            raise SessionOwnerUnreadable(conversation_id)
         return CONVERSATIONS.get(conversation_id)
+
+
+async def _grant(monkeypatch, conversation_id, username):
+    """What the chat ownership gate writes when it hands a conversation to its caller (legacy_migration)."""
+    import fakeredis.aioredis
+
+    import autobot_shared.redis_client as redis_client_module
+
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    await SessionOwnershipValidator(redis).set_session_owner(conversation_id, username)
+
+    async def _client(async_client=False, database="main"):
+        return redis
+
+    monkeypatch.setattr(redis_client_module, "get_redis_client", _client)
 
 
 @pytest.fixture(autouse=True)
@@ -144,3 +165,34 @@ async def test_an_implicit_owner_is_the_conversations_own_so_it_cannot_name_some
 
     assert session.owner == "alice"
     manager._restore_pending_approval.assert_awaited_once_with(session, "conv-alice")
+
+
+# --- an unreadable owner record is not an unowned one (review on #17426) ----
+
+
+@pytest.mark.asyncio
+async def test_a_grant_on_a_conversation_whose_owner_is_unreadable_is_refused(monkeypatch):
+    """The chat gate grants a conversation it cannot read to its next caller; that grant proves nothing."""
+    await _grant(monkeypatch, UNREADABLE, "mallory")
+    manager = _manager()
+
+    with pytest.raises(ConversationNotOwnedError, match=UNREADABLE):
+        await manager.create_session(
+            agent_id="a", agent_role=AgentRole.CHAT_AGENT, conversation_id=UNREADABLE, owner="mallory"
+        )
+
+    assert manager.sessions == {}
+    manager._restore_pending_approval.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_grant_on_a_readable_unowned_conversation_still_binds(monkeypatch):
+    """A file that reads as genuinely unowned plus the gate's grant is the legitimate legacy path."""
+    await _grant(monkeypatch, "conv-unowned", "mallory")
+    manager = _manager()
+
+    session = await manager.create_session(
+        agent_id="a", agent_role=AgentRole.CHAT_AGENT, conversation_id="conv-unowned", owner="mallory"
+    )
+
+    assert session.owner == "mallory"
