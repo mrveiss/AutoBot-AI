@@ -28,8 +28,29 @@ starlette>=1.6.0              # explicit pin — avoids python_multipart __all__
 uvicorn[standard]>=0.53.0
 
 # Database - PostgreSQL (Issue #786)
-sqlalchemy>=2.0.54
+# Capped below 2.1 (#17445). A fresh venv from this file took SQLAlchemy 2.1.0
+# and 27 tests died inside its own cache-key machinery --
+# `TypeError: 'InternalTraversal' object is not callable`, raised in
+# `sqlalchemy/sql/_cache_key_cy.py` with no project frame in the failing call.
+# 2.0.54 is known good: `requirements-ci/storage.txt` already pins it and that
+# venv is healthy on the same commit.
+#
+# This is a DEFERRAL, not a fix. The cap restores the version CI already pins
+# rather than choosing a new state, and it converts an uncontrolled minor bump
+# into a recorded one. Migrating to 2.1.x is its own work and is NOT a
+# base-unblocking change; the tracking issue is on the cap for whoever lifts it.
+# Do not raise this bound without running the SLM suite against 2.1.x first.
+sqlalchemy>=2.0.54,<2.1
 asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
+# greenlet is declared explicitly, not left to SQLAlchemy (#17432). SQLAlchemy
+# ships it as an `[asyncio]` extra AND, in some releases, under a
+# `platform_machine == "x86_64" or ...` marker -- so whether it arrives depends
+# on the release the floor resolves to and on the machine resolving it. It
+# stopped arriving on 2026-09-24 and every `docker-smoke-test` run failed on
+# `main` with `ModuleNotFoundError: No module named 'greenlet'` before the
+# container could start. The async engine is a direct requirement of this
+# service, so it is declared directly rather than inherited conditionally.
+greenlet>=3.1.0  # SQLAlchemy async engine dependency -- see the note above
 psycopg2-binary>=2.9.13  # Sync PostgreSQL driver for migrations
 
 # Data validation
