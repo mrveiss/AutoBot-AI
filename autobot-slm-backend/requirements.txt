@@ -28,7 +28,19 @@ starlette>=1.6.0              # explicit pin — avoids python_multipart __all__
 uvicorn[standard]>=0.53.0
 
 # Database - PostgreSQL (Issue #786)
-sqlalchemy>=2.0.54
+# Capped below 2.1 (#17445). A fresh venv from this file took SQLAlchemy 2.1.0
+# and 27 tests died inside its own cache-key machinery --
+# `TypeError: 'InternalTraversal' object is not callable`, raised in
+# `sqlalchemy/sql/_cache_key_cy.py` with no project frame in the failing call.
+# 2.0.54 is known good: `requirements-ci/storage.txt` already pins it and that
+# venv is healthy on the same commit.
+#
+# This is a DEFERRAL, not a fix. The cap restores the version CI already pins
+# rather than choosing a new state, and it converts an uncontrolled minor bump
+# into a recorded one. Migrating to 2.1.x is its own work and is NOT a
+# base-unblocking change; the tracking issue is on the cap for whoever lifts it.
+# Do not raise this bound without running the SLM suite against 2.1.x first.
+sqlalchemy>=2.0.54,<2.1
 asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
 # greenlet is declared explicitly, not left to SQLAlchemy (#17432). SQLAlchemy
 # ships it as an `[asyncio]` extra AND, in some releases, under a
