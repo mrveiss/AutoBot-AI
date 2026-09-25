@@ -20,6 +20,7 @@ import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from autobot_shared.llm_provider_order import ORDER_ENV_VAR, provider_is_permitted
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
@@ -192,6 +193,39 @@ class FallbackChainManager:
         """Get fallback chain for a model."""
         return self._chains.get(model.lower())
 
+    def _first_permitted(self, chain: FallbackChain, current: str) -> Optional[tuple[str, Optional[str]]]:
+        """Advance through *chain* from *current* to the first permitted hop.
+
+        A cross-provider hop is part of the generation path, so a provider the
+        configured order holds out of the fallback chain must not be reachable
+        through one either (#15500) -- otherwise the order shuts the front door
+        and a model hop lets the provider back in, which is exactly what
+        #15494's ``full_provider`` mode forbids. A hop naming no provider
+        inherits the request's own and is left alone.
+
+        ``seen`` is a cycle guard, not bookkeeping: chains are keyed by model
+        and looked up by position, so a chain listing a model twice would hand
+        back the same successor forever.
+        """
+        seen: set[str] = set()
+        model = current
+        while True:
+            hop = chain.get_next_fallback(model)
+            if hop is None:
+                return None
+            model, provider = hop
+            if model in seen:
+                return None
+            seen.add(model)
+            if provider is None or provider_is_permitted(provider):
+                return model, provider
+            logger.debug(
+                "Fallback hop %s via %s skipped: %s holds that provider out of the chain",
+                model,
+                provider,
+                ORDER_ENV_VAR,
+            )
+
     def get_next_fallback(
         self, current_model: str, current_provider: Optional[str] = None
     ) -> Optional[tuple[str, Optional[str]]]:
@@ -208,14 +242,14 @@ class FallbackChainManager:
         # Try exact match first
         chain = self.get_chain(current_model)
         if chain:
-            return chain.get_next_fallback(current_model)
+            return self._first_permitted(chain, current_model)
 
         # Try provider:model format
         if current_provider:
             qualified_name = f"{current_provider}:{current_model}"
             chain = self.get_chain(qualified_name)
             if chain:
-                return chain.get_next_fallback(qualified_name)
+                return self._first_permitted(chain, qualified_name)
 
         # Mid-chain hop (#11687): chains are keyed by PRIMARY model only, so a
         # fallback model that itself rate-limits resolves no chain and
@@ -226,7 +260,7 @@ class FallbackChainManager:
         for chain in self._chains.values():
             for fb_model in chain.fallback_models:
                 if fb_model.lower() == needle:
-                    return chain.get_next_fallback(fb_model)
+                    return self._first_permitted(chain, fb_model)
 
         return None
 

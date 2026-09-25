@@ -274,7 +274,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/llm_shared/optimization/layer_inference.py": 939,
     "autobot-backend/llm_shared/optimization/layer_inference_test.py": 715,
     "autobot-backend/llm_shared/provider_auth.py": 664,
-    "autobot-backend/llm_shared/provider_registry.py": 788,
     "autobot-backend/llm_shared/tests/test_provider_auth.py": 1187,
     "autobot-backend/markdown_reference_system.py": 708,
     "autobot-backend/mcp_server/autobot_server.py": 948,
