@@ -36,14 +36,14 @@ Environment="REDIS_BIND=0.0.0.0"
 # argument and still appends every `--loadmodule`, so passing it costs no Stack
 # module. An ExecStart= reset is required first: a drop-in appends otherwise.
 # The config activated below writes a pidfile to /var/run/redis/ and a log to
-# /var/log/redis/ (redis-stack.conf.j2:66,68) and NOTHING in roles/redis ever
+# /var/log/redis-stack/ (redis-stack.conf.j2:66,68) and NOTHING in roles/redis ever
 # created either -- neither exists on a provisioned node. While the config was
 # ignored that cost nothing; activating it without these would fail Redis at
 # startup on the logfile, which is the whole data store. systemd creates both
 # with this unit's User=/Group= on every start -- and /run must be recreated
 # every start regardless, being a tmpfs that is empty after a reboot.
-LogsDirectory=redis
-RuntimeDirectory=redis
+LogsDirectory=redis-stack
+RuntimeDirectory=redis-stack
 
 ExecStart=
 ExecStart=/opt/redis-stack/bin/redis-stack-server {{ redis_config_file }}

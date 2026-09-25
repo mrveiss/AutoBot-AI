@@ -271,8 +271,9 @@ def test_the_drop_in_passes_the_config_to_the_daemon() -> None:
 def test_the_drop_in_creates_the_directories_the_config_writes_to() -> None:
     """Activating the config is not enough if it cannot start.
 
-    `redis-stack.conf.j2` hardcodes `pidfile /var/run/redis/...` and
-    `logfile /var/log/redis/...`, and no task in `roles/redis` creates either --
+    `redis-stack.conf.j2` hardcodes `pidfile /var/run/redis-stack/...` and
+    `logfile /var/log/redis-stack/...` (the directory database.yml's nightly
+    cleanup actually sweeps), and no task in `roles/redis` creates either --
     on a provisioned node neither exists. That was free while the config was
     ignored and fatal the moment it was not: Redis exits at startup when it
     cannot open its logfile. `/run` is a tmpfs, so a one-time `file:` task would
@@ -282,7 +283,10 @@ def test_the_drop_in_creates_the_directories_the_config_writes_to() -> None:
         encoding="utf-8"
     )
 
-    for directive, path in (("LogsDirectory=redis", "/var/log/redis"), ("RuntimeDirectory=redis", "/var/run/redis")):
+    for directive, path in (
+        ("LogsDirectory=redis-stack", "/var/log/redis-stack"),
+        ("RuntimeDirectory=redis-stack", "/var/run/redis-stack"),
+    ):
         assert directive in template, (
             f"the drop-in does not declare {directive}, so {path} -- which the rendered config "
             f"writes to -- would not exist when Redis starts (#17434)"
