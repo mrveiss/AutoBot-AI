@@ -639,6 +639,21 @@ jobs:
         # itself a finding, so no exemption outlives its reason.
         python3 tools/lint/check_docs_no_fleet_addressing.py --audit
 
+    - name: Audit fleet addressing in the file kinds nothing else scans (#17440)
+      run: |
+        # #15208 closed docs/**.md. This closes its complement, and the complement
+        # was most of it: of every fleet-range literal in tracked files, 54 sit in an
+        # extension the hardcoded-value hook scans, 6 in the Markdown #15208 guards,
+        # and 549 in neither -- roughly nine in ten unguarded, in a PUBLIC repository.
+        # READMEs outside docs/ held 311 of them and committed .json another 148,
+        # including captured connectivity results, which are reachability maps rather
+        # than prose. Both the pattern and the extension list are parsed from the one
+        # shared rule set, so this guard's population is DEFINED as what the others do
+        # not reach: widen HV_SCAN_EXTENSIONS and files leave this baseline instead of
+        # being guarded twice. The baseline is path -> count and stores no address,
+        # because this guard is as public as the files it guards.
+        python3 tools/lint/check_fleet_addressing_uncovered.py --audit
+
     - name: Audit MCP tool permission coverage (#14494)
       run: |
         # The under-grant guard used to infer "this tool mutates state" from a
