@@ -578,3 +578,18 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MAX_CONTINUATION_ITERATIONS",
+        type=int,
+        default=5,
+        description=(
+            "Maximum multi-step continuation iterations for one chat turn. Read by "
+            "chat_workflow/limits.py, which both ChatWorkflowManager and graph.py's routing "
+            "decision source -- graph.py previously hardcoded this bound and ignored the named "
+            "constant, so raising it had no effect on the LangGraph path (#352, #17468)."
+        ),
+        component="backend",
+    )
+)
