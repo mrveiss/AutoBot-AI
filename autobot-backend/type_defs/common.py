@@ -213,5 +213,13 @@ BROADCAST_EVENT_TYPES: frozenset = frozenset(
         "worker_task_start",  # worker_node.py:389 -- worker telemetry, no tenant fields
         "worker_task_end",  # worker_node.py:405 -- worker telemetry, no tenant fields
         "log_message",  # diagnostics.py:157,192,252 -- the operator log stream
+        # api/agent.py:754,797 -- AgentOrchestrator is a process-wide singleton,
+        # so its run state is genuinely everyone's, and both payloads are a fixed
+        # sentence with no identifier. Found only after a first pass concluded
+        # they did not exist: they publish through a private two-argument
+        # `_publish_event_safe(event_name, data)` that hardcodes the channel, so
+        # neither `publish_event(` nor a channel argument appears on their lines.
+        "agent_paused",
+        "agent_resumed",
     }
 )

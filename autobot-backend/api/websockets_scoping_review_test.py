@@ -245,5 +245,48 @@ class TestTheBroadcastAllowlist:
                 "worker_task_start",
                 "worker_task_end",
                 "log_message",
+                "agent_paused",
+                "agent_resumed",
             }
         )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("event_type", ["agent_paused", "agent_resumed"])
+    async def test_singleton_agent_state_still_reaches_everyone(self, event_type):
+        """These would have died silently under fail-closed.
+
+        `api/agent.py:754,797` publish them through a private
+        `_publish_event_safe(event_name, data)` that hardcodes the channel, so
+        they carry no identifier and resolve to no owner. A first pass concluded
+        the types did not exist -- the call sites contain neither
+        `publish_event(` nor a channel argument, so a search for either misses
+        them, and the census had already bucketed that publisher as
+        "not statically determinable" rather than as safe.
+
+        AgentOrchestrator is a process-wide singleton, so its run state is
+        genuinely everyone's and the payload is a fixed sentence. This is the
+        case the allowlist exists to serve, not an exception to it.
+        """
+        event = {"type": event_type, "payload": {"message": "Agent operation paused."}}
+        assert await _event_is_for_user(event, "alice", {}) is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "event_type,payload",
+        [
+            ("user_message", {"message": "my private goal"}),
+            ("goal_completed", {"goal": "g", "result": "private result"}),
+            ("command_execution_end", {"command": "ls", "status": "success", "output": "secret"}),
+        ],
+    )
+    async def test_its_tenant_carrying_siblings_are_not_declared(self, event_type, payload):
+        """The same helper publishes these, and they are NOT broadcasts.
+
+        Declaring the whole publisher would have been the easy move and would
+        have put a user's goal text, an agent's result and a command's output on
+        every connected client. They are withheld -- which is correct for the
+        disclosure and, because they carry no identifier either, currently also
+        withholds them from their own operator. That half is tracked on #17430,
+        which is the same shape.
+        """
+        assert await _event_is_for_user({"type": event_type, "payload": payload}, "alice", {}) is False
