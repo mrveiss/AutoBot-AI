@@ -61,23 +61,69 @@ def test_a_missing_rule_source_raises() -> None:
 @pytest.mark.parametrize(
     ("rel", "covered"),
     [
+        # scanned extension, inside HV_SCAN_DIRS, not excluded -> the hv hook has it
         ("autobot-backend/api/x.py", True),
-        ("deploy/site.yml", True),
-        ("src/app.ts", True),
-        ("docs/developer/GUIDE.md", True),
+        ("autobot-slm-backend/deploy/site.yml", True),
+        ("autobot-frontend/src/app.ts", True),
+        ("docs/developer/GUIDE.md", True),  # #15208
+        # scanned extension but EXCLUDED by _HV_EXCLUDE_RE -> nobody scans it
+        ("autobot-backend/tests/test_prompt_manager.py", False),
+        ("autobot-backend/api/thing_test.py", False),
+        ("repo_tests/anything.py", False),
+        # scanned extension but OUTSIDE HV_SCAN_DIRS -> nobody scans it
+        ("pipeline-scripts/check_x.py", False),
+        ("tools/lint/helper.py", False),
+        ("check-grafana-health.sh", False),
+        # unscanned extension anywhere
         ("autobot-slm-backend/ansible/README-PLAYBOOKS.md", False),
-        ("config/grafana/dashboards/board.json", False),
+        ("autobot-infrastructure/shared/config/board.json", False),
         ("etc/autobot.service", False),
-        ("scripts/autobot-ctl", False),
     ],
 )
-def test_coverage_is_the_complement_of_the_other_guards(rel: str, covered: bool) -> None:
-    """The population is defined by what else already scans the file.
+def test_coverage_mirrors_the_shared_detector_not_just_its_extension_list(rel: str, covered: bool) -> None:
+    """The population is what the OTHER guards do not reach -- all three clauses.
 
-    `.md` is asymmetric on purpose: #15208 guards it under `docs/` and nowhere
-    else, and the 311 occurrences in READMEs outside `docs/` are why this exists.
+    The first draft checked the extension alone, so a `*_test.py` or anything
+    under `pipeline-scripts/` counted as covered while the shared detector
+    excluded it. That left a gap where neither audit looked: 4 files, 20
+    occurrences (#17447 review). `hv_file_in_scope()` requires the extension AND
+    a path `_HV_EXCLUDE_RE` does not match; the tree scan adds `HV_SCAN_DIRS`.
     """
-    assert hook.is_covered(rel, hook.scanned_extensions()) is covered
+    assert hook.is_covered(rel, hook.scanned_extensions(), hook.scanned_dirs(), hook.exclude_pattern()) is covered
+
+
+def test_the_exclude_pattern_has_no_empty_alternative() -> None:
+    """The bug this caught, pinned so it cannot come back.
+
+    `_HV_EXCLUDE_RE` is built from one `=` and eight `+=` fragments, each of
+    which already carries its own leading `|`. Joining them with `"|"` produced
+    `(a)||(b)`, whose EMPTY alternative matches at any position -- so every path
+    looked excluded, every file looked uncovered, and the population inflated
+    from 1085 to 9933. Nothing failed; only the number showed it.
+    """
+    pattern = hook.exclude_pattern()
+    assert "||" not in pattern.pattern
+    assert not pattern.search(
+        "autobot-backend/api/ordinary_module.py"
+    ), "the exclude pattern matches a plain source file -- it has an empty alternative"
+    assert pattern.search("repo_tests/x.py"), "the exclude pattern no longer reaches its subjects"
+
+
+def test_exempt_and_baseline_are_disjoint_and_both_live() -> None:
+    """An exemption is not a debt, and a debt is not an exemption.
+
+    `EXEMPT` holds files that MUST carry the pattern -- the definition itself and
+    the fixtures of the guards that match it. Recording those as baseline debt
+    would make the shrink-only number permanently unreachable, which is the same
+    as having no target at all.
+    """
+    overlap = sorted(set(hook.EXEMPT) & set(hook.BASELINE))
+    assert not overlap, f"these are both exempt and baselined: {overlap}"
+    assert all(reason.strip() for reason in hook.EXEMPT.values()), "every exemption states its reason"
+
+    counts, _ = hook.uncovered_counts()
+    stranded = sorted(rel for rel in hook.EXEMPT if rel not in counts)
+    assert not stranded, f"exempt but no longer carrying the pattern -- stale claims: {stranded}"
 
 
 def test_the_baseline_stores_no_address(literal: str) -> None:

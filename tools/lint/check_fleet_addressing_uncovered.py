@@ -39,8 +39,23 @@ every address it exists to contain -- the same mistake one directory across.
 WHY A BASELINE RATHER THAN A CLEAN SWEEP. 549 occurrences across 107 files is
 not one commit's work, and four of those files are captured runtime output whose
 removal is a data decision an agent does not get to make on its own (#17038).
-The ratchet makes the number monotone: nothing new lands, and every removal is
-locked in. It is not a licence for the existing 549 -- the shortlist and its
+The ratchet makes the COUNT monotone, and the contract is exactly that -- no
+more, because review (#17447) was right that the docstring claimed more.
+
+WHAT THE RATCHET DOES AND DOES NOT CATCH. `audit()` compares per-path counts
+against `BASELINE`. So it catches a new file, a grown count, and an improvement
+left unrecorded. It does **not** catch a baselined file swapping one fleet-range
+address for a different one at the same count: the replacement still matches the
+pattern, the count is unchanged, and nothing here can see the difference.
+
+That gap is accepted rather than overlooked. Closing it needs a base-revision
+comparison, and the alternative -- storing which address is at which path -- is
+the one thing this file must never do, since it is as public as the files it
+guards. The narrower point stands: the replacement must itself be a fleet-range
+address in a file that already had one, so the ratchet still bounds the blast
+radius to paths already on the list.
+
+It is not a licence for the existing occurrences either -- the shortlist and its
 tiers are on #17440 for the owner to rule on.
 
 Mutation check, all four verified before this landed: a fleet-range literal in
@@ -72,14 +87,19 @@ SELF_REL = "tools/lint/check_fleet_addressing_uncovered.py"
 #: Below this, the sweep has stopped reaching the tree and a clean result means
 #: nothing.
 #:
-#: Measured against the UNCOVERED population, which is the only one this guard
-#: sees: **1085** files. The first value here was 6000, taken from the 10,815
-#: tracked files in the whole tree -- a number measuring a different question,
-#: and the floor refused it on the first run. 700 leaves ordinary churn alone
-#: and still fires on a collapse.
-DISCOVERY_FLOOR = 700
+#: Measured against THIS guard's own population, twice now, because both earlier
+#: values were taken from a different number:
+#:   6000 -- from the 10,815 tracked files in the tree      (population was 1085)
+#:    700 -- correct for 1085, stale the moment review widened the population
+#: Review (#17447) corrected `is_covered` to mirror the shared detector's real
+#: scope, so test files and anything outside HV_SCAN_DIRS are no longer treated
+#: as covered, and the population is now **4715**. 3200 leaves churn alone and
+#: still fires on a collapse.
+DISCOVERY_FLOOR = 3200
 
 _HV_EXTENSIONS = re.compile(r"^HV_SCAN_EXTENSIONS='(?P<exts>[^']+)'", re.MULTILINE)
+_HV_DIRS = re.compile(r"^HV_SCAN_DIRS=\((?P<dirs>.*?)\)", re.MULTILINE | re.DOTALL)
+_HV_EXCLUDE = re.compile(r"^_HV_EXCLUDE_RE\+?='([^']+)'", re.MULTILINE)
 
 
 class RuleSourceError(RuntimeError):
@@ -107,6 +127,45 @@ def scanned_extensions(base: pathlib.Path | None = None) -> frozenset[str]:
     return exts
 
 
+def scanned_dirs(base: pathlib.Path | None = None) -> tuple[str, ...]:
+    """`HV_SCAN_DIRS`, parsed from the one source. Raises rather than defaulting."""
+    root = base or repo_root()
+    try:
+        text = (root / RULES_REL).read_text(encoding="utf-8")
+    except OSError as exc:  # pragma: no cover - environment failure
+        raise RuleSourceError(f"cannot read {RULES_REL}: {exc}") from exc
+    match = _HV_DIRS.search(text)
+    if not match:
+        raise RuleSourceError(f"{RULES_REL} no longer assigns HV_SCAN_DIRS")
+    dirs = tuple(d.strip().strip('"') for d in match.group("dirs").split() if d.strip().strip('"'))
+    if not dirs:
+        raise RuleSourceError(f"{RULES_REL} assigns an empty HV_SCAN_DIRS")
+    return dirs
+
+
+def exclude_pattern(base: pathlib.Path | None = None) -> re.Pattern[str]:
+    """`_HV_EXCLUDE_RE`, rebuilt from its `=` and `+=` assignments in order.
+
+    Parsed rather than restated for the same reason as everything else here: a
+    second copy of "which files the shared detector skips" would drift, and the
+    drift would be invisible -- it only shows up as a file neither audit reads.
+    """
+    root = base or repo_root()
+    text = (root / RULES_REL).read_text(encoding="utf-8")
+    parts = _HV_EXCLUDE.findall(text)
+    if not parts:
+        raise RuleSourceError(f"{RULES_REL} no longer assigns _HV_EXCLUDE_RE")
+    # Concatenated, NOT joined with "|": every `+=` fragment after the first
+    # already carries its own leading `|`. Joining added a second pipe, and
+    # `(a)||(b)` has an EMPTY alternative that matches at any position -- so the
+    # pattern matched every path, every file looked excluded, and the population
+    # inflated from 1085 to 9933. The number was the only thing that showed it.
+    joined = "".join(parts)
+    if "||" in joined:
+        raise RuleSourceError(f"{RULES_REL} produced an empty alternative in _HV_EXCLUDE_RE")
+    return re.compile(joined)
+
+
 def tracked_files(base: pathlib.Path | None = None) -> list[str]:
     """Every tracked path, through the ONE canonical enumeration.
 
@@ -125,28 +184,42 @@ def tracked_files(base: pathlib.Path | None = None) -> list[str]:
         return []
 
 
-def is_covered(rel: str, exts: frozenset[str]) -> bool:
+def is_covered(rel: str, exts: frozenset[str], dirs: tuple[str, ...], exclude: re.Pattern[str]) -> bool:
     """True when some OTHER guard already scans this file.
 
-    The complement is this module's whole population, so widening
-    `HV_SCAN_EXTENSIONS` or #15208's reach shrinks this one rather than
-    double-guarding a file.
+    Mirrors the shared detector's real scope rather than its extension list
+    alone. `hv_file_in_scope()` requires the extension AND a path the
+    `_HV_EXCLUDE_RE` does not match, and the tree scan additionally restricts to
+    `HV_SCAN_DIRS` -- so a `.py` under `pipeline-scripts/`, or any `*_test.py`,
+    has a scanned extension and is **not** scanned. Treating those as covered
+    left a gap where neither audit looked; review found it and it was real:
+    4 files, 20 occurrences, two of them genuine (#17447 review).
+
+    The asymmetry is deliberate. Getting this wrong in the "covered" direction
+    creates a hole; getting it wrong the other way merely guards a file twice.
+    So every clause here narrows what counts as covered.
     """
+    if rel.startswith("docs/") and rel.endswith(".md"):
+        return True  # #15208
     name = rel.rsplit("/", 1)[-1]
-    if "." in name and name.rsplit(".", 1)[-1] in exts:
-        return True
-    return rel.startswith("docs/") and rel.endswith(".md")
+    if "." not in name or name.rsplit(".", 1)[-1] not in exts:
+        return False
+    if not rel.startswith(tuple(d + "/" for d in dirs)):
+        return False
+    return not exclude.search(rel)
 
 
 def uncovered_counts(base: pathlib.Path | None = None) -> tuple[dict[str, int], int]:
     """(path -> fleet-range occurrences, files reached)."""
     root = base or repo_root()
     exts = scanned_extensions(root)
+    dirs = scanned_dirs(root)
+    exclude = exclude_pattern(root)
     pattern = fleet_address_pattern(root)
     counts: dict[str, int] = {}
     reached = 0
     for rel in tracked_files(root):
-        if is_covered(rel, exts) or rel == SELF_REL:
+        if is_covered(rel, exts, dirs, exclude) or rel == SELF_REL:
             continue
         try:
             text = (root / rel).read_text(encoding="utf-8")
@@ -157,6 +230,37 @@ def uncovered_counts(base: pathlib.Path | None = None) -> tuple[dict[str, int], 
         if found:
             counts[rel] = found
     return counts, reached
+
+
+#: Files that MUST contain the fleet range, with the reason each one does.
+#:
+#: Distinct from BASELINE on purpose. A baseline entry is a debt that should
+#: reach zero; these never can, and recording them as debt would make the
+#: shrink-only number permanently unreachable and therefore meaningless. Every
+#: entry here is either the pattern's own definition or a fixture belonging to
+#: a guard that exists to match it -- the same rationale
+#: `check_no_hardcoded_ip_fallbacks.py` states in its own ALLOWLIST.
+EXEMPT: dict[str, str] = {
+    "scripts/lib/hardcoded-value-rules.sh": "defines HV_VM_IP -- this is the pattern every guard parses",
+    "tools/lint/check_no_hardcoded_ip_fallbacks.py": (
+        "#6783's detector holds the regex as a string; on its own ALLOWLIST"
+    ),
+    "tools/lint/check_no_hardcoded_ip_fallbacks_test.py": (
+        "#6783's fixtures use the pattern by design; on its own ALLOWLIST"
+    ),
+    "autobot-frontend/eslint-tests/no-hardcoded-vm-ip-allow.test.ts": (
+        "fixture for the eslint rule that matches this pattern"
+    ),
+    "autobot-frontend/eslint-tests/no-hardcoded-vm-ip-deny.test.ts": (
+        "fixture for the eslint rule that matches this pattern"
+    ),
+    "autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values_test.py": (
+        "fixture for the hook that matches this pattern"
+    ),
+    "pipeline-scripts/check_baseline_no_growth_test.py": (
+        "fixture asserting the hardcoded-values baseline does not grow"
+    ),
+}
 
 
 #: path -> occurrences permitted today. **This may only SHRINK.**
@@ -170,6 +274,7 @@ BASELINE: dict[str, int] = {
     "autobot-backend/resources/prompts/chat/installation_help.md": 1,
     "autobot-backend/resources/prompts/chat/troubleshooting.md": 3,
     "autobot-backend/skills/builtin/bugfix/SKILL.md": 3,
+    "autobot-backend/tests/test_prompt_manager.py": 1,
     "autobot-browser-worker/README.md": 1,
     "autobot-frontend/README.md": 1,
     "autobot-frontend/src/components/examples/AsyncOperationExample.delivery.md": 1,
@@ -263,9 +368,11 @@ BASELINE: dict[str, int] = {
     "autobot-slm-backend/database/schemas/infrastructure_management_schema.sql": 1,
     "autobot-slm-backend/docs/API_ENDPOINTS.md": 3,
     "autobot-slm-backend/scripts/README-remove-orphaned-node.md": 11,
+    "autobot-slm-backend/services/inventory_placeholder_test.py": 1,
     "autobot-slm-frontend/README.md": 4,
     "autobot-tts-worker/README.md": 2,
     "changelog/v0.4.0.md": 9,
+    "check-grafana-health.sh": 2,
     "context7.json": 2,
     "pipeline-scripts/hardcoded_values_baseline.txt": 5,
     "scripts/autobot-ctl": 1,
@@ -283,13 +390,24 @@ def audit(base: pathlib.Path | None = None) -> tuple[list[str], int]:
             "the sweep has stopped seeing the tree, so a clean result asserts nothing"
         )
 
-    for rel in sorted(set(counts) - set(BASELINE)):
+    for rel in sorted(set(EXEMPT) - set(counts)):
+        problems.append(
+            f"{rel}: EXEMPT but no longer carries the fleet range -- delete the entry, "
+            "a stranded exemption is a stale claim (the doctrine #15208 states)."
+        )
+
+    for rel in sorted(set(counts) - set(BASELINE) - set(EXEMPT)):
         problems.append(
             f"{rel}: carries the fleet range and is not in BASELINE "
             f"({counts[rel]} occurrence(s)). No guard scanned this file kind before #17440; "
             "use a role placeholder or an RFC5737 documentation address instead."
         )
 
+    # Count-only by contract: a same-count swap of one fleet address for another
+    # inside an already-baselined file is invisible here. See the module
+    # docstring -- closing it needs a base-revision diff, and the cheap
+    # alternative (recording WHICH address sits at which path) is the one thing
+    # this file must never do.
     for rel in sorted(set(counts) & set(BASELINE)):
         if counts[rel] > BASELINE[rel]:
             problems.append(

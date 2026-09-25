@@ -15,6 +15,12 @@ on:
     paths:
       - '**/*.py'
       - '**/*.sh'
+      # #17440: keep in step with .github/filters/code-quality-paths.yml --
+      # this literal list is the workflow's own trigger and the filter gates
+      # the job; both must admit Markdown and JSON or the fleet-addressing
+      # audit never sees the file kinds it exists to read.
+      - '**/*.md'
+      - '**/*.json'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
       - 'repo_tests/**'
