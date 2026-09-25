@@ -201,17 +201,22 @@ def _scan_source(source: str, label: str) -> tuple[list[str], int, int]:
         if not isinstance(payload, ast.Dict):
             opaque += 1
             continue
-        # A `**spread` entry gives `ast.Dict.keys` a None, and dropping it
-        # silently makes `{"type": "x", **ctx}` count as INSPECTED while half of
-        # it is a variable this guard cannot read. A payload is only inspectable
-        # when every key is a literal; anything else is opaque, which is the
-        # premise the count rests on.
-        if any(k is None for k in payload.keys):
-            opaque += 1
-            continue
+        # The literal keys are read FIRST and unconditionally. A dict can be both
+        # partly opaque and carrying a visible tenant key, and those are separate
+        # facts: `{"session_id": s, **ctx}` must be REPORTED for the literal and
+        # COUNTED for the spread. An earlier version returned after counting,
+        # which hid the literal -- trading one blind spot for a smaller one.
         keys = {k.value for k in payload.keys if isinstance(k, ast.Constant)}
         if keys & _TENANT_KEYS:
             offenders.append(f"{where} {sorted(keys & _TENANT_KEYS)}")
+        # A `**spread` gives `ast.Dict.keys` a None. Dropping it silently makes
+        # `{"type": "x", **ctx}` count as INSPECTED while half of it is a variable
+        # this guard cannot read. A payload is inspectable only when every key is
+        # a literal; anything else is opaque, which is the premise the count rests
+        # on. A computed key (`{key: v}`) is not a Constant either and lands here
+        # for the same reason.
+        if any(not isinstance(k, ast.Constant) for k in payload.keys):
+            opaque += 1
     return offenders, opaque, seen
 
 
@@ -318,6 +323,10 @@ _DATA_KEYWORD = 'publish_event_safe("global", "x", data={"session_id": "s1"})\n'
 _SPREAD_PAYLOAD = 'publish_event("global", "x", payload={"type": "a", **ctx})\n'
 #: The same shape hiding a tenant key inside the spread -- unreadable from here.
 _SPREAD_HIDING_TENANT = 'publish_event("global", "x", payload={"type": "a", **session})\n'
+#: Both facts at once: a literal tenant key AND a spread the guard cannot read.
+_SPREAD_WITH_LITERAL_TENANT = 'publish_event("global", "x", payload={"session_id": "s1", **ctx})\n'
+#: A computed key is not a Constant either, and is opaque for the same reason.
+_COMPUTED_KEY = 'publish_event("global", "x", payload={key: "v"})\n'
 _SCOPED_CHANNEL = 'publish_event(f"chat:{cid}", "x", payload={"task_id": "t1"})\n'
 
 
@@ -390,6 +399,30 @@ def test_a_spread_is_opaque_even_beside_a_clean_literal_key() -> None:
 
     assert opaque == 1, "a payload that is partly a variable is not an inspected payload"
     assert offenders == [], "and it is counted, not reported as a known-bad key"
+
+
+def test_a_spread_beside_a_literal_tenant_key_is_both_reported_and_counted() -> None:
+    """Opaque and offending are separate facts; a payload can be both.
+
+    An earlier version of this guard counted the spread and then `continue`d,
+    which skipped the tenant-key check -- so `{"session_id": s, **ctx}` was
+    counted as opaque and the VISIBLE `session_id` went unreported. That traded
+    one blind spot for a smaller one. The literal keys are now read first and
+    unconditionally.
+    """
+    offenders, opaque, seen = _scan_source(_SPREAD_WITH_LITERAL_TENANT, "fixture.py")
+
+    assert opaque == 1, "the spread is still not inspectable"
+    assert (
+        offenders and "session_id" in offenders[0]
+    ), f"the literal tenant key must be reported even though the dict is also opaque, got {offenders}"
+
+
+def test_a_computed_key_is_opaque() -> None:
+    """`{key: v}` has an `ast.Name` key, not a Constant -- unreadable from here."""
+    _, opaque, seen = _scan_source(_COMPUTED_KEY, "fixture.py")
+
+    assert (seen, opaque) == (1, 1)
 
 
 def test_a_fully_literal_payload_is_still_inspected() -> None:
