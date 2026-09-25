@@ -476,3 +476,32 @@ def test_widening_the_lua_arm_did_not_narrow_it() -> None:
     source = "SCRIPT = \"\"\"redis.call('SET', KEYS[1], ARGV[1], 'NX', 'PX', ARGV[2])\"\"\"\n"
 
     assert _sites_in_source(source, "planted.py"), "the plain SET spelling stopped matching"
+
+
+def test_a_checkout_under_a_tests_directory_is_still_swept(tmp_path) -> None:
+    """The path filter must not exclude the whole tree (#17380 review).
+
+    `"/tests/" in path.as_posix()` matched the CHECKOUT's own location, so a
+    repo at `/srv/tests/AutoBot-AI` excluded every module and the sweep read
+    nothing. The floor tests would fail, but their message blames the matcher or
+    the reach rather than the path filter, so the cause gets looked for in the
+    wrong place.
+
+    Mutating the filter back is SILENT on this machine -- the real checkout path
+    has no `tests` segment -- so the regression needs a root that does, which is
+    what `_iter_sources`' `root` parameter is for. Under the mutation this fails
+    with `assert 'real_module.py' in []`, naming the cause.
+    """
+    root = tmp_path / "tests" / "AutoBot-AI"
+    (root / "autobot_shared" / "coordination").mkdir(parents=True)
+    (root / "autobot_shared" / "coordination" / "real_module.py").write_text("x = 1\n", encoding="utf-8")
+    (root / "autobot_shared" / "tests").mkdir()
+    (root / "autobot_shared" / "tests" / "helper.py").write_text("y = 2\n", encoding="utf-8")
+
+    swept = [p.name for p in _iter_sources(root)]
+
+    assert "real_module.py" in swept, (
+        "the sweep read nothing under a checkout whose own path contains 'tests' -- "
+        "the exclusion is matching the absolute path"
+    )
+    assert "helper.py" not in swept, "a genuine tests/ directory inside the repo must still be excluded"
