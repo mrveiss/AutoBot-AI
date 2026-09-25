@@ -20,6 +20,14 @@ on:
       - 'autobot-slm-frontend/**'
       - '.github/workflows/slm-frontend-check.yml'
       - 'autobot-frontend/scripts/check-i18n-keys.mjs'
+      # The lifting rule's INPUTS, not just its output (review finding on
+      # #17395). `lift_locale_translations.py --check` regenerates the SLM
+      # locales from `autobot-frontend`'s and fails on drift -- so a PR that
+      # changes only the source locales, or only the generator, must start
+      # this workflow. Without these two such a PR passes untested and the
+      # NEXT SLM change reports drift the earlier one caused.
+      - 'autobot-frontend/src/i18n/locales/**'
+      - 'scripts/lift_locale_translations.py'
   pull_request:
     branches: [release, main, develop]
     # #13388: SAFE — "SLM Frontend Check" is NOT one of the ten required contexts
@@ -31,6 +39,14 @@ on:
       - 'autobot-slm-frontend/**'
       - '.github/workflows/slm-frontend-check.yml'
       - 'autobot-frontend/scripts/check-i18n-keys.mjs'
+      # The lifting rule's INPUTS, not just its output (review finding on
+      # #17395). `lift_locale_translations.py --check` regenerates the SLM
+      # locales from `autobot-frontend`'s and fails on drift -- so a PR that
+      # changes only the source locales, or only the generator, must start
+      # this workflow. Without these two such a PR passes untested and the
+      # NEXT SLM change reports drift the earlier one caused.
+      - 'autobot-frontend/src/i18n/locales/**'
+      - 'scripts/lift_locale_translations.py'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -59,6 +75,11 @@ jobs:
               - 'autobot-slm-frontend/**'
               - '.github/workflows/slm-frontend-check.yml'
               - 'autobot-frontend/scripts/check-i18n-keys.mjs'
+              # Mirrors the `on:` paths above -- the trigger and the
+              # job-level filter have to agree, or the workflow starts and
+              # every step self-skips.
+              - 'autobot-frontend/src/i18n/locales/**'
+              - 'scripts/lift_locale_translations.py'
 
   slm-frontend-check:
     name: SLM Frontend Check
@@ -100,6 +121,62 @@ jobs:
       - name: i18n keys
         if: needs.changes.outputs.slm_frontend == 'true'
         run: npm run check:i18n
+
+      # #14781: the console now ships all 11 locales. Two things can rot: a key
+      # present in one locale and not the others (vue-i18n then falls back
+      # silently, so the gap is invisible until someone reads that language),
+      # and a hand-edited locale drifting from what the lifting rule produces.
+      # The first is `check:locales`; the second is the generator's own --check,
+      # which is why the generation is a script in the repo rather than a
+      # one-off someone ran.
+      - name: Locale parity
+        if: needs.changes.outputs.slm_frontend == 'true'
+        run: npm run check:locales
+
+      - name: Locales match the lifting rule
+        if: needs.changes.outputs.slm_frontend == 'true'
+        working-directory: .
+        run: python3 scripts/lift_locale_translations.py --app autobot-slm-frontend/src/locales --check
+
+      # The two repo_tests guards run HERE as well as in the python suite, and
+      # the reason is #15900: they declare `*.vue` / `*.json` globs, which the
+      # python path filter does not cover. That gap is recorded deliberately in
+      # `repo_tests/glob_declared_reads_15900_test.py` -- widening the filter to
+      # those trees would cost twelve shards on nearly every pull request -- but
+      # the consequence is that a .vue-only change would not run them. A gate
+      # that does not fire on the change it guards is the vacuous shape #15665
+      # exists to close, so this workflow, which DOES trigger on
+      # autobot-slm-frontend/**, runs them on exactly those changes.
+      # This job sets up Node and nothing else, so the pytest step below needs
+      # an interpreter. Minimal on purpose: both guards import only the stdlib
+      # (`json`, `re`, `html.parser`) plus `repo_tests._paths`, so pytest is the
+      # whole dependency -- no requirements file, no cache key to invalidate.
+      - name: Set up Python for the i18n guards
+        if: needs.changes.outputs.slm_frontend == 'true'
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install pytest
+        if: needs.changes.outputs.slm_frontend == 'true'
+        working-directory: .
+        # pytest-asyncio as well as pytest, because `pytest.ini`'s global
+        # `addopts` carries `--asyncio-mode=auto` and this job runs from that
+        # rootdir. Bare pytest exits with "unrecognized arguments:
+        # --asyncio-mode=auto" before it collects anything -- the same hazard
+        # pytest.ini's own comment documents for a global `-n`, which it keeps
+        # out of addopts precisely so bare-pytest jobs like this one survive.
+        # These two guards are synchronous and need none of pytest-asyncio's
+        # behaviour; it is here to satisfy the rootdir's arguments.
+        run: python3 -m pip install --quiet pytest pytest-asyncio
+
+      - name: i18n guards (bare literals, locale parity)
+        if: needs.changes.outputs.slm_frontend == 'true'
+        working-directory: .
+        run: |
+          python3 -m pytest -q \
+            repo_tests/slm_frontend_bare_ui_literals_test.py \
+            repo_tests/slm_frontend_i18n_parity_test.py
 
       - name: Build
         if: needs.changes.outputs.slm_frontend == 'true'

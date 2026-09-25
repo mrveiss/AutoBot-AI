@@ -75,11 +75,6 @@ EXEMPT: dict[str, tuple[str, int, str]] = {
         2,
         "input placeholder showing the expected SSH-key format; the body is '...'",
     ),
-    "autobot-slm-frontend/src/locales/en.json": (
-        PEM,
-        2,
-        "i18n placeholder text for the SSH-key fields; the body is '...'",
-    ),
     "docs/design/CHAT_INFRASTRUCTURE_ACCESS_DESIGN.md": (
         PEM,
         1,

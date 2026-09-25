@@ -1,6 +1,6 @@
 {
   "common": {
-    "submit": "Składać",
+    "submit": "Złóż",
     "cancel": "Anulować",
     "save": "Ratować",
     "delete": "Usuwać",
@@ -26,7 +26,7 @@
     "ok": "OK",
     "none": "Nic",
     "all": "Wszystko",
-    "select": "Wybierać",
+    "select": "Wybierz",
     "noResults": "Nie znaleziono żadnych wyników",
     "actions": "Działania",
     "create": "Tworzyć",
@@ -164,7 +164,7 @@
       "noFiles": "Nie ma jeszcze plików",
       "loadingFiles": "Ładowanie plików...",
       "aiGenerated": "Wygenerowano sztuczną inteligencję",
-      "preview": "Zapowiedź",
+      "preview": "Podgląd",
       "download": "Pobierać",
       "rename": "Przemianować",
       "duplicate": "Duplikat",
@@ -361,7 +361,7 @@
       "inputRequired": "Dane wejściowe wymagane dla",
       "commentPlaceholder": "Dodaj komentarz lub powód tej decyzji...",
       "cancelComment": "Anuluj komentarz",
-      "submit": "Składać",
+      "submit": "Złóż",
       "approval": "Aprobata",
       "denial": "Odmowa",
       "submitWithComment": "Prześlij {action} z komentarzem",
@@ -590,7 +590,7 @@
       "hideRawJson": "Ukryj surowy JSON",
       "exportJson": "Eksportuj JSON",
       "sendToChat": "Wyślij do czatu",
-      "preview": "Zapowiedź"
+      "preview": "Podgląd"
     },
     "visualBrowser": {
       "checking": "Kontrola...",

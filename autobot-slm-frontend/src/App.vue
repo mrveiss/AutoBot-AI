@@ -100,7 +100,7 @@ onMounted(async () => {
         <main
           id="main-content"
           class="flex-1 overflow-auto"
-          aria-label="Main content"
+          :aria-label="$t('common.app.mainContentAria')"
         >
           <RouterView />
         </main>
